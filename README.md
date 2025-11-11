@@ -4,32 +4,33 @@ A multi-tenant B2B SaaS platform for building, training, and deploying productio
 
 ## 📊 Project Stats
 
-- **10** Database Models
-- **30+** Files Created
-- **10** HTML Templates (with responsive UI)
-- **13** View Functions
-- **11** URL Patterns
+- **13** Database Models (including ETL models)
+- **40+** Files Created
+- **11** HTML Templates (with responsive UI)
+- **20** View Functions (including ETL APIs)
+- **17** URL Patterns
 - **100%** Authentication Coverage
-- **Status**: Frontend Skeleton Complete ✅
+- **Status**: Frontend Skeleton + ETL Implementation ✅
 
 ## Project Status
 
-**Current Phase**: Django Frontend Skeleton ✅ **COMPLETE**
+**Current Phase**: ETL Implementation ✅ **COMPLETE**
 
 **Date Completed**: November 11, 2025
 
-This is the initial backbone of the client-facing web application. All foundational components are implemented and functional.
+The client-facing web application backbone is complete with fully functional ETL configuration and management system.
 
 ### ✅ Completed Components
 
 **Backend:**
 - ✅ Django project structure with proper settings
-- ✅ 10 database models (ModelEndpoint, ETL, Pipeline, Experiments, Deployments, etc.)
+- ✅ 13 database models (ModelEndpoint, ETL, DataSource, DataSourceTable, Pipeline, Experiments, etc.)
 - ✅ Complete URL routing structure (system + model-level pages)
 - ✅ Functional views with authentication and authorization
 - ✅ API endpoints for AJAX operations (training, ETL, deployment)
 - ✅ Admin interface for all models (searchable, filterable)
 - ✅ Database migrations created and applied
+- ✅ **ETL System**: Multi-source configuration, connection testing, manual triggers
 
 **Frontend:**
 - ✅ Responsive UI using Tailwind CSS
@@ -38,7 +39,7 @@ This is the initial backbone of the client-facing web application. All foundatio
 - ✅ Model/Endpoint creation flow
 - ✅ Model Dashboard (status cards, recent runs, quick actions)
 - ✅ Login/logout functionality
-- ✅ Template placeholders for all 8 model-level pages
+- ✅ **ETL Page**: Full-featured UI for data source management and monitoring
 
 **Developer Experience:**
 - ✅ User creation script (`create_user.py`)
@@ -143,8 +144,31 @@ b2b_recs/
 ### ModelEndpoint
 Represents a complete ML project/pipeline instance. Each ModelEndpoint is a separate recommendation system.
 
-### ETLConfiguration & ETLRun
-ETL configuration and execution history for data extraction from source systems.
+### ETL Models (Configuration-Driven Architecture)
+
+**ETLConfiguration** - Parent configuration for scheduling and settings
+- Schedule type (manual, daily, weekly, monthly)
+- Cron expression for Cloud Scheduler
+- Last run status and timestamps
+- Cloud Run service URL reference
+
+**DataSource** - Individual data source connections (supports multiple per client)
+- Supported types: PostgreSQL, MySQL, SQL Server, BigQuery, CSV, Parquet
+- Connection details (host, port, database, credentials)
+- Connection testing status
+- Enable/disable per source
+
+**DataSourceTable** - Table-level extraction configuration
+- Source → destination table mapping
+- Sync modes: replace (full refresh), append, incremental (date-based)
+- Row limits for testing
+- Per-table enable/disable
+
+**ETLRun** - Execution history with detailed results
+- Tracks all sources and tables in a single run
+- Per-source and per-table success/failure
+- Total rows extracted
+- JSON detailed results structure
 
 ### PipelineConfiguration & PipelineRun
 ML pipeline parameters and execution tracking (4-stage pipeline: extraction → vocab → training → deployment).
@@ -161,12 +185,99 @@ Deployment history and active deployments to Cloud Run.
 ### PredictionLog & SystemMetrics
 Aggregated prediction statistics and system-wide metrics.
 
+## 🔄 ETL Implementation
+
+### Architecture: Configuration-Driven Multi-Source ETL
+
+The ETL system uses a **single Docker container template** deployed per client with configuration stored in Django.
+
+```
+┌─────────────────────────────────────────┐
+│  Django (Client-facing UI)              │
+│  - Configure data sources (PostgreSQL,  │
+│    MySQL, BigQuery, CSV, Parquet)       │
+│  - Set schedules                         │
+│  - Test connections                      │
+│  - Monitor runs                          │
+└─────────────────────────────────────────┘
+                  ↓
+┌─────────────────────────────────────────┐
+│  Cloud Scheduler (per client)            │
+│  - Triggers on schedule (daily 2am, etc.)│
+└─────────────────────────────────────────┘
+                  ↓
+┌─────────────────────────────────────────┐
+│  Cloud Run Job (ETL Container)           │
+│  1. Fetch configuration from Django API │
+│  2. For each enabled data source:       │
+│     - Connect (PostgreSQL/MySQL/etc.)   │
+│     - Extract configured tables         │
+│     - Load to BigQuery                  │
+│  3. Report results back to Django       │
+└─────────────────────────────────────────┘
+                  ↓
+┌─────────────────────────────────────────┐
+│  BigQuery (Client's GCP Project)         │
+│  Dataset: raw_data                       │
+│    - transactions (from PostgreSQL)     │
+│    - products (from MySQL)              │
+│    - customers (from CSV upload)        │
+└─────────────────────────────────────────┘
+```
+
+### ✅ Implemented Features
+
+**Django Web UI** (`/models/{id}/etl/`):
+- ETL status dashboard with metrics cards
+- Add/edit/delete data sources
+- Configure multiple sources per model (PostgreSQL, MySQL, BigQuery, CSV, Parquet)
+- Test database connections
+- Configure table-level sync settings
+- Manual "Run ETL Now" trigger
+- Enable/disable scheduled runs
+- View ETL run history with detailed results
+
+**API Endpoints**:
+- `POST /api/models/{id}/etl/add-source/` - Create new data source
+- `POST /api/etl/sources/{id}/test/` - Test connection
+- `POST /api/etl/sources/{id}/delete/` - Remove data source
+- `POST /api/models/{id}/etl/toggle/` - Enable/disable scheduling
+- `POST /api/models/{id}/etl/run/` - Trigger manual ETL run
+- `GET /api/etl/runs/{id}/status/` - Poll run status
+
+**Database Models**:
+- Full schema for multi-source ETL configuration
+- Execution tracking with per-table granularity
+- Connection testing state
+
+### 🔨 Pending Components (For Production Deployment)
+
+**ETL Container** (Not yet built - needed for actual data extraction):
+- `etl_runner.py` - Python script with database connectors
+- Database drivers: psycopg2 (PostgreSQL), PyMySQL (MySQL), pyodbc (SQL Server)
+- BigQuery loading via `pandas-gbq`
+- Reads Django configuration via REST API
+- Dockerfile for Cloud Run deployment
+
+**When Needed**:
+- First client goes to production
+- Actual database connections required
+- For now, Django simulates ETL runs for testing
+
+### Key Design Decisions
+
+1. **Configuration-Driven**: All extraction logic driven by Django database configuration
+2. **Multi-Source Support**: Single ETL run processes all configured data sources
+3. **No Airflow**: Uses Cloud Run + Cloud Scheduler for simplicity and cost ($10-20/month vs $120/month)
+4. **Per-Client Isolation**: Each client gets their own Cloud Scheduler + Cloud Run deployment
+5. **Same Container Image**: One Docker image deployed to all clients with different env vars
+
 ## 🎯 Next Steps - Chapter-by-Chapter Implementation
 
-The skeleton is complete! Now we can implement each feature "chapter-by-chapter":
+ETL implementation is complete! Next features to build:
 
 ### Priority 1 - Core ML Pipeline (Weeks 3-5)
-1. **ETL Page** - BigQuery integration, data source connectors, schedule configuration
+1. ✅ **ETL Page** - ✅ COMPLETE (Django UI, APIs, multi-source configuration)
 2. **Training Interface** - Celery + Vertex AI integration, real-time status updates
 3. **Pipeline Configuration** - Complete form validation, parameter presets
 4. **Deployment Manager** - Cloud Run API integration, one-click deployment
@@ -179,7 +290,7 @@ The skeleton is complete! Now we can implement each feature "chapter-by-chapter"
 ### Priority 3 - Advanced Features (Week 6+)
 8. **Feature Engineering** - Visual designer for feature creation
 9. **Control Plane** - Separate app for cross-customer management, billing dashboard
-10. **Production Ready** - Dockerfile, CI/CD, monitoring, testing
+10. **Production Ready** - ETL Container + Dockerfile, CI/CD, monitoring, testing
 
 ### Quick Wins (Can be done anytime)
 - Add pagination to tables

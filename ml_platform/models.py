@@ -50,6 +50,7 @@ class ModelEndpoint(models.Model):
 class ETLConfiguration(models.Model):
     """
     ETL configuration for extracting data from source systems to BigQuery.
+    This is the parent configuration that can have multiple data sources.
     """
 
     SCHEDULE_CHOICES = [
@@ -59,34 +60,24 @@ class ETLConfiguration(models.Model):
         ('monthly', 'Monthly'),
     ]
 
-    SOURCE_TYPE_CHOICES = [
-        ('postgresql', 'PostgreSQL'),
-        ('mysql', 'MySQL'),
-        ('sqlserver', 'SQL Server'),
-        ('bigquery', 'BigQuery'),
-        ('other', 'Other'),
-    ]
-
     model_endpoint = models.OneToOneField(ModelEndpoint, on_delete=models.CASCADE, related_name='etl_config')
 
-    # Source configuration
-    source_type = models.CharField(max_length=50, choices=SOURCE_TYPE_CHOICES)
-    source_host = models.CharField(max_length=255, blank=True)
-    source_port = models.IntegerField(null=True, blank=True)
-    source_database = models.CharField(max_length=255, blank=True)
-    source_credentials_secret = models.CharField(max_length=255, blank=True, help_text="Secret Manager secret name")
-
-    # Schedule configuration
+    # Schedule configuration (applies to all data sources)
     schedule_type = models.CharField(max_length=20, choices=SCHEDULE_CHOICES, default='manual')
     schedule_time = models.TimeField(null=True, blank=True, help_text="Time of day to run (for daily/weekly)")
     schedule_day_of_week = models.IntegerField(null=True, blank=True, help_text="0=Monday, 6=Sunday")
     schedule_day_of_month = models.IntegerField(null=True, blank=True, help_text="Day of month (1-31)")
+    schedule_cron = models.CharField(max_length=100, blank=True, help_text="Cloud Scheduler cron expression")
 
     # ETL settings
     is_enabled = models.BooleanField(default=False)
     last_run_at = models.DateTimeField(null=True, blank=True)
     last_run_status = models.CharField(max_length=50, blank=True)
     last_run_message = models.TextField(blank=True)
+
+    # Cloud Scheduler job ID (for this client's scheduled job)
+    cloud_scheduler_job_name = models.CharField(max_length=255, blank=True)
+    cloud_run_service_url = models.URLField(blank=True, help_text="Cloud Run ETL service URL")
 
     # Data configuration
     lookback_days = models.IntegerField(default=90, help_text="Number of days of historical data to extract")
@@ -102,15 +93,122 @@ class ETLConfiguration(models.Model):
         return f"ETL Config for {self.model_endpoint.name}"
 
 
+class DataSource(models.Model):
+    """
+    Represents a single data source (database connection or file upload).
+    Each ETL configuration can have multiple data sources.
+    """
+
+    SOURCE_TYPE_CHOICES = [
+        ('postgresql', 'PostgreSQL'),
+        ('mysql', 'MySQL'),
+        ('sqlserver', 'SQL Server'),
+        ('bigquery', 'BigQuery'),
+        ('csv', 'CSV Upload'),
+        ('parquet', 'Parquet Files'),
+    ]
+
+    etl_config = models.ForeignKey(ETLConfiguration, on_delete=models.CASCADE, related_name='data_sources')
+
+    # Source identification
+    name = models.CharField(max_length=255, help_text="Friendly name (e.g., 'Main Transaction DB')")
+    source_type = models.CharField(max_length=50, choices=SOURCE_TYPE_CHOICES)
+
+    # Connection details (for database sources)
+    source_host = models.CharField(max_length=255, blank=True)
+    source_port = models.IntegerField(null=True, blank=True)
+    source_database = models.CharField(max_length=255, blank=True)
+    source_schema = models.CharField(max_length=255, blank=True, help_text="Database schema (optional)")
+    credentials_secret_name = models.CharField(max_length=255, blank=True, help_text="Secret Manager secret name")
+
+    # File upload details (for CSV/Parquet sources)
+    file_path = models.CharField(max_length=512, blank=True, help_text="GCS path to uploaded file")
+
+    # BigQuery source details
+    bigquery_project = models.CharField(max_length=255, blank=True)
+    bigquery_dataset = models.CharField(max_length=255, blank=True)
+
+    # Source settings
+    is_enabled = models.BooleanField(default=True)
+    connection_tested = models.BooleanField(default=False)
+    last_test_at = models.DateTimeField(null=True, blank=True)
+    last_test_message = models.TextField(blank=True)
+
+    # Extraction settings
+    use_incremental = models.BooleanField(default=False, help_text="Use incremental extraction")
+    incremental_column = models.CharField(max_length=100, blank=True, help_text="Column for incremental loads (e.g., updated_at)")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['name']
+        verbose_name = 'Data Source'
+        verbose_name_plural = 'Data Sources'
+
+    def __str__(self):
+        return f"{self.name} ({self.get_source_type_display()})"
+
+
+class DataSourceTable(models.Model):
+    """
+    Represents a table/file to extract from a data source.
+    Each data source can have multiple tables configured.
+    """
+
+    SYNC_MODE_CHOICES = [
+        ('replace', 'Replace All (Full Refresh)'),
+        ('append', 'Append New Records'),
+        ('incremental', 'Incremental (Date-based)'),
+    ]
+
+    data_source = models.ForeignKey(DataSource, on_delete=models.CASCADE, related_name='tables')
+
+    # Source table configuration
+    source_table_name = models.CharField(max_length=255, help_text="Table name in source database")
+    source_query = models.TextField(blank=True, help_text="Optional: custom SQL query instead of table name")
+
+    # Destination configuration
+    dest_table_name = models.CharField(max_length=255, help_text="Table name in BigQuery (e.g., 'transactions')")
+    dest_dataset = models.CharField(max_length=255, default='raw_data', help_text="BigQuery dataset name")
+
+    # Sync configuration
+    sync_mode = models.CharField(max_length=20, choices=SYNC_MODE_CHOICES, default='replace')
+    incremental_column = models.CharField(max_length=100, blank=True, help_text="Column for incremental sync")
+    last_sync_value = models.CharField(max_length=255, blank=True, help_text="Last synced value (for incremental)")
+
+    # Table settings
+    is_enabled = models.BooleanField(default=True)
+    row_limit = models.IntegerField(null=True, blank=True, help_text="Optional: limit rows for testing")
+
+    # Statistics
+    last_row_count = models.IntegerField(null=True, blank=True)
+    last_synced_at = models.DateTimeField(null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['source_table_name']
+        unique_together = ['data_source', 'source_table_name']
+        verbose_name = 'Data Source Table'
+        verbose_name_plural = 'Data Source Tables'
+
+    def __str__(self):
+        return f"{self.source_table_name} → {self.dest_table_name}"
+
+
 class ETLRun(models.Model):
     """
     History of ETL job executions.
+    Tracks execution of all data sources and tables in a single run.
     """
 
     STATUS_CHOICES = [
         ('pending', 'Pending'),
         ('running', 'Running'),
         ('completed', 'Completed'),
+        ('partial', 'Partially Completed'),
         ('failed', 'Failed'),
         ('cancelled', 'Cancelled'),
     ]
@@ -123,11 +221,17 @@ class ETLRun(models.Model):
     completed_at = models.DateTimeField(null=True, blank=True)
 
     # Job details
-    vertex_job_id = models.CharField(max_length=255, blank=True)
-    cloud_run_job_id = models.CharField(max_length=255, blank=True)
+    cloud_run_execution_id = models.CharField(max_length=255, blank=True, help_text="Cloud Run Job execution ID")
 
-    # Results
-    rows_extracted = models.IntegerField(null=True, blank=True)
+    # Results summary
+    total_sources = models.IntegerField(default=0, help_text="Total data sources processed")
+    successful_sources = models.IntegerField(default=0)
+    total_tables = models.IntegerField(default=0, help_text="Total tables processed")
+    successful_tables = models.IntegerField(default=0)
+    total_rows_extracted = models.BigIntegerField(default=0)
+
+    # Detailed results (JSON structure with per-table results)
+    results_detail = models.JSONField(default=dict, help_text="Detailed results per source and table")
     error_message = models.TextField(blank=True)
     logs_url = models.URLField(blank=True)
 
@@ -141,6 +245,11 @@ class ETLRun(models.Model):
 
     def __str__(self):
         return f"ETL Run {self.id} - {self.model_endpoint.name} ({self.status})"
+
+    def get_duration_seconds(self):
+        if self.started_at and self.completed_at:
+            return (self.completed_at - self.started_at).total_seconds()
+        return None
 
 
 class PipelineConfiguration(models.Model):

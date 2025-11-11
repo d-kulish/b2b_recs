@@ -1,10 +1,465 @@
 {% extends 'base_model.html' %}
+{% load humanize %}
 
-{% block title %}{{ model.name }} - PLACEHOLDER{% endblock %}
+{% block title %}{{ model.name }} - ETL Configuration{% endblock %}
 
 {% block model_content %}
-<div class="bg-white rounded-lg shadow p-6">
-    <h2 class="text-2xl font-bold text-gray-900 mb-4">PLACEHOLDER_TITLE</h2>
-    <p class="text-gray-600">This page is under development.</p>
+<div class="space-y-6">
+    <!-- ETL Status Card -->
+    <div class="bg-white rounded-xl border border-black shadow-lg p-6">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-2xl font-bold text-gray-900">ETL Configuration</h2>
+            {% if etl_config.is_enabled %}
+            <span class="px-4 py-2 bg-green-100 text-green-800 rounded-lg text-sm font-semibold">
+                <i class="fas fa-check-circle mr-1"></i>Enabled
+            </span>
+            {% else %}
+            <span class="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm font-semibold">
+                <i class="fas fa-pause-circle mr-1"></i>Disabled
+            </span>
+            {% endif %}
+        </div>
+
+        <div class="grid grid-cols-4 gap-6">
+            <!-- Schedule -->
+            <div class="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                <div class="text-sm text-blue-600 font-semibold mb-1">Schedule</div>
+                <div class="text-lg font-bold text-blue-900">
+                    {{ etl_config.get_schedule_type_display|default:"Not Configured" }}
+                </div>
+                {% if etl_config.schedule_time %}
+                <div class="text-sm text-blue-700 mt-1">at {{ etl_config.schedule_time|time:"g:i A" }}</div>
+                {% endif %}
+            </div>
+
+            <!-- Last Run -->
+            <div class="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                <div class="text-sm text-gray-600 font-semibold mb-1">Last Run</div>
+                {% if etl_config.last_run_at %}
+                <div class="text-lg font-bold text-gray-900">
+                    {{ etl_config.last_run_at|timesince }} ago
+                </div>
+                <div class="text-sm mt-1">
+                    {% if etl_config.last_run_status == 'completed' %}
+                    <span class="text-green-600"><i class="fas fa-check-circle mr-1"></i>Success</span>
+                    {% elif etl_config.last_run_status == 'failed' %}
+                    <span class="text-red-600"><i class="fas fa-times-circle mr-1"></i>Failed</span>
+                    {% else %}
+                    <span class="text-gray-600">{{ etl_config.last_run_status|title }}</span>
+                    {% endif %}
+                </div>
+                {% else %}
+                <div class="text-lg font-bold text-gray-400">Never</div>
+                {% endif %}
+            </div>
+
+            <!-- Data Sources -->
+            <div class="bg-purple-50 rounded-lg p-4 border border-purple-200">
+                <div class="text-sm text-purple-600 font-semibold mb-1">Data Sources</div>
+                <div class="text-lg font-bold text-purple-900">
+                    {{ data_sources|length }}
+                </div>
+                <div class="text-sm text-purple-700 mt-1">
+                    {{ enabled_sources_count }} enabled
+                </div>
+            </div>
+
+            <!-- Tables -->
+            <div class="bg-indigo-50 rounded-lg p-4 border border-indigo-200">
+                <div class="text-sm text-indigo-600 font-semibold mb-1">Total Tables</div>
+                <div class="text-lg font-bold text-indigo-900">
+                    {{ total_tables_count }}
+                </div>
+                <div class="text-sm text-indigo-700 mt-1">
+                    {{ enabled_tables_count }} enabled
+                </div>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="mt-6 flex gap-3">
+            <button onclick="runETLNow()" class="px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold transition shadow-sm">
+                <i class="fas fa-play mr-2"></i>Run ETL Now
+            </button>
+            <button onclick="toggleSchedule()" class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition shadow-sm">
+                <i class="fas fa-calendar mr-2"></i>Configure Schedule
+            </button>
+            {% if etl_config.is_enabled %}
+            <button onclick="disableETL()" class="px-6 py-3 bg-gray-600 hover:bg-gray-700 text-white rounded-lg font-semibold transition shadow-sm">
+                <i class="fas fa-pause mr-2"></i>Disable
+            </button>
+            {% else %}
+            <button onclick="enableETL()" class="px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold transition shadow-sm">
+                <i class="fas fa-play mr-2"></i>Enable
+            </button>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Data Sources Section -->
+    <div class="bg-white rounded-xl border border-black shadow-lg p-6">
+        <div class="flex items-center justify-between mb-6">
+            <h3 class="text-xl font-bold text-gray-900">Data Sources</h3>
+            <button onclick="showAddSourceModal()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition">
+                <i class="fas fa-plus mr-2"></i>Add Data Source
+            </button>
+        </div>
+
+        {% if data_sources %}
+        <div class="space-y-4">
+            {% for source in data_sources %}
+            <div class="border border-gray-300 rounded-lg p-4 hover:border-blue-400 transition">
+                <div class="flex items-start justify-between">
+                    <div class="flex-1">
+                        <div class="flex items-center gap-3 mb-2">
+                            <h4 class="text-lg font-bold text-gray-900">{{ source.name }}</h4>
+                            <span class="px-3 py-1 bg-gray-100 text-gray-700 rounded text-sm font-medium">
+                                {{ source.get_source_type_display }}
+                            </span>
+                            {% if source.is_enabled %}
+                            <span class="px-3 py-1 bg-green-100 text-green-700 rounded text-sm font-medium">
+                                <i class="fas fa-check mr-1"></i>Enabled
+                            </span>
+                            {% else %}
+                            <span class="px-3 py-1 bg-gray-100 text-gray-600 rounded text-sm font-medium">
+                                Disabled
+                            </span>
+                            {% endif %}
+                            {% if source.connection_tested %}
+                            <span class="px-3 py-1 bg-blue-100 text-blue-700 rounded text-sm font-medium">
+                                <i class="fas fa-check-circle mr-1"></i>Connection Tested
+                            </span>
+                            {% endif %}
+                        </div>
+
+                        <!-- Connection Details -->
+                        <div class="text-sm text-gray-600 mb-3">
+                            {% if source.source_type == 'postgresql' or source.source_type == 'mysql' or source.source_type == 'sqlserver' %}
+                            <span><strong>Host:</strong> {{ source.source_host }}:{{ source.source_port }}</span>
+                            <span class="mx-2">|</span>
+                            <span><strong>Database:</strong> {{ source.source_database }}</span>
+                            {% elif source.source_type == 'csv' or source.source_type == 'parquet' %}
+                            <span><strong>File:</strong> {{ source.file_path }}</span>
+                            {% elif source.source_type == 'bigquery' %}
+                            <span><strong>Project:</strong> {{ source.bigquery_project }}</span>
+                            <span class="mx-2">|</span>
+                            <span><strong>Dataset:</strong> {{ source.bigquery_dataset }}</span>
+                            {% endif %}
+                        </div>
+
+                        <!-- Tables -->
+                        <div class="mt-3">
+                            <div class="text-sm font-semibold text-gray-700 mb-2">
+                                Configured Tables ({{ source.tables.count }}):
+                            </div>
+                            <div class="flex flex-wrap gap-2">
+                                {% for table in source.tables.all %}
+                                <span class="px-3 py-1 bg-white border border-black rounded text-sm">
+                                    {{ table.source_table_name }} → {{ table.dest_table_name }}
+                                    {% if not table.is_enabled %}
+                                    <span class="text-gray-400">(disabled)</span>
+                                    {% endif %}
+                                </span>
+                                {% empty %}
+                                <span class="text-sm text-gray-400 italic">No tables configured</span>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Actions -->
+                    <div class="flex flex-col gap-2 ml-4">
+                        <button onclick="testConnection({{ source.id }})" class="px-4 py-2 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg text-sm font-semibold transition">
+                            <i class="fas fa-plug mr-1"></i>Test
+                        </button>
+                        <button onclick="editSource({{ source.id }})" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-semibold transition">
+                            <i class="fas fa-edit mr-1"></i>Edit
+                        </button>
+                        <button onclick="deleteSource({{ source.id }})" class="px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg text-sm font-semibold transition">
+                            <i class="fas fa-trash mr-1"></i>Delete
+                        </button>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="text-center py-12 bg-gray-50 rounded-lg border border-gray-200">
+            <i class="fas fa-database text-gray-400 text-5xl mb-4"></i>
+            <p class="text-gray-600 text-lg mb-4">No data sources configured</p>
+            <button onclick="showAddSourceModal()" class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition">
+                <i class="fas fa-plus mr-2"></i>Add Your First Data Source
+            </button>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Recent ETL Runs -->
+    <div class="bg-white rounded-xl border border-black shadow-lg p-6">
+        <h3 class="text-xl font-bold text-gray-900 mb-4">Recent ETL Runs</h3>
+
+        {% if recent_runs %}
+        <div class="overflow-x-auto">
+            <table class="min-w-full">
+                <thead class="bg-gray-50 border-b border-gray-200">
+                    <tr>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Run ID</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Status</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Started</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Duration</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Tables</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Rows</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200">
+                    {% for run in recent_runs %}
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-4 py-3 text-sm font-medium text-gray-900">#{{ run.id }}</td>
+                        <td class="px-4 py-3">
+                            {% if run.status == 'completed' %}
+                            <span class="px-3 py-1 bg-green-100 text-green-700 rounded text-sm font-semibold">
+                                <i class="fas fa-check-circle mr-1"></i>Completed
+                            </span>
+                            {% elif run.status == 'failed' %}
+                            <span class="px-3 py-1 bg-red-100 text-red-700 rounded text-sm font-semibold">
+                                <i class="fas fa-times-circle mr-1"></i>Failed
+                            </span>
+                            {% elif run.status == 'running' %}
+                            <span class="px-3 py-1 bg-blue-100 text-blue-700 rounded text-sm font-semibold">
+                                <i class="fas fa-spinner fa-spin mr-1"></i>Running
+                            </span>
+                            {% elif run.status == 'partial' %}
+                            <span class="px-3 py-1 bg-yellow-100 text-yellow-700 rounded text-sm font-semibold">
+                                <i class="fas fa-exclamation-triangle mr-1"></i>Partial
+                            </span>
+                            {% else %}
+                            <span class="px-3 py-1 bg-gray-100 text-gray-700 rounded text-sm font-semibold">
+                                {{ run.get_status_display }}
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3 text-sm text-gray-600">
+                            {{ run.started_at|date:"M d, Y g:i A"|default:"—" }}
+                        </td>
+                        <td class="px-4 py-3 text-sm text-gray-600">
+                            {% if run.get_duration_seconds %}
+                            {{ run.get_duration_seconds|floatformat:0 }}s
+                            {% else %}
+                            —
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3 text-sm text-gray-600">
+                            {{ run.successful_tables }}/{{ run.total_tables }}
+                        </td>
+                        <td class="px-4 py-3 text-sm text-gray-600">
+                            {{ run.total_rows_extracted|intcomma|default:"0" }}
+                        </td>
+                        <td class="px-4 py-3">
+                            <button onclick="viewRunDetails({{ run.id }})" class="text-blue-600 hover:text-blue-800 font-semibold text-sm">
+                                View Details
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center py-8 bg-gray-50 rounded-lg">
+            <p class="text-gray-600">No ETL runs yet</p>
+        </div>
+        {% endif %}
+    </div>
 </div>
+
+<!-- Add Data Source Modal (placeholder) -->
+<div id="addSourceModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+    <div class="bg-white rounded-xl shadow-2xl max-w-3xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+        <div class="p-6 border-b border-gray-200">
+            <div class="flex items-center justify-between">
+                <h3 class="text-2xl font-bold text-gray-900">Add Data Source</h3>
+                <button onclick="hideAddSourceModal()" class="text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times text-2xl"></i>
+                </button>
+            </div>
+        </div>
+        <div class="p-6">
+            <p class="text-gray-600">Form will be implemented here...</p>
+        </div>
+    </div>
+</div>
+
+<script>
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+const csrftoken = getCookie('csrftoken');
+
+function runETLNow() {
+    if (confirm('Run ETL extraction now? This will process all enabled data sources.')) {
+        fetch(`/api/models/{{ model.id }}/etl/run/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrftoken
+            },
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                alert(data.message + '\nRun ID: ' + data.run_id);
+                location.reload();
+            } else {
+                alert('Error: ' + data.message);
+            }
+        })
+        .catch(error => {
+            alert('Error triggering ETL: ' + error);
+        });
+    }
+}
+
+function toggleSchedule() {
+    alert('Schedule configuration modal will be implemented in the next phase');
+}
+
+function enableETL() {
+    if (confirm('Enable scheduled ETL runs?')) {
+        fetch(`/api/models/{{ model.id }}/etl/toggle/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrftoken
+            },
+            body: JSON.stringify({ enabled: true })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                alert(data.message);
+                location.reload();
+            } else {
+                alert('Error: ' + data.message);
+            }
+        })
+        .catch(error => {
+            alert('Error: ' + error);
+        });
+    }
+}
+
+function disableETL() {
+    if (confirm('Disable scheduled ETL runs?')) {
+        fetch(`/api/models/{{ model.id }}/etl/toggle/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrftoken
+            },
+            body: JSON.stringify({ enabled: false })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                alert(data.message);
+                location.reload();
+            } else {
+                alert('Error: ' + data.message);
+            }
+        })
+        .catch(error => {
+            alert('Error: ' + error);
+        });
+    }
+}
+
+function showAddSourceModal() {
+    document.getElementById('addSourceModal').classList.remove('hidden');
+}
+
+function hideAddSourceModal() {
+    document.getElementById('addSourceModal').classList.add('hidden');
+}
+
+function testConnection(sourceId) {
+    if (confirm('Test connection for this data source?')) {
+        fetch(`/api/etl/sources/${sourceId}/test/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrftoken
+            },
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                alert('✓ ' + data.message);
+                location.reload();
+            } else {
+                alert('✗ Connection test failed:\n' + data.message);
+            }
+        })
+        .catch(error => {
+            alert('Error testing connection: ' + error);
+        });
+    }
+}
+
+function editSource(sourceId) {
+    alert('Edit source modal will be implemented in the next phase.\nFor now, you can delete and recreate the source.');
+}
+
+function deleteSource(sourceId) {
+    if (confirm('Delete this data source and all its configured tables?\nThis action cannot be undone.')) {
+        fetch(`/api/etl/sources/${sourceId}/delete/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrftoken
+            },
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                alert(data.message);
+                location.reload();
+            } else {
+                alert('Error: ' + data.message);
+            }
+        })
+        .catch(error => {
+            alert('Error deleting source: ' + error);
+        });
+    }
+}
+
+function viewRunDetails(runId) {
+    // Fetch run details and show in modal
+    fetch(`/api/etl/runs/${runId}/status/`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.status) {
+                alert(`ETL Run #${runId}\n\nStatus: ${data.status}\nSources: ${data.successful_sources}/${data.total_sources}\nTables: ${data.successful_tables}/${data.total_tables}\nRows Extracted: ${data.total_rows_extracted.toLocaleString()}\n\n${data.error_message || ''}`);
+            } else {
+                alert('Error: ' + data.message);
+            }
+        })
+        .catch(error => {
+            alert('Error fetching run details: ' + error);
+        });
+}
+</script>
 {% endblock %}

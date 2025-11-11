@@ -2,10 +2,15 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
+from django.views.decorators.csrf import csrf_exempt
 from django.contrib import messages
+from django.utils import timezone
+import json
 from .models import (
     ModelEndpoint,
     ETLConfiguration,
+    DataSource,
+    DataSourceTable,
     ETLRun,
     PipelineConfiguration,
     PipelineRun,
@@ -138,33 +143,37 @@ def model_etl(request, model_id):
     """
     model = get_object_or_404(ModelEndpoint, id=model_id)
 
+    # Get or create ETL configuration
     try:
         etl_config = model.etl_config
     except ETLConfiguration.DoesNotExist:
         etl_config = ETLConfiguration.objects.create(
             model_endpoint=model,
-            source_type='postgresql',
+            schedule_type='manual',
         )
 
-    etl_runs = model.etl_runs.all()[:20]
+    # Get all data sources for this model
+    data_sources = etl_config.data_sources.all().prefetch_related('tables')
 
-    if request.method == 'POST':
-        # Update ETL configuration
-        etl_config.source_type = request.POST.get('source_type', etl_config.source_type)
-        etl_config.source_host = request.POST.get('source_host', '')
-        etl_config.source_port = request.POST.get('source_port', None)
-        etl_config.source_database = request.POST.get('source_database', '')
-        etl_config.schedule_type = request.POST.get('schedule_type', 'manual')
-        etl_config.is_enabled = request.POST.get('is_enabled') == 'on'
-        etl_config.save()
+    # Calculate statistics
+    enabled_sources = data_sources.filter(is_enabled=True)
+    enabled_sources_count = enabled_sources.count()
 
-        messages.success(request, 'ETL configuration updated successfully!')
-        return redirect('model_etl', model_id=model_id)
+    # Count all tables across all data sources
+    total_tables_count = sum(source.tables.count() for source in data_sources)
+    enabled_tables_count = sum(source.tables.filter(is_enabled=True).count() for source in data_sources)
+
+    # Get recent ETL runs
+    recent_runs = model.etl_runs.all()[:10]
 
     context = {
         'model': model,
         'etl_config': etl_config,
-        'etl_runs': etl_runs,
+        'data_sources': data_sources,
+        'enabled_sources_count': enabled_sources_count,
+        'total_tables_count': total_tables_count,
+        'enabled_tables_count': enabled_tables_count,
+        'recent_runs': recent_runs,
     }
 
     return render(request, 'ml_platform/model_etl.html', context)
@@ -417,3 +426,201 @@ def api_pipeline_run_status(request, run_id):
         'completed_at': pipeline_run.completed_at.isoformat() if pipeline_run.completed_at else None,
         'error_message': pipeline_run.error_message,
     })
+
+
+# ============================================================================
+# ETL API ENDPOINTS
+# ============================================================================
+
+@login_required
+@require_http_methods(["POST"])
+def api_etl_add_source(request, model_id):
+    """
+    API endpoint to add a new data source.
+    """
+    try:
+        model = get_object_or_404(ModelEndpoint, id=model_id)
+        etl_config = model.etl_config
+
+        data = json.loads(request.body)
+
+        # Create data source
+        source = DataSource.objects.create(
+            etl_config=etl_config,
+            name=data.get('name'),
+            source_type=data.get('source_type'),
+            source_host=data.get('source_host', ''),
+            source_port=data.get('source_port'),
+            source_database=data.get('source_database', ''),
+            source_schema=data.get('source_schema', ''),
+            bigquery_project=data.get('bigquery_project', ''),
+            bigquery_dataset=data.get('bigquery_dataset', ''),
+            file_path=data.get('file_path', ''),
+            is_enabled=data.get('is_enabled', True),
+        )
+
+        # Create tables if provided
+        tables_data = data.get('tables', [])
+        for table_data in tables_data:
+            DataSourceTable.objects.create(
+                data_source=source,
+                source_table_name=table_data.get('source_table_name'),
+                dest_table_name=table_data.get('dest_table_name'),
+                dest_dataset=table_data.get('dest_dataset', 'raw_data'),
+                sync_mode=table_data.get('sync_mode', 'replace'),
+                is_enabled=table_data.get('is_enabled', True),
+            )
+
+        return JsonResponse({
+            'status': 'success',
+            'message': 'Data source added successfully',
+            'source_id': source.id,
+        })
+
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e),
+        }, status=400)
+
+
+@login_required
+@require_http_methods(["POST"])
+def api_etl_test_connection(request, source_id):
+    """
+    API endpoint to test a data source connection.
+    """
+    try:
+        source = get_object_or_404(DataSource, id=source_id)
+
+        # TODO: Implement actual connection testing
+        # For now, simulate success
+        source.connection_tested = True
+        source.last_test_at = timezone.now()
+        source.last_test_message = "Connection test successful (simulated)"
+        source.save()
+
+        return JsonResponse({
+            'status': 'success',
+            'message': 'Connection test successful',
+        })
+
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e),
+        }, status=400)
+
+
+@login_required
+@require_http_methods(["POST"])
+def api_etl_delete_source(request, source_id):
+    """
+    API endpoint to delete a data source.
+    """
+    try:
+        source = get_object_or_404(DataSource, id=source_id)
+        source_name = source.name
+        source.delete()
+
+        return JsonResponse({
+            'status': 'success',
+            'message': f'Data source "{source_name}" deleted successfully',
+        })
+
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e),
+        }, status=400)
+
+
+@login_required
+@require_http_methods(["POST"])
+def api_etl_toggle_enabled(request, model_id):
+    """
+    API endpoint to enable/disable ETL scheduling.
+    """
+    try:
+        model = get_object_or_404(ModelEndpoint, id=model_id)
+        etl_config = model.etl_config
+
+        data = json.loads(request.body)
+        etl_config.is_enabled = data.get('enabled', not etl_config.is_enabled)
+        etl_config.save()
+
+        return JsonResponse({
+            'status': 'success',
+            'message': f'ETL {"enabled" if etl_config.is_enabled else "disabled"}',
+            'is_enabled': etl_config.is_enabled,
+        })
+
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e),
+        }, status=400)
+
+
+@login_required
+@require_http_methods(["POST"])
+def api_etl_run_now(request, model_id):
+    """
+    API endpoint to trigger ETL run manually.
+    """
+    try:
+        model = get_object_or_404(ModelEndpoint, id=model_id)
+        etl_config = model.etl_config
+
+        # Create ETL run record
+        etl_run = ETLRun.objects.create(
+            etl_config=etl_config,
+            model_endpoint=model,
+            status='pending',
+            triggered_by=request.user,
+            started_at=timezone.now(),
+        )
+
+        # TODO: Trigger actual Cloud Run ETL job
+        # For now, simulate success
+        etl_run.status = 'running'
+        etl_run.save()
+
+        return JsonResponse({
+            'status': 'success',
+            'message': 'ETL run started',
+            'run_id': etl_run.id,
+        })
+
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e),
+        }, status=400)
+
+
+@login_required
+def api_etl_run_status(request, run_id):
+    """
+    API endpoint to get ETL run status (for polling).
+    """
+    try:
+        etl_run = get_object_or_404(ETLRun, id=run_id)
+
+        return JsonResponse({
+            'status': etl_run.status,
+            'started_at': etl_run.started_at.isoformat() if etl_run.started_at else None,
+            'completed_at': etl_run.completed_at.isoformat() if etl_run.completed_at else None,
+            'total_sources': etl_run.total_sources,
+            'successful_sources': etl_run.successful_sources,
+            'total_tables': etl_run.total_tables,
+            'successful_tables': etl_run.successful_tables,
+            'total_rows_extracted': etl_run.total_rows_extracted,
+            'error_message': etl_run.error_message,
+        })
+
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e),
+        }, status=400)

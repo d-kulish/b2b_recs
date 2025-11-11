@@ -2,6 +2,8 @@ from django.contrib import admin
 from .models import (
     ModelEndpoint,
     ETLConfiguration,
+    DataSource,
+    DataSourceTable,
     ETLRun,
     PipelineConfiguration,
     PipelineRun,
@@ -23,15 +25,31 @@ class ModelEndpointAdmin(admin.ModelAdmin):
 
 @admin.register(ETLConfiguration)
 class ETLConfigurationAdmin(admin.ModelAdmin):
-    list_display = ['model_endpoint', 'source_type', 'schedule_type', 'is_enabled', 'last_run_at']
-    list_filter = ['source_type', 'schedule_type', 'is_enabled']
+    list_display = ['model_endpoint', 'schedule_type', 'is_enabled', 'last_run_at', 'last_run_status']
+    list_filter = ['schedule_type', 'is_enabled']
     search_fields = ['model_endpoint__name']
-    readonly_fields = ['created_at', 'updated_at']
+    readonly_fields = ['created_at', 'updated_at', 'last_run_at']
+
+
+@admin.register(DataSource)
+class DataSourceAdmin(admin.ModelAdmin):
+    list_display = ['name', 'source_type', 'etl_config', 'is_enabled', 'connection_tested']
+    list_filter = ['source_type', 'is_enabled', 'connection_tested']
+    search_fields = ['name', 'etl_config__model_endpoint__name']
+    readonly_fields = ['created_at', 'updated_at', 'last_test_at']
+
+
+@admin.register(DataSourceTable)
+class DataSourceTableAdmin(admin.ModelAdmin):
+    list_display = ['source_table_name', 'dest_table_name', 'data_source', 'sync_mode', 'is_enabled']
+    list_filter = ['sync_mode', 'is_enabled']
+    search_fields = ['source_table_name', 'dest_table_name', 'data_source__name']
+    readonly_fields = ['created_at', 'updated_at', 'last_synced_at']
 
 
 @admin.register(ETLRun)
 class ETLRunAdmin(admin.ModelAdmin):
-    list_display = ['id', 'model_endpoint', 'status', 'started_at', 'completed_at', 'rows_extracted']
+    list_display = ['id', 'model_endpoint', 'status', 'started_at', 'completed_at', 'total_tables', 'total_rows_extracted']
     list_filter = ['status', 'created_at']
     search_fields = ['model_endpoint__name']
     readonly_fields = ['created_at']

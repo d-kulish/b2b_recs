@@ -79,3 +79,12 @@ htmlcov/
 *.tmp
 *.temp
 .cache/
+
+# Django
+db.sqlite3
+db.sqlite3-journal
+*.sqlite3
+staticfiles/
+media/
+__pycache__/
+*.pyc

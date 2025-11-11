@@ -1,0 +1,90 @@
+from django.contrib import admin
+from .models import (
+    ModelEndpoint,
+    ETLConfiguration,
+    ETLRun,
+    PipelineConfiguration,
+    PipelineRun,
+    Experiment,
+    TrainedModel,
+    Deployment,
+    PredictionLog,
+    SystemMetrics,
+)
+
+
+@admin.register(ModelEndpoint)
+class ModelEndpointAdmin(admin.ModelAdmin):
+    list_display = ['name', 'status', 'is_endpoint_active', 'created_by', 'created_at', 'last_trained_at']
+    list_filter = ['status', 'is_endpoint_active', 'created_at']
+    search_fields = ['name', 'description', 'gcp_project_id']
+    readonly_fields = ['created_at', 'updated_at']
+
+
+@admin.register(ETLConfiguration)
+class ETLConfigurationAdmin(admin.ModelAdmin):
+    list_display = ['model_endpoint', 'source_type', 'schedule_type', 'is_enabled', 'last_run_at']
+    list_filter = ['source_type', 'schedule_type', 'is_enabled']
+    search_fields = ['model_endpoint__name']
+    readonly_fields = ['created_at', 'updated_at']
+
+
+@admin.register(ETLRun)
+class ETLRunAdmin(admin.ModelAdmin):
+    list_display = ['id', 'model_endpoint', 'status', 'started_at', 'completed_at', 'rows_extracted']
+    list_filter = ['status', 'created_at']
+    search_fields = ['model_endpoint__name']
+    readonly_fields = ['created_at']
+
+
+@admin.register(PipelineConfiguration)
+class PipelineConfigurationAdmin(admin.ModelAdmin):
+    list_display = ['model_endpoint', 'use_gpu', 'gpu_type', 'epochs', 'batch_size']
+    search_fields = ['model_endpoint__name']
+    readonly_fields = ['created_at', 'updated_at']
+
+
+@admin.register(PipelineRun)
+class PipelineRunAdmin(admin.ModelAdmin):
+    list_display = ['id', 'model_endpoint', 'status', 'current_stage', 'started_at', 'completed_at']
+    list_filter = ['status', 'current_stage', 'created_at']
+    search_fields = ['model_endpoint__name']
+    readonly_fields = ['created_at']
+
+
+@admin.register(Experiment)
+class ExperimentAdmin(admin.ModelAdmin):
+    list_display = ['name', 'model_endpoint', 'recall_at_100', 'is_production', 'created_at']
+    list_filter = ['is_production', 'created_at']
+    search_fields = ['name', 'model_endpoint__name']
+    readonly_fields = ['created_at']
+
+
+@admin.register(TrainedModel)
+class TrainedModelAdmin(admin.ModelAdmin):
+    list_display = ['model_endpoint', 'version', 'status', 'recall_at_100', 'created_at']
+    list_filter = ['status', 'created_at']
+    search_fields = ['model_endpoint__name', 'version']
+    readonly_fields = ['created_at']
+
+
+@admin.register(Deployment)
+class DeploymentAdmin(admin.ModelAdmin):
+    list_display = ['model_endpoint', 'environment', 'status', 'is_healthy', 'deployed_at']
+    list_filter = ['environment', 'status', 'is_healthy']
+    search_fields = ['model_endpoint__name']
+    readonly_fields = ['deployed_at']
+
+
+@admin.register(PredictionLog)
+class PredictionLogAdmin(admin.ModelAdmin):
+    list_display = ['deployment', 'window_start', 'window_end', 'total_requests', 'total_predictions']
+    list_filter = ['logged_at']
+    readonly_fields = ['logged_at']
+
+
+@admin.register(SystemMetrics)
+class SystemMetricsAdmin(admin.ModelAdmin):
+    list_display = ['date', 'total_endpoints', 'active_endpoints', 'total_pipeline_runs', 'total_predictions']
+    list_filter = ['date']
+    readonly_fields = ['recorded_at']

@@ -1,0 +1,65 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4">
+    <div class="mb-6">
+        <div class="flex items-center justify-between mb-4">
+            <div>
+                <a href="{% url 'system_dashboard' %}" class="text-blue-600 hover:text-blue-800 mb-2 inline-block">
+                    <i class="fas fa-arrow-left mr-2"></i>Back to System Dashboard
+                </a>
+                <h1 class="text-3xl font-bold text-gray-900">{{ model.name }}</h1>
+                <p class="text-gray-600 mt-1">{{ model.description }}</p>
+            </div>
+            <div>
+                <span class="px-3 py-1 rounded-full text-sm font-medium
+                    {% if model.status == 'active' %}bg-green-100 text-green-800
+                    {% elif model.status == 'draft' %}bg-gray-100 text-gray-800
+                    {% elif model.status == 'inactive' %}bg-yellow-100 text-yellow-800
+                    {% else %}bg-red-100 text-red-800{% endif %}">
+                    {{ model.get_status_display }}
+                </span>
+            </div>
+        </div>
+
+        <nav class="bg-white shadow rounded-lg mb-6">
+            <div class="flex overflow-x-auto">
+                <a href="{% url 'model_dashboard' model.id %}"
+                   class="px-6 py-3 text-sm font-medium {% if request.resolver_match.url_name == 'model_dashboard' %}text-blue-600 border-b-2 border-blue-600{% else %}text-gray-600 hover:text-blue-600{% endif %}">
+                    <i class="fas fa-dashboard mr-2"></i>Dashboard
+                </a>
+                <a href="{% url 'model_training' model.id %}"
+                   class="px-6 py-3 text-sm font-medium {% if request.resolver_match.url_name == 'model_training' %}text-blue-600 border-b-2 border-blue-600{% else %}text-gray-600 hover:text-blue-600{% endif %}">
+                    <i class="fas fa-play mr-2"></i>Training
+                </a>
+                <a href="{% url 'model_experiments' model.id %}"
+                   class="px-6 py-3 text-sm font-medium {% if request.resolver_match.url_name == 'model_experiments' %}text-blue-600 border-b-2 border-blue-600{% else %}text-gray-600 hover:text-blue-600{% endif %}">
+                    <i class="fas fa-flask mr-2"></i>Experiments
+                </a>
+                <a href="{% url 'model_deployment' model.id %}"
+                   class="px-6 py-3 text-sm font-medium {% if request.resolver_match.url_name == 'model_deployment' %}text-blue-600 border-b-2 border-blue-600{% else %}text-gray-600 hover:text-blue-600{% endif %}">
+                    <i class="fas fa-rocket mr-2"></i>Deployment
+                </a>
+                <a href="{% url 'model_pipeline_config' model.id %}"
+                   class="px-6 py-3 text-sm font-medium {% if request.resolver_match.url_name == 'model_pipeline_config' %}text-blue-600 border-b-2 border-blue-600{% else %}text-gray-600 hover:text-blue-600{% endif %}">
+                    <i class="fas fa-cog mr-2"></i>Pipeline Config
+                </a>
+                <a href="{% url 'model_dataset' model.id %}"
+                   class="px-6 py-3 text-sm font-medium {% if request.resolver_match.url_name == 'model_dataset' %}text-blue-600 border-b-2 border-blue-600{% else %}text-gray-600 hover:text-blue-600{% endif %}">
+                    <i class="fas fa-database mr-2"></i>Dataset
+                </a>
+                <a href="{% url 'model_etl' model.id %}"
+                   class="px-6 py-3 text-sm font-medium {% if request.resolver_match.url_name == 'model_etl' %}text-blue-600 border-b-2 border-blue-600{% else %}text-gray-600 hover:text-blue-600{% endif %}">
+                    <i class="fas fa-sync mr-2"></i>ETL
+                </a>
+                <a href="{% url 'model_feature_engineering' model.id %}"
+                   class="px-6 py-3 text-sm font-medium {% if request.resolver_match.url_name == 'model_feature_engineering' %}text-blue-600 border-b-2 border-blue-600{% else %}text-gray-600 hover:text-blue-600{% endif %}">
+                    <i class="fas fa-wrench mr-2"></i>Feature Engineering
+                </a>
+            </div>
+        </nav>
+    </div>
+
+    {% block model_content %}{% endblock %}
+</div>
+{% endblock %}

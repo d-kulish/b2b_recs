@@ -485,6 +485,109 @@ def api_etl_add_source(request, model_id):
 
 
 @login_required
+@require_http_methods(["GET"])
+def api_etl_get_source(request, source_id):
+    """
+    API endpoint to get data source details for editing.
+    """
+    try:
+        source = get_object_or_404(DataSource, id=source_id)
+
+        # Get tables for this source
+        tables = []
+        for table in source.tables.all():
+            tables.append({
+                'id': table.id,
+                'source_table_name': table.source_table_name,
+                'dest_table_name': table.dest_table_name,
+                'dest_dataset': table.dest_dataset,
+                'sync_mode': table.sync_mode,
+                'incremental_column': table.incremental_column or '',
+                'row_limit': table.row_limit,
+                'is_enabled': table.is_enabled,
+            })
+
+        return JsonResponse({
+            'status': 'success',
+            'source': {
+                'id': source.id,
+                'name': source.name,
+                'source_type': source.source_type,
+                'source_host': source.source_host or '',
+                'source_port': source.source_port,
+                'source_database': source.source_database or '',
+                'source_schema': source.source_schema or '',
+                'source_username': source.source_username or '',
+                'bigquery_project': source.bigquery_project or '',
+                'bigquery_dataset': source.bigquery_dataset or '',
+                'file_path': source.file_path or '',
+                'is_enabled': source.is_enabled,
+                'tables': tables,
+            }
+        })
+
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e),
+        }, status=400)
+
+
+@login_required
+@require_http_methods(["POST"])
+def api_etl_update_source(request, source_id):
+    """
+    API endpoint to update an existing data source.
+    """
+    try:
+        source = get_object_or_404(DataSource, id=source_id)
+        data = json.loads(request.body)
+
+        # Update source fields
+        source.name = data.get('name', source.name)
+        source.source_type = data.get('source_type', source.source_type)
+        source.source_host = data.get('source_host', '')
+        source.source_port = data.get('source_port')
+        source.source_database = data.get('source_database', '')
+        source.source_schema = data.get('source_schema', '')
+        source.bigquery_project = data.get('bigquery_project', '')
+        source.bigquery_dataset = data.get('bigquery_dataset', '')
+        source.file_path = data.get('file_path', '')
+        source.is_enabled = data.get('is_enabled', source.is_enabled)
+        source.save()
+
+        # Update tables if provided
+        tables_data = data.get('tables', [])
+        if tables_data:
+            # Delete existing tables
+            source.tables.all().delete()
+            # Create new tables
+            for table_data in tables_data:
+                DataSourceTable.objects.create(
+                    data_source=source,
+                    source_table_name=table_data.get('source_table_name'),
+                    dest_table_name=table_data.get('dest_table_name'),
+                    dest_dataset=table_data.get('dest_dataset', 'raw_data'),
+                    sync_mode=table_data.get('sync_mode', 'replace'),
+                    incremental_column=table_data.get('incremental_column', ''),
+                    row_limit=table_data.get('row_limit'),
+                    is_enabled=table_data.get('is_enabled', True),
+                )
+
+        return JsonResponse({
+            'status': 'success',
+            'message': 'Data source updated successfully',
+            'source_id': source.id,
+        })
+
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e),
+        }, status=400)
+
+
+@login_required
 @require_http_methods(["POST"])
 def api_etl_test_connection(request, source_id):
     """
@@ -589,6 +692,48 @@ def api_etl_run_now(request, model_id):
         return JsonResponse({
             'status': 'success',
             'message': 'ETL run started',
+            'run_id': etl_run.id,
+        })
+
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e),
+        }, status=400)
+
+
+@login_required
+@require_http_methods(["POST"])
+def api_etl_run_source(request, source_id):
+    """
+    API endpoint to trigger ETL run for a single data source.
+    """
+    try:
+        source = get_object_or_404(DataSource, id=source_id)
+        etl_config = source.etl_config
+        model = etl_config.model_endpoint
+
+        # Create ETL run record for this specific source
+        etl_run = ETLRun.objects.create(
+            etl_config=etl_config,
+            model_endpoint=model,
+            status='pending',
+            triggered_by=request.user,
+            started_at=timezone.now(),
+        )
+
+        # TODO: Trigger actual Cloud Run ETL job for this specific source
+        # For now, simulate success
+        etl_run.status = 'running'
+        etl_run.total_sources = 1
+        etl_run.successful_sources = 0
+        etl_run.total_tables = source.tables.filter(is_enabled=True).count()
+        etl_run.successful_tables = 0
+        etl_run.save()
+
+        return JsonResponse({
+            'status': 'success',
+            'message': f'ETL run started for "{source.name}"',
             'run_id': etl_run.id,
         })
 

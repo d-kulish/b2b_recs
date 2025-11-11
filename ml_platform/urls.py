@@ -28,7 +28,10 @@ urlpatterns = [
     path('api/models/<int:model_id>/etl/add-source/', views.api_etl_add_source, name='api_etl_add_source'),
     path('api/models/<int:model_id>/etl/toggle/', views.api_etl_toggle_enabled, name='api_etl_toggle_enabled'),
     path('api/models/<int:model_id>/etl/run/', views.api_etl_run_now, name='api_etl_run_now'),
+    path('api/etl/sources/<int:source_id>/', views.api_etl_get_source, name='api_etl_get_source'),
+    path('api/etl/sources/<int:source_id>/update/', views.api_etl_update_source, name='api_etl_update_source'),
     path('api/etl/sources/<int:source_id>/test/', views.api_etl_test_connection, name='api_etl_test_connection'),
+    path('api/etl/sources/<int:source_id>/run/', views.api_etl_run_source, name='api_etl_run_source'),
     path('api/etl/sources/<int:source_id>/delete/', views.api_etl_delete_source, name='api_etl_delete_source'),
     path('api/etl/runs/<int:run_id>/status/', views.api_etl_run_status, name='api_etl_run_status'),
 ]

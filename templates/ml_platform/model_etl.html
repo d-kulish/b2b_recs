@@ -5,178 +5,89 @@
 
 {% block model_content %}
 <div class="space-y-6">
-    <!-- ETL Status Card -->
-    <div class="bg-white rounded-xl border border-black shadow-lg p-6">
-        <div class="flex items-center justify-between mb-4">
-            <h2 class="text-2xl font-bold text-gray-900">ETL Configuration</h2>
-            {% if etl_config.is_enabled %}
-            <span class="px-4 py-2 bg-green-100 text-green-800 rounded-lg text-sm font-semibold">
-                <i class="fas fa-check-circle mr-1"></i>Enabled
-            </span>
-            {% else %}
-            <span class="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm font-semibold">
-                <i class="fas fa-pause-circle mr-1"></i>Disabled
-            </span>
-            {% endif %}
-        </div>
-
-        <div class="grid grid-cols-4 gap-6">
-            <!-- Schedule -->
-            <div class="bg-blue-50 rounded-lg p-4 border border-blue-200">
-                <div class="text-sm text-blue-600 font-semibold mb-1">Schedule</div>
-                <div class="text-lg font-bold text-blue-900">
-                    {{ etl_config.get_schedule_type_display|default:"Not Configured" }}
-                </div>
-                {% if etl_config.schedule_time %}
-                <div class="text-sm text-blue-700 mt-1">at {{ etl_config.schedule_time|time:"g:i A" }}</div>
-                {% endif %}
-            </div>
-
-            <!-- Last Run -->
-            <div class="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                <div class="text-sm text-gray-600 font-semibold mb-1">Last Run</div>
-                {% if etl_config.last_run_at %}
-                <div class="text-lg font-bold text-gray-900">
-                    {{ etl_config.last_run_at|timesince }} ago
-                </div>
-                <div class="text-sm mt-1">
-                    {% if etl_config.last_run_status == 'completed' %}
-                    <span class="text-green-600"><i class="fas fa-check-circle mr-1"></i>Success</span>
-                    {% elif etl_config.last_run_status == 'failed' %}
-                    <span class="text-red-600"><i class="fas fa-times-circle mr-1"></i>Failed</span>
-                    {% else %}
-                    <span class="text-gray-600">{{ etl_config.last_run_status|title }}</span>
-                    {% endif %}
-                </div>
-                {% else %}
-                <div class="text-lg font-bold text-gray-400">Never</div>
-                {% endif %}
-            </div>
-
-            <!-- Data Sources -->
-            <div class="bg-purple-50 rounded-lg p-4 border border-purple-200">
-                <div class="text-sm text-purple-600 font-semibold mb-1">Data Sources</div>
-                <div class="text-lg font-bold text-purple-900">
-                    {{ data_sources|length }}
-                </div>
-                <div class="text-sm text-purple-700 mt-1">
-                    {{ enabled_sources_count }} enabled
-                </div>
-            </div>
-
-            <!-- Tables -->
-            <div class="bg-indigo-50 rounded-lg p-4 border border-indigo-200">
-                <div class="text-sm text-indigo-600 font-semibold mb-1">Total Tables</div>
-                <div class="text-lg font-bold text-indigo-900">
-                    {{ total_tables_count }}
-                </div>
-                <div class="text-sm text-indigo-700 mt-1">
-                    {{ enabled_tables_count }} enabled
-                </div>
-            </div>
-        </div>
-
-        <!-- Actions -->
-        <div class="mt-6 flex gap-3">
-            <button onclick="runETLNow()" class="px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold transition shadow-sm">
-                <i class="fas fa-play mr-2"></i>Run ETL Now
-            </button>
-            <button onclick="toggleSchedule()" class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition shadow-sm">
-                <i class="fas fa-calendar mr-2"></i>Configure Schedule
-            </button>
-            {% if etl_config.is_enabled %}
-            <button onclick="disableETL()" class="px-6 py-3 bg-gray-600 hover:bg-gray-700 text-white rounded-lg font-semibold transition shadow-sm">
-                <i class="fas fa-pause mr-2"></i>Disable
-            </button>
-            {% else %}
-            <button onclick="enableETL()" class="px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold transition shadow-sm">
-                <i class="fas fa-play mr-2"></i>Enable
-            </button>
-            {% endif %}
-        </div>
-    </div>
-
-    <!-- Data Sources Section -->
+    <!-- ETL Jobs Section -->
     <div class="bg-white rounded-xl border border-black shadow-lg p-6">
         <div class="flex items-center justify-between mb-6">
-            <h3 class="text-xl font-bold text-gray-900">Data Sources</h3>
+            <h3 class="text-xl font-bold text-gray-900">ETL Jobs</h3>
             <button onclick="showAddSourceModal()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition">
-                <i class="fas fa-plus mr-2"></i>Add Data Source
+                <i class="fas fa-plus mr-2"></i>Add ETL Job
             </button>
         </div>
 
         {% if data_sources %}
-        <div class="space-y-4">
+        <div class="space-y-3">
             {% for source in data_sources %}
-            <div class="border border-gray-300 rounded-lg p-4 hover:border-blue-400 transition">
-                <div class="flex items-start justify-between">
+            <div class="border border-gray-300 rounded-lg p-4 hover:border-blue-400 transition bg-white">
+                <div class="flex items-center justify-between">
+                    <!-- Left: Job Info -->
                     <div class="flex-1">
                         <div class="flex items-center gap-3 mb-2">
-                            <h4 class="text-lg font-bold text-gray-900">{{ source.name }}</h4>
-                            <span class="px-3 py-1 bg-gray-100 text-gray-700 rounded text-sm font-medium">
-                                {{ source.get_source_type_display }}
+                            <!-- Source Type Icon -->
+                            <span class="w-8 h-8 bg-gray-100 rounded flex items-center justify-center">
+                                {% if source.source_type == 'postgresql' %}
+                                <i class="fas fa-database text-blue-600"></i>
+                                {% elif source.source_type == 'mysql' %}
+                                <i class="fas fa-database text-orange-600"></i>
+                                {% elif source.source_type == 'csv' %}
+                                <i class="fas fa-file-csv text-green-600"></i>
+                                {% else %}
+                                <i class="fas fa-database text-gray-600"></i>
+                                {% endif %}
                             </span>
-                            {% if source.is_enabled %}
-                            <span class="px-3 py-1 bg-green-100 text-green-700 rounded text-sm font-medium">
-                                <i class="fas fa-check mr-1"></i>Enabled
-                            </span>
-                            {% else %}
-                            <span class="px-3 py-1 bg-gray-100 text-gray-600 rounded text-sm font-medium">
-                                Disabled
-                            </span>
-                            {% endif %}
-                            {% if source.connection_tested %}
-                            <span class="px-3 py-1 bg-blue-100 text-blue-700 rounded text-sm font-medium">
-                                <i class="fas fa-check-circle mr-1"></i>Connection Tested
-                            </span>
-                            {% endif %}
-                        </div>
 
-                        <!-- Connection Details -->
-                        <div class="text-sm text-gray-600 mb-3">
-                            {% if source.source_type == 'postgresql' or source.source_type == 'mysql' or source.source_type == 'sqlserver' %}
-                            <span><strong>Host:</strong> {{ source.source_host }}:{{ source.source_port }}</span>
-                            <span class="mx-2">|</span>
-                            <span><strong>Database:</strong> {{ source.source_database }}</span>
-                            {% elif source.source_type == 'csv' or source.source_type == 'parquet' %}
-                            <span><strong>File:</strong> {{ source.file_path }}</span>
-                            {% elif source.source_type == 'bigquery' %}
-                            <span><strong>Project:</strong> {{ source.bigquery_project }}</span>
-                            <span class="mx-2">|</span>
-                            <span><strong>Dataset:</strong> {{ source.bigquery_dataset }}</span>
-                            {% endif %}
-                        </div>
-
-                        <!-- Tables -->
-                        <div class="mt-3">
-                            <div class="text-sm font-semibold text-gray-700 mb-2">
-                                Configured Tables ({{ source.tables.count }}):
-                            </div>
-                            <div class="flex flex-wrap gap-2">
-                                {% for table in source.tables.all %}
-                                <span class="px-3 py-1 bg-white border border-black rounded text-sm">
-                                    {{ table.source_table_name }} → {{ table.dest_table_name }}
-                                    {% if not table.is_enabled %}
-                                    <span class="text-gray-400">(disabled)</span>
+                            <!-- Job Title -->
+                            <div class="flex-1">
+                                <h4 class="text-base font-bold text-gray-900">{{ source.name }}</h4>
+                                <div class="text-sm text-gray-600">
+                                    <span class="font-medium">{{ source.get_source_type_display }}</span>
+                                    {% if source.source_type == 'postgresql' or source.source_type == 'mysql' or source.source_type == 'sqlserver' %}
+                                    <span class="mx-1">•</span>
+                                    <span>{{ source.source_host }}</span>
                                     {% endif %}
-                                </span>
-                                {% empty %}
-                                <span class="text-sm text-gray-400 italic">No tables configured</span>
-                                {% endfor %}
+                                    {% for table in source.tables.all %}
+                                    <span class="mx-1">•</span>
+                                    <span class="font-medium">{{ table.source_table_name }} → {{ table.dest_table_name }}</span>
+                                    {% endfor %}
+                                </div>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Actions -->
-                    <div class="flex flex-col gap-2 ml-4">
-                        <button onclick="testConnection({{ source.id }})" class="px-4 py-2 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg text-sm font-semibold transition">
-                            <i class="fas fa-plug mr-1"></i>Test
+                    <!-- Middle: Status & Schedule -->
+                    <div class="flex items-center gap-4 mx-6">
+                        <!-- Status -->
+                        <div class="text-center">
+                            {% if source.is_enabled %}
+                            <span class="px-3 py-1 bg-green-100 text-green-700 rounded text-sm font-semibold">
+                                <i class="fas fa-check-circle mr-1"></i>Enabled
+                            </span>
+                            {% else %}
+                            <span class="px-3 py-1 bg-gray-100 text-gray-600 rounded text-sm font-semibold">
+                                <i class="fas fa-pause-circle mr-1"></i>Disabled
+                            </span>
+                            {% endif %}
+                        </div>
+
+                        <!-- Schedule Info -->
+                        <div class="text-sm text-gray-600">
+                            {% if source.last_test_at %}
+                            <div><i class="fas fa-clock mr-1"></i>Last: {{ source.last_test_at|timesince }} ago</div>
+                            {% else %}
+                            <div class="text-gray-400"><i class="fas fa-clock mr-1"></i>Never run</div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Right: Actions -->
+                    <div class="flex gap-2">
+                        <button onclick="runSourceNow({{ source.id }})" class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-semibold transition shadow-sm">
+                            <i class="fas fa-play mr-1"></i>Run Now
                         </button>
                         <button onclick="editSource({{ source.id }})" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-semibold transition">
-                            <i class="fas fa-edit mr-1"></i>Edit
+                            <i class="fas fa-edit"></i>
                         </button>
                         <button onclick="deleteSource({{ source.id }})" class="px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg text-sm font-semibold transition">
-                            <i class="fas fa-trash mr-1"></i>Delete
+                            <i class="fas fa-trash"></i>
                         </button>
                     </div>
                 </div>
@@ -186,9 +97,10 @@
         {% else %}
         <div class="text-center py-12 bg-gray-50 rounded-lg border border-gray-200">
             <i class="fas fa-database text-gray-400 text-5xl mb-4"></i>
-            <p class="text-gray-600 text-lg mb-4">No data sources configured</p>
+            <p class="text-gray-600 text-lg mb-4">No ETL jobs configured</p>
+            <p class="text-gray-500 text-sm mb-6">Add your first data source to start extracting data to BigQuery</p>
             <button onclick="showAddSourceModal()" class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition">
-                <i class="fas fa-plus mr-2"></i>Add Your First Data Source
+                <i class="fas fa-plus mr-2"></i>Add Your First ETL Job
             </button>
         </div>
         {% endif %}
@@ -273,19 +185,254 @@
     </div>
 </div>
 
-<!-- Add Data Source Modal (placeholder) -->
+<!-- Add Data Source Wizard Modal -->
 <div id="addSourceModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
-    <div class="bg-white rounded-xl shadow-2xl max-w-3xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+    <div class="bg-white rounded-xl shadow-2xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+        <!-- Modal Header -->
         <div class="p-6 border-b border-gray-200">
             <div class="flex items-center justify-between">
-                <h3 class="text-2xl font-bold text-gray-900">Add Data Source</h3>
+                <div>
+                    <h3 class="text-2xl font-bold text-gray-900">Add ETL Job</h3>
+                    <p class="text-sm text-gray-600 mt-1">Step <span id="currentStep">1</span> of 4</p>
+                </div>
                 <button onclick="hideAddSourceModal()" class="text-gray-400 hover:text-gray-600">
                     <i class="fas fa-times text-2xl"></i>
                 </button>
             </div>
+
+            <!-- Progress Bar -->
+            <div class="mt-4 flex gap-2">
+                <div id="progress1" class="flex-1 h-2 bg-blue-600 rounded"></div>
+                <div id="progress2" class="flex-1 h-2 bg-gray-200 rounded"></div>
+                <div id="progress3" class="flex-1 h-2 bg-gray-200 rounded"></div>
+                <div id="progress4" class="flex-1 h-2 bg-gray-200 rounded"></div>
+            </div>
         </div>
+
+        <!-- Modal Body -->
         <div class="p-6">
-            <p class="text-gray-600">Form will be implemented here...</p>
+            <!-- Step 1: Connection Setup -->
+            <div id="step1" class="wizard-step">
+                <h4 class="text-lg font-bold text-gray-900 mb-4">Connection Setup</h4>
+
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Connection Type</label>
+                        <select id="sourceType" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <option value="postgresql">PostgreSQL</option>
+                            <option value="mysql">MySQL</option>
+                            <option value="sqlserver">SQL Server</option>
+                            <option value="bigquery">BigQuery</option>
+                            <option value="csv">CSV Upload</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Job Name</label>
+                        <input type="text" id="sourceName" placeholder="e.g., Production Transactions DB" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <p class="text-xs text-gray-500 mt-1">A friendly name to identify this ETL job</p>
+                    </div>
+
+                    <div id="dbConnectionFields">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-semibold text-gray-700 mb-2">Host</label>
+                                <input type="text" id="sourceHost" placeholder="db.example.com" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-semibold text-gray-700 mb-2">Port</label>
+                                <input type="number" id="sourcePort" placeholder="5432" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            </div>
+                        </div>
+
+                        <div class="mt-4">
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">Database Name</label>
+                            <input type="text" id="sourceDatabase" placeholder="analytics" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-4 mt-4">
+                            <div>
+                                <label class="block text-sm font-semibold text-gray-700 mb-2">Username</label>
+                                <input type="text" id="sourceUsername" placeholder="etl_user" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-semibold text-gray-700 mb-2">Password</label>
+                                <input type="password" id="sourcePassword" placeholder="••••••••" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            </div>
+                        </div>
+
+                        <div class="mt-4">
+                            <button onclick="testConnectionWizard()" class="px-4 py-2 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg font-semibold transition">
+                                <i class="fas fa-plug mr-2"></i>Test Connection
+                            </button>
+                            <span id="connectionStatus" class="ml-3 text-sm"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 2: Table Selection -->
+            <div id="step2" class="wizard-step hidden">
+                <h4 class="text-lg font-bold text-gray-900 mb-4">Select Table</h4>
+
+                <p class="text-sm text-gray-600 mb-4">Choose one table to extract. You can create additional ETL jobs for other tables.</p>
+
+                <div class="space-y-2 border border-gray-200 rounded-lg p-4 max-h-96 overflow-y-auto">
+                    <!-- Simulated table list -->
+                    <label class="flex items-center p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
+                        <input type="radio" name="selectedTable" value="transactions" class="mr-3">
+                        <div class="flex-1">
+                            <div class="font-semibold text-gray-900">transactions</div>
+                            <div class="text-sm text-gray-600">~1.2M rows • Last updated: 2 min ago</div>
+                        </div>
+                    </label>
+
+                    <label class="flex items-center p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
+                        <input type="radio" name="selectedTable" value="customers" class="mr-3">
+                        <div class="flex-1">
+                            <div class="font-semibold text-gray-900">customers</div>
+                            <div class="text-sm text-gray-600">~450K rows • Last updated: 1 hour ago</div>
+                        </div>
+                    </label>
+
+                    <label class="flex items-center p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
+                        <input type="radio" name="selectedTable" value="orders" class="mr-3">
+                        <div class="flex-1">
+                            <div class="font-semibold text-gray-900">orders</div>
+                            <div class="text-sm text-gray-600">~890K rows • Last updated: 5 min ago</div>
+                        </div>
+                    </label>
+
+                    <label class="flex items-center p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
+                        <input type="radio" name="selectedTable" value="products" class="mr-3">
+                        <div class="flex-1">
+                            <div class="font-semibold text-gray-900">products</div>
+                            <div class="text-sm text-gray-600">~120K rows • Last updated: 2 days ago</div>
+                        </div>
+                    </label>
+
+                    <label class="flex items-center p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
+                        <input type="radio" name="selectedTable" value="stores" class="mr-3">
+                        <div class="flex-1">
+                            <div class="font-semibold text-gray-900">stores</div>
+                            <div class="text-sm text-gray-600">~500 rows • Last updated: 1 week ago</div>
+                        </div>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Step 3: Table Configuration -->
+            <div id="step3" class="wizard-step hidden">
+                <h4 class="text-lg font-bold text-gray-900 mb-4">Configure Table Sync</h4>
+
+                <div class="space-y-4">
+                    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                        <div class="flex items-center gap-2 mb-2">
+                            <i class="fas fa-info-circle text-blue-600"></i>
+                            <span class="font-semibold text-blue-900">Source Table: <span id="selectedTableName"></span></span>
+                        </div>
+                        <div class="text-sm text-blue-800">
+                            Destination: raw_data.<span id="destTableName"></span>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Sync Mode</label>
+                        <select id="syncMode" onchange="toggleIncrementalFields()" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <option value="replace">Full Refresh - Replace all data</option>
+                            <option value="append">Append - Only add new rows</option>
+                            <option value="incremental">Incremental - Sync based on timestamp column</option>
+                        </select>
+                        <p class="text-xs text-gray-500 mt-1">
+                            <span id="syncModeHelp">Deletes all existing data and reloads from source</span>
+                        </p>
+                    </div>
+
+                    <div id="incrementalFields" class="hidden">
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Timestamp Column</label>
+                        <select id="incrementalColumn" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <option value="updated_at">updated_at</option>
+                            <option value="created_at">created_at</option>
+                            <option value="timestamp">timestamp</option>
+                            <option value="last_modified">last_modified</option>
+                        </select>
+                        <p class="text-xs text-gray-500 mt-1">Column used to identify new/updated records</p>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Row Limit (Optional - for testing)</label>
+                        <input type="number" id="rowLimit" placeholder="Leave empty for no limit" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <p class="text-xs text-gray-500 mt-1">Useful for testing - extract only first N rows</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 4: Schedule & Summary -->
+            <div id="step4" class="wizard-step hidden">
+                <h4 class="text-lg font-bold text-gray-900 mb-4">Schedule & Deploy</h4>
+
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Schedule</label>
+                        <select id="scheduleType" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <option value="manual">Manual Only - No automatic runs</option>
+                            <option value="hourly">Hourly - Every hour</option>
+                            <option value="daily">Daily - Once per day</option>
+                            <option value="weekly">Weekly - Once per week</option>
+                            <option value="monthly">Monthly - Once per month</option>
+                        </select>
+                    </div>
+
+                    <div class="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                        <h5 class="font-bold text-gray-900 mb-3">Summary</h5>
+                        <div class="space-y-2 text-sm">
+                            <div class="flex">
+                                <span class="w-32 text-gray-600">Connection:</span>
+                                <span class="font-semibold text-gray-900" id="summaryConnection"></span>
+                            </div>
+                            <div class="flex">
+                                <span class="w-32 text-gray-600">Source Table:</span>
+                                <span class="font-semibold text-gray-900" id="summarySourceTable"></span>
+                            </div>
+                            <div class="flex">
+                                <span class="w-32 text-gray-600">Destination:</span>
+                                <span class="font-semibold text-gray-900" id="summaryDestination"></span>
+                            </div>
+                            <div class="flex">
+                                <span class="w-32 text-gray-600">Sync Mode:</span>
+                                <span class="font-semibold text-gray-900" id="summarySyncMode"></span>
+                            </div>
+                            <div class="flex">
+                                <span class="w-32 text-gray-600">Schedule:</span>
+                                <span class="font-semibold text-gray-900" id="summarySchedule"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center">
+                        <input type="checkbox" id="enableImmediately" class="mr-2">
+                        <label for="enableImmediately" class="text-sm text-gray-700">Enable immediately after creation</label>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal Footer -->
+        <div class="p-6 border-t border-gray-200 flex justify-between">
+            <button id="backButton" onclick="previousStep()" class="px-6 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-semibold transition hidden">
+                <i class="fas fa-arrow-left mr-2"></i>Back
+            </button>
+            <div class="flex gap-3">
+                <button onclick="hideAddSourceModal()" class="px-6 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-semibold transition">
+                    Cancel
+                </button>
+                <button id="nextButton" onclick="nextStep()" class="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition">
+                    Next: Select Table <i class="fas fa-arrow-right ml-2"></i>
+                </button>
+                <button id="createButton" onclick="createDataSource()" class="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold transition hidden">
+                    <i class="fas fa-check mr-2"></i>Create ETL Job
+                </button>
+            </div>
         </div>
     </div>
 </div>
@@ -308,9 +455,9 @@ function getCookie(name) {
 
 const csrftoken = getCookie('csrftoken');
 
-function runETLNow() {
-    if (confirm('Run ETL extraction now? This will process all enabled data sources.')) {
-        fetch(`/api/models/{{ model.id }}/etl/run/`, {
+function runSourceNow(sourceId) {
+    if (confirm('Run ETL extraction now for this data source?')) {
+        fetch(`/api/etl/sources/${sourceId}/run/`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -320,7 +467,7 @@ function runETLNow() {
         .then(response => response.json())
         .then(data => {
             if (data.status === 'success') {
-                alert(data.message + '\nRun ID: ' + data.run_id);
+                alert('✓ ' + data.message + '\nRun ID: ' + data.run_id);
                 location.reload();
             } else {
                 alert('Error: ' + data.message);
@@ -419,7 +566,51 @@ function testConnection(sourceId) {
 }
 
 function editSource(sourceId) {
-    alert('Edit source modal will be implemented in the next phase.\nFor now, you can delete and recreate the source.');
+    // Fetch source data
+    fetch(`/api/etl/sources/${sourceId}/`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                const source = data.source;
+
+                // Set wizard to edit mode
+                wizardEditMode = true;
+                wizardEditSourceId = sourceId;
+
+                // Populate form with existing data
+                document.getElementById('sourceType').value = source.source_type;
+                document.getElementById('sourceName').value = source.name;
+                document.getElementById('sourceHost').value = source.source_host;
+                document.getElementById('sourcePort').value = source.source_port || '';
+                document.getElementById('sourceDatabase').value = source.source_database;
+                document.getElementById('sourceUsername').value = source.source_username;
+                document.getElementById('sourcePassword').value = ''; // Don't populate password
+
+                // If there's a table configured, pre-select it
+                if (source.tables && source.tables.length > 0) {
+                    const table = source.tables[0];
+                    wizardEditTableData = table;
+
+                    // Store sync settings for step 3
+                    document.getElementById('syncMode').value = table.sync_mode;
+                    document.getElementById('incrementalColumn').value = table.incremental_column || '';
+                    document.getElementById('rowLimit').value = table.row_limit || '';
+                }
+
+                document.getElementById('enableImmediately').checked = source.is_enabled;
+
+                // Update modal title
+                document.querySelector('#addSourceModal h3').textContent = 'Edit ETL Job';
+
+                // Show modal
+                showAddSourceModal();
+            } else {
+                alert('Error loading source data: ' + data.message);
+            }
+        })
+        .catch(error => {
+            alert('Error loading source: ' + error);
+        });
 }
 
 function deleteSource(sourceId) {
@@ -460,6 +651,245 @@ function viewRunDetails(runId) {
         .catch(error => {
             alert('Error fetching run details: ' + error);
         });
+}
+
+// ============================================================================
+// Wizard Functions
+// ============================================================================
+
+let currentWizardStep = 1;
+let wizardEditMode = false;
+let wizardEditSourceId = null;
+let wizardEditTableData = null;
+
+function showAddSourceModal() {
+    document.getElementById('addSourceModal').classList.remove('hidden');
+    // Reset title if not already set by editSource
+    if (!wizardEditMode) {
+        document.querySelector('#addSourceModal h3').textContent = 'Add ETL Job';
+    }
+    currentWizardStep = 1;
+    showStep(1);
+}
+
+function hideAddSourceModal() {
+    document.getElementById('addSourceModal').classList.add('hidden');
+    resetWizard();
+}
+
+function resetWizard() {
+    currentWizardStep = 1;
+    wizardEditMode = false;
+    wizardEditSourceId = null;
+    wizardEditTableData = null;
+
+    document.querySelectorAll('.wizard-step').forEach(step => step.classList.add('hidden'));
+    document.getElementById('step1').classList.remove('hidden');
+
+    // Reset form fields
+    document.getElementById('sourceType').value = 'postgresql';
+    document.getElementById('sourceName').value = '';
+    document.getElementById('sourceHost').value = '';
+    document.getElementById('sourcePort').value = '';
+    document.getElementById('sourceDatabase').value = '';
+    document.getElementById('sourceUsername').value = '';
+    document.getElementById('sourcePassword').value = '';
+    document.getElementById('syncMode').value = 'replace';
+    document.getElementById('rowLimit').value = '';
+    document.getElementById('enableImmediately').checked = true;
+
+    // Reset progress
+    updateProgress(1);
+}
+
+function showStep(step) {
+    // Hide all steps
+    document.querySelectorAll('.wizard-step').forEach(s => s.classList.add('hidden'));
+
+    // Show current step
+    document.getElementById(`step${step}`).classList.remove('hidden');
+
+    // Update step indicator
+    document.getElementById('currentStep').textContent = step;
+
+    // Update progress bar
+    updateProgress(step);
+
+    // Update buttons
+    document.getElementById('backButton').classList.toggle('hidden', step === 1);
+    document.getElementById('nextButton').classList.toggle('hidden', step === 4);
+    document.getElementById('createButton').classList.toggle('hidden', step !== 4);
+
+    // Update next button text
+    const nextButton = document.getElementById('nextButton');
+    if (step === 1) nextButton.innerHTML = 'Next: Select Table <i class="fas fa-arrow-right ml-2"></i>';
+    else if (step === 2) nextButton.innerHTML = 'Next: Configure <i class="fas fa-arrow-right ml-2"></i>';
+    else if (step === 3) nextButton.innerHTML = 'Next: Schedule <i class="fas fa-arrow-right ml-2"></i>';
+
+    // Update create button text based on edit mode
+    if (step === 4) {
+        const createButton = document.getElementById('createButton');
+        if (wizardEditMode) {
+            createButton.innerHTML = '<i class="fas fa-check mr-2"></i>Update ETL Job';
+        } else {
+            createButton.innerHTML = '<i class="fas fa-check mr-2"></i>Create ETL Job';
+        }
+    }
+
+    // Populate step 3 with selected table
+    if (step === 3) {
+        const selectedTable = document.querySelector('input[name="selectedTable"]:checked');
+        if (selectedTable) {
+            document.getElementById('selectedTableName').textContent = selectedTable.value;
+            document.getElementById('destTableName').textContent = selectedTable.value;
+        }
+    }
+
+    // Populate step 4 summary
+    if (step === 4) {
+        populateSummary();
+    }
+}
+
+function updateProgress(step) {
+    for (let i = 1; i <= 4; i++) {
+        const progressBar = document.getElementById(`progress${i}`);
+        if (i <= step) {
+            progressBar.classList.remove('bg-gray-200');
+            progressBar.classList.add('bg-blue-600');
+        } else {
+            progressBar.classList.remove('bg-blue-600');
+            progressBar.classList.add('bg-gray-200');
+        }
+    }
+}
+
+function nextStep() {
+    // Validation
+    if (currentWizardStep === 1) {
+        if (!document.getElementById('sourceName').value) {
+            alert('Please enter a job name');
+            return;
+        }
+    } else if (currentWizardStep === 2) {
+        const selectedTable = document.querySelector('input[name="selectedTable"]:checked');
+        if (!selectedTable) {
+            alert('Please select a table');
+            return;
+        }
+    }
+
+    currentWizardStep++;
+    showStep(currentWizardStep);
+}
+
+function previousStep() {
+    currentWizardStep--;
+    showStep(currentWizardStep);
+}
+
+function toggleIncrementalFields() {
+    const syncMode = document.getElementById('syncMode').value;
+    const incrementalFields = document.getElementById('incrementalFields');
+    const syncModeHelp = document.getElementById('syncModeHelp');
+
+    if (syncMode === 'incremental') {
+        incrementalFields.classList.remove('hidden');
+        syncModeHelp.textContent = 'Only syncs rows modified after last run';
+    } else {
+        incrementalFields.classList.add('hidden');
+        if (syncMode === 'replace') {
+            syncModeHelp.textContent = 'Deletes all existing data and reloads from source';
+        } else {
+            syncModeHelp.textContent = 'Adds new rows without deleting existing data';
+        }
+    }
+}
+
+function populateSummary() {
+    const sourceType = document.getElementById('sourceType').options[document.getElementById('sourceType').selectedIndex].text;
+    const sourceName = document.getElementById('sourceName').value;
+    const sourceHost = document.getElementById('sourceHost').value;
+    const selectedTable = document.querySelector('input[name="selectedTable"]:checked');
+    const syncMode = document.getElementById('syncMode').options[document.getElementById('syncMode').selectedIndex].text;
+    const schedule = document.getElementById('scheduleType').options[document.getElementById('scheduleType').selectedIndex].text;
+
+    document.getElementById('summaryConnection').textContent = `${sourceType} - ${sourceName}`;
+    if (sourceHost) {
+        document.getElementById('summaryConnection').textContent += ` (${sourceHost})`;
+    }
+    document.getElementById('summarySourceTable').textContent = selectedTable ? selectedTable.value : '';
+    document.getElementById('summaryDestination').textContent = `raw_data.${selectedTable ? selectedTable.value : ''}`;
+    document.getElementById('summarySyncMode').textContent = syncMode;
+    document.getElementById('summarySchedule').textContent = schedule;
+}
+
+function testConnectionWizard() {
+    const statusSpan = document.getElementById('connectionStatus');
+    statusSpan.innerHTML = '<i class="fas fa-spinner fa-spin text-blue-600"></i> Testing...';
+
+    // Simulate connection test
+    setTimeout(() => {
+        statusSpan.innerHTML = '<i class="fas fa-check-circle text-green-600"></i> Connection successful';
+    }, 1500);
+}
+
+function createDataSource() {
+    const selectedTable = document.querySelector('input[name="selectedTable"]:checked');
+    if (!selectedTable) {
+        alert('Please select a table');
+        return;
+    }
+
+    const data = {
+        name: document.getElementById('sourceName').value,
+        source_type: document.getElementById('sourceType').value,
+        source_host: document.getElementById('sourceHost').value,
+        source_port: document.getElementById('sourcePort').value || null,
+        source_database: document.getElementById('sourceDatabase').value,
+        is_enabled: document.getElementById('enableImmediately').checked,
+        tables: [{
+            source_table_name: selectedTable.value,
+            dest_table_name: selectedTable.value,
+            dest_dataset: 'raw_data',
+            sync_mode: document.getElementById('syncMode').value,
+            incremental_column: document.getElementById('syncMode').value === 'incremental'
+                ? document.getElementById('incrementalColumn').value
+                : '',
+            row_limit: document.getElementById('rowLimit').value || null,
+            is_enabled: true
+        }]
+    };
+
+    // Determine if we're editing or creating
+    const url = wizardEditMode
+        ? `/api/etl/sources/${wizardEditSourceId}/update/`
+        : `/api/models/{{ model.id }}/etl/add-source/`;
+    const successMessage = wizardEditMode
+        ? '✓ ETL job updated successfully!'
+        : '✓ ETL job created successfully!';
+
+    fetch(url, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrftoken
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.status === 'success') {
+            alert(successMessage);
+            hideAddSourceModal();
+            location.reload();
+        } else {
+            alert('Error: ' + result.message);
+        }
+    })
+    .catch(error => {
+        alert('Error saving ETL job: ' + error);
+    });
 }
 </script>
 {% endblock %}

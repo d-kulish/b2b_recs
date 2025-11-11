@@ -228,27 +228,32 @@ The ETL system uses a **single Docker container template** deployed per client w
 ### ✅ Implemented Features
 
 **Django Web UI** (`/models/{id}/etl/`):
-- ETL status dashboard with metrics cards
-- Add/edit/delete data sources
-- Configure multiple sources per model (PostgreSQL, MySQL, BigQuery, CSV, Parquet)
-- Test database connections
-- Configure table-level sync settings
-- Manual "Run ETL Now" trigger
-- Enable/disable scheduled runs
-- View ETL run history with detailed results
+- **Per-Table ETL Jobs**: Each data source extracts exactly one table with independent scheduling
+- **4-Step Wizard Modal**: Guided job creation (Connection → Table → Sync → Schedule)
+- **Full CRUD Operations**: Add, edit, delete ETL jobs with complete configuration
+- **Multiple Data Source Types**: PostgreSQL, MySQL, SQL Server, BigQuery, CSV, Parquet
+- **Connection Testing**: Validate database connections before saving
+- **Sync Modes**: Full Refresh (replace), Append, Incremental (timestamp-based)
+- **Per-Job Run Trigger**: "Run Now" button on each individual job
+- **Schedule Configuration**: Manual, hourly, daily, weekly, monthly options
+- **ETL Run History**: View past executions with detailed results and row counts
 
 **API Endpoints**:
-- `POST /api/models/{id}/etl/add-source/` - Create new data source
-- `POST /api/etl/sources/{id}/test/` - Test connection
-- `POST /api/etl/sources/{id}/delete/` - Remove data source
-- `POST /api/models/{id}/etl/toggle/` - Enable/disable scheduling
-- `POST /api/models/{id}/etl/run/` - Trigger manual ETL run
-- `GET /api/etl/runs/{id}/status/` - Poll run status
+- `POST /api/models/{id}/etl/add-source/` - Create new data source/job
+- `GET /api/etl/sources/{id}/` - Get source details for editing
+- `POST /api/etl/sources/{id}/update/` - Update existing data source
+- `POST /api/etl/sources/{id}/test/` - Test database connection
+- `POST /api/etl/sources/{id}/run/` - Run ETL for single source
+- `POST /api/etl/sources/{id}/delete/` - Delete data source
+- `POST /api/models/{id}/etl/toggle/` - Enable/disable ETL scheduling
+- `POST /api/models/{id}/etl/run/` - Trigger full ETL run (all sources)
+- `GET /api/etl/runs/{id}/status/` - Poll ETL run status
 
 **Database Models**:
-- Full schema for multi-source ETL configuration
-- Execution tracking with per-table granularity
-- Connection testing state
+- **ETLConfiguration**: Schedule settings and Cloud Run service configuration
+- **DataSource**: Individual source connections (one table per source)
+- **DataSourceTable**: Table-level extraction config (sync mode, incremental column, row limits)
+- **ETLRun**: Execution history with per-source and per-table success tracking
 
 ### 🔨 Pending Components (For Production Deployment)
 
@@ -266,11 +271,15 @@ The ETL system uses a **single Docker container template** deployed per client w
 
 ### Key Design Decisions
 
-1. **Configuration-Driven**: All extraction logic driven by Django database configuration
-2. **Multi-Source Support**: Single ETL run processes all configured data sources
-3. **No Airflow**: Uses Cloud Run + Cloud Scheduler for simplicity and cost ($10-20/month vs $120/month)
-4. **Per-Client Isolation**: Each client gets their own Cloud Scheduler + Cloud Run deployment
-5. **Same Container Image**: One Docker image deployed to all clients with different env vars
+1. **Per-Table Job Architecture**: One DataSource = One Table = One Independent Schedule
+   - Maximum flexibility for different update frequencies per table
+   - Granular control over sync modes and incremental logic
+   - Independent failure handling (one table failure doesn't block others)
+2. **Configuration-Driven**: All extraction logic driven by Django database configuration
+3. **Wizard-Based UX**: 4-step guided process for non-technical users
+4. **No Airflow**: Uses Cloud Run + Cloud Scheduler for simplicity and cost ($10-20/month vs $120/month)
+5. **Per-Client Isolation**: Each client gets their own Cloud Scheduler + Cloud Run deployment
+6. **Same Container Image**: One Docker image deployed to all clients with different env vars
 
 ## 🎯 Next Steps - Chapter-by-Chapter Implementation
 

@@ -60,6 +60,10 @@ credentials.json
 gcp-key.json
 .gcp/
 
+# Cloud SQL Proxy (binary - download separately on each machine)
+cloud-sql-proxy
+cloud_sql_proxy
+
 # Airflow
 airflow.db
 airflow.cfg

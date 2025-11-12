@@ -171,6 +171,104 @@ python manage.py runserver
 
 ---
 
+## Step 9: Download Cloud SQL Proxy (Optional - for PostgreSQL access)
+
+**Only needed if you want to test ETL connections to PostgreSQL databases**
+
+Cloud SQL Proxy is a binary executable that provides secure access to Cloud SQL databases. It's **NOT** included in git because:
+- Large file size (~50MB)
+- Platform-specific (different for Mac, Linux, Windows)
+- Can be easily downloaded
+
+### Download Instructions
+
+**On Mac (Apple Silicon - M1/M2/M3):**
+```bash
+# Download for Mac ARM64
+curl -o cloud-sql-proxy https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.15.0/cloud-sql-proxy.darwin.arm64
+
+# Make it executable
+chmod +x cloud-sql-proxy
+
+# Verify it works
+./cloud-sql-proxy --version
+```
+
+**On Mac (Intel):**
+```bash
+# Download for Mac x86_64
+curl -o cloud-sql-proxy https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.15.0/cloud-sql-proxy.darwin.amd64
+
+# Make it executable
+chmod +x cloud-sql-proxy
+
+# Verify it works
+./cloud-sql-proxy --version
+```
+
+**On Linux:**
+```bash
+# Download for Linux
+curl -o cloud-sql-proxy https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.15.0/cloud-sql-proxy.linux.amd64
+
+# Make it executable
+chmod +x cloud-sql-proxy
+
+# Verify it works
+./cloud-sql-proxy --version
+```
+
+**On Windows:**
+```powershell
+# Download for Windows
+Invoke-WebRequest -Uri "https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.15.0/cloud-sql-proxy.x64.exe" -OutFile "cloud-sql-proxy.exe"
+
+# Verify it works
+.\cloud-sql-proxy.exe --version
+```
+
+### Grant Service Account Access to Cloud SQL
+
+If you need to connect to a Cloud SQL PostgreSQL database (like the memo2 database):
+
+```bash
+# Grant cloudsql.client role to the service account
+gcloud projects add-iam-policy-binding memo2-456215 \
+    --member="serviceAccount:django-app@b2b-recs.iam.gserviceaccount.com" \
+    --role="roles/cloudsql.client"
+```
+
+### Running Cloud SQL Proxy
+
+**In a separate terminal:**
+```bash
+# Export credentials
+export GOOGLE_APPLICATION_CREDENTIALS="/Users/YOUR_USER/Projects/b2b_recs/.gcp/django-service-account.json"
+
+# Start proxy (example for memo2 database)
+./cloud-sql-proxy memo2-456215:europe-central2:memo2-db --port 5433
+```
+
+**Keep this terminal running** while you test ETL connections.
+
+**Then in your Django terminal:**
+```bash
+# Export credentials
+export GOOGLE_APPLICATION_CREDENTIALS="/Users/YOUR_USER/Projects/b2b_recs/.gcp/django-service-account.json"
+
+# Start Django
+source venv/bin/activate
+python manage.py runserver 0.0.0.0:8000
+```
+
+**Connection details to use in wizard:**
+- Host: `127.0.0.1` (or `localhost`)
+- Port: `5433` (the proxy port)
+- Database: `memo2`
+- Username/Password: (from the database)
+
+---
+
 ## Verification Checklist
 
 Run these commands to verify everything works:
@@ -257,6 +355,7 @@ b2b_recs/
 ├── static/                         # CSS, JS, images
 ├── venv/                           # Python virtual environment (NOT in git)
 ├── db.sqlite3                      # SQLite database (NOT in git)
+├── cloud-sql-proxy                 # Cloud SQL Proxy binary (NOT in git - download separately)
 ├── manage.py                       # Django management
 ├── requirements.txt                # Python dependencies
 ├── next_steps.md                   # Development roadmap
@@ -277,6 +376,7 @@ b2b_recs/
 - `*.json` files (except package.json)
 - `db.sqlite3`
 - `venv/`
+- `cloud-sql-proxy` - Binary executable (download separately on each machine)
 
 ---
 

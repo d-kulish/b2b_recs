@@ -1,0 +1,264 @@
+/* ============================================================================
+   BUTTON STYLES - B2B ML Platform
+   ============================================================================
+   Standardized button styles across all pages and components
+   Design: Black thin border, light background, subtle shadow, hover effects
+   ============================================================================ */
+
+/* Base Button Class */
+.btn {
+    /* Layout */
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 24px;
+    min-width: 120px;
+    gap: 10px;
+
+    /* Typography */
+    font-size: 14px;
+    font-weight: 600;
+    text-align: center;
+    white-space: nowrap;
+
+    /* Style */
+    background-color: #ffffff;  /* White background */
+    border: 1px solid #000000;  /* Thin black border */
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);  /* Tiny subtle shadow */
+
+    /* Behavior */
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+    text-decoration: none;
+}
+
+/* Hover State */
+.btn:hover {
+    background-color: #f0fdf4;  /* Light green on hover */
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);  /* Enhanced shadow on hover */
+    transform: translateY(-1px);  /* Subtle lift effect */
+}
+
+/* Active/Pressed State */
+.btn:active {
+    transform: translateY(0);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+/* Disabled State */
+.btn:disabled,
+.btn.disabled {
+    background-color: #e5e7eb;
+    color: #9ca3af;
+    cursor: not-allowed;
+    opacity: 0.6;
+    box-shadow: none;
+}
+
+.btn:disabled:hover,
+.btn.disabled:hover {
+    transform: none;
+    box-shadow: none;
+}
+
+
+/* ============================================================================
+   Button Variants (for different actions)
+   ============================================================================ */
+
+/* Primary Action Button (main calls-to-action) */
+.btn-primary {
+    background-color: #ffffff;  /* White background */
+    color: #1f2937;  /* Dark gray text */
+    border-color: #000000;
+}
+
+.btn-primary:hover {
+    background-color: #f0fdf4;  /* Light green on hover */
+    color: #166534;  /* Dark green text on hover */
+}
+
+/* Success Button (confirmations, create, add) */
+.btn-success {
+    background-color: #f0fdf4;  /* Very light green */
+    color: #15803d;  /* Deep green text */
+    border-color: #000000;
+}
+
+.btn-success:hover {
+    background-color: #dcfce7;
+    color: #166534;
+}
+
+/* Danger Button (delete, remove, destructive actions) */
+.btn-danger {
+    background-color: #fef2f2;  /* Very light red */
+    color: #dc2626;  /* Red text */
+    border-color: #000000;
+}
+
+.btn-danger:hover {
+    background-color: #fee2e2;
+    color: #991b1b;
+}
+
+/* Secondary Button (less emphasis) */
+.btn-secondary {
+    background-color: #ffffff;  /* White */
+    color: #374151;  /* Gray text */
+    border-color: #000000;
+}
+
+.btn-secondary:hover {
+    background-color: #f9fafb;
+    color: #1f2937;
+}
+
+/* Warning Button (caution actions) */
+.btn-warning {
+    background-color: #fffbeb;  /* Very light yellow */
+    color: #d97706;  /* Orange text */
+    border-color: #000000;
+}
+
+.btn-warning:hover {
+    background-color: #fef3c7;
+    color: #b45309;
+}
+
+
+/* ============================================================================
+   Button Sizes
+   ============================================================================ */
+
+/* Small Button */
+.btn-sm {
+    padding: 6px 16px;
+    font-size: 12px;
+    min-width: 80px;
+}
+
+/* Large Button */
+.btn-lg {
+    padding: 14px 32px;
+    font-size: 16px;
+    min-width: 160px;
+}
+
+/* Wide Button (for prominent actions) */
+.btn-wide {
+    min-width: 200px;
+    padding-left: 40px;
+    padding-right: 40px;
+}
+
+/* Full Width Button */
+.btn-block {
+    width: 100%;
+    display: flex;
+}
+
+
+/* ============================================================================
+   Button with Icons
+   ============================================================================ */
+
+.btn i {
+    /* Spacing handled by gap property on .btn */
+    flex-shrink: 0;
+}
+
+/* Icon-only buttons */
+.btn-icon {
+    min-width: auto;
+    padding: 10px;
+    aspect-ratio: 1;
+}
+
+.btn-icon i {
+    margin: 0;
+}
+
+
+/* ============================================================================
+   Button Groups
+   ============================================================================ */
+
+.btn-group {
+    display: inline-flex;
+    gap: 8px;
+}
+
+.btn-group-tight {
+    display: inline-flex;
+    gap: 0;
+}
+
+.btn-group-tight .btn {
+    border-radius: 0;
+}
+
+.btn-group-tight .btn:first-child {
+    border-top-left-radius: 8px;
+    border-bottom-left-radius: 8px;
+}
+
+.btn-group-tight .btn:last-child {
+    border-top-right-radius: 8px;
+    border-bottom-right-radius: 8px;
+}
+
+.btn-group-tight .btn:not(:last-child) {
+    border-right: none;
+}
+
+
+/* ============================================================================
+   Special Button States
+   ============================================================================ */
+
+/* Loading State */
+.btn-loading {
+    position: relative;
+    color: transparent;
+    pointer-events: none;
+}
+
+.btn-loading::after {
+    content: '';
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    top: 50%;
+    left: 50%;
+    margin-left: -8px;
+    margin-top: -8px;
+    border: 2px solid #000000;
+    border-radius: 50%;
+    border-top-color: transparent;
+    animation: button-loading-spinner 0.6s linear infinite;
+}
+
+@keyframes button-loading-spinner {
+    from {
+        transform: rotate(0turn);
+    }
+    to {
+        transform: rotate(1turn);
+    }
+}
+
+
+/* ============================================================================
+   Accessibility
+   ============================================================================ */
+
+.btn:focus {
+    outline: 2px solid #3b82f6;
+    outline-offset: 2px;
+}
+
+.btn:focus:not(:focus-visible) {
+    outline: none;
+}

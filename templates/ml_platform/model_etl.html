@@ -9,8 +9,8 @@
     <div class="bg-white rounded-xl border border-black shadow-lg p-6">
         <div class="flex items-center justify-between mb-6">
             <h3 class="text-xl font-bold text-gray-900">ETL Jobs</h3>
-            <button onclick="showAddSourceModal()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition">
-                <i class="fas fa-plus mr-2"></i>Add ETL Job
+            <button onclick="showAddSourceModal()" class="btn btn-primary btn-wide">
+                <i class="fas fa-plus"></i><span>ETL Job</span>
             </button>
         </div>
 
@@ -95,13 +95,8 @@
             {% endfor %}
         </div>
         {% else %}
-        <div class="text-center py-12 bg-gray-50 rounded-lg border border-gray-200">
-            <i class="fas fa-database text-gray-400 text-5xl mb-4"></i>
-            <p class="text-gray-600 text-lg mb-4">No ETL jobs configured</p>
-            <p class="text-gray-500 text-sm mb-6">Add your first data source to start extracting data to BigQuery</p>
-            <button onclick="showAddSourceModal()" class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition">
-                <i class="fas fa-plus mr-2"></i>Add Your First ETL Job
-            </button>
+        <div class="py-8">
+            <!-- Empty space for ETL jobs to be added -->
         </div>
         {% endif %}
     </div>
@@ -386,12 +381,14 @@
                             </div>
                         </div>
 
-                        <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mt-4">
-                            <p class="text-xs text-yellow-800 mb-2">⚠️ Connection testing is required before proceeding</p>
-                            <button onclick="testConnectionWizard()" id="testConnectionBtn" class="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition">
-                                <i class="fas fa-plug mr-1.5"></i>Test Connection
-                            </button>
-                            <span id="connectionStatus" class="ml-3 text-sm"></span>
+                        <div id="connectionTestContainer" class="bg-white border border-gray-300 rounded-lg p-3 mt-4 transition-colors">
+                            <div class="flex items-center gap-3">
+                                <button onclick="testConnectionWizard()" id="testConnectionBtn" class="btn btn-primary">
+                                    <span>Test Connection</span>
+                                </button>
+                                <span class="text-sm text-gray-600">Working connection is required</span>
+                                <span id="connectionStatus" class="ml-auto text-sm"></span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -405,12 +402,14 @@
                             <p class="text-xs text-gray-500 mt-1">Full Google Cloud Storage path to your file</p>
                         </div>
 
-                        <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mt-4">
-                            <p class="text-xs text-yellow-800 mb-2">⚠️ Path validation is required before proceeding</p>
-                            <button onclick="testConnectionWizard()" id="testFilePathBtn" class="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition">
-                                <i class="fas fa-check mr-1.5"></i>Validate Path
-                            </button>
-                            <span id="filePathStatus" class="ml-3 text-sm"></span>
+                        <div id="filePathTestContainer" class="bg-white border border-gray-300 rounded-lg p-3 mt-4 transition-colors">
+                            <div class="flex items-center gap-3">
+                                <button onclick="testConnectionWizard()" id="testFilePathBtn" class="btn btn-primary">
+                                    <i class="fas fa-check"></i><span>Validate Path</span>
+                                </button>
+                                <span class="text-sm text-gray-600">Working connection is required</span>
+                                <span id="filePathStatus" class="ml-auto text-sm"></span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -463,12 +462,14 @@
                             </div>
                         </div>
 
-                        <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mt-4">
-                            <p class="text-xs text-yellow-800 mb-2">⚠️ Connection testing is required before proceeding</p>
-                            <button onclick="testConnectionWizard()" id="testBigQueryBtn" class="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition">
-                                <i class="fas fa-plug mr-1.5"></i>Test Connection
-                            </button>
-                            <span id="bigqueryConnectionStatus" class="ml-3 text-sm"></span>
+                        <div id="bigqueryTestContainer" class="bg-white border border-gray-300 rounded-lg p-3 mt-4 transition-colors">
+                            <div class="flex items-center gap-3">
+                                <button onclick="testConnectionWizard()" id="testBigQueryBtn" class="btn btn-primary">
+                                    <span>Test Connection</span>
+                                </button>
+                                <span class="text-sm text-gray-600">Working connection is required</span>
+                                <span id="bigqueryConnectionStatus" class="ml-auto text-sm"></span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -487,12 +488,14 @@
                             <input type="text" id="nosqlDatabase" placeholder="mydb" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                         </div>
 
-                        <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mt-4">
-                            <p class="text-xs text-yellow-800 mb-2">⚠️ Connection testing is required before proceeding</p>
-                            <button onclick="testConnectionWizard()" id="testNoSQLBtn" class="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition">
-                                <i class="fas fa-plug mr-1.5"></i>Test Connection
-                            </button>
-                            <span id="nosqlConnectionStatus" class="ml-3 text-sm"></span>
+                        <div id="nosqlTestContainer" class="bg-white border border-gray-300 rounded-lg p-3 mt-4 transition-colors">
+                            <div class="flex items-center gap-3">
+                                <button onclick="testConnectionWizard()" id="testNoSQLBtn" class="btn btn-primary">
+                                    <span>Test Connection</span>
+                                </button>
+                                <span class="text-sm text-gray-600">Working connection is required</span>
+                                <span id="nosqlConnectionStatus" class="ml-auto text-sm"></span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -649,22 +652,22 @@
             <div class="flex items-center justify-between">
                 <!-- Left: Back/Next buttons -->
                 <div class="flex gap-2">
-                    <button id="backButton" onclick="previousStep()" class="w-[142px] h-[38px] bg-gray-300 text-gray-500 rounded-lg font-semibold transition flex items-center justify-center cursor-not-allowed" disabled>
+                    <button id="backButton" onclick="previousStep()" class="btn btn-secondary" style="width: 142px; height: 38px;" disabled>
                         <i class="fas fa-arrow-left"></i>
                     </button>
-                    <button id="nextButton" onclick="nextStep()" class="w-[142px] h-[38px] bg-gray-300 text-gray-500 rounded-lg font-semibold transition flex items-center justify-center cursor-not-allowed" disabled>
+                    <button id="nextButton" onclick="nextStep()" class="btn btn-secondary" style="width: 142px; height: 38px;" disabled>
                         <i class="fas fa-arrow-right"></i>
                     </button>
                 </div>
 
                 <!-- Right: Cancel button -->
-                <button onclick="hideAddSourceModal()" class="w-[142px] h-[38px] text-xs bg-red-100 hover:bg-red-200 text-red-700 rounded-lg font-semibold transition flex items-center justify-center">
-                    Cancel
+                <button onclick="hideAddSourceModal()" class="btn btn-danger" style="width: 142px; height: 38px;">
+                    <span>Cancel</span>
                 </button>
 
                 <!-- Hidden create button -->
-                <button id="createButton" onclick="createDataSource()" class="w-[142px] h-[38px] text-xs bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold transition hidden flex items-center justify-center">
-                    <i class="fas fa-check mr-1"></i>Create
+                <button id="createButton" onclick="createDataSource()" class="btn btn-success hidden" style="width: 142px; height: 38px;">
+                    <i class="fas fa-check"></i><span>Create</span>
                 </button>
             </div>
         </div>
@@ -723,12 +726,8 @@ function updateStep1NextButton() {
 
     if (selectedSource) {
         nextButton.disabled = false;
-        nextButton.classList.remove('bg-gray-300', 'text-gray-500', 'cursor-not-allowed');
-        nextButton.classList.add('bg-blue-600', 'hover:bg-blue-700', 'text-white');
     } else {
         nextButton.disabled = true;
-        nextButton.classList.remove('bg-blue-600', 'hover:bg-blue-700', 'text-white');
-        nextButton.classList.add('bg-gray-300', 'text-gray-500', 'cursor-not-allowed');
     }
 }
 
@@ -1017,6 +1016,12 @@ function showConnectionForm() {
     // Reset connection test flag when switching forms
     window.connectionTested = false;
 
+    // Disable next button since connection needs to be tested again
+    const nextButton = document.getElementById('nextButton');
+    if (nextButton) {
+        nextButton.disabled = true;
+    }
+
     // Clear all status messages
     const statusSpans = [
         document.getElementById('connectionStatus'),
@@ -1026,6 +1031,20 @@ function showConnectionForm() {
     ];
     statusSpans.forEach(span => {
         if (span) span.innerHTML = '';
+    });
+
+    // Reset all container backgrounds to white
+    const containers = [
+        document.getElementById('connectionTestContainer'),
+        document.getElementById('filePathTestContainer'),
+        document.getElementById('bigqueryTestContainer'),
+        document.getElementById('nosqlTestContainer')
+    ];
+    containers.forEach(container => {
+        if (container) {
+            container.classList.remove('bg-green-50', 'bg-red-50', 'border-green-200', 'border-red-200');
+            container.classList.add('bg-white', 'border-gray-300');
+        }
     });
 
     // Hide all connection forms
@@ -1069,18 +1088,16 @@ function showStep(step) {
     // Back button: always visible, disabled on step 1
     if (step === 1) {
         backButton.disabled = true;
-        backButton.classList.add('bg-gray-300', 'text-gray-500', 'cursor-not-allowed');
-        backButton.classList.remove('bg-blue-600', 'text-white', 'hover:bg-blue-700');
         // Update next button state based on validation
         updateStep1NextButton();
+    } else if (step === 2) {
+        backButton.disabled = false;
+        // For step 2, next button is disabled until connection is tested
+        nextButton.disabled = !window.connectionTested;
     } else {
         backButton.disabled = false;
-        backButton.classList.remove('bg-gray-300', 'text-gray-500', 'cursor-not-allowed');
-        backButton.classList.add('bg-blue-600', 'text-white', 'hover:bg-blue-700');
         // Enable next button for other steps
         nextButton.disabled = false;
-        nextButton.classList.remove('bg-gray-300', 'text-gray-500', 'cursor-not-allowed');
-        nextButton.classList.add('bg-blue-600', 'hover:bg-blue-700', 'text-white');
     }
 
     // Next button: hide on last step, always show just icon
@@ -1093,9 +1110,9 @@ function showStep(step) {
     if (step === 5) {
         const createButton = document.getElementById('createButton');
         if (wizardEditMode) {
-            createButton.innerHTML = '<i class="fas fa-check mr-1"></i>Update';
+            createButton.innerHTML = '<i class="fas fa-check"></i><span>Update</span>';
         } else {
-            createButton.innerHTML = '<i class="fas fa-check mr-1"></i>Create';
+            createButton.innerHTML = '<i class="fas fa-check"></i><span>Create</span>';
         }
     }
 
@@ -1143,11 +1160,8 @@ function nextStep() {
             return;
         }
     } else if (currentWizardStep === 2) {
-        // Connection testing is required before proceeding from Step 2 to Step 3
-        if (!window.connectionTested) {
-            alert('Please test the connection before proceeding');
-            return;
-        }
+        // Connection testing is handled by disabled button state
+        // No need for alert since next button is disabled until connection is tested
     } else if (currentWizardStep === 3) {
         const selectedTable = document.querySelector('input[name="selectedTable"]:checked');
         if (!selectedTable) {
@@ -1202,12 +1216,19 @@ function populateSummary() {
 }
 
 function testConnectionWizard() {
-    // Get all status spans
+    // Get all status spans and containers
     const statusSpans = [
         document.getElementById('connectionStatus'),
         document.getElementById('filePathStatus'),
         document.getElementById('bigqueryConnectionStatus'),
         document.getElementById('nosqlConnectionStatus')
+    ];
+
+    const containers = [
+        document.getElementById('connectionTestContainer'),
+        document.getElementById('filePathTestContainer'),
+        document.getElementById('bigqueryTestContainer'),
+        document.getElementById('nosqlTestContainer')
     ];
 
     // Show testing message on all status spans
@@ -1219,13 +1240,53 @@ function testConnectionWizard() {
 
     // Simulate connection test
     setTimeout(() => {
-        statusSpans.forEach(span => {
-            if (span) {
-                span.innerHTML = '<i class="fas fa-check-circle text-green-600"></i> Connection successful';
+        const isSuccess = Math.random() > 0.2; // 80% success rate for demo
+
+        if (isSuccess) {
+            // Success case
+            statusSpans.forEach(span => {
+                if (span) {
+                    span.innerHTML = '<i class="fas fa-check-circle text-green-600"></i> Success';
+                }
+            });
+
+            // Change container backgrounds to light green
+            containers.forEach(container => {
+                if (container) {
+                    container.classList.remove('bg-white', 'bg-red-50');
+                    container.classList.add('bg-green-50');
+                    container.classList.remove('border-gray-300', 'border-red-200');
+                    container.classList.add('border-green-200');
+                }
+            });
+
+            // Mark connection as tested and enable next button
+            window.connectionTested = true;
+            const nextButton = document.getElementById('nextButton');
+            if (nextButton) {
+                nextButton.disabled = false;
             }
-        });
-        // Mark connection as tested
-        window.connectionTested = true;
+        } else {
+            // Failure case
+            statusSpans.forEach(span => {
+                if (span) {
+                    span.innerHTML = '<i class="fas fa-times-circle text-red-600"></i> Failed';
+                }
+            });
+
+            // Change container backgrounds to light red
+            containers.forEach(container => {
+                if (container) {
+                    container.classList.remove('bg-white', 'bg-green-50');
+                    container.classList.add('bg-red-50');
+                    container.classList.remove('border-gray-300', 'border-green-200');
+                    container.classList.add('border-red-200');
+                }
+            });
+
+            // Keep connection as not tested
+            window.connectionTested = false;
+        }
     }, 1500);
 }
 

@@ -387,12 +387,87 @@ python manage.py changepassword dkulish
 - Tailwind CSS (via CDN)
 - Font Awesome icons
 - Vanilla JavaScript (for now)
+- Custom Button CSS System (see below)
 
 **Future:**
 - Vue.js for reactive components
 - Celery for async tasks
 - Redis for caching
 - Google Cloud Platform services
+
+## UI Components - Button Styling System
+
+A unified button styling system has been implemented for consistent UI across all pages.
+
+### Button CSS File
+**Location**: `static/css/buttons.css`
+
+All buttons follow a standardized design:
+- **White background** with thin black border (1px)
+- **Light green hover effect** (`#f0fdf4`)
+- Subtle shadow for depth
+- Proper icon spacing (10px gap)
+- Short and wide proportions for better visibility
+
+### Base Button Classes
+
+**Primary button** (main actions):
+```html
+<button class="btn btn-primary">
+    <i class="fas fa-plus"></i><span>Add Item</span>
+</button>
+```
+
+**Button variants**:
+- `.btn-success` - Light green (create, confirm actions)
+- `.btn-danger` - Light red (delete, remove actions)
+- `.btn-secondary` - Neutral (less emphasis)
+- `.btn-warning` - Light yellow (caution actions)
+
+**Size modifiers**:
+- `.btn-sm` - Small buttons
+- `.btn-lg` - Large buttons
+- `.btn-wide` - Extra wide buttons (200px min-width)
+- `.btn-block` - Full width
+
+### Usage Guidelines
+
+1. **Always wrap text in `<span>` tags** when using icons for proper spacing
+2. **Use consistent color coding**: success (green), danger (red), primary (neutral)
+3. **Icons are optional** but provide good visual cues
+4. **Disabled state** is handled automatically via CSS `:disabled` pseudo-class
+
+### Examples
+
+**With icon:**
+```html
+<button class="btn btn-success">
+    <i class="fas fa-check"></i><span>Save</span>
+</button>
+```
+
+**Text only:**
+```html
+<button class="btn btn-primary">
+    <span>Test Connection</span>
+</button>
+```
+
+**Wide button:**
+```html
+<button class="btn btn-primary btn-wide">
+    <i class="fas fa-plus"></i><span>ETL Job</span>
+</button>
+```
+
+### Connection Test Containers
+
+Connection test sections use dynamic background colors:
+- **White** (default) - Before testing
+- **Light green** (`bg-green-50`) - Success
+- **Light red** (`bg-red-50`) - Failure
+
+The "Next" navigation button remains disabled until connection test succeeds.
 
 ## Contributing
 

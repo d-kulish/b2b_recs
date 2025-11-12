@@ -99,13 +99,33 @@ class DataSource(models.Model):
     Each ETL configuration can have multiple data sources.
     """
 
+    # Organized by category for UI display
     SOURCE_TYPE_CHOICES = [
+        # Relational Databases
         ('postgresql', 'PostgreSQL'),
         ('mysql', 'MySQL'),
-        ('sqlserver', 'SQL Server'),
-        ('bigquery', 'BigQuery'),
-        ('csv', 'CSV Upload'),
+        ('oracle', 'Oracle Database'),
+        ('sqlserver', 'Microsoft SQL Server'),
+        ('db2', 'IBM DB2'),
+        ('redshift', 'Amazon Redshift'),
+        ('synapse', 'Azure Synapse'),
+        ('bigquery', 'Google BigQuery'),
+        ('snowflake', 'Snowflake'),
+        ('mariadb', 'MariaDB'),
+        ('teradata', 'Teradata'),
+        # Flat Files
+        ('csv', 'CSV Files'),
         ('parquet', 'Parquet Files'),
+        ('json', 'JSON Files'),
+        ('excel', 'Excel (XLS/XLSX)'),
+        ('txt', 'Text Files'),
+        ('avro', 'Avro Files'),
+        # NoSQL Databases
+        ('mongodb', 'MongoDB'),
+        ('firestore', 'Google Firestore'),
+        ('cassandra', 'Apache Cassandra'),
+        ('dynamodb', 'Amazon DynamoDB'),
+        ('redis', 'Redis'),
     ]
 
     etl_config = models.ForeignKey(ETLConfiguration, on_delete=models.CASCADE, related_name='data_sources')
@@ -124,9 +144,19 @@ class DataSource(models.Model):
     # File upload details (for CSV/Parquet sources)
     file_path = models.CharField(max_length=512, blank=True, help_text="GCS path to uploaded file")
 
-    # BigQuery source details
+    # BigQuery/Firestore source details
     bigquery_project = models.CharField(max_length=255, blank=True)
     bigquery_dataset = models.CharField(max_length=255, blank=True)
+
+    # Service Account Authentication (BigQuery, Firestore, etc.)
+    service_account_json = models.TextField(blank=True, help_text="Service account JSON key (pasted)")
+    service_account_file_path = models.CharField(max_length=512, blank=True, help_text="GCS path to service account JSON")
+
+    # NoSQL connection strings
+    connection_string = models.TextField(blank=True, help_text="Connection string (MongoDB, Redis, etc.)")
+
+    # Additional connection parameters (stored as JSON for flexibility)
+    connection_params = models.JSONField(default=dict, blank=True, help_text="Additional connection parameters")
 
     # Source settings
     is_enabled = models.BooleanField(default=True)

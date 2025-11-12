@@ -186,136 +186,363 @@
 </div>
 
 <!-- Add Data Source Wizard Modal -->
-<div id="addSourceModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
-    <div class="bg-white rounded-xl shadow-2xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+<div id="addSourceModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-[100] flex items-center justify-center p-4 pt-20">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-h-[75vh] flex flex-col" style="max-width: 634px;">
         <!-- Modal Header -->
-        <div class="p-6 border-b border-gray-200">
+        <div class="px-5 py-3 border-b border-gray-200 sticky top-0 bg-white z-10 rounded-t-xl">
             <div class="flex items-center justify-between">
                 <div>
-                    <h3 class="text-2xl font-bold text-gray-900">Add ETL Job</h3>
-                    <p class="text-sm text-gray-600 mt-1">Step <span id="currentStep">1</span> of 4</p>
+                    <h3 class="text-base font-bold text-gray-900">Add ETL Job</h3>
+                    <p class="text-xs text-gray-600 mt-0.5">Step <span id="currentStep">1</span> of 5</p>
                 </div>
-                <button onclick="hideAddSourceModal()" class="text-gray-400 hover:text-gray-600">
-                    <i class="fas fa-times text-2xl"></i>
-                </button>
             </div>
 
             <!-- Progress Bar -->
-            <div class="mt-4 flex gap-2">
-                <div id="progress1" class="flex-1 h-2 bg-blue-600 rounded"></div>
-                <div id="progress2" class="flex-1 h-2 bg-gray-200 rounded"></div>
-                <div id="progress3" class="flex-1 h-2 bg-gray-200 rounded"></div>
-                <div id="progress4" class="flex-1 h-2 bg-gray-200 rounded"></div>
+            <div class="mt-2 flex gap-1.5">
+                <div id="progress1" class="flex-1 h-1 bg-blue-600 rounded"></div>
+                <div id="progress2" class="flex-1 h-1 bg-gray-200 rounded"></div>
+                <div id="progress3" class="flex-1 h-1 bg-gray-200 rounded"></div>
+                <div id="progress4" class="flex-1 h-1 bg-gray-200 rounded"></div>
+                <div id="progress5" class="flex-1 h-1 bg-gray-200 rounded"></div>
             </div>
         </div>
 
         <!-- Modal Body -->
-        <div class="p-6">
-            <!-- Step 1: Connection Setup -->
+        <div class="px-5 py-3 flex-1 overflow-y-auto">
+            <!-- Step 1: Type Selection (Tab-Based) -->
             <div id="step1" class="wizard-step">
-                <h4 class="text-lg font-bold text-gray-900 mb-4">Connection Setup</h4>
+                <h4 class="text-sm font-bold text-gray-900 mb-2">Select Connection Type</h4>
 
-                <div class="space-y-4">
-                    <div>
-                        <label class="block text-sm font-semibold text-gray-700 mb-2">Connection Type</label>
-                        <select id="sourceType" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                            <option value="postgresql">PostgreSQL</option>
-                            <option value="mysql">MySQL</option>
-                            <option value="sqlserver">SQL Server</option>
-                            <option value="bigquery">BigQuery</option>
-                            <option value="csv">CSV Upload</option>
-                        </select>
+                <!-- Category Tabs -->
+                <div class="mb-3">
+                    <div class="grid grid-cols-3 gap-2">
+                        <button onclick="switchTab('relational')" id="tabRelational" class="px-3 py-2 text-xs font-semibold rounded-lg border border-green-600 bg-green-50 text-green-700 transition">
+                            Relational Databases
+                        </button>
+                        <button onclick="switchTab('files')" id="tabFiles" class="px-3 py-2 text-xs font-semibold rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition">
+                            Flat Files
+                        </button>
+                        <button onclick="switchTab('nosql')" id="tabNoSQL" class="px-3 py-2 text-xs font-semibold rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition">
+                            NoSQL
+                        </button>
                     </div>
+                </div>
 
-                    <div>
-                        <label class="block text-sm font-semibold text-gray-700 mb-2">Job Name</label>
-                        <input type="text" id="sourceName" placeholder="e.g., Production Transactions DB" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                        <p class="text-xs text-gray-500 mt-1">A friendly name to identify this ETL job</p>
+                <!-- Relational Databases Tab Content -->
+                <div id="contentRelational" class="tab-content">
+                    <p class="text-xs text-gray-600 mb-2">Select a relational database:</p>
+                    <div class="grid grid-cols-2 gap-2 h-36 overflow-y-auto border border-gray-200 rounded-lg p-2">
+                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
+                            <input type="radio" name="sourceType" value="postgresql" class="mr-1.5 scale-75" onchange="updateStep1NextButton()">
+                            <span class="text-xs">PostgreSQL</span>
+                        </label>
+                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
+                            <input type="radio" name="sourceType" value="mysql" class="mr-1.5 scale-75" onchange="updateStep1NextButton()">
+                            <span class="text-xs">MySQL</span>
+                        </label>
+                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
+                            <input type="radio" name="sourceType" value="oracle" class="mr-1.5 scale-75" onchange="updateStep1NextButton()">
+                            <span class="text-xs">Oracle Database</span>
+                        </label>
+                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
+                            <input type="radio" name="sourceType" value="sqlserver" class="mr-1.5 scale-75" onchange="updateStep1NextButton()">
+                            <span class="text-xs">SQL Server</span>
+                        </label>
+                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
+                            <input type="radio" name="sourceType" value="db2" class="mr-1.5 scale-75" onchange="updateStep1NextButton()">
+                            <span class="text-xs">IBM DB2</span>
+                        </label>
+                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
+                            <input type="radio" name="sourceType" value="redshift" class="mr-1.5 scale-75" onchange="updateStep1NextButton()">
+                            <span class="text-xs">Redshift</span>
+                        </label>
+                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
+                            <input type="radio" name="sourceType" value="synapse" class="mr-1.5 scale-75" onchange="updateStep1NextButton()">
+                            <span class="text-xs">Azure Synapse</span>
+                        </label>
+                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
+                            <input type="radio" name="sourceType" value="bigquery" class="mr-1.5 scale-75" onchange="updateStep1NextButton()">
+                            <span class="text-xs">BigQuery</span>
+                        </label>
+                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
+                            <input type="radio" name="sourceType" value="snowflake" class="mr-1.5 scale-75" onchange="updateStep1NextButton()">
+                            <span class="text-xs">Snowflake</span>
+                        </label>
+                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
+                            <input type="radio" name="sourceType" value="mariadb" class="mr-1.5 scale-75" onchange="updateStep1NextButton()">
+                            <span class="text-xs">MariaDB</span>
+                        </label>
+                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
+                            <input type="radio" name="sourceType" value="teradata" class="mr-1.5 scale-75" onchange="updateStep1NextButton()">
+                            <span class="text-xs">Teradata</span>
+                        </label>
                     </div>
+                </div>
 
-                    <div id="dbConnectionFields">
-                        <div class="grid grid-cols-2 gap-4">
+                <!-- Flat Files Tab Content -->
+                <div id="contentFiles" class="tab-content hidden">
+                    <p class="text-xs text-gray-600 mb-2">Select a file format:</p>
+                    <div class="grid grid-cols-2 gap-2 h-36 overflow-y-auto border border-gray-200 rounded-lg p-2">
+                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
+                            <input type="radio" name="sourceType" value="csv" class="mr-1.5 scale-75" onchange="updateStep1NextButton()">
+                            <span class="text-xs">CSV Files</span>
+                        </label>
+                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
+                            <input type="radio" name="sourceType" value="parquet" class="mr-1.5 scale-75" onchange="updateStep1NextButton()">
+                            <span class="text-xs">Parquet Files</span>
+                        </label>
+                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
+                            <input type="radio" name="sourceType" value="json" class="mr-1.5 scale-75" onchange="updateStep1NextButton()">
+                            <span class="text-xs">JSON Files</span>
+                        </label>
+                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
+                            <input type="radio" name="sourceType" value="excel" class="mr-1.5 scale-75" onchange="updateStep1NextButton()">
+                            <span class="text-xs">Excel (XLS/XLSX)</span>
+                        </label>
+                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
+                            <input type="radio" name="sourceType" value="txt" class="mr-1.5 scale-75" onchange="updateStep1NextButton()">
+                            <span class="text-xs">Text Files</span>
+                        </label>
+                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
+                            <input type="radio" name="sourceType" value="avro" class="mr-1.5 scale-75" onchange="updateStep1NextButton()">
+                            <span class="text-xs">Avro Files</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- NoSQL Tab Content -->
+                <div id="contentNoSQL" class="tab-content hidden">
+                    <p class="text-xs text-gray-600 mb-2">Select a NoSQL database:</p>
+                    <div class="grid grid-cols-2 gap-2 h-36 overflow-y-auto border border-gray-200 rounded-lg p-2">
+                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
+                            <input type="radio" name="sourceType" value="mongodb" class="mr-1.5 scale-75" onchange="updateStep1NextButton()">
+                            <span class="text-xs">MongoDB</span>
+                        </label>
+                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
+                            <input type="radio" name="sourceType" value="firestore" class="mr-1.5 scale-75" onchange="updateStep1NextButton()">
+                            <span class="text-xs">Firestore</span>
+                        </label>
+                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
+                            <input type="radio" name="sourceType" value="cassandra" class="mr-1.5 scale-75" onchange="updateStep1NextButton()">
+                            <span class="text-xs">Cassandra</span>
+                        </label>
+                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
+                            <input type="radio" name="sourceType" value="dynamodb" class="mr-1.5 scale-75" onchange="updateStep1NextButton()">
+                            <span class="text-xs">DynamoDB</span>
+                        </label>
+                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
+                            <input type="radio" name="sourceType" value="redis" class="mr-1.5 scale-75" onchange="updateStep1NextButton()">
+                            <span class="text-xs">Redis</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Job Name Field (Always Visible) -->
+                <div class="mt-3">
+                    <label class="block text-xs font-semibold text-gray-700 mb-1">Job Name</label>
+                    <input type="text" id="sourceName" placeholder="e.g., Production Transactions DB" class="w-full px-2.5 py-1.5 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" oninput="validateJobName()">
+                    <p id="jobNameError" class="text-xs text-red-600 mt-0.5 invisible">Job name is required</p>
+                </div>
+            </div>
+
+            <!-- Step 2: Connection Configuration (Conditional) -->
+            <div id="step2" class="wizard-step hidden">
+                <h4 class="text-base font-bold text-gray-900 mb-3">Connection Configuration</h4>
+
+                <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+                    <div class="flex items-center gap-2">
+                        <i class="fas fa-info-circle text-blue-600 text-sm"></i>
+                        <span class="font-semibold text-sm text-blue-900">Connection Type: <span id="selectedTypeDisplay"></span></span>
+                    </div>
+                </div>
+
+                <!-- Relational Database Form -->
+                <div id="formRelationalDB" class="connection-form hidden">
+                    <div class="space-y-3">
+                        <div class="grid grid-cols-2 gap-3">
                             <div>
-                                <label class="block text-sm font-semibold text-gray-700 mb-2">Host</label>
-                                <input type="text" id="sourceHost" placeholder="db.example.com" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                <label class="block text-sm font-semibold text-gray-700 mb-1.5">Host</label>
+                                <input type="text" id="sourceHost" placeholder="db.example.com" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                             </div>
                             <div>
-                                <label class="block text-sm font-semibold text-gray-700 mb-2">Port</label>
-                                <input type="number" id="sourcePort" placeholder="5432" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                <label class="block text-sm font-semibold text-gray-700 mb-1.5">Port</label>
+                                <input type="number" id="sourcePort" placeholder="5432" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                             </div>
                         </div>
 
-                        <div class="mt-4">
-                            <label class="block text-sm font-semibold text-gray-700 mb-2">Database Name</label>
-                            <input type="text" id="sourceDatabase" placeholder="analytics" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-1.5">Database Name</label>
+                            <input type="text" id="sourceDatabase" placeholder="analytics" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                         </div>
 
-                        <div class="grid grid-cols-2 gap-4 mt-4">
+                        <div class="grid grid-cols-2 gap-3">
                             <div>
-                                <label class="block text-sm font-semibold text-gray-700 mb-2">Username</label>
-                                <input type="text" id="sourceUsername" placeholder="etl_user" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                <label class="block text-sm font-semibold text-gray-700 mb-1.5">Username</label>
+                                <input type="text" id="sourceUsername" placeholder="etl_user" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                             </div>
                             <div>
-                                <label class="block text-sm font-semibold text-gray-700 mb-2">Password</label>
-                                <input type="password" id="sourcePassword" placeholder="••••••••" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                <label class="block text-sm font-semibold text-gray-700 mb-1.5">Password</label>
+                                <input type="password" id="sourcePassword" placeholder="••••••••" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                             </div>
                         </div>
 
-                        <div class="mt-4">
-                            <button onclick="testConnectionWizard()" class="px-4 py-2 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg font-semibold transition">
-                                <i class="fas fa-plug mr-2"></i>Test Connection
+                        <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mt-4">
+                            <p class="text-xs text-yellow-800 mb-2">⚠️ Connection testing is required before proceeding</p>
+                            <button onclick="testConnectionWizard()" id="testConnectionBtn" class="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition">
+                                <i class="fas fa-plug mr-1.5"></i>Test Connection
                             </button>
                             <span id="connectionStatus" class="ml-3 text-sm"></span>
                         </div>
                     </div>
                 </div>
+
+                <!-- File Path Form (CSV, Parquet, JSON, etc.) -->
+                <div id="formFilePath" class="connection-form hidden">
+                    <div class="space-y-3">
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-1.5">GCS Path</label>
+                            <input type="text" id="filePath" placeholder="gs://bucket-name/path/to/file.csv" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <p class="text-xs text-gray-500 mt-1">Full Google Cloud Storage path to your file</p>
+                        </div>
+
+                        <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mt-4">
+                            <p class="text-xs text-yellow-800 mb-2">⚠️ Path validation is required before proceeding</p>
+                            <button onclick="testConnectionWizard()" id="testFilePathBtn" class="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition">
+                                <i class="fas fa-check mr-1.5"></i>Validate Path
+                            </button>
+                            <span id="filePathStatus" class="ml-3 text-sm"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- BigQuery/Firestore Form -->
+                <div id="formBigQuery" class="connection-form hidden">
+                    <div class="space-y-3">
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-1.5">Project ID</label>
+                            <input type="text" id="bigqueryProject" placeholder="my-gcp-project" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-1.5">Dataset (BigQuery) / Collection Path (Firestore)</label>
+                            <input type="text" id="bigqueryDataset" placeholder="raw_data" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+
+                        <div class="border-t border-gray-200 pt-3 mt-3">
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">Service Account Authentication</label>
+
+                            <!-- Tab selector for service account method -->
+                            <div class="flex space-x-2 mb-3">
+                                <button onclick="switchServiceAccountMethod('paste')" id="btnPaste" class="flex-1 px-3 py-2 text-xs border-2 border-blue-600 bg-blue-50 text-blue-700 rounded-lg font-semibold">
+                                    Paste JSON
+                                </button>
+                                <button onclick="switchServiceAccountMethod('upload')" id="btnUpload" class="flex-1 px-3 py-2 text-xs border-2 border-gray-300 bg-white text-gray-700 rounded-lg font-semibold">
+                                    Upload File
+                                </button>
+                                <button onclick="switchServiceAccountMethod('path')" id="btnPath" class="flex-1 px-3 py-2 text-xs border-2 border-gray-300 bg-white text-gray-700 rounded-lg font-semibold">
+                                    GCS Path
+                                </button>
+                            </div>
+
+                            <!-- Paste JSON -->
+                            <div id="serviceAccountPaste" class="service-account-method">
+                                <textarea id="serviceAccountJson" rows="4" placeholder='{"type": "service_account", ...}' class="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono"></textarea>
+                                <p class="text-xs text-gray-500 mt-1">Paste the contents of your service account JSON key</p>
+                            </div>
+
+                            <!-- Upload File -->
+                            <div id="serviceAccountUpload" class="service-account-method hidden">
+                                <input type="file" id="serviceAccountFile" accept=".json" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg">
+                                <p class="text-xs text-gray-500 mt-1">Upload your service account JSON key file</p>
+                            </div>
+
+                            <!-- GCS Path -->
+                            <div id="serviceAccountPath" class="service-account-method hidden">
+                                <input type="text" id="serviceAccountFilePath" placeholder="gs://bucket-name/service-account.json" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                <p class="text-xs text-gray-500 mt-1">GCS path to your service account JSON key</p>
+                            </div>
+                        </div>
+
+                        <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mt-4">
+                            <p class="text-xs text-yellow-800 mb-2">⚠️ Connection testing is required before proceeding</p>
+                            <button onclick="testConnectionWizard()" id="testBigQueryBtn" class="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition">
+                                <i class="fas fa-plug mr-1.5"></i>Test Connection
+                            </button>
+                            <span id="bigqueryConnectionStatus" class="ml-3 text-sm"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- NoSQL Form (MongoDB, Redis, etc.) -->
+                <div id="formNoSQL" class="connection-form hidden">
+                    <div class="space-y-3">
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-1.5">Connection String</label>
+                            <textarea id="connectionString" rows="2" placeholder="mongodb://username:password@host:port/database" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono"></textarea>
+                            <p class="text-xs text-gray-500 mt-1">Full connection string for your NoSQL database</p>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-1.5">Database Name</label>
+                            <input type="text" id="nosqlDatabase" placeholder="mydb" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+
+                        <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mt-4">
+                            <p class="text-xs text-yellow-800 mb-2">⚠️ Connection testing is required before proceeding</p>
+                            <button onclick="testConnectionWizard()" id="testNoSQLBtn" class="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition">
+                                <i class="fas fa-plug mr-1.5"></i>Test Connection
+                            </button>
+                            <span id="nosqlConnectionStatus" class="ml-3 text-sm"></span>
+                        </div>
+                    </div>
+                </div>
             </div>
 
-            <!-- Step 2: Table Selection -->
-            <div id="step2" class="wizard-step hidden">
-                <h4 class="text-lg font-bold text-gray-900 mb-4">Select Table</h4>
+            <!-- Step 3: Table Selection -->
+            <div id="step3" class="wizard-step hidden">
+                <h4 class="text-base font-bold text-gray-900 mb-3">Select Table</h4>
 
-                <p class="text-sm text-gray-600 mb-4">Choose one table to extract. You can create additional ETL jobs for other tables.</p>
+                <p class="text-sm text-gray-600 mb-3">Choose one table to extract. You can create additional ETL jobs for other tables.</p>
 
-                <div class="space-y-2 border border-gray-200 rounded-lg p-4 max-h-96 overflow-y-auto">
+                <div class="space-y-2 border border-gray-200 rounded-lg p-3 max-h-80 overflow-y-auto">
                     <!-- Simulated table list -->
-                    <label class="flex items-center p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
-                        <input type="radio" name="selectedTable" value="transactions" class="mr-3">
+                    <label class="flex items-center p-2.5 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
+                        <input type="radio" name="selectedTable" value="transactions" class="mr-2.5">
                         <div class="flex-1">
-                            <div class="font-semibold text-gray-900">transactions</div>
-                            <div class="text-sm text-gray-600">~1.2M rows • Last updated: 2 min ago</div>
+                            <div class="font-semibold text-sm text-gray-900">transactions</div>
+                            <div class="text-xs text-gray-600">~1.2M rows • Last updated: 2 min ago</div>
                         </div>
                     </label>
 
-                    <label class="flex items-center p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
-                        <input type="radio" name="selectedTable" value="customers" class="mr-3">
+                    <label class="flex items-center p-2.5 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
+                        <input type="radio" name="selectedTable" value="customers" class="mr-2.5">
                         <div class="flex-1">
-                            <div class="font-semibold text-gray-900">customers</div>
-                            <div class="text-sm text-gray-600">~450K rows • Last updated: 1 hour ago</div>
+                            <div class="font-semibold text-sm text-gray-900">customers</div>
+                            <div class="text-xs text-gray-600">~450K rows • Last updated: 1 hour ago</div>
                         </div>
                     </label>
 
-                    <label class="flex items-center p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
-                        <input type="radio" name="selectedTable" value="orders" class="mr-3">
+                    <label class="flex items-center p-2.5 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
+                        <input type="radio" name="selectedTable" value="orders" class="mr-2.5">
                         <div class="flex-1">
-                            <div class="font-semibold text-gray-900">orders</div>
-                            <div class="text-sm text-gray-600">~890K rows • Last updated: 5 min ago</div>
+                            <div class="font-semibold text-sm text-gray-900">orders</div>
+                            <div class="text-xs text-gray-600">~890K rows • Last updated: 5 min ago</div>
                         </div>
                     </label>
 
-                    <label class="flex items-center p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
-                        <input type="radio" name="selectedTable" value="products" class="mr-3">
+                    <label class="flex items-center p-2.5 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
+                        <input type="radio" name="selectedTable" value="products" class="mr-2.5">
                         <div class="flex-1">
-                            <div class="font-semibold text-gray-900">products</div>
-                            <div class="text-sm text-gray-600">~120K rows • Last updated: 2 days ago</div>
+                            <div class="font-semibold text-sm text-gray-900">products</div>
+                            <div class="text-xs text-gray-600">~120K rows • Last updated: 2 days ago</div>
                         </div>
                     </label>
 
-                    <label class="flex items-center p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
-                        <input type="radio" name="selectedTable" value="stores" class="mr-3">
+                    <label class="flex items-center p-2.5 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
+                        <input type="radio" name="selectedTable" value="stores" class="mr-2.5">
                         <div class="flex-1">
-                            <div class="font-semibold text-gray-900">stores</div>
-                            <div class="text-sm text-gray-600">~500 rows • Last updated: 1 week ago</div>
+                            <div class="font-semibold text-sm text-gray-900">stores</div>
+                            <div class="text-xs text-gray-600">~500 rows • Last updated: 1 week ago</div>
                         </div>
                     </label>
                 </div>
@@ -323,22 +550,22 @@
 
             <!-- Step 3: Table Configuration -->
             <div id="step3" class="wizard-step hidden">
-                <h4 class="text-lg font-bold text-gray-900 mb-4">Configure Table Sync</h4>
+                <h4 class="text-base font-bold text-gray-900 mb-3">Configure Table Sync</h4>
 
-                <div class="space-y-4">
-                    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                        <div class="flex items-center gap-2 mb-2">
-                            <i class="fas fa-info-circle text-blue-600"></i>
-                            <span class="font-semibold text-blue-900">Source Table: <span id="selectedTableName"></span></span>
+                <div class="space-y-3">
+                    <div class="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                        <div class="flex items-center gap-2 mb-1">
+                            <i class="fas fa-info-circle text-blue-600 text-sm"></i>
+                            <span class="font-semibold text-sm text-blue-900">Source Table: <span id="selectedTableName"></span></span>
                         </div>
-                        <div class="text-sm text-blue-800">
+                        <div class="text-xs text-blue-800">
                             Destination: raw_data.<span id="destTableName"></span>
                         </div>
                     </div>
 
                     <div>
-                        <label class="block text-sm font-semibold text-gray-700 mb-2">Sync Mode</label>
-                        <select id="syncMode" onchange="toggleIncrementalFields()" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <label class="block text-sm font-semibold text-gray-700 mb-1.5">Sync Mode</label>
+                        <select id="syncMode" onchange="toggleIncrementalFields()" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                             <option value="replace">Full Refresh - Replace all data</option>
                             <option value="append">Append - Only add new rows</option>
                             <option value="incremental">Incremental - Sync based on timestamp column</option>
@@ -349,8 +576,8 @@
                     </div>
 
                     <div id="incrementalFields" class="hidden">
-                        <label class="block text-sm font-semibold text-gray-700 mb-2">Timestamp Column</label>
-                        <select id="incrementalColumn" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <label class="block text-sm font-semibold text-gray-700 mb-1.5">Timestamp Column</label>
+                        <select id="incrementalColumn" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                             <option value="updated_at">updated_at</option>
                             <option value="created_at">created_at</option>
                             <option value="timestamp">timestamp</option>
@@ -360,8 +587,8 @@
                     </div>
 
                     <div>
-                        <label class="block text-sm font-semibold text-gray-700 mb-2">Row Limit (Optional - for testing)</label>
-                        <input type="number" id="rowLimit" placeholder="Leave empty for no limit" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <label class="block text-sm font-semibold text-gray-700 mb-1.5">Row Limit (Optional - for testing)</label>
+                        <input type="number" id="rowLimit" placeholder="Leave empty for no limit" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                         <p class="text-xs text-gray-500 mt-1">Useful for testing - extract only first N rows</p>
                     </div>
                 </div>
@@ -369,12 +596,12 @@
 
             <!-- Step 4: Schedule & Summary -->
             <div id="step4" class="wizard-step hidden">
-                <h4 class="text-lg font-bold text-gray-900 mb-4">Schedule & Deploy</h4>
+                <h4 class="text-base font-bold text-gray-900 mb-3">Schedule & Deploy</h4>
 
-                <div class="space-y-4">
+                <div class="space-y-3">
                     <div>
-                        <label class="block text-sm font-semibold text-gray-700 mb-2">Schedule</label>
-                        <select id="scheduleType" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <label class="block text-sm font-semibold text-gray-700 mb-1.5">Schedule</label>
+                        <select id="scheduleType" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                             <option value="manual">Manual Only - No automatic runs</option>
                             <option value="hourly">Hourly - Every hour</option>
                             <option value="daily">Daily - Once per day</option>
@@ -383,28 +610,28 @@
                         </select>
                     </div>
 
-                    <div class="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                        <h5 class="font-bold text-gray-900 mb-3">Summary</h5>
-                        <div class="space-y-2 text-sm">
+                    <div class="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                        <h5 class="font-bold text-sm text-gray-900 mb-2">Summary</h5>
+                        <div class="space-y-1.5 text-sm">
                             <div class="flex">
-                                <span class="w-32 text-gray-600">Connection:</span>
-                                <span class="font-semibold text-gray-900" id="summaryConnection"></span>
+                                <span class="w-28 text-gray-600 text-xs">Connection:</span>
+                                <span class="font-semibold text-gray-900 text-xs" id="summaryConnection"></span>
                             </div>
                             <div class="flex">
-                                <span class="w-32 text-gray-600">Source Table:</span>
-                                <span class="font-semibold text-gray-900" id="summarySourceTable"></span>
+                                <span class="w-28 text-gray-600 text-xs">Source Table:</span>
+                                <span class="font-semibold text-gray-900 text-xs" id="summarySourceTable"></span>
                             </div>
                             <div class="flex">
-                                <span class="w-32 text-gray-600">Destination:</span>
-                                <span class="font-semibold text-gray-900" id="summaryDestination"></span>
+                                <span class="w-28 text-gray-600 text-xs">Destination:</span>
+                                <span class="font-semibold text-gray-900 text-xs" id="summaryDestination"></span>
                             </div>
                             <div class="flex">
-                                <span class="w-32 text-gray-600">Sync Mode:</span>
-                                <span class="font-semibold text-gray-900" id="summarySyncMode"></span>
+                                <span class="w-28 text-gray-600 text-xs">Sync Mode:</span>
+                                <span class="font-semibold text-gray-900 text-xs" id="summarySyncMode"></span>
                             </div>
                             <div class="flex">
-                                <span class="w-32 text-gray-600">Schedule:</span>
-                                <span class="font-semibold text-gray-900" id="summarySchedule"></span>
+                                <span class="w-28 text-gray-600 text-xs">Schedule:</span>
+                                <span class="font-semibold text-gray-900 text-xs" id="summarySchedule"></span>
                             </div>
                         </div>
                     </div>
@@ -418,19 +645,26 @@
         </div>
 
         <!-- Modal Footer -->
-        <div class="p-6 border-t border-gray-200 flex justify-between">
-            <button id="backButton" onclick="previousStep()" class="px-6 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-semibold transition hidden">
-                <i class="fas fa-arrow-left mr-2"></i>Back
-            </button>
-            <div class="flex gap-3">
-                <button onclick="hideAddSourceModal()" class="px-6 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-semibold transition">
+        <div class="px-5 py-2.5 border-t border-gray-200 sticky bottom-0 bg-white rounded-b-xl">
+            <div class="flex items-center justify-between">
+                <!-- Left: Back/Next buttons -->
+                <div class="flex gap-2">
+                    <button id="backButton" onclick="previousStep()" class="w-[142px] h-[38px] bg-gray-300 text-gray-500 rounded-lg font-semibold transition flex items-center justify-center cursor-not-allowed" disabled>
+                        <i class="fas fa-arrow-left"></i>
+                    </button>
+                    <button id="nextButton" onclick="nextStep()" class="w-[142px] h-[38px] bg-gray-300 text-gray-500 rounded-lg font-semibold transition flex items-center justify-center cursor-not-allowed" disabled>
+                        <i class="fas fa-arrow-right"></i>
+                    </button>
+                </div>
+
+                <!-- Right: Cancel button -->
+                <button onclick="hideAddSourceModal()" class="w-[142px] h-[38px] text-xs bg-red-100 hover:bg-red-200 text-red-700 rounded-lg font-semibold transition flex items-center justify-center">
                     Cancel
                 </button>
-                <button id="nextButton" onclick="nextStep()" class="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition">
-                    Next: Select Table <i class="fas fa-arrow-right ml-2"></i>
-                </button>
-                <button id="createButton" onclick="createDataSource()" class="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold transition hidden">
-                    <i class="fas fa-check mr-2"></i>Create ETL Job
+
+                <!-- Hidden create button -->
+                <button id="createButton" onclick="createDataSource()" class="w-[142px] h-[38px] text-xs bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold transition hidden flex items-center justify-center">
+                    <i class="fas fa-check mr-1"></i>Create
                 </button>
             </div>
         </div>
@@ -454,6 +688,72 @@ function getCookie(name) {
 }
 
 const csrftoken = getCookie('csrftoken');
+
+// ============================================================================
+// Tab Switching Function
+// ============================================================================
+
+function switchTab(tabName) {
+    // Update tab buttons
+    const tabs = ['Relational', 'Files', 'NoSQL'];
+    tabs.forEach(tab => {
+        const tabButton = document.getElementById(`tab${tab}`);
+        const content = document.getElementById(`content${tab}`);
+
+        if (tab.toLowerCase() === tabName) {
+            // Activate this tab
+            tabButton.classList.remove('border-gray-300', 'bg-white', 'text-gray-700');
+            tabButton.classList.add('border-green-600', 'bg-green-50', 'text-green-700');
+            content.classList.remove('hidden');
+        } else {
+            // Deactivate other tabs
+            tabButton.classList.remove('border-green-600', 'bg-green-50', 'text-green-700');
+            tabButton.classList.add('border-gray-300', 'bg-white', 'text-gray-700');
+            content.classList.add('hidden');
+        }
+    });
+}
+
+// Update next button state on step 1
+function updateStep1NextButton() {
+    const nextButton = document.getElementById('nextButton');
+    if (!nextButton) return;
+
+    const selectedSource = document.querySelector('input[name="sourceType"]:checked');
+
+    if (selectedSource) {
+        nextButton.disabled = false;
+        nextButton.classList.remove('bg-gray-300', 'text-gray-500', 'cursor-not-allowed');
+        nextButton.classList.add('bg-blue-600', 'hover:bg-blue-700', 'text-white');
+    } else {
+        nextButton.disabled = true;
+        nextButton.classList.remove('bg-blue-600', 'hover:bg-blue-700', 'text-white');
+        nextButton.classList.add('bg-gray-300', 'text-gray-500', 'cursor-not-allowed');
+    }
+}
+
+// Validate job name
+function validateJobName() {
+    const jobNameInput = document.getElementById('sourceName');
+    const jobNameError = document.getElementById('jobNameError');
+    const value = jobNameInput.value.trim();
+
+    if (value === '') {
+        jobNameInput.classList.remove('border-gray-300');
+        jobNameInput.classList.add('border-red-500');
+        jobNameError.classList.remove('invisible');
+        jobNameError.classList.add('visible');
+    } else {
+        jobNameInput.classList.remove('border-red-500');
+        jobNameInput.classList.add('border-gray-300');
+        jobNameError.classList.remove('visible');
+        jobNameError.classList.add('invisible');
+    }
+}
+
+// ============================================================================
+// ETL Action Functions
+// ============================================================================
 
 function runSourceNow(sourceId) {
     if (confirm('Run ETL extraction now for this data source?')) {
@@ -682,6 +982,7 @@ function resetWizard() {
     wizardEditMode = false;
     wizardEditSourceId = null;
     wizardEditTableData = null;
+    window.connectionTested = false;
 
     document.querySelectorAll('.wizard-step').forEach(step => step.classList.add('hidden'));
     document.getElementById('step1').classList.remove('hidden');
@@ -702,6 +1003,52 @@ function resetWizard() {
     updateProgress(1);
 }
 
+function showConnectionForm() {
+    // Get selected source type
+    const selectedSourceType = document.querySelector('input[name="sourceType"]:checked');
+    if (!selectedSourceType) return;
+
+    const sourceType = selectedSourceType.value;
+    const sourceTypeLabel = selectedSourceType.nextElementSibling.textContent;
+
+    // Update display
+    document.getElementById('selectedTypeDisplay').textContent = sourceTypeLabel;
+
+    // Reset connection test flag when switching forms
+    window.connectionTested = false;
+
+    // Clear all status messages
+    const statusSpans = [
+        document.getElementById('connectionStatus'),
+        document.getElementById('filePathStatus'),
+        document.getElementById('bigqueryConnectionStatus'),
+        document.getElementById('nosqlConnectionStatus')
+    ];
+    statusSpans.forEach(span => {
+        if (span) span.innerHTML = '';
+    });
+
+    // Hide all connection forms
+    document.querySelectorAll('.connection-form').forEach(form => form.classList.add('hidden'));
+
+    // Define source type categories
+    const relationalDBs = ['postgresql', 'mysql', 'oracle', 'sqlserver', 'db2', 'redshift', 'synapse', 'snowflake', 'mariadb', 'teradata'];
+    const fileFormats = ['csv', 'parquet', 'json', 'excel', 'txt', 'avro'];
+    const bigQueryTypes = ['bigquery', 'firestore'];
+    const nosqlDBs = ['mongodb', 'cassandra', 'dynamodb', 'redis'];
+
+    // Show appropriate form
+    if (relationalDBs.includes(sourceType)) {
+        document.getElementById('formRelationalDB').classList.remove('hidden');
+    } else if (fileFormats.includes(sourceType)) {
+        document.getElementById('formFilePath').classList.remove('hidden');
+    } else if (bigQueryTypes.includes(sourceType)) {
+        document.getElementById('formBigQuery').classList.remove('hidden');
+    } else if (nosqlDBs.includes(sourceType)) {
+        document.getElementById('formNoSQL').classList.remove('hidden');
+    }
+}
+
 function showStep(step) {
     // Hide all steps
     document.querySelectorAll('.wizard-step').forEach(s => s.classList.add('hidden'));
@@ -716,28 +1063,49 @@ function showStep(step) {
     updateProgress(step);
 
     // Update buttons
-    document.getElementById('backButton').classList.toggle('hidden', step === 1);
-    document.getElementById('nextButton').classList.toggle('hidden', step === 4);
-    document.getElementById('createButton').classList.toggle('hidden', step !== 4);
-
-    // Update next button text
+    const backButton = document.getElementById('backButton');
     const nextButton = document.getElementById('nextButton');
-    if (step === 1) nextButton.innerHTML = 'Next: Select Table <i class="fas fa-arrow-right ml-2"></i>';
-    else if (step === 2) nextButton.innerHTML = 'Next: Configure <i class="fas fa-arrow-right ml-2"></i>';
-    else if (step === 3) nextButton.innerHTML = 'Next: Schedule <i class="fas fa-arrow-right ml-2"></i>';
+
+    // Back button: always visible, disabled on step 1
+    if (step === 1) {
+        backButton.disabled = true;
+        backButton.classList.add('bg-gray-300', 'text-gray-500', 'cursor-not-allowed');
+        backButton.classList.remove('bg-blue-600', 'text-white', 'hover:bg-blue-700');
+        // Update next button state based on validation
+        updateStep1NextButton();
+    } else {
+        backButton.disabled = false;
+        backButton.classList.remove('bg-gray-300', 'text-gray-500', 'cursor-not-allowed');
+        backButton.classList.add('bg-blue-600', 'text-white', 'hover:bg-blue-700');
+        // Enable next button for other steps
+        nextButton.disabled = false;
+        nextButton.classList.remove('bg-gray-300', 'text-gray-500', 'cursor-not-allowed');
+        nextButton.classList.add('bg-blue-600', 'hover:bg-blue-700', 'text-white');
+    }
+
+    // Next button: hide on last step, always show just icon
+    nextButton.classList.toggle('hidden', step === 5);
+    nextButton.innerHTML = '<i class="fas fa-arrow-right"></i>';
+
+    document.getElementById('createButton').classList.toggle('hidden', step !== 5);
 
     // Update create button text based on edit mode
-    if (step === 4) {
+    if (step === 5) {
         const createButton = document.getElementById('createButton');
         if (wizardEditMode) {
-            createButton.innerHTML = '<i class="fas fa-check mr-2"></i>Update ETL Job';
+            createButton.innerHTML = '<i class="fas fa-check mr-1"></i>Update';
         } else {
-            createButton.innerHTML = '<i class="fas fa-check mr-2"></i>Create ETL Job';
+            createButton.innerHTML = '<i class="fas fa-check mr-1"></i>Create';
         }
     }
 
-    // Populate step 3 with selected table
-    if (step === 3) {
+    // Show appropriate connection form in Step 2
+    if (step === 2) {
+        showConnectionForm();
+    }
+
+    // Populate step 4 with selected table
+    if (step === 4) {
         const selectedTable = document.querySelector('input[name="selectedTable"]:checked');
         if (selectedTable) {
             document.getElementById('selectedTableName').textContent = selectedTable.value;
@@ -745,14 +1113,14 @@ function showStep(step) {
         }
     }
 
-    // Populate step 4 summary
-    if (step === 4) {
+    // Populate step 5 summary
+    if (step === 5) {
         populateSummary();
     }
 }
 
 function updateProgress(step) {
-    for (let i = 1; i <= 4; i++) {
+    for (let i = 1; i <= 5; i++) {
         const progressBar = document.getElementById(`progress${i}`);
         if (i <= step) {
             progressBar.classList.remove('bg-gray-200');
@@ -767,11 +1135,20 @@ function updateProgress(step) {
 function nextStep() {
     // Validation
     if (currentWizardStep === 1) {
-        if (!document.getElementById('sourceName').value) {
-            alert('Please enter a job name');
+        // Check job name is filled
+        const jobName = document.getElementById('sourceName').value.trim();
+        if (!jobName) {
+            // Trigger visual feedback
+            validateJobName();
             return;
         }
     } else if (currentWizardStep === 2) {
+        // Connection testing is required before proceeding from Step 2 to Step 3
+        if (!window.connectionTested) {
+            alert('Please test the connection before proceeding');
+            return;
+        }
+    } else if (currentWizardStep === 3) {
         const selectedTable = document.querySelector('input[name="selectedTable"]:checked');
         if (!selectedTable) {
             alert('Please select a table');
@@ -825,12 +1202,30 @@ function populateSummary() {
 }
 
 function testConnectionWizard() {
-    const statusSpan = document.getElementById('connectionStatus');
-    statusSpan.innerHTML = '<i class="fas fa-spinner fa-spin text-blue-600"></i> Testing...';
+    // Get all status spans
+    const statusSpans = [
+        document.getElementById('connectionStatus'),
+        document.getElementById('filePathStatus'),
+        document.getElementById('bigqueryConnectionStatus'),
+        document.getElementById('nosqlConnectionStatus')
+    ];
+
+    // Show testing message on all status spans
+    statusSpans.forEach(span => {
+        if (span) {
+            span.innerHTML = '<i class="fas fa-spinner fa-spin text-blue-600"></i> Testing...';
+        }
+    });
 
     // Simulate connection test
     setTimeout(() => {
-        statusSpan.innerHTML = '<i class="fas fa-check-circle text-green-600"></i> Connection successful';
+        statusSpans.forEach(span => {
+            if (span) {
+                span.innerHTML = '<i class="fas fa-check-circle text-green-600"></i> Connection successful';
+            }
+        });
+        // Mark connection as tested
+        window.connectionTested = true;
     }, 1500);
 }
 

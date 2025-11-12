@@ -229,10 +229,20 @@ The ETL system uses a **single Docker container template** deployed per client w
 
 **Django Web UI** (`/models/{id}/etl/`):
 - **Per-Table ETL Jobs**: Each data source extracts exactly one table with independent scheduling
-- **4-Step Wizard Modal**: Guided job creation (Connection → Table → Sync → Schedule)
+- **5-Step Wizard Modal**: Guided job creation (Job Name → Connection → Test → Table Selection → Configuration)
+- **Real Database Connection Testing**: Live connection validation with actual database credentials
+  - PostgreSQL: Full support with connection pooling and timeout handling
+  - MySQL: Full support with connection validation
+  - BigQuery: Service account authentication support
+- **Automatic Table Discovery**: Fetches real table list with metadata after successful connection
+  - Table names
+  - Row counts
+  - Last updated timestamps
+- **Secure Credential Storage**: All passwords saved to GCP Secret Manager (never in Django DB)
+- **Draft-Save Flow**: Credentials saved immediately after successful test (before wizard completion)
+- **Inline Error Messages**: User-friendly error feedback without popup alerts
 - **Full CRUD Operations**: Add, edit, delete ETL jobs with complete configuration
 - **Multiple Data Source Types**: PostgreSQL, MySQL, SQL Server, BigQuery, CSV, Parquet
-- **Connection Testing**: Validate database connections before saving
 - **Sync Modes**: Full Refresh (replace), Append, Incremental (timestamp-based)
 - **Per-Job Run Trigger**: "Run Now" button on each individual job
 - **Schedule Configuration**: Manual, hourly, daily, weekly, monthly options
@@ -240,6 +250,8 @@ The ETL system uses a **single Docker container template** deployed per client w
 
 **API Endpoints**:
 - `POST /api/models/{id}/etl/add-source/` - Create new data source/job
+- `POST /api/models/{id}/etl/save-draft/` - Save draft DataSource with credentials to Secret Manager
+- `POST /api/etl/test-connection/` - Test database connection in wizard (real connection)
 - `GET /api/etl/sources/{id}/` - Get source details for editing
 - `POST /api/etl/sources/{id}/update/` - Update existing data source
 - `POST /api/etl/sources/{id}/test/` - Test database connection
@@ -252,8 +264,18 @@ The ETL system uses a **single Docker container template** deployed per client w
 **Database Models**:
 - **ETLConfiguration**: Schedule settings and Cloud Run service configuration
 - **DataSource**: Individual source connections (one table per source)
+  - Stores `credentials_secret_name` instead of actual passwords
+  - Connection test status and last test timestamp
+  - Enable/disable per source
 - **DataSourceTable**: Table-level extraction config (sync mode, incremental column, row limits)
 - **ETLRun**: Execution history with per-source and per-table success tracking
+
+**Security Architecture**:
+- All database passwords stored in **GCP Secret Manager** (never in Django DB)
+- Secret naming: `model-{id}-source-{id}-credentials`
+- Django only stores the secret name reference
+- Connection testing validates credentials before saving
+- Draft-save immediately stores credentials after successful test
 
 ### 🔨 Pending Components (For Production Deployment)
 
@@ -276,10 +298,17 @@ The ETL system uses a **single Docker container template** deployed per client w
    - Granular control over sync modes and incremental logic
    - Independent failure handling (one table failure doesn't block others)
 2. **Configuration-Driven**: All extraction logic driven by Django database configuration
-3. **Wizard-Based UX**: 4-step guided process for non-technical users
-4. **No Airflow**: Uses Cloud Run + Cloud Scheduler for simplicity and cost ($10-20/month vs $120/month)
-5. **Per-Client Isolation**: Each client gets their own Cloud Scheduler + Cloud Run deployment
-6. **Same Container Image**: One Docker image deployed to all clients with different env vars
+3. **Wizard-Based UX**: 5-step guided process for non-technical users with real-time validation
+4. **Security-First**: GCP Secret Manager for credential storage, never plain text in Django DB
+5. **Real Connection Testing**: Live database validation before saving (not fake success)
+6. **Draft-Save Flow**: Credentials saved immediately after test, before wizard completion
+7. **Connection Manager Utility**: `ml_platform/utils/connection_manager.py`
+   - PostgreSQL, MySQL, BigQuery connection testing
+   - Table metadata fetching (names, row counts, last updated)
+   - Secret Manager integration for credential save/retrieve
+8. **No Airflow**: Uses Cloud Run + Cloud Scheduler for simplicity and cost ($10-20/month vs $120/month)
+9. **Per-Client Isolation**: Each client gets their own Cloud Scheduler + Cloud Run deployment
+10. **Same Container Image**: One Docker image deployed to all clients with different env vars
 
 ## 🎯 Next Steps - Chapter-by-Chapter Implementation
 

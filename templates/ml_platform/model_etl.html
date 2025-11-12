@@ -389,6 +389,7 @@
                                 <span class="text-sm text-gray-600">Working connection is required</span>
                                 <span id="connectionStatus" class="ml-auto text-sm"></span>
                             </div>
+                            <div id="connectionMessage" class="mt-2 text-sm hidden"></div>
                         </div>
                     </div>
                 </div>
@@ -960,6 +961,8 @@ let currentWizardStep = 1;
 let wizardEditMode = false;
 let wizardEditSourceId = null;
 let wizardEditTableData = null;
+let savedConnectionData = null;  // Store connection params after successful test
+let draftSourceId = null;  // Store draft source ID after saving
 
 function showAddSourceModal() {
     document.getElementById('addSourceModal').classList.remove('hidden');
@@ -981,6 +984,8 @@ function resetWizard() {
     wizardEditMode = false;
     wizardEditSourceId = null;
     wizardEditTableData = null;
+    savedConnectionData = null;
+    draftSourceId = null;
     window.connectionTested = false;
 
     document.querySelectorAll('.wizard-step').forEach(step => step.classList.add('hidden'));
@@ -1121,6 +1126,11 @@ function showStep(step) {
         showConnectionForm();
     }
 
+    // Populate Step 3 with real tables from connection test
+    if (step === 3) {
+        populateTablesList();
+    }
+
     // Populate step 4 with selected table
     if (step === 4) {
         const selectedTable = document.querySelector('input[name="selectedTable"]:checked');
@@ -1160,8 +1170,11 @@ function nextStep() {
             return;
         }
     } else if (currentWizardStep === 2) {
-        // Connection testing is handled by disabled button state
-        // No need for alert since next button is disabled until connection is tested
+        // Save draft before moving to Step 3
+        if (window.connectionTested && savedConnectionData) {
+            saveDraftSource();
+            return;  // Will proceed to Step 3 after successful save
+        }
     } else if (currentWizardStep === 3) {
         const selectedTable = document.querySelector('input[name="selectedTable"]:checked');
         if (!selectedTable) {
@@ -1216,6 +1229,12 @@ function populateSummary() {
 }
 
 function testConnectionWizard() {
+    // Clear any previous messages
+    const messageDiv = document.getElementById('connectionMessage');
+    if (messageDiv) {
+        messageDiv.classList.add('hidden');
+    }
+
     // Get all status spans and containers
     const statusSpans = [
         document.getElementById('connectionStatus'),
@@ -1238,11 +1257,59 @@ function testConnectionWizard() {
         }
     });
 
-    // Simulate connection test
-    setTimeout(() => {
-        const isSuccess = Math.random() > 0.2; // 80% success rate for demo
+    // Get source type from selected radio button
+    const sourceTypeRadio = document.querySelector('input[name="sourceType"]:checked');
+    if (!sourceTypeRadio) {
+        // Show error message inline
+        if (messageDiv) {
+            messageDiv.className = 'mt-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2';
+            messageDiv.textContent = 'Please select a connection type in Step 1';
+            messageDiv.classList.remove('hidden');
+        }
+        // Reset status
+        statusSpans.forEach(span => {
+            if (span) span.innerHTML = '';
+        });
+        return;
+    }
+    const sourceType = sourceTypeRadio.value;
 
-        if (isSuccess) {
+    // Collect connection parameters based on source type
+    let connectionData = {
+        source_type: sourceType
+    };
+
+    // Relational databases
+    if (['postgresql', 'mysql', 'oracle', 'sqlserver', 'mariadb'].includes(sourceType)) {
+        connectionData.host = document.getElementById('sourceHost')?.value || '';
+        connectionData.port = parseInt(document.getElementById('sourcePort')?.value) || null;
+        connectionData.database = document.getElementById('sourceDatabase')?.value || '';
+        connectionData.username = document.getElementById('sourceUsername')?.value || '';
+        connectionData.password = document.getElementById('sourcePassword')?.value || '';
+    }
+    // BigQuery
+    else if (sourceType === 'bigquery') {
+        connectionData.project_id = document.getElementById('bigqueryProject')?.value || '';
+        connectionData.dataset = document.getElementById('bigqueryDataset')?.value || '';
+        connectionData.service_account_json = document.getElementById('bigqueryServiceAccount')?.value || '';
+    }
+    // NoSQL
+    else if (['mongodb', 'redis'].includes(sourceType)) {
+        connectionData.connection_string = document.getElementById('nosqlConnectionString')?.value || '';
+    }
+
+    // Make real API call to test connection
+    fetch('/api/etl/test-connection/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrftoken
+        },
+        body: JSON.stringify(connectionData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
             // Success case
             statusSpans.forEach(span => {
                 if (span) {
@@ -1260,11 +1327,25 @@ function testConnectionWizard() {
                 }
             });
 
+            // Store tables for Step 3
+            window.availableTables = data.tables || [];
+
+            // Store connection data for later use
+            savedConnectionData = connectionData;
+
             // Mark connection as tested and enable next button
             window.connectionTested = true;
             const nextButton = document.getElementById('nextButton');
             if (nextButton) {
                 nextButton.disabled = false;
+            }
+
+            // Show success message inline
+            const messageDiv = document.getElementById('connectionMessage');
+            if (messageDiv) {
+                messageDiv.className = 'mt-2 text-sm text-green-700 bg-green-50 border border-green-200 rounded px-3 py-2';
+                messageDiv.textContent = data.message;
+                messageDiv.classList.remove('hidden');
             }
         } else {
             // Failure case
@@ -1286,8 +1367,148 @@ function testConnectionWizard() {
 
             // Keep connection as not tested
             window.connectionTested = false;
+
+            // Show error message inline
+            const messageDiv = document.getElementById('connectionMessage');
+            if (messageDiv) {
+                messageDiv.className = 'mt-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2';
+                messageDiv.textContent = data.message;
+                messageDiv.classList.remove('hidden');
+            }
         }
-    }, 1500);
+    })
+    .catch(error => {
+        // Error case
+        statusSpans.forEach(span => {
+            if (span) {
+                span.innerHTML = '<i class="fas fa-times-circle text-red-600"></i> Error';
+            }
+        });
+
+        containers.forEach(container => {
+            if (container) {
+                container.classList.remove('bg-white', 'bg-green-50');
+                container.classList.add('bg-red-50');
+                container.classList.remove('border-gray-300', 'border-green-200');
+                container.classList.add('border-red-200');
+            }
+        });
+
+        window.connectionTested = false;
+
+        // Show error message inline
+        const messageDiv = document.getElementById('connectionMessage');
+        if (messageDiv) {
+            messageDiv.className = 'mt-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2';
+            messageDiv.textContent = 'Error testing connection: ' + error;
+            messageDiv.classList.remove('hidden');
+        }
+    });
+}
+
+function populateTablesList() {
+    const tablesList = document.querySelector('#step3 .space-y-2');
+    if (!tablesList) return;
+
+    // Clear existing content
+    tablesList.innerHTML = '';
+
+    // Check if we have tables from connection test
+    if (!window.availableTables || window.availableTables.length === 0) {
+        tablesList.innerHTML = '<p class="text-gray-500 text-sm">No tables found. Please go back and test the connection.</p>';
+        return;
+    }
+
+    // Create table options from real data
+    window.availableTables.forEach(table => {
+        const label = document.createElement('label');
+        label.className = 'flex items-center justify-between p-4 bg-white border border-gray-300 rounded-lg cursor-pointer hover:border-blue-500 hover:bg-blue-50 transition-colors';
+
+        const rowCountText = table.row_count !== null ?
+            `~${table.row_count.toLocaleString()} rows` :
+            'Unknown rows';
+        const lastUpdatedText = table.last_updated || 'Unknown';
+
+        label.innerHTML = `
+            <div class="flex items-center flex-1">
+                <input type="radio" name="selectedTable" value="${table.name}" class="mr-3">
+                <div>
+                    <div class="font-medium text-gray-900">${table.name}</div>
+                    <div class="text-sm text-gray-500">${rowCountText} • Last updated: ${lastUpdatedText}</div>
+                </div>
+            </div>
+            <i class="fas fa-chevron-right text-gray-400"></i>
+        `;
+
+        tablesList.appendChild(label);
+    });
+}
+
+function saveDraftSource() {
+    // Collect job name
+    const sourceName = document.getElementById('sourceName').value.trim();
+
+    if (!sourceName || !savedConnectionData) {
+        alert('Missing job name or connection data');
+        return;
+    }
+
+    // Prepare data for draft save
+    const draftData = {
+        name: sourceName,
+        source_type: savedConnectionData.source_type,
+        connection_params: savedConnectionData
+    };
+
+    // Show loading message
+    const messageDiv = document.getElementById('connectionMessage');
+    if (messageDiv) {
+        messageDiv.className = 'mt-2 text-sm text-blue-700 bg-blue-50 border border-blue-200 rounded px-3 py-2';
+        messageDiv.textContent = 'Saving connection details...';
+        messageDiv.classList.remove('hidden');
+    }
+
+    // Call save-draft endpoint
+    fetch('/api/models/{{ model.id }}/etl/save-draft/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrftoken
+        },
+        body: JSON.stringify(draftData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            // Store the draft source ID
+            draftSourceId = data.source_id;
+
+            // Show success message
+            if (messageDiv) {
+                messageDiv.className = 'mt-2 text-sm text-green-700 bg-green-50 border border-green-200 rounded px-3 py-2';
+                messageDiv.textContent = 'Connection details saved securely!';
+            }
+
+            // Proceed to Step 3
+            setTimeout(() => {
+                currentWizardStep++;
+                showStep(currentWizardStep);
+            }, 500);
+        } else {
+            // Show error message
+            if (messageDiv) {
+                messageDiv.className = 'mt-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2';
+                messageDiv.textContent = 'Error saving draft: ' + data.message;
+            }
+        }
+    })
+    .catch(error => {
+        // Show error message
+        if (messageDiv) {
+            messageDiv.className = 'mt-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2';
+            messageDiv.textContent = 'Error saving draft: ' + error;
+        }
+    });
 }
 
 function createDataSource() {
@@ -1317,13 +1538,21 @@ function createDataSource() {
         }]
     };
 
-    // Determine if we're editing or creating
-    const url = wizardEditMode
-        ? `/api/etl/sources/${wizardEditSourceId}/update/`
-        : `/api/models/{{ model.id }}/etl/add-source/`;
-    const successMessage = wizardEditMode
-        ? '✓ ETL job updated successfully!'
-        : '✓ ETL job created successfully!';
+    // Determine if we're editing, updating draft, or creating new
+    let url, successMessage;
+    if (wizardEditMode) {
+        // Editing existing source
+        url = `/api/etl/sources/${wizardEditSourceId}/update/`;
+        successMessage = '✓ ETL job updated successfully!';
+    } else if (draftSourceId) {
+        // Updating draft source created in Step 2
+        url = `/api/etl/sources/${draftSourceId}/update/`;
+        successMessage = '✓ ETL job created successfully!';
+    } else {
+        // Creating new source (fallback for old flow)
+        url = `/api/models/{{ model.id }}/etl/add-source/`;
+        successMessage = '✓ ETL job created successfully!';
+    }
 
     fetch(url, {
         method: 'POST',

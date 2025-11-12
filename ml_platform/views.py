@@ -589,30 +589,202 @@ def api_etl_update_source(request, source_id):
 
 @login_required
 @require_http_methods(["POST"])
-def api_etl_test_connection(request, source_id):
+def api_etl_test_connection_wizard(request):
     """
-    API endpoint to test a data source connection.
+    API endpoint to test a data source connection during wizard (no saved source yet).
     """
+    from .utils.connection_manager import test_and_fetch_metadata
+
     try:
-        source = get_object_or_404(DataSource, id=source_id)
+        data = json.loads(request.body)
 
-        # TODO: Implement actual connection testing
-        # For now, simulate success
-        source.connection_tested = True
-        source.last_test_at = timezone.now()
-        source.last_test_message = "Connection test successful (simulated)"
-        source.save()
+        # Get connection parameters from request
+        source_type = data.get('source_type')
+        connection_params = {
+            'host': data.get('host', ''),
+            'port': data.get('port'),
+            'database': data.get('database', ''),
+            'username': data.get('username', ''),
+            'password': data.get('password', ''),
+            'project_id': data.get('project_id', ''),
+            'dataset': data.get('dataset', ''),
+            'service_account_json': data.get('service_account_json', ''),
+            'connection_string': data.get('connection_string', ''),
+        }
 
-        return JsonResponse({
-            'status': 'success',
-            'message': 'Connection test successful',
-        })
+        # Test connection and get metadata
+        result = test_and_fetch_metadata(source_type, connection_params)
+
+        if result['success']:
+            return JsonResponse({
+                'status': 'success',
+                'message': result['message'],
+                'tables': result['tables']
+            })
+        else:
+            return JsonResponse({
+                'status': 'error',
+                'message': result['message'],
+            }, status=400)
 
     except Exception as e:
         return JsonResponse({
             'status': 'error',
-            'message': str(e),
-        }, status=400)
+            'message': f'Unexpected error: {str(e)}',
+        }, status=500)
+
+
+@login_required
+@require_http_methods(["POST"])
+def api_etl_save_draft_source(request, model_id):
+    """
+    API endpoint to save draft DataSource after successful connection test.
+    Saves credentials to Secret Manager.
+    """
+    from .utils.connection_manager import save_credentials_to_secret_manager
+
+    try:
+        model = get_object_or_404(ModelEndpoint, id=model_id)
+        etl_config = model.etl_config
+
+        data = json.loads(request.body)
+
+        # Extract connection details
+        source_name = data.get('name', 'Untitled Connection')
+        source_type = data.get('source_type')
+
+        # Prepare credentials for Secret Manager
+        credentials_dict = {
+            'host': data.get('host', ''),
+            'port': data.get('port'),
+            'database': data.get('database', ''),
+            'username': data.get('username', ''),
+            'password': data.get('password', ''),
+            'project_id': data.get('project_id', ''),
+            'dataset': data.get('dataset', ''),
+            'service_account_json': data.get('service_account_json', ''),
+            'connection_string': data.get('connection_string', ''),
+        }
+
+        # Create draft DataSource
+        source = DataSource.objects.create(
+            etl_config=etl_config,
+            name=source_name,
+            source_type=source_type,
+            source_host=credentials_dict['host'],
+            source_port=credentials_dict['port'],
+            source_database=credentials_dict['database'],
+            source_schema=data.get('schema', ''),
+            bigquery_project=credentials_dict['project_id'],
+            bigquery_dataset=credentials_dict['dataset'],
+            connection_string=credentials_dict['connection_string'],
+            is_enabled=False,  # Disabled until wizard is completed
+            connection_tested=True,
+        )
+
+        # Save credentials to Secret Manager
+        try:
+            secret_name = save_credentials_to_secret_manager(
+                model_id=model_id,
+                source_id=source.id,
+                credentials_dict=credentials_dict
+            )
+
+            source.credentials_secret_name = secret_name
+            source.save()
+
+            return JsonResponse({
+                'status': 'success',
+                'message': 'Connection saved as draft',
+                'source_id': source.id,
+            })
+
+        except Exception as secret_error:
+            # If Secret Manager fails, delete the DataSource
+            source.delete()
+            return JsonResponse({
+                'status': 'error',
+                'message': f'Failed to save credentials: {str(secret_error)}',
+            }, status=500)
+
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Failed to save draft: {str(e)}',
+        }, status=500)
+
+
+@login_required
+@require_http_methods(["POST"])
+def api_etl_test_connection(request, source_id):
+    """
+    API endpoint to test a data source connection.
+    """
+    from .utils.connection_manager import test_and_fetch_metadata, save_credentials_to_secret_manager
+
+    try:
+        source = get_object_or_404(DataSource, id=source_id)
+        data = json.loads(request.body)
+
+        # Prepare connection parameters based on source type
+        connection_params = {
+            'host': source.source_host,
+            'port': source.source_port,
+            'database': source.source_database,
+            'username': data.get('username', ''),
+            'password': data.get('password', ''),
+        }
+
+        # Test connection and get metadata
+        result = test_and_fetch_metadata(source.source_type, connection_params)
+
+        if result['success']:
+            # Save credentials to Secret Manager
+            try:
+                model_id = source.etl_config.model_endpoint.id
+                secret_name = save_credentials_to_secret_manager(
+                    model_id=model_id,
+                    source_id=source.id,
+                    credentials_dict=connection_params
+                )
+
+                # Update DataSource record
+                source.connection_tested = True
+                source.last_test_at = timezone.now()
+                source.last_test_message = result['message']
+                source.credentials_secret_name = secret_name
+                source.save()
+
+                return JsonResponse({
+                    'status': 'success',
+                    'message': result['message'],
+                    'tables': result['tables']
+                })
+
+            except Exception as secret_error:
+                # Connection worked but Secret Manager failed
+                return JsonResponse({
+                    'status': 'error',
+                    'message': f'Connection successful, but failed to save credentials: {str(secret_error)}',
+                }, status=500)
+
+        else:
+            # Connection failed
+            source.connection_tested = False
+            source.last_test_at = timezone.now()
+            source.last_test_message = result['message']
+            source.save()
+
+            return JsonResponse({
+                'status': 'error',
+                'message': result['message'],
+            }, status=400)
+
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Unexpected error: {str(e)}',
+        }, status=500)
 
 
 @login_required

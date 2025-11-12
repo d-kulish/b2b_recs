@@ -58,6 +58,7 @@ venv.bak/
 service-account-*.json
 credentials.json
 gcp-key.json
+.gcp/
 
 # Airflow
 airflow.db

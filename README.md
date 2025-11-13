@@ -230,16 +230,27 @@ The ETL system uses a **single Docker container template** deployed per client w
 **Django Web UI** (`/models/{id}/etl/`):
 - **Per-Table ETL Jobs**: Each data source extracts exactly one table with independent scheduling
 - **5-Step Wizard Modal**: Guided job creation (Job Name → Connection → Test → Table Selection → Configuration)
+- **Connection Management System**: Reusable named database connections
+  - Create named connections (e.g., "Production PostgreSQL")
+  - Auto-suggest connection names based on source type + database name
+  - Reuse saved connections across multiple ETL jobs
+  - Connection cards at Step 1 with "Use This Connection" button
+  - Read-only connection details when reusing saved connection
+  - Duplicate connection name validation
 - **Real Database Connection Testing**: Live connection validation with actual database credentials
   - PostgreSQL: Full support with connection pooling and timeout handling
   - MySQL: Full support with connection validation
   - BigQuery: Service account authentication support
+  - Auto-test saved connections in background to fetch table list
 - **Automatic Table Discovery**: Fetches real table list with metadata after successful connection
   - Table names
   - Row counts
   - Last updated timestamps
 - **Secure Credential Storage**: All passwords saved to GCP Secret Manager (never in Django DB)
-- **Draft-Save Flow**: Credentials saved immediately after successful test (before wizard completion)
+- **Draft ETL Job Creation**: Draft DataSource saved at Step 2 (after connection test)
+  - Links to Connection via ForeignKey
+  - Enabled/disabled until wizard completion at Step 5
+- **ETL Job Name Validation**: Duplicate job name check at Step 1 (prevents UNIQUE constraint errors)
 - **Inline Error Messages**: User-friendly error feedback without popup alerts
 - **Full CRUD Operations**: Add, edit, delete ETL jobs with complete configuration
 - **Multiple Data Source Types**: PostgreSQL, MySQL, SQL Server, BigQuery, CSV, Parquet
@@ -249,9 +260,11 @@ The ETL system uses a **single Docker container template** deployed per client w
 - **ETL Run History**: View past executions with detailed results and row counts
 
 **API Endpoints**:
+
+*ETL Job Management:*
 - `POST /api/models/{id}/etl/add-source/` - Create new data source/job
-- `POST /api/models/{id}/etl/save-draft/` - Save draft DataSource with credentials to Secret Manager
-- `POST /api/etl/test-connection/` - Test database connection in wizard (real connection)
+- `POST /api/models/{id}/etl/save-draft/` - Save draft DataSource (at Step 2) with connection link
+- `POST /api/models/{id}/etl/check-name/` - Validate ETL job name uniqueness
 - `GET /api/etl/sources/{id}/` - Get source details for editing
 - `POST /api/etl/sources/{id}/update/` - Update existing data source
 - `POST /api/etl/sources/{id}/test/` - Test database connection
@@ -261,21 +274,89 @@ The ETL system uses a **single Docker container template** deployed per client w
 - `POST /api/models/{id}/etl/run/` - Trigger full ETL run (all sources)
 - `GET /api/etl/runs/{id}/status/` - Poll ETL run status
 
+*Connection Management:*
+- `POST /api/models/{id}/connections/test-wizard/` - Test connection in wizard (real connection, fetches tables)
+- `POST /api/models/{id}/connections/create/` - Create new named Connection with credentials
+- `GET /api/models/{id}/connections/` - List all saved connections for model
+- `GET /api/connections/{id}/` - Get connection details (without credentials)
+- `GET /api/connections/{id}/credentials/` - Get decrypted credentials from Secret Manager
+- `POST /api/connections/{id}/test/` - Test existing connection
+- `POST /api/connections/{id}/delete/` - Delete connection (checks for dependent jobs)
+
 **Database Models**:
 - **ETLConfiguration**: Schedule settings and Cloud Run service configuration
-- **DataSource**: Individual source connections (one table per source)
-  - Stores `credentials_secret_name` instead of actual passwords
+- **Connection**: Reusable named database connections (NEW)
+  - Name (unique per ModelEndpoint)
+  - Source type (postgresql, mysql, bigquery, etc.)
+  - Connection parameters (host, port, database, schema)
+  - Credentials stored in GCP Secret Manager
+  - ForeignKey to ModelEndpoint (one model can have many connections)
+- **DataSource**: Individual ETL jobs (one table per source)
+  - ForeignKey to Connection (many jobs can share one connection)
+  - Job name (unique per ETLConfiguration)
+  - Enable/disable per job
   - Connection test status and last test timestamp
-  - Enable/disable per source
+  - Draft vs finalized status (is_enabled)
 - **DataSourceTable**: Table-level extraction config (sync mode, incremental column, row limits)
 - **ETLRun**: Execution history with per-source and per-table success tracking
 
 **Security Architecture**:
 - All database passwords stored in **GCP Secret Manager** (never in Django DB)
-- Secret naming: `model-{id}-source-{id}-credentials`
-- Django only stores the secret name reference
+- Secret naming for connections: `model-{model_id}-connection-{connection_id}-credentials`
+- Django only stores the secret name reference in Connection model
 - Connection testing validates credentials before saving
-- Draft-save immediately stores credentials after successful test
+- Credentials saved immediately when creating new Connection
+- Multiple DataSource jobs can reference the same Connection (share credentials)
+
+### 📚 How to Use: Connection Management & ETL Jobs
+
+**Creating Your First ETL Job:**
+
+1. **Navigate to ETL Page**: Go to `/models/{id}/etl/` for your model
+2. **Click "Add ETL Job"**: Opens the 5-step wizard modal
+
+**Step 1: Source Type & Job Name**
+- Select data source type (PostgreSQL, MySQL, BigQuery, etc.)
+- Enter unique job name (e.g., "Production Transactions")
+- **Option A**: Click "Use This Connection" on a saved connection card (if available)
+- **Option B**: Click "Create New Connection" to proceed with fresh connection
+
+**Step 2: Connection Configuration**
+- If reusing: Connection details auto-populate (read-only)
+- If new: Enter connection details (host, port, database, username, password)
+- Enter **Connection Name** (e.g., "Production PostgreSQL") - required and must be unique
+  - Auto-suggested based on source type + database name
+- Click "Test Connection" to validate credentials
+- On success: Draft ETL job automatically saved with connection link
+
+**Step 3: Table Selection**
+- Real tables fetched from database with metadata (row count, last updated)
+- Select the table to extract
+- Click "Next"
+
+**Step 4: Sync Configuration**
+- Choose sync mode: Replace (full refresh), Append, or Incremental
+- For Incremental: Select timestamp column for delta extraction
+- Set row limit (optional, for testing)
+- Configure schedule (manual, hourly, daily, weekly, monthly)
+
+**Step 5: Review & Create**
+- Review all configuration
+- Click "Create ETL Job" to finalize
+- Job is now enabled and ready to run
+
+**Reusing Connections:**
+- Saved connections appear as cards at Step 1
+- Shows connection name, type, host, database
+- Click "Use This Connection" to skip Step 2 configuration
+- Credentials securely retrieved from GCP Secret Manager
+- Connection auto-tested in background to fetch table list
+
+**Benefits of Connection Reuse:**
+- ✅ No need to re-enter credentials for same database
+- ✅ Faster job creation (skip connection configuration)
+- ✅ Centralized credential management (update once, affects all jobs)
+- ✅ Security: Credentials stored once in Secret Manager
 
 ### 🔨 Pending Components (For Production Deployment)
 
@@ -297,11 +378,20 @@ The ETL system uses a **single Docker container template** deployed per client w
    - Maximum flexibility for different update frequencies per table
    - Granular control over sync modes and incremental logic
    - Independent failure handling (one table failure doesn't block others)
-2. **Configuration-Driven**: All extraction logic driven by Django database configuration
-3. **Wizard-Based UX**: 5-step guided process for non-technical users with real-time validation
-4. **Security-First**: GCP Secret Manager for credential storage, never plain text in Django DB
-5. **Real Connection Testing**: Live database validation before saving (not fake success)
-6. **Draft-Save Flow**: Credentials saved immediately after test, before wizard completion
+2. **Connection Reuse Architecture**: Separate Connection model with ForeignKey from DataSource
+   - One Connection can be shared by many ETL jobs
+   - Named connections (e.g., "Production PostgreSQL") for easy identification
+   - Credentials stored once per connection (not duplicated per job)
+   - Auto-suggest connection names based on source type + database name
+3. **Configuration-Driven**: All extraction logic driven by Django database configuration
+4. **Wizard-Based UX**: 5-step guided process for non-technical users with real-time validation
+   - Job name uniqueness validated at Step 1 (prevents database errors)
+   - Connection name uniqueness validated at Step 2
+   - Draft ETL jobs saved at Step 2 (after connection test, before completion)
+5. **Security-First**: GCP Secret Manager for credential storage, never plain text in Django DB
+6. **Real Connection Testing**: Live database validation before saving (not fake success)
+   - Auto-test saved connections in background when reusing
+   - Fetches real table list with metadata during test
 7. **Connection Manager Utility**: `ml_platform/utils/connection_manager.py`
    - PostgreSQL, MySQL, BigQuery connection testing
    - Table metadata fetching (names, row counts, last updated)

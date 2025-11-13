@@ -27,6 +27,7 @@ urlpatterns = [
     # ETL API Endpoints
     path('api/models/<int:model_id>/etl/add-source/', views.api_etl_add_source, name='api_etl_add_source'),
     path('api/models/<int:model_id>/etl/save-draft/', views.api_etl_save_draft_source, name='api_etl_save_draft_source'),
+    path('api/models/<int:model_id>/etl/check-name/', views.api_etl_check_job_name, name='api_etl_check_job_name'),
     path('api/models/<int:model_id>/etl/toggle/', views.api_etl_toggle_enabled, name='api_etl_toggle_enabled'),
     path('api/models/<int:model_id>/etl/run/', views.api_etl_run_now, name='api_etl_run_now'),
     path('api/etl/test-connection/', views.api_etl_test_connection_wizard, name='api_etl_test_connection_wizard'),
@@ -36,4 +37,13 @@ urlpatterns = [
     path('api/etl/sources/<int:source_id>/run/', views.api_etl_run_source, name='api_etl_run_source'),
     path('api/etl/sources/<int:source_id>/delete/', views.api_etl_delete_source, name='api_etl_delete_source'),
     path('api/etl/runs/<int:run_id>/status/', views.api_etl_run_status, name='api_etl_run_status'),
+
+    # Connection Management API (New Architecture)
+    path('api/models/<int:model_id>/connections/test-wizard/', views.api_connection_test_wizard, name='api_connection_test_wizard'),
+    path('api/models/<int:model_id>/connections/create/', views.api_connection_create, name='api_connection_create'),
+    path('api/models/<int:model_id>/connections/', views.api_connection_list, name='api_connection_list'),
+    path('api/connections/<int:connection_id>/', views.api_connection_get, name='api_connection_get'),
+    path('api/connections/<int:connection_id>/credentials/', views.api_connection_get_credentials, name='api_connection_get_credentials'),
+    path('api/connections/<int:connection_id>/test/', views.api_connection_test, name='api_connection_test'),
+    path('api/connections/<int:connection_id>/delete/', views.api_connection_delete, name='api_connection_delete'),
 ]

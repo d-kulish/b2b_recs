@@ -1,33 +1,51 @@
-# Next Steps: Connection Testing & Credential Management
+# Next Steps: ETL & Connection Management System
 
-**Last Updated:** November 12, 2025
+**Last Updated:** November 13, 2025
 
 ---
 
 ## Current Status
 
-- ✅ UI wizard is complete and looks great
-- ✅ "Test Connection" button performs real database connections
-- ✅ Real database connections working (PostgreSQL, MySQL, BigQuery)
+- ✅ UI wizard is complete and functional
+- ✅ Real database connection testing (PostgreSQL, MySQL, BigQuery)
+- ✅ Secure credential storage in GCP Secret Manager
+- ✅ **Connection Management System** - reusable named connections across ETL jobs
+- ✅ **Connection Naming** - obligatory unique names with validation
+- ✅ **ETL Job Naming** - duplicate job name validation at Step 1
+- ✅ **Draft ETL Jobs** - saved at Step 2 (after connection test)
 - ✅ Step 3 shows real tables from database with metadata
-- ✅ Passwords stored securely in GCP Secret Manager
-- ✅ Draft-save flow implemented (credentials saved immediately after test)
+- ✅ Connection reuse - auto-populate and fetch tables for saved connections
 
 ---
 
 ## Solution Overview
 
-**What we're building:**
-1. Django connects to real databases (PostgreSQL, MySQL, etc.)
-2. Fetches real table list from the database
-3. Saves credentials to GCP Secret Manager (secure)
-4. Shows real tables in wizard Step 3
+**What we've built:**
+1. **Connection Management** - Named, reusable database connections
+2. **Real Database Testing** - Connect to PostgreSQL, MySQL, BigQuery
+3. **Secure Credentials** - Store passwords in GCP Secret Manager
+4. **ETL Job Wizard** - 5-step wizard to create ETL jobs
+5. **Draft System** - Save job drafts at Step 2, finalize at Step 5
 
-**Flow:**
+**ETL Wizard Flow:**
 ```
-User enters DB credentials → Click "Test Connection" →
-Django connects → Pulls table list →
-Saves to Secret Manager → Shows real tables → User selects table
+Step 1: Select source type + Job name (validate uniqueness) →
+        Option: Reuse saved connection OR create new connection →
+Step 2: Enter/view connection details + Connection name →
+        Test connection → Auto-save draft ETL job →
+Step 3: Select table from real database →
+Step 4: Configure sync mode (replace/incremental/append) →
+Step 5: Review and create (finalize ETL job)
+```
+
+**Connection Reuse Flow:**
+```
+User creates connection "Production PostgreSQL" →
+Connection saved with encrypted credentials in Secret Manager →
+Next ETL job: User selects "Production PostgreSQL" at Step 1 →
+Step 2 auto-populates connection details (read-only) →
+Auto-tests connection in background to fetch tables →
+Proceeds to Step 3 with table list ready
 ```
 
 ---
@@ -65,7 +83,30 @@ Saves to Secret Manager → Shows real tables → User selects table
 - [x] Test full wizard flow end-to-end ✓
 - [x] Replace popup alerts with inline messages ✓
 
-### 🎯 Milestone 4: Production Readiness (Next Phase)
+### 🎯 Milestone 4: Connection Management System ✅ COMPLETE
+- [x] Create Connection model with ForeignKey from DataSource ✓
+- [x] Migrate database schema ✓
+- [x] Update views to create/retrieve Connection objects ✓
+- [x] Add Connection Name field to wizard (obligatory, unique) ✓
+- [x] Auto-suggest connection name based on source type + database name ✓
+- [x] Validate connection name uniqueness ✓
+- [x] Show saved connections at Step 1 (select to reuse) ✓
+- [x] Auto-populate connection details when reusing saved connection ✓
+- [x] Auto-test saved connection to fetch tables ✓
+- [x] ETL job name validation (check duplicates at Step 1) ✓
+- [x] Draft ETL job creation at Step 2 (not Step 5) ✓
+- [x] Fix nextStep() to handle all wizard steps ✓
+
+### 🎯 Milestone 5: Connection Editing & Management (Next Phase)
+- [ ] Add Edit button to saved connection cards
+- [ ] Create Edit Connection modal with pre-filled form
+- [ ] Add backend endpoint for updating connection credentials
+- [ ] Show affected jobs count when editing connection
+- [ ] Require connection re-test before saving edits
+- [ ] Add Delete connection functionality (with cascade warnings)
+- [ ] Add connection usage analytics (last used, job count)
+
+### 🎯 Milestone 6: Production Readiness (Future)
 - [ ] Test with MySQL database connection
 - [ ] Test with BigQuery dataset
 - [ ] Add SQL Server support if needed
@@ -78,16 +119,22 @@ Saves to Secret Manager → Shows real tables → User selects table
 
 ## What We Accomplished
 
-**Milestones 1-3 Complete!**
+**Milestones 1-4 Complete!**
 
 ✅ Real database connection testing (PostgreSQL, MySQL, BigQuery)
 ✅ Secure credential storage in GCP Secret Manager
-✅ Draft-save flow (credentials saved immediately after successful test)
+✅ **Connection Management System** - reusable named connections
+✅ **Connection Naming** - obligatory unique names with auto-suggestion
+✅ **ETL Job Naming** - duplicate validation at Step 1 prevents UNIQUE constraint errors
+✅ **Draft ETL Jobs** - correctly saved at Step 2 after connection test
+✅ Connection reuse - select saved connection at Step 1, auto-populate details
+✅ Auto-test saved connections to fetch table list in background
 ✅ Real table metadata displayed in wizard (names, row counts, last updated)
 ✅ Inline error messages with proper UX
 ✅ Cloud SQL Proxy integration for secure database access
+✅ Fixed wizard step navigation (nextStep() handles all steps)
 
-**Next Steps:** Milestone 4 - Build ETL container for production data extraction
+**Next Steps:** Milestone 5 - Connection editing and advanced management features
 
 ---
 
@@ -95,11 +142,14 @@ Saves to Secret Manager → Shows real tables → User selects table
 
 ```
 ml_platform/utils/connection_manager.py    ✅ NEW - connection testing for PostgreSQL, MySQL, BigQuery
-ml_platform/views.py                       ✅ UPDATED - api_etl_test_connection_wizard(), api_etl_save_draft_source()
-ml_platform/models.py                      ✅ UPDATED - added credentials_secret_name field
-ml_platform/urls.py                        ✅ UPDATED - added save-draft endpoint route
-templates/ml_platform/model_etl.html       ✅ UPDATED - real table list, draft-save flow, inline messages
-requirements.txt                           ✅ UPDATED - added psycopg2-binary, pymysql, google-cloud-secret-manager
+ml_platform/views.py                       ✅ UPDATED - Connection CRUD, ETL wizard endpoints, validation
+ml_platform/models.py                      ✅ UPDATED - Connection model, ForeignKey from DataSource
+ml_platform/urls.py                        ✅ UPDATED - Connection management routes, validation endpoints
+templates/ml_platform/model_etl.html       ✅ UPDATED - connection reuse, name validation, draft-save at Step 2
+ml_platform/migrations/0005_*.py           ✅ NEW - Connection model migration
+ml_platform/migrations/0006_*.py           ✅ NEW - DataSource unique constraint (etl_config, name)
+requirements.txt                           ✅ UPDATED - psycopg2-binary, pymysql, google-cloud-secret-manager
+start_dev.sh                               ✅ NEW - development environment startup script
 ```
 
 ---

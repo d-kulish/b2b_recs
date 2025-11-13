@@ -93,6 +93,101 @@ class ETLConfiguration(models.Model):
         return f"ETL Config for {self.model_endpoint.name}"
 
 
+class Connection(models.Model):
+    """
+    Reusable database/data connection.
+    Multiple ETL jobs can share the same connection.
+    This separates connection credentials from ETL job configuration.
+    """
+
+    # Organized by category for UI display
+    SOURCE_TYPE_CHOICES = [
+        # Relational Databases
+        ('postgresql', 'PostgreSQL'),
+        ('mysql', 'MySQL'),
+        ('oracle', 'Oracle Database'),
+        ('sqlserver', 'Microsoft SQL Server'),
+        ('db2', 'IBM DB2'),
+        ('redshift', 'Amazon Redshift'),
+        ('synapse', 'Azure Synapse'),
+        ('bigquery', 'Google BigQuery'),
+        ('snowflake', 'Snowflake'),
+        ('mariadb', 'MariaDB'),
+        ('teradata', 'Teradata'),
+        # Flat Files
+        ('csv', 'CSV Files'),
+        ('parquet', 'Parquet Files'),
+        ('json', 'JSON Files'),
+        ('excel', 'Excel (XLS/XLSX)'),
+        ('txt', 'Text Files'),
+        ('avro', 'Avro Files'),
+        # NoSQL Databases
+        ('mongodb', 'MongoDB'),
+        ('firestore', 'Google Firestore'),
+        ('cassandra', 'Apache Cassandra'),
+        ('dynamodb', 'Amazon DynamoDB'),
+        ('redis', 'Redis'),
+    ]
+
+    model_endpoint = models.ForeignKey(ModelEndpoint, on_delete=models.CASCADE, related_name='connections')
+
+    # Connection identification
+    name = models.CharField(max_length=255, help_text="Friendly name (e.g., 'Production PostgreSQL')")
+    source_type = models.CharField(max_length=50, choices=SOURCE_TYPE_CHOICES)
+    description = models.TextField(blank=True, help_text="Optional description")
+
+    # Connection details (for database sources)
+    source_host = models.CharField(max_length=255, blank=True)
+    source_port = models.IntegerField(null=True, blank=True)
+    source_database = models.CharField(max_length=255, blank=True)
+    source_schema = models.CharField(max_length=255, blank=True, help_text="Database schema (optional)")
+    source_username = models.CharField(max_length=255, blank=True, help_text="Database username (for deduplication)")
+    credentials_secret_name = models.CharField(max_length=255, blank=True, help_text="Secret Manager secret name")
+
+    # File upload details (for CSV/Parquet sources)
+    file_path = models.CharField(max_length=512, blank=True, help_text="GCS path to uploaded file")
+
+    # BigQuery/Firestore source details
+    bigquery_project = models.CharField(max_length=255, blank=True)
+    bigquery_dataset = models.CharField(max_length=255, blank=True)
+
+    # Service Account Authentication (BigQuery, Firestore, etc.)
+    service_account_json = models.TextField(blank=True, help_text="Service account JSON key (pasted)")
+    service_account_file_path = models.CharField(max_length=512, blank=True, help_text="GCS path to service account JSON")
+
+    # NoSQL connection strings
+    connection_string = models.TextField(blank=True, help_text="Connection string (MongoDB, Redis, etc.)")
+
+    # Additional connection parameters (stored as JSON for flexibility)
+    connection_params = models.JSONField(default=dict, blank=True, help_text="Additional connection parameters")
+
+    # Connection status
+    is_enabled = models.BooleanField(default=True)
+    connection_tested = models.BooleanField(default=False)
+    last_test_at = models.DateTimeField(null=True, blank=True)
+    last_test_status = models.CharField(max_length=20, blank=True, help_text="success or failed")
+    last_test_message = models.TextField(blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['name']
+        unique_together = [
+            ['model_endpoint', 'name'],  # Unique connection names per model
+            ['model_endpoint', 'source_type', 'source_host', 'source_port', 'source_database', 'source_username']  # Prevent duplicate connections
+        ]
+        verbose_name = 'Connection'
+        verbose_name_plural = 'Connections'
+
+    def __str__(self):
+        return f"{self.name} ({self.get_source_type_display()})"
+
+    def get_dependent_jobs_count(self):
+        """Returns count of ETL jobs using this connection"""
+        return self.data_sources.filter(is_enabled=True).count()
+
+
 class DataSource(models.Model):
     """
     Represents a single data source (database connection or file upload).
@@ -130,16 +225,21 @@ class DataSource(models.Model):
 
     etl_config = models.ForeignKey(ETLConfiguration, on_delete=models.CASCADE, related_name='data_sources')
 
+    # NEW: Reference to reusable Connection
+    connection = models.ForeignKey(Connection, on_delete=models.PROTECT, null=True, blank=True, related_name='data_sources',
+                                    help_text="Reusable connection (new architecture)")
+
     # Source identification
     name = models.CharField(max_length=255, help_text="Friendly name (e.g., 'Main Transaction DB')")
     source_type = models.CharField(max_length=50, choices=SOURCE_TYPE_CHOICES)
 
-    # Connection details (for database sources)
-    source_host = models.CharField(max_length=255, blank=True)
+    # DEPRECATED: Direct connection fields (kept for backward compatibility during migration)
+    # These will be removed once all DataSources use Connection model
+    source_host = models.CharField(max_length=255, blank=True, null=True)
     source_port = models.IntegerField(null=True, blank=True)
-    source_database = models.CharField(max_length=255, blank=True)
-    source_schema = models.CharField(max_length=255, blank=True, help_text="Database schema (optional)")
-    credentials_secret_name = models.CharField(max_length=255, blank=True, help_text="Secret Manager secret name")
+    source_database = models.CharField(max_length=255, blank=True, null=True)
+    source_schema = models.CharField(max_length=255, blank=True, null=True, help_text="Database schema (optional)")
+    credentials_secret_name = models.CharField(max_length=255, blank=True, null=True, help_text="Secret Manager secret name")
 
     # File upload details (for CSV/Parquet sources)
     file_path = models.CharField(max_length=512, blank=True, help_text="GCS path to uploaded file")
@@ -173,11 +273,50 @@ class DataSource(models.Model):
 
     class Meta:
         ordering = ['name']
+        unique_together = ['etl_config', 'name']  # Ensure unique ETL job names per model
         verbose_name = 'Data Source'
         verbose_name_plural = 'Data Sources'
 
     def __str__(self):
         return f"{self.name} ({self.get_source_type_display()})"
+
+    def get_connection_details(self):
+        """
+        Returns connection details from either Connection FK or direct fields.
+        Supports both old and new architecture during migration.
+        """
+        if self.connection:
+            # New architecture: use Connection model
+            return {
+                'source_type': self.connection.source_type,
+                'host': self.connection.source_host,
+                'port': self.connection.source_port,
+                'database': self.connection.source_database,
+                'schema': self.connection.source_schema,
+                'credentials_secret_name': self.connection.credentials_secret_name,
+                'bigquery_project': self.connection.bigquery_project,
+                'bigquery_dataset': self.connection.bigquery_dataset,
+                'connection_string': self.connection.connection_string,
+                'file_path': self.connection.file_path,
+            }
+        else:
+            # Old architecture: use direct fields
+            return {
+                'source_type': self.source_type,
+                'host': self.source_host,
+                'port': self.source_port,
+                'database': self.source_database,
+                'schema': self.source_schema,
+                'credentials_secret_name': self.credentials_secret_name,
+                'bigquery_project': self.bigquery_project,
+                'bigquery_dataset': self.bigquery_dataset,
+                'connection_string': self.connection_string,
+                'file_path': self.file_path,
+            }
+
+    def uses_connection_model(self):
+        """Returns True if this DataSource uses the new Connection model"""
+        return self.connection is not None
 
 
 class DataSourceTable(models.Model):

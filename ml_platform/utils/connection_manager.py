@@ -459,3 +459,99 @@ def get_credentials_from_secret_manager(secret_name):
 
     except Exception as e:
         raise Exception(f"Failed to retrieve credentials from Secret Manager: {str(e)}")
+
+
+def save_connection_credentials(model_id, connection_id, credentials_dict):
+    """
+    Save connection credentials to GCP Secret Manager.
+    Uses naming convention: model-{model_id}-connection-{connection_id}-credentials
+
+    Args:
+        model_id (int): Model endpoint ID
+        connection_id (int): Connection ID
+        credentials_dict (dict): Credentials to store
+
+    Returns:
+        str: Secret name
+
+    Raises:
+        Exception: If secret creation fails
+    """
+    try:
+        client = secretmanager.SecretManagerServiceClient()
+
+        # Generate secret name for Connection (different from DataSource)
+        secret_name = f"model-{model_id}-connection-{connection_id}-credentials"
+        parent = f"projects/{GCP_PROJECT_ID}"
+        secret_id = secret_name
+
+        # Convert credentials to JSON string
+        payload = json.dumps(credentials_dict).encode('UTF-8')
+
+        # Check if secret already exists
+        secret_path = f"{parent}/secrets/{secret_id}"
+        try:
+            client.get_secret(name=secret_path)
+            # Secret exists, add new version
+            version_parent = secret_path
+            response = client.add_secret_version(
+                request={
+                    "parent": version_parent,
+                    "payload": {"data": payload}
+                }
+            )
+        except gcp_exceptions.NotFound:
+            # Secret doesn't exist, create it
+            secret = client.create_secret(
+                request={
+                    "parent": parent,
+                    "secret_id": secret_id,
+                    "secret": {
+                        "replication": {"automatic": {}},
+                    },
+                }
+            )
+            # Add first version
+            response = client.add_secret_version(
+                request={
+                    "parent": secret.name,
+                    "payload": {"data": payload}
+                }
+            )
+
+        return secret_name
+
+    except Exception as e:
+        raise Exception(f"Failed to save credentials to Secret Manager: {str(e)}")
+
+
+def delete_secret_from_secret_manager(secret_name):
+    """
+    Delete a secret from GCP Secret Manager.
+
+    Args:
+        secret_name (str): Secret name to delete
+
+    Returns:
+        bool: True if deleted successfully, False if secret didn't exist
+
+    Raises:
+        Exception: If deletion fails for reasons other than "not found"
+    """
+    try:
+        client = secretmanager.SecretManagerServiceClient()
+
+        # Build secret path
+        secret_path = f"projects/{GCP_PROJECT_ID}/secrets/{secret_name}"
+
+        # Delete the secret
+        client.delete_secret(request={"name": secret_path})
+
+        return True
+
+    except gcp_exceptions.NotFound:
+        # Secret doesn't exist - that's okay
+        return False
+
+    except Exception as e:
+        raise Exception(f"Failed to delete secret from Secret Manager: {str(e)}")

@@ -2,6 +2,7 @@ from django.contrib import admin
 from .models import (
     ModelEndpoint,
     ETLConfiguration,
+    Connection,
     DataSource,
     DataSourceTable,
     ETLRun,
@@ -29,6 +30,14 @@ class ETLConfigurationAdmin(admin.ModelAdmin):
     list_filter = ['schedule_type', 'is_enabled']
     search_fields = ['model_endpoint__name']
     readonly_fields = ['created_at', 'updated_at', 'last_run_at']
+
+
+@admin.register(Connection)
+class ConnectionAdmin(admin.ModelAdmin):
+    list_display = ['name', 'source_type', 'model_endpoint', 'is_enabled', 'connection_tested', 'last_test_at']
+    list_filter = ['source_type', 'is_enabled', 'connection_tested']
+    search_fields = ['name', 'model_endpoint__name', 'source_host']
+    readonly_fields = ['created_at', 'updated_at', 'last_test_at']
 
 
 @admin.register(DataSource)

@@ -182,7 +182,7 @@
 
 <!-- Add Data Source Wizard Modal -->
 <div id="addSourceModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-[100] flex items-center justify-center p-4 pt-20">
-    <div class="bg-white rounded-xl shadow-2xl w-full max-h-[75vh] flex flex-col" style="max-width: 634px;">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-h-[75vh] min-h-[500px] flex flex-col" style="max-width: 634px;">
         <!-- Modal Header -->
         <div class="px-5 py-3 border-b border-gray-200 sticky top-0 bg-white z-10 rounded-t-xl">
             <div class="flex items-center justify-between">
@@ -210,8 +210,11 @@
 
                 <!-- Category Tabs -->
                 <div class="mb-3">
-                    <div class="grid grid-cols-3 gap-2">
-                        <button onclick="switchTab('relational')" id="tabRelational" class="px-3 py-2 text-xs font-semibold rounded-lg border border-green-600 bg-green-50 text-green-700 transition">
+                    <div class="grid grid-cols-4 gap-2">
+                        <button onclick="switchTab('saved')" id="tabSaved" class="px-3 py-2 text-xs font-semibold rounded-lg border border-green-600 bg-green-50 text-green-700 transition">
+                            Saved Connections
+                        </button>
+                        <button onclick="switchTab('relational')" id="tabRelational" class="px-3 py-2 text-xs font-semibold rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition">
                             Relational Databases
                         </button>
                         <button onclick="switchTab('files')" id="tabFiles" class="px-3 py-2 text-xs font-semibold rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition">
@@ -223,8 +226,22 @@
                     </div>
                 </div>
 
+                <!-- Saved Connections Tab Content -->
+                <div id="contentSaved" class="tab-content">
+                    <p class="text-xs text-gray-600 mb-2">Select a saved connection:</p>
+                    <div id="savedConnectionsList" class="space-y-2 h-36 overflow-y-auto border border-gray-200 rounded-lg p-2">
+                        <!-- Will be populated dynamically via JavaScript -->
+                        <p class="text-xs text-gray-500 text-center py-4">Loading connections...</p>
+                    </div>
+                    <div class="mt-2 flex justify-end">
+                        <button onclick="createNewConnection()" class="text-xs text-blue-600 hover:text-blue-800 font-semibold">
+                            <i class="fas fa-plus mr-1"></i>Create New Connection
+                        </button>
+                    </div>
+                </div>
+
                 <!-- Relational Databases Tab Content -->
-                <div id="contentRelational" class="tab-content">
+                <div id="contentRelational" class="tab-content hidden">
                     <p class="text-xs text-gray-600 mb-2">Select a relational database:</p>
                     <div class="grid grid-cols-2 gap-2 h-36 overflow-y-auto border border-gray-200 rounded-lg p-2">
                         <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
@@ -379,6 +396,16 @@
                                 <label class="block text-sm font-semibold text-gray-700 mb-1.5">Password</label>
                                 <input type="password" id="sourcePassword" placeholder="••••••••" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                             </div>
+                        </div>
+
+                        <!-- Connection Name Section -->
+                        <div class="border-t border-gray-200 pt-3 mt-3">
+                            <label class="block text-sm font-semibold text-gray-700 mb-1.5">
+                                Connection Name <span class="text-red-500">*</span>
+                            </label>
+                            <input type="text" id="connectionName" placeholder="Production PostgreSQL" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <p class="text-xs text-gray-500 mt-1">This name will be saved for reuse in future ETL jobs</p>
+                            <div id="connectionNameError" class="text-xs text-red-600 mt-1 hidden"></div>
                         </div>
 
                         <div id="connectionTestContainer" class="bg-white border border-gray-300 rounded-lg p-3 mt-4 transition-colors">
@@ -699,7 +726,7 @@ const csrftoken = getCookie('csrftoken');
 
 function switchTab(tabName) {
     // Update tab buttons
-    const tabs = ['Relational', 'Files', 'NoSQL'];
+    const tabs = ['Saved', 'Relational', 'Files', 'NoSQL'];
     tabs.forEach(tab => {
         const tabButton = document.getElementById(`tab${tab}`);
         const content = document.getElementById(`content${tab}`);
@@ -709,6 +736,11 @@ function switchTab(tabName) {
             tabButton.classList.remove('border-gray-300', 'bg-white', 'text-gray-700');
             tabButton.classList.add('border-green-600', 'bg-green-50', 'text-green-700');
             content.classList.remove('hidden');
+
+            // Load saved connections if this is the Saved tab
+            if (tabName === 'saved') {
+                loadSavedConnections();
+            }
         } else {
             // Deactivate other tabs
             tabButton.classList.remove('border-green-600', 'bg-green-50', 'text-green-700');
@@ -972,6 +1004,12 @@ function showAddSourceModal() {
     }
     currentWizardStep = 1;
     showStep(1);
+
+    // Load saved connections when wizard opens
+    loadSavedConnections();
+
+    // Setup auto-suggestion for connection name
+    setupConnectionNameAutoSuggest();
 }
 
 function hideAddSourceModal() {
@@ -988,20 +1026,50 @@ function resetWizard() {
     draftSourceId = null;
     window.connectionTested = false;
 
+    // Reset saved connection flags
+    window.usingSavedConnection = false;
+    window.usingExistingConnection = false;
+    window.existingConnectionId = null;
+    selectedConnectionId = null;
+    window.selectedConnection = null;
+
     document.querySelectorAll('.wizard-step').forEach(step => step.classList.add('hidden'));
     document.getElementById('step1').classList.remove('hidden');
 
-    // Reset form fields
-    document.getElementById('sourceType').value = 'postgresql';
-    document.getElementById('sourceName').value = '';
-    document.getElementById('sourceHost').value = '';
-    document.getElementById('sourcePort').value = '';
-    document.getElementById('sourceDatabase').value = '';
-    document.getElementById('sourceUsername').value = '';
-    document.getElementById('sourcePassword').value = '';
-    document.getElementById('syncMode').value = 'replace';
-    document.getElementById('rowLimit').value = '';
-    document.getElementById('enableImmediately').checked = true;
+    // Reset form fields (with null checks)
+    const setFieldValue = (id, value) => {
+        const field = document.getElementById(id);
+        if (field) field.value = value;
+    };
+    const setFieldChecked = (id, checked) => {
+        const field = document.getElementById(id);
+        if (field) field.checked = checked;
+    };
+
+    setFieldValue('sourceType', 'postgresql');
+    setFieldValue('sourceName', '');
+    setFieldValue('sourceHost', '');
+    setFieldValue('sourcePort', '');
+    setFieldValue('sourceDatabase', '');
+    setFieldValue('sourceUsername', '');
+    setFieldValue('sourcePassword', '');
+    setFieldValue('connectionName', '');
+    setFieldValue('syncMode', 'replace');
+    setFieldValue('rowLimit', '');
+    setFieldChecked('enableImmediately', true);
+
+    // Clear connection name error and read-only state
+    const connectionNameField = document.getElementById('connectionName');
+    if (connectionNameField) {
+        connectionNameField.classList.remove('border-red-500', 'bg-gray-100');
+        connectionNameField.readOnly = false;
+        connectionNameField.title = '';
+        connectionNameField.dataset.autoGenerated = 'false';
+    }
+    const connectionNameError = document.getElementById('connectionNameError');
+    if (connectionNameError) {
+        connectionNameError.classList.add('hidden');
+    }
 
     // Reset progress
     updateProgress(1);
@@ -1019,12 +1087,15 @@ function showConnectionForm() {
     document.getElementById('selectedTypeDisplay').textContent = sourceTypeLabel;
 
     // Reset connection test flag when switching forms
-    window.connectionTested = false;
+    // BUT: Don't reset if we're using an existing connection (already tested & saved)
+    if (!window.usingExistingConnection) {
+        window.connectionTested = false;
 
-    // Disable next button since connection needs to be tested again
-    const nextButton = document.getElementById('nextButton');
-    if (nextButton) {
-        nextButton.disabled = true;
+        // Disable next button since connection needs to be tested again
+        const nextButton = document.getElementById('nextButton');
+        if (nextButton) {
+            nextButton.disabled = true;
+        }
     }
 
     // Clear all status messages
@@ -1078,10 +1149,16 @@ function showStep(step) {
     document.querySelectorAll('.wizard-step').forEach(s => s.classList.add('hidden'));
 
     // Show current step
-    document.getElementById(`step${step}`).classList.remove('hidden');
+    const currentStepEl = document.getElementById(`step${step}`);
+    if (currentStepEl) {
+        currentStepEl.classList.remove('hidden');
+    }
 
     // Update step indicator
-    document.getElementById('currentStep').textContent = step;
+    const stepIndicator = document.getElementById('currentStep');
+    if (stepIndicator) {
+        stepIndicator.textContent = step;
+    }
 
     // Update progress bar
     updateProgress(step);
@@ -1092,28 +1169,32 @@ function showStep(step) {
 
     // Back button: always visible, disabled on step 1
     if (step === 1) {
-        backButton.disabled = true;
+        if (backButton) backButton.disabled = true;
         // Update next button state based on validation
         updateStep1NextButton();
     } else if (step === 2) {
-        backButton.disabled = false;
+        if (backButton) backButton.disabled = false;
         // For step 2, next button is disabled until connection is tested
-        nextButton.disabled = !window.connectionTested;
+        if (nextButton) nextButton.disabled = !window.connectionTested;
     } else {
-        backButton.disabled = false;
+        if (backButton) backButton.disabled = false;
         // Enable next button for other steps
-        nextButton.disabled = false;
+        if (nextButton) nextButton.disabled = false;
     }
 
     // Next button: hide on last step, always show just icon
-    nextButton.classList.toggle('hidden', step === 5);
-    nextButton.innerHTML = '<i class="fas fa-arrow-right"></i>';
+    if (nextButton) {
+        nextButton.classList.toggle('hidden', step === 5);
+        nextButton.innerHTML = '<i class="fas fa-arrow-right"></i>';
+    }
 
-    document.getElementById('createButton').classList.toggle('hidden', step !== 5);
+    const createButton = document.getElementById('createButton');
+    if (createButton) {
+        createButton.classList.toggle('hidden', step !== 5);
+    }
 
     // Update create button text based on edit mode
-    if (step === 5) {
-        const createButton = document.getElementById('createButton');
+    if (step === 5 && createButton) {
         if (wizardEditMode) {
             createButton.innerHTML = '<i class="fas fa-check"></i><span>Update</span>';
         } else {
@@ -1135,8 +1216,10 @@ function showStep(step) {
     if (step === 4) {
         const selectedTable = document.querySelector('input[name="selectedTable"]:checked');
         if (selectedTable) {
-            document.getElementById('selectedTableName').textContent = selectedTable.value;
-            document.getElementById('destTableName').textContent = selectedTable.value;
+            const selectedTableNameEl = document.getElementById('selectedTableName');
+            const destTableNameEl = document.getElementById('destTableName');
+            if (selectedTableNameEl) selectedTableNameEl.textContent = selectedTable.value;
+            if (destTableNameEl) destTableNameEl.textContent = selectedTable.value;
         }
     }
 
@@ -1169,13 +1252,61 @@ function nextStep() {
             validateJobName();
             return;
         }
-    } else if (currentWizardStep === 2) {
-        // Save draft before moving to Step 3
-        if (window.connectionTested && savedConnectionData) {
+
+        // Check if job name already exists
+        fetch(`/api/models/{{ model.id }}/etl/check-name/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrftoken
+            },
+            body: JSON.stringify({ name: jobName })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.exists) {
+                // Show duplicate error
+                const jobNameField = document.getElementById('sourceName');
+                const jobNameError = document.getElementById('sourceNameError');
+                if (jobNameField) {
+                    jobNameField.classList.add('border-red-500');
+                }
+                if (jobNameError) {
+                    jobNameError.textContent = data.message;
+                    jobNameError.classList.remove('hidden');
+                }
+                return;
+            }
+
+            // Name is unique, proceed with saved connection flow if applicable
+            proceedFromStep1();
+        })
+        .catch(error => {
+            console.error('Error checking job name:', error);
+            // Continue anyway if check fails
+            proceedFromStep1();
+        });
+
+        return;
+    }
+
+    // Step 2 -> 3: Save draft ETL job
+    if (currentWizardStep === 2) {
+        console.log('=== STEP 2 -> 3: ALWAYS SAVE DRAFT ===');
+        console.log('window.connectionTested:', window.connectionTested);
+
+        // ALWAYS save draft ETL job at Step 2, no exceptions
+        if (window.connectionTested) {
             saveDraftSource();
             return;  // Will proceed to Step 3 after successful save
+        } else {
+            alert('Please test connection before proceeding');
+            return;
         }
-    } else if (currentWizardStep === 3) {
+    }
+
+    // Step 3 -> 4: Validate table selection
+    if (currentWizardStep === 3) {
         const selectedTable = document.querySelector('input[name="selectedTable"]:checked');
         if (!selectedTable) {
             alert('Please select a table');
@@ -1183,9 +1314,174 @@ function nextStep() {
         }
     }
 
+    // Default: proceed to next step
     currentWizardStep++;
     showStep(currentWizardStep);
 }
+
+function proceedFromStep1() {
+        // NEW: If using saved connection, populate Step 2 with connection details
+        if (window.savedConnectionForStep2) {
+            const connectionId = window.savedConnectionForStep2;
+
+            // Fetch connection details and credentials
+            Promise.all([
+                fetch(`/api/connections/${connectionId}/`).then(r => {
+                    if (!r.ok) throw new Error(`Connection not found (HTTP ${r.status})`);
+                    return r.json();
+                }),
+                fetch(`/api/connections/${connectionId}/credentials/`).then(r => {
+                    if (!r.ok) throw new Error(`Credentials not found (HTTP ${r.status})`);
+                    return r.json();
+                })
+            ])
+            .then(([connResp, credResp]) => {
+                if (connResp.status === 'success' && credResp.status === 'success') {
+                    const conn = connResp.connection;
+                    const creds = credResp.credentials;
+
+                    console.log('=== LOADING SAVED CONNECTION ===');
+                    console.log('Connection source_type:', conn.source_type);
+
+                    // IMPORTANT: Select the appropriate source type radio button in Step 1
+                    // This is needed so showConnectionForm() in Step 2 knows which form to display
+                    const sourceTypeRadio = document.querySelector(`input[name="sourceType"][value="${conn.source_type}"]`);
+                    if (sourceTypeRadio) {
+                        sourceTypeRadio.checked = true;
+                        console.log('Checked radio button for:', conn.source_type);
+                    } else {
+                        console.error('Could not find radio button for source type:', conn.source_type);
+                    }
+
+                    // Populate Step 2 form fields (with null checks)
+                    const setFieldValue = (id, value) => {
+                        const field = document.getElementById(id);
+                        if (field) field.value = value || '';
+                    };
+
+                    setFieldValue('sourceHost', conn.source_host);
+                    setFieldValue('sourcePort', conn.source_port);
+                    setFieldValue('sourceDatabase', conn.source_database);
+                    setFieldValue('sourceSchema', conn.source_schema);
+                    setFieldValue('sourceUsername', creds.username);
+                    setFieldValue('sourcePassword', creds.password);
+
+                    // Populate Connection Name field (read-only since we're reusing)
+                    const connectionNameField = document.getElementById('connectionName');
+                    if (connectionNameField) {
+                        connectionNameField.value = conn.name;
+                        connectionNameField.readOnly = true;
+                        connectionNameField.classList.add('bg-gray-100');
+                        connectionNameField.title = 'Reusing existing connection - name cannot be changed';
+                    }
+
+                    // Mark as using existing connection
+                    window.usingExistingConnection = true;
+                    window.existingConnectionId = connectionId;
+                    window.connectionTested = true;  // Connection already tested & saved
+
+                    console.log('Flags set for saved connection:');
+                    console.log('  usingExistingConnection:', window.usingExistingConnection);
+                    console.log('  existingConnectionId:', window.existingConnectionId);
+                    console.log('  connectionTested:', window.connectionTested);
+
+                    // Clear the flag
+                    window.savedConnectionForStep2 = null;
+
+                    // Proceed to Step 2
+                    currentWizardStep++;
+                    showStep(currentWizardStep);
+
+                    // Show visual feedback that this is a reused connection
+                    const messageDiv = document.getElementById('connectionMessage');
+                    if (messageDiv) {
+                        messageDiv.className = 'mt-2 text-sm text-blue-700 bg-blue-50 border border-blue-200 rounded px-3 py-2';
+                        messageDiv.textContent = `✓ Using saved connection: "${conn.name}" - Testing connection to fetch tables...`;
+                        messageDiv.classList.remove('hidden');
+                    }
+
+                    // Auto-test the connection to fetch available tables
+                    // Build connection data for testing
+                    const connectionData = {
+                        source_type: conn.source_type,
+                        host: conn.source_host,
+                        port: conn.source_port,
+                        database: conn.source_database,
+                        schema: conn.source_schema,
+                        username: creds.username,
+                        password: creds.password
+                    };
+
+                    console.log('Auto-testing saved connection to fetch tables...');
+
+                    // Test connection to get tables
+                    fetch(`/api/models/{{ model.id }}/connections/test-wizard/`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': csrftoken
+                        },
+                        body: JSON.stringify(connectionData)
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.status === 'success') {
+                            console.log('Connection tested successfully, tables fetched:', data.tables?.length || 0);
+
+                            // Store tables for Step 3
+                            window.availableTables = data.tables || [];
+
+                            // Update message
+                            if (messageDiv) {
+                                messageDiv.className = 'mt-2 text-sm text-blue-700 bg-blue-50 border border-blue-200 rounded px-3 py-2';
+                                messageDiv.textContent = `✓ Using saved connection: "${conn.name}" - ${data.tables?.length || 0} tables found`;
+                                messageDiv.classList.remove('hidden');
+                            }
+                        } else {
+                            console.error('Connection test failed:', data.message);
+                            if (messageDiv) {
+                                messageDiv.className = 'mt-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2';
+                                messageDiv.textContent = `Connection test failed: ${data.message}`;
+                                messageDiv.classList.remove('hidden');
+                            }
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error testing connection:', error);
+                        if (messageDiv) {
+                            messageDiv.className = 'mt-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2';
+                            messageDiv.textContent = `Error testing connection: ${error}`;
+                            messageDiv.classList.remove('hidden');
+                        }
+                    });
+                } else {
+                    alert('Error loading connection details: ' + (connResp.message || credResp.message));
+                    // Clear invalid selection
+                    window.savedConnectionForStep2 = null;
+                }
+            })
+            .catch(error => {
+                alert('Connection no longer exists. Please select a different connection or create a new one.');
+                // Clear invalid selection
+                window.savedConnectionForStep2 = null;
+                window.usingSavedConnection = false;
+                selectedConnectionId = null;
+
+                // Disable next button
+                const nextButton = document.getElementById('nextButton');
+                if (nextButton) nextButton.disabled = true;
+
+                // Reload connections list to refresh
+                loadSavedConnections();
+            });
+            return;
+        }
+
+        // Not using saved connection, just proceed to Step 2
+        currentWizardStep++;
+        showStep(currentWizardStep);
+}
+
 
 function previousStep() {
     currentWizardStep--;
@@ -1226,6 +1522,92 @@ function populateSummary() {
     document.getElementById('summaryDestination').textContent = `raw_data.${selectedTable ? selectedTable.value : ''}`;
     document.getElementById('summarySyncMode').textContent = syncMode;
     document.getElementById('summarySchedule').textContent = schedule;
+}
+
+// Auto-suggest connection name based on source type and database
+function suggestConnectionName() {
+    const sourceTypeRadio = document.querySelector('input[name="sourceType"]:checked');
+    if (!sourceTypeRadio) return '';
+
+    const sourceType = sourceTypeRadio.value;
+    const sourceTypeLabel = sourceTypeRadio.nextElementSibling.textContent;
+
+    // Get database/dataset name based on source type
+    let identifier = '';
+
+    if (['postgresql', 'mysql', 'oracle', 'sqlserver', 'mariadb'].includes(sourceType)) {
+        identifier = document.getElementById('sourceDatabase')?.value || '';
+    } else if (sourceType === 'bigquery') {
+        identifier = document.getElementById('bigqueryDataset')?.value || '';
+    }
+
+    if (identifier) {
+        return `${sourceTypeLabel} - ${identifier}`;
+    } else {
+        return sourceTypeLabel;
+    }
+}
+
+// Setup auto-suggestion listeners
+function setupConnectionNameAutoSuggest() {
+    // Listen to database field changes
+    const dbField = document.getElementById('sourceDatabase');
+    const bqDatasetField = document.getElementById('bigqueryDataset');
+    const nameField = document.getElementById('connectionName');
+
+    if (dbField && nameField) {
+        dbField.addEventListener('input', () => {
+            // Only auto-fill if name field is empty or was auto-generated
+            if (!nameField.value || nameField.dataset.autoGenerated === 'true') {
+                nameField.value = suggestConnectionName();
+                nameField.dataset.autoGenerated = 'true';
+            }
+        });
+    }
+
+    if (bqDatasetField && nameField) {
+        bqDatasetField.addEventListener('input', () => {
+            if (!nameField.value || nameField.dataset.autoGenerated === 'true') {
+                nameField.value = suggestConnectionName();
+                nameField.dataset.autoGenerated = 'true';
+            }
+        });
+    }
+
+    // Mark as manually entered when user types
+    if (nameField) {
+        nameField.addEventListener('input', () => {
+            if (nameField.value) {
+                nameField.dataset.autoGenerated = 'false';
+            }
+        });
+    }
+}
+
+// Validate connection name
+function validateConnectionName() {
+    const nameField = document.getElementById('connectionName');
+    const errorDiv = document.getElementById('connectionNameError');
+
+    if (!nameField) return true;
+
+    const name = nameField.value.trim();
+
+    if (!name) {
+        if (errorDiv) {
+            errorDiv.textContent = 'Connection name is required';
+            errorDiv.classList.remove('hidden');
+        }
+        nameField.classList.add('border-red-500');
+        return false;
+    }
+
+    // Clear error
+    if (errorDiv) {
+        errorDiv.classList.add('hidden');
+    }
+    nameField.classList.remove('border-red-500');
+    return true;
 }
 
 function testConnectionWizard() {
@@ -1273,6 +1655,21 @@ function testConnectionWizard() {
         return;
     }
     const sourceType = sourceTypeRadio.value;
+    console.log('=== FORM DATA COLLECTION DEBUG ===');
+    console.log('Source type:', sourceType);
+
+    // Validate connection name (required)
+    if (!validateConnectionName()) {
+        // Reset status
+        statusSpans.forEach(span => {
+            if (span) span.innerHTML = '';
+        });
+        return;
+    }
+
+    // Get connection name
+    const connectionName = document.getElementById('connectionName')?.value.trim() || '';
+    console.log('Connection name:', connectionName);
 
     // Collect connection parameters based on source type
     let connectionData = {
@@ -1281,11 +1678,31 @@ function testConnectionWizard() {
 
     // Relational databases
     if (['postgresql', 'mysql', 'oracle', 'sqlserver', 'mariadb'].includes(sourceType)) {
-        connectionData.host = document.getElementById('sourceHost')?.value || '';
-        connectionData.port = parseInt(document.getElementById('sourcePort')?.value) || null;
-        connectionData.database = document.getElementById('sourceDatabase')?.value || '';
-        connectionData.username = document.getElementById('sourceUsername')?.value || '';
-        connectionData.password = document.getElementById('sourcePassword')?.value || '';
+        const hostField = document.getElementById('sourceHost');
+        const portField = document.getElementById('sourcePort');
+        const dbField = document.getElementById('sourceDatabase');
+        const schemaField = document.getElementById('sourceSchema');
+        const userField = document.getElementById('sourceUsername');
+        const passField = document.getElementById('sourcePassword');
+
+        console.log('Host field:', hostField, 'value:', hostField?.value);
+        console.log('Port field:', portField, 'value:', portField?.value);
+        console.log('Database field:', dbField, 'value:', dbField?.value);
+        console.log('Schema field:', schemaField, 'value:', schemaField?.value);
+        console.log('Username field:', userField, 'value:', userField?.value);
+        console.log('Password field:', passField, 'value:', passField?.value ? '***' : '(empty)');
+
+        connectionData.host = hostField?.value || '';
+        connectionData.port = parseInt(portField?.value) || null;
+        connectionData.database = dbField?.value || '';
+        connectionData.schema = schemaField?.value || '';
+        connectionData.username = userField?.value || '';
+        connectionData.password = passField?.value || '';
+
+        console.log('Collected connectionData:', {
+            ...connectionData,
+            password: connectionData.password ? '***' : '(empty)'
+        });
     }
     // BigQuery
     else if (sourceType === 'bigquery') {
@@ -1298,8 +1715,8 @@ function testConnectionWizard() {
         connectionData.connection_string = document.getElementById('nosqlConnectionString')?.value || '';
     }
 
-    // Make real API call to test connection
-    fetch('/api/etl/test-connection/', {
+    // Make real API call to test connection (with deduplication)
+    fetch(`/api/models/{{ model.id }}/connections/test-wizard/`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -1327,26 +1744,44 @@ function testConnectionWizard() {
                 }
             });
 
+            // Check if this is a duplicate connection
+            if (data.duplicate) {
+                // Existing connection found
+                if (messageDiv) {
+                    messageDiv.className = 'mt-2 text-sm text-blue-700 bg-blue-50 border border-blue-200 rounded px-3 py-2';
+                    messageDiv.textContent = `✓ Using existing connection: "${data.connection_name}"`;
+                    messageDiv.classList.remove('hidden');
+                }
+
+                // Store existing connection ID
+                window.usingExistingConnection = true;
+                window.existingConnectionId = data.connection_id;
+                window.connectionTested = true;
+
+                // Enable Next button for duplicate connections (already saved)
+                const nextButton = document.getElementById('nextButton');
+                if (nextButton) {
+                    nextButton.disabled = false;
+                }
+            } else {
+                // New connection - use the user-provided name
+                // Get next button reference
+                const nextButton = document.getElementById('nextButton');
+
+                // Create the connection automatically
+                // Pass the full connectionData (which has all fields including password)
+                // Next button will be enabled AFTER connection is saved
+                createNewConnectionFromTest(connectionName, connectionData, messageDiv, nextButton);
+
+                // Mark as tested
+                window.connectionTested = true;
+            }
+
             // Store tables for Step 3
             window.availableTables = data.tables || [];
 
             // Store connection data for later use
             savedConnectionData = connectionData;
-
-            // Mark connection as tested and enable next button
-            window.connectionTested = true;
-            const nextButton = document.getElementById('nextButton');
-            if (nextButton) {
-                nextButton.disabled = false;
-            }
-
-            // Show success message inline
-            const messageDiv = document.getElementById('connectionMessage');
-            if (messageDiv) {
-                messageDiv.className = 'mt-2 text-sm text-green-700 bg-green-50 border border-green-200 rounded px-3 py-2';
-                messageDiv.textContent = data.message;
-                messageDiv.classList.remove('hidden');
-            }
         } else {
             // Failure case
             statusSpans.forEach(span => {
@@ -1448,17 +1883,30 @@ function saveDraftSource() {
     // Collect job name
     const sourceName = document.getElementById('sourceName').value.trim();
 
-    if (!sourceName || !savedConnectionData) {
-        alert('Missing job name or connection data');
+    if (!sourceName) {
+        alert('Missing job name');
         return;
     }
 
     // Prepare data for draft save
     const draftData = {
-        name: sourceName,
-        source_type: savedConnectionData.source_type,
-        connection_params: savedConnectionData
+        name: sourceName
     };
+
+    // Check if using saved connection or new connection
+    if (window.usingExistingConnection && window.existingConnectionId) {
+        // Using saved connection - send connection_id
+        draftData.connection_id = window.existingConnectionId;
+        console.log('Saving draft with connection_id:', window.existingConnectionId);
+    } else if (savedConnectionData) {
+        // New connection - send connection params
+        draftData.source_type = savedConnectionData.source_type;
+        draftData.connection_params = savedConnectionData;
+        console.log('Saving draft with connection params');
+    } else {
+        alert('Missing connection data');
+        return;
+    }
 
     // Show loading message
     const messageDiv = document.getElementById('connectionMessage');
@@ -1538,6 +1986,18 @@ function createDataSource() {
         }]
     };
 
+    // NEW: Include connection_id if using existing connection
+    if (window.usingExistingConnection && window.existingConnectionId) {
+        data.connection_id = window.existingConnectionId;
+    }
+
+    console.log('=== CREATE DATA SOURCE DEBUG ===');
+    console.log('Data to send:', data);
+    console.log('wizardEditMode:', wizardEditMode);
+    console.log('draftSourceId:', draftSourceId);
+    console.log('usingExistingConnection:', window.usingExistingConnection);
+    console.log('existingConnectionId:', window.existingConnectionId);
+
     // Determine if we're editing, updating draft, or creating new
     let url, successMessage;
     if (wizardEditMode) {
@@ -1554,6 +2014,9 @@ function createDataSource() {
         successMessage = '✓ ETL job created successfully!';
     }
 
+    console.log('Using URL:', url);
+    console.log('Sending POST request...');
+
     fetch(url, {
         method: 'POST',
         headers: {
@@ -1564,17 +2027,264 @@ function createDataSource() {
     })
     .then(response => response.json())
     .then(result => {
+        console.log('Response:', result);
         if (result.status === 'success') {
+            console.log('ETL job created successfully!');
             alert(successMessage);
             hideAddSourceModal();
             location.reload();
         } else {
+            console.error('Error response:', result);
             alert('Error: ' + result.message);
         }
     })
     .catch(error => {
+        console.error('Fetch error:', error);
         alert('Error saving ETL job: ' + error);
     });
 }
+
+// ============================================================================
+// Saved Connections Functions (New Architecture)
+// ============================================================================
+
+let savedConnections = [];  // Store loaded connections
+let selectedConnectionId = null;  // Track which connection is selected
+
+function loadSavedConnections() {
+    const listContainer = document.getElementById('savedConnectionsList');
+    listContainer.innerHTML = '<p class="text-xs text-gray-500 text-center py-4">Loading connections...</p>';
+
+    fetch(`/api/models/{{ model.id }}/connections/`, {
+        method: 'GET',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrftoken
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            savedConnections = data.connections;
+
+            console.log('=== LOADED CONNECTIONS ===');
+            console.log('Connections:', savedConnections);
+            if (savedConnections.length > 0) {
+                console.log('First connection details:');
+                console.log('  ID:', savedConnections[0].id);
+                console.log('  Name:', savedConnections[0].name);
+                console.log('  source_host:', savedConnections[0].source_host);
+                console.log('  source_database:', savedConnections[0].source_database);
+                console.log('  source_username:', savedConnections[0].source_username);
+            }
+
+            if (savedConnections.length === 0) {
+                listContainer.innerHTML = `
+                    <p class="text-xs text-gray-500 text-center py-4">
+                        No saved connections yet.<br>
+                        Click "Create New Connection" to add one.
+                    </p>
+                `;
+                return;
+            }
+
+            // Render connections list
+            listContainer.innerHTML = savedConnections.map(conn => {
+                const hostDb = conn.source_host && conn.source_database
+                    ? `${conn.source_host}:${conn.source_port || ''}/${conn.source_database}`
+                    : (conn.bigquery_project && conn.bigquery_dataset
+                        ? `${conn.bigquery_project}/${conn.bigquery_dataset}`
+                        : 'No host info');
+
+                return `
+                    <div class="flex items-center p-2 border border-gray-200 rounded-lg hover:bg-blue-50 hover:border-blue-300 group">
+                        <label class="flex items-center flex-1 cursor-pointer">
+                            <input type="radio" name="savedConnection" value="${conn.id}" class="mr-2" onchange="selectSavedConnection(${conn.id})">
+                            <div class="flex-1">
+                                <div class="text-xs font-semibold text-gray-900">${conn.name}</div>
+                                <div class="text-xs text-gray-600">${hostDb}</div>
+                                <div class="text-xs text-gray-500">User: ${conn.source_username || 'N/A'}</div>
+                            </div>
+                        </label>
+                        <button onclick="deleteConnection(${conn.id}, event)" class="text-xs text-red-600 hover:text-red-800 opacity-0 group-hover:opacity-100 transition-opacity px-2" title="Delete connection">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                `;
+            }).join('');
+
+            // Enable next button if needed
+            updateStep1NextButton();
+        } else {
+            listContainer.innerHTML = `<p class="text-xs text-red-600 text-center py-4">Error loading connections</p>`;
+        }
+    })
+    .catch(error => {
+        listContainer.innerHTML = `<p class="text-xs text-red-600 text-center py-4">Error: ${error}</p>`;
+    });
+}
+
+function selectSavedConnection(connectionId) {
+    selectedConnectionId = connectionId;
+    const connection = savedConnections.find(c => c.id === connectionId);
+
+    if (connection) {
+        // Enable next button
+        const nextButton = document.getElementById('nextButton');
+        if (nextButton) {
+            nextButton.disabled = false;
+        }
+
+        // Store connection details for later use
+        window.selectedConnection = connection;
+        window.usingSavedConnection = true;
+        window.savedConnectionForStep2 = connectionId;  // Flag to populate Step 2
+    }
+}
+
+function createNewConnection() {
+    // Switch to Relational tab to create a new connection
+    switchTab('relational');
+}
+
+function deleteConnection(connectionId, event) {
+    // Prevent radio button selection
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (!confirm('Delete this connection? This cannot be undone.')) {
+        return;
+    }
+
+    fetch(`/api/connections/${connectionId}/delete/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrftoken
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            // Clear selection if this was the selected connection
+            if (window.savedConnectionForStep2 === connectionId) {
+                window.savedConnectionForStep2 = null;
+                window.usingSavedConnection = false;
+                window.selectedConnection = null;
+                selectedConnectionId = null;
+
+                // Disable next button
+                const nextButton = document.getElementById('nextButton');
+                if (nextButton) {
+                    nextButton.disabled = true;
+                }
+            }
+
+            // Reload the connections list
+            loadSavedConnections();
+        } else {
+            alert('Error deleting connection: ' + data.message);
+        }
+    })
+    .catch(error => {
+        alert('Error deleting connection: ' + error);
+    });
+}
+
+function createNewConnectionFromTest(connectionName, connectionData, messageDiv, nextButton) {
+    /**
+     * Create a new Connection after successful test
+     * Auto-saves without prompting user
+     * connectionData should have: source_type, host, port, database, schema, username, password
+     */
+    console.log('Creating connection with data:', connectionData);
+    console.log('Connection name:', connectionName);
+
+    fetch(`/api/models/{{ model.id }}/connections/create/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrftoken
+        },
+        body: JSON.stringify({
+            name: connectionName,
+            source_type: connectionData.source_type,
+            connection_params: connectionData  // Pass all connection data including password
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        console.log('=== CONNECTION CREATE RESPONSE ===');
+        console.log('Response data:', data);
+
+        if (data.status === 'success') {
+            console.log(`Connection "${connectionName}" created successfully with ID:`, data.connection_id);
+
+            // Store connection ID for later use
+            window.usingExistingConnection = true;
+            window.existingConnectionId = data.connection_id;
+            window.connectionTested = true;
+
+            console.log('Set flags after connection creation:');
+            console.log('  window.usingExistingConnection:', window.usingExistingConnection);
+            console.log('  window.existingConnectionId:', window.existingConnectionId);
+            console.log('  window.connectionTested:', window.connectionTested);
+
+            // Re-enable Next button now that connection is saved
+            if (nextButton) {
+                nextButton.disabled = false;
+            }
+
+            // Show success message
+            if (messageDiv) {
+                messageDiv.className = 'mt-2 text-sm text-green-700 bg-green-50 border border-green-200 rounded px-3 py-2';
+                messageDiv.textContent = `✓ Connection saved as "${connectionName}" - you can now proceed to Step 3`;
+                messageDiv.classList.remove('hidden');
+            }
+
+            // Reload saved connections list to show the new connection
+            loadSavedConnections();
+        } else {
+            // Re-enable button on error
+            if (nextButton) {
+                nextButton.disabled = false;
+            }
+
+            // Show error message
+            const errorMsg = data.message || 'Failed to save connection';
+
+            // If it's a duplicate name error, show in connection name field
+            if (errorMsg.includes('already exists')) {
+                const connectionNameField = document.getElementById('connectionName');
+                const connectionNameError = document.getElementById('connectionNameError');
+                if (connectionNameField && connectionNameError) {
+                    connectionNameField.classList.add('border-red-500');
+                    connectionNameError.textContent = errorMsg;
+                    connectionNameError.classList.remove('hidden');
+                }
+            }
+
+            if (messageDiv) {
+                messageDiv.className = 'mt-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2';
+                messageDiv.textContent = errorMsg;
+                messageDiv.classList.remove('hidden');
+            }
+        }
+    })
+    .catch(error => {
+        // Re-enable button on error
+        if (nextButton) {
+            nextButton.disabled = false;
+        }
+
+        if (messageDiv) {
+            messageDiv.className = 'mt-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2';
+            messageDiv.textContent = 'Error saving connection: ' + error;
+            messageDiv.classList.remove('hidden');
+        }
+    });
+}
+
+
 </script>
 {% endblock %}

@@ -112,14 +112,27 @@ Proceeds to Step 3 with table list ready
 - [x] Skip name validation in edit mode (Step 1) ✓
 - [x] Add visual feedback during async table loading ✓
 
-### 🎯 Milestone 6: Advanced Connection Management (Next Phase)
-- [ ] Add Edit button to saved connection cards
-- [ ] Create Edit Connection modal with pre-filled form
-- [ ] Add backend endpoint for updating connection credentials
-- [ ] Show affected jobs count when editing connection
-- [ ] Require connection re-test before saving edits
-- [ ] Add Delete connection functionality (with cascade warnings)
-- [ ] Add connection usage analytics (last used, job count)
+### 🎯 Milestone 6: Standalone Connections Management UI ✅ COMPLETE
+- [x] Split ETL Jobs page into 2-column layout (50/50) ✓
+- [x] Add Connections section (LEFT) with "+ Connection" button ✓
+- [x] Move "+ ETL Job" button into ETL Jobs section (RIGHT) ✓
+- [x] Create loadConnections() to fetch and display all connections ✓
+- [x] Create renderConnectionCard() with status indicators ✓
+- [x] Add connection status dots (green=working, red=failed) ✓
+- [x] Auto-test connections on page load in background ✓
+- [x] Create openCreateConnectionModal() for standalone creation ✓
+- [x] Create openEditConnectionModal() with pre-filled data ✓
+- [x] Add wizardStandaloneMode flag (no step progression) ✓
+- [x] Create api_connection_create_standalone endpoint ✓
+- [x] Wire Create Connection to call standalone endpoint ✓
+- [x] Wire Edit Connection to update endpoint ✓
+- [x] Show affected jobs count when editing connection ✓
+- [x] Require connection re-test before saving edits ✓
+- [x] Implement deleteConnection() with usage check ✓
+- [x] Block deletion if ETL jobs depend on connection ✓
+- [x] Add empty states for both sections ✓
+- [x] Hide Back/Next navigation in standalone mode ✓
+- [x] Auto-close modal and reload connections after create/edit ✓
 
 ### 🎯 Milestone 7: Production Readiness (Future)
 - [ ] Test with MySQL database connection
@@ -134,7 +147,7 @@ Proceeds to Step 3 with table list ready
 
 ## What We Accomplished
 
-**Milestones 1-5 Complete!**
+**Milestones 1-6 Complete!**
 
 ✅ Real database connection testing (PostgreSQL, MySQL, BigQuery)
 ✅ Secure credential storage in GCP Secret Manager
@@ -152,8 +165,97 @@ Proceeds to Step 3 with table list ready
 ✅ **Loading State Management** - animated spinner + disabled navigation during async operations
 ✅ **Proper CREATE vs EDIT separation** - no duplicate UNIQUE errors in edit mode
 ✅ **Auto-fetch tables in edit mode** - uses stored credentials from Secret Manager
+✅ **Standalone Connections Management UI** - 2-column layout with dedicated connections section
+✅ **Connection CRUD** - Create, Edit, Delete connections independently from ETL jobs
+✅ **Live Connection Status** - Auto-tested green/red status indicators
+✅ **Protected Deletion** - Blocks deletion of connections with dependent jobs
+✅ **Wizard Standalone Mode** - Create/edit connections without ETL job wizard flow
 
-**Next Steps:** Milestone 6 - Advanced connection editing and management features
+**Next Steps:** Milestone 7 - Production readiness and deployment
+
+---
+
+## Standalone Connections Management UI Architecture
+
+**Overview:**
+The ETL Jobs page now features a 2-column layout that separates connection management from ETL job management, allowing users to manage database connections independently.
+
+**Layout Structure:**
+```
+┌─────────────────────────────────────────────────────────────┐
+│                         ETL Jobs                            │
+├──────────────────────────────┬──────────────────────────────┤
+│    Connections (LEFT 50%)    │   ETL Jobs (RIGHT 50%)       │
+├──────────────────────────────┼──────────────────────────────┤
+│  Connections                 │  Jobs                        │
+│  [+ Connection]              │  [+ ETL Job]                 │
+│                              │                              │
+│  ┌────────────────────────┐  │  ┌────────────────────────┐  │
+│  │ ● PostgreSQL - prod    │  │  │ 📊 daily_users         │  │
+│  │ PostgreSQL             │  │  │ PostgreSQL • prod      │  │
+│  │ 10.0.1.5              │  │  │ [Run] [Edit] [Delete]  │  │
+│  │ 3 job(s) using         │  │  └────────────────────────┘  │
+│  │ [Edit] [Delete]        │  │                              │
+│  └────────────────────────┘  │  ┌────────────────────────┐  │
+│                              │  │ 📊 products_sync       │  │
+│  ┌────────────────────────┐  │  │ MySQL • analytics      │  │
+│  │ ● MySQL - analytics    │  │  │ [Run] [Edit] [Delete]  │  │
+│  │ MySQL                  │  │  └────────────────────────┘  │
+│  │ analytics.db.com      │  │                              │
+│  │ 1 job(s) using         │  │  (scroll for more...)        │
+│  │ [Edit] [Delete]        │  │                              │
+│  └────────────────────────┘  │                              │
+│                              │                              │
+│  (scroll for more...)        │                              │
+│                              │                              │
+└──────────────────────────────┴──────────────────────────────┘
+```
+
+**Connections Section (LEFT):**
+- **Header:** "Connections" with "+ Connection" button
+- **Display:** Connection cards showing:
+  - Status indicator (🟢 green = working, 🔴 red = failed)
+  - Connection name
+  - Data source type (PostgreSQL, MySQL, BigQuery, etc.)
+  - Host/server address or project ID
+  - Number of ETL jobs using this connection
+  - Edit & Delete action buttons
+- **Behavior:**
+  - Max 4 cards visible with vertical scroll
+  - Auto-loads on page load
+  - Auto-tests each connection in background to update status dots
+  - Empty state: "No connections yet" message
+
+**ETL Jobs Section (RIGHT):**
+- **Header:** "Jobs" with "+ ETL Job" button (moved from previous top-right position)
+- **Display:** Existing ETL job cards (unchanged)
+- **Behavior:**
+  - Max 4 cards visible with vertical scroll
+  - Empty state: "No ETL jobs yet" message
+
+**Standalone Connection Modal:**
+When "+ Connection" is clicked:
+1. Opens wizard in **Standalone Mode** at Step 2 (connection details)
+2. Hides Back/Next navigation buttons (no step progression)
+3. Shows "Create Connection" or "Edit Connection" title
+4. User fills connection details and clicks "Test Connection"
+5. If test succeeds, connection is created/updated automatically
+6. Modal shows success message and auto-closes after 1.5 seconds
+7. Connections list reloads to show new/updated connection
+
+**Connection Status Indicators:**
+- 🟢 **Green dot** - Connection tested successfully
+- 🔴 **Red dot** - Connection test failed
+- Status updated via background API calls when page loads
+
+**Protected Deletion:**
+- Clicking Delete checks for dependent ETL jobs
+- If jobs exist: Shows error with job names, blocks deletion
+- If no dependencies: Confirms and deletes connection
+
+**Key Difference from ETL Job Wizard:**
+- **ETL Job Flow:** Step 1 → Step 2 → Step 3 → Step 4 → Step 5 (full wizard)
+- **Standalone Connection:** Only Step 2 (connection details), no progression
 
 ---
 
@@ -161,10 +263,10 @@ Proceeds to Step 3 with table list ready
 
 ```
 ml_platform/utils/connection_manager.py    ✅ NEW - connection testing for PostgreSQL, MySQL, BigQuery
-ml_platform/views.py                       ✅ UPDATED - Connection CRUD, ETL wizard, edit endpoints, loading states
+ml_platform/views.py                       ✅ UPDATED - Connection CRUD, standalone endpoint, ETL wizard, loading states
 ml_platform/models.py                      ✅ UPDATED - Connection model, wizard step tracking fields
-ml_platform/urls.py                        ✅ UPDATED - Connection management, test-and-fetch-tables endpoint
-templates/ml_platform/model_etl.html       ✅ UPDATED - edit/resume, loading states, CREATE vs EDIT separation
+ml_platform/urls.py                        ✅ UPDATED - Connection management, standalone creation endpoint
+templates/ml_platform/model_etl.html       ✅ UPDATED - 2-column layout, standalone connection UI, wizard modes
 ml_platform/migrations/0005_*.py           ✅ NEW - Connection model migration
 ml_platform/migrations/0006_*.py           ✅ NEW - DataSource unique constraint (etl_config, name)
 ml_platform/migrations/0007_*.py           ✅ NEW - wizard_last_step and wizard_completed_steps fields

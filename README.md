@@ -31,6 +31,8 @@ The client-facing web application backbone is complete with fully functional ETL
 - ✅ Admin interface for all models (searchable, filterable)
 - ✅ Database migrations created and applied
 - ✅ **ETL System**: Multi-source configuration, connection testing, manual triggers
+- ✅ **Connection Management**: Reusable named connections with credential storage in GCP Secret Manager
+- ✅ **Standalone Connections UI**: Independent connection CRUD with live status indicators
 
 **Frontend:**
 - ✅ Responsive UI using Tailwind CSS
@@ -39,7 +41,9 @@ The client-facing web application backbone is complete with fully functional ETL
 - ✅ Model/Endpoint creation flow
 - ✅ Model Dashboard (status cards, recent runs, quick actions)
 - ✅ Login/logout functionality
-- ✅ **ETL Page**: Full-featured UI for data source management and monitoring
+- ✅ **ETL Page**: 2-column layout with Connections section and ETL Jobs section
+- ✅ **Connection Cards**: Live status indicators, edit/delete actions, usage tracking
+- ✅ **Wizard Modes**: Full ETL job creation wizard + Standalone connection management
 
 **Developer Experience:**
 - ✅ User creation script (`create_user.py`)
@@ -323,10 +327,25 @@ The ETL system uses a **single Docker container template** deployed per client w
 
 ### 📚 How to Use: Connection Management & ETL Jobs
 
+**ETL Page Layout:**
+
+The ETL page now features a 2-column layout:
+- **LEFT**: Connections section - Manage database connections independently
+- **RIGHT**: ETL Jobs section - Configure and monitor extraction jobs
+
+**Creating a Standalone Connection:**
+
+1. **Navigate to ETL Page**: Go to `/models/{id}/etl/` for your model
+2. **Click "+ Connection"** (in Connections section): Opens connection form
+3. **Fill Connection Details**: Host, port, database, username, password
+4. **Click "Test Connection"**: System validates credentials
+5. **Auto-Save**: If test succeeds, connection is created and credentials stored in Secret Manager
+6. **Status Indicator**: Green dot = working, Red dot = failed (auto-tested on page load)
+
 **Creating Your First ETL Job:**
 
 1. **Navigate to ETL Page**: Go to `/models/{id}/etl/` for your model
-2. **Click "Add ETL Job"**: Opens the 5-step wizard modal
+2. **Click "+ ETL Job"** (in Jobs section): Opens the 5-step wizard modal
 
 **Step 1: Source Type & Job Name**
 - Select data source type (PostgreSQL, MySQL, BigQuery, etc.)
@@ -382,6 +401,31 @@ The ETL system uses a **single Docker container template** deployed per client w
 - All previously entered data pre-populated in form
 - Can modify any configuration and save changes
 - In edit mode, name validation skipped (you're editing the same job)
+
+**Editing Connections:**
+- Click "Edit" button on any connection card in the Connections section
+- Form pre-populated with existing connection details
+- Modify host, port, database, username, or password as needed
+- Click "Test Connection" to validate new credentials
+- If test succeeds, connection is updated in database
+- Secret Manager credentials updated with new password
+- Shows "X jobs affected" message (all ETL jobs using this connection will use new credentials)
+- Modal auto-closes after 1.5 seconds
+- Connections list reloads with updated status
+
+**Deleting Connections:**
+- Click "Delete" button on connection card
+- System checks for dependent ETL jobs
+- **If jobs exist**: Shows error message with list of dependent job names, blocks deletion
+  - Example: "Cannot delete connection: 3 ETL job(s) depend on it. Dependent jobs: • daily_users • products_sync • orders_extract"
+- **If no dependencies**: Confirms deletion, removes connection and credentials from Secret Manager
+- Protected deletion ensures no orphaned ETL jobs
+
+**Connection Status Indicators:**
+- 🟢 **Green dot**: Connection tested successfully, database reachable
+- 🔴 **Red dot**: Connection test failed, check credentials or network
+- Status auto-updated on page load (background API calls test each connection)
+- Real-time health monitoring for all connections
 
 ### 🔨 Pending Components (For Production Deployment)
 

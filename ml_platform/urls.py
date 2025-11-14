@@ -41,10 +41,13 @@ urlpatterns = [
     # Connection Management API (New Architecture)
     path('api/models/<int:model_id>/connections/test-wizard/', views.api_connection_test_wizard, name='api_connection_test_wizard'),
     path('api/models/<int:model_id>/connections/create/', views.api_connection_create, name='api_connection_create'),
+    path('api/models/<int:model_id>/connections/create-standalone/', views.api_connection_create_standalone, name='api_connection_create_standalone'),
     path('api/models/<int:model_id>/connections/', views.api_connection_list, name='api_connection_list'),
     path('api/connections/<int:connection_id>/', views.api_connection_get, name='api_connection_get'),
     path('api/connections/<int:connection_id>/credentials/', views.api_connection_get_credentials, name='api_connection_get_credentials'),
     path('api/connections/<int:connection_id>/test/', views.api_connection_test, name='api_connection_test'),
     path('api/connections/<int:connection_id>/test-and-fetch-tables/', views.api_connection_test_and_fetch_tables, name='api_connection_test_and_fetch_tables'),
+    path('api/connections/<int:connection_id>/update/', views.api_connection_update, name='api_connection_update'),
+    path('api/connections/<int:connection_id>/usage/', views.api_connection_get_usage, name='api_connection_get_usage'),
     path('api/connections/<int:connection_id>/delete/', views.api_connection_delete, name='api_connection_delete'),
 ]

@@ -1249,6 +1249,130 @@ def api_connection_create(request, model_id):
 
 
 @login_required
+@require_http_methods(["POST"])
+def api_connection_create_standalone(request, model_id):
+    """
+    Create a new connection in standalone mode (not from ETL wizard).
+    Tests connection first, creates only if test succeeds.
+    """
+    from .utils.connection_manager import test_and_fetch_metadata, save_connection_credentials
+    from .models import Connection
+
+    try:
+        model = get_object_or_404(ModelEndpoint, id=model_id)
+        data = json.loads(request.body)
+
+        # Extract connection details
+        connection_name = data.get('name', '').strip()
+        source_type = data.get('source_type')
+        host = data.get('host', '')
+        port = data.get('port')
+        database = data.get('database', '')
+        username = data.get('username', '')
+        password = data.get('password', '')
+        schema = data.get('schema', 'public')
+
+        # Validate required fields
+        if not connection_name:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Connection name is required.',
+            }, status=400)
+
+        # Check for duplicate connection name
+        if Connection.objects.filter(model_endpoint=model, name=connection_name).exists():
+            return JsonResponse({
+                'status': 'error',
+                'message': f'A connection named "{connection_name}" already exists. Please choose a different name.',
+            }, status=400)
+
+        # Prepare connection params for testing
+        connection_params = {
+            'host': host,
+            'port': port,
+            'database': database,
+            'username': username,
+            'password': password,
+            'schema': schema,
+            'project_id': data.get('project_id', ''),
+            'dataset': data.get('dataset', ''),
+            'service_account_json': data.get('service_account_json', ''),
+            'connection_string': data.get('connection_string', ''),
+        }
+
+        # Test the connection first
+        test_result = test_and_fetch_metadata(source_type, connection_params)
+
+        if not test_result['success']:
+            return JsonResponse({
+                'status': 'error',
+                'message': f'Connection test failed: {test_result["message"]}',
+            }, status=400)
+
+        # Connection test successful - create the Connection object
+        connection = Connection.objects.create(
+            model_endpoint=model,
+            name=connection_name,
+            source_type=source_type,
+            description=data.get('description', ''),
+            source_host=host,
+            source_port=port,
+            source_database=database,
+            source_schema=schema,
+            source_username=username,
+            bigquery_project=data.get('project_id', ''),
+            bigquery_dataset=data.get('dataset', ''),
+            connection_string=data.get('connection_string', ''),
+            is_enabled=True,
+            connection_tested=True,
+            last_test_at=timezone.now(),
+            last_test_status='success',
+            last_test_message=test_result['message'],
+        )
+
+        # Save credentials to Secret Manager
+        try:
+            secret_name = save_connection_credentials(
+                model_id=model_id,
+                connection_id=connection.id,
+                credentials_dict=connection_params
+            )
+
+            connection.credentials_secret_name = secret_name
+            connection.save()
+
+            return JsonResponse({
+                'status': 'success',
+                'message': 'Connection created successfully',
+                'connection_id': connection.id,
+                'connection': {
+                    'id': connection.id,
+                    'name': connection.name,
+                    'source_type': connection.source_type,
+                    'source_type_display': connection.get_source_type_display(),
+                    'source_host': connection.source_host,
+                    'source_database': connection.source_database,
+                    'last_test_status': connection.last_test_status,
+                    'jobs_count': 0,
+                },
+            })
+
+        except Exception as secret_error:
+            # If Secret Manager fails, delete the Connection
+            connection.delete()
+            return JsonResponse({
+                'status': 'error',
+                'message': f'Failed to save credentials: {str(secret_error)}',
+            }, status=500)
+
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Failed to create connection: {str(e)}',
+        }, status=500)
+
+
+@login_required
 @require_http_methods(["GET"])
 def api_connection_list(request, model_id):
     """
@@ -1434,6 +1558,113 @@ def api_connection_test(request, connection_id):
 
 @login_required
 @require_http_methods(["POST"])
+def api_connection_update(request, connection_id):
+    """
+    Update an existing connection (credentials, connection details, name).
+    Tests connection before updating. Affects all ETL jobs using this connection.
+    """
+    from .utils.connection_manager import test_and_fetch_metadata, save_connection_credentials
+    from .models import Connection
+
+    try:
+        connection = get_object_or_404(Connection, id=connection_id)
+        data = json.loads(request.body)
+
+        # Extract updated connection details
+        connection_name = data.get('name', connection.name)
+        source_type = data.get('source_type', connection.source_type)
+        host = data.get('host', connection.source_host)
+        port = data.get('port', connection.source_port)
+        database = data.get('database', connection.source_database)
+        username = data.get('username', connection.source_username)
+        password = data.get('password', '')  # Password required for update
+        schema = data.get('schema', connection.source_schema)
+
+        # Check if connection name changed and if new name is taken
+        if connection_name != connection.name:
+            if Connection.objects.filter(
+                model_endpoint=connection.model_endpoint,
+                name=connection_name
+            ).exclude(id=connection_id).exists():
+                return JsonResponse({
+                    'status': 'error',
+                    'message': f'A connection named "{connection_name}" already exists. Please choose a different name.',
+                }, status=400)
+
+        # Prepare connection params for testing
+        connection_params = {
+            'host': host,
+            'port': port,
+            'database': database,
+            'username': username,
+            'password': password,
+            'project_id': data.get('project_id', connection.bigquery_project),
+            'dataset': data.get('dataset', connection.bigquery_dataset),
+            'service_account_json': data.get('service_account_json', ''),
+            'connection_string': data.get('connection_string', connection.connection_string),
+        }
+
+        # Test the connection first
+        test_result = test_and_fetch_metadata(source_type, connection_params)
+
+        if not test_result['success']:
+            return JsonResponse({
+                'status': 'error',
+                'message': f'Connection test failed: {test_result["message"]}',
+            }, status=400)
+
+        # Connection test successful - update the Connection object
+        connection.name = connection_name
+        connection.source_type = source_type
+        connection.source_host = host
+        connection.source_port = port
+        connection.source_database = database
+        connection.source_schema = schema
+        connection.source_username = username
+        connection.bigquery_project = data.get('project_id', '')
+        connection.bigquery_dataset = data.get('dataset', '')
+        connection.connection_string = data.get('connection_string', '')
+        connection.last_test_at = timezone.now()
+        connection.last_test_status = 'success'
+        connection.last_test_message = test_result['message']
+        connection.connection_tested = True
+
+        # Update credentials in Secret Manager
+        try:
+            secret_name = save_connection_credentials(
+                model_id=connection.model_endpoint.id,
+                connection_id=connection.id,
+                credentials_dict=connection_params
+            )
+            connection.credentials_secret_name = secret_name
+            connection.save()
+
+            # Get count of affected jobs
+            affected_jobs_count = connection.data_sources.count()
+
+            return JsonResponse({
+                'status': 'success',
+                'message': f'Connection updated successfully. {affected_jobs_count} ETL job(s) will use the new credentials.',
+                'connection_id': connection.id,
+                'affected_jobs_count': affected_jobs_count,
+                'tables': test_result.get('tables', []),
+            })
+
+        except Exception as secret_error:
+            return JsonResponse({
+                'status': 'error',
+                'message': f'Failed to update credentials: {str(secret_error)}',
+            }, status=500)
+
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e),
+        }, status=500)
+
+
+@login_required
+@require_http_methods(["POST"])
 def api_connection_test_and_fetch_tables(request, connection_id):
     """
     Test an existing connection and fetch tables using stored credentials.
@@ -1497,6 +1728,43 @@ def api_connection_test_and_fetch_tables(request, connection_id):
 
 
 @login_required
+@require_http_methods(["GET"])
+def api_connection_get_usage(request, connection_id):
+    """
+    Get list of ETL jobs that depend on this connection.
+    """
+    from .models import Connection
+
+    try:
+        connection = get_object_or_404(Connection, id=connection_id)
+
+        # Get all DataSources using this connection
+        dependent_jobs = []
+        for ds in connection.data_sources.all():
+            dependent_jobs.append({
+                'id': ds.id,
+                'name': ds.name,
+                'source_type': ds.source_type,
+                'is_enabled': ds.is_enabled,
+                'created_at': ds.created_at.isoformat() if ds.created_at else None,
+            })
+
+        return JsonResponse({
+            'status': 'success',
+            'connection_id': connection.id,
+            'connection_name': connection.name,
+            'jobs_count': len(dependent_jobs),
+            'jobs': dependent_jobs,
+        })
+
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e),
+        }, status=500)
+
+
+@login_required
 @require_http_methods(["POST"])
 def api_connection_delete(request, connection_id):
     """
@@ -1509,13 +1777,14 @@ def api_connection_delete(request, connection_id):
     try:
         connection = get_object_or_404(Connection, id=connection_id)
 
-        # Check if any DataSources depend on this connection
-        dependent_jobs_count = connection.get_dependent_jobs_count()
+        # Get list of dependent jobs
+        dependent_jobs = list(connection.data_sources.all().values_list('name', flat=True))
 
-        if dependent_jobs_count > 0:
+        if dependent_jobs:
             return JsonResponse({
                 'status': 'error',
-                'message': f'Cannot delete connection: {dependent_jobs_count} ETL job(s) depend on it. Delete those jobs first.',
+                'message': f'Cannot delete connection: {len(dependent_jobs)} ETL job(s) depend on it.',
+                'dependent_jobs': dependent_jobs,
             }, status=400)
 
         # Delete secret from Secret Manager

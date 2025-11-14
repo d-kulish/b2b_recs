@@ -51,6 +51,12 @@ The client-facing web application backbone is complete with fully functional ETL
 - ✅ `.gitignore` configured for Django projects
 - ✅ Requirements file with all dependencies
 
+**Database:**
+- ✅ **Migrated to Cloud SQL PostgreSQL** (November 14, 2025)
+- ✅ Shared database for development across multiple machines
+- ✅ Cloud SQL Proxy for secure connections
+- ✅ Environment-based configuration (.env file)
+
 ### Pages Structure
 
 **System-Level:**
@@ -79,43 +85,63 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 2. Run migrations
+### 2. Configure Database Connection
+
+This project uses **Cloud SQL PostgreSQL** for the database (shared across all development machines).
+
+Create a `.env` file in the project root:
 
 ```bash
-python manage.py migrate
+# Copy the example file
+cp .env.example .env
+
+# Edit .env and add the database password (ask team for credentials)
 ```
 
-### 3. Create a superuser (Option A - Automated)
+The `.env` file should contain:
+```
+DB_ENGINE=postgresql
+DB_NAME=b2b_recs_dev
+DB_USER=django_user
+DB_PASSWORD=<ask-for-password>
+DB_HOST=127.0.0.1
+DB_PORT=5433
+```
+
+**Note**: The database is already set up and populated. You don't need to run migrations or create users!
+
+### 3. Start Development Environment
+
+Use the provided scripts to start both Cloud SQL Proxy and Django server:
 
 ```bash
-python create_user.py
+./start_dev.sh
 ```
 
-This creates a user with:
-- Username: `dkulish`
-- Password: `admin123`
+This will:
+- Start Cloud SQL Proxy (connects to `memo2-db` instance)
+- Start Django development server
 
-**Or Option B - Manual:**
-
-```bash
-python manage.py createsuperuser
-# Follow the prompts to create your own user
-```
-
-### 4. Run the development server
-
-```bash
-python manage.py runserver
-```
-
-### 5. Access the application
+### 4. Access the application
 
 - **Web App**: http://127.0.0.1:8000/
 - **Admin Panel**: http://127.0.0.1:8000/admin/
+- **Database**: 127.0.0.1:5433 (via Cloud SQL Proxy)
 
-### 6. Login and create your first model
+### 5. Stop Development Environment
 
-1. Log in with your credentials
+```bash
+./stop_dev.sh
+```
+
+### 6. Login and start working
+
+Login credentials:
+- Username: `dkulish`
+- Password: `admin123`
+
+Steps:
+1. Log in at http://127.0.0.1:8000/
 2. Click "Create Model/Endpoint" on the System Dashboard
 3. Fill in the name and description
 4. Explore the model-specific pages (Dashboard, Training, ETL, etc.)
@@ -512,34 +538,31 @@ See `implementation.md` for the complete architecture and implementation plan.
 
 ### Working Across Multiple Machines
 
-The SQLite database (`db.sqlite3`) is **not synced** via Git (it's in `.gitignore`). This is intentional to avoid conflicts.
+This project uses a **shared Cloud SQL PostgreSQL database** for development. All machines connect to the same centralized database, so data is automatically synchronized.
+
+**Benefits:**
+- ✅ Real-time data sync across all machines
+- ✅ No manual data export/import needed
+- ✅ All users, models, and ETL configurations shared
+- ✅ Production-ready database setup
 
 **On a new machine:**
 ```bash
 git pull
 source venv/bin/activate
 pip install -r requirements.txt
-python manage.py migrate       # Creates empty database
-python create_user.py          # Creates user (same credentials)
-python manage.py runserver
+
+# Create .env file with database credentials
+cp .env.example .env
+# Edit .env and add the database password (ask team)
+
+# Start development environment (Cloud SQL Proxy + Django)
+./start_dev.sh
 ```
 
-Your user account will be recreated, but any test data (models you created) won't transfer. This is normal for development.
+**That's it!** No migrations or user creation needed - the database is already populated.
 
-**If you need to sync specific data between machines:**
-```bash
-# On Machine A (export data)
-python manage.py dumpdata auth.User --indent 2 > fixtures/users.json
-
-# Commit and push
-git add fixtures/
-git commit -m "Add user fixtures"
-git push
-
-# On Machine B (import data)
-git pull
-python manage.py loaddata fixtures/users.json
-```
+**Note**: `db.sqlite3` is kept in `.gitignore` for local fallback. To use SQLite locally, delete or don't create the `.env` file (Django defaults to SQLite).
 
 ### Adding a new page
 
@@ -568,8 +591,10 @@ python manage.py changepassword dkulish
 ## Technology Stack
 
 **Backend:**
-- Django 5.2
-- SQLite (development) / PostgreSQL (production)
+- Django 4.2 LTS (Long Term Support until April 2026)
+- PostgreSQL 13 (via Cloud SQL)
+- Cloud SQL Proxy for secure database connections
+- Python 3.13
 
 **Frontend:**
 - Tailwind CSS (via CDN)
@@ -577,11 +602,16 @@ python manage.py changepassword dkulish
 - Vanilla JavaScript (for now)
 - Custom Button CSS System (see below)
 
+**Infrastructure:**
+- Cloud SQL (PostgreSQL) - Shared development database
+- GCP Secret Manager - Credential storage for ETL connections
+- Cloud SQL Proxy - Secure database access
+
 **Future:**
 - Vue.js for reactive components
 - Celery for async tasks
 - Redis for caching
-- Google Cloud Platform services
+- Additional Google Cloud Platform services
 
 ## UI Components - Button Styling System
 

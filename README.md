@@ -53,9 +53,10 @@ The client-facing web application backbone is complete with fully functional ETL
 
 **Database:**
 - ✅ **Migrated to Cloud SQL PostgreSQL** (November 14, 2025)
-- ✅ Shared database for development across multiple machines
+- ✅ **DEVELOPMENT DATABASE ONLY** - Shared across laptop and desktop for development
 - ✅ Cloud SQL Proxy for secure connections
 - ✅ Environment-based configuration (.env file)
+- ⚠️ **Future Migration Required**: This is a temporary dev database. Production will use a separate control plane database in the `b2b-recs` project (see `implementation.md` for architecture)
 
 ### Pages Structure
 
@@ -74,6 +75,11 @@ The client-facing web application backbone is complete with fully functional ETL
 - Feature Engineering - Visual designer (placeholder)
 
 ## Quick Start
+
+> **⚠️ Development Database Notice**
+> This setup uses a **shared Cloud SQL PostgreSQL database for development** (hosted in `memo2-456215` project).
+> This is a **temporary solution** - production will use a separate control plane database in the `b2b-recs` project.
+> See `implementation.md` for the full production architecture.
 
 ### 1. Clone and set up virtual environment
 
@@ -112,15 +118,16 @@ DB_PORT=5433
 
 ### 3. Start Development Environment
 
-Use the provided scripts to start both Cloud SQL Proxy and Django server:
-
 ```bash
 ./start_dev.sh
 ```
 
-This will:
-- Start Cloud SQL Proxy (connects to `memo2-db` instance)
-- Start Django development server
+**What happens:**
+- Cloud SQL Proxy starts in background (connects to `memo2-db` instance)
+- Django development server starts in foreground (all logs visible in terminal)
+- You can see and copy all Django logs in real-time
+
+**To stop:** Press **Ctrl+C** (automatically stops both Django and Cloud SQL Proxy)
 
 ### 4. Access the application
 
@@ -128,13 +135,7 @@ This will:
 - **Admin Panel**: http://127.0.0.1:8000/admin/
 - **Database**: 127.0.0.1:5433 (via Cloud SQL Proxy)
 
-### 5. Stop Development Environment
-
-```bash
-./stop_dev.sh
-```
-
-### 6. Login and start working
+### 5. Login and start working
 
 Login credentials:
 - Username: `dkulish`
@@ -538,13 +539,15 @@ See `implementation.md` for the complete architecture and implementation plan.
 
 ### Working Across Multiple Machines
 
-This project uses a **shared Cloud SQL PostgreSQL database** for development. All machines connect to the same centralized database, so data is automatically synchronized.
+This project uses a **shared Cloud SQL PostgreSQL database for DEVELOPMENT**. All development machines (laptop + desktop) connect to the same centralized database, so data is automatically synchronized.
+
+**⚠️ Important**: This is a **temporary development database** hosted in the `memo2-456215` project for cost savings. Production will use a separate control plane database in the `b2b-recs` project (see `implementation.md` architecture).
 
 **Benefits:**
-- ✅ Real-time data sync across all machines
+- ✅ Real-time data sync across all development machines
 - ✅ No manual data export/import needed
 - ✅ All users, models, and ETL configurations shared
-- ✅ Production-ready database setup
+- ✅ Production-ready PostgreSQL database type
 
 **On a new machine:**
 ```bash
@@ -602,8 +605,11 @@ python manage.py changepassword dkulish
 - Vanilla JavaScript (for now)
 - Custom Button CSS System (see below)
 
-**Infrastructure:**
-- Cloud SQL (PostgreSQL) - Shared development database
+**Infrastructure (Development):**
+- Cloud SQL (PostgreSQL 13) - **DEV DATABASE ONLY** - Shared across development machines
+  - Instance: `memo2-db` in project `memo2-456215` (reusing existing instance for cost savings)
+  - Database: `b2b_recs_dev`
+  - **Note**: Production will use separate control plane database in `b2b-recs` project
 - GCP Secret Manager - Credential storage for ETL connections
 - Cloud SQL Proxy - Secure database access
 

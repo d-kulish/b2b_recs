@@ -93,3 +93,5 @@ staticfiles/
 media/
 __pycache__/
 *.pyc
+
+backups/

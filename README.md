@@ -251,6 +251,17 @@ The ETL system uses a **single Docker container template** deployed per client w
   - Links to Connection via ForeignKey
   - Enabled/disabled until wizard completion at Step 5
 - **ETL Job Name Validation**: Duplicate job name check at Step 1 (prevents UNIQUE constraint errors)
+- **Edit/Restore ETL Jobs**: Resume wizard from last completed step
+  - Click "Edit" button on any ETL job (draft or completed)
+  - Wizard opens at next step after last completed (e.g., completed step 2 → opens at step 3)
+  - Auto-fetches tables using stored credentials from Secret Manager
+  - Proper CREATE vs EDIT flow separation (no duplicate UNIQUE errors)
+  - Skip name validation in edit mode
+- **Loading State Management**: Visual feedback during async operations
+  - Animated spinner with "Loading tables..." message
+  - Navigation buttons disabled during table fetch
+  - Prevents race conditions and broken state
+  - Error messages with "Go back" suggestions
 - **Inline Error Messages**: User-friendly error feedback without popup alerts
 - **Full CRUD Operations**: Add, edit, delete ETL jobs with complete configuration
 - **Multiple Data Source Types**: PostgreSQL, MySQL, SQL Server, BigQuery, CSV, Parquet
@@ -281,6 +292,7 @@ The ETL system uses a **single Docker container template** deployed per client w
 - `GET /api/connections/{id}/` - Get connection details (without credentials)
 - `GET /api/connections/{id}/credentials/` - Get decrypted credentials from Secret Manager
 - `POST /api/connections/{id}/test/` - Test existing connection
+- `POST /api/connections/{id}/test-and-fetch-tables/` - Test connection and fetch tables using stored credentials (for edit mode)
 - `POST /api/connections/{id}/delete/` - Delete connection (checks for dependent jobs)
 
 **Database Models**:
@@ -297,6 +309,7 @@ The ETL system uses a **single Docker container template** deployed per client w
   - Enable/disable per job
   - Connection test status and last test timestamp
   - Draft vs finalized status (is_enabled)
+  - Wizard step tracking (wizard_last_step, wizard_completed_steps) for resume functionality
 - **DataSourceTable**: Table-level extraction config (sync mode, incremental column, row limits)
 - **ETLRun**: Execution history with per-source and per-table success tracking
 
@@ -357,6 +370,18 @@ The ETL system uses a **single Docker container template** deployed per client w
 - ✅ Faster job creation (skip connection configuration)
 - ✅ Centralized credential management (update once, affects all jobs)
 - ✅ Security: Credentials stored once in Secret Manager
+
+**Editing ETL Jobs:**
+- Click "Edit" button on any ETL job (draft or completed)
+- Wizard automatically opens at the **next step** after last completed step
+  - Draft saved at Step 2 → opens at Step 3 (table selection)
+  - Completed job (Step 5) → opens at Step 5 (review/edit)
+- Tables auto-fetched using stored credentials (no password re-entry needed)
+- Animated loading spinner shows while fetching tables
+- Navigation buttons disabled during loading to prevent errors
+- All previously entered data pre-populated in form
+- Can modify any configuration and save changes
+- In edit mode, name validation skipped (you're editing the same job)
 
 ### 🔨 Pending Components (For Production Deployment)
 

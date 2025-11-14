@@ -529,23 +529,42 @@ def api_etl_get_source(request, source_id):
                 'is_enabled': table.is_enabled,
             })
 
+        # Get connection details (works for both old and new architecture)
+        conn_details = source.get_connection_details()
+
+        # Build response with connection details
+        response_data = {
+            'id': source.id,
+            'name': source.name,
+            'source_type': source.source_type,
+            'source_host': conn_details.get('host') or '',
+            'source_port': conn_details.get('port'),
+            'source_database': conn_details.get('database') or '',
+            'source_schema': conn_details.get('schema') or '',
+            'bigquery_project': conn_details.get('bigquery_project') or '',
+            'bigquery_dataset': conn_details.get('bigquery_dataset') or '',
+            'file_path': conn_details.get('file_path') or '',
+            'connection_string': conn_details.get('connection_string') or '',
+            'is_enabled': source.is_enabled,
+            'tables': tables,
+            'wizard_last_step': source.wizard_last_step,
+            'wizard_completed_steps': source.wizard_completed_steps or [],
+        }
+
+        # Add source_username and connection info if using Connection model
+        if source.connection:
+            response_data['source_username'] = source.connection.source_username or ''
+            response_data['connection_id'] = source.connection.id
+            response_data['connection_name'] = source.connection.name
+            response_data['uses_saved_connection'] = True
+        else:
+            # Old architecture - no source_username field in DataSource
+            response_data['source_username'] = ''
+            response_data['uses_saved_connection'] = False
+
         return JsonResponse({
             'status': 'success',
-            'source': {
-                'id': source.id,
-                'name': source.name,
-                'source_type': source.source_type,
-                'source_host': source.source_host or '',
-                'source_port': source.source_port,
-                'source_database': source.source_database or '',
-                'source_schema': source.source_schema or '',
-                'source_username': source.source_username or '',
-                'bigquery_project': source.bigquery_project or '',
-                'bigquery_dataset': source.bigquery_dataset or '',
-                'file_path': source.file_path or '',
-                'is_enabled': source.is_enabled,
-                'tables': tables,
-            }
+            'source': response_data
         })
 
     except Exception as e:
@@ -595,6 +614,11 @@ def api_etl_update_source(request, source_id):
                     row_limit=table_data.get('row_limit'),
                     is_enabled=table_data.get('is_enabled', True),
                 )
+
+            # Mark wizard as completed (all 5 steps done)
+            source.wizard_last_step = 5
+            source.wizard_completed_steps = [1, 2, 3, 4, 5]
+            source.save()
 
         return JsonResponse({
             'status': 'success',
@@ -734,6 +758,8 @@ def api_etl_save_draft_source(request, model_id):
                 source_type=connection.source_type,
                 is_enabled=False,  # Disabled until wizard is completed
                 connection_tested=True,
+                wizard_last_step=2,  # Draft saved at step 2
+                wizard_completed_steps=[1, 2],  # Steps 1 and 2 completed
             )
 
             print(f"Draft created with ID: {source.id}")
@@ -777,6 +803,8 @@ def api_etl_save_draft_source(request, model_id):
                 connection_string=credentials_dict['connection_string'],
                 is_enabled=False,  # Disabled until wizard is completed
                 connection_tested=True,
+                wizard_last_step=2,  # Draft saved at step 2
+                wizard_completed_steps=[1, 2],  # Steps 1 and 2 completed
             )
 
         # Save credentials to Secret Manager
@@ -1376,6 +1404,70 @@ def api_connection_test(request, connection_id):
         }
 
         # Test connection
+        result = test_and_fetch_metadata(connection.source_type, connection_params)
+
+        # Update connection status
+        connection.last_test_at = timezone.now()
+        connection.last_test_status = 'success' if result['success'] else 'failed'
+        connection.last_test_message = result['message']
+        connection.connection_tested = result['success']
+        connection.save()
+
+        if result['success']:
+            return JsonResponse({
+                'status': 'success',
+                'message': result['message'],
+                'tables': result['tables'],
+            })
+        else:
+            return JsonResponse({
+                'status': 'error',
+                'message': result['message'],
+            }, status=400)
+
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e),
+        }, status=500)
+
+
+@login_required
+@require_http_methods(["POST"])
+def api_connection_test_and_fetch_tables(request, connection_id):
+    """
+    Test an existing connection and fetch tables using stored credentials.
+    Used in edit mode to refresh table list without requiring password input.
+    """
+    from .utils.connection_manager import test_and_fetch_metadata, get_credentials_from_secret_manager
+    from .models import Connection
+
+    try:
+        connection = get_object_or_404(Connection, id=connection_id)
+
+        # Retrieve credentials from Secret Manager
+        if not connection.credentials_secret_name:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'No credentials stored for this connection',
+            }, status=400)
+
+        credentials = get_credentials_from_secret_manager(connection.credentials_secret_name)
+
+        # Prepare connection parameters
+        connection_params = {
+            'host': connection.source_host,
+            'port': connection.source_port,
+            'database': connection.source_database,
+            'username': credentials.get('username', ''),
+            'password': credentials.get('password', ''),
+            'project_id': connection.bigquery_project,
+            'dataset': connection.bigquery_dataset,
+            'service_account_json': credentials.get('service_account_json', ''),
+            'connection_string': connection.connection_string,
+        }
+
+        # Test connection and fetch tables
         result = test_and_fetch_metadata(connection.source_type, connection_params)
 
         # Update connection status

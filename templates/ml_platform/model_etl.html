@@ -865,14 +865,6 @@ function disableETL() {
     }
 }
 
-function showAddSourceModal() {
-    document.getElementById('addSourceModal').classList.remove('hidden');
-}
-
-function hideAddSourceModal() {
-    document.getElementById('addSourceModal').classList.add('hidden');
-}
-
 function testConnection(sourceId) {
     if (confirm('Test connection for this data source?')) {
         fetch(`/api/etl/sources/${sourceId}/test/`, {
@@ -905,42 +897,109 @@ function editSource(sourceId) {
             if (data.status === 'success') {
                 const source = data.source;
 
+                console.log('=== EDIT SOURCE DEBUG ===');
+                console.log('Source data:', source);
+                console.log('Wizard last step:', source.wizard_last_step);
+                console.log('Uses saved connection:', source.uses_saved_connection);
+
                 // Set wizard to edit mode
                 wizardEditMode = true;
                 wizardEditSourceId = sourceId;
+                draftSourceId = sourceId;  // Treat edit as updating existing draft
 
-                // Populate form with existing data
-                document.getElementById('sourceType').value = source.source_type;
+                // Determine which step to resume from: last completed step + 1 (next step to work on)
+                const lastCompletedStep = source.wizard_last_step || 2;
+                const resumeStep = Math.min(lastCompletedStep + 1, 5);  // Next step, capped at 5
+
+                console.log(`Last completed step: ${lastCompletedStep}, resuming at step: ${resumeStep}`);
+
+                // Step 1: Populate job name and source type
                 document.getElementById('sourceName').value = source.name;
-                document.getElementById('sourceHost').value = source.source_host;
-                document.getElementById('sourcePort').value = source.source_port || '';
-                document.getElementById('sourceDatabase').value = source.source_database;
-                document.getElementById('sourceUsername').value = source.source_username;
-                document.getElementById('sourcePassword').value = ''; // Don't populate password
 
-                // If there's a table configured, pre-select it
+                // Select the appropriate source type radio button
+                const sourceTypeRadio = document.querySelector(`input[name="sourceType"][value="${source.source_type}"]`);
+                if (sourceTypeRadio) {
+                    sourceTypeRadio.checked = true;
+                }
+
+                // Step 2: Populate connection details based on source type
+                const sourceType = source.source_type;
+
+                // Show appropriate form based on source type
+                if (['postgresql', 'mysql', 'oracle', 'sqlserver', 'mariadb', 'redshift', 'synapse', 'snowflake', 'teradata', 'db2'].includes(sourceType)) {
+                    // Relational database form
+                    document.getElementById('formRelationalDB').classList.remove('hidden');
+                    document.getElementById('formFilePath').classList.add('hidden');
+                    document.getElementById('formBigQuery').classList.add('hidden');
+
+                    document.getElementById('sourceHost').value = source.source_host || '';
+                    document.getElementById('sourcePort').value = source.source_port || '';
+                    document.getElementById('sourceDatabase').value = source.source_database || '';
+                    document.getElementById('sourceUsername').value = source.source_username || '';
+                    document.getElementById('sourcePassword').value = ''; // Never populate password
+
+                    // If using saved connection, store connection info
+                    if (source.uses_saved_connection && source.connection_id) {
+                        window.usingExistingConnection = true;
+                        window.existingConnectionId = source.connection_id;
+                        document.getElementById('connectionName').value = source.connection_name || '';
+                        document.getElementById('connectionName').readOnly = true;  // Don't allow changing connection name in edit mode
+                    }
+
+                } else if (['csv', 'parquet', 'json', 'excel', 'txt', 'avro'].includes(sourceType)) {
+                    // File path form
+                    document.getElementById('formFilePath').classList.remove('hidden');
+                    document.getElementById('formRelationalDB').classList.add('hidden');
+                    document.getElementById('formBigQuery').classList.add('hidden');
+
+                    document.getElementById('filePath').value = source.file_path || '';
+
+                } else if (['bigquery', 'firestore'].includes(sourceType)) {
+                    // BigQuery/Firestore form
+                    document.getElementById('formBigQuery').classList.remove('hidden');
+                    document.getElementById('formRelationalDB').classList.add('hidden');
+                    document.getElementById('formFilePath').classList.add('hidden');
+
+                    document.getElementById('bigqueryProject').value = source.bigquery_project || '';
+                    document.getElementById('bigqueryDataset').value = source.bigquery_dataset || '';
+                }
+
+                // Mark connection as tested since it was previously saved
+                window.connectionTested = true;
+
+                // Step 3+: Handle table selection if tables exist
                 if (source.tables && source.tables.length > 0) {
                     const table = source.tables[0];
                     wizardEditTableData = table;
 
-                    // Store sync settings for step 3
-                    document.getElementById('syncMode').value = table.sync_mode;
-                    document.getElementById('incrementalColumn').value = table.incremental_column || '';
-                    document.getElementById('rowLimit').value = table.row_limit || '';
+                    // Store table info for later steps
+                    if (document.getElementById('syncMode')) {
+                        document.getElementById('syncMode').value = table.sync_mode || 'replace';
+                    }
+                    if (document.getElementById('incrementalColumn')) {
+                        document.getElementById('incrementalColumn').value = table.incremental_column || '';
+                    }
+                    if (document.getElementById('rowLimit')) {
+                        document.getElementById('rowLimit').value = table.row_limit || '';
+                    }
                 }
 
-                document.getElementById('enableImmediately').checked = source.is_enabled;
+                // Step 5: Enable immediately checkbox
+                if (document.getElementById('enableImmediately')) {
+                    document.getElementById('enableImmediately').checked = source.is_enabled;
+                }
 
                 // Update modal title
                 document.querySelector('#addSourceModal h3').textContent = 'Edit ETL Job';
 
-                // Show modal
-                showAddSourceModal();
+                // Show modal at the appropriate resume step
+                showAddSourceModal(resumeStep);
             } else {
                 alert('Error loading source data: ' + data.message);
             }
         })
         .catch(error => {
+            console.error('Error loading source:', error);
             alert('Error loading source: ' + error);
         });
 }
@@ -995,15 +1054,84 @@ let wizardEditSourceId = null;
 let wizardEditTableData = null;
 let savedConnectionData = null;  // Store connection params after successful test
 let draftSourceId = null;  // Store draft source ID after saving
+let isLoadingTables = false;  // Flag to track if tables are being fetched
 
-function showAddSourceModal() {
+// Helper functions for navigation button states
+function disableWizardNavigation() {
+    isLoadingTables = true;
+    const backButton = document.getElementById('backButton');
+    const nextButton = document.getElementById('nextButton');
+
+    if (backButton) {
+        backButton.disabled = true;
+        backButton.style.opacity = '0.5';
+        backButton.style.cursor = 'not-allowed';
+    }
+    if (nextButton) {
+        nextButton.disabled = true;
+        nextButton.style.opacity = '0.5';
+        nextButton.style.cursor = 'not-allowed';
+    }
+}
+
+function enableWizardNavigation() {
+    isLoadingTables = false;
+    const backButton = document.getElementById('backButton');
+    const nextButton = document.getElementById('nextButton');
+
+    if (backButton) {
+        backButton.disabled = false;
+        backButton.style.opacity = '1';
+        backButton.style.cursor = 'pointer';
+    }
+    if (nextButton) {
+        nextButton.disabled = false;
+        nextButton.style.opacity = '1';
+        nextButton.style.cursor = 'pointer';
+    }
+}
+
+function showLoadingSpinner(container, message = 'Loading...') {
+    if (!container) return;
+    container.innerHTML = `
+        <div class="flex items-center justify-center py-8">
+            <div class="text-center">
+                <svg class="animate-spin h-8 w-8 text-blue-600 mx-auto mb-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <p class="text-sm text-gray-600 font-medium">${message}</p>
+                <p class="text-xs text-gray-500 mt-1">Please wait</p>
+            </div>
+        </div>
+    `;
+}
+
+function showLoadingError(container, errorMessage) {
+    if (!container) return;
+    container.innerHTML = `
+        <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+            <p class="text-sm text-yellow-800">
+                <i class="fas fa-exclamation-triangle mr-2"></i>
+                <strong>Unable to fetch tables:</strong> ${errorMessage}
+            </p>
+            <p class="text-xs text-yellow-600 mt-2">
+                Please go back to Step 2 and test the connection again.
+            </p>
+        </div>
+    `;
+}
+
+function showAddSourceModal(resumeStep = 1) {
     document.getElementById('addSourceModal').classList.remove('hidden');
     // Reset title if not already set by editSource
     if (!wizardEditMode) {
         document.querySelector('#addSourceModal h3').textContent = 'Add ETL Job';
     }
-    currentWizardStep = 1;
-    showStep(1);
+
+    // In edit mode, use the provided resumeStep; otherwise start at step 1
+    currentWizardStep = resumeStep;
+    showStep(resumeStep);
 
     // Load saved connections when wizard opens
     loadSavedConnections();
@@ -1209,7 +1337,14 @@ function showStep(step) {
 
     // Populate Step 3 with real tables from connection test
     if (step === 3) {
-        populateTablesList();
+        // In edit mode, fetch tables from the existing connection
+        if (wizardEditMode && draftSourceId) {
+            console.log('Edit mode: fetching tables for existing connection');
+            fetchTablesForEdit();
+        } else {
+            // Create mode: use tables from memory (set by testConnectionWizard)
+            populateTablesList();
+        }
     }
 
     // Populate step 4 with selected table
@@ -1243,8 +1378,21 @@ function updateProgress(step) {
 }
 
 function nextStep() {
+    // Prevent navigation while tables are loading
+    if (isLoadingTables) {
+        console.log('Navigation blocked: tables are loading');
+        return;
+    }
+
     // Validation
     if (currentWizardStep === 1) {
+        // In edit mode, skip name validation (we're editing existing job)
+        if (wizardEditMode) {
+            console.log('Edit mode: skipping name validation at step 1');
+            proceedFromStep1();
+            return;
+        }
+
         // Check job name is filled
         const jobName = document.getElementById('sourceName').value.trim();
         if (!jobName) {
@@ -1253,7 +1401,7 @@ function nextStep() {
             return;
         }
 
-        // Check if job name already exists
+        // Check if job name already exists (only for new jobs)
         fetch(`/api/models/{{ model.id }}/etl/check-name/`, {
             method: 'POST',
             headers: {
@@ -1290,13 +1438,24 @@ function nextStep() {
         return;
     }
 
-    // Step 2 -> 3: Save draft ETL job
+    // Step 2 -> 3: Save draft ETL job (CREATE mode only)
     if (currentWizardStep === 2) {
-        console.log('=== STEP 2 -> 3: ALWAYS SAVE DRAFT ===');
+        console.log('=== STEP 2 -> 3 TRANSITION ===');
+        console.log('wizardEditMode:', wizardEditMode);
+        console.log('draftSourceId:', draftSourceId);
         console.log('window.connectionTested:', window.connectionTested);
 
-        // ALWAYS save draft ETL job at Step 2, no exceptions
+        // In EDIT mode: skip draft saving, DataSource already exists
+        if (wizardEditMode && draftSourceId) {
+            console.log('Edit mode: skipping draft save, proceeding directly to step 3');
+            currentWizardStep++;
+            showStep(currentWizardStep);
+            return;
+        }
+
+        // In CREATE mode: save draft ETL job at Step 2
         if (window.connectionTested) {
+            console.log('Create mode: saving draft');
             saveDraftSource();
             return;  // Will proceed to Step 3 after successful save
         } else {
@@ -1484,6 +1643,12 @@ function proceedFromStep1() {
 
 
 function previousStep() {
+    // Prevent navigation while tables are loading
+    if (isLoadingTables) {
+        console.log('Navigation blocked: tables are loading');
+        return;
+    }
+
     currentWizardStep--;
     showStep(currentWizardStep);
 }
@@ -1877,6 +2042,85 @@ function populateTablesList() {
 
         tablesList.appendChild(label);
     });
+}
+
+function fetchTablesForEdit() {
+    console.log('=== FETCHING TABLES FOR EDIT MODE ===');
+    console.log('draftSourceId:', draftSourceId);
+
+    const tablesList = document.querySelector('#step3 .space-y-2');
+    if (!tablesList) return;
+
+    // Disable navigation buttons during loading
+    disableWizardNavigation();
+
+    // Show loading spinner
+    showLoadingSpinner(tablesList, 'Loading tables from database...');
+
+    // Fetch source details to get connection info
+    fetch(`/api/etl/sources/${draftSourceId}/`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.status !== 'success') {
+                throw new Error(data.message || 'Failed to load source');
+            }
+
+            const source = data.source;
+            console.log('Source loaded:', source);
+
+            // Prepare connection params for testing
+            const testParams = {
+                source_type: source.source_type,
+                host: source.source_host,
+                port: source.source_port,
+                database: source.source_database,
+                username: source.source_username,
+                password: '',  // Password not available, need to fetch from secret manager
+            };
+
+            // If using saved connection, we need connection ID to fetch credentials
+            if (source.uses_saved_connection && source.connection_id) {
+                console.log('Using saved connection ID:', source.connection_id);
+                // Fetch connection with credentials
+                return fetch(`/api/connections/${source.connection_id}/test-and-fetch-tables/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrftoken
+                    }
+                });
+            } else {
+                // Old architecture - we can't re-fetch without password
+                throw new Error('Cannot fetch tables in edit mode for legacy connections without saved Connection model');
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            console.log('Tables fetch response:', data);
+
+            if (data.status === 'success' && data.tables) {
+                // Store tables in window.availableTables
+                window.availableTables = data.tables;
+                console.log(`Loaded ${data.tables.length} tables`);
+
+                // Populate the list
+                populateTablesList();
+
+                // Re-enable navigation buttons
+                enableWizardNavigation();
+            } else {
+                throw new Error(data.message || 'Failed to fetch tables');
+            }
+        })
+        .catch(error => {
+            console.error('Error fetching tables:', error);
+
+            // Show error message
+            showLoadingError(tablesList, error.message);
+
+            // Re-enable navigation buttons so user can go back
+            enableWizardNavigation();
+        });
 }
 
 function saveDraftSource() {

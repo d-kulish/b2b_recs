@@ -1,6 +1,6 @@
 # Next Steps: ETL & Connection Management System
 
-**Last Updated:** November 13, 2025
+**Last Updated:** November 14, 2025
 
 ---
 
@@ -15,6 +15,9 @@
 - ✅ **Draft ETL Jobs** - saved at Step 2 (after connection test)
 - ✅ Step 3 shows real tables from database with metadata
 - ✅ Connection reuse - auto-populate and fetch tables for saved connections
+- ✅ **Edit/Restore ETL Jobs** - resume wizard from last completed step
+- ✅ **Loading States** - visual feedback with disabled navigation during async operations
+- ✅ **Wizard Step Tracking** - wizard_last_step and wizard_completed_steps in DataSource model
 
 ---
 
@@ -97,7 +100,19 @@ Proceeds to Step 3 with table list ready
 - [x] Draft ETL job creation at Step 2 (not Step 5) ✓
 - [x] Fix nextStep() to handle all wizard steps ✓
 
-### 🎯 Milestone 5: Connection Editing & Management (Next Phase)
+### 🎯 Milestone 5: ETL Job Editing & Wizard Resume ✅ COMPLETE
+- [x] Add wizard step tracking to DataSource model ✓
+- [x] Fix api_etl_get_source to handle both old and new architecture ✓
+- [x] Implement wizard resume at last completed step + 1 ✓
+- [x] Skip draft-save in edit mode (prevent duplicate UNIQUE errors) ✓
+- [x] Auto-fetch tables in edit mode using stored credentials ✓
+- [x] Create api_connection_test_and_fetch_tables endpoint ✓
+- [x] Add loading spinner with disabled navigation buttons ✓
+- [x] Implement proper CREATE vs EDIT flow separation ✓
+- [x] Skip name validation in edit mode (Step 1) ✓
+- [x] Add visual feedback during async table loading ✓
+
+### 🎯 Milestone 6: Advanced Connection Management (Next Phase)
 - [ ] Add Edit button to saved connection cards
 - [ ] Create Edit Connection modal with pre-filled form
 - [ ] Add backend endpoint for updating connection credentials
@@ -106,7 +121,7 @@ Proceeds to Step 3 with table list ready
 - [ ] Add Delete connection functionality (with cascade warnings)
 - [ ] Add connection usage analytics (last used, job count)
 
-### 🎯 Milestone 6: Production Readiness (Future)
+### 🎯 Milestone 7: Production Readiness (Future)
 - [ ] Test with MySQL database connection
 - [ ] Test with BigQuery dataset
 - [ ] Add SQL Server support if needed
@@ -119,7 +134,7 @@ Proceeds to Step 3 with table list ready
 
 ## What We Accomplished
 
-**Milestones 1-4 Complete!**
+**Milestones 1-5 Complete!**
 
 ✅ Real database connection testing (PostgreSQL, MySQL, BigQuery)
 ✅ Secure credential storage in GCP Secret Manager
@@ -133,8 +148,12 @@ Proceeds to Step 3 with table list ready
 ✅ Inline error messages with proper UX
 ✅ Cloud SQL Proxy integration for secure database access
 ✅ Fixed wizard step navigation (nextStep() handles all steps)
+✅ **Edit/Restore ETL Jobs** - click Edit to resume wizard at last step + 1
+✅ **Loading State Management** - animated spinner + disabled navigation during async operations
+✅ **Proper CREATE vs EDIT separation** - no duplicate UNIQUE errors in edit mode
+✅ **Auto-fetch tables in edit mode** - uses stored credentials from Secret Manager
 
-**Next Steps:** Milestone 5 - Connection editing and advanced management features
+**Next Steps:** Milestone 6 - Advanced connection editing and management features
 
 ---
 
@@ -142,12 +161,13 @@ Proceeds to Step 3 with table list ready
 
 ```
 ml_platform/utils/connection_manager.py    ✅ NEW - connection testing for PostgreSQL, MySQL, BigQuery
-ml_platform/views.py                       ✅ UPDATED - Connection CRUD, ETL wizard endpoints, validation
-ml_platform/models.py                      ✅ UPDATED - Connection model, ForeignKey from DataSource
-ml_platform/urls.py                        ✅ UPDATED - Connection management routes, validation endpoints
-templates/ml_platform/model_etl.html       ✅ UPDATED - connection reuse, name validation, draft-save at Step 2
+ml_platform/views.py                       ✅ UPDATED - Connection CRUD, ETL wizard, edit endpoints, loading states
+ml_platform/models.py                      ✅ UPDATED - Connection model, wizard step tracking fields
+ml_platform/urls.py                        ✅ UPDATED - Connection management, test-and-fetch-tables endpoint
+templates/ml_platform/model_etl.html       ✅ UPDATED - edit/resume, loading states, CREATE vs EDIT separation
 ml_platform/migrations/0005_*.py           ✅ NEW - Connection model migration
 ml_platform/migrations/0006_*.py           ✅ NEW - DataSource unique constraint (etl_config, name)
+ml_platform/migrations/0007_*.py           ✅ NEW - wizard_last_step and wizard_completed_steps fields
 requirements.txt                           ✅ UPDATED - psycopg2-binary, pymysql, google-cloud-secret-manager
 start_dev.sh                               ✅ NEW - development environment startup script
 ```

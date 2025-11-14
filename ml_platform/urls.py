@@ -45,5 +45,6 @@ urlpatterns = [
     path('api/connections/<int:connection_id>/', views.api_connection_get, name='api_connection_get'),
     path('api/connections/<int:connection_id>/credentials/', views.api_connection_get_credentials, name='api_connection_get_credentials'),
     path('api/connections/<int:connection_id>/test/', views.api_connection_test, name='api_connection_test'),
+    path('api/connections/<int:connection_id>/test-and-fetch-tables/', views.api_connection_test_and_fetch_tables, name='api_connection_test_and_fetch_tables'),
     path('api/connections/<int:connection_id>/delete/', views.api_connection_delete, name='api_connection_delete'),
 ]

@@ -268,6 +268,10 @@ class DataSource(models.Model):
     use_incremental = models.BooleanField(default=False, help_text="Use incremental extraction")
     incremental_column = models.CharField(max_length=100, blank=True, help_text="Column for incremental loads (e.g., updated_at)")
 
+    # Wizard state tracking
+    wizard_last_step = models.IntegerField(default=1, help_text="Last wizard step user completed")
+    wizard_completed_steps = models.JSONField(default=list, blank=True, help_text="List of completed step numbers [1,2,3]")
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

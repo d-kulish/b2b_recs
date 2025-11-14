@@ -1,8 +1,24 @@
 # Database Synchronization Guide
 
+> **⚠️ DEPRECATED - November 14, 2025**
+> This guide describes the **old SQLite workflow**. The project now uses **Cloud SQL PostgreSQL** for shared database across all machines.
+> See **README.md** for current setup instructions.
+
+---
+
+## Historical Context (Before Cloud SQL Migration)
+
 **Problem**: Working on the same Django project across multiple machines (laptop + desktop) with `db.sqlite3` not synced via Git.
 
-**Solution**: This guide helps you synchronize database schema and optionally data between machines.
+**Old Solution**: This guide helped synchronize database schema and optionally data between machines using SQLite.
+
+**Current Solution (Nov 14, 2025+)**: We now use **Cloud SQL PostgreSQL** - a shared database in the cloud. All machines connect to the same database, so no sync is needed.
+
+---
+
+## For Historical Reference Only
+
+The sections below describe the **old SQLite sync workflow**. This information is preserved for reference but is no longer the recommended approach.
 
 ---
 

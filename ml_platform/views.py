@@ -1809,3 +1809,220 @@ def api_connection_delete(request, connection_id):
             'status': 'error',
             'message': str(e),
         }, status=500)
+
+
+# ============================================================================
+# NEW ETL WIZARD API ENDPOINTS (Simplified Flow)
+# ============================================================================
+
+@login_required
+@require_http_methods(["GET"])
+def api_etl_get_connections(request, model_id):
+    """
+    Get all connections for a model to populate ETL wizard Step 1.
+    Returns connections with test status and usage count.
+    """
+    from .models import Connection
+
+    try:
+        model = get_object_or_404(ModelEndpoint, id=model_id)
+
+        # Fetch all connections for this model
+        connections = Connection.objects.filter(model_endpoint=model).order_by('name')
+
+        # Build response data
+        connections_data = []
+        for conn in connections:
+            connections_data.append({
+                'id': conn.id,
+                'name': conn.name,
+                'source_type': conn.source_type,
+                'source_type_display': conn.get_source_type_display(),
+                'host': conn.source_host,
+                'port': conn.source_port,
+                'database': conn.source_database,
+                'last_test_status': conn.last_test_status or 'untested',
+                'last_test_at': conn.last_test_at.isoformat() if conn.last_test_at else None,
+                'last_used_at': conn.last_used_at.isoformat() if conn.last_used_at else None,
+                'jobs_count': conn.data_sources.count(),
+                'is_enabled': conn.is_enabled,
+            })
+
+        return JsonResponse({
+            'status': 'success',
+            'connections': connections_data,
+        })
+
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e),
+        }, status=500)
+
+
+@login_required
+@require_http_methods(["POST"])
+def api_etl_test_connection_in_wizard(request, connection_id):
+    """
+    Test an existing connection from within ETL wizard.
+    Does NOT create or modify anything, just tests and fetches tables.
+    Updates connection last_test_at and last_test_status.
+    """
+    from .models import Connection
+    from .utils.connection_manager import test_and_fetch_metadata
+    from django.utils import timezone
+
+    try:
+        connection = get_object_or_404(Connection, id=connection_id)
+
+        # Build connection parameters from Connection object
+        connection_params = {
+            'host': connection.source_host,
+            'port': connection.source_port,
+            'database': connection.source_database,
+            'schema': connection.source_schema,
+            'username': connection.source_username,
+            'credentials_secret_name': connection.credentials_secret_name,
+            'project_id': connection.bigquery_project,
+            'dataset': connection.bigquery_dataset,
+            'connection_string': connection.connection_string,
+            'service_account_json': connection.service_account_json,
+        }
+
+        # Test connection and get tables
+        result = test_and_fetch_metadata(connection.source_type, connection_params)
+
+        # Update connection test status
+        connection.last_test_at = timezone.now()
+        if result['success']:
+            connection.last_test_status = 'success'
+            connection.last_test_message = result.get('message', 'Connection successful')
+        else:
+            connection.last_test_status = 'failed'
+            connection.last_test_message = result.get('message', 'Connection failed')
+        connection.save()
+
+        if result['success']:
+            return JsonResponse({
+                'status': 'success',
+                'message': result['message'],
+                'tables': result.get('tables', []),
+            })
+        else:
+            return JsonResponse({
+                'status': 'error',
+                'message': result['message'],
+            }, status=400)
+
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Unexpected error: {str(e)}',
+        }, status=500)
+
+
+@login_required
+@require_http_methods(["POST"])
+def api_etl_create_job(request, model_id):
+    """
+    Create complete ETL job with all configuration.
+    Called at final wizard step only (no drafts).
+
+    Payload:
+    {
+        "name": "daily_transactions",
+        "connection_id": 5,
+        "tables": [
+            {
+                "source_table_name": "transactions",
+                "dest_table_name": "raw_transactions",
+                "sync_mode": "incremental",
+                "incremental_column": "updated_at"
+            }
+        ]
+    }
+    """
+    from .models import Connection, DataSourceTable
+    from django.utils import timezone
+
+    try:
+        model = get_object_or_404(ModelEndpoint, id=model_id)
+        etl_config = model.etl_config
+
+        data = json.loads(request.body)
+
+        # Extract and validate required fields
+        job_name = data.get('name', '').strip()
+        connection_id = data.get('connection_id')
+        tables = data.get('tables', [])
+
+        if not job_name:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'ETL job name is required',
+            }, status=400)
+
+        if not connection_id:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Connection is required',
+            }, status=400)
+
+        if not tables or len(tables) == 0:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'At least one table must be selected',
+            }, status=400)
+
+        # Validate connection belongs to this model
+        connection = get_object_or_404(Connection, id=connection_id, model_endpoint=model)
+
+        # Check for duplicate job name
+        if DataSource.objects.filter(etl_config=etl_config, name=job_name).exists():
+            return JsonResponse({
+                'status': 'error',
+                'message': f'ETL job "{job_name}" already exists. Please choose a different name.',
+            }, status=400)
+
+        # Create DataSource (ETL job)
+        data_source = DataSource.objects.create(
+            etl_config=etl_config,
+            connection=connection,
+            name=job_name,
+            source_type=connection.source_type,  # Denormalized from connection
+            is_enabled=True,
+        )
+
+        # Create DataSourceTable objects for each selected table
+        for table_config in tables:
+            source_table = table_config.get('source_table_name', '').strip()
+            dest_table = table_config.get('dest_table_name', source_table).strip()
+            sync_mode = table_config.get('sync_mode', 'replace')
+            incremental_column = table_config.get('incremental_column', '').strip()
+
+            if source_table:
+                DataSourceTable.objects.create(
+                    data_source=data_source,
+                    source_table_name=source_table,
+                    dest_table_name=dest_table,
+                    sync_mode=sync_mode,
+                    incremental_column=incremental_column if sync_mode == 'incremental' else '',
+                    is_enabled=True,
+                )
+
+        # Update connection last_used_at
+        connection.last_used_at = timezone.now()
+        connection.save()
+
+        return JsonResponse({
+            'status': 'success',
+            'message': f'ETL job "{job_name}" created successfully',
+            'job_id': data_source.id,
+            'job_name': data_source.name,
+        })
+
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Error creating ETL job: {str(e)}',
+        }, status=500)

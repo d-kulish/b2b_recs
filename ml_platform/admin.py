@@ -34,18 +34,18 @@ class ETLConfigurationAdmin(admin.ModelAdmin):
 
 @admin.register(Connection)
 class ConnectionAdmin(admin.ModelAdmin):
-    list_display = ['name', 'source_type', 'model_endpoint', 'is_enabled', 'connection_tested', 'last_test_at']
+    list_display = ['name', 'source_type', 'model_endpoint', 'is_enabled', 'connection_tested', 'last_test_at', 'last_used_at']
     list_filter = ['source_type', 'is_enabled', 'connection_tested']
     search_fields = ['name', 'model_endpoint__name', 'source_host']
-    readonly_fields = ['created_at', 'updated_at', 'last_test_at']
+    readonly_fields = ['created_at', 'updated_at', 'last_test_at', 'last_used_at']
 
 
 @admin.register(DataSource)
 class DataSourceAdmin(admin.ModelAdmin):
-    list_display = ['name', 'source_type', 'etl_config', 'is_enabled', 'connection_tested']
-    list_filter = ['source_type', 'is_enabled', 'connection_tested']
-    search_fields = ['name', 'etl_config__model_endpoint__name']
-    readonly_fields = ['created_at', 'updated_at', 'last_test_at']
+    list_display = ['name', 'source_type', 'connection', 'etl_config', 'is_enabled']
+    list_filter = ['source_type', 'is_enabled']
+    search_fields = ['name', 'etl_config__model_endpoint__name', 'connection__name']
+    readonly_fields = ['created_at', 'updated_at']
 
 
 @admin.register(DataSourceTable)

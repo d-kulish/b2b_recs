@@ -260,13 +260,21 @@ The ETL system uses a **single Docker container template** deployed per client w
 
 **Django Web UI** (`/models/{id}/etl/`):
 - **Per-Table ETL Jobs**: Each data source extracts exactly one table with independent scheduling
-- **5-Step Wizard Modal**: Guided job creation (Job Name → Connection → Test → Table Selection → Configuration)
+- **Simplified 3-Step ETL Wizard**: Streamlined job creation (40% faster than before)
+  - Step 1: Select existing connection + Enter job name
+  - Step 2: Select table from database (auto-fetched)
+  - Step 3: Configure sync mode + Schedule + Review summary
+- **Standalone Connection Management**: 2-step wizard for independent connection creation
+  - Step 1: Category tabs (Relational DB/Files/NoSQL) + tile-based database selection
+  - Step 2: Connection form with test button → "Save Connection" after successful test
+  - Connections managed separately from ETL jobs
+  - Test-first pattern: Connection test BEFORE Secret Manager save
 - **Connection Management System**: Reusable named database connections
-  - Create named connections (e.g., "Production PostgreSQL")
+  - Create named connections independently (e.g., "Production PostgreSQL")
   - Auto-suggest connection names based on source type + database name
   - Reuse saved connections across multiple ETL jobs
-  - Connection cards at Step 1 with "Use This Connection" button
-  - Read-only connection details when reusing saved connection
+  - Live status indicators (green=working, red=failed)
+  - Connection cards with "Use This Connection" button
   - Duplicate connection name validation
 - **Real Database Connection Testing**: Live connection validation with actual database credentials
   - PostgreSQL: Full support with connection pooling and timeout handling
@@ -278,13 +286,14 @@ The ETL system uses a **single Docker container template** deployed per client w
   - Row counts
   - Last updated timestamps
 - **Secure Credential Storage**: All passwords saved to GCP Secret Manager (never in Django DB)
-- **Draft ETL Job Creation**: Draft DataSource saved at Step 2 (after connection test)
+- **Atomic ETL Job Creation**: ETL jobs created at final step (no drafts, cleaner flow)
   - Links to Connection via ForeignKey
-  - Enabled/disabled until wizard completion at Step 5
+  - Connection.last_used_at updated on job creation
+  - Enabled immediately after creation
 - **ETL Job Name Validation**: Duplicate job name check at Step 1 (prevents UNIQUE constraint errors)
 - **Edit/Restore ETL Jobs**: Resume wizard from last completed step
-  - Click "Edit" button on any ETL job (draft or completed)
-  - Wizard opens at next step after last completed (e.g., completed step 2 → opens at step 3)
+  - Click "Edit" button on any ETL job
+  - Wizard opens at appropriate step with pre-filled data
   - Auto-fetches tables using stored credentials from Secret Manager
   - Proper CREATE vs EDIT flow separation (no duplicate UNIQUE errors)
   - Skip name validation in edit mode
@@ -356,53 +365,73 @@ The ETL system uses a **single Docker container template** deployed per client w
 
 **ETL Page Layout:**
 
-The ETL page now features a 2-column layout:
+The ETL page features a 2-column layout:
 - **LEFT**: Connections section - Manage database connections independently
 - **RIGHT**: ETL Jobs section - Configure and monitor extraction jobs
 
 **Creating a Standalone Connection:**
 
 1. **Navigate to ETL Page**: Go to `/models/{id}/etl/` for your model
-2. **Click "+ Connection"** (in Connections section): Opens connection form
-3. **Fill Connection Details**: Host, port, database, username, password
-4. **Click "Test Connection"**: System validates credentials
-5. **Auto-Save**: If test succeeds, connection is created and credentials stored in Secret Manager
-6. **Status Indicator**: Green dot = working, Red dot = failed (auto-tested on page load)
+2. **Click "+ Connection"** (in Connections section): Opens 2-step connection wizard modal
+
+**Connection Wizard - Step 1: Select Database Type**
+- Choose category: **Relational Databases**, **Flat Files**, or **NoSQL**
+- Select specific database type from tile-based grid:
+  - Relational: PostgreSQL, MySQL, Amazon Redshift, BigQuery, Snowflake
+  - Flat Files: CSV Files, Parquet Files
+  - NoSQL: MongoDB, Firestore
+- Click "Next" to proceed to configuration
+
+**Connection Wizard - Step 2: Configure & Test**
+- Enter connection details:
+  - Host (database server address)
+  - Port (auto-populated based on type: PostgreSQL=5432, MySQL=3306, etc.)
+  - Database name
+  - Username & Password
+  - **Connection Name** (e.g., "Production PostgreSQL") - required and must be unique
+- Click "Test Connection" to validate credentials
+  - **Important**: Test does NOT save to Secret Manager yet (test-first pattern)
+- On success: "Save Connection" button appears
+- Click "Save Connection":
+  - Credentials saved to GCP Secret Manager
+  - Connection created in database
+  - Modal auto-closes, connections list reloads with new connection
+- **Status Indicator**: Green dot = working, Red dot = failed (auto-tested on page load)
 
 **Creating Your First ETL Job:**
 
 1. **Navigate to ETL Page**: Go to `/models/{id}/etl/` for your model
-2. **Click "+ ETL Job"** (in Jobs section): Opens the 5-step wizard modal
+2. **Click "+ ETL Job"** (in Jobs section): Opens the 3-step wizard modal
 
-**Step 1: Source Type & Job Name**
-- Select data source type (PostgreSQL, MySQL, BigQuery, etc.)
-- Enter unique job name (e.g., "Production Transactions")
-- **Option A**: Click "Use This Connection" on a saved connection card (if available)
-- **Option B**: Click "Create New Connection" to proceed with fresh connection
+**ETL Wizard - Step 1: Select Connection & Job Name**
+- Enter unique job name (e.g., "Daily Transactions Extract")
+- Select existing connection from list:
+  - Saved connections shown as cards with status indicators (green/red dot)
+  - Shows connection name, type, host, database
+  - Click "Use This Connection" button
+- If no connections exist: Create one first using "+ Connection" button
 
-**Step 2: Connection Configuration**
-- If reusing: Connection details auto-populate (read-only)
-- If new: Enter connection details (host, port, database, username, password)
-- Enter **Connection Name** (e.g., "Production PostgreSQL") - required and must be unique
-  - Auto-suggested based on source type + database name
-- Click "Test Connection" to validate credentials
-- On success: Draft ETL job automatically saved with connection link
-
-**Step 3: Table Selection**
-- Real tables fetched from database with metadata (row count, last updated)
+**ETL Wizard - Step 2: Table Selection**
+- Real tables fetched automatically from selected connection
+- Shows table metadata: name, row count, last updated timestamp
 - Select the table to extract
 - Click "Next"
 
-**Step 4: Sync Configuration**
-- Choose sync mode: Replace (full refresh), Append, or Incremental
+**ETL Wizard - Step 3: Configure & Review**
+- Choose sync mode: **Replace** (full refresh), **Append**, or **Incremental**
 - For Incremental: Select timestamp column for delta extraction
-- Set row limit (optional, for testing)
-- Configure schedule (manual, hourly, daily, weekly, monthly)
-
-**Step 5: Review & Create**
-- Review all configuration
-- Click "Create ETL Job" to finalize
-- Job is now enabled and ready to run
+- Configure schedule: Manual, Hourly, Daily, Weekly, or Monthly
+- Review summary:
+  - Job name
+  - Connection details
+  - Table name
+  - Sync mode
+  - Schedule
+- Click "Create ETL Job" to finalize:
+  - ETL job created atomically (no drafts)
+  - Connection.last_used_at updated
+  - Job enabled immediately
+  - Modal closes, jobs list reloads
 
 **Reusing Connections:**
 - Saved connections appear as cards at Step 1
@@ -479,22 +508,33 @@ The ETL page now features a 2-column layout:
    - Named connections (e.g., "Production PostgreSQL") for easy identification
    - Credentials stored once per connection (not duplicated per job)
    - Auto-suggest connection names based on source type + database name
+   - Connection.last_used_at tracking for usage monitoring
 3. **Configuration-Driven**: All extraction logic driven by Django database configuration
-4. **Wizard-Based UX**: 5-step guided process for non-technical users with real-time validation
+4. **Simplified Wizard UX**:
+   - **3-step ETL wizard** (down from 5 steps, 40% faster)
+   - **2-step connection wizard** with category tabs and tile-based selection
+   - Complete separation: Connections managed independently from ETL jobs
    - Job name uniqueness validated at Step 1 (prevents database errors)
-   - Connection name uniqueness validated at Step 2
-   - Draft ETL jobs saved at Step 2 (after connection test, before completion)
-5. **Security-First**: GCP Secret Manager for credential storage, never plain text in Django DB
-6. **Real Connection Testing**: Live database validation before saving (not fake success)
+   - Connection name uniqueness validated during connection creation
+5. **Atomic Creation Pattern**: ETL jobs created at final step (no drafts, cleaner flow)
+   - No intermediate saves until user completes wizard
+   - Connection.last_used_at updated on job creation
+   - Jobs enabled immediately after creation
+6. **Test-First Pattern**: Connection test BEFORE Secret Manager save
+   - User tests credentials first to validate
+   - "Save Connection" button only appears after successful test
+   - Prevents premature credential storage in Secret Manager
+7. **Security-First**: GCP Secret Manager for credential storage, never plain text in Django DB
+8. **Real Connection Testing**: Live database validation before saving (not fake success)
    - Auto-test saved connections in background when reusing
    - Fetches real table list with metadata during test
-7. **Connection Manager Utility**: `ml_platform/utils/connection_manager.py`
+9. **Connection Manager Utility**: `ml_platform/utils/connection_manager.py`
    - PostgreSQL, MySQL, BigQuery connection testing
    - Table metadata fetching (names, row counts, last updated)
    - Secret Manager integration for credential save/retrieve
-8. **No Airflow**: Uses Cloud Run + Cloud Scheduler for simplicity and cost ($10-20/month vs $120/month)
-9. **Per-Client Isolation**: Each client gets their own Cloud Scheduler + Cloud Run deployment
-10. **Same Container Image**: One Docker image deployed to all clients with different env vars
+10. **No Airflow**: Uses Cloud Run + Cloud Scheduler for simplicity and cost ($10-20/month vs $120/month)
+11. **Per-Client Isolation**: Each client gets their own Cloud Scheduler + Cloud Run deployment
+12. **Same Container Image**: One Docker image deployed to all clients with different env vars
 
 ## 🎯 Next Steps - Chapter-by-Chapter Implementation
 

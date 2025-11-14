@@ -226,7 +226,7 @@
             <div class="flex items-center justify-between">
                 <div>
                     <h3 class="text-base font-bold text-gray-900">Add ETL Job</h3>
-                    <p class="text-xs text-gray-600 mt-0.5">Step <span id="currentStep">1</span> of 5</p>
+                    <p class="text-xs text-gray-600 mt-0.5">Step <span id="currentStep">1</span> of 3</p>
                 </div>
             </div>
 
@@ -235,340 +235,39 @@
                 <div id="progress1" class="flex-1 h-1 bg-blue-600 rounded"></div>
                 <div id="progress2" class="flex-1 h-1 bg-gray-200 rounded"></div>
                 <div id="progress3" class="flex-1 h-1 bg-gray-200 rounded"></div>
-                <div id="progress4" class="flex-1 h-1 bg-gray-200 rounded"></div>
-                <div id="progress5" class="flex-1 h-1 bg-gray-200 rounded"></div>
             </div>
         </div>
 
         <!-- Modal Body -->
         <div class="px-5 py-3 flex-1 overflow-y-auto">
-            <!-- Step 1: Type Selection (Tab-Based) -->
+            <!-- Step 1: Select Connection & Job Name -->
             <div id="step1" class="wizard-step">
-                <h4 class="text-sm font-bold text-gray-900 mb-2">Select Connection Type</h4>
+                <h4 class="text-sm font-bold text-gray-900 mb-3">Select Connection</h4>
 
-                <!-- Category Tabs -->
+                <!-- Job Name Field -->
                 <div class="mb-3">
-                    <div class="grid grid-cols-4 gap-2">
-                        <button onclick="switchTab('saved')" id="tabSaved" class="px-3 py-2 text-xs font-semibold rounded-lg border border-green-600 bg-green-50 text-green-700 transition">
-                            Saved Connections
-                        </button>
-                        <button onclick="switchTab('relational')" id="tabRelational" class="px-3 py-2 text-xs font-semibold rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition">
-                            Relational Databases
-                        </button>
-                        <button onclick="switchTab('files')" id="tabFiles" class="px-3 py-2 text-xs font-semibold rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition">
-                            Flat Files
-                        </button>
-                        <button onclick="switchTab('nosql')" id="tabNoSQL" class="px-3 py-2 text-xs font-semibold rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition">
-                            NoSQL
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Saved Connections Tab Content -->
-                <div id="contentSaved" class="tab-content">
-                    <p class="text-xs text-gray-600 mb-2">Select a saved connection:</p>
-                    <div id="savedConnectionsList" class="space-y-2 h-36 overflow-y-auto border border-gray-200 rounded-lg p-2">
-                        <!-- Will be populated dynamically via JavaScript -->
-                        <p class="text-xs text-gray-500 text-center py-4">Loading connections...</p>
-                    </div>
-                    <div class="mt-2 flex justify-end">
-                        <button onclick="createNewConnection()" class="text-xs text-blue-600 hover:text-blue-800 font-semibold">
-                            <i class="fas fa-plus mr-1"></i>Create New Connection
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Relational Databases Tab Content -->
-                <div id="contentRelational" class="tab-content hidden">
-                    <p class="text-xs text-gray-600 mb-2">Select a relational database:</p>
-                    <div class="grid grid-cols-2 gap-2 h-36 overflow-y-auto border border-gray-200 rounded-lg p-2">
-                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
-                            <input type="radio" name="sourceType" value="postgresql" class="mr-1.5 scale-75" onchange="updateStep1NextButton()">
-                            <span class="text-xs">PostgreSQL</span>
-                        </label>
-                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
-                            <input type="radio" name="sourceType" value="mysql" class="mr-1.5 scale-75" onchange="updateStep1NextButton()">
-                            <span class="text-xs">MySQL</span>
-                        </label>
-                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
-                            <input type="radio" name="sourceType" value="oracle" class="mr-1.5 scale-75" onchange="updateStep1NextButton()">
-                            <span class="text-xs">Oracle Database</span>
-                        </label>
-                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
-                            <input type="radio" name="sourceType" value="sqlserver" class="mr-1.5 scale-75" onchange="updateStep1NextButton()">
-                            <span class="text-xs">SQL Server</span>
-                        </label>
-                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
-                            <input type="radio" name="sourceType" value="db2" class="mr-1.5 scale-75" onchange="updateStep1NextButton()">
-                            <span class="text-xs">IBM DB2</span>
-                        </label>
-                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
-                            <input type="radio" name="sourceType" value="redshift" class="mr-1.5 scale-75" onchange="updateStep1NextButton()">
-                            <span class="text-xs">Redshift</span>
-                        </label>
-                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
-                            <input type="radio" name="sourceType" value="synapse" class="mr-1.5 scale-75" onchange="updateStep1NextButton()">
-                            <span class="text-xs">Azure Synapse</span>
-                        </label>
-                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
-                            <input type="radio" name="sourceType" value="bigquery" class="mr-1.5 scale-75" onchange="updateStep1NextButton()">
-                            <span class="text-xs">BigQuery</span>
-                        </label>
-                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
-                            <input type="radio" name="sourceType" value="snowflake" class="mr-1.5 scale-75" onchange="updateStep1NextButton()">
-                            <span class="text-xs">Snowflake</span>
-                        </label>
-                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
-                            <input type="radio" name="sourceType" value="mariadb" class="mr-1.5 scale-75" onchange="updateStep1NextButton()">
-                            <span class="text-xs">MariaDB</span>
-                        </label>
-                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
-                            <input type="radio" name="sourceType" value="teradata" class="mr-1.5 scale-75" onchange="updateStep1NextButton()">
-                            <span class="text-xs">Teradata</span>
-                        </label>
-                    </div>
-                </div>
-
-                <!-- Flat Files Tab Content -->
-                <div id="contentFiles" class="tab-content hidden">
-                    <p class="text-xs text-gray-600 mb-2">Select a file format:</p>
-                    <div class="grid grid-cols-2 gap-2 h-36 overflow-y-auto border border-gray-200 rounded-lg p-2">
-                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
-                            <input type="radio" name="sourceType" value="csv" class="mr-1.5 scale-75" onchange="updateStep1NextButton()">
-                            <span class="text-xs">CSV Files</span>
-                        </label>
-                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
-                            <input type="radio" name="sourceType" value="parquet" class="mr-1.5 scale-75" onchange="updateStep1NextButton()">
-                            <span class="text-xs">Parquet Files</span>
-                        </label>
-                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
-                            <input type="radio" name="sourceType" value="json" class="mr-1.5 scale-75" onchange="updateStep1NextButton()">
-                            <span class="text-xs">JSON Files</span>
-                        </label>
-                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
-                            <input type="radio" name="sourceType" value="excel" class="mr-1.5 scale-75" onchange="updateStep1NextButton()">
-                            <span class="text-xs">Excel (XLS/XLSX)</span>
-                        </label>
-                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
-                            <input type="radio" name="sourceType" value="txt" class="mr-1.5 scale-75" onchange="updateStep1NextButton()">
-                            <span class="text-xs">Text Files</span>
-                        </label>
-                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
-                            <input type="radio" name="sourceType" value="avro" class="mr-1.5 scale-75" onchange="updateStep1NextButton()">
-                            <span class="text-xs">Avro Files</span>
-                        </label>
-                    </div>
-                </div>
-
-                <!-- NoSQL Tab Content -->
-                <div id="contentNoSQL" class="tab-content hidden">
-                    <p class="text-xs text-gray-600 mb-2">Select a NoSQL database:</p>
-                    <div class="grid grid-cols-2 gap-2 h-36 overflow-y-auto border border-gray-200 rounded-lg p-2">
-                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
-                            <input type="radio" name="sourceType" value="mongodb" class="mr-1.5 scale-75" onchange="updateStep1NextButton()">
-                            <span class="text-xs">MongoDB</span>
-                        </label>
-                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
-                            <input type="radio" name="sourceType" value="firestore" class="mr-1.5 scale-75" onchange="updateStep1NextButton()">
-                            <span class="text-xs">Firestore</span>
-                        </label>
-                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
-                            <input type="radio" name="sourceType" value="cassandra" class="mr-1.5 scale-75" onchange="updateStep1NextButton()">
-                            <span class="text-xs">Cassandra</span>
-                        </label>
-                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
-                            <input type="radio" name="sourceType" value="dynamodb" class="mr-1.5 scale-75" onchange="updateStep1NextButton()">
-                            <span class="text-xs">DynamoDB</span>
-                        </label>
-                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
-                            <input type="radio" name="sourceType" value="redis" class="mr-1.5 scale-75" onchange="updateStep1NextButton()">
-                            <span class="text-xs">Redis</span>
-                        </label>
-                    </div>
-                </div>
-
-                <!-- Job Name Field (Always Visible) -->
-                <div class="mt-3">
-                    <label class="block text-xs font-semibold text-gray-700 mb-1">Job Name</label>
-                    <input type="text" id="sourceName" placeholder="e.g., Production Transactions DB" class="w-full px-2.5 py-1.5 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" oninput="validateJobName()">
+                    <label class="block text-xs font-semibold text-gray-700 mb-1">ETL Job Name*</label>
+                    <input type="text" id="sourceName" placeholder="e.g., Daily Transactions Extract" class="w-full px-2.5 py-1.5 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" oninput="validateJobName()">
                     <p id="jobNameError" class="text-xs text-red-600 mt-0.5 invisible">Job name is required</p>
                 </div>
+
+                <!-- Saved Connections List -->
+                <div>
+                    <label class="block text-xs font-semibold text-gray-700 mb-1">Select Connection*</label>
+                    <div id="savedConnectionsList" class="space-y-2 h-64 overflow-y-auto border border-gray-200 rounded-lg p-3">
+                        <!-- Will be populated dynamically via JavaScript -->
+                        <p class="text-xs text-gray-500 text-center py-8">Loading connections...</p>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-2">
+                        <i class="fas fa-info-circle mr-1"></i>
+                        No connection yet? <a href="javascript:void(0)" onclick="closeWizard()" class="text-blue-600 hover:underline">Create one first</a> in the Connections section.
+                    </p>
+                </div>
             </div>
 
-            <!-- Step 2: Connection Configuration (Conditional) -->
+
+            <!-- Step 2: Table Selection -->
             <div id="step2" class="wizard-step hidden">
-                <h4 class="text-base font-bold text-gray-900 mb-3">Connection Configuration</h4>
-
-                <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
-                    <div class="flex items-center gap-2">
-                        <i class="fas fa-info-circle text-blue-600 text-sm"></i>
-                        <span class="font-semibold text-sm text-blue-900">Connection Type: <span id="selectedTypeDisplay"></span></span>
-                    </div>
-                </div>
-
-                <!-- Relational Database Form -->
-                <div id="formRelationalDB" class="connection-form hidden">
-                    <div class="space-y-3">
-                        <div class="grid grid-cols-2 gap-3">
-                            <div>
-                                <label class="block text-sm font-semibold text-gray-700 mb-1.5">Host</label>
-                                <input type="text" id="sourceHost" placeholder="db.example.com" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                            </div>
-                            <div>
-                                <label class="block text-sm font-semibold text-gray-700 mb-1.5">Port</label>
-                                <input type="number" id="sourcePort" placeholder="5432" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                            </div>
-                        </div>
-
-                        <div>
-                            <label class="block text-sm font-semibold text-gray-700 mb-1.5">Database Name</label>
-                            <input type="text" id="sourceDatabase" placeholder="analytics" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                        </div>
-
-                        <div class="grid grid-cols-2 gap-3">
-                            <div>
-                                <label class="block text-sm font-semibold text-gray-700 mb-1.5">Username</label>
-                                <input type="text" id="sourceUsername" placeholder="etl_user" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                            </div>
-                            <div>
-                                <label class="block text-sm font-semibold text-gray-700 mb-1.5">Password</label>
-                                <input type="password" id="sourcePassword" placeholder="••••••••" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                            </div>
-                        </div>
-
-                        <!-- Connection Name Section -->
-                        <div class="border-t border-gray-200 pt-3 mt-3">
-                            <label class="block text-sm font-semibold text-gray-700 mb-1.5">
-                                Connection Name <span class="text-red-500">*</span>
-                            </label>
-                            <input type="text" id="connectionName" placeholder="Production PostgreSQL" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                            <p class="text-xs text-gray-500 mt-1">This name will be saved for reuse in future ETL jobs</p>
-                            <div id="connectionNameError" class="text-xs text-red-600 mt-1 hidden"></div>
-                        </div>
-
-                        <div id="connectionTestContainer" class="bg-white border border-gray-300 rounded-lg p-3 mt-4 transition-colors">
-                            <div class="flex items-center gap-3">
-                                <button onclick="testConnectionWizard()" id="testConnectionBtn" class="btn btn-primary">
-                                    <span>Test Connection</span>
-                                </button>
-                                <span class="text-sm text-gray-600">Working connection is required</span>
-                                <span id="connectionStatus" class="ml-auto text-sm"></span>
-                            </div>
-                            <div id="connectionMessage" class="mt-2 text-sm hidden"></div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- File Path Form (CSV, Parquet, JSON, etc.) -->
-                <div id="formFilePath" class="connection-form hidden">
-                    <div class="space-y-3">
-                        <div>
-                            <label class="block text-sm font-semibold text-gray-700 mb-1.5">GCS Path</label>
-                            <input type="text" id="filePath" placeholder="gs://bucket-name/path/to/file.csv" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                            <p class="text-xs text-gray-500 mt-1">Full Google Cloud Storage path to your file</p>
-                        </div>
-
-                        <div id="filePathTestContainer" class="bg-white border border-gray-300 rounded-lg p-3 mt-4 transition-colors">
-                            <div class="flex items-center gap-3">
-                                <button onclick="testConnectionWizard()" id="testFilePathBtn" class="btn btn-primary">
-                                    <i class="fas fa-check"></i><span>Validate Path</span>
-                                </button>
-                                <span class="text-sm text-gray-600">Working connection is required</span>
-                                <span id="filePathStatus" class="ml-auto text-sm"></span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- BigQuery/Firestore Form -->
-                <div id="formBigQuery" class="connection-form hidden">
-                    <div class="space-y-3">
-                        <div>
-                            <label class="block text-sm font-semibold text-gray-700 mb-1.5">Project ID</label>
-                            <input type="text" id="bigqueryProject" placeholder="my-gcp-project" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                        </div>
-
-                        <div>
-                            <label class="block text-sm font-semibold text-gray-700 mb-1.5">Dataset (BigQuery) / Collection Path (Firestore)</label>
-                            <input type="text" id="bigqueryDataset" placeholder="raw_data" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                        </div>
-
-                        <div class="border-t border-gray-200 pt-3 mt-3">
-                            <label class="block text-sm font-semibold text-gray-700 mb-2">Service Account Authentication</label>
-
-                            <!-- Tab selector for service account method -->
-                            <div class="flex space-x-2 mb-3">
-                                <button onclick="switchServiceAccountMethod('paste')" id="btnPaste" class="flex-1 px-3 py-2 text-xs border-2 border-blue-600 bg-blue-50 text-blue-700 rounded-lg font-semibold">
-                                    Paste JSON
-                                </button>
-                                <button onclick="switchServiceAccountMethod('upload')" id="btnUpload" class="flex-1 px-3 py-2 text-xs border-2 border-gray-300 bg-white text-gray-700 rounded-lg font-semibold">
-                                    Upload File
-                                </button>
-                                <button onclick="switchServiceAccountMethod('path')" id="btnPath" class="flex-1 px-3 py-2 text-xs border-2 border-gray-300 bg-white text-gray-700 rounded-lg font-semibold">
-                                    GCS Path
-                                </button>
-                            </div>
-
-                            <!-- Paste JSON -->
-                            <div id="serviceAccountPaste" class="service-account-method">
-                                <textarea id="serviceAccountJson" rows="4" placeholder='{"type": "service_account", ...}' class="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono"></textarea>
-                                <p class="text-xs text-gray-500 mt-1">Paste the contents of your service account JSON key</p>
-                            </div>
-
-                            <!-- Upload File -->
-                            <div id="serviceAccountUpload" class="service-account-method hidden">
-                                <input type="file" id="serviceAccountFile" accept=".json" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg">
-                                <p class="text-xs text-gray-500 mt-1">Upload your service account JSON key file</p>
-                            </div>
-
-                            <!-- GCS Path -->
-                            <div id="serviceAccountPath" class="service-account-method hidden">
-                                <input type="text" id="serviceAccountFilePath" placeholder="gs://bucket-name/service-account.json" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                <p class="text-xs text-gray-500 mt-1">GCS path to your service account JSON key</p>
-                            </div>
-                        </div>
-
-                        <div id="bigqueryTestContainer" class="bg-white border border-gray-300 rounded-lg p-3 mt-4 transition-colors">
-                            <div class="flex items-center gap-3">
-                                <button onclick="testConnectionWizard()" id="testBigQueryBtn" class="btn btn-primary">
-                                    <span>Test Connection</span>
-                                </button>
-                                <span class="text-sm text-gray-600">Working connection is required</span>
-                                <span id="bigqueryConnectionStatus" class="ml-auto text-sm"></span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- NoSQL Form (MongoDB, Redis, etc.) -->
-                <div id="formNoSQL" class="connection-form hidden">
-                    <div class="space-y-3">
-                        <div>
-                            <label class="block text-sm font-semibold text-gray-700 mb-1.5">Connection String</label>
-                            <textarea id="connectionString" rows="2" placeholder="mongodb://username:password@host:port/database" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono"></textarea>
-                            <p class="text-xs text-gray-500 mt-1">Full connection string for your NoSQL database</p>
-                        </div>
-
-                        <div>
-                            <label class="block text-sm font-semibold text-gray-700 mb-1.5">Database Name</label>
-                            <input type="text" id="nosqlDatabase" placeholder="mydb" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                        </div>
-
-                        <div id="nosqlTestContainer" class="bg-white border border-gray-300 rounded-lg p-3 mt-4 transition-colors">
-                            <div class="flex items-center gap-3">
-                                <button onclick="testConnectionWizard()" id="testNoSQLBtn" class="btn btn-primary">
-                                    <span>Test Connection</span>
-                                </button>
-                                <span class="text-sm text-gray-600">Working connection is required</span>
-                                <span id="nosqlConnectionStatus" class="ml-auto text-sm"></span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Step 3: Table Selection -->
-            <div id="step3" class="wizard-step hidden">
                 <h4 class="text-base font-bold text-gray-900 mb-3">Select Table</h4>
 
                 <p class="text-sm text-gray-600 mb-3">Choose one table to extract. You can create additional ETL jobs for other tables.</p>
@@ -617,57 +316,21 @@
                 </div>
             </div>
 
-            <!-- Step 3: Table Configuration -->
+            <!-- Step 3: Schedule & Configuration -->
             <div id="step3" class="wizard-step hidden">
-                <h4 class="text-base font-bold text-gray-900 mb-3">Configure Table Sync</h4>
+                <h4 class="text-base font-bold text-gray-900 mb-3">Configure & Schedule</h4>
 
                 <div class="space-y-3">
-                    <div class="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                        <div class="flex items-center gap-2 mb-1">
-                            <i class="fas fa-info-circle text-blue-600 text-sm"></i>
-                            <span class="font-semibold text-sm text-blue-900">Source Table: <span id="selectedTableName"></span></span>
-                        </div>
-                        <div class="text-xs text-blue-800">
-                            Destination: raw_data.<span id="destTableName"></span>
-                        </div>
-                    </div>
-
                     <div>
                         <label class="block text-sm font-semibold text-gray-700 mb-1.5">Sync Mode</label>
-                        <select id="syncMode" onchange="toggleIncrementalFields()" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                            <option value="replace">Full Refresh - Replace all data</option>
-                            <option value="append">Append - Only add new rows</option>
-                            <option value="incremental">Incremental - Sync based on timestamp column</option>
+                        <select id="syncMode" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <option value="replace">Replace All (Full Refresh)</option>
+                            <option value="append">Append New Records</option>
+                            <option value="incremental">Incremental (Date-based)</option>
                         </select>
-                        <p class="text-xs text-gray-500 mt-1">
-                            <span id="syncModeHelp">Deletes all existing data and reloads from source</span>
-                        </p>
+                        <p class="text-xs text-gray-500 mt-1">Choose how data should be synced to BigQuery</p>
                     </div>
 
-                    <div id="incrementalFields" class="hidden">
-                        <label class="block text-sm font-semibold text-gray-700 mb-1.5">Timestamp Column</label>
-                        <select id="incrementalColumn" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                            <option value="updated_at">updated_at</option>
-                            <option value="created_at">created_at</option>
-                            <option value="timestamp">timestamp</option>
-                            <option value="last_modified">last_modified</option>
-                        </select>
-                        <p class="text-xs text-gray-500 mt-1">Column used to identify new/updated records</p>
-                    </div>
-
-                    <div>
-                        <label class="block text-sm font-semibold text-gray-700 mb-1.5">Row Limit (Optional - for testing)</label>
-                        <input type="number" id="rowLimit" placeholder="Leave empty for no limit" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                        <p class="text-xs text-gray-500 mt-1">Useful for testing - extract only first N rows</p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Step 4: Schedule & Summary -->
-            <div id="step4" class="wizard-step hidden">
-                <h4 class="text-base font-bold text-gray-900 mb-3">Schedule & Deploy</h4>
-
-                <div class="space-y-3">
                     <div>
                         <label class="block text-sm font-semibold text-gray-700 mb-1.5">Schedule</label>
                         <select id="scheduleType" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
@@ -739,6 +402,196 @@
         </div>
     </div>
 </div>
+
+<!-- Standalone Connection Creation Modal (2-Step Wizard) -->
+<div id="createConnectionModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-[100] flex items-center justify-center p-4 pt-20">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-h-[75vh] min-h-[500px] flex flex-col" style="max-width: 634px;">
+        <!-- Modal Header -->
+        <div class="px-5 py-3 border-b border-gray-200 sticky top-0 bg-white z-10 rounded-t-xl">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h3 class="text-base font-bold text-gray-900">Create Connection</h3>
+                    <p class="text-xs text-gray-600 mt-0.5">Step <span id="connModalStep">1</span> of 2</p>
+                </div>
+            </div>
+
+            <!-- Progress Bar -->
+            <div class="mt-2 flex gap-1.5">
+                <div id="connProgress1" class="flex-1 h-1 bg-blue-600 rounded"></div>
+                <div id="connProgress2" class="flex-1 h-1 bg-gray-200 rounded"></div>
+            </div>
+        </div>
+
+        <!-- Modal Body -->
+        <div class="px-5 py-3 flex-1 overflow-y-auto">
+            <!-- Connection Step 1: Select Type -->
+            <div id="connStep1" class="connection-modal-step">
+                <h4 class="text-sm font-bold text-gray-900 mb-2">Select Connection Type</h4>
+
+                <!-- Category Tabs -->
+                <div class="mb-3">
+                    <div class="grid grid-cols-3 gap-2">
+                        <button onclick="switchConnTab('relational')" id="connTabRelational" class="px-3 py-2 text-xs font-semibold rounded-lg border border-blue-600 bg-blue-50 text-blue-700 transition">
+                            Relational Databases
+                        </button>
+                        <button onclick="switchConnTab('files')" id="connTabFiles" class="px-3 py-2 text-xs font-semibold rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition">
+                            Flat Files
+                        </button>
+                        <button onclick="switchConnTab('nosql')" id="connTabNoSQL" class="px-3 py-2 text-xs font-semibold rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition">
+                            NoSQL
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Relational Databases Tab Content -->
+                <div id="connContentRelational" class="conn-tab-content">
+                    <p class="text-xs text-gray-600 mb-2">Select a relational database:</p>
+                    <div class="grid grid-cols-2 gap-2 h-36 overflow-y-auto border border-gray-200 rounded-lg p-2">
+                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
+                            <input type="radio" name="connSourceType" value="postgresql" class="mr-1.5 scale-75">
+                            <span class="text-xs">PostgreSQL</span>
+                        </label>
+                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
+                            <input type="radio" name="connSourceType" value="mysql" class="mr-1.5 scale-75">
+                            <span class="text-xs">MySQL</span>
+                        </label>
+                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
+                            <input type="radio" name="connSourceType" value="redshift" class="mr-1.5 scale-75">
+                            <span class="text-xs">Amazon Redshift</span>
+                        </label>
+                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
+                            <input type="radio" name="connSourceType" value="bigquery" class="mr-1.5 scale-75">
+                            <span class="text-xs">BigQuery</span>
+                        </label>
+                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
+                            <input type="radio" name="connSourceType" value="snowflake" class="mr-1.5 scale-75">
+                            <span class="text-xs">Snowflake</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Flat Files Tab Content -->
+                <div id="connContentFiles" class="conn-tab-content hidden">
+                    <p class="text-xs text-gray-600 mb-2">Select a file format:</p>
+                    <div class="grid grid-cols-2 gap-2 h-36 overflow-y-auto border border-gray-200 rounded-lg p-2">
+                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
+                            <input type="radio" name="connSourceType" value="csv" class="mr-1.5 scale-75">
+                            <span class="text-xs">CSV Files</span>
+                        </label>
+                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
+                            <input type="radio" name="connSourceType" value="parquet" class="mr-1.5 scale-75">
+                            <span class="text-xs">Parquet Files</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- NoSQL Tab Content -->
+                <div id="connContentNoSQL" class="conn-tab-content hidden">
+                    <p class="text-xs text-gray-600 mb-2">Select a NoSQL database:</p>
+                    <div class="grid grid-cols-2 gap-2 h-36 overflow-y-auto border border-gray-200 rounded-lg p-2">
+                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
+                            <input type="radio" name="connSourceType" value="mongodb" class="mr-1.5 scale-75">
+                            <span class="text-xs">MongoDB</span>
+                        </label>
+                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
+                            <input type="radio" name="connSourceType" value="firestore" class="mr-1.5 scale-75">
+                            <span class="text-xs">Firestore</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Connection Step 2: Configure Connection -->
+            <div id="connStep2" class="connection-modal-step hidden">
+                <h4 class="text-base font-bold text-gray-900 mb-3">Connection Configuration</h4>
+
+                <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+                    <div class="flex items-center gap-2">
+                        <i class="fas fa-info-circle text-blue-600 text-sm"></i>
+                        <span class="font-semibold text-sm text-blue-900">Connection Type: <span id="connSelectedTypeDisplay"></span></span>
+                    </div>
+                </div>
+
+                <!-- Relational Database Form -->
+                <div id="connFormRelationalDB" class="conn-form hidden">
+                    <div class="space-y-3">
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-sm font-semibold text-gray-700 mb-1.5">Host</label>
+                                <input type="text" id="connHost" placeholder="db.example.com" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-semibold text-gray-700 mb-1.5">Port</label>
+                                <input type="number" id="connPort" placeholder="5432" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-1.5">Database Name</label>
+                            <input type="text" id="connDatabase" placeholder="analytics" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-sm font-semibold text-gray-700 mb-1.5">Username</label>
+                                <input type="text" id="connUsername" placeholder="etl_user" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-semibold text-gray-700 mb-1.5">Password</label>
+                                <input type="password" id="connPassword" placeholder="••••••••" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            </div>
+                        </div>
+
+                        <!-- Connection Name Section -->
+                        <div class="border-t border-gray-200 pt-3 mt-3">
+                            <label class="block text-sm font-semibold text-gray-700 mb-1.5">
+                                Connection Name <span class="text-red-500">*</span>
+                            </label>
+                            <input type="text" id="connName" placeholder="Production PostgreSQL" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <p class="text-xs text-gray-500 mt-1">This name will be saved for reuse in ETL jobs</p>
+                        </div>
+
+                        <div id="connTestContainer" class="bg-white border border-gray-300 rounded-lg p-3 mt-4 transition-colors">
+                            <div class="flex items-center gap-3">
+                                <button onclick="testConnectionStandalone()" id="connTestBtn" class="btn btn-primary">
+                                    <span>Test Connection</span>
+                                </button>
+                                <span class="text-sm text-gray-600">Test first, then save</span>
+                                <span id="connStatus" class="ml-auto text-sm"></span>
+                            </div>
+                            <div id="connMessage" class="mt-2 text-sm hidden"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Other forms (Files, NoSQL) can be added similarly -->
+            </div>
+        </div>
+
+        <!-- Modal Footer -->
+        <div class="px-5 py-2.5 border-t border-gray-200 sticky bottom-0 bg-white rounded-b-xl">
+            <div class="flex items-center justify-between">
+                <div class="flex gap-2">
+                    <button id="connBackBtn" onclick="connPreviousStep()" class="btn btn-secondary" style="width: 142px; height: 38px;" disabled>
+                        <i class="fas fa-arrow-left"></i>
+                    </button>
+                    <button id="connNextBtn" onclick="connNextStep()" class="btn btn-secondary" style="width: 142px; height: 38px;" disabled>
+                        <i class="fas fa-arrow-right"></i>
+                    </button>
+                </div>
+
+                <button onclick="closeCreateConnectionModal()" class="btn btn-danger" style="width: 142px; height: 38px;">
+                    <span>Cancel</span>
+                </button>
+
+                <button id="connSaveBtn" onclick="saveConnectionStandalone()" class="btn btn-success hidden" style="width: 142px; height: 38px;">
+                    <i class="fas fa-save"></i><span>Save Connection</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 
 <script>
 function getCookie(name) {
@@ -1209,20 +1062,312 @@ function autoTestConnections(connections) {
     });
 }
 
+// ==================================================
+// STANDALONE CONNECTION MODAL (2-Step Wizard)
+// ==================================================
+
+let connCurrentStep = 1;
+let connSelectedType = null;
+let connTestedSuccessfully = false;
+
 function openCreateConnectionModal() {
-    // Set wizard to standalone mode
-    window.wizardStandaloneMode = true;
+    console.log('openCreateConnectionModal called');
+    console.log('connCurrentStep:', connCurrentStep);
+    console.log('Modal element:', document.getElementById('createConnectionModal'));
+    // Reset state
+    connCurrentStep = 1;
+    connSelectedType = null;
+    connTestedSuccessfully = false;
 
-    // Reset wizard to Step 2 (connection details)
-    resetWizard();
-    currentWizardStep = 2;
+    // Reset form fields
+    document.querySelectorAll('input[name="connSourceType"]').forEach(radio => radio.checked = false);
+    if (document.getElementById('connName')) document.getElementById('connName').value = '';
+    if (document.getElementById('connHost')) document.getElementById('connHost').value = '';
+    if (document.getElementById('connPort')) document.getElementById('connPort').value = '';
+    if (document.getElementById('connDatabase')) document.getElementById('connDatabase').value = '';
+    if (document.getElementById('connUsername')) document.getElementById('connUsername').value = '';
+    if (document.getElementById('connPassword')) document.getElementById('connPassword').value = '';
 
-    // Clear connection name field
-    document.getElementById('connectionName').value = '';
+    // Reset test status
+    if (document.getElementById('connStatus')) document.getElementById('connStatus').textContent = '';
+    if (document.getElementById('connMessage')) document.getElementById('connMessage').classList.add('hidden');
 
-    // Show modal at Step 2
-    showAddSourceModal(2);
+    // Show Step 1
+    connShowStep(1);
+
+    // Show modal
+    document.getElementById('createConnectionModal').classList.remove('hidden');
 }
+
+function closeCreateConnectionModal() {
+    document.getElementById('createConnectionModal').classList.add('hidden');
+}
+
+function switchConnTab(tab) {
+    // Update tab buttons
+    const tabs = ['relational', 'files', 'nosql'];
+    tabs.forEach(t => {
+        const btnId = 'connTab' + t.charAt(0).toUpperCase() + t.slice(1);
+        const btn = document.getElementById(btnId);
+        if (btn) {
+            if (t === tab) {
+                btn.classList.remove('border-gray-300', 'bg-white', 'text-gray-700');
+                btn.classList.add('border-blue-600', 'bg-blue-50', 'text-blue-700');
+            } else {
+                btn.classList.remove('border-blue-600', 'bg-blue-50', 'text-blue-700');
+                btn.classList.add('border-gray-300', 'bg-white', 'text-gray-700');
+            }
+        }
+
+        // Update content visibility
+        const contentId = 'connContent' + t.charAt(0).toUpperCase() + t.slice(1);
+        const content = document.getElementById(contentId);
+        if (content) {
+            if (t === tab) {
+                content.classList.remove('hidden');
+            } else {
+                content.classList.add('hidden');
+            }
+        }
+    });
+}
+
+function connNextStep() {
+    if (connCurrentStep === 1) {
+        // Check if source type is selected
+        const selectedRadio = document.querySelector('input[name="connSourceType"]:checked');
+        if (!selectedRadio) {
+            alert('Please select a connection type');
+            return;
+        }
+
+        connSelectedType = selectedRadio.value;
+
+        // Move to Step 2
+        connCurrentStep = 2;
+        connShowStep(2);
+        connShowForm(connSelectedType);
+    }
+}
+
+function connPreviousStep() {
+    if (connCurrentStep === 2) {
+        connCurrentStep = 1;
+        connShowStep(1);
+    }
+}
+
+function connShowStep(step) {
+    // Hide all steps
+    document.querySelectorAll('.connection-modal-step').forEach(s => s.classList.add('hidden'));
+
+    // Show current step
+    const stepEl = document.getElementById('connStep' + step);
+    if (stepEl) stepEl.classList.remove('hidden');
+
+    // Update step indicator
+    const indicator = document.getElementById('connModalStep');
+    if (indicator) indicator.textContent = step;
+
+    // Update progress bar
+    for (let i = 1; i <= 2; i++) {
+        const bar = document.getElementById('connProgress' + i);
+        if (bar) {
+            if (i <= step) {
+                bar.classList.remove('bg-gray-200');
+                bar.classList.add('bg-blue-600');
+            } else {
+                bar.classList.remove('bg-blue-600');
+                bar.classList.add('bg-gray-200');
+            }
+        }
+    }
+
+    // Update buttons
+    const backBtn = document.getElementById('connBackBtn');
+    const nextBtn = document.getElementById('connNextBtn');
+    const saveBtn = document.getElementById('connSaveBtn');
+
+    if (step === 1) {
+        if (backBtn) backBtn.disabled = true;
+        if (nextBtn) {
+            nextBtn.disabled = false;
+            nextBtn.classList.remove('hidden');
+        }
+        if (saveBtn) saveBtn.classList.add('hidden');
+    } else if (step === 2) {
+        if (backBtn) backBtn.disabled = false;
+        if (nextBtn) nextBtn.classList.add('hidden');
+        if (saveBtn) saveBtn.classList.add('hidden'); // Only show after successful test
+    }
+}
+
+function connShowForm(sourceType) {
+    // Hide all forms
+    document.querySelectorAll('.conn-form').forEach(form => form.classList.add('hidden'));
+
+    // Update type display
+    const typeNames = {
+        'postgresql': 'PostgreSQL',
+        'mysql': 'MySQL',
+        'redshift': 'Amazon Redshift',
+        'bigquery': 'Google BigQuery',
+        'snowflake': 'Snowflake',
+        'mongodb': 'MongoDB',
+        'firestore': 'Firestore',
+        'csv': 'CSV Files',
+        'parquet': 'Parquet Files'
+    };
+    const displayEl = document.getElementById('connSelectedTypeDisplay');
+    if (displayEl) displayEl.textContent = typeNames[sourceType] || sourceType;
+
+    // Set default ports and show appropriate form
+    const portField = document.getElementById('connPort');
+    const relationalForm = document.getElementById('connFormRelationalDB');
+
+    if (['postgresql', 'mysql', 'redshift'].includes(sourceType)) {
+        if (portField) {
+            if (sourceType === 'postgresql') portField.value = '5432';
+            else if (sourceType === 'mysql') portField.value = '3306';
+            else if (sourceType === 'redshift') portField.value = '5439';
+        }
+        if (relationalForm) relationalForm.classList.remove('hidden');
+    }
+}
+
+async function testConnectionStandalone() {
+    const type = connSelectedType;
+    const host = document.getElementById('connHost').value.trim();
+    const port = document.getElementById('connPort').value;
+    const database = document.getElementById('connDatabase').value.trim();
+    const username = document.getElementById('connUsername').value.trim();
+    const password = document.getElementById('connPassword').value;
+
+    if (!host || !port || !database || !username || !password) {
+        alert('Please fill all connection fields');
+        return;
+    }
+
+    const statusEl = document.getElementById('connStatus');
+    const messageEl = document.getElementById('connMessage');
+    const testBtn = document.getElementById('connTestBtn');
+    const saveBtn = document.getElementById('connSaveBtn');
+
+    if (statusEl) statusEl.innerHTML = '<span class="text-blue-600"><i class="fas fa-spinner fa-spin mr-1"></i>Testing...</span>';
+    if (messageEl) messageEl.classList.add('hidden');
+    if (testBtn) testBtn.disabled = true;
+    connTestedSuccessfully = false;
+    if (saveBtn) saveBtn.classList.add('hidden');
+
+    try {
+        const response = await fetch('/api/models/' + {{ model.id }} + '/connections/test-wizard/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken'),
+            },
+            body: JSON.stringify({
+                source_type: type,
+                host: host,
+                port: parseInt(port),
+                database: database,
+                username: username,
+                password: password,
+            }),
+        });
+
+        const data = await response.json();
+
+        if (data.status === 'success') {
+            if (statusEl) statusEl.innerHTML = '<span class="text-green-600"><i class="fas fa-check-circle mr-1"></i>Success</span>';
+            if (messageEl) {
+                messageEl.innerHTML = '<span class="text-green-600">' + data.message + '</span>';
+                messageEl.classList.remove('hidden');
+            }
+            connTestedSuccessfully = true;
+            if (saveBtn) saveBtn.classList.remove('hidden'); // Show save button after successful test
+        } else {
+            if (statusEl) statusEl.innerHTML = '<span class="text-red-600"><i class="fas fa-times-circle mr-1"></i>Failed</span>';
+            if (messageEl) {
+                messageEl.innerHTML = '<span class="text-red-600">' + data.message + '</span>';
+                messageEl.classList.remove('hidden');
+            }
+            connTestedSuccessfully = false;
+        }
+    } catch (error) {
+        if (statusEl) statusEl.innerHTML = '<span class="text-red-600"><i class="fas fa-times-circle mr-1"></i>Error</span>';
+        if (messageEl) {
+            messageEl.innerHTML = '<span class="text-red-600">Error: ' + error.message + '</span>';
+            messageEl.classList.remove('hidden');
+        }
+        connTestedSuccessfully = false;
+    } finally {
+        if (testBtn) testBtn.disabled = false;
+    }
+}
+
+async function saveConnectionStandalone() {
+    if (!connTestedSuccessfully) {
+        alert('Please test the connection first');
+        return;
+    }
+
+    const connectionName = document.getElementById('connName').value.trim();
+    if (!connectionName) {
+        alert('Please enter a connection name');
+        return;
+    }
+
+    const connectionData = {
+        name: connectionName,
+        source_type: connSelectedType,
+        host: document.getElementById('connHost').value.trim(),
+        port: parseInt(document.getElementById('connPort').value),
+        database: document.getElementById('connDatabase').value.trim(),
+        username: document.getElementById('connUsername').value.trim(),
+        password: document.getElementById('connPassword').value,
+    };
+
+    const saveBtn = document.getElementById('connSaveBtn');
+    if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving...';
+    }
+
+    try {
+        const response = await fetch('/api/models/' + {{ model.id }} + '/connections/create-standalone/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken'),
+            },
+            body: JSON.stringify(connectionData),
+        });
+
+        const data = await response.json();
+
+        if (data.status === 'success') {
+            alert('Connection created successfully!');
+            closeCreateConnectionModal();
+            location.reload(); // Reload to show new connection
+        } else {
+            alert('Error: ' + data.message);
+            if (saveBtn) {
+                saveBtn.disabled = false;
+                saveBtn.innerHTML = '<i class="fas fa-save"></i><span>Save Connection</span>';
+            }
+        }
+    } catch (error) {
+        alert('Error saving connection: ' + error.message);
+        if (saveBtn) {
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = '<i class="fas fa-save"></i><span>Save Connection</span>';
+        }
+    }
+}
+
+// ==================================================
+// STANDALONE CONNECTION MODAL (2-Step Wizard)
 
 function openEditConnectionModal(connectionId) {
     // Set wizard to standalone mode
@@ -1394,6 +1539,8 @@ function showLoadingError(container, errorMessage) {
 }
 
 function showAddSourceModal(resumeStep = 1) {
+    console.log('showAddSourceModal called with resumeStep:', resumeStep);
+    console.log('Modal element:', document.getElementById('addSourceModal'));
     document.getElementById('addSourceModal').classList.remove('hidden');
 
     // Set modal title based on mode
@@ -1583,85 +1730,57 @@ function showStep(step) {
     // Update buttons
     const backButton = document.getElementById('backButton');
     const nextButton = document.getElementById('nextButton');
+    const createButton = document.getElementById('createButton');
 
-    // Back button: always visible, disabled on step 1
+    // Step 1: Connection Selection
     if (step === 1) {
         if (backButton) backButton.disabled = true;
-        // Update next button state based on validation
         updateStep1NextButton();
-    } else if (step === 2) {
+        if (nextButton) {
+            nextButton.classList.remove('hidden');
+            nextButton.innerHTML = '<i class="fas fa-arrow-right"></i>';
+        }
+        if (createButton) createButton.classList.add('hidden');
+    }
+
+    // Step 2: Table Selection
+    else if (step === 2) {
         if (backButton) backButton.disabled = false;
-        // For step 2, next button is disabled until connection is tested
-        if (nextButton) nextButton.disabled = !window.connectionTested;
-    } else {
+        if (nextButton) {
+            nextButton.disabled = false;
+            nextButton.classList.remove('hidden');
+            nextButton.innerHTML = '<i class="fas fa-arrow-right"></i>';
+        }
+        if (createButton) createButton.classList.add('hidden');
+    }
+
+    // Step 3: Schedule & Create (Final Step)
+    else if (step === 3) {
         if (backButton) backButton.disabled = false;
-        // Enable next button for other steps
-        if (nextButton) nextButton.disabled = false;
-    }
-
-    // Next button: hide on last step, always show just icon
-    if (nextButton) {
-        nextButton.classList.toggle('hidden', step === 5);
-        nextButton.innerHTML = '<i class="fas fa-arrow-right"></i>';
-    }
-
-    const createButton = document.getElementById('createButton');
-    if (createButton) {
-        createButton.classList.toggle('hidden', step !== 5);
-    }
-
-    // Update create button text based on edit mode
-    if (step === 5 && createButton) {
-        if (wizardEditMode) {
-            createButton.innerHTML = '<i class="fas fa-check"></i><span>Update</span>';
-        } else {
-            createButton.innerHTML = '<i class="fas fa-check"></i><span>Create</span>';
+        if (nextButton) nextButton.classList.add('hidden');
+        if (createButton) {
+            createButton.classList.remove('hidden');
+            createButton.onclick = createETLJob;
+            if (wizardEditMode) {
+                createButton.innerHTML = '<i class="fas fa-check"></i><span>Update Job</span>';
+            } else {
+                createButton.innerHTML = '<i class="fas fa-check"></i><span>Create ETL Job</span>';
+            }
         }
-    }
-
-    // Show appropriate connection form in Step 2
-    if (step === 2) {
-        showConnectionForm();
-    }
-
-    // Populate Step 3 with real tables from connection test
-    if (step === 3) {
-        // In edit mode, fetch tables from the existing connection
-        if (wizardEditMode && draftSourceId) {
-            console.log('Edit mode: fetching tables for existing connection');
-            fetchTablesForEdit();
-        } else {
-            // Create mode: use tables from memory (set by testConnectionWizard)
-            populateTablesList();
-        }
-    }
-
-    // Populate step 4 with selected table
-    if (step === 4) {
-        const selectedTable = document.querySelector('input[name="selectedTable"]:checked');
-        if (selectedTable) {
-            const selectedTableNameEl = document.getElementById('selectedTableName');
-            const destTableNameEl = document.getElementById('destTableName');
-            if (selectedTableNameEl) selectedTableNameEl.textContent = selectedTable.value;
-            if (destTableNameEl) destTableNameEl.textContent = selectedTable.value;
-        }
-    }
-
-    // Populate step 5 summary
-    if (step === 5) {
-        populateSummary();
     }
 }
 
 function updateProgress(step) {
-    for (let i = 1; i <= 5; i++) {
+    for (let i = 1; i <= 3; i++) {
         const progressBar = document.getElementById(`progress${i}`);
-        if (i <= step) {
-            progressBar.classList.remove('bg-gray-200');
-            progressBar.classList.add('bg-blue-600');
-        } else {
-            progressBar.classList.remove('bg-blue-600');
-            progressBar.classList.add('bg-gray-200');
+        if (progressBar) {
+            if (i <= step) {
+                progressBar.classList.remove('bg-gray-200');
+                progressBar.classList.add('bg-blue-600');
+            } else {
+                progressBar.classList.remove('bg-blue-600');
+                progressBar.classList.add('bg-gray-200');
+            }
         }
     }
 }
@@ -1673,98 +1792,215 @@ function nextStep() {
         return;
     }
 
-    // Validation
+    // STEP 1 -> STEP 2: Validate connection and job name, fetch tables
     if (currentWizardStep === 1) {
-        // In edit mode, skip name validation (we're editing existing job)
-        if (wizardEditMode) {
-            console.log('Edit mode: skipping name validation at step 1');
-            proceedFromStep1();
-            return;
-        }
-
         // Check job name is filled
         const jobName = document.getElementById('sourceName').value.trim();
         if (!jobName) {
-            // Trigger visual feedback
-            validateJobName();
+            document.getElementById('jobNameError').textContent = 'Job name is required';
+            document.getElementById('jobNameError').classList.remove('invisible');
+            document.getElementById('sourceName').classList.add('border-red-500');
             return;
         }
 
-        // Check if job name already exists (only for new jobs)
-        fetch(`/api/models/{{ model.id }}/etl/check-name/`, {
+        // Check connection is selected
+        if (!window.selectedConnectionId) {
+            alert('Please select a connection');
+            return;
+        }
+
+        // Check if job name already exists (only for new jobs, not edit mode)
+        if (!wizardEditMode) {
+            fetch(`/api/models/{{ model.id }}/etl/check-name/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrftoken
+                },
+                body: JSON.stringify({ name: jobName })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.exists) {
+                    document.getElementById('jobNameError').textContent = data.message;
+                    document.getElementById('jobNameError').classList.remove('invisible');
+                    document.getElementById('sourceName').classList.add('border-red-500');
+                    return;
+                }
+
+                // Name is unique, proceed to Step 2 and fetch tables
+                proceedToStep2();
+            })
+            .catch(error => {
+                console.error('Error checking job name:', error);
+                // Continue anyway if check fails
+                proceedToStep2();
+            });
+        } else {
+            // Edit mode - skip name check
+            proceedToStep2();
+        }
+
+        return;
+    }
+
+    // STEP 2 -> STEP 3: Validate table selection
+    if (currentWizardStep === 2) {
+        const selectedTable = document.querySelector('input[name="selectedTable"]:checked');
+        if (!selectedTable) {
+            alert('Please select a table to extract');
+            return;
+        }
+
+        // Store selected table
+        window.selectedTableName = selectedTable.value;
+
+        // Proceed to Step 3
+        currentWizardStep = 3;
+        showStep(3);
+        updateSummary();
+        return;
+    }
+
+    // STEP 3: This is the final step, button should say "Create ETL Job"
+    if (currentWizardStep === 3) {
+        // This should be handled by the "Create ETL Job" button, not Next
+        return;
+    }
+}
+
+function proceedToStep2() {
+    // Fetch tables for the selected connection
+    fetchTablesForConnection(window.selectedConnectionId);
+
+    // Move to Step 2
+    currentWizardStep = 2;
+    showStep(2);
+}
+
+function fetchTablesForConnection(connectionId) {
+    const listContainer = document.querySelector('#step2 .space-y-2');
+    if (!listContainer) return;
+
+    listContainer.innerHTML = '<p class="text-sm text-gray-500 text-center py-4"><i class="fas fa-spinner fa-spin mr-2"></i>Loading tables...</p>';
+    isLoadingTables = true;
+
+    fetch(`/api/connections/${connectionId}/test-and-fetch-tables/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrftoken
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        isLoadingTables = false;
+
+        if (data.status === 'success' && data.tables) {
+            if (data.tables.length === 0) {
+                listContainer.innerHTML = '<p class="text-sm text-gray-500 text-center py-4">No tables found in this database</p>';
+                return;
+            }
+
+            // Render table list
+            listContainer.innerHTML = data.tables.map(table => `
+                <label class="flex items-center p-2.5 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
+                    <input type="radio" name="selectedTable" value="${table.table_name}" class="mr-2.5">
+                    <div class="flex-1">
+                        <div class="text-sm font-semibold text-gray-900">${table.table_name}</div>
+                        ${table.row_count ? `<div class="text-xs text-gray-500">${table.row_count.toLocaleString()} rows</div>` : ''}
+                    </div>
+                </label>
+            `).join('');
+        } else {
+            listContainer.innerHTML = `<p class="text-sm text-red-600 text-center py-4">Error: ${data.message || 'Failed to load tables'}</p>`;
+        }
+    })
+    .catch(error => {
+        isLoadingTables = false;
+        listContainer.innerHTML = `<p class="text-sm text-red-600 text-center py-4">Error: ${error.message}</p>`;
+    });
+}
+
+function updateSummary() {
+    // Update summary section in Step 3
+    const connection = window.selectedConnection;
+    if (connection) {
+        document.getElementById('summaryConnection').textContent = connection.name || 'N/A';
+    }
+
+    document.getElementById('summarySourceTable').textContent = window.selectedTableName || 'N/A';
+    document.getElementById('summaryDestination').textContent = window.selectedTableName || 'N/A';
+
+    const syncMode = document.getElementById('syncMode')?.value || 'replace';
+    document.getElementById('summarySyncMode').textContent = syncMode.charAt(0).toUpperCase() + syncMode.slice(1);
+
+    const schedule = document.getElementById('scheduleType')?.value || 'manual';
+    document.getElementById('summarySchedule').textContent = schedule.charAt(0).toUpperCase() + schedule.slice(1);
+}
+
+async function createETLJob() {
+    const jobName = document.getElementById('sourceName').value.trim();
+    const syncMode = document.getElementById('syncMode')?.value || 'replace';
+    const scheduleType = document.getElementById('scheduleType')?.value || 'manual';
+
+    if (!jobName || !window.selectedConnectionId || !window.selectedTableName) {
+        alert('Missing required information. Please go back and complete all steps.');
+        return;
+    }
+
+    // Disable create button to prevent double-clicks
+    const createButton = document.getElementById('createButton');
+    if (createButton) {
+        createButton.disabled = true;
+        createButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Creating...';
+    }
+
+    const payload = {
+        name: jobName,
+        connection_id: window.selectedConnectionId,
+        tables: [
+            {
+                source_table_name: window.selectedTableName,
+                dest_table_name: window.selectedTableName,
+                sync_mode: syncMode,
+                incremental_column: syncMode === 'incremental' ? '' : ''
+            }
+        ]
+    };
+
+    console.log('Creating ETL job with payload:', payload);
+
+    try {
+        const response = await fetch(`/api/models/{{ model.id }}/etl/create-job/`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'X-CSRFToken': csrftoken
             },
-            body: JSON.stringify({ name: jobName })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.exists) {
-                // Show duplicate error
-                const jobNameField = document.getElementById('sourceName');
-                const jobNameError = document.getElementById('sourceNameError');
-                if (jobNameField) {
-                    jobNameField.classList.add('border-red-500');
-                }
-                if (jobNameError) {
-                    jobNameError.textContent = data.message;
-                    jobNameError.classList.remove('hidden');
-                }
-                return;
-            }
-
-            // Name is unique, proceed with saved connection flow if applicable
-            proceedFromStep1();
-        })
-        .catch(error => {
-            console.error('Error checking job name:', error);
-            // Continue anyway if check fails
-            proceedFromStep1();
+            body: JSON.stringify(payload)
         });
 
-        return;
-    }
+        const data = await response.json();
 
-    // Step 2 -> 3: Save draft ETL job (CREATE mode only)
-    if (currentWizardStep === 2) {
-        console.log('=== STEP 2 -> 3 TRANSITION ===');
-        console.log('wizardEditMode:', wizardEditMode);
-        console.log('draftSourceId:', draftSourceId);
-        console.log('window.connectionTested:', window.connectionTested);
-
-        // In EDIT mode: skip draft saving, DataSource already exists
-        if (wizardEditMode && draftSourceId) {
-            console.log('Edit mode: skipping draft save, proceeding directly to step 3');
-            currentWizardStep++;
-            showStep(currentWizardStep);
-            return;
-        }
-
-        // In CREATE mode: save draft ETL job at Step 2
-        if (window.connectionTested) {
-            console.log('Create mode: saving draft');
-            saveDraftSource();
-            return;  // Will proceed to Step 3 after successful save
+        if (data.status === 'success') {
+            alert(`ETL job "${data.job_name}" created successfully!`);
+            hideAddSourceModal();
+            location.reload(); // Reload to show new job
         } else {
-            alert('Please test connection before proceeding');
-            return;
+            alert(`Error: ${data.message}`);
+            if (createButton) {
+                createButton.disabled = false;
+                createButton.innerHTML = '<i class="fas fa-check"></i><span>Create ETL Job</span>';
+            }
+        }
+    } catch (error) {
+        alert(`Error creating ETL job: ${error.message}`);
+        if (createButton) {
+            createButton.disabled = false;
+            createButton.innerHTML = '<i class="fas fa-check"></i><span>Create ETL Job</span>';
         }
     }
-
-    // Step 3 -> 4: Validate table selection
-    if (currentWizardStep === 3) {
-        const selectedTable = document.querySelector('input[name="selectedTable"]:checked');
-        if (!selectedTable) {
-            alert('Please select a table');
-            return;
-        }
-    }
-
-    // Default: proceed to next step
-    currentWizardStep++;
-    showStep(currentWizardStep);
 }
 
 function proceedFromStep1() {
@@ -2653,9 +2889,9 @@ let selectedConnectionId = null;  // Track which connection is selected
 
 function loadSavedConnections() {
     const listContainer = document.getElementById('savedConnectionsList');
-    listContainer.innerHTML = '<p class="text-xs text-gray-500 text-center py-4">Loading connections...</p>';
+    listContainer.innerHTML = '<p class="text-xs text-gray-500 text-center py-8">Loading connections...</p>';
 
-    fetch(`/api/models/{{ model.id }}/connections/`, {
+    fetch(`/api/models/{{ model.id }}/etl/connections/`, {
         method: 'GET',
         headers: {
             'Content-Type': 'application/json',
@@ -2667,60 +2903,53 @@ function loadSavedConnections() {
         if (data.status === 'success') {
             savedConnections = data.connections;
 
-            console.log('=== LOADED CONNECTIONS ===');
-            console.log('Connections:', savedConnections);
-            if (savedConnections.length > 0) {
-                console.log('First connection details:');
-                console.log('  ID:', savedConnections[0].id);
-                console.log('  Name:', savedConnections[0].name);
-                console.log('  source_host:', savedConnections[0].source_host);
-                console.log('  source_database:', savedConnections[0].source_database);
-                console.log('  source_username:', savedConnections[0].source_username);
-            }
-
             if (savedConnections.length === 0) {
                 listContainer.innerHTML = `
-                    <p class="text-xs text-gray-500 text-center py-4">
-                        No saved connections yet.<br>
-                        Click "Create New Connection" to add one.
-                    </p>
+                    <div class="text-center py-8">
+                        <i class="fas fa-database text-3xl text-gray-300 mb-2"></i>
+                        <p class="text-sm text-gray-500">No connections available</p>
+                        <p class="text-xs text-gray-400 mt-1">Create a connection first in the Connections section</p>
+                    </div>
                 `;
+                // Disable next button
+                document.getElementById('nextButton').disabled = true;
                 return;
             }
 
             // Render connections list
             listContainer.innerHTML = savedConnections.map(conn => {
-                const hostDb = conn.source_host && conn.source_database
-                    ? `${conn.source_host}:${conn.source_port || ''}/${conn.source_database}`
-                    : (conn.bigquery_project && conn.bigquery_dataset
-                        ? `${conn.bigquery_project}/${conn.bigquery_dataset}`
-                        : 'No host info');
+                // Status indicator
+                const statusColor = conn.last_test_status === 'success' ? 'green' : (conn.last_test_status === 'failed' ? 'red' : 'gray');
+                const statusIcon = conn.last_test_status === 'success' ? 'check-circle' : (conn.last_test_status === 'failed' ? 'times-circle' : 'question-circle');
+
+                // Connection details
+                const hostDb = conn.host && conn.database
+                    ? `${conn.host}${conn.port ? ':' + conn.port : ''}/${conn.database}`
+                    : 'Details unavailable';
 
                 return `
-                    <div class="flex items-center p-2 border border-gray-200 rounded-lg hover:bg-blue-50 hover:border-blue-300 group">
-                        <label class="flex items-center flex-1 cursor-pointer">
-                            <input type="radio" name="savedConnection" value="${conn.id}" class="mr-2" onchange="selectSavedConnection(${conn.id})">
-                            <div class="flex-1">
-                                <div class="text-xs font-semibold text-gray-900">${conn.name}</div>
-                                <div class="text-xs text-gray-600">${hostDb}</div>
-                                <div class="text-xs text-gray-500">User: ${conn.source_username || 'N/A'}</div>
+                    <label class="flex items-center p-3 border-2 border-gray-200 rounded-lg hover:bg-blue-50 hover:border-blue-400 cursor-pointer transition has-[:checked]:border-blue-600 has-[:checked]:bg-blue-50">
+                        <input type="radio" name="savedConnection" value="${conn.id}" class="mr-3 scale-110" onchange="selectSavedConnection(${conn.id})">
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center gap-2 mb-1">
+                                <span class="text-sm font-bold text-gray-900">${conn.name}</span>
+                                <i class="fas fa-${statusIcon} text-${statusColor}-500 text-xs" title="${conn.last_test_status || 'Not tested'}"></i>
                             </div>
-                        </label>
-                        <button onclick="deleteConnection(${conn.id}, event)" class="text-xs text-red-600 hover:text-red-800 opacity-0 group-hover:opacity-100 transition-opacity px-2" title="Delete connection">
-                            <i class="fas fa-trash"></i>
-                        </button>
-                    </div>
+                            <div class="text-xs text-gray-600 truncate">${conn.source_type_display || conn.source_type}</div>
+                            <div class="text-xs text-gray-500 truncate">${hostDb}</div>
+                        </div>
+                    </label>
                 `;
             }).join('');
 
-            // Enable next button if needed
+            // Enable next button if a connection is already selected
             updateStep1NextButton();
         } else {
             listContainer.innerHTML = `<p class="text-xs text-red-600 text-center py-4">Error loading connections</p>`;
         }
     })
     .catch(error => {
-        listContainer.innerHTML = `<p class="text-xs text-red-600 text-center py-4">Error: ${error}</p>`;
+        listContainer.innerHTML = `<p class="text-xs text-red-600 text-center py-4">Error: ${error.message}</p>`;
     });
 }
 
@@ -2729,16 +2958,14 @@ function selectSavedConnection(connectionId) {
     const connection = savedConnections.find(c => c.id === connectionId);
 
     if (connection) {
-        // Enable next button
-        const nextButton = document.getElementById('nextButton');
-        if (nextButton) {
-            nextButton.disabled = false;
-        }
+        console.log('Selected connection:', connection);
 
-        // Store connection details for later use
+        // Store connection for later use
         window.selectedConnection = connection;
-        window.usingSavedConnection = true;
-        window.savedConnectionForStep2 = connectionId;  // Flag to populate Step 2
+        window.selectedConnectionId = connectionId;
+
+        // Enable next button
+        updateStep1NextButton();
     }
 }
 
@@ -2892,6 +3119,16 @@ function createNewConnectionFromTest(connectionName, connectionData, messageDiv,
 // Load connections when page loads
 document.addEventListener('DOMContentLoaded', function() {
     loadConnections();
+
+    // Enable Next button in connection modal when connection type is selected
+    document.querySelectorAll('input[name="connSourceType"]').forEach(radio => {
+        radio.addEventListener('change', function() {
+            const nextBtn = document.getElementById('connNextBtn');
+            if (nextBtn && this.checked) {
+                nextBtn.disabled = false;
+            }
+        });
+    });
 });
 
 </script>

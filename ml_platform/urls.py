@@ -50,4 +50,9 @@ urlpatterns = [
     path('api/connections/<int:connection_id>/update/', views.api_connection_update, name='api_connection_update'),
     path('api/connections/<int:connection_id>/usage/', views.api_connection_get_usage, name='api_connection_get_usage'),
     path('api/connections/<int:connection_id>/delete/', views.api_connection_delete, name='api_connection_delete'),
+
+    # New Simplified ETL Wizard API (Simplified Flow - Connection-First Approach)
+    path('api/models/<int:model_id>/etl/connections/', views.api_etl_get_connections, name='api_etl_get_connections'),
+    path('api/models/<int:model_id>/etl/create-job/', views.api_etl_create_job, name='api_etl_create_job'),
+    path('api/connections/<int:connection_id>/test-wizard/', views.api_etl_test_connection_in_wizard, name='api_etl_test_connection_in_wizard'),
 ]

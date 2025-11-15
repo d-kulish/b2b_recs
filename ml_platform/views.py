@@ -1527,25 +1527,41 @@ def api_connection_get_credentials(request, connection_id):
 @require_http_methods(["POST"])
 def api_connection_test(request, connection_id):
     """
-    Test an existing connection.
+    Test an existing connection using stored credentials.
+    Used by auto-test feature on ETL page.
     """
-    from .utils.connection_manager import test_and_fetch_metadata
+    from .utils.connection_manager import test_and_fetch_metadata, get_credentials_from_secret_manager
     from .models import Connection
 
     try:
         connection = get_object_or_404(Connection, id=connection_id)
-        data = json.loads(request.body)
 
-        # Prepare connection parameters
+        # Check if credentials are stored
+        if not connection.credentials_secret_name:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'No credentials stored for this connection. Please edit and save the connection.',
+            }, status=400)
+
+        # Retrieve credentials from Secret Manager
+        try:
+            credentials = get_credentials_from_secret_manager(connection.credentials_secret_name)
+        except Exception as cred_error:
+            return JsonResponse({
+                'status': 'error',
+                'message': f'Failed to retrieve credentials: {str(cred_error)}',
+            }, status=500)
+
+        # Prepare connection parameters with stored credentials
         connection_params = {
             'host': connection.source_host,
             'port': connection.source_port,
             'database': connection.source_database,
-            'username': data.get('username', ''),
-            'password': data.get('password', ''),
+            'username': credentials.get('username', ''),
+            'password': credentials.get('password', ''),
             'project_id': connection.bigquery_project,
             'dataset': connection.bigquery_dataset,
-            'service_account_json': data.get('service_account_json', ''),
+            'service_account_json': credentials.get('service_account_json', ''),
             'connection_string': connection.connection_string,
         }
 
@@ -1563,18 +1579,20 @@ def api_connection_test(request, connection_id):
             return JsonResponse({
                 'status': 'success',
                 'message': result['message'],
-                'tables': result['tables'],
             })
         else:
             return JsonResponse({
-                'status': 'error',
+                'status': 'failed',  # Changed from 'error' to 'failed' to match frontend expectations
                 'message': result['message'],
-            }, status=400)
+            })
 
     except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
+        print(f"ERROR in api_connection_test: {error_details}")  # Log to console for debugging
         return JsonResponse({
             'status': 'error',
-            'message': str(e),
+            'message': f'System error: {str(e)}',
         }, status=500)
 
 

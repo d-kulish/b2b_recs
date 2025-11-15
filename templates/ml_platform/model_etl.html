@@ -16,9 +16,14 @@
             <div class="border-r border-gray-200 pr-6">
                 <div class="flex items-center justify-between mb-4">
                     <h3 class="text-lg font-bold text-gray-700">Connections</h3>
-                    <button onclick="openCreateConnectionModal()" class="btn btn-secondary btn-sm">
-                        <i class="fas fa-plus mr-1"></i>Connection
-                    </button>
+                    <div class="btn-group">
+                        <button onclick="refreshConnections()" class="btn btn-secondary btn-sm btn-icon" title="Refresh and test all connections">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                        <button onclick="openCreateConnectionModal()" class="btn btn-secondary btn-sm">
+                            <i class="fas fa-plus"></i>Connection
+                        </button>
+                    </div>
                 </div>
 
                 <!-- Connections List Container (max 4 items with scroll) -->
@@ -37,7 +42,7 @@
                 <div class="flex items-center justify-between mb-4">
                     <h3 class="text-lg font-bold text-gray-700">Jobs</h3>
                     <button onclick="showAddSourceModal()" class="btn btn-primary btn-sm">
-                        <i class="fas fa-plus mr-1"></i>ETL Job
+                        <i class="fas fa-plus"></i>ETL Job
                     </button>
                 </div>
 
@@ -1204,12 +1209,31 @@ function renderConnectionCard(connection, container) {
     card.className = 'border border-gray-300 rounded-lg p-3 hover:border-blue-400 transition bg-white';
     card.id = `connection-${connection.id}`;
 
-    // Determine status indicator (default to grey if not tested yet)
-    let statusDot = '<span class="w-2 h-2 bg-gray-400 rounded-full inline-block" title="Not tested"></span>';
-    if (connection.last_test_status === 'success') {
-        statusDot = '<span class="w-2 h-2 bg-green-500 rounded-full inline-block" title="Connected"></span>';
-    } else if (connection.last_test_status === 'failed') {
-        statusDot = '<span class="w-2 h-2 bg-red-500 rounded-full inline-block" title="Connection failed"></span>';
+    // Store original status as data attribute for fallback
+    card.dataset.originalStatus = connection.last_test_status || 'unknown';
+    card.dataset.lastTestAt = connection.last_test_at || '';
+
+    // Determine status indicator (start with testing state, will be updated)
+    let statusDot = '<span class="w-2 h-2 bg-blue-400 rounded-full inline-block animate-pulse" title="Testing connection..."></span>';
+    let statusText = '<div class="text-xs text-blue-600">Testing...</div>';
+
+    // If we have a recent test result (less than 5 minutes old), show it
+    // Otherwise show testing state (will be updated by auto-test)
+    if (connection.last_test_status && connection.last_test_at) {
+        const testTime = new Date(connection.last_test_at);
+        const now = new Date();
+        const minutesAgo = Math.floor((now - testTime) / 60000);
+
+        if (connection.last_test_status === 'success') {
+            statusDot = '<span class="w-2 h-2 bg-green-500 rounded-full inline-block" title="Connected"></span>';
+            statusText = `<div class="text-xs text-gray-500">Tested ${minutesAgo < 1 ? 'just now' : minutesAgo + 'm ago'}</div>`;
+        } else if (connection.last_test_status === 'failed') {
+            statusDot = '<span class="w-2 h-2 bg-red-500 rounded-full inline-block" title="Connection failed"></span>';
+            statusText = `<div class="text-xs text-gray-500">Failed ${minutesAgo < 1 ? 'just now' : minutesAgo + 'm ago'}</div>`;
+        } else {
+            statusDot = '<span class="w-2 h-2 bg-gray-400 rounded-full inline-block" title="Not tested"></span>';
+            statusText = '<div class="text-xs text-gray-500">Not tested</div>';
+        }
     }
 
     card.innerHTML = `
@@ -1222,7 +1246,10 @@ function renderConnectionCard(connection, container) {
                 <div class="text-xs text-gray-600 space-y-0.5">
                     <div><span class="font-medium">${connection.source_type_display}</span></div>
                     <div class="truncate">${connection.source_host || connection.bigquery_project || 'N/A'}</div>
-                    <div class="text-gray-500">${connection.jobs_count} job(s) using</div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-gray-500">${connection.jobs_count} job(s) using</span>
+                        ${statusText}
+                    </div>
                 </div>
             </div>
             <div class="flex gap-1 ml-2">
@@ -1245,7 +1272,11 @@ function renderConnectionCard(connection, container) {
 
 function autoTestConnections(connections) {
     // Test each connection in the background to update status indicators
+    console.log(`🔄 Auto-testing ${connections.length} connection(s)...`);
+
     connections.forEach(connection => {
+        console.log(`⏳ Testing connection #${connection.id}: "${connection.name}"...`);
+
         fetch(`/api/connections/${connection.id}/test/`, {
             method: 'POST',
             headers: {
@@ -1253,36 +1284,136 @@ function autoTestConnections(connections) {
                 'X-CSRFToken': csrftoken
             }
         })
-        .then(response => response.json())
+        .then(response => {
+            console.log(`📡 Connection #${connection.id} response status: ${response.status}`);
+            return response.json();
+        })
         .then(data => {
+            console.log(`📊 Connection #${connection.id} test result:`, data);
+
             // Update status dot in the card
             const card = document.getElementById(`connection-${connection.id}`);
-            if (card) {
-                const statusDot = card.querySelector('span.rounded-full');
-                if (statusDot) {
-                    if (data.status === 'success') {
-                        statusDot.className = 'w-2 h-2 bg-green-500 rounded-full inline-block';
-                        statusDot.title = 'Connected';
-                    } else {
-                        statusDot.className = 'w-2 h-2 bg-red-500 rounded-full inline-block';
-                        statusDot.title = 'Connection failed';
-                    }
+            if (!card) {
+                console.warn(`⚠️ Card element not found for connection #${connection.id}`);
+                return;
+            }
+
+            const statusDot = card.querySelector('span.rounded-full');
+            const statusTextEl = card.querySelector('.text-xs.text-gray-500, .text-xs.text-blue-600');
+
+            if (!statusDot) {
+                console.warn(`⚠️ Status dot not found for connection #${connection.id}`);
+                return;
+            }
+
+            if (data.status === 'success') {
+                // Connection test PASSED
+                console.log(`✅ Connection #${connection.id} "${connection.name}" - SUCCESS`);
+                statusDot.className = 'w-2 h-2 bg-green-500 rounded-full inline-block';
+                statusDot.title = 'Connected successfully';
+                if (statusTextEl) {
+                    statusTextEl.textContent = 'Tested just now';
+                    statusTextEl.className = 'text-xs text-gray-500';
+                }
+            } else if (data.status === 'failed') {
+                // Connection test FAILED (bad credentials, host unreachable, etc.)
+                console.log(`❌ Connection #${connection.id} "${connection.name}" - FAILED: ${data.message || 'Unknown error'}`);
+                statusDot.className = 'w-2 h-2 bg-red-500 rounded-full inline-block';
+                statusDot.title = `Connection failed: ${data.message || 'Unknown error'}`;
+                if (statusTextEl) {
+                    statusTextEl.textContent = 'Failed just now';
+                    statusTextEl.className = 'text-xs text-red-600';
+                }
+            } else if (data.status === 'error') {
+                // System error (backend issue, not connection issue)
+                console.log(`⚠️ Connection #${connection.id} "${connection.name}" - SYSTEM ERROR: ${data.message || 'Unknown error'}`);
+                statusDot.className = 'w-2 h-2 bg-yellow-500 rounded-full inline-block';
+                statusDot.title = `Test error: ${data.message || 'Unknown error'}`;
+                if (statusTextEl) {
+                    statusTextEl.textContent = 'Test error';
+                    statusTextEl.className = 'text-xs text-yellow-600';
+                }
+            } else {
+                // Unknown status
+                console.log(`⚠️ Connection #${connection.id} "${connection.name}" - UNKNOWN STATUS: ${data.status}`);
+                statusDot.className = 'w-2 h-2 bg-gray-400 rounded-full inline-block';
+                statusDot.title = 'Unknown status';
+                if (statusTextEl) {
+                    statusTextEl.textContent = 'Unknown';
+                    statusTextEl.className = 'text-xs text-gray-500';
                 }
             }
         })
         .catch(error => {
-            console.error(`Error testing connection ${connection.id}:`, error);
-            // Update status dot to red on error
+            // Network error, timeout, or other JavaScript error
+            // DON'T automatically mark as failed - this is a test system issue, not a connection issue
+            console.error(`🚨 Network/System error testing connection #${connection.id} "${connection.name}":`, error);
+
             const card = document.getElementById(`connection-${connection.id}`);
             if (card) {
                 const statusDot = card.querySelector('span.rounded-full');
+                const statusTextEl = card.querySelector('.text-xs.text-gray-500, .text-xs.text-blue-600');
+
+                // Fallback to original status instead of marking as failed
+                const originalStatus = card.dataset.originalStatus;
+
                 if (statusDot) {
-                    statusDot.className = 'w-2 h-2 bg-red-500 rounded-full inline-block';
-                    statusDot.title = 'Connection failed';
+                    if (originalStatus === 'success') {
+                        // Keep showing green if it was previously successful
+                        statusDot.className = 'w-2 h-2 bg-green-500 rounded-full inline-block';
+                        statusDot.title = 'Last test: Connected (current test failed to run)';
+                        if (statusTextEl) {
+                            statusTextEl.textContent = 'Test unavailable';
+                            statusTextEl.className = 'text-xs text-gray-500';
+                        }
+                    } else if (originalStatus === 'failed') {
+                        // Keep showing red if it was previously failed
+                        statusDot.className = 'w-2 h-2 bg-red-500 rounded-full inline-block';
+                        statusDot.title = 'Last test: Failed (current test failed to run)';
+                        if (statusTextEl) {
+                            statusTextEl.textContent = 'Test unavailable';
+                            statusTextEl.className = 'text-xs text-gray-500';
+                        }
+                    } else {
+                        // Unknown previous status - show yellow warning
+                        statusDot.className = 'w-2 h-2 bg-yellow-500 rounded-full inline-block';
+                        statusDot.title = 'Test system unavailable - cannot verify connection';
+                        if (statusTextEl) {
+                            statusTextEl.textContent = 'Test unavailable';
+                            statusTextEl.className = 'text-xs text-yellow-600';
+                        }
+                    }
                 }
             }
         });
     });
+}
+
+// Refresh connections - reload and re-test all
+function refreshConnections() {
+    console.log('🔄 Refreshing connections...');
+    const refreshBtn = event.target.closest('button');
+
+    // Add spinning animation to refresh icon
+    if (refreshBtn) {
+        const icon = refreshBtn.querySelector('i');
+        if (icon) {
+            icon.classList.add('fa-spin');
+        }
+    }
+
+    // Reload connections (which will auto-test them)
+    loadConnections();
+
+    // Remove spinning animation after 2 seconds
+    setTimeout(() => {
+        if (refreshBtn) {
+            const icon = refreshBtn.querySelector('i');
+            if (icon) {
+                icon.classList.remove('fa-spin');
+            }
+        }
+    }, 2000);
 }
 
 // ==================================================

@@ -16,9 +16,9 @@ A multi-tenant B2B SaaS platform for building, training, and deploying productio
 
 **Current Phase**: ETL & Connection Management ✅ **COMPLETE**
 
-**Date Completed**: November 15, 2025 (Milestone 7.5)
+**Date Completed**: November 15, 2025 (Milestone 8)
 
-The client-facing web application is complete with fully functional ETL configuration, comprehensive connection management, and professional UX enhancements.
+The client-facing web application is complete with fully functional ETL configuration, comprehensive connection management, robust connection testing, and professional UX enhancements.
 
 ### ✅ Completed Components
 
@@ -42,8 +42,12 @@ The client-facing web application is complete with fully functional ETL configur
 - ✅ Model Dashboard (status cards, recent runs, quick actions)
 - ✅ Login/logout functionality
 - ✅ **ETL Page**: 2-column layout with Connections section and ETL Jobs section
-- ✅ **Connection Cards**: Live status indicators, edit/delete actions, usage tracking
+- ✅ **Connection Cards**: Live status indicators with intelligent error handling (green/red/yellow)
 - ✅ **Wizard Modes**: Full ETL job creation wizard + Standalone connection management
+- ✅ **Status Timestamps**: "Tested 5m ago" display on connection cards
+- ✅ **Manual Refresh**: Refresh button to re-test connections on demand
+- ✅ **Standardized Buttons**: Consistent styling using buttons.css system
+- ✅ **Debug Logging**: Comprehensive console logs with emoji indicators
 
 **Developer Experience:**
 - ✅ User creation script (`create_user.py`)
@@ -480,8 +484,15 @@ The ETL page features a 2-column layout:
 **Connection Status Indicators:**
 - 🟢 **Green dot**: Connection tested successfully, database reachable
 - 🔴 **Red dot**: Connection test failed, check credentials or network
+- 🟡 **Yellow dot**: Test system error, unclear status (Secret Manager unavailable, network timeout, etc.)
+- ⚪ **Gray dot**: Connection not tested yet
 - Status auto-updated on page load (background API calls test each connection)
 - Real-time health monitoring for all connections
+- Intelligent error handling: Network errors don't incorrectly mark connections as "failed"
+- Fallback to previous status when test system unavailable
+- **Manual refresh button** to re-test all connections on demand
+- **Timestamp display** shows "Tested 5m ago" for freshness awareness
+- **Comprehensive debug logs** in browser console with emoji indicators
 
 ### 🔨 Pending Components (For Production Deployment)
 

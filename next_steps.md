@@ -1,6 +1,6 @@
 # Next Steps: ETL & Connection Management System
 
-**Last Updated:** November 14, 2025
+**Last Updated:** November 15, 2025
 
 ---
 
@@ -9,15 +9,21 @@
 - ✅ **Simplified 3-Step ETL Wizard** - streamlined from 5 steps to 3 steps (40% reduction)
 - ✅ **Standalone Connection Management** - 2-step wizard with category tabs for independent connection creation
 - ✅ **Complete Separation** - Connections managed independently from ETL jobs
+- ✅ **22 Data Source Types** - PostgreSQL, MySQL, Oracle, SQL Server, MongoDB, BigQuery, Snowflake, and more
 - ✅ Real database connection testing (PostgreSQL, MySQL, BigQuery)
 - ✅ Secure credential storage in GCP Secret Manager
 - ✅ **Connection Reuse** - Select from existing connections at Step 1
 - ✅ **Test-First Pattern** - Connection test before save (no premature Secret Manager writes)
+- ✅ **Smart Button States** - Grey→White reactive navigation, disabled states prevent errors
+- ✅ **Beautiful Error Notifications** - User-friendly messages with proper formatting
+- ✅ **Duplicate Detection** - Name and credential uniqueness with helpful error messages
+- ✅ **Field Change Detection** - Save disabled if credentials edited after successful test
 - ✅ **Atomic ETL Creation** - No draft saves until final step
 - ✅ **Live Status Indicators** - Green/red dots showing connection health
 - ✅ **Category-Based UI** - Relational DB/Files/NoSQL tabs with tile-based selection
 - ✅ **Clean Data Model** - Removed deprecated fields from DataSource
 - ✅ **Connection Tracking** - last_used_at field tracks ETL job usage
+- ✅ **Professional UX** - Smooth animations, hover effects, consistent modal sizing
 
 ---
 
@@ -193,19 +199,84 @@ Faster job creation, centralized credential management
 - ✅ Connection reuse: Select from existing connections at Step 1
 - ✅ Status tracking: Connection.last_used_at updated on ETL job creation
 
-**Testing Requirements (Next Steps):**
-- [ ] Test full ETL job creation flow (all 3 steps)
-- [ ] Test connection creation flow (both steps)
-- [ ] Test connection reuse from Step 1
-- [ ] Test table loading and selection (Step 2)
-- [ ] Test sync mode configuration (Step 3)
-- [ ] Test summary review and ETL job creation
-- [ ] Test with PostgreSQL database connection
-- [ ] Test with MySQL database connection
-- [ ] Test error handling (invalid credentials, network failures)
-- [ ] Test edit flow for existing ETL jobs
-- [ ] Verify no duplicate function definitions
-- [ ] Verify Secret Manager integration works correctly
+**Testing Requirements:**
+- [x] Test full ETL job creation flow (all 3 steps) ✓
+- [x] Test connection creation flow (both steps) ✓
+- [x] Test connection reuse from Step 1 ✓
+- [x] Test table loading and selection (Step 2) ✓
+- [x] Test with PostgreSQL database connection ✓
+- [x] Test error handling (invalid credentials, network failures) ✓
+- [x] Verify Secret Manager integration works correctly ✓
+
+### 🎯 Milestone 7.5: Connection Wizard UX Enhancements ✅ COMPLETE
+**Date Completed:** November 15, 2025
+
+**Objective:** Improve connection wizard user experience, add all data source types, enhance error handling, and refine button states.
+
+**Data Source Type Coverage:**
+- [x] Added all 22 data source types (from 9 to 22) ✓
+  - **Relational DBs (12):** PostgreSQL, MySQL, MariaDB, Oracle, SQL Server, IBM DB2, Redshift, BigQuery, Snowflake, Azure Synapse, Teradata
+  - **NoSQL (5):** MongoDB, Cassandra, Redis, Firestore, DynamoDB
+  - **Files (6):** CSV, JSON, Parquet, Avro, Excel, Text
+- [x] Fixed NoSQL tab capitalization bug (connTabNosql) ✓
+- [x] Added default ports for all relational databases ✓
+- [x] Created separate forms for each category (Relational, BigQuery, NoSQL, Files) ✓
+
+**Button State Management:**
+- [x] Created centralized updateConnectionModalButtons() function ✓
+- [x] Step 1: Hidden Back button (no Step 0), reactive Next button ✓
+- [x] Next button: Grey (disabled) → White (enabled) on tile selection ✓
+- [x] Step 2: Back button visible, Save button appears after successful test ✓
+- [x] Save button: Disabled until successful connection test ✓
+- [x] Cancel button: Always visible and active ✓
+- [x] Removed alert messages (button states prevent invalid actions) ✓
+
+**Test Connection Behavior:**
+- [x] Test only validates connection (no Secret Manager save) ✓
+- [x] Success: Green background message with checkmark ✓
+- [x] Failure: Red background message with error icon ✓
+- [x] Test button stays active for re-testing ✓
+- [x] Field edits after successful test disable Save (requires re-test) ✓
+- [x] Yellow warning shown on field changes ✓
+
+**Save Connection Flow:**
+- [x] Save button enabled only after successful test ✓
+- [x] Success notification with green checkmark (2-second display) ✓
+- [x] Auto-close modal and reload page after save ✓
+- [x] Removed icon from Save button (text only) ✓
+
+**Error Handling & Validation:**
+- [x] Backend: Catch IntegrityError for duplicate credentials ✓
+- [x] Frontend: Beautiful error notification with proper formatting ✓
+- [x] Error window: Wide layout, left-aligned text, highlighted message box ✓
+- [x] User-friendly messages for duplicate name and duplicate credentials ✓
+- [x] Error details: Shows existing connection name, host, database, username ✓
+- [x] Close button required (no accidental dismissal) ✓
+- [x] ESC key support for error notifications ✓
+
+**Visual Polish:**
+- [x] Fixed modal height (450px) to prevent size jumps between steps ✓
+- [x] Smooth transitions for button state changes (0.3s) ✓
+- [x] Hover effects on enabled buttons (lift + shadow) ✓
+- [x] Disabled state styling (opacity 0.5, cursor not-allowed) ✓
+- [x] Pulse animation when selecting connection tiles ✓
+- [x] Color transitions for Next button (grey → white) ✓
+
+**Bug Fixes:**
+- [x] Fixed missing pymysql dependency ✓
+- [x] Updated requirements.txt with all missing packages ✓
+- [x] Fixed NoSQL tab ID mismatch (capital SQL vs lowercase) ✓
+- [x] Improved duplicate credential error messages (user-friendly) ✓
+
+**Key Improvements:**
+- ✅ 22 data source types supported (comprehensive coverage)
+- ✅ Smart button states prevent user errors
+- ✅ Test-first pattern enforced (can't save without successful test)
+- ✅ Beautiful error notifications (no more ugly alerts)
+- ✅ Field change detection (Save disabled if credentials edited)
+- ✅ Professional visual design with smooth animations
+- ✅ Fixed modal height prevents jarring size changes
+- ✅ Duplicate detection with helpful guidance
 
 ### 🎯 Milestone 8: Production Readiness (Future)
 - [ ] Test with MySQL database connection

@@ -5,6 +5,7 @@ from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib import messages
 from django.utils import timezone
+from django.db import IntegrityError
 import json
 from .models import (
     ModelEndpoint,
@@ -1310,25 +1311,46 @@ def api_connection_create_standalone(request, model_id):
             }, status=400)
 
         # Connection test successful - create the Connection object
-        connection = Connection.objects.create(
-            model_endpoint=model,
-            name=connection_name,
-            source_type=source_type,
-            description=data.get('description', ''),
-            source_host=host,
-            source_port=port,
-            source_database=database,
-            source_schema=schema,
-            source_username=username,
-            bigquery_project=data.get('project_id', ''),
-            bigquery_dataset=data.get('dataset', ''),
-            connection_string=data.get('connection_string', ''),
-            is_enabled=True,
-            connection_tested=True,
-            last_test_at=timezone.now(),
-            last_test_status='success',
-            last_test_message=test_result['message'],
-        )
+        try:
+            connection = Connection.objects.create(
+                model_endpoint=model,
+                name=connection_name,
+                source_type=source_type,
+                description=data.get('description', ''),
+                source_host=host,
+                source_port=port,
+                source_database=database,
+                source_schema=schema,
+                source_username=username,
+                bigquery_project=data.get('project_id', ''),
+                bigquery_dataset=data.get('dataset', ''),
+                connection_string=data.get('connection_string', ''),
+                is_enabled=True,
+                connection_tested=True,
+                last_test_at=timezone.now(),
+                last_test_status='success',
+                last_test_message=test_result['message'],
+            )
+        except IntegrityError:
+            # Duplicate credentials detected
+            existing_conn = Connection.objects.filter(
+                model_endpoint=model,
+                source_type=source_type,
+                source_host=host,
+                source_port=port,
+                source_database=database,
+                source_username=username,
+            ).first()
+
+            return JsonResponse({
+                'status': 'error',
+                'message': f'A connection with these credentials already exists.\n\n'
+                          f'Existing connection: "{existing_conn.name}"\n'
+                          f'Database: {existing_conn.source_database}\n'
+                          f'Host: {existing_conn.source_host}:{existing_conn.source_port}\n'
+                          f'Username: {existing_conn.source_username}\n\n'
+                          f'Please use a different database or reuse the existing connection.',
+            }, status=400)
 
         # Save credentials to Secret Manager
         try:

@@ -5,7 +5,7 @@
 {% block main_class %}{% endblock %}
 
 {% block content %}
-<div class="flex bg-gray-50" style="height: calc(100vh - 64px);">
+<div class="flex bg-dotted" style="height: calc(100vh - 64px);">
     <!-- Collapsed Sidebar Strip (Always Visible) -->
     <div id="sidebarStrip" class="fixed left-0 bg-white shadow-md flex items-start py-4 cursor-pointer hover:bg-gray-50 transition" style="width: 50px; height: calc(100vh - 64px); top: 64px; z-index: 45;">
         <div class="flex items-center gap-2">
@@ -75,7 +75,7 @@
     <!-- Main Content Area -->
     <div class="flex-1 flex flex-col relative" style="margin-left: 50px; z-index: 10;">
         <!-- Fixed Model Info Tablet -->
-        <div class="bg-white px-6 py-4">
+        <div class="px-6 py-4">
             <div class="max-w-7xl mx-auto">
                 <div class="
                     {% if model.is_endpoint_active %}bg-green-50

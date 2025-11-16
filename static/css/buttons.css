@@ -159,6 +159,25 @@
     display: flex;
 }
 
+/* Fixed Width Button (for consistent button sizing) */
+.btn-fixed {
+    width: 120px !important;
+    min-width: 120px !important;
+    max-width: 120px !important;
+}
+
+/* Fixed Width Small Button */
+.btn-sm.btn-fixed {
+    width: 110px !important;
+    min-width: 110px !important;
+    max-width: 110px !important;
+}
+
+/* Override aspect-ratio for icon buttons with fixed width */
+.btn-icon.btn-fixed {
+    aspect-ratio: auto !important;
+}
+
 
 /* ============================================================================
    Button with Icons

@@ -14,9 +14,9 @@ A multi-tenant B2B SaaS platform for building, training, and deploying productio
 
 ## Project Status
 
-**Current Phase**: ETL & Connection Management ✅ **COMPLETE**
+**Current Phase**: ETL & Connection Management + UI/UX Polish ✅ **COMPLETE**
 
-**Date Completed**: November 15, 2025 (Milestone 8)
+**Date Completed**: November 16, 2025 (Milestone 9)
 
 The client-facing web application is complete with fully functional ETL configuration, comprehensive connection management, robust connection testing, and professional UX enhancements.
 
@@ -46,8 +46,12 @@ The client-facing web application is complete with fully functional ETL configur
 - ✅ **Wizard Modes**: Full ETL job creation wizard + Standalone connection management
 - ✅ **Status Timestamps**: "Tested 5m ago" display on connection cards
 - ✅ **Manual Refresh**: Refresh button to re-test connections on demand
-- ✅ **Standardized Buttons**: Consistent styling using buttons.css system
+- ✅ **Standardized Buttons**: Consistent styling using buttons.css system + fixed button sizing
 - ✅ **Debug Logging**: Comprehensive console logs with emoji indicators
+- ✅ **Dotted Background**: Professional Vertex AI-style dotted pattern background
+- ✅ **Custom Modal System**: Reusable confirmation modals (modals.css)
+- ✅ **Unified Navigation**: Consistent chevron arrows across all navigation buttons
+- ✅ **Modern Empty States**: Professional empty state messages without icons
 
 **Developer Experience:**
 - ✅ User creation script (`create_user.py`)
@@ -654,7 +658,10 @@ python manage.py changepassword dkulish
 - Tailwind CSS (via CDN)
 - Font Awesome icons
 - Vanilla JavaScript (for now)
-- Custom Button CSS System (see below)
+- Custom CSS Design System:
+  - `buttons.css` - Standardized button styles with fixed sizing
+  - `backgrounds.css` - Dotted pattern backgrounds (Vertex AI style)
+  - `modals.css` - Reusable modal/confirmation dialog system
 
 **Infrastructure (Development):**
 - Cloud SQL (PostgreSQL 13) - **DEV DATABASE ONLY** - Shared across development machines
@@ -670,11 +677,11 @@ python manage.py changepassword dkulish
 - Redis for caching
 - Additional Google Cloud Platform services
 
-## UI Components - Button Styling System
+## UI Components - Design System
 
-A unified button styling system has been implemented for consistent UI across all pages.
+A comprehensive design system has been implemented for consistent, professional UI across all pages.
 
-### Button CSS File
+### 1. Button System
 **Location**: `static/css/buttons.css`
 
 All buttons follow a standardized design:
@@ -704,6 +711,8 @@ All buttons follow a standardized design:
 - `.btn-lg` - Large buttons
 - `.btn-wide` - Extra wide buttons (200px min-width)
 - `.btn-block` - Full width
+- `.btn-fixed` - Fixed width for uniform sizing (works with `.btn-sm` for 110px width)
+- `.btn-icon` - Icon-only buttons (square with no min-width)
 
 ### Usage Guidelines
 
@@ -743,6 +752,55 @@ Connection test sections use dynamic background colors:
 - **Light red** (`bg-red-50`) - Failure
 
 The "Next" navigation button remains disabled until connection test succeeds.
+
+### 2. Background System
+**Location**: `static/css/backgrounds.css`
+
+Professional dotted background patterns inspired by Vertex AI Pipelines:
+
+**Available patterns**:
+- `.bg-dotted` - Standard dotted pattern (20px spacing, #d1d5db dots)
+- `.bg-dotted-subtle` - Lighter dots for less prominent backgrounds
+- `.bg-dotted-dense` - Tighter spacing (15px) for more texture
+
+**Usage**: Applied to main content areas where white cards should float elegantly.
+
+### 3. Modal System
+**Location**: `static/css/modals.css`
+
+Reusable modal/confirmation dialog system with professional styling:
+
+**Components**:
+- `.modal-overlay` - Dark background overlay
+- `.modal-container` - White modal box with animation
+- `.modal-header` - Header with colored icon
+- `.modal-body` - Content area (supports HTML)
+- `.modal-footer` - Button area
+
+**Modal types** (colored icons and buttons):
+- `danger` - Red (delete, destructive actions)
+- `warning` - Yellow (caution messages)
+- `info` - Blue (information)
+- `success` - Green (confirmations)
+
+**JavaScript function**:
+```javascript
+showConfirmModal({
+    title: 'Delete Connection',
+    message: '<p>Are you sure?</p>',
+    confirmText: 'Delete',
+    cancelText: 'Cancel',
+    type: 'danger',
+    onConfirm: () => { /* action */ }
+});
+```
+
+**Features**:
+- Smooth slide-in animation
+- Auto-hides Cancel button for error/info messages (confirmText === 'OK')
+- Keyboard support (ESC to close)
+- Click overlay to close
+- Customizable buttons and icons
 
 ## Contributing
 

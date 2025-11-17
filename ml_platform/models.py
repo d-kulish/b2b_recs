@@ -114,13 +114,10 @@ class Connection(models.Model):
         ('snowflake', 'Snowflake'),
         ('mariadb', 'MariaDB'),
         ('teradata', 'Teradata'),
-        # Flat Files
-        ('csv', 'CSV Files'),
-        ('parquet', 'Parquet Files'),
-        ('json', 'JSON Files'),
-        ('excel', 'Excel (XLS/XLSX)'),
-        ('txt', 'Text Files'),
-        ('avro', 'Avro Files'),
+        # Cloud Storage (Storage-first approach: connection = bucket access, file type selected during ETL)
+        ('gcs', 'Google Cloud Storage'),
+        ('s3', 'AWS S3'),
+        ('azure_blob', 'Azure Blob Storage'),
         # NoSQL Databases
         ('mongodb', 'MongoDB'),
         ('firestore', 'Google Firestore'),
@@ -144,16 +141,29 @@ class Connection(models.Model):
     source_username = models.CharField(max_length=255, blank=True, help_text="Database username (for deduplication)")
     credentials_secret_name = models.CharField(max_length=255, blank=True, help_text="Secret Manager secret name")
 
-    # File upload details (for CSV/Parquet sources)
-    file_path = models.CharField(max_length=512, blank=True, help_text="GCS path to uploaded file")
+    # Cloud Storage details (GCS, S3, Azure Blob)
+    bucket_path = models.CharField(max_length=512, blank=True, help_text="Bucket/container path (gs://, s3://, https://)")
+
+    # File upload details (legacy - for uploaded files)
+    file_path = models.CharField(max_length=512, blank=True, help_text="File path within bucket")
 
     # BigQuery/Firestore source details
     bigquery_project = models.CharField(max_length=255, blank=True)
     bigquery_dataset = models.CharField(max_length=255, blank=True)
 
-    # Service Account Authentication (BigQuery, Firestore, etc.)
+    # GCS Authentication (Google Cloud Storage, BigQuery, Firestore)
     service_account_json = models.TextField(blank=True, help_text="Service account JSON key (pasted)")
     service_account_file_path = models.CharField(max_length=512, blank=True, help_text="GCS path to service account JSON")
+
+    # AWS S3 Authentication
+    aws_access_key_id = models.CharField(max_length=255, blank=True, help_text="AWS Access Key ID")
+    aws_secret_access_key_secret = models.CharField(max_length=255, blank=True, help_text="Secret Manager path for AWS Secret Access Key")
+    aws_region = models.CharField(max_length=50, blank=True, default='us-east-1', help_text="AWS region")
+
+    # Azure Blob Storage Authentication
+    azure_storage_account = models.CharField(max_length=255, blank=True, help_text="Azure storage account name")
+    azure_account_key_secret = models.CharField(max_length=255, blank=True, help_text="Secret Manager path for Azure account key")
+    azure_sas_token_secret = models.CharField(max_length=255, blank=True, help_text="Secret Manager path for SAS token (alternative to account key)")
 
     # NoSQL connection strings
     connection_string = models.TextField(blank=True, help_text="Connection string (MongoDB, Redis, etc.)")

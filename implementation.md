@@ -154,6 +154,87 @@ Build a SaaS platform where business users can build, train, and deploy producti
 - Cross-project monitoring
 - Support tools
 
+#### 5. Network Architecture & Static IPs
+**Challenge:**
+- Cloud Run services (Django, ETL) have dynamic outbound IPs by default
+- Client databases often require IP whitelisting for security
+- Each client needs predictable, stable IP address for firewall rules
+
+**Solution: Cloud NAT + Reserved Static IP per Client Project**
+
+**Architecture:**
+```
+Client GCP Project
+├── Cloud Run Services (Django, ETL, Model Serving)
+│   └── Outbound connections
+│           ↓
+├── Cloud NAT Gateway
+│   └── Maps all outbound traffic to static IP
+│           ↓
+├── Reserved Static External IP
+│   └── Whitelisted in client's source database
+│           ↓
+Client's Database (PostgreSQL, MySQL, MongoDB, etc.)
+    ├── Firewall: Allow 34.120.45.67 (client's static IP)
+    └── Behind corporate VPN/firewall
+```
+
+**Implementation Per Client Project:**
+1. **Reserve Static IP**: One dedicated external IP address per project
+2. **Create Cloud Router**: Routes traffic within the VPC
+3. **Configure Cloud NAT**: NAT gateway using the reserved static IP
+4. **Result**: All outbound connections from Cloud Run use the static IP
+
+**Cost Impact:**
+- Static IP reservation: ~$7/month
+- Cloud NAT usage: ~$32/month
+- **Total: ~$40/month per client** for stable networking
+
+**Client Benefits:**
+- Client whitelists ONE IP address in their database firewall
+- IP never changes - connection remains stable
+- No VPN or complex networking required from client side
+- Works with on-premise databases behind corporate firewalls
+
+**Alternative Approaches (Not Recommended):**
+- **VPN/Interconnect**: Complex, expensive, not scalable for multi-tenant SaaS
+- **Agent/Connector**: Requires client to install software, adds support burden
+- **Cloud Databases Only**: Limits client flexibility, many enterprises have on-prem databases
+
+**Setup Steps:**
+```bash
+# Reserve static IP
+gcloud compute addresses create client-static-ip \
+    --region=us-central1 \
+    --project=client-{name}-prod
+
+# Create Cloud Router
+gcloud compute routers create nat-router \
+    --network=default \
+    --region=us-central1 \
+    --project=client-{name}-prod
+
+# Create Cloud NAT with static IP
+gcloud compute routers nats create nat-config \
+    --router=nat-router \
+    --region=us-central1 \
+    --nat-external-ip-pool=client-static-ip \
+    --nat-all-subnet-ip-ranges \
+    --project=client-{name}-prod
+```
+
+**Client Onboarding:**
+- Provide client with their dedicated static IP: `34.120.45.67`
+- Client adds IP to database whitelist/firewall rules
+- Enable SSL/TLS for encrypted connections
+- Test connection from Django UI
+
+**Rationale:**
+- **Essential for enterprise clients**: Most have on-premise databases with strict security
+- **Professional**: Shows proper enterprise architecture, builds trust
+- **Cost-effective**: $40/month is minimal compared to alternative solutions
+- **Scalable**: Terraform-automated, works for unlimited clients
+
 ---
 
 ## GCP Organization Structure
@@ -1159,8 +1240,9 @@ Onboard additional clients, iterate on product.
 - Cloud Run (MLflow): ~$20-30
 - Cloud SQL (Django DB): ~$25-40
 - Cloud SQL (MLflow DB): ~$25-40
+- Cloud NAT + Static IP: ~$40
 - Cloud Scheduler (ETL): ~$0.10
-- **Total Fixed**: ~$100-160/month
+- **Total Fixed**: ~$140-200/month
 
 **Variable Costs** (usage-based):
 - ETL runs (Cloud Run + Dataflow): ~$5-20 per run
@@ -1170,9 +1252,9 @@ Onboard additional clients, iterate on product.
 - GCS storage: ~$1-10/month depending on data volume
 
 **Typical Monthly Total Per Client**:
-- Light usage (1-2 trainings): ~$150-200
-- Medium usage (4-8 trainings): ~$250-400
-- Heavy usage (daily trainings): ~$500-800
+- Light usage (1-2 trainings): ~$190-240
+- Medium usage (4-8 trainings): ~$290-440
+- Heavy usage (daily trainings): ~$540-840
 
 ### Cost Optimization Strategies
 
@@ -1515,6 +1597,7 @@ From `past/` folder, these components are production-tested and will be reused:
 | Date | Version | Changes | Author |
 |------|---------|---------|--------|
 | 2025-11-09 | 1.0 | Initial document based on architecture discussions | - |
+| 2025-11-17 | 1.1 | Added Network Architecture section (Cloud NAT + Static IPs), updated cost structure | Claude Code |
 
 ---
 

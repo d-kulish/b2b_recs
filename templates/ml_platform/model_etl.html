@@ -442,8 +442,8 @@
                         <button onclick="switchConnTab('relational')" id="connTabRelational" class="px-3 py-2 text-xs font-semibold rounded-lg border border-blue-600 bg-blue-50 text-blue-700 transition">
                             Relational Databases
                         </button>
-                        <button onclick="switchConnTab('files')" id="connTabFiles" class="px-3 py-2 text-xs font-semibold rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition">
-                            Flat Files
+                        <button onclick="switchConnTab('storage')" id="connTabStorage" class="px-3 py-2 text-xs font-semibold rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition">
+                            Cloud Storage
                         </button>
                         <button onclick="switchConnTab('nosql')" id="connTabNosql" class="px-3 py-2 text-xs font-semibold rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition">
                             NoSQL
@@ -502,33 +502,31 @@
                     </div>
                 </div>
 
-                <!-- Flat Files Tab Content -->
-                <div id="connContentFiles" class="conn-tab-content hidden">
-                    <p class="text-xs text-gray-600 mb-2">Select a file format:</p>
-                    <div class="grid grid-cols-2 gap-2 max-h-80 overflow-y-auto border border-gray-200 rounded-lg p-2">
-                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
-                            <input type="radio" name="connSourceType" value="csv" class="mr-1.5 scale-75">
-                            <span class="text-xs">CSV Files</span>
+                <!-- Cloud Storage Tab Content -->
+                <div id="connContentStorage" class="conn-tab-content hidden">
+                    <p class="text-xs text-gray-600 mb-2">Select a cloud storage provider:</p>
+                    <p class="text-xs text-gray-500 mb-3 italic">Connection = access to bucket/container. File type selected during ETL job creation.</p>
+                    <div class="grid grid-cols-1 gap-2 max-h-80 overflow-y-auto border border-gray-200 rounded-lg p-2">
+                        <label class="flex items-center p-2 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
+                            <input type="radio" name="connSourceType" value="gcs" class="mr-2 scale-90">
+                            <div>
+                                <span class="text-sm font-semibold">Google Cloud Storage (GCS)</span>
+                                <p class="text-xs text-gray-500">Access gs:// buckets with service account</p>
+                            </div>
                         </label>
-                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
-                            <input type="radio" name="connSourceType" value="json" class="mr-1.5 scale-75">
-                            <span class="text-xs">JSON Files</span>
+                        <label class="flex items-center p-2 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
+                            <input type="radio" name="connSourceType" value="s3" class="mr-2 scale-90">
+                            <div>
+                                <span class="text-sm font-semibold">AWS S3</span>
+                                <p class="text-xs text-gray-500">Access s3:// buckets with AWS credentials</p>
+                            </div>
                         </label>
-                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
-                            <input type="radio" name="connSourceType" value="parquet" class="mr-1.5 scale-75">
-                            <span class="text-xs">Parquet Files</span>
-                        </label>
-                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
-                            <input type="radio" name="connSourceType" value="avro" class="mr-1.5 scale-75">
-                            <span class="text-xs">Avro Files</span>
-                        </label>
-                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
-                            <input type="radio" name="connSourceType" value="excel" class="mr-1.5 scale-75">
-                            <span class="text-xs">Excel Files</span>
-                        </label>
-                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
-                            <input type="radio" name="connSourceType" value="txt" class="mr-1.5 scale-75">
-                            <span class="text-xs">Text Files</span>
+                        <label class="flex items-center p-2 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
+                            <input type="radio" name="connSourceType" value="azure_blob" class="mr-2 scale-90">
+                            <div>
+                                <span class="text-sm font-semibold">Azure Blob Storage</span>
+                                <p class="text-xs text-gray-500">Access Azure containers with account key or SAS token</p>
+                            </div>
                         </label>
                     </div>
                 </div>
@@ -563,52 +561,43 @@
 
             <!-- Connection Step 2: Configure Connection -->
             <div id="connStep2" class="connection-modal-step hidden">
-                <h4 class="text-base font-bold text-gray-900 mb-3">Connection Configuration</h4>
-
-                <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
-                    <div class="flex items-center gap-2">
-                        <i class="fas fa-info-circle text-blue-600 text-sm"></i>
-                        <span class="font-semibold text-sm text-blue-900">Connection Type: <span id="connSelectedTypeDisplay"></span></span>
-                    </div>
-                </div>
-
                 <!-- Relational Database Form -->
                 <div id="connFormRelationalDB" class="conn-form hidden">
                     <div class="space-y-3">
+                        <!-- Connection Name Section (moved to top) -->
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-1.5">
+                                Connection Name <span class="text-red-500">*</span>
+                            </label>
+                            <input type="text" id="connName" placeholder="e.g., Production PostgreSQL" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <p class="text-xs text-gray-500 mt-1">Friendly name for this connection</p>
+                        </div>
+
                         <div class="grid grid-cols-2 gap-3">
                             <div>
-                                <label class="block text-sm font-semibold text-gray-700 mb-1.5">Host</label>
+                                <label class="block text-sm font-semibold text-gray-700 mb-1.5">Host <span class="text-red-500">*</span></label>
                                 <input type="text" id="connHost" placeholder="db.example.com" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                             </div>
                             <div>
-                                <label class="block text-sm font-semibold text-gray-700 mb-1.5">Port</label>
+                                <label class="block text-sm font-semibold text-gray-700 mb-1.5">Port <span class="text-red-500">*</span></label>
                                 <input type="number" id="connPort" placeholder="5432" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                             </div>
                         </div>
 
                         <div>
-                            <label class="block text-sm font-semibold text-gray-700 mb-1.5">Database Name</label>
+                            <label class="block text-sm font-semibold text-gray-700 mb-1.5">Database Name <span class="text-red-500">*</span></label>
                             <input type="text" id="connDatabase" placeholder="analytics" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                         </div>
 
                         <div class="grid grid-cols-2 gap-3">
                             <div>
-                                <label class="block text-sm font-semibold text-gray-700 mb-1.5">Username</label>
+                                <label class="block text-sm font-semibold text-gray-700 mb-1.5">Username <span class="text-red-500">*</span></label>
                                 <input type="text" id="connUsername" placeholder="etl_user" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                             </div>
                             <div>
-                                <label class="block text-sm font-semibold text-gray-700 mb-1.5">Password</label>
+                                <label class="block text-sm font-semibold text-gray-700 mb-1.5">Password <span class="text-red-500">*</span></label>
                                 <input type="password" id="connPassword" placeholder="••••••••" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                             </div>
-                        </div>
-
-                        <!-- Connection Name Section -->
-                        <div class="border-t border-gray-200 pt-3 mt-3">
-                            <label class="block text-sm font-semibold text-gray-700 mb-1.5">
-                                Connection Name <span class="text-red-500">*</span>
-                            </label>
-                            <input type="text" id="connName" placeholder="Production PostgreSQL" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                            <p class="text-xs text-gray-500 mt-1">This name will be saved for reuse in ETL jobs</p>
                         </div>
 
                         <div id="connTestContainer" class="bg-white border border-gray-300 rounded-lg p-3 mt-4 transition-colors">
@@ -627,30 +616,43 @@
                 <!-- BigQuery/Firestore Form -->
                 <div id="connFormBigQuery" class="conn-form hidden">
                     <div class="space-y-3">
+                        <!-- Connection Name Section (moved to top) -->
                         <div>
-                            <label class="block text-sm font-semibold text-gray-700 mb-1.5">Project ID</label>
+                            <label class="block text-sm font-semibold text-gray-700 mb-1.5">
+                                Connection Name <span class="text-red-500">*</span>
+                            </label>
+                            <input type="text" id="connNameBQ" placeholder="e.g., Production BigQuery or Firestore DB" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <p class="text-xs text-gray-500 mt-1">Friendly name for this connection (e.g., "Memo2 Firestore", "Analytics BigQuery")</p>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-1.5">Project ID <span class="text-red-500">*</span></label>
                             <input type="text" id="connBigQueryProject" placeholder="my-gcp-project" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                         </div>
 
                         <div>
-                            <label class="block text-sm font-semibold text-gray-700 mb-1.5">Dataset / Collection Path</label>
-                            <input type="text" id="connBigQueryDataset" placeholder="raw_data" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                            <p class="text-xs text-gray-500 mt-1">BigQuery dataset name or Firestore collection path</p>
-                        </div>
-
-                        <div class="border-t border-gray-200 pt-3 mt-3">
-                            <label class="block text-sm font-semibold text-gray-700 mb-2">Service Account JSON</label>
-                            <textarea id="connServiceAccountJson" rows="4" placeholder='{"type": "service_account", "project_id": "...", ...}' class="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono"></textarea>
-                            <p class="text-xs text-gray-500 mt-1">Paste the contents of your service account JSON key file</p>
-                        </div>
-
-                        <!-- Connection Name Section -->
-                        <div class="border-t border-gray-200 pt-3 mt-3">
                             <label class="block text-sm font-semibold text-gray-700 mb-1.5">
-                                Connection Name <span class="text-red-500">*</span>
+                                Dataset / Collection Path
+                                <span class="text-xs font-normal text-gray-500">(Optional)</span>
                             </label>
-                            <input type="text" id="connNameBQ" placeholder="Production BigQuery" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                            <p class="text-xs text-gray-500 mt-1">This name will be saved for reuse in ETL jobs</p>
+                            <input type="text" id="connBigQueryDataset" placeholder="Leave empty to access all datasets/collections" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <p class="text-xs text-gray-500 mt-1">Optional: Specify a dataset (BigQuery) or collection (Firestore), or leave empty to access all</p>
+                        </div>
+
+                        <div>
+                            <div class="flex justify-between items-center mb-2">
+                                <label class="text-sm font-semibold text-gray-700">Service Account JSON <span class="text-red-500">*</span></label>
+                                <div>
+                                    <input type="file" id="connServiceAccountFile" accept=".json" class="hidden">
+                                    <button type="button" onclick="document.getElementById('connServiceAccountFile').click()" class="btn btn-secondary btn-sm flex items-center gap-1">
+                                        <i class="fas fa-upload"></i>
+                                        Upload JSON File
+                                    </button>
+                                </div>
+                            </div>
+
+                            <textarea id="connServiceAccountJson" rows="4" placeholder='{"type": "service_account", "project_id": "...", ...}' class="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono"></textarea>
+                            <p class="text-xs text-gray-500 mt-1">Upload your service account JSON file or paste the contents directly</p>
                         </div>
 
                         <div id="connTestContainerBQ" class="bg-white border border-gray-300 rounded-lg p-3 mt-4 transition-colors">
@@ -669,24 +671,24 @@
                 <!-- NoSQL Database Form -->
                 <div id="connFormNoSQL" class="conn-form hidden">
                     <div class="space-y-3">
+                        <!-- Connection Name Section (moved to top) -->
                         <div>
-                            <label class="block text-sm font-semibold text-gray-700 mb-1.5">Connection String</label>
+                            <label class="block text-sm font-semibold text-gray-700 mb-1.5">
+                                Connection Name <span class="text-red-500">*</span>
+                            </label>
+                            <input type="text" id="connNameNoSQL" placeholder="e.g., Production MongoDB" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <p class="text-xs text-gray-500 mt-1">Friendly name for this connection</p>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-1.5">Connection String <span class="text-red-500">*</span></label>
                             <textarea id="connConnectionString" rows="2" placeholder="mongodb://username:password@host:port/database" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono"></textarea>
                             <p class="text-xs text-gray-500 mt-1">Full connection string for your NoSQL database</p>
                         </div>
 
                         <div>
-                            <label class="block text-sm font-semibold text-gray-700 mb-1.5">Database Name</label>
+                            <label class="block text-sm font-semibold text-gray-700 mb-1.5">Database Name <span class="text-red-500">*</span></label>
                             <input type="text" id="connNoSQLDatabase" placeholder="mydb" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                        </div>
-
-                        <!-- Connection Name Section -->
-                        <div class="border-t border-gray-200 pt-3 mt-3">
-                            <label class="block text-sm font-semibold text-gray-700 mb-1.5">
-                                Connection Name <span class="text-red-500">*</span>
-                            </label>
-                            <input type="text" id="connNameNoSQL" placeholder="Production MongoDB" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                            <p class="text-xs text-gray-500 mt-1">This name will be saved for reuse in ETL jobs</p>
                         </div>
 
                         <div id="connTestContainerNoSQL" class="bg-white border border-gray-300 rounded-lg p-3 mt-4 transition-colors">
@@ -705,19 +707,19 @@
                 <!-- File Source Form -->
                 <div id="connFormFiles" class="conn-form hidden">
                     <div class="space-y-3">
+                        <!-- Connection Name Section (moved to top) -->
                         <div>
-                            <label class="block text-sm font-semibold text-gray-700 mb-1.5">File Path</label>
-                            <input type="text" id="connFilePath" placeholder="gs://bucket-name/path/to/file.csv or /local/path/file.csv" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                            <p class="text-xs text-gray-500 mt-1">GCS path (gs://...), S3 path (s3://...), or local file path</p>
-                        </div>
-
-                        <!-- Connection Name Section -->
-                        <div class="border-t border-gray-200 pt-3 mt-3">
                             <label class="block text-sm font-semibold text-gray-700 mb-1.5">
                                 Connection Name <span class="text-red-500">*</span>
                             </label>
-                            <input type="text" id="connNameFiles" placeholder="Monthly Sales CSV" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                            <p class="text-xs text-gray-500 mt-1">This name will be saved for reuse in ETL jobs</p>
+                            <input type="text" id="connNameFiles" placeholder="e.g., Monthly Sales CSV" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <p class="text-xs text-gray-500 mt-1">Friendly name for this connection</p>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-1.5">File Path <span class="text-red-500">*</span></label>
+                            <input type="text" id="connFilePath" placeholder="gs://bucket-name/path/to/file.csv or /local/path/file.csv" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <p class="text-xs text-gray-500 mt-1">GCS path (gs://...), S3 path (s3://...), or local file path</p>
                         </div>
 
                         <div id="connTestContainerFiles" class="bg-white border border-gray-300 rounded-lg p-3 mt-4 transition-colors">
@@ -729,6 +731,177 @@
                                 <span id="connStatusFiles" class="ml-auto text-sm"></span>
                             </div>
                             <div id="connMessageFiles" class="mt-2 text-sm hidden"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- GCS (Google Cloud Storage) Form -->
+                <div id="connFormGCS" class="conn-form hidden">
+                    <div class="space-y-3">
+                        <!-- Connection Name Section -->
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-1.5">
+                                Connection Name <span class="text-red-500">*</span>
+                            </label>
+                            <input type="text" id="connNameGCS" placeholder="e.g., Production GCS Bucket" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <p class="text-xs text-gray-500 mt-1">Friendly name for this connection</p>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-1.5">Bucket Path <span class="text-red-500">*</span></label>
+                            <input type="text" id="connGCSBucketPath" placeholder="gs://my-bucket-name" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono">
+                            <p class="text-xs text-gray-500 mt-1">Full GCS bucket path (e.g., gs://my-bucket-name)</p>
+                        </div>
+
+                        <div>
+                            <div class="flex justify-between items-center mb-2">
+                                <label class="text-sm font-semibold text-gray-700">Service Account JSON <span class="text-red-500">*</span></label>
+                                <div>
+                                    <input type="file" id="connGCSServiceAccountFile" accept=".json" class="hidden">
+                                    <button type="button" onclick="document.getElementById('connGCSServiceAccountFile').click()" class="btn btn-secondary btn-sm flex items-center gap-1">
+                                        <i class="fas fa-upload"></i>
+                                        Upload JSON File
+                                    </button>
+                                </div>
+                            </div>
+                            <textarea id="connGCSServiceAccountJson" rows="4" placeholder="Paste service account JSON here or upload file" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono"></textarea>
+                            <p class="text-xs text-gray-500 mt-1">Service account JSON key with read access to the bucket</p>
+                        </div>
+
+                        <div id="connTestContainerGCS" class="bg-white border border-gray-300 rounded-lg p-3 mt-4 transition-colors">
+                            <div class="flex items-center gap-3">
+                                <button onclick="testConnectionStandalone()" id="connTestBtnGCS" class="btn btn-primary">
+                                    <span>Test Connection</span>
+                                </button>
+                                <span class="text-sm text-gray-600">Test first, then save</span>
+                                <span id="connStatusGCS" class="ml-auto text-sm"></span>
+                            </div>
+                            <div id="connMessageGCS" class="mt-2 text-sm hidden"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- S3 (AWS S3) Form -->
+                <div id="connFormS3" class="conn-form hidden">
+                    <div class="space-y-3">
+                        <!-- Connection Name Section -->
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-1.5">
+                                Connection Name <span class="text-red-500">*</span>
+                            </label>
+                            <input type="text" id="connNameS3" placeholder="e.g., Production S3 Bucket" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <p class="text-xs text-gray-500 mt-1">Friendly name for this connection</p>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-1.5">Bucket Path <span class="text-red-500">*</span></label>
+                            <input type="text" id="connS3BucketPath" placeholder="s3://my-bucket-name" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono">
+                            <p class="text-xs text-gray-500 mt-1">Full S3 bucket path (e.g., s3://my-bucket-name)</p>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-1.5">AWS Access Key ID <span class="text-red-500">*</span></label>
+                            <input type="text" id="connS3AccessKeyId" placeholder="AKIAIOSFODNN7EXAMPLE" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono">
+                            <p class="text-xs text-gray-500 mt-1">AWS IAM user access key ID</p>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-1.5">AWS Secret Access Key <span class="text-red-500">*</span></label>
+                            <input type="password" id="connS3SecretAccessKey" placeholder="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono">
+                            <p class="text-xs text-gray-500 mt-1">AWS secret access key (stored securely in Secret Manager)</p>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-1.5">AWS Region <span class="text-red-500">*</span></label>
+                            <select id="connS3Region" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                <option value="us-east-1">US East (N. Virginia) - us-east-1</option>
+                                <option value="us-east-2">US East (Ohio) - us-east-2</option>
+                                <option value="us-west-1">US West (N. California) - us-west-1</option>
+                                <option value="us-west-2">US West (Oregon) - us-west-2</option>
+                                <option value="eu-west-1">EU (Ireland) - eu-west-1</option>
+                                <option value="eu-west-2">EU (London) - eu-west-2</option>
+                                <option value="eu-central-1">EU (Frankfurt) - eu-central-1</option>
+                                <option value="ap-southeast-1">Asia Pacific (Singapore) - ap-southeast-1</option>
+                                <option value="ap-southeast-2">Asia Pacific (Sydney) - ap-southeast-2</option>
+                                <option value="ap-northeast-1">Asia Pacific (Tokyo) - ap-northeast-1</option>
+                                <option value="ap-south-1">Asia Pacific (Mumbai) - ap-south-1</option>
+                                <option value="sa-east-1">South America (São Paulo) - sa-east-1</option>
+                            </select>
+                            <p class="text-xs text-gray-500 mt-1">AWS region where your bucket is located</p>
+                        </div>
+
+                        <div id="connTestContainerS3" class="bg-white border border-gray-300 rounded-lg p-3 mt-4 transition-colors">
+                            <div class="flex items-center gap-3">
+                                <button onclick="testConnectionStandalone()" id="connTestBtnS3" class="btn btn-primary">
+                                    <span>Test Connection</span>
+                                </button>
+                                <span class="text-sm text-gray-600">Test first, then save</span>
+                                <span id="connStatusS3" class="ml-auto text-sm"></span>
+                            </div>
+                            <div id="connMessageS3" class="mt-2 text-sm hidden"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Azure Blob Storage Form -->
+                <div id="connFormAzureBlob" class="conn-form hidden">
+                    <div class="space-y-3">
+                        <!-- Connection Name Section -->
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-1.5">
+                                Connection Name <span class="text-red-500">*</span>
+                            </label>
+                            <input type="text" id="connNameAzureBlob" placeholder="e.g., Production Azure Storage" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <p class="text-xs text-gray-500 mt-1">Friendly name for this connection</p>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-1.5">Storage Account Name <span class="text-red-500">*</span></label>
+                            <input type="text" id="connAzureStorageAccount" placeholder="mystorageaccount" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono">
+                            <p class="text-xs text-gray-500 mt-1">Azure storage account name</p>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-1.5">Container Path <span class="text-red-500">*</span></label>
+                            <input type="text" id="connAzureContainerPath" placeholder="https://mystorageaccount.blob.core.windows.net/mycontainer" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono">
+                            <p class="text-xs text-gray-500 mt-1">Full Azure Blob container URL</p>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-1.5">Authentication Method <span class="text-red-500">*</span></label>
+                            <div class="space-y-2">
+                                <label class="flex items-center gap-2 p-3 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50">
+                                    <input type="radio" name="azureAuthMethod" value="account_key" checked onchange="toggleAzureAuthFields()">
+                                    <span class="font-medium">Account Key</span>
+                                </label>
+                                <label class="flex items-center gap-2 p-3 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50">
+                                    <input type="radio" name="azureAuthMethod" value="sas_token" onchange="toggleAzureAuthFields()">
+                                    <span class="font-medium">SAS Token</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div id="connAzureAccountKeyField">
+                            <label class="block text-sm font-semibold text-gray-700 mb-1.5">Account Key <span class="text-red-500">*</span></label>
+                            <input type="password" id="connAzureAccountKey" placeholder="Enter storage account key" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono">
+                            <p class="text-xs text-gray-500 mt-1">Storage account key (stored securely in Secret Manager)</p>
+                        </div>
+
+                        <div id="connAzureSasTokenField" class="hidden">
+                            <label class="block text-sm font-semibold text-gray-700 mb-1.5">SAS Token <span class="text-red-500">*</span></label>
+                            <textarea id="connAzureSasToken" rows="2" placeholder="?sv=2021-06-08&ss=bfqt&srt=sco&sp=rwdlacupitfx..." class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono"></textarea>
+                            <p class="text-xs text-gray-500 mt-1">Shared Access Signature token (stored securely in Secret Manager)</p>
+                        </div>
+
+                        <div id="connTestContainerAzureBlob" class="bg-white border border-gray-300 rounded-lg p-3 mt-4 transition-colors">
+                            <div class="flex items-center gap-3">
+                                <button onclick="testConnectionStandalone()" id="connTestBtnAzureBlob" class="btn btn-primary">
+                                    <span>Test Connection</span>
+                                </button>
+                                <span class="text-sm text-gray-600">Test first, then save</span>
+                                <span id="connStatusAzureBlob" class="ml-auto text-sm"></span>
+                            </div>
+                            <div id="connMessageAzureBlob" class="mt-2 text-sm hidden"></div>
                         </div>
                     </div>
                 </div>
@@ -1732,7 +1905,7 @@ function showErrorNotification(message) {
 
 function switchConnTab(tab) {
     // Update tab buttons
-    const tabs = ['relational', 'files', 'nosql'];
+    const tabs = ['relational', 'storage', 'nosql'];
     tabs.forEach(t => {
         const btnId = 'connTab' + t.charAt(0).toUpperCase() + t.slice(1);
         const btn = document.getElementById(btnId);
@@ -1898,12 +2071,9 @@ function connShowForm(sourceType) {
         'redis': 'Redis',
         'firestore': 'Firestore',
         'dynamodb': 'DynamoDB',
-        'csv': 'CSV Files',
-        'json': 'JSON Files',
-        'parquet': 'Parquet Files',
-        'avro': 'Avro Files',
-        'excel': 'Excel Files',
-        'txt': 'Text Files'
+        'gcs': 'Google Cloud Storage',
+        's3': 'AWS S3',
+        'azure_blob': 'Azure Blob Storage'
     };
     const displayEl = document.getElementById('connSelectedTypeDisplay');
     if (displayEl) displayEl.textContent = typeNames[sourceType] || sourceType;
@@ -1912,14 +2082,16 @@ function connShowForm(sourceType) {
     const relationalDBs = ['postgresql', 'mysql', 'mariadb', 'oracle', 'sqlserver', 'db2', 'redshift', 'snowflake', 'synapse', 'teradata'];
     const bigQueryTypes = ['bigquery', 'firestore'];
     const nosqlTypes = ['mongodb', 'cassandra', 'redis', 'dynamodb'];
-    const fileTypes = ['csv', 'json', 'parquet', 'avro', 'excel', 'txt'];
+    const storageTypes = ['gcs', 's3', 'azure_blob'];
 
     // Get form elements
     const portField = document.getElementById('connPort');
     const relationalForm = document.getElementById('connFormRelationalDB');
     const bigQueryForm = document.getElementById('connFormBigQuery');
     const nosqlForm = document.getElementById('connFormNoSQL');
-    const filesForm = document.getElementById('connFormFiles');
+    const gcsForm = document.getElementById('connFormGCS');
+    const s3Form = document.getElementById('connFormS3');
+    const azureBlobForm = document.getElementById('connFormAzureBlob');
 
     // Show appropriate form and set defaults
     if (relationalDBs.includes(sourceType)) {
@@ -1944,8 +2116,12 @@ function connShowForm(sourceType) {
         if (bigQueryForm) bigQueryForm.classList.remove('hidden');
     } else if (nosqlTypes.includes(sourceType)) {
         if (nosqlForm) nosqlForm.classList.remove('hidden');
-    } else if (fileTypes.includes(sourceType)) {
-        if (filesForm) filesForm.classList.remove('hidden');
+    } else if (sourceType === 'gcs') {
+        if (gcsForm) gcsForm.classList.remove('hidden');
+    } else if (sourceType === 's3') {
+        if (s3Form) s3Form.classList.remove('hidden');
+    } else if (sourceType === 'azure_blob') {
+        if (azureBlobForm) azureBlobForm.classList.remove('hidden');
     }
 }
 
@@ -1956,7 +2132,7 @@ async function testConnectionStandalone() {
     const relationalDBs = ['postgresql', 'mysql', 'mariadb', 'oracle', 'sqlserver', 'db2', 'redshift', 'snowflake', 'synapse', 'teradata'];
     const bigQueryTypes = ['bigquery', 'firestore'];
     const nosqlTypes = ['mongodb', 'cassandra', 'redis', 'dynamodb'];
-    const fileTypes = ['csv', 'json', 'parquet', 'avro', 'excel', 'txt'];
+    const storageTypes = ['gcs', 's3', 'azure_blob'];
 
     let requestData = { source_type: type };
     let statusEl, messageEl, testBtn, saveBtn;
@@ -1985,8 +2161,9 @@ async function testConnectionStandalone() {
         const dataset = document.getElementById('connBigQueryDataset').value.trim();
         const serviceAccountJson = document.getElementById('connServiceAccountJson').value.trim();
 
-        if (!projectId || !dataset || !serviceAccountJson) {
-            alert('Please fill all connection fields');
+        // For both BigQuery and Firestore, dataset/collection is optional
+        if (!projectId || !serviceAccountJson) {
+            alert('Please fill all required fields (Project ID, Service Account JSON)');
             return;
         }
 
@@ -2011,18 +2188,67 @@ async function testConnectionStandalone() {
         testBtn = document.getElementById('connTestBtnNoSQL');
         saveBtn = document.getElementById('connSaveBtn');
 
-    } else if (fileTypes.includes(type)) {
-        const filePath = document.getElementById('connFilePath').value.trim();
+    } else if (type === 'gcs') {
+        const bucketPath = document.getElementById('connGCSBucketPath').value.trim();
+        const serviceAccountJson = document.getElementById('connGCSServiceAccountJson').value.trim();
 
-        if (!filePath) {
-            alert('Please enter a file path');
+        if (!bucketPath || !serviceAccountJson) {
+            alert('Please fill all required fields (Bucket Path, Service Account JSON)');
             return;
         }
 
-        requestData = { ...requestData, file_path: filePath };
-        statusEl = document.getElementById('connStatusFiles');
-        messageEl = document.getElementById('connMessageFiles');
-        testBtn = document.getElementById('connTestBtnFiles');
+        requestData = { ...requestData, bucket_path: bucketPath, service_account_json: serviceAccountJson };
+        statusEl = document.getElementById('connStatusGCS');
+        messageEl = document.getElementById('connMessageGCS');
+        testBtn = document.getElementById('connTestBtnGCS');
+        saveBtn = document.getElementById('connSaveBtn');
+
+    } else if (type === 's3') {
+        const bucketPath = document.getElementById('connS3BucketPath').value.trim();
+        const accessKeyId = document.getElementById('connS3AccessKeyId').value.trim();
+        const secretAccessKey = document.getElementById('connS3SecretAccessKey').value;
+        const region = document.getElementById('connS3Region').value;
+
+        if (!bucketPath || !accessKeyId || !secretAccessKey || !region) {
+            alert('Please fill all required fields');
+            return;
+        }
+
+        requestData = { ...requestData, bucket_path: bucketPath, aws_access_key_id: accessKeyId, aws_secret_access_key: secretAccessKey, aws_region: region };
+        statusEl = document.getElementById('connStatusS3');
+        messageEl = document.getElementById('connMessageS3');
+        testBtn = document.getElementById('connTestBtnS3');
+        saveBtn = document.getElementById('connSaveBtn');
+
+    } else if (type === 'azure_blob') {
+        const storageAccount = document.getElementById('connAzureStorageAccount').value.trim();
+        const containerPath = document.getElementById('connAzureContainerPath').value.trim();
+        const authMethod = document.querySelector('input[name="azureAuthMethod"]:checked').value;
+
+        if (!storageAccount || !containerPath) {
+            alert('Please fill all required fields');
+            return;
+        }
+
+        if (authMethod === 'account_key') {
+            const accountKey = document.getElementById('connAzureAccountKey').value;
+            if (!accountKey) {
+                alert('Please enter the Account Key');
+                return;
+            }
+            requestData = { ...requestData, bucket_path: containerPath, azure_storage_account: storageAccount, azure_account_key: accountKey };
+        } else {
+            const sasToken = document.getElementById('connAzureSasToken').value.trim();
+            if (!sasToken) {
+                alert('Please enter the SAS Token');
+                return;
+            }
+            requestData = { ...requestData, bucket_path: containerPath, azure_storage_account: storageAccount, azure_sas_token: sasToken };
+        }
+
+        statusEl = document.getElementById('connStatusAzureBlob');
+        messageEl = document.getElementById('connMessageAzureBlob');
+        testBtn = document.getElementById('connTestBtnAzureBlob');
         saveBtn = document.getElementById('connSaveBtn');
     }
 
@@ -2097,7 +2323,7 @@ async function saveConnectionStandalone() {
     const relationalDBs = ['postgresql', 'mysql', 'mariadb', 'oracle', 'sqlserver', 'db2', 'redshift', 'snowflake', 'synapse', 'teradata'];
     const bigQueryTypes = ['bigquery', 'firestore'];
     const nosqlTypes = ['mongodb', 'cassandra', 'redis', 'dynamodb'];
-    const fileTypes = ['csv', 'json', 'parquet', 'avro', 'excel', 'txt'];
+    const storageTypes = ['gcs', 's3', 'azure_blob'];
 
     let connectionData = { source_type: type };
     let connectionName;
@@ -2149,8 +2375,8 @@ async function saveConnectionStandalone() {
             database: document.getElementById('connNoSQLDatabase').value.trim(),
         };
 
-    } else if (fileTypes.includes(type)) {
-        connectionName = document.getElementById('connNameFiles').value.trim();
+    } else if (type === 'gcs') {
+        connectionName = document.getElementById('connNameGCS').value.trim();
         if (!connectionName) {
             alert('Please enter a connection name');
             return;
@@ -2159,8 +2385,47 @@ async function saveConnectionStandalone() {
         connectionData = {
             ...connectionData,
             name: connectionName,
-            file_path: document.getElementById('connFilePath').value.trim(),
+            bucket_path: document.getElementById('connGCSBucketPath').value.trim(),
+            service_account_json: document.getElementById('connGCSServiceAccountJson').value.trim(),
         };
+
+    } else if (type === 's3') {
+        connectionName = document.getElementById('connNameS3').value.trim();
+        if (!connectionName) {
+            alert('Please enter a connection name');
+            return;
+        }
+
+        connectionData = {
+            ...connectionData,
+            name: connectionName,
+            bucket_path: document.getElementById('connS3BucketPath').value.trim(),
+            aws_access_key_id: document.getElementById('connS3AccessKeyId').value.trim(),
+            aws_secret_access_key: document.getElementById('connS3SecretAccessKey').value,
+            aws_region: document.getElementById('connS3Region').value,
+        };
+
+    } else if (type === 'azure_blob') {
+        connectionName = document.getElementById('connNameAzureBlob').value.trim();
+        if (!connectionName) {
+            alert('Please enter a connection name');
+            return;
+        }
+
+        const authMethod = document.querySelector('input[name="azureAuthMethod"]:checked').value;
+
+        connectionData = {
+            ...connectionData,
+            name: connectionName,
+            bucket_path: document.getElementById('connAzureContainerPath').value.trim(),
+            azure_storage_account: document.getElementById('connAzureStorageAccount').value.trim(),
+        };
+
+        if (authMethod === 'account_key') {
+            connectionData.azure_account_key = document.getElementById('connAzureAccountKey').value;
+        } else {
+            connectionData.azure_sas_token = document.getElementById('connAzureSasToken').value.trim();
+        }
     }
 
     const saveBtn = document.getElementById('connSaveBtn');
@@ -4013,7 +4278,106 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     });
+
+    // Handle Service Account JSON file upload (for BigQuery/Firestore)
+    const serviceAccountFileInput = document.getElementById('connServiceAccountFile');
+    if (serviceAccountFileInput) {
+        serviceAccountFileInput.addEventListener('change', function(event) {
+            const file = event.target.files[0];
+            if (file) {
+                // Validate file type
+                if (!file.name.endsWith('.json')) {
+                    alert('Please select a JSON file');
+                    event.target.value = ''; // Clear the input
+                    return;
+                }
+
+                // Read file contents
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    try {
+                        const contents = e.target.result;
+                        // Validate it's valid JSON
+                        JSON.parse(contents);
+                        // Populate textarea
+                        document.getElementById('connServiceAccountJson').value = contents;
+                        // Show success message
+                        const textarea = document.getElementById('connServiceAccountJson');
+                        textarea.classList.add('border-green-500');
+                        setTimeout(() => {
+                            textarea.classList.remove('border-green-500');
+                        }, 2000);
+                    } catch (error) {
+                        alert('Invalid JSON file. Please check the file contents.');
+                        event.target.value = ''; // Clear the input
+                    }
+                };
+                reader.onerror = function() {
+                    alert('Error reading file. Please try again.');
+                    event.target.value = ''; // Clear the input
+                };
+                reader.readAsText(file);
+            }
+        });
+    }
+
+    // Handle Service Account JSON file upload (for GCS)
+    const gcsServiceAccountFileInput = document.getElementById('connGCSServiceAccountFile');
+    if (gcsServiceAccountFileInput) {
+        gcsServiceAccountFileInput.addEventListener('change', function(event) {
+            const file = event.target.files[0];
+            if (file) {
+                // Validate file type
+                if (!file.name.endsWith('.json')) {
+                    alert('Please select a JSON file');
+                    event.target.value = ''; // Clear the input
+                    return;
+                }
+
+                // Read file contents
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    try {
+                        const contents = e.target.result;
+                        // Validate it's valid JSON
+                        JSON.parse(contents);
+                        // Populate textarea
+                        document.getElementById('connGCSServiceAccountJson').value = contents;
+                        // Show success message
+                        const textarea = document.getElementById('connGCSServiceAccountJson');
+                        textarea.classList.add('border-green-500');
+                        setTimeout(() => {
+                            textarea.classList.remove('border-green-500');
+                        }, 2000);
+                    } catch (error) {
+                        alert('Invalid JSON file. Please check the file contents.');
+                        event.target.value = ''; // Clear the input
+                    }
+                };
+                reader.onerror = function() {
+                    alert('Error reading file. Please try again.');
+                    event.target.value = ''; // Clear the input
+                };
+                reader.readAsText(file);
+            }
+        });
+    }
 });
+
+// Toggle Azure authentication fields based on selected method
+function toggleAzureAuthFields() {
+    const authMethod = document.querySelector('input[name="azureAuthMethod"]:checked');
+    const accountKeyField = document.getElementById('connAzureAccountKeyField');
+    const sasTokenField = document.getElementById('connAzureSasTokenField');
+
+    if (authMethod && authMethod.value === 'account_key') {
+        accountKeyField.classList.remove('hidden');
+        sasTokenField.classList.add('hidden');
+    } else {
+        accountKeyField.classList.add('hidden');
+        sasTokenField.classList.remove('hidden');
+    }
+}
 
 </script>
 {% endblock %}

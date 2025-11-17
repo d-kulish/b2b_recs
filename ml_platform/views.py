@@ -1106,6 +1106,14 @@ def api_connection_test_wizard(request, model_id):
             'dataset': data.get('dataset', ''),
             'service_account_json': data.get('service_account_json', ''),
             'connection_string': data.get('connection_string', ''),
+            # Cloud Storage parameters
+            'bucket_path': data.get('bucket_path', ''),
+            'aws_access_key_id': data.get('aws_access_key_id', ''),
+            'aws_secret_access_key': data.get('aws_secret_access_key', ''),
+            'aws_region': data.get('aws_region', ''),
+            'azure_storage_account': data.get('azure_storage_account', ''),
+            'azure_account_key': data.get('azure_account_key', ''),
+            'azure_sas_token': data.get('azure_sas_token', ''),
         }
 
         # Test the connection
@@ -1299,6 +1307,14 @@ def api_connection_create_standalone(request, model_id):
             'dataset': data.get('dataset', ''),
             'service_account_json': data.get('service_account_json', ''),
             'connection_string': data.get('connection_string', ''),
+            # Cloud Storage parameters
+            'bucket_path': data.get('bucket_path', ''),
+            'aws_access_key_id': data.get('aws_access_key_id', ''),
+            'aws_secret_access_key': data.get('aws_secret_access_key', ''),
+            'aws_region': data.get('aws_region', ''),
+            'azure_storage_account': data.get('azure_storage_account', ''),
+            'azure_account_key': data.get('azure_account_key', ''),
+            'azure_sas_token': data.get('azure_sas_token', ''),
         }
 
         # Test the connection first
@@ -1325,6 +1341,12 @@ def api_connection_create_standalone(request, model_id):
                 bigquery_project=data.get('project_id', ''),
                 bigquery_dataset=data.get('dataset', ''),
                 connection_string=data.get('connection_string', ''),
+                # Cloud Storage fields
+                bucket_path=data.get('bucket_path', ''),
+                service_account_json=data.get('service_account_json', ''),
+                aws_access_key_id=data.get('aws_access_key_id', ''),
+                aws_region=data.get('aws_region', ''),
+                azure_storage_account=data.get('azure_storage_account', ''),
                 is_enabled=True,
                 connection_tested=True,
                 last_test_at=timezone.now(),

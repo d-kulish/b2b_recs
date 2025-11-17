@@ -473,6 +473,87 @@ Faster job creation, centralized credential management
 **Files Modified:**
 - `templates/ml_platform/model_etl.html` - Card rendering and layout
 
+### 🎯 Milestone 10.5: Cloud Storage Integration & Storage-First Architecture ✅ COMPLETE
+**Date Completed:** November 17, 2025
+
+**Objective:** Implement comprehensive cloud storage support (GCS, S3, Azure Blob) with a storage-first approach where connections represent bucket/container access rather than file types.
+
+**Architecture Decision:**
+- Replaced file-type-first (CSV, Parquet, JSON) with storage-first approach
+- One connection = one bucket/container (regardless of file formats inside)
+- File type selection deferred to ETL job creation (not connection setup)
+- Matches industry best practices and provides better flexibility
+
+**Backend Changes:**
+- [x] Updated Connection model SOURCE_TYPE_CHOICES ✓
+  - Removed: csv, json, parquet, avro, excel, txt (6 file types)
+  - Added: gcs, s3, azure_blob (3 storage providers)
+- [x] Added cloud storage authentication fields to Connection model ✓
+  - GCS: bucket_path, service_account_json
+  - S3: aws_access_key_id, aws_secret_access_key_secret, aws_region
+  - Azure: azure_storage_account, azure_account_key_secret, azure_sas_token_secret
+- [x] Applied database migration (0009_connection_aws_access_key_id...) ✓
+- [x] Implemented connection test functions in connection_manager.py ✓
+  - test_gcs(): Google Cloud Storage with service account authentication
+  - test_s3(): AWS S3 with access key/secret key authentication
+  - test_azure_blob(): Azure Blob Storage with account key or SAS token
+- [x] Updated view functions to handle storage parameters ✓
+  - api_connection_test_wizard: Extract bucket_path, AWS credentials, Azure credentials
+  - api_connection_create_standalone: Save storage connection fields
+
+**Frontend Changes:**
+- [x] Renamed "Flat Files" tab to "Cloud Storage" ✓
+- [x] Created three comprehensive connection forms ✓
+  - **GCS Form**: Bucket path + Service Account JSON (with file upload button)
+  - **S3 Form**: Bucket path + Access Key ID + Secret Access Key + Region selector (12 regions)
+  - **Azure Blob Form**: Storage account + Container path + Auth method toggle (Account Key or SAS Token)
+- [x] Updated JavaScript routing logic ✓
+  - switchConnTab(): Handle 'storage' tab instead of 'files'
+  - connShowForm(): Route to correct storage form (gcs, s3, azure_blob)
+  - testConnectionStandalone(): Collect storage credentials
+  - saveConnectionStandalone(): Save storage connections
+- [x] Added file upload handler for GCS service account JSON ✓
+- [x] Added toggleAzureAuthFields() for Azure authentication switching ✓
+
+**Dependencies Installed:**
+- [x] google-cloud-storage==2.19.0 ✓
+- [x] boto3==1.35.94 (AWS SDK) ✓
+- [x] azure-storage-blob==12.25.0 ✓
+
+**Connection Test Features:**
+- **GCS**: Validates service account JSON, connects to bucket, lists up to 100 files
+- **S3**: Validates AWS credentials, connects to bucket, lists up to 100 objects
+- **Azure Blob**: Supports both Account Key and SAS Token authentication, lists up to 100 blobs
+- All test functions return file metadata: name, size, last_modified
+
+**Security:**
+- Service account JSON stored directly in Connection model (encrypted at rest)
+- AWS Secret Access Key stored in GCP Secret Manager (never in Django DB)
+- Azure Account Key/SAS Token stored in GCP Secret Manager (never in Django DB)
+- Only non-sensitive fields (bucket_path, aws_access_key_id, azure_storage_account) in Django DB
+
+**Key Improvements:**
+- ✅ Storage-first architecture (connection = bucket access, not file type)
+- ✅ Support for 3 major cloud storage providers (GCS, S3, Azure)
+- ✅ Comprehensive authentication methods (service account, access keys, SAS tokens)
+- ✅ File upload UX for service account JSON files
+- ✅ Dual authentication options for Azure (Account Key or SAS Token)
+- ✅ Real-time file listing during connection test (up to 100 files shown)
+- ✅ Better flexibility - one connection can access multiple file formats
+
+**Files Modified:**
+- `ml_platform/models.py` - Updated SOURCE_TYPE_CHOICES, added storage fields
+- `ml_platform/migrations/0009_*.py` - Database migration for storage fields
+- `templates/ml_platform/model_etl.html` - New storage forms, updated JavaScript
+- `ml_platform/utils/connection_manager.py` - Three new test functions (test_gcs, test_s3, test_azure_blob)
+- `ml_platform/views.py` - Updated to handle storage parameters
+- `requirements.txt` - Added cloud storage client libraries
+
+**Testing Notes:**
+- GCS connection tested successfully with memo2 project bucket
+- Required IAM role: **Storage Object Viewer** (for read access)
+- Service account: `firestore-etl-test@memo2-456215.iam.gserviceaccount.com`
+
 ### 🎯 Milestone 11: Production Readiness (Future)
 - [ ] Test with MySQL database connection
 - [ ] Test with BigQuery dataset

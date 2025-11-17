@@ -12,8 +12,12 @@ import json
 import psycopg2
 import pymysql
 from datetime import datetime
-from google.cloud import secretmanager
+from google.cloud import secretmanager, storage
 from google.api_core import exceptions as gcp_exceptions
+import boto3
+from botocore.exceptions import ClientError, NoCredentialsError
+from azure.storage.blob import BlobServiceClient
+from azure.core.exceptions import AzureError
 
 
 # GCP Project ID (should match your project)
@@ -25,7 +29,7 @@ def test_and_fetch_metadata(source_type, connection_params):
     Main entry point for testing connections and fetching metadata.
 
     Args:
-        source_type (str): Type of data source ('postgresql', 'mysql', 'bigquery', etc.)
+        source_type (str): Type of data source ('postgresql', 'mysql', 'bigquery', 'firestore', etc.)
         connection_params (dict): Connection parameters (host, port, database, username, password, etc.)
 
     Returns:
@@ -45,6 +49,14 @@ def test_and_fetch_metadata(source_type, connection_params):
         return test_mysql(**connection_params)
     elif source_type == 'bigquery':
         return test_bigquery(**connection_params)
+    elif source_type == 'firestore':
+        return test_firestore(**connection_params)
+    elif source_type == 'gcs':
+        return test_gcs(**connection_params)
+    elif source_type == 's3':
+        return test_s3(**connection_params)
+    elif source_type == 'azure_blob':
+        return test_azure_blob(**connection_params)
     else:
         return {
             'success': False,
@@ -293,15 +305,15 @@ def test_mysql(host, port, database, username, password, timeout=10, **kwargs):
 
 def test_bigquery(project_id, dataset, service_account_json, **kwargs):
     """
-    Test BigQuery connection and fetch table metadata.
+    Test BigQuery connection and fetch dataset/table metadata.
 
     Args:
         project_id (str): GCP project ID
-        dataset (str): BigQuery dataset name
+        dataset (str): Optional - BigQuery dataset name (if empty, lists all datasets)
         service_account_json (str): Service account JSON key (as string)
 
     Returns:
-        dict: Connection result with table metadata
+        dict: Connection result with dataset/table metadata
     """
     try:
         from google.cloud import bigquery
@@ -318,37 +330,64 @@ def test_bigquery(project_id, dataset, service_account_json, **kwargs):
         )
 
         # Test connection by listing datasets
-        datasets = list(client.list_datasets())
+        all_datasets = list(client.list_datasets())
 
-        # Check if specified dataset exists
-        dataset_ref = client.dataset(dataset)
-        try:
-            client.get_dataset(dataset_ref)
-        except Exception:
+        # If dataset is specified, validate it and list tables
+        if dataset and dataset.strip():
+            dataset_ref = client.dataset(dataset)
+            try:
+                client.get_dataset(dataset_ref)
+            except Exception:
+                return {
+                    'success': False,
+                    'message': f'Dataset "{dataset}" not found in project "{project_id}"',
+                    'tables': []
+                }
+
+            # Fetch tables in the specified dataset
+            tables = []
+            table_list = client.list_tables(dataset)
+
+            for table_item in table_list:
+                table_ref = client.get_table(f"{project_id}.{dataset}.{table_item.table_id}")
+
+                tables.append({
+                    'name': table_item.table_id,
+                    'row_count': table_ref.num_rows,
+                    'last_updated': table_ref.modified.strftime('%Y-%m-%d %H:%M:%S') if table_ref.modified else 'Unknown'
+                })
+
             return {
-                'success': False,
-                'message': f'Dataset "{dataset}" not found in project "{project_id}"',
-                'tables': []
+                'success': True,
+                'message': f'Successfully connected to BigQuery dataset "{dataset}" ({len(tables)} tables found)',
+                'tables': tables
             }
+        else:
+            # No dataset specified - list all datasets in the project
+            datasets_info = []
+            for dataset_item in all_datasets:
+                # Get dataset details
+                try:
+                    dataset_ref = client.get_dataset(dataset_item.dataset_id)
+                    table_count = len(list(client.list_tables(dataset_item.dataset_id)))
 
-        # Fetch tables in the dataset
-        tables = []
-        table_list = client.list_tables(dataset)
+                    datasets_info.append({
+                        'name': dataset_item.dataset_id,
+                        'row_count': f'{table_count} tables',
+                        'last_updated': dataset_ref.modified.strftime('%Y-%m-%d %H:%M:%S') if dataset_ref.modified else 'Unknown'
+                    })
+                except Exception:
+                    datasets_info.append({
+                        'name': dataset_item.dataset_id,
+                        'row_count': 'Unknown',
+                        'last_updated': 'Unknown'
+                    })
 
-        for table_item in table_list:
-            table_ref = client.get_table(f"{project_id}.{dataset}.{table_item.table_id}")
-
-            tables.append({
-                'name': table_item.table_id,
-                'row_count': table_ref.num_rows,
-                'last_updated': table_ref.modified.strftime('%Y-%m-%d %H:%M:%S') if table_ref.modified else 'Unknown'
-            })
-
-        return {
-            'success': True,
-            'message': f'Successfully connected to BigQuery dataset "{dataset}" ({len(tables)} tables found)',
-            'tables': tables
-        }
+            return {
+                'success': True,
+                'message': f'Successfully connected to BigQuery project "{project_id}" ({len(datasets_info)} datasets found)',
+                'tables': datasets_info
+            }
 
     except json.JSONDecodeError:
         return {
@@ -363,6 +402,122 @@ def test_bigquery(project_id, dataset, service_account_json, **kwargs):
             'message': f'BigQuery connection error: {str(e)}',
             'tables': []
         }
+
+
+def test_firestore(project_id, dataset, service_account_json, **kwargs):
+    """
+    Test Firestore connection and fetch collection metadata.
+
+    Args:
+        project_id (str): GCP project ID
+        dataset (str): Optional - specific collection name to validate (not required)
+        service_account_json (str): Service account JSON key (as string)
+
+    Returns:
+        dict: Connection result with collection metadata (collections shown as 'tables')
+    """
+    try:
+        from google.cloud import firestore
+        from google.oauth2 import service_account
+
+        # Parse service account JSON
+        credentials_dict = json.loads(service_account_json)
+        credentials = service_account.Credentials.from_service_account_info(credentials_dict)
+
+        # Create Firestore client
+        db = firestore.Client(
+            project=project_id,
+            credentials=credentials
+        )
+
+        # Test connection by listing collections
+        collections = []
+        collection_refs = db.collections()
+
+        # Firestore collections() returns an iterator
+        for collection_ref in collection_refs:
+            collection_name = collection_ref.id
+
+            # Count documents in collection (limit to 1000 for performance)
+            try:
+                docs = list(collection_ref.limit(1000).stream())
+                doc_count = len(docs)
+
+                # If we got exactly 1000, there might be more
+                if doc_count == 1000:
+                    doc_count_display = "1000+"
+                else:
+                    doc_count_display = doc_count
+
+            except Exception:
+                doc_count_display = "Unknown"
+
+            collections.append({
+                'name': collection_name,
+                'row_count': doc_count_display,
+                'last_updated': 'N/A'  # Firestore doesn't provide collection-level timestamps
+            })
+
+        # If a specific collection was provided, validate it exists
+        if dataset and dataset.strip():
+            collection_found = any(c['name'] == dataset for c in collections)
+            if not collection_found:
+                return {
+                    'success': False,
+                    'message': f'Collection "{dataset}" not found in Firestore database',
+                    'tables': []
+                }
+            # Filter to show only the requested collection
+            collections = [c for c in collections if c['name'] == dataset]
+            return {
+                'success': True,
+                'message': f'Successfully connected to Firestore. Collection "{dataset}" found with {collections[0]["row_count"]} documents',
+                'tables': collections
+            }
+
+        # No specific collection requested - show all collections
+        if len(collections) == 0:
+            return {
+                'success': True,
+                'message': f'Successfully connected to Firestore project "{project_id}" (no collections found - database is empty)',
+                'tables': []
+            }
+
+        return {
+            'success': True,
+            'message': f'Successfully connected to Firestore project "{project_id}" ({len(collections)} collections found)',
+            'tables': collections
+        }
+
+    except json.JSONDecodeError:
+        return {
+            'success': False,
+            'message': 'Invalid service account JSON. Please check the format.',
+            'tables': []
+        }
+
+    except Exception as e:
+        error_msg = str(e)
+
+        # Provide helpful error messages for common issues
+        if 'permission' in error_msg.lower() or 'forbidden' in error_msg.lower():
+            return {
+                'success': False,
+                'message': f'Permission denied. Service account needs "Cloud Datastore User" or "Cloud Datastore Viewer" role for project "{project_id}"',
+                'tables': []
+            }
+        elif 'not found' in error_msg.lower():
+            return {
+                'success': False,
+                'message': f'Project "{project_id}" not found or Firestore is not enabled',
+                'tables': []
+            }
+        else:
+            return {
+                'success': False,
+                'message': f'Firestore connection error: {error_msg}',
+                'tables': []
+            }
 
 
 def save_credentials_to_secret_manager(model_id, source_id, credentials_dict):
@@ -555,3 +710,275 @@ def delete_secret_from_secret_manager(secret_name):
 
     except Exception as e:
         raise Exception(f"Failed to delete secret from Secret Manager: {str(e)}")
+
+
+def test_gcs(bucket_path, service_account_json, **kwargs):
+    """
+    Test Google Cloud Storage connection and list available files.
+
+    Args:
+        bucket_path (str): GCS bucket path (e.g., gs://my-bucket-name)
+        service_account_json (str): Service account JSON key as string
+
+    Returns:
+        dict: Connection result with file metadata
+    """
+    try:
+        # Parse service account JSON
+        try:
+            credentials_info = json.loads(service_account_json)
+        except json.JSONDecodeError:
+            return {
+                'success': False,
+                'message': 'Invalid service account JSON format',
+                'tables': []
+            }
+
+        # Extract bucket name from path (gs://bucket-name)
+        if not bucket_path.startswith('gs://'):
+            return {
+                'success': False,
+                'message': 'Bucket path must start with gs://',
+                'tables': []
+            }
+
+        bucket_name = bucket_path.replace('gs://', '').split('/')[0]
+
+        # Create GCS client with service account
+        from google.oauth2 import service_account
+        credentials = service_account.Credentials.from_service_account_info(credentials_info)
+        client = storage.Client(credentials=credentials, project=credentials_info.get('project_id'))
+
+        # Test connection by accessing bucket
+        bucket = client.get_bucket(bucket_name)
+
+        # List files in bucket (limit to 100 for performance)
+        blobs = list(bucket.list_blobs(max_results=100))
+
+        file_list = []
+        for blob in blobs:
+            file_list.append({
+                'name': blob.name,
+                'size': blob.size,
+                'last_modified': blob.updated.strftime('%Y-%m-%d %H:%M:%S') if blob.updated else 'N/A'
+            })
+
+        return {
+            'success': True,
+            'message': f'Successfully connected to GCS bucket: {bucket_name}. Found {len(file_list)} files (showing up to 100).',
+            'tables': file_list  # Using 'tables' for consistency with other connection types
+        }
+
+    except gcp_exceptions.NotFound:
+        return {
+            'success': False,
+            'message': f'Bucket not found: {bucket_name}. Check bucket name and permissions.',
+            'tables': []
+        }
+    except gcp_exceptions.Forbidden:
+        return {
+            'success': False,
+            'message': 'Access denied. Service account does not have permission to access this bucket.',
+            'tables': []
+        }
+    except Exception as e:
+        return {
+            'success': False,
+            'message': f'GCS connection failed: {str(e)}',
+            'tables': []
+        }
+
+
+def test_s3(bucket_path, aws_access_key_id, aws_secret_access_key, aws_region, **kwargs):
+    """
+    Test AWS S3 connection and list available files.
+
+    Args:
+        bucket_path (str): S3 bucket path (e.g., s3://my-bucket-name)
+        aws_access_key_id (str): AWS access key ID
+        aws_secret_access_key (str): AWS secret access key
+        aws_region (str): AWS region (e.g., us-east-1)
+
+    Returns:
+        dict: Connection result with file metadata
+    """
+    try:
+        # Extract bucket name from path (s3://bucket-name)
+        if not bucket_path.startswith('s3://'):
+            return {
+                'success': False,
+                'message': 'Bucket path must start with s3://',
+                'tables': []
+            }
+
+        bucket_name = bucket_path.replace('s3://', '').split('/')[0]
+
+        # Create S3 client
+        s3_client = boto3.client(
+            's3',
+            aws_access_key_id=aws_access_key_id,
+            aws_secret_access_key=aws_secret_access_key,
+            region_name=aws_region
+        )
+
+        # Test connection by listing objects (limit to 100)
+        response = s3_client.list_objects_v2(Bucket=bucket_name, MaxKeys=100)
+
+        file_list = []
+        if 'Contents' in response:
+            for obj in response['Contents']:
+                file_list.append({
+                    'name': obj['Key'],
+                    'size': obj['Size'],
+                    'last_modified': obj['LastModified'].strftime('%Y-%m-%d %H:%M:%S')
+                })
+
+        return {
+            'success': True,
+            'message': f'Successfully connected to S3 bucket: {bucket_name}. Found {len(file_list)} files (showing up to 100).',
+            'tables': file_list
+        }
+
+    except ClientError as e:
+        error_code = e.response['Error']['Code']
+        if error_code == 'NoSuchBucket':
+            return {
+                'success': False,
+                'message': f'Bucket not found: {bucket_name}',
+                'tables': []
+            }
+        elif error_code == 'InvalidAccessKeyId':
+            return {
+                'success': False,
+                'message': 'Invalid AWS Access Key ID',
+                'tables': []
+            }
+        elif error_code == 'SignatureDoesNotMatch':
+            return {
+                'success': False,
+                'message': 'Invalid AWS Secret Access Key',
+                'tables': []
+            }
+        elif error_code == 'AccessDenied':
+            return {
+                'success': False,
+                'message': 'Access denied. Check IAM permissions for this bucket.',
+                'tables': []
+            }
+        else:
+            return {
+                'success': False,
+                'message': f'S3 error: {error_code} - {e.response["Error"]["Message"]}',
+                'tables': []
+            }
+    except NoCredentialsError:
+        return {
+            'success': False,
+            'message': 'AWS credentials not provided',
+            'tables': []
+        }
+    except Exception as e:
+        return {
+            'success': False,
+            'message': f'S3 connection failed: {str(e)}',
+            'tables': []
+        }
+
+
+def test_azure_blob(bucket_path, azure_storage_account, azure_account_key=None, azure_sas_token=None, **kwargs):
+    """
+    Test Azure Blob Storage connection and list available files.
+
+    Args:
+        bucket_path (str): Azure container URL (e.g., https://account.blob.core.windows.net/container)
+        azure_storage_account (str): Storage account name
+        azure_account_key (str, optional): Account key for authentication
+        azure_sas_token (str, optional): SAS token for authentication (alternative to account key)
+
+    Returns:
+        dict: Connection result with file metadata
+    """
+    try:
+        # Validate authentication method
+        if not azure_account_key and not azure_sas_token:
+            return {
+                'success': False,
+                'message': 'Either account key or SAS token must be provided',
+                'tables': []
+            }
+
+        # Extract container name from URL
+        # Expected format: https://storageaccount.blob.core.windows.net/container
+        if not bucket_path.startswith('https://'):
+            return {
+                'success': False,
+                'message': 'Container path must be a valid HTTPS URL',
+                'tables': []
+            }
+
+        parts = bucket_path.replace('https://', '').split('/')
+        if len(parts) < 2:
+            return {
+                'success': False,
+                'message': 'Invalid container path format. Expected: https://account.blob.core.windows.net/container',
+                'tables': []
+            }
+
+        container_name = parts[1]
+
+        # Create BlobServiceClient
+        if azure_account_key:
+            account_url = f"https://{azure_storage_account}.blob.core.windows.net"
+            blob_service_client = BlobServiceClient(account_url=account_url, credential=azure_account_key)
+        else:
+            # SAS token authentication
+            account_url = f"https://{azure_storage_account}.blob.core.windows.net"
+            blob_service_client = BlobServiceClient(account_url=account_url, credential=azure_sas_token)
+
+        # Get container client and list blobs (limit to 100)
+        container_client = blob_service_client.get_container_client(container_name)
+
+        # Test connection by listing blobs
+        blob_list = list(container_client.list_blobs(results_per_page=100))
+
+        file_list = []
+        for blob in blob_list[:100]:  # Limit to 100
+            file_list.append({
+                'name': blob.name,
+                'size': blob.size,
+                'last_modified': blob.last_modified.strftime('%Y-%m-%d %H:%M:%S') if blob.last_modified else 'N/A'
+            })
+
+        auth_method = "Account Key" if azure_account_key else "SAS Token"
+        return {
+            'success': True,
+            'message': f'Successfully connected to Azure container: {container_name} using {auth_method}. Found {len(file_list)} files (showing up to 100).',
+            'tables': file_list
+        }
+
+    except AzureError as e:
+        error_msg = str(e)
+        if 'AuthenticationFailed' in error_msg:
+            return {
+                'success': False,
+                'message': 'Authentication failed. Check account key or SAS token.',
+                'tables': []
+            }
+        elif 'ContainerNotFound' in error_msg:
+            return {
+                'success': False,
+                'message': f'Container not found: {container_name}',
+                'tables': []
+            }
+        else:
+            return {
+                'success': False,
+                'message': f'Azure Blob error: {error_msg}',
+                'tables': []
+            }
+    except Exception as e:
+        return {
+            'success': False,
+            'message': f'Azure Blob connection failed: {str(e)}',
+            'tables': []
+        }

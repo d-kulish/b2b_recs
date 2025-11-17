@@ -982,3 +982,722 @@ def test_azure_blob(bucket_path, azure_storage_account, azure_account_key=None, 
             'message': f'Azure Blob connection failed: {str(e)}',
             'tables': []
         }
+
+
+# ============================================================================
+# Schema Fetching Functions
+# ============================================================================
+
+def fetch_schemas(source_type, connection_params):
+    """
+    Fetch available schemas for a given connection.
+
+    Args:
+        source_type (str): Type of data source ('postgresql', 'mysql', 'bigquery', etc.)
+        connection_params (dict): Connection parameters
+
+    Returns:
+        dict: {
+            'success': True/False,
+            'message': 'Success message' or error details,
+            'schemas': ['public', 'analytics', 'staging', ...]
+        }
+    """
+    if source_type == 'postgresql':
+        return fetch_schemas_postgresql(**connection_params)
+    elif source_type == 'mysql':
+        return fetch_schemas_mysql(**connection_params)
+    elif source_type == 'bigquery':
+        return fetch_schemas_bigquery(**connection_params)
+    else:
+        # For databases without schema support, return a default schema
+        return {
+            'success': True,
+            'message': 'Schema not applicable for this database type',
+            'schemas': ['default']
+        }
+
+
+def fetch_schemas_postgresql(host, port, database, username, password, timeout=10, **kwargs):
+    """
+    Fetch all schemas from a PostgreSQL database.
+
+    Returns:
+        dict: List of schema names
+    """
+    conn = None
+    cursor = None
+
+    try:
+        conn = psycopg2.connect(
+            host=host,
+            port=port or 5432,
+            database=database,
+            user=username,
+            password=password,
+            connect_timeout=timeout
+        )
+
+        cursor = conn.cursor()
+
+        # Fetch all schemas excluding system schemas
+        cursor.execute("""
+            SELECT schema_name
+            FROM information_schema.schemata
+            WHERE schema_name NOT IN ('pg_catalog', 'information_schema', 'pg_toast')
+            ORDER BY schema_name
+        """)
+
+        schemas = [row[0] for row in cursor.fetchall()]
+
+        return {
+            'success': True,
+            'message': f'Found {len(schemas)} schemas',
+            'schemas': schemas
+        }
+
+    except Exception as e:
+        return {
+            'success': False,
+            'message': f'Error fetching schemas: {str(e)}',
+            'schemas': []
+        }
+
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+
+def fetch_schemas_mysql(host, port, database, username, password, timeout=10, **kwargs):
+    """
+    Fetch schemas from MySQL (in MySQL, database = schema).
+    For MySQL, we just return the current database as the only schema.
+
+    Returns:
+        dict: Single schema (the database itself)
+    """
+    return {
+        'success': True,
+        'message': 'MySQL uses database as schema',
+        'schemas': [database]  # In MySQL, database IS the schema
+    }
+
+
+def fetch_schemas_bigquery(project_id, dataset, service_account_json, **kwargs):
+    """
+    Fetch datasets from BigQuery (datasets act as schemas).
+
+    Returns:
+        dict: List of dataset names
+    """
+    try:
+        from google.cloud import bigquery
+        from google.oauth2 import service_account
+
+        # Parse service account JSON
+        credentials = service_account.Credentials.from_service_account_info(
+            json.loads(service_account_json)
+        )
+
+        client = bigquery.Client(
+            credentials=credentials,
+            project=project_id
+        )
+
+        # List all datasets
+        datasets = list(client.list_datasets())
+        schema_names = [d.dataset_id for d in datasets]
+
+        return {
+            'success': True,
+            'message': f'Found {len(schema_names)} datasets',
+            'schemas': schema_names
+        }
+
+    except Exception as e:
+        return {
+            'success': False,
+            'message': f'Error fetching BigQuery datasets: {str(e)}',
+            'schemas': []
+        }
+
+
+def fetch_tables_for_schema(source_type, schema_name, connection_params):
+    """
+    Fetch tables for a specific schema.
+
+    Args:
+        source_type (str): Type of data source
+        schema_name (str): Schema to fetch tables from
+        connection_params (dict): Connection parameters
+
+    Returns:
+        dict: {
+            'success': True/False,
+            'message': 'Success message' or error,
+            'tables': [{'name': 'table1', 'row_count': 1000, 'last_updated': '2025-11-12'}, ...]
+        }
+    """
+    if source_type == 'postgresql':
+        return fetch_tables_postgresql(schema_name, **connection_params)
+    elif source_type == 'mysql':
+        return fetch_tables_mysql(schema_name, **connection_params)
+    elif source_type == 'bigquery':
+        return fetch_tables_bigquery(schema_name, **connection_params)
+    else:
+        return {
+            'success': False,
+            'message': f'Database type "{source_type}" not yet implemented',
+            'tables': []
+        }
+
+
+def fetch_tables_postgresql(schema_name, host, port, database, username, password, timeout=10, **kwargs):
+    """
+    Fetch tables from a specific PostgreSQL schema.
+    """
+    conn = None
+    cursor = None
+
+    try:
+        conn = psycopg2.connect(
+            host=host,
+            port=port or 5432,
+            database=database,
+            user=username,
+            password=password,
+            connect_timeout=timeout
+        )
+
+        cursor = conn.cursor()
+
+        # Fetch tables from specific schema
+        cursor.execute("""
+            SELECT table_name
+            FROM information_schema.tables
+            WHERE table_schema = %s
+            AND table_type = 'BASE TABLE'
+            ORDER BY table_name
+        """, (schema_name,))
+
+        tables = []
+        for row in cursor.fetchall():
+            table_name = row[0]
+
+            # Get row count
+            try:
+                cursor.execute(f"SELECT COUNT(*) FROM {schema_name}.{table_name}")
+                row_count = cursor.fetchone()[0]
+            except Exception:
+                row_count = None
+
+            # Get last modified time
+            try:
+                cursor.execute(f"""
+                    SELECT pg_stat_get_last_analyze_time(c.oid) as last_updated
+                    FROM pg_class c
+                    JOIN pg_namespace n ON n.oid = c.relnamespace
+                    WHERE c.relname = %s
+                    AND n.nspname = %s
+                """, (table_name, schema_name))
+                result = cursor.fetchone()
+                last_updated = result[0].strftime('%Y-%m-%d %H:%M:%S') if result and result[0] else None
+            except Exception:
+                last_updated = None
+
+            tables.append({
+                'name': table_name,
+                'row_count': row_count,
+                'last_updated': last_updated or 'Unknown'
+            })
+
+        return {
+            'success': True,
+            'message': f'Found {len(tables)} tables in schema "{schema_name}"',
+            'tables': tables
+        }
+
+    except Exception as e:
+        return {
+            'success': False,
+            'message': f'Error fetching tables: {str(e)}',
+            'tables': []
+        }
+
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+
+def fetch_tables_mysql(schema_name, host, port, database, username, password, timeout=10, **kwargs):
+    """
+    Fetch tables from MySQL database (schema_name is the database name).
+    """
+    conn = None
+    cursor = None
+
+    try:
+        conn = pymysql.connect(
+            host=host,
+            port=port or 3306,
+            database=schema_name,  # Use schema_name as database
+            user=username,
+            password=password,
+            connect_timeout=timeout
+        )
+
+        cursor = conn.cursor()
+
+        # Fetch all tables
+        cursor.execute("SHOW TABLES")
+
+        tables = []
+        for row in cursor.fetchall():
+            table_name = row[0]
+
+            # Get row count
+            try:
+                cursor.execute(f"SELECT COUNT(*) FROM `{table_name}`")
+                row_count = cursor.fetchone()[0]
+            except Exception:
+                row_count = None
+
+            # Get last modified time
+            try:
+                cursor.execute(f"""
+                    SELECT UPDATE_TIME
+                    FROM information_schema.tables
+                    WHERE table_schema = %s AND table_name = %s
+                """, (schema_name, table_name))
+                result = cursor.fetchone()
+                last_updated = result[0].strftime('%Y-%m-%d %H:%M:%S') if result and result[0] else None
+            except Exception:
+                last_updated = None
+
+            tables.append({
+                'name': table_name,
+                'row_count': row_count,
+                'last_updated': last_updated or 'Unknown'
+            })
+
+        return {
+            'success': True,
+            'message': f'Found {len(tables)} tables in database "{schema_name}"',
+            'tables': tables
+        }
+
+    except Exception as e:
+        return {
+            'success': False,
+            'message': f'Error fetching tables: {str(e)}',
+            'tables': []
+        }
+
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+
+def fetch_tables_bigquery(dataset_name, project_id, service_account_json, **kwargs):
+    """
+    Fetch tables from a specific BigQuery dataset.
+    """
+    try:
+        from google.cloud import bigquery
+        from google.oauth2 import service_account
+
+        credentials = service_account.Credentials.from_service_account_info(
+            json.loads(service_account_json)
+        )
+
+        client = bigquery.Client(
+            credentials=credentials,
+            project=project_id
+        )
+
+        # List tables in dataset
+        dataset_ref = client.dataset(dataset_name)
+        tables_list = list(client.list_tables(dataset_ref))
+
+        tables = []
+        for table_item in tables_list:
+            table_ref = dataset_ref.table(table_item.table_id)
+            table = client.get_table(table_ref)
+
+            tables.append({
+                'name': table.table_id,
+                'row_count': table.num_rows,
+                'last_updated': table.modified.strftime('%Y-%m-%d %H:%M:%S') if table.modified else 'Unknown'
+            })
+
+        return {
+            'success': True,
+            'message': f'Found {len(tables)} tables in dataset "{dataset_name}"',
+            'tables': tables
+        }
+
+    except Exception as e:
+        return {
+            'success': False,
+            'message': f'Error fetching BigQuery tables: {str(e)}',
+            'tables': []
+        }
+
+
+# ============================================================================
+# Table Metadata & Preview Functions
+# ============================================================================
+
+def fetch_table_metadata(source_type, schema_name, table_name, connection_params):
+    """
+    Fetch detailed table metadata including column information and sample data.
+
+    Args:
+        source_type (str): Type of data source ('postgresql', 'mysql', etc.)
+        schema_name (str): Schema name
+        table_name (str): Table name
+        connection_params (dict): Connection parameters
+
+    Returns:
+        dict: {
+            'success': True/False,
+            'message': 'Success message' or error,
+            'columns': [
+                {
+                    'name': 'id',
+                    'type': 'INTEGER',
+                    'nullable': False,
+                    'is_primary_key': True,
+                    'is_timestamp': False,
+                    'sample_values': [1, 2, 3, 4, 5]
+                },
+                ...
+            ],
+            'total_rows': 1234567,
+            'recommended': {
+                'timestamp_column': 'created_at',
+                'primary_key': 'id'
+            }
+        }
+    """
+    if source_type == 'postgresql':
+        return fetch_table_metadata_postgresql(schema_name, table_name, **connection_params)
+    elif source_type == 'mysql':
+        return fetch_table_metadata_mysql(schema_name, table_name, **connection_params)
+    elif source_type == 'bigquery':
+        return fetch_table_metadata_bigquery(schema_name, table_name, **connection_params)
+    else:
+        return {
+            'success': False,
+            'message': f'Table metadata not implemented for {source_type}',
+            'columns': [],
+            'total_rows': 0
+        }
+
+
+def fetch_table_metadata_postgresql(schema_name, table_name, host, port, database, username, password, timeout=10, **kwargs):
+    """
+    Fetch table metadata for PostgreSQL.
+    """
+    conn = None
+    cursor = None
+
+    try:
+        conn = psycopg2.connect(
+            host=host,
+            port=port or 5432,
+            database=database,
+            user=username,
+            password=password,
+            connect_timeout=timeout
+        )
+
+        cursor = conn.cursor()
+
+        # Get column metadata
+        cursor.execute("""
+            SELECT
+                c.column_name,
+                c.data_type,
+                c.is_nullable,
+                CASE
+                    WHEN pk.column_name IS NOT NULL THEN true
+                    ELSE false
+                END as is_primary_key
+            FROM information_schema.columns c
+            LEFT JOIN (
+                SELECT ku.column_name
+                FROM information_schema.table_constraints tc
+                JOIN information_schema.key_column_usage ku
+                    ON tc.constraint_name = ku.constraint_name
+                    AND tc.table_schema = ku.table_schema
+                WHERE tc.constraint_type = 'PRIMARY KEY'
+                    AND tc.table_schema = %s
+                    AND tc.table_name = %s
+            ) pk ON c.column_name = pk.column_name
+            WHERE c.table_schema = %s
+                AND c.table_name = %s
+            ORDER BY c.ordinal_position
+        """, (schema_name, table_name, schema_name, table_name))
+
+        columns = []
+        timestamp_columns = []
+        primary_key = None
+
+        for row in cursor.fetchall():
+            column_name = row[0]
+            data_type = row[1].upper()
+            nullable = row[2] == 'YES'
+            is_pk = row[3]
+
+            # Detect timestamp columns
+            is_timestamp = any(ts_type in data_type for ts_type in ['TIMESTAMP', 'DATE', 'TIME'])
+            if is_timestamp:
+                timestamp_columns.append(column_name)
+
+            if is_pk:
+                primary_key = column_name
+
+            # Get sample values
+            try:
+                cursor.execute(f"SELECT {column_name} FROM {schema_name}.{table_name} LIMIT 5")
+                sample_values = [str(r[0]) if r[0] is not None else 'NULL' for r in cursor.fetchall()]
+            except Exception:
+                sample_values = []
+
+            columns.append({
+                'name': column_name,
+                'type': data_type,
+                'nullable': nullable,
+                'is_primary_key': is_pk,
+                'is_timestamp': is_timestamp,
+                'sample_values': sample_values
+            })
+
+        # Get total row count
+        cursor.execute(f"SELECT COUNT(*) FROM {schema_name}.{table_name}")
+        total_rows = cursor.fetchone()[0]
+
+        # Recommend timestamp column (prefer created_at, then updated_at, then any timestamp)
+        recommended_timestamp = None
+        for col in ['created_at', 'createdat', 'created', 'timestamp', 'date']:
+            if col in [c.lower() for c in timestamp_columns]:
+                recommended_timestamp = next(c for c in timestamp_columns if c.lower() == col)
+                break
+        if not recommended_timestamp and timestamp_columns:
+            recommended_timestamp = timestamp_columns[0]
+
+        return {
+            'success': True,
+            'message': f'Fetched metadata for {schema_name}.{table_name}',
+            'columns': columns,
+            'total_rows': total_rows,
+            'recommended': {
+                'timestamp_column': recommended_timestamp,
+                'primary_key': primary_key
+            }
+        }
+
+    except Exception as e:
+        return {
+            'success': False,
+            'message': f'Error fetching table metadata: {str(e)}',
+            'columns': [],
+            'total_rows': 0
+        }
+
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+
+def fetch_table_metadata_mysql(schema_name, table_name, host, port, database, username, password, timeout=10, **kwargs):
+    """
+    Fetch table metadata for MySQL.
+    """
+    conn = None
+    cursor = None
+
+    try:
+        conn = pymysql.connect(
+            host=host,
+            port=port or 3306,
+            database=schema_name,
+            user=username,
+            password=password,
+            connect_timeout=timeout
+        )
+
+        cursor = conn.cursor()
+
+        # Get column metadata
+        cursor.execute("""
+            SELECT
+                COLUMN_NAME,
+                DATA_TYPE,
+                IS_NULLABLE,
+                COLUMN_KEY
+            FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = %s
+                AND TABLE_NAME = %s
+            ORDER BY ORDINAL_POSITION
+        """, (schema_name, table_name))
+
+        columns = []
+        timestamp_columns = []
+        primary_key = None
+
+        for row in cursor.fetchall():
+            column_name = row[0]
+            data_type = row[1].upper()
+            nullable = row[2] == 'YES'
+            is_pk = row[3] == 'PRI'
+
+            # Detect timestamp columns
+            is_timestamp = any(ts_type in data_type for ts_type in ['TIMESTAMP', 'DATETIME', 'DATE', 'TIME'])
+            if is_timestamp:
+                timestamp_columns.append(column_name)
+
+            if is_pk:
+                primary_key = column_name
+
+            # Get sample values
+            try:
+                cursor.execute(f"SELECT `{column_name}` FROM `{table_name}` LIMIT 5")
+                sample_values = [str(r[0]) if r[0] is not None else 'NULL' for r in cursor.fetchall()]
+            except Exception:
+                sample_values = []
+
+            columns.append({
+                'name': column_name,
+                'type': data_type,
+                'nullable': nullable,
+                'is_primary_key': is_pk,
+                'is_timestamp': is_timestamp,
+                'sample_values': sample_values
+            })
+
+        # Get total row count
+        cursor.execute(f"SELECT COUNT(*) FROM `{table_name}`")
+        total_rows = cursor.fetchone()[0]
+
+        # Recommend timestamp column
+        recommended_timestamp = None
+        for col in ['created_at', 'createdat', 'created', 'timestamp', 'date']:
+            if col in [c.lower() for c in timestamp_columns]:
+                recommended_timestamp = next(c for c in timestamp_columns if c.lower() == col)
+                break
+        if not recommended_timestamp and timestamp_columns:
+            recommended_timestamp = timestamp_columns[0]
+
+        return {
+            'success': True,
+            'message': f'Fetched metadata for {schema_name}.{table_name}',
+            'columns': columns,
+            'total_rows': total_rows,
+            'recommended': {
+                'timestamp_column': recommended_timestamp,
+                'primary_key': primary_key
+            }
+        }
+
+    except Exception as e:
+        return {
+            'success': False,
+            'message': f'Error fetching table metadata: {str(e)}',
+            'columns': [],
+            'total_rows': 0
+        }
+
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+
+def fetch_table_metadata_bigquery(dataset_name, table_name, project_id, service_account_json, **kwargs):
+    """
+    Fetch table metadata for BigQuery.
+    """
+    try:
+        from google.cloud import bigquery
+        from google.oauth2 import service_account
+
+        credentials = service_account.Credentials.from_service_account_info(
+            json.loads(service_account_json)
+        )
+
+        client = bigquery.Client(
+            credentials=credentials,
+            project=project_id
+        )
+
+        # Get table reference
+        dataset_ref = client.dataset(dataset_name)
+        table_ref = dataset_ref.table(table_name)
+        table = client.get_table(table_ref)
+
+        columns = []
+        timestamp_columns = []
+        primary_key = None
+
+        # Get column metadata
+        for field in table.schema:
+            is_timestamp = field.field_type in ['TIMESTAMP', 'DATETIME', 'DATE', 'TIME']
+            if is_timestamp:
+                timestamp_columns.append(field.name)
+
+            # Get sample values
+            try:
+                query = f"SELECT {field.name} FROM `{project_id}.{dataset_name}.{table_name}` LIMIT 5"
+                query_job = client.query(query)
+                results = query_job.result()
+                sample_values = [str(row[0]) if row[0] is not None else 'NULL' for row in results]
+            except Exception:
+                sample_values = []
+
+            columns.append({
+                'name': field.name,
+                'type': field.field_type,
+                'nullable': field.mode != 'REQUIRED',
+                'is_primary_key': False,  # BigQuery doesn't have primary keys
+                'is_timestamp': is_timestamp,
+                'sample_values': sample_values
+            })
+
+        # Recommend timestamp column
+        recommended_timestamp = None
+        for col in ['created_at', 'createdat', 'created', 'timestamp', 'date']:
+            if col in [c.lower() for c in timestamp_columns]:
+                recommended_timestamp = next(c for c in timestamp_columns if c.lower() == col)
+                break
+        if not recommended_timestamp and timestamp_columns:
+            recommended_timestamp = timestamp_columns[0]
+
+        return {
+            'success': True,
+            'message': f'Fetched metadata for {dataset_name}.{table_name}',
+            'columns': columns,
+            'total_rows': table.num_rows,
+            'recommended': {
+                'timestamp_column': recommended_timestamp,
+                'primary_key': None  # BigQuery doesn't have PKs
+            }
+        }
+
+    except Exception as e:
+        return {
+            'success': False,
+            'message': f'Error fetching BigQuery table metadata: {str(e)}',
+            'columns': [],
+            'total_rows': 0
+        }

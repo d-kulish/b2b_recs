@@ -2016,7 +2016,17 @@ def api_etl_create_job(request, model_id):
         # Extract and validate required fields
         job_name = data.get('name', '').strip()
         connection_id = data.get('connection_id')
+        schema_name = data.get('schema_name', '').strip()
         tables = data.get('tables', [])
+
+        # Extract Step 3 fields (Load Strategy)
+        load_type = data.get('load_type', 'transactional')
+        timestamp_column = data.get('timestamp_column', '').strip()
+        historical_start_date = data.get('historical_start_date')
+        selected_columns = data.get('selected_columns', [])
+
+        # Extract Step 4 fields (Schedule)
+        schedule_type = data.get('schedule_type', 'manual')
 
         if not job_name:
             return JsonResponse({
@@ -2065,10 +2075,17 @@ def api_etl_create_job(request, model_id):
             if source_table:
                 DataSourceTable.objects.create(
                     data_source=data_source,
+                    schema_name=schema_name,
                     source_table_name=source_table,
                     dest_table_name=dest_table,
                     sync_mode=sync_mode,
                     incremental_column=incremental_column if sync_mode == 'incremental' else '',
+                    # New fields from Step 3 & 4
+                    load_type=load_type,
+                    timestamp_column=timestamp_column,
+                    historical_start_date=historical_start_date,
+                    selected_columns=selected_columns,
+                    schedule_type=schedule_type,
                     is_enabled=True,
                 )
 
@@ -2087,4 +2104,224 @@ def api_etl_create_job(request, model_id):
         return JsonResponse({
             'status': 'error',
             'message': f'Error creating ETL job: {str(e)}',
+        }, status=500)
+
+
+@login_required
+@require_http_methods(["GET"])
+def api_connection_fetch_schemas(request, connection_id):
+    """
+    Fetch available schemas for a connection.
+    Used in ETL wizard Step 2 to show schema dropdown.
+    """
+    from .utils.connection_manager import fetch_schemas, get_credentials_from_secret_manager
+    from .models import Connection
+
+    try:
+        connection = get_object_or_404(Connection, id=connection_id)
+
+        # Retrieve credentials from Secret Manager
+        if not connection.credentials_secret_name:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'No credentials stored for this connection',
+            }, status=400)
+
+        credentials = get_credentials_from_secret_manager(connection.credentials_secret_name)
+
+        # Prepare connection parameters
+        connection_params = {
+            'host': connection.source_host,
+            'port': connection.source_port,
+            'database': connection.source_database,
+            'username': credentials.get('username', ''),
+            'password': credentials.get('password', ''),
+            'project_id': connection.bigquery_project,
+            'dataset': connection.bigquery_dataset,
+            'service_account_json': credentials.get('service_account_json', ''),
+        }
+
+        # Fetch schemas
+        result = fetch_schemas(connection.source_type, connection_params)
+
+        if result['success']:
+            return JsonResponse({
+                'status': 'success',
+                'message': result['message'],
+                'schemas': result['schemas'],
+                'source_type': connection.source_type,
+            })
+        else:
+            return JsonResponse({
+                'status': 'error',
+                'message': result['message'],
+            }, status=400)
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e),
+        }, status=500)
+
+
+@login_required
+@require_http_methods(["POST"])
+def api_connection_fetch_tables_for_schema(request, connection_id):
+    """
+    Fetch tables for a specific schema within a connection.
+    Used in ETL wizard Step 2 after schema selection.
+
+    POST body: {
+        "schema_name": "public"
+    }
+    """
+    from .utils.connection_manager import fetch_tables_for_schema, get_credentials_from_secret_manager
+    from .models import Connection
+    import json
+
+    try:
+        connection = get_object_or_404(Connection, id=connection_id)
+
+        # Parse request body
+        data = json.loads(request.body)
+        schema_name = data.get('schema_name')
+
+        if not schema_name:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'schema_name is required',
+            }, status=400)
+
+        # Retrieve credentials from Secret Manager
+        if not connection.credentials_secret_name:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'No credentials stored for this connection',
+            }, status=400)
+
+        credentials = get_credentials_from_secret_manager(connection.credentials_secret_name)
+
+        # Prepare connection parameters
+        connection_params = {
+            'host': connection.source_host,
+            'port': connection.source_port,
+            'database': connection.source_database,
+            'username': credentials.get('username', ''),
+            'password': credentials.get('password', ''),
+            'project_id': connection.bigquery_project,
+            'dataset': connection.bigquery_dataset,
+            'service_account_json': credentials.get('service_account_json', ''),
+        }
+
+        # Fetch tables for the specified schema
+        result = fetch_tables_for_schema(connection.source_type, schema_name, connection_params)
+
+        if result['success']:
+            return JsonResponse({
+                'status': 'success',
+                'message': result['message'],
+                'tables': result['tables'],
+                'schema_name': schema_name,
+            })
+        else:
+            return JsonResponse({
+                'status': 'error',
+                'message': result['message'],
+            }, status=400)
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e),
+        }, status=500)
+
+@login_required
+@require_http_methods(["POST"])
+def api_connection_fetch_table_preview(request, connection_id):
+    """
+    Fetch table preview with column metadata and sample data.
+    Used in ETL wizard Step 3 to show table structure.
+
+    POST body: {
+        "schema_name": "public",
+        "table_name": "transactions"
+    }
+
+    Returns: {
+        "columns": [...],
+        "total_rows": 1234567,
+        "recommended": {...}
+    }
+    """
+    from .utils.connection_manager import fetch_table_metadata, get_credentials_from_secret_manager
+    from .models import Connection
+    import json
+
+    try:
+        connection = get_object_or_404(Connection, id=connection_id)
+
+        # Parse request body
+        data = json.loads(request.body)
+        schema_name = data.get('schema_name')
+        table_name = data.get('table_name')
+
+        if not schema_name or not table_name:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'schema_name and table_name are required',
+            }, status=400)
+
+        # Retrieve credentials from Secret Manager
+        if not connection.credentials_secret_name:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'No credentials stored for this connection',
+            }, status=400)
+
+        credentials = get_credentials_from_secret_manager(connection.credentials_secret_name)
+
+        # Prepare connection parameters
+        connection_params = {
+            'host': connection.source_host,
+            'port': connection.source_port,
+            'database': connection.source_database,
+            'username': credentials.get('username', ''),
+            'password': credentials.get('password', ''),
+            'project_id': connection.bigquery_project,
+            'dataset': connection.bigquery_dataset,
+            'service_account_json': credentials.get('service_account_json', ''),
+        }
+
+        # Fetch table metadata
+        result = fetch_table_metadata(
+            connection.source_type,
+            schema_name,
+            table_name,
+            connection_params
+        )
+
+        if result['success']:
+            return JsonResponse({
+                'status': 'success',
+                'message': result['message'],
+                'columns': result['columns'],
+                'total_rows': result['total_rows'],
+                'recommended': result.get('recommended', {}),
+            })
+        else:
+            return JsonResponse({
+                'status': 'error',
+                'message': result['message'],
+            }, status=400)
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e),
         }, status=500)

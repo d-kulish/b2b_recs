@@ -55,4 +55,11 @@ urlpatterns = [
     path('api/models/<int:model_id>/etl/connections/', views.api_etl_get_connections, name='api_etl_get_connections'),
     path('api/models/<int:model_id>/etl/create-job/', views.api_etl_create_job, name='api_etl_create_job'),
     path('api/connections/<int:connection_id>/test-wizard/', views.api_etl_test_connection_in_wizard, name='api_etl_test_connection_in_wizard'),
+
+    # Schema and Table Fetching (ETL Wizard Step 2)
+    path('api/connections/<int:connection_id>/fetch-schemas/', views.api_connection_fetch_schemas, name='api_connection_fetch_schemas'),
+    path('api/connections/<int:connection_id>/fetch-tables-for-schema/', views.api_connection_fetch_tables_for_schema, name='api_connection_fetch_tables_for_schema'),
+
+    # Table Preview (ETL Wizard Step 3)
+    path('api/connections/<int:connection_id>/fetch-table-preview/', views.api_connection_fetch_table_preview, name='api_connection_fetch_table_preview'),
 ]

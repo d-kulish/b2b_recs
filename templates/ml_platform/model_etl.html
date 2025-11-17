@@ -234,7 +234,7 @@
             <div class="flex items-center justify-between">
                 <div>
                     <h3 class="text-base font-bold text-gray-900">Add ETL Job</h3>
-                    <p class="text-xs text-gray-600 mt-0.5">Step <span id="currentStep">1</span> of 3</p>
+                    <p class="text-xs text-gray-600 mt-0.5">Step <span id="currentStep">1</span> of 4</p>
                 </div>
             </div>
 
@@ -243,6 +243,7 @@
                 <div id="progress1" class="flex-1 h-1 bg-blue-600 rounded"></div>
                 <div id="progress2" class="flex-1 h-1 bg-gray-200 rounded"></div>
                 <div id="progress3" class="flex-1 h-1 bg-gray-200 rounded"></div>
+                <div id="progress4" class="flex-1 h-1 bg-gray-200 rounded"></div>
             </div>
         </div>
 
@@ -274,59 +275,120 @@
             </div>
 
 
-            <!-- Step 2: Table Selection -->
+            <!-- Step 2: Schema & Table Selection -->
             <div id="step2" class="wizard-step hidden">
-                <h4 class="text-base font-bold text-gray-900 mb-3">Select Table</h4>
+                <h4 class="text-base font-bold text-gray-900 mb-3">Select Schema & Table</h4>
 
-                <p class="text-sm text-gray-600 mb-3">Choose one table to extract. You can create additional ETL jobs for other tables.</p>
+                <p class="text-sm text-gray-600 mb-3">Choose the schema and table to extract data from.</p>
 
-                <div class="space-y-2 border border-gray-200 rounded-lg p-3 max-h-80 overflow-y-auto">
-                    <!-- Simulated table list -->
-                    <label class="flex items-center p-2.5 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
-                        <input type="radio" name="selectedTable" value="transactions" class="mr-2.5">
-                        <div class="flex-1">
-                            <div class="font-semibold text-sm text-gray-900">transactions</div>
-                            <div class="text-xs text-gray-600">~1.2M rows • Last updated: 2 min ago</div>
-                        </div>
-                    </label>
+                <!-- Schema Selection -->
+                <div class="mb-4">
+                    <label class="block text-sm font-semibold text-gray-700 mb-1.5">Schema*</label>
+                    <select id="schemaSelector" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" onchange="onSchemaChange()">
+                        <option value="">Loading schemas...</option>
+                    </select>
+                    <p class="text-xs text-gray-500 mt-1">Select the database schema containing your target table</p>
+                </div>
 
-                    <label class="flex items-center p-2.5 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
-                        <input type="radio" name="selectedTable" value="customers" class="mr-2.5">
-                        <div class="flex-1">
-                            <div class="font-semibold text-sm text-gray-900">customers</div>
-                            <div class="text-xs text-gray-600">~450K rows • Last updated: 1 hour ago</div>
-                        </div>
-                    </label>
-
-                    <label class="flex items-center p-2.5 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
-                        <input type="radio" name="selectedTable" value="orders" class="mr-2.5">
-                        <div class="flex-1">
-                            <div class="font-semibold text-sm text-gray-900">orders</div>
-                            <div class="text-xs text-gray-600">~890K rows • Last updated: 5 min ago</div>
-                        </div>
-                    </label>
-
-                    <label class="flex items-center p-2.5 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
-                        <input type="radio" name="selectedTable" value="products" class="mr-2.5">
-                        <div class="flex-1">
-                            <div class="font-semibold text-sm text-gray-900">products</div>
-                            <div class="text-xs text-gray-600">~120K rows • Last updated: 2 days ago</div>
-                        </div>
-                    </label>
-
-                    <label class="flex items-center p-2.5 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
-                        <input type="radio" name="selectedTable" value="stores" class="mr-2.5">
-                        <div class="flex-1">
-                            <div class="font-semibold text-sm text-gray-900">stores</div>
-                            <div class="text-xs text-gray-600">~500 rows • Last updated: 1 week ago</div>
-                        </div>
-                    </label>
+                <!-- Table Selection -->
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1.5">Table*</label>
+                    <div id="tablesListContainer" class="space-y-2 border border-gray-200 rounded-lg p-3 max-h-80 overflow-y-auto">
+                        <!-- Tables will be populated dynamically -->
+                        <p class="text-xs text-gray-500 text-center py-8">Select a schema to load tables</p>
+                    </div>
                 </div>
             </div>
 
-            <!-- Step 3: Schedule & Configuration -->
+            <!-- Step 3: Configure Load Strategy (NEW) -->
             <div id="step3" class="wizard-step hidden">
-                <h4 class="text-base font-bold text-gray-900 mb-3">Configure & Schedule</h4>
+                <h4 class="text-base font-bold text-gray-900 mb-3">Configure Load Strategy</h4>
+
+                <!-- Table Preview Section -->
+                <div class="mb-4">
+                    <h5 class="text-sm font-semibold text-gray-700 mb-2">Table Preview</h5>
+                    <div id="tablePreviewContainer" class="border border-gray-200 rounded-lg p-2 bg-gray-50" style="max-height: 300px; overflow-y: auto;">
+                        <p class="text-xs text-gray-500 text-center py-4">Loading table preview...</p>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-1">
+                        <i class="fas fa-info-circle mr-1"></i>
+                        Select columns to sync. Deselect large TEXT/BLOB fields to improve performance.
+                    </p>
+                </div>
+
+                <!-- Load Type Selection -->
+                <div class="mb-4">
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Load Type*</label>
+                    <div class="space-y-2">
+                        <label class="flex items-start p-3 border-2 border-gray-200 rounded-lg hover:bg-blue-50 hover:border-blue-400 cursor-pointer transition has-[:checked]:border-blue-600 has-[:checked]:bg-blue-50">
+                            <input type="radio" name="loadType" value="transactional" class="mt-1 mr-3" checked onchange="onLoadTypeChange()">
+                            <div>
+                                <div class="font-semibold text-sm text-gray-900">Transactional (Append-Only)</div>
+                                <div class="text-xs text-gray-600 mt-0.5">Best for: Transactions, logs, events, orders</div>
+                                <div class="text-xs text-gray-500 mt-0.5">→ Only inserts new records, never updates</div>
+                            </div>
+                        </label>
+                        <label class="flex items-start p-3 border-2 border-gray-200 rounded-lg hover:bg-blue-50 hover:border-blue-400 cursor-pointer transition has-[:checked]:border-blue-600 has-[:checked]:bg-blue-50">
+                            <input type="radio" name="loadType" value="catalog" class="mt-1 mr-3" onchange="onLoadTypeChange()">
+                            <div>
+                                <div class="font-semibold text-sm text-gray-900">Catalog (Daily Snapshot)</div>
+                                <div class="text-xs text-gray-600 mt-0.5">Best for: Products, customers, inventory</div>
+                                <div class="text-xs text-gray-500 mt-0.5">→ Replaces entire table daily, no history</div>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Transactional Configuration (shown when transactional is selected) -->
+                <div id="transactionalConfig" class="mb-4">
+                    <div class="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                        <h6 class="font-semibold text-sm text-gray-900 mb-2">Incremental Configuration</h6>
+
+                        <div class="mb-3">
+                            <label class="block text-xs font-semibold text-gray-700 mb-1">Timestamp Column*</label>
+                            <select id="timestampColumn" class="w-full px-2.5 py-1.5 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                <option value="">Select timestamp column...</option>
+                            </select>
+                            <p class="text-xs text-gray-500 mt-1">
+                                <i class="fas fa-exclamation-circle mr-1"></i>
+                                This column will be used to track which records are new since the last sync
+                            </p>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-700 mb-1">Historical Backfill</label>
+                            <select id="historicalRange" class="w-full px-2.5 py-1.5 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                <option value="all">Load all data (from beginning)</option>
+                                <option value="30">Last 30 days</option>
+                                <option value="60">Last 60 days</option>
+                                <option value="90" selected>Last 90 days</option>
+                                <option value="custom">Custom date...</option>
+                            </select>
+                            <div id="customDateContainer" class="mt-2 hidden">
+                                <input type="date" id="customStartDate" class="w-full px-2.5 py-1.5 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            </div>
+                            <p class="text-xs text-gray-500 mt-1" id="historicalRangeHint">
+                                First sync will load records from the last 90 days
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Catalog Configuration (shown when catalog is selected) -->
+                <div id="catalogConfig" class="mb-4 hidden">
+                    <div class="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                        <h6 class="font-semibold text-sm text-gray-900 mb-2">Snapshot Configuration</h6>
+                        <p class="text-xs text-gray-600">
+                            <i class="fas fa-info-circle mr-1"></i>
+                            Full table will be replaced on each sync. Previous data will be overwritten.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 4: Schedule & Review (RENAMED from Step 3) -->
+            <div id="step4" class="wizard-step hidden">
+                <h4 class="text-base font-bold text-gray-900 mb-3">Schedule & Review</h4>
 
                 <div class="space-y-3">
                     <div>
@@ -1181,9 +1243,15 @@ function updateStep1NextButton() {
     const nextButton = document.getElementById('nextButton');
     if (!nextButton) return;
 
-    const selectedSource = document.querySelector('input[name="sourceType"]:checked');
+    // Check if job name is filled
+    const jobNameInput = document.getElementById('sourceName');
+    const jobName = jobNameInput ? jobNameInput.value.trim() : '';
 
-    if (selectedSource) {
+    // Check if a saved connection is selected
+    const selectedConnection = document.querySelector('input[name="savedConnection"]:checked');
+
+    // Enable next button only if BOTH conditions are met
+    if (jobName !== '' && selectedConnection) {
         nextButton.disabled = false;
     } else {
         nextButton.disabled = true;
@@ -1207,6 +1275,9 @@ function validateJobName() {
         jobNameError.classList.remove('visible');
         jobNameError.classList.add('invisible');
     }
+
+    // Update Next button state based on job name + connection selection
+    updateStep1NextButton();
 }
 
 // ============================================================================
@@ -2936,7 +3007,7 @@ function showStep(step) {
         if (createButton) createButton.classList.add('hidden');
     }
 
-    // Step 2: Table Selection
+    // Step 2: Schema & Table Selection
     else if (step === 2) {
         if (backButton) backButton.disabled = false;
         if (nextButton) {
@@ -2947,8 +3018,19 @@ function showStep(step) {
         if (createButton) createButton.classList.add('hidden');
     }
 
-    // Step 3: Schedule & Create (Final Step)
+    // Step 3: Load Strategy Configuration
     else if (step === 3) {
+        if (backButton) backButton.disabled = false;
+        if (nextButton) {
+            nextButton.disabled = false;
+            nextButton.classList.remove('hidden');
+            nextButton.innerHTML = '<i class="fas fa-chevron-right"></i>';
+        }
+        if (createButton) createButton.classList.add('hidden');
+    }
+
+    // Step 4: Schedule & Review (Final Step)
+    else if (step === 4) {
         if (backButton) backButton.disabled = false;
         if (nextButton) nextButton.classList.add('hidden');
         if (createButton) {
@@ -2964,7 +3046,7 @@ function showStep(step) {
 }
 
 function updateProgress(step) {
-    for (let i = 1; i <= 3; i++) {
+    for (let i = 1; i <= 4; i++) {
         const progressBar = document.getElementById(`progress${i}`);
         if (progressBar) {
             if (i <= step) {
@@ -3037,49 +3119,84 @@ function nextStep() {
         return;
     }
 
-    // STEP 2 -> STEP 3: Validate table selection
+    // STEP 2 -> STEP 3: Validate schema and table selection
     if (currentWizardStep === 2) {
+        // Check if schema is selected
+        const schemaSelector = document.getElementById('schemaSelector');
+        if (!schemaSelector.value) {
+            alert('Please select a schema');
+            return;
+        }
+
+        // Check if table is selected
         const selectedTable = document.querySelector('input[name="selectedTable"]:checked');
         if (!selectedTable) {
             alert('Please select a table to extract');
             return;
         }
 
-        // Store selected table
+        // Store selected schema and table
+        window.selectedSchema = schemaSelector.value;
         window.selectedTableName = selectedTable.value;
 
-        // Proceed to Step 3
-        currentWizardStep = 3;
-        showStep(3);
+        // Proceed to Step 3 (Load Strategy)
+        proceedToStep3();
+        return;
+    }
+
+    // STEP 3 -> STEP 4: Validate load configuration
+    if (currentWizardStep === 3) {
+        const loadType = document.querySelector('input[name="loadType"]:checked').value;
+
+        // Validate transactional configuration
+        if (loadType === 'transactional') {
+            const timestampColumn = document.getElementById('timestampColumn').value;
+            if (!timestampColumn) {
+                alert('Please select a timestamp column for incremental tracking');
+                return;
+            }
+        }
+
+        // Validate at least one column is selected
+        const selectedColumns = Array.from(document.querySelectorAll('.column-checkbox:checked')).map(cb => cb.value);
+        if (selectedColumns.length === 0) {
+            alert('Please select at least one column to sync');
+            return;
+        }
+
+        // Proceed to Step 4 (Schedule & Review)
+        currentWizardStep = 4;
+        showStep(4);
         updateSummary();
         return;
     }
 
-    // STEP 3: This is the final step, button should say "Create ETL Job"
-    if (currentWizardStep === 3) {
+    // STEP 4: This is the final step, button should say "Create ETL Job"
+    if (currentWizardStep === 4) {
         // This should be handled by the "Create ETL Job" button, not Next
         return;
     }
 }
 
 function proceedToStep2() {
-    // Fetch tables for the selected connection
-    fetchTablesForConnection(window.selectedConnectionId);
+    // Fetch schemas for the selected connection
+    fetchSchemasForConnection(window.selectedConnectionId);
 
     // Move to Step 2
     currentWizardStep = 2;
     showStep(2);
 }
 
-function fetchTablesForConnection(connectionId) {
-    const listContainer = document.querySelector('#step2 .space-y-2');
-    if (!listContainer) return;
+function fetchSchemasForConnection(connectionId) {
+    const schemaSelector = document.getElementById('schemaSelector');
+    if (!schemaSelector) return;
 
-    listContainer.innerHTML = '<p class="text-sm text-gray-500 text-center py-4"><i class="fas fa-spinner fa-spin mr-2"></i>Loading tables...</p>';
-    isLoadingTables = true;
+    // Show loading state
+    schemaSelector.innerHTML = '<option value="">Loading schemas...</option>';
+    schemaSelector.disabled = true;
 
-    fetch(`/api/connections/${connectionId}/test-and-fetch-tables/`, {
-        method: 'POST',
+    fetch(`/api/connections/${connectionId}/fetch-schemas/`, {
+        method: 'GET',
         headers: {
             'Content-Type': 'application/json',
             'X-CSRFToken': csrftoken
@@ -3087,31 +3204,100 @@ function fetchTablesForConnection(connectionId) {
     })
     .then(response => response.json())
     .then(data => {
+        if (data.status === 'success' && data.schemas) {
+            // Populate schema dropdown
+            if (data.schemas.length === 0) {
+                schemaSelector.innerHTML = '<option value="">No schemas found</option>';
+                return;
+            }
+
+            // For MySQL, only one schema (auto-select)
+            if (data.schemas.length === 1) {
+                schemaSelector.innerHTML = `<option value="${data.schemas[0]}">${data.schemas[0]}</option>`;
+                schemaSelector.disabled = true;
+                window.selectedSchema = data.schemas[0];
+                // Auto-fetch tables for the single schema
+                fetchTablesForSchema(connectionId, data.schemas[0]);
+            } else {
+                // Multiple schemas - let user select
+                schemaSelector.innerHTML = `
+                    <option value="">-- Select Schema --</option>
+                    ${data.schemas.map(schema => `<option value="${schema}">${schema}</option>`).join('')}
+                `;
+                schemaSelector.disabled = false;
+            }
+        } else {
+            schemaSelector.innerHTML = '<option value="">Error loading schemas</option>';
+            console.error('Error fetching schemas:', data.message);
+        }
+    })
+    .catch(error => {
+        schemaSelector.innerHTML = '<option value="">Error loading schemas</option>';
+        console.error('Error fetching schemas:', error);
+    });
+}
+
+function onSchemaChange() {
+    const schemaSelector = document.getElementById('schemaSelector');
+    const selectedSchema = schemaSelector.value;
+
+    if (!selectedSchema) {
+        // Clear table list
+        const tablesContainer = document.getElementById('tablesListContainer');
+        tablesContainer.innerHTML = '<p class="text-xs text-gray-500 text-center py-8">Select a schema to load tables</p>';
+        return;
+    }
+
+    // Store selected schema
+    window.selectedSchema = selectedSchema;
+
+    // Fetch tables for the selected schema
+    fetchTablesForSchema(window.selectedConnectionId, selectedSchema);
+}
+
+function fetchTablesForSchema(connectionId, schemaName) {
+    const tablesContainer = document.getElementById('tablesListContainer');
+    if (!tablesContainer) return;
+
+    // Show loading state
+    tablesContainer.innerHTML = '<p class="text-sm text-gray-500 text-center py-4"><i class="fas fa-spinner fa-spin mr-2"></i>Loading tables...</p>';
+    isLoadingTables = true;
+
+    fetch(`/api/connections/${connectionId}/fetch-tables-for-schema/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrftoken
+        },
+        body: JSON.stringify({ schema_name: schemaName })
+    })
+    .then(response => response.json())
+    .then(data => {
         isLoadingTables = false;
 
         if (data.status === 'success' && data.tables) {
             if (data.tables.length === 0) {
-                listContainer.innerHTML = '<p class="text-sm text-gray-500 text-center py-4">No tables found in this database</p>';
+                tablesContainer.innerHTML = '<p class="text-sm text-gray-500 text-center py-4">No tables found in this schema</p>';
                 return;
             }
 
             // Render table list
-            listContainer.innerHTML = data.tables.map(table => `
+            tablesContainer.innerHTML = data.tables.map(table => `
                 <label class="flex items-center p-2.5 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
-                    <input type="radio" name="selectedTable" value="${table.table_name}" class="mr-2.5">
+                    <input type="radio" name="selectedTable" value="${table.name}" class="mr-2.5">
                     <div class="flex-1">
-                        <div class="text-sm font-semibold text-gray-900">${table.table_name}</div>
+                        <div class="text-sm font-semibold text-gray-900">${table.name}</div>
                         ${table.row_count ? `<div class="text-xs text-gray-500">${table.row_count.toLocaleString()} rows</div>` : ''}
                     </div>
                 </label>
             `).join('');
         } else {
-            listContainer.innerHTML = `<p class="text-sm text-red-600 text-center py-4">Error: ${data.message || 'Failed to load tables'}</p>`;
+            tablesContainer.innerHTML = `<p class="text-sm text-red-600 text-center py-4">Error: ${data.message || 'Failed to load tables'}</p>`;
         }
     })
     .catch(error => {
         isLoadingTables = false;
-        listContainer.innerHTML = `<p class="text-sm text-red-600 text-center py-4">Error: ${error.message}</p>`;
+        tablesContainer.innerHTML = `<p class="text-sm text-red-600 text-center py-4">Error: ${error.message}</p>`;
     });
 }
 
@@ -3122,7 +3308,12 @@ function updateSummary() {
         document.getElementById('summaryConnection').textContent = connection.name || 'N/A';
     }
 
-    document.getElementById('summarySourceTable').textContent = window.selectedTableName || 'N/A';
+    // Show schema.table_name format
+    const fullTableName = window.selectedSchema && window.selectedTableName
+        ? `${window.selectedSchema}.${window.selectedTableName}`
+        : (window.selectedTableName || 'N/A');
+
+    document.getElementById('summarySourceTable').textContent = fullTableName;
     document.getElementById('summaryDestination').textContent = window.selectedTableName || 'N/A';
 
     const syncMode = document.getElementById('syncMode')?.value || 'replace';
@@ -3134,13 +3325,34 @@ function updateSummary() {
 
 async function createETLJob() {
     const jobName = document.getElementById('sourceName').value.trim();
-    const syncMode = document.getElementById('syncMode')?.value || 'replace';
-    const scheduleType = document.getElementById('scheduleType')?.value || 'manual';
 
-    if (!jobName || !window.selectedConnectionId || !window.selectedTableName) {
+    if (!jobName || !window.selectedConnectionId || !window.selectedSchema || !window.selectedTableName) {
         alert('Missing required information. Please go back and complete all steps.');
         return;
     }
+
+    // Collect Step 3 data: Load strategy
+    const loadType = document.querySelector('input[name="loadType"]:checked').value;
+    const timestampColumn = document.getElementById('timestampColumn')?.value || '';
+    const historicalRange = document.getElementById('historicalRange')?.value || '90';
+    const customStartDate = document.getElementById('customStartDate')?.value || '';
+    const selectedColumns = Array.from(document.querySelectorAll('.column-checkbox:checked')).map(cb => cb.value);
+
+    // Calculate historical_start_date
+    let historicalStartDate = null;
+    if (loadType === 'transactional') {
+        if (historicalRange === 'custom' && customStartDate) {
+            historicalStartDate = customStartDate;
+        } else if (historicalRange !== 'all') {
+            const days = parseInt(historicalRange);
+            const date = new Date();
+            date.setDate(date.getDate() - days);
+            historicalStartDate = date.toISOString().split('T')[0];
+        }
+    }
+
+    // Collect Step 4 data: Schedule
+    const scheduleType = document.getElementById('scheduleType')?.value || 'manual';
 
     // Disable create button to prevent double-clicks
     const createButton = document.getElementById('createButton');
@@ -3152,12 +3364,18 @@ async function createETLJob() {
     const payload = {
         name: jobName,
         connection_id: window.selectedConnectionId,
+        schema_name: window.selectedSchema,
+        load_type: loadType,
+        timestamp_column: timestampColumn,
+        historical_start_date: historicalStartDate,
+        selected_columns: selectedColumns,
+        schedule_type: scheduleType,
         tables: [
             {
                 source_table_name: window.selectedTableName,
                 dest_table_name: window.selectedTableName,
-                sync_mode: syncMode,
-                incremental_column: syncMode === 'incremental' ? '' : ''
+                sync_mode: loadType === 'transactional' ? 'incremental' : 'replace',
+                incremental_column: timestampColumn
             }
         ]
     };
@@ -4381,3 +4599,127 @@ function toggleAzureAuthFields() {
 
 </script>
 {% endblock %}
+
+
+// ============================================================================
+// Step 3: Load Strategy Functions
+// ============================================================================
+
+function proceedToStep3() {
+    // Fetch table preview
+    fetchTablePreview(window.selectedConnectionId, window.selectedSchema, window.selectedTableName);
+
+    // Move to Step 3
+    currentWizardStep = 3;
+    showStep(3);
+}
+
+function fetchTablePreview(connectionId, schemaName, tableName) {
+    const container = document.getElementById('tablePreviewContainer');
+    container.innerHTML = '<p class="text-xs text-gray-500 text-center py-4"><i class="fas fa-spinner fa-spin mr-2"></i>Loading table preview...</p>';
+
+    fetch('/api/connections/' + connectionId + '/fetch-table-preview/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrftoken
+        },
+        body: JSON.stringify({
+            schema_name: schemaName,
+            table_name: tableName
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            window.tableMetadata = data;
+            renderTablePreview(data);
+            populateTimestampColumns(data.columns, data.recommended.timestamp_column);
+        } else {
+            container.innerHTML = '<p class="text-xs text-red-600 text-center py-4">Error: ' + data.message + '</p>';
+        }
+    })
+    .catch(error => {
+        container.innerHTML = '<p class="text-xs text-red-600 text-center py-4">Error loading preview: ' + error.message + '</p>';
+    });
+}
+
+function renderTablePreview(metadata) {
+    const container = document.getElementById('tablePreviewContainer');
+
+    let rowsHTML = metadata.columns.map(col => {
+        return '<tr class="border-b border-gray-100 hover:bg-gray-50">' +
+            '<td class="py-1 px-2">' +
+            '<input type="checkbox" class="column-checkbox" value="' + col.name + '" data-column="' + col.name + '">' +
+            '</td>' +
+            '<td class="py-1 px-2 font-medium">' +
+            col.name +
+            (col.is_primary_key ? '<span class="text-blue-600 ml-1">🔑</span>' : '') +
+            (col.is_timestamp ? '<span class="text-green-600 ml-1">🕐</span>' : '') +
+            '</td>' +
+            '<td class="py-1 px-2 text-gray-600">' + col.type + (col.nullable ? ' <span class="text-gray-400">(NULL)</span>' : '') + '</td>' +
+            '<td class="py-1 px-2 text-gray-500 truncate" style="max-width: 150px;">' + col.sample_values.slice(0, 3).join(', ') + '</td>' +
+            '</tr>';
+    }).join('');
+
+    const html = '<div class="text-xs mb-2 font-semibold text-gray-700">' +
+        metadata.columns.length + ' columns · ' + metadata.total_rows.toLocaleString() + ' rows' +
+        '</div>' +
+        '<table class="w-full text-xs">' +
+        '<thead>' +
+        '<tr class="border-b border-gray-300">' +
+        '<th class="text-left py-1 px-2 w-8"></th>' +
+        '<th class="text-left py-1 px-2">Column</th>' +
+        '<th class="text-left py-1 px-2">Type</th>' +
+        '<th class="text-left py-1 px-2">Sample</th>' +
+        '</tr>' +
+        '</thead>' +
+        '<tbody>' +
+        rowsHTML +
+        '</tbody>' +
+        '</table>' +
+        '<div class="mt-2 flex items-center justify-between">' +
+        '<button onclick="toggleAllColumns(true)" class="text-xs text-blue-600 hover:underline">Select All</button>' +
+        '<button onclick="toggleAllColumns(false)" class="text-xs text-blue-600 hover:underline">Deselect All</button>' +
+        '</div>';
+
+    container.innerHTML = html;
+}
+
+function toggleAllColumns(select) {
+    document.querySelectorAll('.column-checkbox').forEach(cb => {
+        cb.checked = select;
+    });
+}
+
+function populateTimestampColumns(columns, recommended) {
+    const select = document.getElementById('timestampColumn');
+    const timestampCols = columns.filter(c => c.is_timestamp);
+
+    select.innerHTML = '<option value="">Select timestamp column...</option>';
+
+    timestampCols.forEach(col => {
+        const option = document.createElement('option');
+        option.value = col.name;
+        option.textContent = col.name + ' (' + col.type + ')';
+        if (col.name === recommended) {
+            option.textContent += ' - Recommended ✓';
+            option.selected = true;
+        }
+        select.appendChild(option);
+    });
+}
+
+function onLoadTypeChange() {
+    const loadType = document.querySelector('input[name="loadType"]:checked').value;
+    const transactionalConfig = document.getElementById('transactionalConfig');
+    const catalogConfig = document.getElementById('catalogConfig');
+
+    if (loadType === 'transactional') {
+        transactionalConfig.classList.remove('hidden');
+        catalogConfig.classList.add('hidden');
+    } else {
+        transactionalConfig.classList.add('hidden');
+        catalogConfig.classList.remove('hidden');
+    }
+}

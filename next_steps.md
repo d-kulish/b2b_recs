@@ -1,18 +1,24 @@
 # Next Steps: ETL & Connection Management System
 
-**Last Updated:** November 16, 2025
+**Last Updated:** November 17, 2025
 
 ---
 
 ## Current Status
 
-- ✅ **Simplified 3-Step ETL Wizard** - streamlined from 5 steps to 3 steps (40% reduction)
+- ✅ **Advanced 4-Step ETL Wizard** - Enhanced with load strategy configuration, table preview, and column selection
+- ✅ **Schema Selection** - Support for multi-schema databases (PostgreSQL, Oracle, SQL Server)
+- ✅ **Load Type Differentiation** - Transactional (append-only) vs Catalog (daily snapshot)
+- ✅ **Historical Backfill** - Load last 30/60/90 days on first sync, then incremental
+- ✅ **Table Preview & Column Selection** - View table structure, select columns to sync
+- ✅ **Smart Auto-Detection** - Automatically recommends timestamp columns and primary keys
 - ✅ **Standalone Connection Management** - 2-step wizard with category tabs for independent connection creation
 - ✅ **Complete Separation** - Connections managed independently from ETL jobs
-- ✅ **22 Data Source Types** - PostgreSQL, MySQL, Oracle, SQL Server, MongoDB, BigQuery, Snowflake, and more
+- ✅ **22 Data Source Types** - Relational DBs (12), Cloud Storage (3), NoSQL (5)
+- ✅ **Cloud Storage Integration** - GCS, S3, Azure Blob with storage-first architecture
 - ✅ Real database connection testing (PostgreSQL, MySQL, BigQuery)
 - ✅ Secure credential storage in GCP Secret Manager
-- ✅ **Connection Reuse** - Select from existing connections at Step 1
+- ✅ **Connection Reuse** - Select from existing connections, one connection serves multiple schemas
 - ✅ **Test-First Pattern** - Connection test before save (no premature Secret Manager writes)
 - ✅ **Smart Button States** - Grey→White reactive navigation, disabled states prevent errors
 - ✅ **Beautiful Error Notifications** - User-friendly messages with proper formatting
@@ -20,7 +26,7 @@
 - ✅ **Field Change Detection** - Save disabled if credentials edited after successful test
 - ✅ **Atomic ETL Creation** - No draft saves until final step
 - ✅ **Live Status Indicators** - Green/red/yellow dots with intelligent error handling
-- ✅ **Category-Based UI** - Relational DB/Files/NoSQL tabs with tile-based selection
+- ✅ **Category-Based UI** - Relational DB/Cloud Storage/NoSQL tabs with tile-based selection
 - ✅ **Clean Data Model** - Removed deprecated fields from DataSource
 - ✅ **Connection Tracking** - last_used_at field tracks ETL job usage
 - ✅ **Professional UX** - Smooth animations, hover effects, consistent modal sizing
@@ -55,12 +61,18 @@ Step 2: Enter connection details (host, port, database, username, password, conn
         Modal auto-closes, connections list reloads
 ```
 
-**ETL Job Creation Flow (3 Steps):**
+**ETL Job Creation Flow (4 Steps):**
 ```
 Click "+ ETL Job" →
 Step 1: Select existing connection (with live status indicator) + Enter job name →
-Step 2: Select table from database (auto-fetched from selected connection) →
-Step 3: Configure sync mode (replace/incremental/append) + Schedule + Review summary →
+Step 2: Select schema (auto-fetched) + Select table from schema →
+Step 3: Configure load strategy:
+        • View table preview (columns, types, sample data)
+        • Select columns to sync (with checkboxes)
+        • Choose load type (Transactional vs Catalog)
+        • Configure timestamp column (if transactional)
+        • Set historical backfill range (30/60/90 days or custom) →
+Step 4: Configure schedule (Manual/Hourly/Daily/Weekly/Monthly) + Review summary →
         Click "Create ETL Job" → Atomic creation (no drafts) →
         Connection.last_used_at updated →
         Modal closes, jobs list reloads
@@ -554,7 +566,230 @@ Faster job creation, centralized credential management
 - Required IAM role: **Storage Object Viewer** (for read access)
 - Service account: `firestore-etl-test@memo2-456215.iam.gserviceaccount.com`
 
-### 🎯 Milestone 11: Production Readiness (Future)
+### 🎯 Milestone 10.6: Schema Selection in ETL Wizard ✅ COMPLETE
+**Date Completed:** November 17, 2025
+
+**Objective:** Add schema selection capability to ETL Wizard Step 2, enabling users to select specific database schemas (for PostgreSQL, SQL Server, Oracle) before choosing tables.
+
+**Problem Addressed:**
+- Many databases have multiple schemas (e.g., `public`, `analytics`, `staging` in PostgreSQL)
+- Previous implementation only fetched tables from a single hardcoded schema
+- Users couldn't access tables from different schemas
+
+**Architecture Decision:**
+- **Schema at ETL Job Level** (not connection level)
+- One connection can serve multiple ETL jobs, each pulling from different schemas
+- More flexible and scalable - don't need N connections for N schemas
+
+**Backend Changes:**
+- [x] Added `fetch_schemas()` routing function to connection_manager.py ✓
+- [x] Added `fetch_schemas_postgresql()` - fetches all user schemas (excludes system schemas) ✓
+- [x] Added `fetch_schemas_mysql()` - returns database name as single schema ✓
+- [x] Added `fetch_schemas_bigquery()` - fetches all datasets (act as schemas) ✓
+- [x] Added `fetch_tables_for_schema()` - routing function with schema parameter ✓
+- [x] Added schema-aware table fetching for PostgreSQL, MySQL, BigQuery ✓
+- [x] Created API endpoint: `api_connection_fetch_schemas()` ✓
+- [x] Created API endpoint: `api_connection_fetch_tables_for_schema()` ✓
+- [x] Added `schema_name` field to DataSourceTable model ✓
+- [x] Applied migration: `0010_add_schema_name_to_datasourcetable.py` ✓
+- [x] Updated `api_etl_create_job()` to store schema_name ✓
+
+**Frontend Changes:**
+- [x] Updated Step 2 UI to add schema dropdown ✓
+- [x] Added schema selection before table selection ✓
+- [x] Created `fetchSchemasForConnection()` JavaScript function ✓
+- [x] Created `onSchemaChange()` handler to load tables when schema selected ✓
+- [x] Updated `fetchTablesForSchema()` to accept schema parameter ✓
+- [x] Auto-select for MySQL (only 1 schema), disable dropdown ✓
+- [x] Updated validation to check both schema and table selection ✓
+- [x] Updated summary to show `schema.table_name` format ✓
+- [x] Updated payload to include schema_name ✓
+
+**User Flow:**
+```
+Step 2: Select Schema & Table
+  ↓
+[Schema Dropdown] (auto-populated with available schemas)
+  ↓
+User selects schema (e.g., "public")
+  ↓
+[Tables List] (auto-fetched for selected schema)
+  ↓
+User selects table → Next Step
+```
+
+**Database-Specific Behavior:**
+- **PostgreSQL:** Shows all user schemas, excludes system schemas
+- **MySQL:** Auto-selects database as schema, hides dropdown
+- **BigQuery:** Shows all datasets as schemas
+- **Others:** Graceful fallback with default schema
+
+**Key Improvements:**
+- ✅ One connection can access multiple schemas
+- ✅ Eliminates connection proliferation (don't need separate connections per schema)
+- ✅ Better for Oracle/PostgreSQL with many schemas
+- ✅ Smart auto-detection for single-schema databases (MySQL)
+- ✅ Full history of which schema each ETL job uses
+
+**Files Modified:**
+- `ml_platform/utils/connection_manager.py` - Schema fetching functions (~350 lines added)
+- `ml_platform/views.py` - 2 new API endpoints
+- `ml_platform/models.py` - schema_name field
+- `ml_platform/urls.py` - 2 new routes
+- `templates/ml_platform/model_etl.html` - UI and JavaScript updates
+
+### 🎯 Milestone 11: Advanced ETL Wizard - 4-Step Flow with Load Strategy ✅ COMPLETE
+**Date Completed:** November 17, 2025
+
+**Objective:** Enhance ETL wizard from 3 steps to 4 steps with sophisticated load strategy configuration, table preview, column selection, and historical backfill capabilities.
+
+**Problem Addressed:**
+- Need to differentiate between transactional (append-only) and catalog (snapshot) tables
+- Users want historical backfill (e.g., load last 90 days, then daily increments)
+- Need column-level control (exclude heavy BLOB/TEXT fields)
+- Lack of visibility into table structure before configuring load
+
+**Architecture:**
+- **2 Load Types:** Transactional (append-only) vs Catalog (daily snapshot)
+- **Historical Backfill:** Last 30/60/90 days or custom date for first sync
+- **Column Selection:** Deselect specific columns to optimize performance
+- **Smart Auto-Detection:** Automatically recommends timestamp columns
+
+**Backend Changes:**
+- [x] Added 9 new fields to DataSourceTable model ✓
+  - `load_type` (transactional | catalog)
+  - `timestamp_column` (for incremental tracking)
+  - `historical_start_date` (backfill start date)
+  - `selected_columns` (JSON array)
+  - `schedule_type`, `schedule_time`, `schedule_day_of_week`, `schedule_day_of_month`, `schedule_cron`
+- [x] Applied migration: `0011_add_load_strategy_fields.py` ✓
+- [x] Added `fetch_table_metadata()` to connection_manager.py ✓
+  - Fetches column names, types, nullability, constraints
+  - Fetches sample data (5 rows per column)
+  - Auto-detects timestamp columns (prefers created_at, updated_at)
+  - Auto-detects primary keys
+- [x] Implemented for PostgreSQL, MySQL, BigQuery ✓
+- [x] Created API endpoint: `api_connection_fetch_table_preview()` ✓
+- [x] Updated `api_etl_create_job()` to handle all new fields ✓
+
+**Frontend Changes:**
+- [x] Updated wizard from 3 steps to 4 steps ✓
+- [x] Updated progress bar (4 segments instead of 3) ✓
+- [x] Created **new Step 3: Configure Load Strategy** ✓
+  - Table preview with column metadata
+  - Column checkboxes (Select All / Deselect All)
+  - Load type selection (Transactional vs Catalog)
+  - Timestamp column dropdown (auto-populated with recommendations)
+  - Historical backfill options (30/60/90 days or custom date)
+- [x] Renamed old Step 3 to **Step 4: Schedule & Review** ✓
+- [x] Added JavaScript functions for Step 3 ✓
+  - `proceedToStep3()` - Transitions and fetches table preview
+  - `fetchTablePreview()` - Calls API for metadata
+  - `renderTablePreview()` - Renders columns with visual indicators
+  - `toggleAllColumns()` - Bulk column selection
+  - `populateTimestampColumns()` - Populates dropdown with auto-detection
+  - `onLoadTypeChange()` - Shows/hides config sections
+- [x] Updated navigation logic for 4 steps ✓
+- [x] Updated `createETLJob()` to collect and send all new fields ✓
+
+**New 4-Step Wizard Flow:**
+```
+Step 1: Connection & Job Name
+  ↓
+Step 2: Schema & Table Selection
+  ↓
+Step 3: Configure Load Strategy ⭐ NEW
+  ├─ View table preview (columns, types, samples)
+  ├─ Select columns to sync (checkboxes)
+  ├─ Choose load type:
+  │   • Transactional (append-only, incremental by timestamp)
+  │   • Catalog (daily snapshot, full replace)
+  ├─ Configure timestamp column (if transactional)
+  └─ Set historical backfill range (30/60/90 days or custom)
+  ↓
+Step 4: Schedule & Review
+  ├─ Set schedule (Manual, Hourly, Daily, Weekly, Monthly)
+  └─ Review summary → Create ETL Job
+```
+
+**Visual Indicators:**
+- 🔑 Primary key columns
+- 🕐 Timestamp columns
+- Sample values for each column
+- Row count display
+- Column type information
+
+**Load Type Behavior:**
+
+**Transactional (Append-Only):**
+- For: Transactions, logs, events, orders
+- Uses timestamp column for incremental tracking
+- First sync: Loads records from historical_start_date to now
+- Subsequent syncs: Loads only new records (WHERE timestamp > last_sync_value)
+- Never updates existing records
+
+**Catalog (Daily Snapshot):**
+- For: Products, customers, inventory
+- Full table replacement on each sync
+- No incremental tracking needed
+- No history kept (overwrites previous data)
+
+**Historical Backfill Example:**
+```
+User selects: "Last 90 days"
+Today: 2025-11-17
+Calculated start date: 2025-08-19
+
+First sync SQL:
+  WHERE created_at >= '2025-08-19'
+
+Subsequent sync SQL:
+  WHERE created_at > '2025-11-17 10:23:45' (last sync timestamp)
+```
+
+**Key Features:**
+- ✅ Table preview with column metadata and sample data
+- ✅ Smart auto-detection of timestamp columns and primary keys
+- ✅ Column-level control (deselect heavy fields)
+- ✅ Two distinct load strategies (transactional vs catalog)
+- ✅ Historical backfill with flexible date ranges
+- ✅ Visual indicators (icons for PK and timestamp columns)
+- ✅ All configuration stored in database for execution
+- ✅ Monthly schedule option added
+
+**Payload Example:**
+```json
+{
+  "name": "Daily Transactions",
+  "connection_id": 5,
+  "schema_name": "public",
+  "load_type": "transactional",
+  "timestamp_column": "created_at",
+  "historical_start_date": "2025-08-19",
+  "selected_columns": ["id", "created_at", "amount", "customer_id"],
+  "schedule_type": "daily",
+  "tables": [{
+    "source_table_name": "transactions",
+    "dest_table_name": "transactions",
+    "sync_mode": "incremental",
+    "incremental_column": "created_at"
+  }]
+}
+```
+
+**Files Modified:**
+- `ml_platform/models.py` - 9 new fields added
+- `ml_platform/migrations/0011_*.py` - Migration for new fields
+- `ml_platform/utils/connection_manager.py` - Table metadata functions (~400 lines)
+- `ml_platform/views.py` - New API endpoint + updated ETL creation
+- `ml_platform/urls.py` - New route
+- `templates/ml_platform/model_etl.html` - Complete Step 3 HTML + JavaScript (~200 lines)
+
+**Documentation Created:**
+- `IMPLEMENTATION_STATUS.md` - Progress tracking
+- `IMPLEMENTATION_COMPLETE.md` - Comprehensive reference guide
+
+### 🎯 Milestone 12: Production Readiness (Future)
 - [ ] Test with MySQL database connection
 - [ ] Test with BigQuery dataset
 - [ ] Add SQL Server support if needed
@@ -567,17 +802,24 @@ Faster job creation, centralized credential management
 
 ## What We Accomplished
 
-**Milestones 1-10 Complete!**
+**Milestones 1-11 Complete!**
 
+✅ **Advanced 4-Step ETL Wizard** - Enhanced with load strategy, table preview, column selection
+✅ **Schema Selection** - Support for multi-schema databases (PostgreSQL, Oracle, SQL Server)
+✅ **Load Type Differentiation** - Transactional (append-only) vs Catalog (daily snapshot)
+✅ **Historical Backfill** - Load last 30/60/90 days on first sync, then daily increments
+✅ **Table Preview** - View column metadata, data types, sample values before configuring
+✅ **Column Selection** - Deselect specific columns (e.g., heavy BLOB/TEXT fields)
+✅ **Smart Auto-Detection** - Recommends timestamp columns and detects primary keys
+✅ **Cloud Storage Integration** - GCS, S3, Azure Blob with storage-first architecture
 ✅ Real database connection testing (PostgreSQL, MySQL, BigQuery)
 ✅ Secure credential storage in GCP Secret Manager
-✅ **Simplified 3-Step ETL Wizard** - streamlined from 5 steps to 3 (40% faster)
 ✅ **Standalone Connection Management** - 2-step wizard with category tabs
 ✅ **Complete Architecture Separation** - Connections and ETL jobs managed independently
-✅ **Connection Reuse Pattern** - Select from existing connections, no credential re-entry
+✅ **Connection Reuse Pattern** - One connection serves multiple schemas and ETL jobs
 ✅ **Test-First Pattern** - Connection test before Secret Manager save (no premature writes)
 ✅ **Atomic ETL Creation** - No draft saves until final step (cleaner flow)
-✅ **Clean Data Model** - Removed deprecated DataSource fields (simplified schema)
+✅ **Clean Data Model** - Added 9 new fields for load strategy configuration
 ✅ **Connection Tracking** - last_used_at field updated on ETL job creation
 ✅ Auto-test saved connections to fetch table list in background
 ✅ Real table metadata displayed in wizard (names, row counts, last updated)
@@ -587,10 +829,10 @@ Faster job creation, centralized credential management
 ✅ **Loading State Management** - animated spinner + disabled navigation during async operations
 ✅ **Standalone Connections Management UI** - 2-column layout with dedicated connections section
 ✅ **Connection CRUD** - Create, Edit, Delete connections independently from ETL jobs
-✅ **Live Connection Status** - Auto-tested green/red status indicators
+✅ **Live Connection Status** - Auto-tested green/red/yellow indicators
 ✅ **Protected Deletion** - Blocks deletion of connections with dependent jobs
-✅ **Category-Based Selection** - Relational DB/Files/NoSQL tabs with tile-based database picking
-✅ **Fixed Connection Status Bug** - Proper green/red/yellow indicators with intelligent error handling
+✅ **Category-Based Selection** - Relational DB/Cloud Storage/NoSQL tabs with tile-based picking
+✅ **Fixed Connection Status Bug** - Proper status indicators with intelligent error handling
 ✅ **Standardized Button Styling** - Consistent buttons using buttons.css system
 ✅ **Manual Refresh** - Re-test connections on demand with spinning animation
 ✅ **Status Timestamps** - "Tested 5m ago" display for freshness awareness
@@ -599,8 +841,9 @@ Faster job creation, centralized credential management
 ✅ **Reusable Card System** - cards.css for consistent design across platform
 ✅ **Optimized Space Usage** - 2-row layout, no wasted whitespace
 ✅ **Text Truncation** - Ellipsis for long names, prevents overflow
+✅ **22 Data Source Types** - 12 relational DBs, 3 cloud storage providers, 5 NoSQL databases
 
-**Next Steps:** Testing and validation, then Milestone 11 - Production readiness and deployment
+**Next Steps:** Testing and validation, then Milestone 12 - Production readiness and deployment
 
 ---
 

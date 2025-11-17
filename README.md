@@ -14,11 +14,11 @@ A multi-tenant B2B SaaS platform for building, training, and deploying productio
 
 ## Project Status
 
-**Current Phase**: ETL & Connection Management + Cloud Storage Integration ✅ **COMPLETE**
+**Current Phase**: Advanced ETL Wizard with Load Strategy & Schema Selection ✅ **COMPLETE**
 
-**Date Completed**: November 17, 2025 (Milestone 10.5)
+**Date Completed**: November 17, 2025 (Milestones 10.6 & 11)
 
-The client-facing web application is complete with fully functional ETL configuration, comprehensive connection management with full CRUD operations, cloud storage integration (GCS, S3, Azure Blob), robust connection testing, modern minimalistic UI design, and professional UX enhancements.
+The client-facing web application is complete with advanced 4-step ETL wizard featuring load strategy configuration, table preview, column selection, historical backfill, schema selection for multi-schema databases, comprehensive connection management with full CRUD operations, cloud storage integration (GCS, S3, Azure Blob), robust connection testing, modern minimalistic UI design, and professional UX enhancements.
 
 ### ✅ Completed Components
 
@@ -273,10 +273,21 @@ The ETL system uses a **single Docker container template** deployed per client w
 
 **Django Web UI** (`/models/{id}/etl/`):
 - **Per-Table ETL Jobs**: Each data source extracts exactly one table with independent scheduling
-- **Simplified 3-Step ETL Wizard**: Streamlined job creation (40% faster than before)
+- **Advanced 4-Step ETL Wizard**: Enhanced with load strategy configuration
   - Step 1: Select existing connection + Enter job name
-  - Step 2: Select table from database (auto-fetched)
-  - Step 3: Configure sync mode + Schedule + Review summary
+  - Step 2: Select schema + Select table from schema (auto-fetched)
+  - Step 3: Configure load strategy (table preview, column selection, load type, historical backfill)
+  - Step 4: Configure schedule + Review summary
+- **Schema Selection**: Support for multi-schema databases (PostgreSQL, Oracle, SQL Server)
+- **Load Strategy Configuration**:
+  - Transactional (append-only with timestamp tracking)
+  - Catalog (daily snapshot, full replace)
+  - Historical backfill (load last 30/60/90 days on first sync)
+- **Table Preview & Column Selection**:
+  - View column metadata, types, and sample values
+  - Select specific columns to sync (deselect heavy BLOB/TEXT fields)
+  - Smart auto-detection of timestamp columns and primary keys
+  - Visual indicators (🔑 for primary keys, 🕐 for timestamps)
 - **Standalone Connection Management**: 2-step wizard for independent connection creation
   - Step 1: Category tabs (Relational DB/Files/NoSQL) + tile-based database selection
   - Step 2: Connection form with test button → "Save Connection" after successful test
@@ -424,24 +435,46 @@ The ETL page features a 2-column layout:
   - Click "Use This Connection" button
 - If no connections exist: Create one first using "+ Connection" button
 
-**ETL Wizard - Step 2: Table Selection**
-- Real tables fetched automatically from selected connection
+**ETL Wizard - Step 2: Schema & Table Selection**
+- **Schema dropdown** populated automatically from selected connection
+  - PostgreSQL/Oracle: Shows all user schemas
+  - MySQL: Auto-selects database as schema (single option)
+  - BigQuery: Shows all datasets
+- Select schema → **Table list** auto-fetches for that schema
 - Shows table metadata: name, row count, last updated timestamp
 - Select the table to extract
 - Click "Next"
 
-**ETL Wizard - Step 3: Configure & Review**
-- Choose sync mode: **Replace** (full refresh), **Append**, or **Incremental**
-- For Incremental: Select timestamp column for delta extraction
+**ETL Wizard - Step 3: Configure Load Strategy** ⭐ NEW
+- **Table Preview**: View column structure before configuring
+  - Column names, data types, nullability
+  - Sample values (5 rows per column)
+  - Visual indicators (🔑 primary key, 🕐 timestamp columns)
+- **Column Selection**: Check/uncheck columns to sync
+  - "Select All" / "Deselect All" buttons
+  - Useful for excluding heavy BLOB/TEXT fields
+- **Load Type**: Choose data loading strategy
+  - **Transactional (Append-Only)**: For transactions, logs, events
+    - Select timestamp column for incremental tracking
+    - Historical backfill: Last 30/60/90 days or custom date
+    - First sync loads historical data, subsequent syncs only new records
+  - **Catalog (Daily Snapshot)**: For products, customers, inventory
+    - Full table replacement on each sync
+    - No incremental tracking needed
+- Click "Next"
+
+**ETL Wizard - Step 4: Schedule & Review**
 - Configure schedule: Manual, Hourly, Daily, Weekly, or Monthly
 - Review summary:
   - Job name
   - Connection details
-  - Table name
-  - Sync mode
+  - Schema and table name (schema.table format)
+  - Load type and configuration
+  - Selected columns
   - Schedule
 - Click "Create ETL Job" to finalize:
   - ETL job created atomically (no drafts)
+  - All configuration stored in database
   - Connection.last_used_at updated
   - Job enabled immediately
   - Modal closes, jobs list reloads

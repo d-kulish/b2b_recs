@@ -260,6 +260,7 @@ class DataSourceTable(models.Model):
     data_source = models.ForeignKey(DataSource, on_delete=models.CASCADE, related_name='tables')
 
     # Source table configuration
+    schema_name = models.CharField(max_length=255, blank=True, help_text="Schema name (for databases that support schemas)")
     source_table_name = models.CharField(max_length=255, help_text="Table name in source database")
     source_query = models.TextField(blank=True, help_text="Optional: custom SQL query instead of table name")
 
@@ -267,10 +268,79 @@ class DataSourceTable(models.Model):
     dest_table_name = models.CharField(max_length=255, help_text="Table name in BigQuery (e.g., 'transactions')")
     dest_dataset = models.CharField(max_length=255, default='raw_data', help_text="BigQuery dataset name")
 
-    # Sync configuration
+    # Sync configuration (DEPRECATED - replaced by load_type)
     sync_mode = models.CharField(max_length=20, choices=SYNC_MODE_CHOICES, default='replace')
     incremental_column = models.CharField(max_length=100, blank=True, help_text="Column for incremental sync")
     last_sync_value = models.CharField(max_length=255, blank=True, help_text="Last synced value (for incremental)")
+
+    # Load Strategy Configuration (NEW)
+    LOAD_TYPE_CHOICES = [
+        ('transactional', 'Transactional (Append-Only)'),
+        ('catalog', 'Catalog (Daily Snapshot)'),
+    ]
+
+    load_type = models.CharField(
+        max_length=20,
+        choices=LOAD_TYPE_CHOICES,
+        default='transactional',
+        help_text="Type of data load strategy"
+    )
+
+    # Transactional load configuration
+    timestamp_column = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Column used to track incremental changes (e.g., created_at, updated_at)"
+    )
+    historical_start_date = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Start date for historical backfill (optional)"
+    )
+
+    # Column selection
+    selected_columns = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="List of column names to sync (empty = all columns)"
+    )
+
+    # Schedule configuration
+    SCHEDULE_TYPE_CHOICES = [
+        ('manual', 'Manual Only'),
+        ('hourly', 'Hourly'),
+        ('daily', 'Daily'),
+        ('weekly', 'Weekly'),
+        ('monthly', 'Monthly'),
+        ('custom', 'Custom (cron)'),
+    ]
+
+    schedule_type = models.CharField(
+        max_length=20,
+        choices=SCHEDULE_TYPE_CHOICES,
+        default='manual',
+        help_text="Schedule frequency"
+    )
+    schedule_time = models.TimeField(
+        null=True,
+        blank=True,
+        help_text="Time of day for daily/weekly/monthly schedules"
+    )
+    schedule_day_of_week = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="Day of week for weekly schedules (0=Monday, 6=Sunday)"
+    )
+    schedule_day_of_month = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="Day of month for monthly schedules (1-31)"
+    )
+    schedule_cron = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Custom cron expression"
+    )
 
     # Table settings
     is_enabled = models.BooleanField(default=True)

@@ -30,6 +30,8 @@
 - ✅ **Status Timestamps** - "Tested 5m ago" display on connection cards
 - ✅ **Modern Connection Cards** - Minimalistic 3-column design with optimized space usage
 - ✅ **Reusable Card System** - cards.css for consistent tablet/card design across platform
+- ✅ **Full Edit Functionality** - Edit connections with pre-populated fields and proper update flow
+- ✅ **Multi-Machine Development** - Shared Cloud SQL database across desktop and laptop
 
 ---
 

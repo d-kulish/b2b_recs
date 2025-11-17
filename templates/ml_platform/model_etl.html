@@ -1558,6 +1558,7 @@ function openCreateConnectionModal() {
     connCurrentStep = 1;
     connSelectedType = null;
     connTestedSuccessfully = false;
+    wizardEditConnectionId = null; // Clear edit mode when creating new
 
     // Reset form fields
     document.querySelectorAll('input[name="connSourceType"]').forEach(radio => radio.checked = false);
@@ -2169,7 +2170,13 @@ async function saveConnectionStandalone() {
     }
 
     try {
-        const response = await fetch('/api/models/' + {{ model.id }} + '/connections/create-standalone/', {
+        // Determine if we're editing or creating
+        const isEditing = wizardEditConnectionId !== null && wizardEditConnectionId !== undefined;
+        const apiUrl = isEditing
+            ? `/api/connections/${wizardEditConnectionId}/update/`
+            : '/api/models/' + {{ model.id }} + '/connections/create-standalone/';
+
+        const response = await fetch(apiUrl, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -2181,8 +2188,12 @@ async function saveConnectionStandalone() {
         const data = await response.json();
 
         if (data.status === 'success') {
+            // Clear edit mode
+            wizardEditConnectionId = null;
+
             // Show success notification
-            showSuccessNotification('Connection saved successfully!');
+            const message = isEditing ? 'Connection updated successfully!' : 'Connection saved successfully!';
+            showSuccessNotification(message);
 
             // Wait 2 seconds, then close modal and reload
             setTimeout(() => {
@@ -2221,31 +2232,70 @@ function openEditConnectionModal(connectionId) {
             if (data.status === 'success') {
                 const connection = data.connection;
 
-                // Set wizard edit connection mode
-                wizardEditMode = false;  // Not editing ETL job
+                // Set edit connection ID
                 wizardEditConnectionId = connectionId;
+                connSelectedType = connection.source_type;
+                connTestedSuccessfully = false;
 
-                // Populate Step 2 fields
-                document.getElementById('sourceType').value = connection.source_type;
-                document.getElementById('connectionName').value = connection.name;
-                document.getElementById('sourceHost').value = connection.source_host || '';
-                document.getElementById('sourcePort').value = connection.source_port || '';
-                document.getElementById('sourceDatabase').value = connection.source_database || '';
-                document.getElementById('sourceSchema').value = connection.source_schema || '';
-                document.getElementById('sourceUsername').value = connection.source_username || '';
+                // Reset modal to Step 1 first
+                connCurrentStep = 1;
 
-                // BigQuery fields
-                if (connection.source_type === 'bigquery') {
-                    document.getElementById('bigqueryProject').value = connection.bigquery_project || '';
-                    document.getElementById('bigqueryDataset').value = connection.bigquery_dataset || '';
+                // Select the correct source type radio button
+                const sourceTypeRadio = document.querySelector(`input[name="connSourceType"][value="${connection.source_type}"]`);
+                if (sourceTypeRadio) {
+                    sourceTypeRadio.checked = true;
                 }
 
-                // Track that we're editing an existing connection
-                window.usingExistingConnection = true;
-                window.existingConnectionId = connectionId;
+                // Show the modal
+                document.getElementById('createConnectionModal').classList.remove('hidden');
 
-                // Show modal at Step 2
-                showAddSourceModal(2);
+                // Move to Step 2 and populate fields
+                setTimeout(() => {
+                    connCurrentStep = 2;
+                    connShowStep(2);
+                    connShowForm(connSelectedType); // Show the form for this connection type
+
+                    // Populate connection fields with correct IDs
+                    const connNameField = document.getElementById('connName');
+                    const connHostField = document.getElementById('connHost');
+                    const connPortField = document.getElementById('connPort');
+                    const connDatabaseField = document.getElementById('connDatabase');
+                    const connUsernameField = document.getElementById('connUsername');
+
+                    if (connNameField) connNameField.value = connection.name || '';
+                    if (connHostField) connHostField.value = connection.source_host || '';
+                    if (connPortField) connPortField.value = connection.source_port || '';
+                    if (connDatabaseField) connDatabaseField.value = connection.source_database || '';
+                    if (connUsernameField) connUsernameField.value = connection.source_username || '';
+
+                    // BigQuery fields
+                    if (connection.source_type === 'bigquery') {
+                        const bqProjectField = document.getElementById('connBigQueryProject');
+                        const bqDatasetField = document.getElementById('connBigQueryDataset');
+                        if (bqProjectField) bqProjectField.value = connection.bigquery_project || '';
+                        if (bqDatasetField) bqDatasetField.value = connection.bigquery_dataset || '';
+                    }
+
+                    // NoSQL fields
+                    if (['mongodb', 'cassandra', 'redis', 'firestore', 'dynamodb'].includes(connection.source_type)) {
+                        const connStringField = document.getElementById('connConnectionString');
+                        const noSQLDbField = document.getElementById('connNoSQLDatabase');
+                        if (connStringField) connStringField.value = connection.connection_string || '';
+                        if (noSQLDbField) noSQLDbField.value = connection.source_database || '';
+                    }
+
+                    // Files fields
+                    if (['csv', 'json', 'parquet', 'avro', 'excel', 'text'].includes(connection.source_type)) {
+                        const filePathField = document.getElementById('connFilePath');
+                        if (filePathField) filePathField.value = connection.file_path || '';
+                    }
+
+                    // Update button states
+                    updateConnectionModalButtons(2);
+
+                    // Add field change listeners
+                    addFieldChangeListeners();
+                }, 100);
             }
         })
         .catch(error => {

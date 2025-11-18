@@ -2643,15 +2643,21 @@ def api_etl_trigger_now(request, data_source_id):
 
             operation = client.run_job(request=exec_request)
 
-            # Update ETL run with execution ID
-            etl_run.cloud_run_execution_id = operation.name
+            # Update ETL run with operation name (execution ID will be populated by ETL runner)
+            # Note: operation.result() would block until completion, so we store operation name instead
+            operation_name = None
+            if hasattr(operation, 'operation') and hasattr(operation.operation, 'name'):
+                operation_name = operation.operation.name
+
+            etl_run.cloud_run_execution_id = operation_name or 'triggered'
+            etl_run.status = 'running'
             etl_run.save()
 
             return JsonResponse({
                 'status': 'success',
                 'message': f'ETL run triggered for "{data_source.name}"',
                 'run_id': etl_run.id,
-                'execution_name': operation.name
+                'operation_name': operation_name
             })
 
         except Exception as e:

@@ -15,21 +15,42 @@ A multi-tenant B2B SaaS platform for building, training, and deploying productio
 
 ## Project Status
 
-**Current Phase**: ETL Runner & Cloud Scheduler Integration ✅ **COMPLETE** (Milestone 12)
+**Current Phase**: Production Deployment to Cloud Run ✅ **COMPLETE** (Nov 18, 2025)
 
-**Date Completed**: November 18, 2025
+**Latest Milestone**: Django deployed to Cloud Run with dedicated Cloud SQL database
 
-The ETL platform is now fully functional with:
-- ✅ **5-step ETL wizard** with BigQuery table creation
-- ✅ **ETL Runner deployed to Cloud Run** (europe-central2)
-- ✅ **Manual "Run Now" triggers** Cloud Run jobs
-- ✅ **Cloud Scheduler integration** ready for automated runs
-- ✅ **Progress tracking API** for real-time status updates
-- ✅ **IAM permissions configured** (BigQuery Admin, Cloud Run Admin)
+### 🚀 Production Deployment
 
-**Current Status:** Ready for end-to-end testing and data loading
+**Django Application**: `https://django-app-555035914949.europe-central2.run.app`
 
-**Next Phase**: Testing & Phase 3 (Status Monitoring UI) - See `etl_runner.md` for detailed next steps.
+**Infrastructure:**
+- **Project**: b2b-recs (555035914949)
+- **Region**: europe-central2 (Warsaw, Poland)
+- **Django**: Cloud Run Service (2Gi RAM, 2 CPU, auto-scaling 0-10)
+- **Database**: Cloud SQL PostgreSQL 15 (`b2b-recs-db`)
+  - Database: `b2b_recs_dev`
+  - User: `django_user`
+  - Password: **Secret Manager** (`django-db-password`)
+- **ETL Runner**: Cloud Run Job (connected to Django API)
+- **Secrets**: Secret Manager integration
+- **Data Warehouse**: BigQuery (`raw_data` dataset)
+
+**Security:**
+- ✅ CSRF protection configured for Cloud Run
+- ✅ HTTPS only (SECURE_PROXY_SSL_HEADER)
+- ✅ Production middleware (WhiteNoise for static files)
+- ✅ Credentials stored in Secret Manager
+- ✅ Service account IAM configured
+
+**Deployment Features:**
+- ✅ Automated Docker image builds
+- ✅ Database migrations via Cloud Run Jobs
+- ✅ Superuser creation scripts
+- ✅ Health checks and logging
+
+**Current Status:** Production ready, testing end-to-end ETL flow
+
+**Next Phase**: End-to-end testing → Real-time status monitoring (Phase 3) - See `next_steps.md`
 
 ### ✅ Completed Components
 

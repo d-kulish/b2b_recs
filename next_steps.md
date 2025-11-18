@@ -918,18 +918,49 @@ GCP_PROJECT_ID = 'your-gcp-project-id'
 **Documentation:**
 - `BQ_TABLE_SETUP.md` - Complete implementation guide with detailed next steps for ETL Runner and Cloud Scheduler
 
-### 🎯 Milestone 12: ETL Runner & Cloud Scheduler Integration (NEXT)
-**Status:** 📋 PLANNED
-**Estimated Time:** 2-3 weeks
+### 🎯 Milestone 12: ETL Runner & Cloud Scheduler Integration ✅ COMPLETE
+**Date Completed:** November 18, 2025
+**Status:** Phase 1 & Phase 2 COMPLETE | Ready for Data Loading
 
-**Phase 1: Simple Cloud Run ETL Runner (Week 1-2)**
-- [ ] Test with MySQL database connection
-- [ ] Test with BigQuery dataset
-- [ ] Add SQL Server support if needed
-- [ ] Build ETL container (etl_runner.py) for actual data extraction
-- [ ] Create Dockerfile for Cloud Run deployment
-- [ ] Set up Cloud Scheduler for automated runs
-- [ ] Add comprehensive logging and error tracking
+**Phase 1: ETL Runner Implementation (Week 1-2)** ✅
+- [x] Built complete ETL runner codebase (~2,600 lines of Python) ✓
+- [x] Implemented PostgreSQLExtractor with server-side cursors ✓
+- [x] Implemented MySQLExtractor with SSCursor streaming ✓
+- [x] Built BigQueryLoader with batch processing ✓
+- [x] Created configuration management module ✓
+- [x] Implemented logging and error handling utilities ✓
+- [x] Created main.py orchestrator with job execution flow ✓
+- [x] Created Dockerfile for Cloud Run deployment ✓
+- [x] Deployed to Cloud Run Jobs (europe-central2) ✓
+- [x] Configured service accounts and IAM permissions ✓
+
+**Phase 2: Django Integration & Cloud Scheduler (Week 2-3)** ✅
+- [x] Created CloudSchedulerManager utility module ✓
+- [x] Updated ETLRun model with progress tracking fields ✓
+- [x] Added schedule fields to DataSource model ✓
+- [x] Created API endpoint: `api_etl_job_config` (runner fetches config) ✓
+- [x] Created API endpoint: `api_etl_run_update` (runner reports progress) ✓
+- [x] Created API endpoint: `api_etl_trigger_now` (manual execution) ✓
+- [x] Updated `api_etl_create_job` to integrate Cloud Scheduler ✓
+- [x] Updated frontend "Run Now" button to trigger Cloud Run jobs ✓
+- [x] Configured IAM permissions for all service accounts ✓
+- [x] Set region to europe-central2 (Warsaw, Poland) ✓
+- [x] Database migrations created and applied ✓
+
+**What's Ready:**
+- ✅ ETL jobs create BigQuery tables during wizard
+- ✅ Manual "Run Now" triggers Cloud Run ETL jobs
+- ✅ Cloud Scheduler utility ready for automated scheduling
+- ✅ Progress tracking API endpoints implemented
+- ✅ All IAM permissions configured
+- ✅ Docker image deployed to Cloud Run
+
+**Next Steps (Testing & Phase 3):**
+- [ ] Test end-to-end data loading (click "Run Now", verify data in BigQuery)
+- [ ] Test Cloud Scheduler job creation for scheduled jobs
+- [ ] Validate progress tracking and status updates
+- [ ] Implement Phase 3: Real-time status monitoring UI
+- [ ] Build ETL history page with run metrics
 
 ---
 

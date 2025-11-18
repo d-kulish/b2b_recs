@@ -156,3 +156,6 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 LOGIN_URL = 'login'
 LOGIN_REDIRECT_URL = 'system_dashboard'
 LOGOUT_REDIRECT_URL = 'login'
+
+# GCP Configuration
+GCP_PROJECT_ID = os.environ.get('GCP_PROJECT_ID', '')

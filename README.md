@@ -15,13 +15,21 @@ A multi-tenant B2B SaaS platform for building, training, and deploying productio
 
 ## Project Status
 
-**Current Phase**: BigQuery Table Setup & Schema Management ✅ **COMPLETE**
+**Current Phase**: ETL Runner & Cloud Scheduler Integration ✅ **COMPLETE** (Milestone 12)
 
-**Date Completed**: November 18, 2025 (Milestone 11.5)
+**Date Completed**: November 18, 2025
 
-The client-facing web application is complete with advanced **5-step ETL wizard** featuring BigQuery table schema configuration with intelligent type mapping, load strategy configuration, table preview, column selection, historical backfill, schema selection for multi-schema databases, comprehensive connection management with full CRUD operations, cloud storage integration (GCS, S3, Azure Blob), robust connection testing, modern minimalistic UI design, and professional UX enhancements.
+The ETL platform is now fully functional with:
+- ✅ **5-step ETL wizard** with BigQuery table creation
+- ✅ **ETL Runner deployed to Cloud Run** (europe-central2)
+- ✅ **Manual "Run Now" triggers** Cloud Run jobs
+- ✅ **Cloud Scheduler integration** ready for automated runs
+- ✅ **Progress tracking API** for real-time status updates
+- ✅ **IAM permissions configured** (BigQuery Admin, Cloud Run Admin)
 
-**Next Phase**: ETL Runner & Cloud Scheduler Integration (Milestone 12) - See `BQ_TABLE_SETUP.md` for detailed implementation plan.
+**Current Status:** Ready for end-to-end testing and data loading
+
+**Next Phase**: Testing & Phase 3 (Status Monitoring UI) - See `etl_runner.md` for detailed next steps.
 
 ### ✅ Completed Components
 

@@ -3,7 +3,7 @@
 ## Document Purpose
 This document outlines the agreed-upon architecture and implementation strategy for transforming a client-specific TFRS (Two-Tower Retrieval System) implementation into a multi-tenant B2B SaaS platform.
 
-**Last Updated**: 2025-11-09
+**Last Updated**: 2025-11-18
 
 ---
 
@@ -1208,6 +1208,102 @@ Onboard additional clients, iterate on product.
 - Service accounts per service
 - Time-limited credentials
 - No long-lived keys
+
+### IAM Requirements & Setup
+
+**Region Configuration:**
+- Primary Region: `europe-central2` (Warsaw, Poland)
+- Matches existing infrastructure location
+- Ensures data residency compliance for Ukraine
+
+**Required GCP APIs** (must be enabled):
+```bash
+# Core ETL Platform APIs
+bigquery.googleapis.com              # BigQuery for data warehousing
+cloudscheduler.googleapis.com        # Cloud Scheduler for ETL automation
+run.googleapis.com                   # Cloud Run for containerized services
+cloudbuild.googleapis.com            # Cloud Build for Docker image builds
+secretmanager.googleapis.com         # Secret Manager for credentials
+sqladmin.googleapis.com              # Cloud SQL for Django/MLflow databases
+```
+
+**Service Accounts:**
+
+1. **ETL Runner Service Account**
+   - Name: `etl-runner@{project-id}.iam.gserviceaccount.com`
+   - Purpose: Executes Cloud Run ETL jobs
+   - Required Roles:
+     - `roles/bigquery.dataEditor` - Create tables, load data
+     - `roles/bigquery.jobUser` - Run BigQuery jobs
+     - `roles/secretmanager.secretAccessor` - Read database credentials
+     - `roles/run.invoker` - Invoke Cloud Run jobs
+
+2. **Django App Service Account** (App Engine Default)
+   - Name: `{project-id}@appspot.gserviceaccount.com`
+   - Purpose: Django application backend operations
+   - Required Roles:
+     - `roles/cloudscheduler.admin` - Create/manage Cloud Scheduler jobs
+     - `roles/bigquery.admin` - Manage BigQuery datasets/tables
+     - `roles/secretmanager.admin` - Manage connection credentials
+     - `roles/run.admin` - Trigger ETL jobs
+
+**User Permissions** (for development/operations):
+- Primary User: `kulish.dmytro@gmail.com`
+  - `roles/owner` - Full project access (already assigned)
+  - `roles/bigquery.admin` - BigQuery operations
+  - `roles/cloudscheduler.admin` - Scheduler management
+
+**Setup Commands:**
+```bash
+# Set project
+gcloud config set project b2b-recs
+
+# Enable required APIs
+gcloud services enable bigquery.googleapis.com \
+  cloudscheduler.googleapis.com \
+  run.googleapis.com \
+  cloudbuild.googleapis.com \
+  secretmanager.googleapis.com \
+  sqladmin.googleapis.com
+
+# Create ETL Runner service account
+gcloud iam service-accounts create etl-runner \
+  --display-name="ETL Runner Service Account"
+
+# Grant permissions to ETL Runner
+gcloud projects add-iam-policy-binding b2b-recs \
+  --member="serviceAccount:etl-runner@b2b-recs.iam.gserviceaccount.com" \
+  --role="roles/bigquery.dataEditor"
+
+gcloud projects add-iam-policy-binding b2b-recs \
+  --member="serviceAccount:etl-runner@b2b-recs.iam.gserviceaccount.com" \
+  --role="roles/bigquery.jobUser"
+
+gcloud projects add-iam-policy-binding b2b-recs \
+  --member="serviceAccount:etl-runner@b2b-recs.iam.gserviceaccount.com" \
+  --role="roles/secretmanager.secretAccessor"
+
+gcloud projects add-iam-policy-binding b2b-recs \
+  --member="serviceAccount:etl-runner@b2b-recs.iam.gserviceaccount.com" \
+  --role="roles/run.invoker"
+
+# Grant permissions to Django App (App Engine default SA)
+gcloud projects add-iam-policy-binding b2b-recs \
+  --member="serviceAccount:b2b-recs@appspot.gserviceaccount.com" \
+  --role="roles/cloudscheduler.admin"
+
+# Setup application default credentials (for local development)
+gcloud auth application-default login
+```
+
+**Security Best Practices:**
+- ✅ No service account keys stored locally
+- ✅ All credentials in Secret Manager
+- ✅ Least privilege access (scoped to specific services)
+- ✅ Service accounts per component (ETL, Django, ML)
+- ✅ Regular IAM policy audits
+- ⚠️ Never commit credentials to Git
+- ⚠️ Rotate service account keys if generated
 
 ### Compliance
 

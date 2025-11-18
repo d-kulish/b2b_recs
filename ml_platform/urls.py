@@ -38,6 +38,11 @@ urlpatterns = [
     path('api/etl/sources/<int:source_id>/delete/', views.api_etl_delete_source, name='api_etl_delete_source'),
     path('api/etl/runs/<int:run_id>/status/', views.api_etl_run_status, name='api_etl_run_status'),
 
+    # ETL Runner API endpoints (Phase 2)
+    path('api/etl/job-config/<int:data_source_id>/', views.api_etl_job_config, name='api_etl_job_config'),
+    path('api/etl/runs/<int:run_id>/update/', views.api_etl_run_update, name='api_etl_run_update'),
+    path('api/etl/sources/<int:data_source_id>/trigger/', views.api_etl_trigger_now, name='api_etl_trigger_now'),
+
     # Connection Management API (New Architecture)
     path('api/models/<int:model_id>/connections/test-wizard/', views.api_connection_test_wizard, name='api_connection_test_wizard'),
     path('api/models/<int:model_id>/connections/create/', views.api_connection_create, name='api_connection_create'),

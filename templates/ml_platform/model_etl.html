@@ -1423,8 +1423,15 @@ function validateJobName() {
 // ============================================================================
 
 function runSourceNow(sourceId) {
-    if (confirm('Run ETL extraction now for this data source?')) {
-        fetch(`/api/etl/sources/${sourceId}/run/`, {
+    if (confirm('Run ETL extraction now for this data source?\n\nThis will trigger the Cloud Run ETL job to extract and load data to BigQuery.')) {
+        // Disable the button to prevent double-clicks
+        const button = event.target.closest('button');
+        if (button) {
+            button.disabled = true;
+            button.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Starting...';
+        }
+
+        fetch(`/api/etl/sources/${sourceId}/trigger/`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -1434,14 +1441,28 @@ function runSourceNow(sourceId) {
         .then(response => response.json())
         .then(data => {
             if (data.status === 'success') {
-                alert('✓ ' + data.message + '\nRun ID: ' + data.run_id);
+                alert('✓ ETL Run Triggered Successfully!\n\n' +
+                      'Run ID: ' + data.run_id + '\n' +
+                      'Execution: ' + data.execution_name + '\n\n' +
+                      'The ETL job is now running in Cloud Run.\n' +
+                      'You can monitor its progress in the Cloud Console.');
                 location.reload();
             } else {
                 alert('Error: ' + data.message);
+                // Re-enable button on error
+                if (button) {
+                    button.disabled = false;
+                    button.innerHTML = '<i class="fas fa-play mr-1"></i>Run Now';
+                }
             }
         })
         .catch(error => {
             alert('Error triggering ETL: ' + error);
+            // Re-enable button on error
+            if (button) {
+                button.disabled = false;
+                button.innerHTML = '<i class="fas fa-play mr-1"></i>Run Now';
+            }
         });
     }
 }

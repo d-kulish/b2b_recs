@@ -2130,6 +2130,10 @@ def api_etl_create_job(request, model_id):
             name=job_name,
             source_type=connection.source_type,  # Denormalized from connection
             is_enabled=True,
+            schedule_type=schedule_type,
+            use_incremental=(load_type == 'transactional'),
+            incremental_column=timestamp_column if load_type == 'transactional' else '',
+            historical_start_date=historical_start_date,
         )
 
         # Create DataSourceTable objects for each selected table
@@ -2160,6 +2164,50 @@ def api_etl_create_job(request, model_id):
         connection.last_used_at = timezone.now()
         connection.save()
 
+        # ============================================================
+        # CREATE CLOUD SCHEDULER (if not manual)
+        # ============================================================
+        schedule_created = False
+        scheduler_message = ''
+
+        if schedule_type != 'manual':
+            from .utils.cloud_scheduler import CloudSchedulerManager
+
+            try:
+                scheduler_manager = CloudSchedulerManager(
+                    project_id=project_id,
+                    region='europe-central2'
+                )
+
+                # Cloud Run Jobs execution URL
+                # Format: https://{region}-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/{project_id}/jobs/{job_name}:run
+                cloud_run_job_url = f"https://europe-central2-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/{project_id}/jobs/etl-runner:run"
+                service_account = f"etl-runner@{project_id}.iam.gserviceaccount.com"
+
+                scheduler_result = scheduler_manager.create_etl_schedule(
+                    data_source_id=data_source.id,
+                    job_name=job_name,
+                    schedule_type=schedule_type,
+                    cloud_run_job_url=cloud_run_job_url,
+                    service_account_email=service_account
+                )
+
+                if scheduler_result['success']:
+                    # Save scheduler job name to DataSource
+                    data_source.cloud_scheduler_job_name = scheduler_result['job_name']
+                    data_source.save()
+
+                    schedule_created = True
+                    scheduler_message = scheduler_result['schedule']
+                    logger.info(f"Created Cloud Scheduler job: {scheduler_result['job_name']}")
+                else:
+                    logger.warning(f"Failed to create Cloud Scheduler: {scheduler_result['message']}")
+                    scheduler_message = scheduler_result['message']
+
+            except Exception as e:
+                logger.error(f"Error creating Cloud Scheduler: {str(e)}")
+                scheduler_message = f"Scheduler creation failed: {str(e)}"
+
         return JsonResponse({
             'status': 'success',
             'message': f'ETL job "{job_name}" created successfully',
@@ -2167,6 +2215,8 @@ def api_etl_create_job(request, model_id):
             'job_name': data_source.name,
             'bigquery_table': table_result['full_table_id'],
             'bigquery_partitioned': table_result.get('partitioned', False),
+            'schedule_created': schedule_created,
+            'schedule_message': scheduler_message if scheduler_message else None,
         })
 
     except Exception as e:
@@ -2393,4 +2443,233 @@ def api_connection_fetch_table_preview(request, connection_id):
         return JsonResponse({
             'status': 'error',
             'message': str(e),
+        }, status=500)
+
+
+# ============================================================
+# ETL RUNNER API ENDPOINTS (Phase 2)
+# ============================================================
+
+@require_http_methods(["GET"])
+def api_etl_job_config(request, data_source_id):
+    """
+    Get ETL job configuration for the ETL runner.
+    Called by Cloud Run ETL runner to fetch job details.
+
+    Returns complete configuration needed to execute ETL job.
+    """
+    from .utils.connection_manager import get_credentials_from_secret_manager
+
+    try:
+        data_source = get_object_or_404(DataSource, id=data_source_id)
+
+        # Get first table (for now we support single table per job)
+        table = data_source.tables.first()
+        if not table:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'No tables configured for this data source'
+            }, status=400)
+
+        # Get connection
+        connection = data_source.connection
+        if not connection:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'No connection associated with this data source'
+            }, status=400)
+
+        # Retrieve credentials from Secret Manager
+        if not connection.credentials_secret_name:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'No credentials stored for this connection'
+            }, status=400)
+
+        credentials = get_credentials_from_secret_manager(connection.credentials_secret_name)
+
+        # Build connection parameters
+        connection_params = {
+            'host': connection.source_host,
+            'port': connection.source_port,
+            'database': connection.source_database,
+            'username': credentials.get('username', ''),
+            'password': credentials.get('password', ''),
+        }
+
+        # Determine load type
+        load_type = table.load_type if hasattr(table, 'load_type') else ('transactional' if data_source.use_incremental else 'catalog')
+
+        # Build job configuration
+        config = {
+            'source_type': connection.source_type,
+            'connection_params': connection_params,
+            'source_table_name': table.source_table_name,
+            'schema_name': table.schema_name or connection.source_database,
+            'dest_table_name': table.dest_table_name,
+            'load_type': load_type,
+            'timestamp_column': data_source.incremental_column or table.incremental_column,
+            'selected_columns': table.selected_columns if hasattr(table, 'selected_columns') and table.selected_columns else [],
+            'last_sync_value': data_source.last_sync_value,
+            'historical_start_date': data_source.historical_start_date.isoformat() if data_source.historical_start_date else None,
+        }
+
+        return JsonResponse(config)
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e)
+        }, status=500)
+
+
+@require_http_methods(["PATCH"])
+def api_etl_run_update(request, run_id):
+    """
+    Update ETL run status and progress.
+    Called by Cloud Run ETL runner to report progress.
+
+    Payload examples:
+    {"status": "running"}
+    {"status": "completed", "rows_extracted": 1000, "rows_loaded": 1000, "duration_seconds": 120}
+    {"rows_extracted": 5000, "rows_loaded": 5000}
+    """
+    from django.utils import timezone
+
+    try:
+        etl_run = get_object_or_404(ETLRun, id=run_id)
+        data = json.loads(request.body)
+
+        # Update status if provided
+        if 'status' in data:
+            etl_run.status = data['status']
+
+            # Set timestamps based on status
+            if data['status'] == 'running' and not etl_run.started_at:
+                etl_run.started_at = timezone.now()
+            elif data['status'] in ['completed', 'failed', 'cancelled'] and not etl_run.completed_at:
+                etl_run.completed_at = timezone.now()
+
+        # Update metrics if provided
+        if 'rows_extracted' in data:
+            etl_run.total_rows_extracted = data['rows_extracted']
+        if 'rows_loaded' in data:
+            etl_run.rows_loaded = data['rows_loaded']
+        if 'bytes_processed' in data:
+            etl_run.bytes_processed = data['bytes_processed']
+        if 'duration_seconds' in data:
+            etl_run.duration_seconds = data['duration_seconds']
+        if 'error_message' in data:
+            etl_run.error_message = data['error_message']
+
+        # Update phase timestamps if provided
+        if 'extraction_started_at' in data:
+            etl_run.extraction_started_at = timezone.now()
+        if 'extraction_completed_at' in data:
+            etl_run.extraction_completed_at = timezone.now()
+        if 'loading_started_at' in data:
+            etl_run.loading_started_at = timezone.now()
+        if 'loading_completed_at' in data:
+            etl_run.loading_completed_at = timezone.now()
+
+        etl_run.save()
+
+        return JsonResponse({
+            'status': 'success',
+            'message': 'ETL run updated successfully'
+        })
+
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e)
+        }, status=500)
+
+
+@login_required
+@require_http_methods(["POST"])
+def api_etl_trigger_now(request, data_source_id):
+    """
+    Manually trigger an ETL run for a data source.
+    Creates an ETL run record and triggers the Cloud Run job.
+    """
+    from django.utils import timezone
+    from google.cloud import run_v2
+    from django.conf import settings
+    import os
+
+    try:
+        data_source = get_object_or_404(DataSource, id=data_source_id)
+        model = data_source.etl_config.model_endpoint
+
+        # Get GCP project ID
+        project_id = getattr(settings, 'GCP_PROJECT_ID', os.getenv('GCP_PROJECT_ID'))
+        if not project_id:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'GCP_PROJECT_ID not configured'
+            }, status=500)
+
+        # Create ETL run record
+        etl_run = ETLRun.objects.create(
+            etl_config=data_source.etl_config,
+            model_endpoint=model,
+            status='pending',
+            triggered_by=request.user,
+            started_at=timezone.now(),
+        )
+
+        # Trigger Cloud Run job
+        try:
+            client = run_v2.JobsClient()
+            job_name = f'projects/{project_id}/locations/europe-central2/jobs/etl-runner'
+
+            # Build execution request with arguments
+            exec_request = run_v2.RunJobRequest(
+                name=job_name,
+                overrides=run_v2.RunJobRequest.Overrides(
+                    container_overrides=[
+                        run_v2.RunJobRequest.Overrides.ContainerOverride(
+                            args=[
+                                '--data_source_id', str(data_source_id),
+                                '--etl_run_id', str(etl_run.id)
+                            ]
+                        )
+                    ]
+                )
+            )
+
+            operation = client.run_job(request=exec_request)
+
+            # Update ETL run with execution ID
+            etl_run.cloud_run_execution_id = operation.name
+            etl_run.save()
+
+            return JsonResponse({
+                'status': 'success',
+                'message': f'ETL run triggered for "{data_source.name}"',
+                'run_id': etl_run.id,
+                'execution_name': operation.name
+            })
+
+        except Exception as e:
+            # Update ETL run to failed
+            etl_run.status = 'failed'
+            etl_run.error_message = f'Failed to trigger Cloud Run job: {str(e)}'
+            etl_run.completed_at = timezone.now()
+            etl_run.save()
+
+            return JsonResponse({
+                'status': 'error',
+                'message': f'Failed to trigger ETL run: {str(e)}'
+            }, status=500)
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e)
         }, status=500)

@@ -222,9 +222,22 @@ class DataSource(models.Model):
     # Job settings
     is_enabled = models.BooleanField(default=True, help_text="Enable/disable this ETL job")
 
+    # Schedule settings (Phase 2)
+    SCHEDULE_CHOICES = [
+        ('manual', 'Manual Only'),
+        ('hourly', 'Hourly'),
+        ('daily', 'Daily'),
+        ('weekly', 'Weekly'),
+        ('monthly', 'Monthly'),
+    ]
+    schedule_type = models.CharField(max_length=20, choices=SCHEDULE_CHOICES, default='manual', help_text="ETL run schedule")
+    cloud_scheduler_job_name = models.CharField(max_length=500, blank=True, help_text="Cloud Scheduler job name (full path)")
+
     # Extraction settings
     use_incremental = models.BooleanField(default=False, help_text="Use incremental extraction")
     incremental_column = models.CharField(max_length=100, blank=True, help_text="Column for incremental loads (e.g., updated_at)")
+    last_sync_value = models.CharField(max_length=255, blank=True, help_text="Last synced value for incremental loads")
+    historical_start_date = models.DateField(null=True, blank=True, help_text="Start date for historical backfill")
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -388,17 +401,26 @@ class ETLRun(models.Model):
     # Job details
     cloud_run_execution_id = models.CharField(max_length=255, blank=True, help_text="Cloud Run Job execution ID")
 
+    # Detailed progress tracking (Phase 3)
+    extraction_started_at = models.DateTimeField(null=True, blank=True, help_text="When data extraction started")
+    extraction_completed_at = models.DateTimeField(null=True, blank=True, help_text="When data extraction completed")
+    loading_started_at = models.DateTimeField(null=True, blank=True, help_text="When data loading started")
+    loading_completed_at = models.DateTimeField(null=True, blank=True, help_text="When data loading completed")
+
     # Results summary
     total_sources = models.IntegerField(default=0, help_text="Total data sources processed")
     successful_sources = models.IntegerField(default=0)
     total_tables = models.IntegerField(default=0, help_text="Total tables processed")
     successful_tables = models.IntegerField(default=0)
     total_rows_extracted = models.BigIntegerField(default=0)
+    rows_loaded = models.BigIntegerField(default=0, help_text="Total rows loaded to BigQuery")
+    bytes_processed = models.BigIntegerField(default=0, help_text="Total bytes processed")
+    duration_seconds = models.IntegerField(null=True, blank=True, help_text="Total duration in seconds")
 
     # Detailed results (JSON structure with per-table results)
     results_detail = models.JSONField(default=dict, help_text="Detailed results per source and table")
     error_message = models.TextField(blank=True)
-    logs_url = models.URLField(blank=True)
+    logs_url = models.URLField(blank=True, help_text="Cloud Run logs URL")
 
     created_at = models.DateTimeField(auto_now_add=True)
     triggered_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)

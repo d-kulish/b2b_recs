@@ -130,6 +130,30 @@ When extracting data from Cloud SQL databases in different GCP projects (e.g., m
 - For production: Use Cloud NAT ($40/month) for static IP or whitelist specific IP ranges
 - Alternative: VPC peering between projects (complex setup)
 
+### Quick Open/Test/Close for memo2 Database
+
+**When you need to test ETL with memo2:**
+
+```bash
+# 1. OPEN - Allow all IPs temporarily
+gcloud sql instances patch memo2-db \
+  --project=memo2-456215 \
+  --authorized-networks=0.0.0.0/0 \
+  --quiet
+
+# 2. TEST - Run your ETL job from Django UI
+# Visit: https://django-app-3dmqemfmxq-lm.a.run.app
+# Navigate to model → ETL → Run Now
+
+# 3. CLOSE - Remove all access
+gcloud sql instances patch memo2-db \
+  --project=memo2-456215 \
+  --clear-authorized-networks \
+  --quiet
+```
+
+**Current Status:** memo2-db is **CLOSED** (no authorized networks)
+
 ## Usage
 
 ### Local Development

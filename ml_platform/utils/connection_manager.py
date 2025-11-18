@@ -1357,6 +1357,7 @@ def fetch_tables_bigquery(dataset_name, project_id, service_account_json, **kwar
 def fetch_table_metadata(source_type, schema_name, table_name, connection_params):
     """
     Fetch detailed table metadata including column information and sample data.
+    NOW ENHANCED: Includes BigQuery type mapping for each column.
 
     Args:
         source_type (str): Type of data source ('postgresql', 'mysql', etc.)
@@ -1375,7 +1376,11 @@ def fetch_table_metadata(source_type, schema_name, table_name, connection_params
                     'nullable': False,
                     'is_primary_key': True,
                     'is_timestamp': False,
-                    'sample_values': [1, 2, 3, 4, 5]
+                    'sample_values': [1, 2, 3, 4, 5],
+                    'bigquery_type': 'INT64',  # NEW
+                    'bigquery_mode': 'REQUIRED',  # NEW
+                    'confidence': 'high',  # NEW
+                    'warning': None  # NEW
                 },
                 ...
             ],
@@ -1386,12 +1391,16 @@ def fetch_table_metadata(source_type, schema_name, table_name, connection_params
             }
         }
     """
+    # Import SchemaMapper for BigQuery type mapping
+    from .schema_mapper import SchemaMapper
+
+    # Fetch metadata from source database
     if source_type == 'postgresql':
-        return fetch_table_metadata_postgresql(schema_name, table_name, **connection_params)
+        result = fetch_table_metadata_postgresql(schema_name, table_name, **connection_params)
     elif source_type == 'mysql':
-        return fetch_table_metadata_mysql(schema_name, table_name, **connection_params)
+        result = fetch_table_metadata_mysql(schema_name, table_name, **connection_params)
     elif source_type == 'bigquery':
-        return fetch_table_metadata_bigquery(schema_name, table_name, **connection_params)
+        result = fetch_table_metadata_bigquery(schema_name, table_name, **connection_params)
     else:
         return {
             'success': False,
@@ -1399,6 +1408,35 @@ def fetch_table_metadata(source_type, schema_name, table_name, connection_params
             'columns': [],
             'total_rows': 0
         }
+
+    if not result['success']:
+        return result
+
+    # ENHANCEMENT: Map each column to BigQuery type
+    mapped_columns = []
+    for col in result['columns']:
+        # Map column using SchemaMapper
+        mapped_col = SchemaMapper.map_column(
+            source_type=source_type,
+            column_name=col['name'],
+            column_type=col['type'],
+            nullable=col['nullable'],
+            sample_values=col.get('sample_values', [])
+        )
+
+        # Merge with existing column info
+        mapped_col.update({
+            'is_primary_key': col.get('is_primary_key', False),
+            'is_timestamp': col.get('is_timestamp', False),
+            'sample_values': col.get('sample_values', [])
+        })
+
+        mapped_columns.append(mapped_col)
+
+    # Replace columns with mapped versions
+    result['columns'] = mapped_columns
+
+    return result
 
 
 def fetch_table_metadata_postgresql(schema_name, table_name, host, port, database, username, password, timeout=10, **kwargs):

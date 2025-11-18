@@ -234,7 +234,7 @@
             <div class="flex items-center justify-between">
                 <div>
                     <h3 class="text-base font-bold text-gray-900">Add ETL Job</h3>
-                    <p class="text-xs text-gray-600 mt-0.5">Step <span id="currentStep">1</span> of 4</p>
+                    <p class="text-xs text-gray-600 mt-0.5">Step <span id="currentStep">1</span> of 5</p>
                 </div>
             </div>
 
@@ -244,6 +244,7 @@
                 <div id="progress2" class="flex-1 h-1 bg-gray-200 rounded"></div>
                 <div id="progress3" class="flex-1 h-1 bg-gray-200 rounded"></div>
                 <div id="progress4" class="flex-1 h-1 bg-gray-200 rounded"></div>
+                <div id="progress5" class="flex-1 h-1 bg-gray-200 rounded"></div>
             </div>
         </div>
 
@@ -386,8 +387,145 @@
                 </div>
             </div>
 
-            <!-- Step 4: Schedule & Review (RENAMED from Step 3) -->
+            <!-- Step 4: BigQuery Table Setup (NEW) -->
             <div id="step4" class="wizard-step hidden">
+                <h4 class="text-base font-bold text-gray-900 mb-3">BigQuery Table Setup</h4>
+
+                <p class="text-sm text-gray-600 mb-4">
+                    Review and customize the BigQuery table schema before creation.
+                </p>
+
+                <!-- Destination Table Name -->
+                <div class="mb-4">
+                    <label class="block text-sm font-semibold text-gray-700 mb-1.5">
+                        BigQuery Table Name*
+                    </label>
+                    <div class="flex gap-2 items-center">
+                        <span class="text-sm text-gray-500 bg-gray-50 px-3 py-2 rounded-lg border border-gray-200">
+                            raw_data.
+                        </span>
+                        <input
+                            type="text"
+                            id="bqTableName"
+                            class="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            placeholder="bq_transactions"
+                        >
+                    </div>
+                    <p class="text-xs text-gray-500 mt-1">
+                        <i class="fas fa-info-circle mr-1"></i>
+                        Default: <code class="bg-gray-100 px-1 rounded">bq_<span id="sourceTableNamePreview"></span></code>
+                        You can customize this name if needed.
+                    </p>
+                </div>
+
+                <!-- Schema Editor -->
+                <div class="mb-4">
+                    <div class="flex items-center justify-between mb-2">
+                        <label class="block text-sm font-semibold text-gray-700">
+                            Table Schema
+                        </label>
+                        <div class="flex gap-2">
+                            <button
+                                onclick="resetSchemaToDefaults()"
+                                class="text-xs text-blue-600 hover:underline"
+                                title="Reset all types to auto-detected defaults">
+                                <i class="fas fa-undo mr-1"></i>Reset to Defaults
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Schema Table -->
+                    <div id="bqSchemaContainer" class="border border-gray-200 rounded-lg overflow-hidden">
+                        <table class="w-full text-xs">
+                            <thead class="bg-gray-50 border-b border-gray-300">
+                                <tr>
+                                    <th class="text-left py-2 px-3 w-1/4">Column Name</th>
+                                    <th class="text-left py-2 px-3 w-1/6">Source Type</th>
+                                    <th class="text-left py-2 px-3 w-1/4">BigQuery Type</th>
+                                    <th class="text-left py-2 px-3 w-1/6">Mode</th>
+                                    <th class="text-left py-2 px-3 w-1/4">Sample Values</th>
+                                </tr>
+                            </thead>
+                            <tbody id="bqSchemaTableBody">
+                                <!-- Will be populated by JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <p class="text-xs text-gray-500 mt-2">
+                        <i class="fas fa-exclamation-circle mr-1"></i>
+                        <strong>Note:</strong> Schema cannot be changed after table creation.
+                        To modify schema later, create a new ETL job with a different table name.
+                    </p>
+                </div>
+
+                <!-- Partitioning & Clustering (for Transactional loads) -->
+                <div id="bqOptimizationSettings" class="mb-4 hidden">
+                    <div class="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                        <h6 class="font-semibold text-sm text-gray-900 mb-2">
+                            <i class="fas fa-bolt text-blue-600 mr-1"></i>
+                            Performance Optimization
+                        </h6>
+
+                        <div class="grid grid-cols-2 gap-3 text-xs">
+                            <div>
+                                <label class="block text-gray-700 font-semibold mb-1">Partitioning</label>
+                                <div class="bg-white px-2 py-1.5 rounded border border-gray-200">
+                                    <i class="fas fa-calendar text-green-600 mr-1"></i>
+                                    By <code class="bg-gray-100 px-1 rounded" id="partitioningFieldPreview">created_at</code> (DAY)
+                                </div>
+                                <p class="text-gray-500 mt-1">Improves query performance for date-based filtering</p>
+                            </div>
+
+                            <div>
+                                <label class="block text-gray-700 font-semibold mb-1">Clustering</label>
+                                <div class="bg-white px-2 py-1.5 rounded border border-gray-200">
+                                    <i class="fas fa-layer-group text-purple-600 mr-1"></i>
+                                    By <code class="bg-gray-100 px-1 rounded" id="clusteringFieldsPreview">created_at</code>
+                                </div>
+                                <p class="text-gray-500 mt-1">Reduces cost and improves query speed</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Schema Validation Warnings -->
+                <div id="schemaWarnings" class="hidden mb-4">
+                    <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                        <h6 class="font-semibold text-sm text-gray-900 mb-2">
+                            <i class="fas fa-exclamation-triangle text-yellow-600 mr-1"></i>
+                            Schema Warnings
+                        </h6>
+                        <ul id="schemaWarningsList" class="text-xs text-gray-700 space-y-1">
+                            <!-- Populated dynamically -->
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Summary -->
+                <div class="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                    <h6 class="font-semibold text-sm text-gray-900 mb-2">Summary</h6>
+                    <div class="space-y-1 text-xs">
+                        <div class="flex">
+                            <span class="w-32 text-gray-600">Full Table Path:</span>
+                            <code class="font-semibold text-gray-900 bg-white px-2 py-0.5 rounded border border-gray-200">
+                                <span id="projectIdPreview">PROJECT</span>.raw_data.<span id="bqTableNamePreview">bq_table</span>
+                            </code>
+                        </div>
+                        <div class="flex">
+                            <span class="w-32 text-gray-600">Columns:</span>
+                            <span class="font-semibold text-gray-900" id="columnCountPreview">0</span>
+                        </div>
+                        <div class="flex">
+                            <span class="w-32 text-gray-600">Load Type:</span>
+                            <span class="font-semibold text-gray-900" id="loadTypePreview">Transactional</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 5: Schedule & Review (RENAMED from Step 4) -->
+            <div id="step5" class="wizard-step hidden">
                 <h4 class="text-base font-bold text-gray-900 mb-3">Schedule & Review</h4>
 
                 <div class="space-y-3">
@@ -3029,8 +3167,19 @@ function showStep(step) {
         if (createButton) createButton.classList.add('hidden');
     }
 
-    // Step 4: Schedule & Review (Final Step)
+    // Step 4: BigQuery Table Setup (NEW)
     else if (step === 4) {
+        if (backButton) backButton.disabled = false;
+        if (nextButton) {
+            nextButton.disabled = false;
+            nextButton.classList.remove('hidden');
+            nextButton.innerHTML = '<i class="fas fa-chevron-right"></i>';
+        }
+        if (createButton) createButton.classList.add('hidden');
+    }
+
+    // Step 5: Schedule & Review (Final Step, formerly Step 4)
+    else if (step === 5) {
         if (backButton) backButton.disabled = false;
         if (nextButton) nextButton.classList.add('hidden');
         if (createButton) {
@@ -3046,7 +3195,7 @@ function showStep(step) {
 }
 
 function updateProgress(step) {
-    for (let i = 1; i <= 4; i++) {
+    for (let i = 1; i <= 5; i++) {  // Changed from 4 to 5
         const progressBar = document.getElementById(`progress${i}`);
         if (progressBar) {
             if (i <= step) {
@@ -3144,7 +3293,7 @@ function nextStep() {
         return;
     }
 
-    // STEP 3 -> STEP 4: Validate load configuration
+    // STEP 3 -> STEP 4: Validate load configuration and proceed to BigQuery Table Setup
     if (currentWizardStep === 3) {
         const loadType = document.querySelector('input[name="loadType"]:checked').value;
 
@@ -3164,15 +3313,45 @@ function nextStep() {
             return;
         }
 
-        // Proceed to Step 4 (Schedule & Review)
-        currentWizardStep = 4;
-        showStep(4);
+        // Proceed to Step 4 (BigQuery Table Setup)
+        proceedToStep4();
+        return;
+    }
+
+    // STEP 4 -> STEP 5: Validate BigQuery table configuration
+    if (currentWizardStep === 4) {
+        const bqTableName = document.getElementById('bqTableName').value.trim();
+
+        if (!bqTableName) {
+            alert('Please provide a BigQuery table name');
+            return;
+        }
+
+        // Validate table name format (alphanumeric + underscores)
+        const tableNameRegex = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+        if (!tableNameRegex.test(bqTableName)) {
+            alert('Table name must start with a letter or underscore, and contain only letters, numbers, and underscores');
+            return;
+        }
+
+        // Validate schema has columns
+        if (!window.bqSchemaColumns || window.bqSchemaColumns.length === 0) {
+            alert('Schema must have at least one column');
+            return;
+        }
+
+        // Store BigQuery table name
+        window.bqDestTableName = bqTableName;
+
+        // Proceed to Step 5 (Schedule & Review)
+        currentWizardStep = 5;
+        showStep(5);
         updateSummary();
         return;
     }
 
-    // STEP 4: This is the final step, button should say "Create ETL Job"
-    if (currentWizardStep === 4) {
+    // STEP 5: This is the final step, button should say "Create ETL Job"
+    if (currentWizardStep === 5) {
         // This should be handled by the "Create ETL Job" button, not Next
         return;
     }
@@ -3351,7 +3530,11 @@ async function createETLJob() {
         }
     }
 
-    // Collect Step 4 data: Schedule
+    // Collect Step 4 data: BigQuery Table Setup (NEW)
+    const bqTableName = window.bqDestTableName || document.getElementById('bqTableName').value.trim();
+    const bqSchemaColumns = window.bqSchemaColumns || [];
+
+    // Collect Step 5 data: Schedule (RENAMED from Step 4)
     const scheduleType = document.getElementById('scheduleType')?.value || 'manual';
 
     // Disable create button to prevent double-clicks
@@ -3370,10 +3553,15 @@ async function createETLJob() {
         historical_start_date: historicalStartDate,
         selected_columns: selectedColumns,
         schedule_type: scheduleType,
+
+        // NEW: BigQuery table configuration
+        bigquery_table_name: bqTableName,
+        bigquery_schema: bqSchemaColumns,  // Full schema with types
+
         tables: [
             {
                 source_table_name: window.selectedTableName,
-                dest_table_name: window.selectedTableName,
+                dest_table_name: bqTableName,  // Use custom BQ table name
                 sync_mode: loadType === 'transactional' ? 'incremental' : 'replace',
                 incremental_column: timestampColumn
             }
@@ -3395,7 +3583,7 @@ async function createETLJob() {
         const data = await response.json();
 
         if (data.status === 'success') {
-            alert(`ETL job "${data.job_name}" created successfully!`);
+            alert(`ETL job "${data.job_name}" created successfully!\n\nBigQuery table: ${data.bigquery_table}\nSchedule: ${data.schedule_created ? 'Created' : 'Manual only'}`);
             hideAddSourceModal();
             location.reload(); // Reload to show new job
         } else {
@@ -4719,6 +4907,219 @@ function onLoadTypeChange() {
         catalogConfig.classList.remove('hidden');
     }
 }
+
+// ============================================================================
+// STEP 4: BigQuery Table Setup Functions
+// ============================================================================
+
+function proceedToStep4() {
+    // Validate Step 3 selections
+    const loadType = document.querySelector('input[name="loadType"]:checked').value;
+
+    if (loadType === 'transactional') {
+        const timestampColumn = document.getElementById('timestampColumn').value;
+        if (!timestampColumn) {
+            alert('Please select a timestamp column for incremental tracking');
+            return;
+        }
+    }
+
+    const selectedColumns = Array.from(document.querySelectorAll('.column-checkbox:checked')).map(cb => cb.value);
+    if (selectedColumns.length === 0) {
+        alert('Please select at least one column to sync');
+        return;
+    }
+
+    // Generate default BigQuery table name
+    const sourceTableName = window.selectedTableName;
+    const defaultBqTableName = 'bq_' + sourceTableName;
+
+    // Set table name
+    document.getElementById('bqTableName').value = defaultBqTableName;
+    document.getElementById('sourceTableNamePreview').textContent = sourceTableName;
+    document.getElementById('bqTableNamePreview').textContent = defaultBqTableName;
+
+    // Set project ID preview (you can set this from window or a global variable)
+    document.getElementById('projectIdPreview').textContent = 'PROJECT_ID';
+
+    // Set load type preview
+    document.getElementById('loadTypePreview').textContent =
+        loadType === 'transactional' ? 'Transactional (Append-Only)' : 'Catalog (Daily Snapshot)';
+
+    // Render BigQuery schema editor
+    renderBigQuerySchemaEditor();
+
+    // Show optimization settings for transactional loads
+    if (loadType === 'transactional') {
+        const timestampCol = document.getElementById('timestampColumn').value;
+        document.getElementById('partitioningFieldPreview').textContent = timestampCol;
+        document.getElementById('clusteringFieldsPreview').textContent = timestampCol;
+        document.getElementById('bqOptimizationSettings').classList.remove('hidden');
+    } else {
+        document.getElementById('bqOptimizationSettings').classList.add('hidden');
+    }
+
+    // Move to Step 4
+    currentWizardStep = 4;
+    showStep(4);
+}
+
+function renderBigQuerySchemaEditor() {
+    const tableBody = document.getElementById('bqSchemaTableBody');
+    const selectedColumns = Array.from(document.querySelectorAll('.column-checkbox:checked'))
+        .map(cb => cb.value);
+
+    // Filter metadata to only selected columns
+    const selectedColumnsMetadata = window.tableMetadata.columns.filter(col =>
+        selectedColumns.includes(col.name)
+    );
+
+    // Store for later use (deep copy)
+    window.bqSchemaColumns = JSON.parse(JSON.stringify(selectedColumnsMetadata));
+
+    // Render rows
+    let rowsHTML = selectedColumnsMetadata.map((col, index) => {
+        const confidenceColor = {
+            'high': 'text-green-600',
+            'medium': 'text-yellow-600',
+            'low': 'text-red-600'
+        }[col.confidence || 'high'];
+
+        return `
+            <tr class="border-b border-gray-100 hover:bg-gray-50">
+                <!-- Column Name -->
+                <td class="py-2 px-3 font-medium">
+                    ${col.name}
+                    ${col.is_primary_key ? '<span class="text-blue-600 ml-1" title="Primary Key">🔑</span>' : ''}
+                    ${col.is_timestamp ? '<span class="text-green-600 ml-1" title="Timestamp">🕐</span>' : ''}
+                </td>
+
+                <!-- Source Type -->
+                <td class="py-2 px-3 text-gray-600">
+                    <code class="text-xs bg-gray-100 px-1 rounded">${col.source_type}</code>
+                </td>
+
+                <!-- BigQuery Type (Editable Dropdown) -->
+                <td class="py-2 px-3">
+                    <select
+                        class="bq-type-select w-full px-2 py-1 text-xs border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+                        data-column-index="${index}"
+                        onchange="onBqTypeChange(${index}, this.value)">
+                        ${getBigQueryTypeOptions(col.bigquery_type)}
+                    </select>
+                    ${col.warning ? `
+                        <div class="text-xs text-orange-600 mt-1">
+                            <i class="fas fa-exclamation-triangle"></i> ${col.warning}
+                        </div>
+                    ` : ''}
+                </td>
+
+                <!-- Mode (Editable) -->
+                <td class="py-2 px-3">
+                    <select
+                        class="bq-mode-select w-full px-2 py-1 text-xs border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+                        data-column-index="${index}"
+                        onchange="onBqModeChange(${index}, this.value)">
+                        <option value="NULLABLE" ${col.bigquery_mode === 'NULLABLE' ? 'selected' : ''}>NULLABLE</option>
+                        <option value="REQUIRED" ${col.bigquery_mode === 'REQUIRED' ? 'selected' : ''}>REQUIRED</option>
+                    </select>
+                </td>
+
+                <!-- Sample Values -->
+                <td class="py-2 px-3 text-gray-500 text-xs truncate" style="max-width: 150px;">
+                    ${col.sample_values.slice(0, 2).join(', ')}
+                </td>
+            </tr>
+        `;
+    }).join('');
+
+    tableBody.innerHTML = rowsHTML;
+
+    // Update column count
+    document.getElementById('columnCountPreview').textContent = selectedColumnsMetadata.length;
+
+    // Check for warnings
+    updateSchemaWarnings();
+}
+
+function getBigQueryTypeOptions(selectedType) {
+    const types = [
+        'STRING', 'INT64', 'FLOAT64', 'NUMERIC', 'BIGNUMERIC',
+        'BOOL', 'DATE', 'DATETIME', 'TIMESTAMP', 'TIME',
+        'JSON', 'BYTES', 'GEOGRAPHY'
+    ];
+
+    return types.map(type =>
+        `<option value="${type}" ${type === selectedType ? 'selected' : ''}>${type}</option>`
+    ).join('');
+}
+
+function onBqTypeChange(columnIndex, newType) {
+    window.bqSchemaColumns[columnIndex].bigquery_type = newType;
+    window.bqSchemaColumns[columnIndex].auto_detected = false;  // User override
+    updateSchemaWarnings();
+}
+
+function onBqModeChange(columnIndex, newMode) {
+    window.bqSchemaColumns[columnIndex].bigquery_mode = newMode;
+    updateSchemaWarnings();
+}
+
+function resetSchemaToDefaults() {
+    if (!confirm('Reset all column types to auto-detected defaults?')) {
+        return;
+    }
+
+    // Re-render from original metadata
+    renderBigQuerySchemaEditor();
+}
+
+function updateSchemaWarnings() {
+    const warnings = [];
+    const warningsList = document.getElementById('schemaWarningsList');
+    const warningsContainer = document.getElementById('schemaWarnings');
+
+    // Check for warnings
+    window.bqSchemaColumns.forEach(col => {
+        // Large STRING fields
+        if (col.bigquery_type === 'STRING' &&
+            col.source_type.toLowerCase().includes('text')) {
+            warnings.push(`<li><strong>${col.name}</strong>: Large TEXT field may impact performance</li>`);
+        }
+
+        // Type overrides
+        if (!col.auto_detected) {
+            warnings.push(`<li><strong>${col.name}</strong>: Type manually changed from auto-detected value</li>`);
+        }
+
+        // No timestamp column for transactional
+        const loadType = document.querySelector('input[name="loadType"]:checked').value;
+        if (loadType === 'transactional') {
+            const timestampCol = document.getElementById('timestampColumn').value;
+            const hasTimestampInSchema = window.bqSchemaColumns.some(c => c.name === timestampCol);
+            if (!hasTimestampInSchema) {
+                warnings.push(`<li><strong>Missing timestamp column:</strong> "${timestampCol}" not included in schema</li>`);
+            }
+        }
+    });
+
+    if (warnings.length > 0) {
+        warningsList.innerHTML = warnings.join('');
+        warningsContainer.classList.remove('hidden');
+    } else {
+        warningsContainer.classList.add('hidden');
+    }
+}
+
+// Update table name preview on input
+document.addEventListener('DOMContentLoaded', function() {
+    const bqTableNameInput = document.getElementById('bqTableName');
+    if (bqTableNameInput) {
+        bqTableNameInput.addEventListener('input', function() {
+            document.getElementById('bqTableNamePreview').textContent = this.value || 'bq_table';
+        });
+    }
+});
 
 </script>
 {% endblock %}

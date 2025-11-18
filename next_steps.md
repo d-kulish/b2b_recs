@@ -1,12 +1,12 @@
 # Next Steps: ETL & Connection Management System
 
-**Last Updated:** November 17, 2025
+**Last Updated:** November 18, 2025
 
 ---
 
 ## Current Status
 
-- ✅ **Advanced 4-Step ETL Wizard** - Enhanced with load strategy configuration, table preview, and column selection
+- ✅ **Advanced 5-Step ETL Wizard** - Enhanced with BigQuery table setup, load strategy configuration, table preview, and column selection
 - ✅ **Schema Selection** - Support for multi-schema databases (PostgreSQL, Oracle, SQL Server)
 - ✅ **Load Type Differentiation** - Transactional (append-only) vs Catalog (daily snapshot)
 - ✅ **Historical Backfill** - Load last 30/60/90 days on first sync, then incremental
@@ -789,7 +789,140 @@ Subsequent sync SQL:
 - `IMPLEMENTATION_STATUS.md` - Progress tracking
 - `IMPLEMENTATION_COMPLETE.md` - Comprehensive reference guide
 
-### 🎯 Milestone 12: Production Readiness (Future)
+### 🎯 Milestone 11.5: BigQuery Table Setup & Schema Management ✅ COMPLETE
+**Date Completed:** November 18, 2025
+
+**Objective:** Add intelligent BigQuery table schema configuration with auto-type detection, user customization, and upfront table creation.
+
+**Architecture Decision:**
+- **Schema-First Approach:** BigQuery tables created during ETL wizard (before any data is loaded)
+- **Immutable Schemas:** Tables cannot be modified after creation (must create new job for schema changes)
+- **Smart Type Mapping:** Intelligent mapping from source DB types to BigQuery types with confidence scoring
+
+**Backend Implementation:**
+- [x] Created `ml_platform/utils/schema_mapper.py` (368 lines) ✓
+  - PostgreSQL → BigQuery type mapping (40+ types)
+  - MySQL → BigQuery type mapping (30+ types)
+  - Smart type detection (dates in VARCHAR, integers in strings, boolean patterns)
+  - Confidence scoring (high/medium/low)
+  - Warning system for problematic fields
+- [x] Created `ml_platform/utils/bigquery_manager.py` (219 lines) ✓
+  - `ensure_dataset_exists()` - Creates raw_data dataset
+  - `create_table_from_schema()` - Creates tables with partitioning/clustering
+  - `validate_table_schema()` - Schema validation for evolution
+  - Automatic DAY partitioning for transactional loads
+  - Automatic clustering on timestamp column
+- [x] Enhanced `ml_platform/utils/connection_manager.py` ✓
+  - `fetch_table_metadata()` now returns BigQuery type mappings
+  - Each column includes: bigquery_type, bigquery_mode, confidence, warnings
+- [x] Updated `ml_platform/views.py` (api_etl_create_job) ✓
+  - Creates BigQuery dataset (if needed)
+  - Creates BigQuery table with custom schema
+  - Validates table name and schema
+  - Returns full table path in response
+  - Rollback on table creation failure
+
+**Frontend Implementation (5-Step Wizard):**
+- [x] Updated wizard from 4 steps to 5 steps ✓
+- [x] Added **new Step 4: BigQuery Table Setup** ✓
+  - Table name input (default: `bq_{source_table}`, editable)
+  - Interactive schema editor table
+  - Editable BigQuery type dropdown (13 types)
+  - Editable mode dropdown (NULLABLE/REQUIRED)
+  - Confidence indicators (🟢 high, 🟡 medium, 🔴 low)
+  - Warning panel for schema issues
+  - Performance optimization info (partitioning/clustering)
+  - Summary panel with full table path
+  - Reset to Defaults button
+- [x] Renamed old Step 4 → **Step 5: Schedule & Review** ✓
+- [x] Added JavaScript functions for Step 4 ✓
+  - `proceedToStep4()` - Transition and setup
+  - `renderBigQuerySchemaEditor()` - Render editable schema
+  - `getBigQueryTypeOptions()` - Type dropdown options
+  - `onBqTypeChange()` / `onBqModeChange()` - Handle user edits
+  - `resetSchemaToDefaults()` - Reset to auto-detected
+  - `updateSchemaWarnings()` - Validate schema
+- [x] Updated navigation logic (progress bar, showStep, nextStep) ✓
+- [x] Updated `createETLJob()` payload with BigQuery schema ✓
+
+**New 5-Step Wizard Flow:**
+```
+Step 1: Connection & Job Name
+  ↓
+Step 2: Schema & Table Selection
+  ↓
+Step 3: Configure Load Strategy
+  • View table preview (columns, types, samples)
+  • Select columns to sync
+  • Choose load type (Transactional vs Catalog)
+  • Configure timestamp column
+  • Set historical backfill range
+  ↓
+Step 4: BigQuery Table Setup ⭐ NEW
+  • Review source → BigQuery type mappings
+  • Customize table name (default: bq_{source_table})
+  • Edit BigQuery types if needed
+  • Edit modes (NULLABLE/REQUIRED)
+  • View warnings for schema issues
+  • See performance optimizations (partitioning/clustering)
+  ↓
+Step 5: Schedule & Review
+  • Set schedule (Manual, Hourly, Daily, Weekly, Monthly)
+  • Review complete summary
+  • Create ETL Job → BigQuery table created immediately
+```
+
+**Type Mapping Examples:**
+- PostgreSQL `integer` → BigQuery `INT64` (high confidence)
+- PostgreSQL `timestamp without time zone` → BigQuery `TIMESTAMP` (high confidence)
+- PostgreSQL `varchar(50)` → BigQuery `STRING` (high confidence)
+- MySQL `tinyint(1)` → BigQuery `BOOL` (high confidence, special case)
+- VARCHAR containing dates → BigQuery `DATE` (medium confidence, auto-detected)
+- TEXT fields → BigQuery `STRING` with warning about performance
+
+**Key Features:**
+- ✅ Intelligent type mapping with 40+ PostgreSQL and 30+ MySQL types
+- ✅ Smart pattern detection (dates, timestamps, booleans in strings)
+- ✅ User customization - edit any type or mode
+- ✅ Confidence scoring - visual indicators for mapping quality
+- ✅ Warning system - alerts for large TEXT fields, type mismatches
+- ✅ Schema immutability - clear messaging that schemas can't change
+- ✅ Performance optimization - automatic partitioning/clustering for transactional loads
+- ✅ Table name customization - default prefix `bq_` but editable
+- ✅ Upfront creation - tables created during wizard (not at runtime)
+
+**Configuration Required:**
+```python
+# settings.py or .env
+GCP_PROJECT_ID = 'your-gcp-project-id'
+```
+
+**GCP Permissions Needed:**
+- `bigquery.datasets.create`
+- `bigquery.tables.create`
+- `bigquery.tables.get`
+- `bigquery.tables.list`
+
+**Files Created:**
+- `ml_platform/utils/schema_mapper.py` (368 lines)
+- `ml_platform/utils/bigquery_manager.py` (219 lines)
+- `BQ_TABLE_SETUP.md` (comprehensive documentation)
+
+**Files Modified:**
+- `ml_platform/utils/connection_manager.py` (enhanced fetch_table_metadata)
+- `ml_platform/views.py` (enhanced api_etl_create_job)
+- `templates/ml_platform/model_etl.html` (added Step 4, ~300 lines)
+
+**Total Lines of Code Added:** ~1,100 lines
+
+**Documentation:**
+- `BQ_TABLE_SETUP.md` - Complete implementation guide with detailed next steps for ETL Runner and Cloud Scheduler
+
+### 🎯 Milestone 12: ETL Runner & Cloud Scheduler Integration (NEXT)
+**Status:** 📋 PLANNED
+**Estimated Time:** 2-3 weeks
+
+**Phase 1: Simple Cloud Run ETL Runner (Week 1-2)**
 - [ ] Test with MySQL database connection
 - [ ] Test with BigQuery dataset
 - [ ] Add SQL Server support if needed

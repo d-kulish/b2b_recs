@@ -2025,7 +2025,11 @@ def api_etl_create_job(request, model_id):
         historical_start_date = data.get('historical_start_date')
         selected_columns = data.get('selected_columns', [])
 
-        # Extract Step 4 fields (Schedule)
+        # Extract Step 4 fields (BigQuery Table Setup) - NEW
+        bq_table_name = data.get('bigquery_table_name', '').strip()
+        bq_schema_columns = data.get('bigquery_schema', [])
+
+        # Extract Step 5 fields (Schedule) - RENAMED from Step 4
         schedule_type = data.get('schedule_type', 'manual')
 
         if not job_name:
@@ -2046,6 +2050,18 @@ def api_etl_create_job(request, model_id):
                 'message': 'At least one table must be selected',
             }, status=400)
 
+        if not bq_table_name:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'BigQuery table name is required',
+            }, status=400)
+
+        if not bq_schema_columns or len(bq_schema_columns) == 0:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'BigQuery schema must have at least one column',
+            }, status=400)
+
         # Validate connection belongs to this model
         connection = get_object_or_404(Connection, id=connection_id, model_endpoint=model)
 
@@ -2056,6 +2072,57 @@ def api_etl_create_job(request, model_id):
                 'message': f'ETL job "{job_name}" already exists. Please choose a different name.',
             }, status=400)
 
+        # ============================================================
+        # CREATE BIGQUERY TABLE FIRST
+        # ============================================================
+        from .utils.bigquery_manager import BigQueryTableManager
+        import os
+        from django.conf import settings
+
+        # Get project ID (assumes you store it in settings or environment)
+        project_id = getattr(settings, 'GCP_PROJECT_ID', os.getenv('GCP_PROJECT_ID'))
+        if not project_id:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'GCP_PROJECT_ID not configured in settings',
+            }, status=500)
+
+        bq_manager = BigQueryTableManager(
+            project_id=project_id,
+            dataset_id='raw_data'
+        )
+
+        # Ensure dataset exists
+        dataset_result = bq_manager.ensure_dataset_exists()
+        if not dataset_result['success']:
+            return JsonResponse({
+                'status': 'error',
+                'message': f'Failed to create/verify dataset: {dataset_result["message"]}',
+            }, status=500)
+
+        # Create BigQuery table
+        table_result = bq_manager.create_table_from_schema(
+            table_name=bq_table_name,
+            schema_columns=bq_schema_columns,
+            load_type=load_type,
+            timestamp_column=timestamp_column if load_type == 'transactional' else None,
+            description=f"ETL source: {schema_name}.{tables[0]['source_table_name']} from {connection.name}",
+            overwrite=False  # Don't overwrite existing tables
+        )
+
+        if not table_result['success']:
+            return JsonResponse({
+                'status': 'error',
+                'message': f'Failed to create BigQuery table: {table_result["message"]}',
+            }, status=500)
+
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"Created BigQuery table: {table_result['full_table_id']}")
+
+        # ============================================================
+        # CREATE DATA SOURCE
+        # ============================================================
         # Create DataSource (ETL job)
         data_source = DataSource.objects.create(
             etl_config=etl_config,
@@ -2068,7 +2135,7 @@ def api_etl_create_job(request, model_id):
         # Create DataSourceTable objects for each selected table
         for table_config in tables:
             source_table = table_config.get('source_table_name', '').strip()
-            dest_table = table_config.get('dest_table_name', source_table).strip()
+            dest_table = table_config.get('dest_table_name', bq_table_name).strip()  # Use BigQuery table name
             sync_mode = table_config.get('sync_mode', 'replace')
             incremental_column = table_config.get('incremental_column', '').strip()
 
@@ -2080,7 +2147,7 @@ def api_etl_create_job(request, model_id):
                     dest_table_name=dest_table,
                     sync_mode=sync_mode,
                     incremental_column=incremental_column if sync_mode == 'incremental' else '',
-                    # New fields from Step 3 & 4
+                    # New fields from Step 3, 4 & 5
                     load_type=load_type,
                     timestamp_column=timestamp_column,
                     historical_start_date=historical_start_date,
@@ -2098,6 +2165,8 @@ def api_etl_create_job(request, model_id):
             'message': f'ETL job "{job_name}" created successfully',
             'job_id': data_source.id,
             'job_name': data_source.name,
+            'bigquery_table': table_result['full_table_id'],
+            'bigquery_partitioned': table_result.get('partitioned', False),
         })
 
     except Exception as e:

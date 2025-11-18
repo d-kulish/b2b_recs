@@ -5,20 +5,23 @@ A multi-tenant B2B SaaS platform for building, training, and deploying productio
 ## 📊 Project Stats
 
 - **13** Database Models (including ETL models)
-- **40+** Files Created
+- **45+** Files Created (including schema_mapper.py, bigquery_manager.py)
 - **11** HTML Templates (with responsive UI)
-- **20** View Functions (including ETL APIs)
-- **17** URL Patterns
+- **22** View Functions (including ETL & BigQuery APIs)
+- **19** URL Patterns
 - **100%** Authentication Coverage
-- **Status**: Frontend Skeleton + ETL Implementation ✅
+- **~1,100** Lines of Code Added (Milestone 11.5)
+- **Status**: Frontend Skeleton + Advanced 5-Step ETL Wizard + BigQuery Integration ✅
 
 ## Project Status
 
-**Current Phase**: Advanced ETL Wizard with Load Strategy & Schema Selection ✅ **COMPLETE**
+**Current Phase**: BigQuery Table Setup & Schema Management ✅ **COMPLETE**
 
-**Date Completed**: November 17, 2025 (Milestones 10.6 & 11)
+**Date Completed**: November 18, 2025 (Milestone 11.5)
 
-The client-facing web application is complete with advanced 4-step ETL wizard featuring load strategy configuration, table preview, column selection, historical backfill, schema selection for multi-schema databases, comprehensive connection management with full CRUD operations, cloud storage integration (GCS, S3, Azure Blob), robust connection testing, modern minimalistic UI design, and professional UX enhancements.
+The client-facing web application is complete with advanced **5-step ETL wizard** featuring BigQuery table schema configuration with intelligent type mapping, load strategy configuration, table preview, column selection, historical backfill, schema selection for multi-schema databases, comprehensive connection management with full CRUD operations, cloud storage integration (GCS, S3, Azure Blob), robust connection testing, modern minimalistic UI design, and professional UX enhancements.
+
+**Next Phase**: ETL Runner & Cloud Scheduler Integration (Milestone 12) - See `BQ_TABLE_SETUP.md` for detailed implementation plan.
 
 ### ✅ Completed Components
 
@@ -27,7 +30,7 @@ The client-facing web application is complete with advanced 4-step ETL wizard fe
 - ✅ 13 database models (ModelEndpoint, ETL, DataSource, DataSourceTable, Pipeline, Experiments, etc.)
 - ✅ Complete URL routing structure (system + model-level pages)
 - ✅ Functional views with authentication and authorization
-- ✅ API endpoints for AJAX operations (training, ETL, deployment)
+- ✅ API endpoints for AJAX operations (training, ETL, deployment, BigQuery)
 - ✅ Admin interface for all models (searchable, filterable)
 - ✅ Database migrations created and applied
 - ✅ **ETL System**: Multi-source configuration, connection testing, manual triggers
@@ -35,6 +38,9 @@ The client-facing web application is complete with advanced 4-step ETL wizard fe
 - ✅ **Cloud Storage Integration**: GCS, AWS S3, Azure Blob Storage with storage-first architecture
 - ✅ **Standalone Connections UI**: Independent connection CRUD with live status indicators
 - ✅ **19 Data Source Types**: PostgreSQL, MySQL, Oracle, SQL Server, BigQuery, Snowflake, Firestore, MongoDB, GCS, S3, Azure Blob, and more
+- ✅ **BigQuery Integration**: Intelligent type mapping (70+ types), schema validation, table creation with partitioning/clustering
+- ✅ **Schema Mapper**: Auto-detection of dates, timestamps, booleans in VARCHAR fields with confidence scoring
+- ✅ **BigQuery Manager**: Dataset creation, table creation, schema validation, performance optimization
 
 **Frontend:**
 - ✅ Responsive UI using Tailwind CSS
@@ -43,7 +49,12 @@ The client-facing web application is complete with advanced 4-step ETL wizard fe
 - ✅ Model/Endpoint creation flow
 - ✅ Model Dashboard (status cards, recent runs, quick actions)
 - ✅ Login/logout functionality
+- ✅ **5-Step ETL Wizard**: Connection → Schema/Table → Load Strategy → BigQuery Setup → Schedule
 - ✅ **ETL Page**: 2-column layout with Connections section and ETL Jobs section
+- ✅ **BigQuery Schema Editor**: Interactive table with editable types/modes, confidence indicators, warnings
+- ✅ **Smart Type Detection**: Auto-mapping with 🟢🟡🔴 confidence indicators
+- ✅ **Schema Customization**: Edit BigQuery types (13 types), modes (NULLABLE/REQUIRED), table names
+- ✅ **Performance Optimization UI**: Partitioning/clustering configuration display
 - ✅ **Modern Connection Cards**: Minimalistic 3-column design (60% info + 30% meta + 10% actions)
 - ✅ **Reusable Card System**: cards.css for consistent tablet/card design across platform
 - ✅ **Live Status Indicators**: Green/red/yellow dots with intelligent error handling

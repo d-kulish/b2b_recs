@@ -80,15 +80,13 @@ def create_model_endpoint(request):
             # Create default configurations
             ETLConfiguration.objects.create(
                 model_endpoint=model,
-                source_type='postgresql',
             )
 
             PipelineConfiguration.objects.create(
                 model_endpoint=model,
             )
 
-            messages.success(request, f'Model/Endpoint "{name}" created successfully!')
-            return redirect('model_dashboard', model_id=model.id)
+            return redirect('system_dashboard')
 
         except Exception as e:
             messages.error(request, f'Error creating model: {str(e)}')

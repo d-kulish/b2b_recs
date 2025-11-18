@@ -9,6 +9,7 @@ pymysql==1.1.0
 # Data Processing
 pandas==2.1.4
 numpy==1.26.2
+pyarrow==14.0.1
 
 # HTTP & API
 requests==2.31.0

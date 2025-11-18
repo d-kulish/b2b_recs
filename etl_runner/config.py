@@ -19,7 +19,7 @@ class Config:
         """Initialize configuration from environment variables"""
 
         # Django API configuration
-        self.django_api_url = os.getenv('DJANGO_API_URL', 'http://localhost:8000')
+        self.django_api_url = os.getenv('DJANGO_API_URL', '')
         self.api_token = os.getenv('ETL_API_TOKEN', '')
 
         # GCP configuration
@@ -43,7 +43,10 @@ class Config:
             raise ValueError("GCP_PROJECT_ID environment variable is required")
 
         if not self.django_api_url:
-            raise ValueError("DJANGO_API_URL environment variable is required")
+            raise ValueError(
+                "DJANGO_API_URL environment variable is required. "
+                "Set it to your Django Cloud Run URL (e.g., https://django-app-xxx.run.app)"
+            )
 
         logger.info(f"Configuration loaded:")
         logger.info(f"  - Django API: {self.django_api_url}")

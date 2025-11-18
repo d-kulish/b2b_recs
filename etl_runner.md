@@ -104,6 +104,32 @@ The ETL runner is configured via environment variables:
 - `ETL_RETRY_DELAY`: Initial retry delay in seconds (default: `5`)
 - `LOG_LEVEL`: Logging level (default: `INFO`)
 
+## External Database Access Configuration
+
+### Connecting to Cloud SQL in Other Projects
+
+When extracting data from Cloud SQL databases in different GCP projects (e.g., memo2 project):
+
+**Required Setup:**
+1. **Enable Public IP** on source Cloud SQL instance
+2. **Whitelist Cloud Run IPs** in source database authorized networks:
+   - Go to Cloud Console → Source Project → Cloud SQL → Instance → Connections → Networking
+   - Add authorized network: `0.0.0.0/0` (for testing/development)
+   - **Production**: Narrow to specific Cloud Run IP ranges or use Cloud NAT with static IP
+
+**Connection Configuration:**
+- Host: Source Cloud SQL public IP (e.g., `34.116.170.252`)
+- Port: `5432` (PostgreSQL) or `3306` (MySQL)
+- Database: Database name
+- Username: Database user
+- Password: Database password (stored in Django, retrieved by ETL runner)
+
+**Security Notes:**
+- `0.0.0.0/0` allows access from anywhere - only use for testing
+- Cloud Run uses dynamic IPs from Google's IP ranges
+- For production: Use Cloud NAT ($40/month) for static IP or whitelist specific IP ranges
+- Alternative: VPC peering between projects (complex setup)
+
 ## Usage
 
 ### Local Development

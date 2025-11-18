@@ -7,7 +7,12 @@
 ## 🚀 Latest Update: Cloud Run Deployment & Production Database (Nov 18, 2025)
 
 ### **✅ Completed:**
-- **Django Deployed to Cloud Run**: `https://django-app-555035914949.europe-central2.run.app`
+- **Django Deployed to Cloud Run**: `https://django-app-3dmqemfmxq-lm.a.run.app`
+- **Bug Fixes on Nov 18, 2025:**
+  - Fixed static files collection in Dockerfile (added dummy SECRET_KEY for collectstatic)
+  - Fixed Cloud SQL connection (removed PORT when using Unix sockets)
+  - Fixed Tailwind CDN (switched from cdn.tailwindcss.com to jsDelivr due to outage)
+  - Fixed start_dev.sh to use b2b-recs database instead of memo2
 - **New Cloud SQL Database**: Created dedicated PostgreSQL instance in `b2b-recs` project
   - Instance: `b2b-recs-db` (europe-central2)
   - Database: `b2b_recs_dev`

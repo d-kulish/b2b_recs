@@ -23,8 +23,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY . .
 
-# Collect static files
-RUN python manage.py collectstatic --noinput || true
+# Collect static files (use dummy SECRET_KEY for build)
+ENV DJANGO_SECRET_KEY=dummy-secret-key-for-collectstatic
+RUN python manage.py collectstatic --noinput
 
 # Create non-root user for security
 RUN useradd -m -u 1000 django && chown -R django:django /app

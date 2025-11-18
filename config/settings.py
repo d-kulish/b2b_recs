@@ -88,14 +88,19 @@ WSGI_APPLICATION = 'config.wsgi.application'
 DB_ENGINE = os.environ.get('DB_ENGINE', 'sqlite')
 
 if DB_ENGINE == 'postgresql':
+    db_host = os.environ.get('DB_HOST', '127.0.0.1')
+    # When using Cloud SQL Unix socket in Cloud Run, PORT must be empty
+    # Only use port 5433 for local development with Cloud SQL Proxy (TCP)
+    db_port = '' if db_host.startswith('/cloudsql/') else os.environ.get('DB_PORT', '5433')
+
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
             'NAME': os.environ.get('DB_NAME', 'b2b_recs_dev'),
             'USER': os.environ.get('DB_USER', 'django_user'),
             'PASSWORD': os.environ.get('DB_PASSWORD'),
-            'HOST': os.environ.get('DB_HOST', '127.0.0.1'),
-            'PORT': os.environ.get('DB_PORT', '5433'),  # Cloud SQL Proxy port
+            'HOST': db_host,
+            'PORT': db_port,
         }
     }
 else:

@@ -47,16 +47,16 @@ if [ ! -f "$GCP_CREDS" ]; then
 fi
 
 # Stop any existing Cloud SQL Proxy
-if pgrep -f "cloud-sql-proxy.*memo2-456215" > /dev/null; then
+if pgrep -f "cloud-sql-proxy.*b2b-recs" > /dev/null; then
     echo "🧹 Stopping existing Cloud SQL Proxy..."
-    pkill -f "cloud-sql-proxy.*memo2-456215"
+    pkill -f "cloud-sql-proxy.*b2b-recs"
     sleep 1
 fi
 
 # Start Cloud SQL Proxy in background (output hidden)
 echo "🔌 Starting Cloud SQL Proxy..."
 export GOOGLE_APPLICATION_CREDENTIALS="$GCP_CREDS"
-./cloud-sql-proxy memo2-456215:europe-central2:memo2-db --port 5433 > /dev/null 2>&1 &
+./cloud-sql-proxy b2b-recs:europe-central2:b2b-recs-db --port 5433 > /dev/null 2>&1 &
 PROXY_PID=$!
 sleep 2
 
@@ -80,6 +80,23 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo ""
 
 source "$VENV_PATH/bin/activate"
+
+# Load environment variables from .env file
+if [ -f "$PROJECT_DIR/.env" ]; then
+    export $(grep -v '^#' "$PROJECT_DIR/.env" | xargs)
+    echo "   ✅ Loaded environment variables from .env"
+fi
+
+# Set database environment variables for b2b-recs PostgreSQL
+export DB_ENGINE=postgresql
+export DB_NAME=b2b_recs_dev
+export DB_USER=django_user
+export DB_HOST=127.0.0.1
+export DB_PORT=5433
+
+echo "   📊 Database: b2b_recs_dev @ b2b-recs-db"
+echo ""
+
 python manage.py runserver
 
 # If Django exits normally (not Ctrl+C), cleanup

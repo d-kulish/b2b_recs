@@ -101,11 +101,11 @@
     align-items: center;
 }
 
-/* Card Layout: 4-Column Structure (icon + content + meta + actions) - For ETL Jobs */
-.card-container-4col {
+/* Card Layout: 5-Column Structure (content + schedule/conn + status + run + actions) - For ETL Jobs */
+.card-container-5col {
     display: grid;
-    grid-template-columns: auto 1fr 0.5fr auto;
-    gap: 12px;
+    grid-template-columns: 1fr 0.5fr auto auto auto;
+    gap: 20px;
     align-items: center;
 }
 
@@ -186,6 +186,7 @@
     display: flex;
     align-items: center;
     gap: 4px;
+    padding: 4px 8px;
     font-size: 11px;
     color: #9ca3af;
 }
@@ -230,10 +231,9 @@
     border-color: #fecaca;
 }
 
-/* Primary Action Button (e.g., Run Now) */
+/* Primary Action Button (e.g., Run) */
 .card-action-btn.run {
-    width: auto;
-    padding: 6px 12px;
+    width: 64px;  /* 100% increase from default 32px */
     background-color: #10b981;
     color: #ffffff;
     font-weight: 600;

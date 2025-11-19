@@ -15,10 +15,10 @@
         <h2 class="text-2xl font-bold text-gray-900 mb-6">ETL Jobs</h2>
 
         <!-- Grid: 2 columns, 50/50 split -->
-        <div class="grid grid-cols-2 gap-6">
+        <div class="grid grid-cols-2 gap-0">
 
             <!-- LEFT COLUMN: Connections -->
-            <div class="border-r border-gray-200 pr-6">
+            <div class="pr-3 border-r border-gray-200">
                 <div class="flex items-center justify-between mb-4">
                     <h3 class="text-lg font-bold text-gray-700">Connections</h3>
                     <div class="btn-group">
@@ -42,12 +42,14 @@
             </div>
 
             <!-- RIGHT COLUMN: ETL Jobs -->
-            <div class="pl-6">
+            <div class="pl-3">
                 <div class="flex items-center justify-between mb-4">
                     <h3 class="text-lg font-bold text-gray-700">Jobs</h3>
-                    <button onclick="showAddSourceModal()" class="btn btn-secondary btn-sm" style="width: 150px; min-width: 150px; max-width: 150px;">
-                        <i class="fas fa-plus"></i>ETL Job
-                    </button>
+                    <div class="btn-group">
+                        <button onclick="showAddSourceModal()" class="btn btn-secondary btn-sm" style="width: 150px; min-width: 150px; max-width: 150px;">
+                            <i class="fas fa-plus"></i>ETL Job
+                        </button>
+                    </div>
                 </div>
 
                 <!-- ETL Jobs List Container (max 4 items with scroll) -->
@@ -56,7 +58,7 @@
                     <div class="space-y-3">
                         {% for source in data_sources %}
                         <div class="card">
-                            <div class="card-container">
+                            <div class="card-container-5col">
                                 <!-- Column 1: Job Info -->
                                 <div class="card-content">
                                     <!-- Row 1: Status Dot + Job Name -->
@@ -65,19 +67,28 @@
                                         <h4 class="card-title">{{ source.name }}</h4>
                                     </div>
 
-                                    <!-- Row 2: Source Type + Host/Tables -->
+                                    <!-- Row 2: Table Mappings -->
                                     <div class="card-body">
-                                        <span class="card-label">{{ source.get_source_type_display }}</span>
-                                        {% if source.source_type == 'postgresql' or source.source_type == 'mysql' or source.source_type == 'sqlserver' %}
-                                        <span class="card-value"> • {{ source.source_host }}</span>
-                                        {% endif %}
                                         {% for table in source.tables.all %}
-                                        <span class="card-value"> • {{ table.source_table_name }} → {{ table.dest_table_name }}</span>
+                                        <div style="display: flex; flex-direction: column; gap: 2px;">
+                                            <span class="card-value"><span class="card-label">From:</span> {{ table.source_table_name }}</span>
+                                            <span class="card-value"><span class="card-label">To:</span> {{ table.dest_table_name }}</span>
+                                        </div>
                                         {% endfor %}
                                     </div>
                                 </div>
 
-                                <!-- Column 2: Status Badge + Schedule -->
+                                <!-- Column 2: Schedule + Connection -->
+                                <div class="card-meta-column">
+                                    <span class="card-schedule-info">
+                                        <span class="card-label">Schedule:</span> {% if source.schedule_type %}{{ source.schedule_type|title }}{% else %}Manual{% endif %}
+                                    </span>
+                                    <span class="card-schedule-info">
+                                        <span class="card-label">Connection:</span> {{ source.connection_name|default:"None" }}
+                                    </span>
+                                </div>
+
+                                <!-- Column 3: Status Badge + Last Run -->
                                 <div class="card-meta-column">
                                     <span class="card-status-badge {% if source.is_enabled %}enabled{% else %}disabled{% endif %}">
                                         <i class="fas {% if source.is_enabled %}fa-check-circle{% else %}fa-pause-circle{% endif %}"></i>
@@ -89,11 +100,15 @@
                                     </span>
                                 </div>
 
-                                <!-- Column 3: Actions -->
-                                <div class="card-actions horizontal">
+                                <!-- Column 4: Run Button -->
+                                <div style="display: flex; align-items: center; justify-content: center;">
                                     <button onclick="runSourceNow({{ source.id }})" class="card-action-btn run" title="Run ETL job now">
-                                        <i class="fas fa-play"></i>Run Now
+                                        <i class="fas fa-play"></i>
                                     </button>
+                                </div>
+
+                                <!-- Column 5: Actions (Edit + Delete) -->
+                                <div class="card-actions">
                                     <button onclick="editSource({{ source.id }})" class="card-action-btn edit" title="Edit ETL job">
                                         <i class="fas fa-edit"></i>
                                     </button>

@@ -1,10 +1,83 @@
 # Next Steps: ETL & Connection Management System
 
-**Last Updated:** November 19, 2025
+**Last Updated:** November 19, 2025 (Evening Update)
 
 ---
 
-## 🚀 Latest Update: Flat File ETL Wizard Complete! (Nov 19, 2025)
+## 🎉 Latest Update: Intelligent File Selection & Load Strategy Redesign! (Nov 19, Evening)
+
+### **✅ Completed This Session:**
+
+#### **Phase 1: Conditional Step 3 UI - Database vs File Sources**
+- **Separated configuration UI** for different source types
+  - Database sources: Show timestamp column + historical backfill
+  - File sources: Show file tracking explanation (NO timestamp column)
+- **Removed confusing "Timestamp Column" for files**
+  - Files tracked by metadata (size + modification date), not timestamps
+  - Prevents user confusion about non-existent columns
+- **Updated Load Type descriptions**
+  - Transactional for files: "New files detected and loaded automatically"
+  - Transactional for databases: "Only inserts new records, never updates"
+
+#### **Phase 2: File Selection with Checkboxes** ⭐ **MAJOR FEATURE**
+- **Removed "Load Strategy" from Step 2**
+  - Moved file selection decision to Step 3 Catalog mode
+  - Eliminated overlap between Step 2 and Step 3 choices
+- **Added checkbox selection for files in Step 2**
+  - User can select specific files to include in ETL
+  - Prevents accidentally loading wrong files (e.g., transportation.csv vs sales.csv)
+  - "Select All" / "Deselect All" buttons
+  - Real-time counter: "2 of 3 selected"
+  - Files >1GB automatically disabled
+  - All valid files selected by default
+- **Smart "Detect Schema" button**
+  - Disabled if no files selected
+  - Shows count: "Detect Schema from Selected Files (2)"
+  - Uses first selected file for schema detection
+
+#### **Phase 3: Load Strategy Clarification**
+- **For Transactional mode (files):**
+  - No user choice needed
+  - Always loads all new/changed files based on metadata
+  - Automatic file change detection
+- **For Catalog mode (files):**
+  - User chooses in Step 3: "Latest file only" OR "All matched files"
+  - Clear use cases explained in UI
+
+#### **Phase 4: Database Schema Updates**
+- **Added `selected_files` field to DataSourceTable**
+  - JSONField storing list of file paths
+  - Default: empty list (uses pattern if empty)
+  - Migration 0014 created and applied
+- **Updated ETL job creation payload**
+  - Includes selected_files for file sources
+  - Backend saves selected files to database
+- **Enhanced Step 3 file preview**
+  - Shows selected files count and names
+  - Displays first 5 files if >5 selected
+
+### **📊 Implementation Summary:**
+
+**Files Modified:**
+- `templates/ml_platform/model_etl.html` - ~600 lines changed
+  - Updated Step 2 file list with checkboxes
+  - Conditional Step 3 UI (database vs file)
+  - File selection JavaScript functions
+  - Payload updates for selected_files
+- `ml_platform/models.py` - Added selected_files field
+- `ml_platform/migrations/0014_datasourcetable_selected_files.py` - New migration
+
+**New Functions Created:**
+- `toggleFileSelection(filePath, checkbox)` - Handle individual file checkbox
+- `selectAllFiles()` / `deselectAllFiles()` - Bulk selection
+- `updateSelectedFilesCount()` - Update counter display
+- `updateDetectSchemaButton()` - Smart button state management
+
+**Total Changes:** ~700 lines of code across frontend and backend
+
+---
+
+## 🚀 Previous Update: Flat File ETL Wizard Complete! (Nov 19, Morning)
 
 ### **✅ Completed Today:**
 
@@ -67,36 +140,53 @@
 
 ### **🎯 Current Status:**
 
-✅ **Flat File ETL - Phase 1 Complete:**
-- GCS connection management ✅
+✅ **Flat File ETL - UI/UX Complete:**
+- GCS/S3/Azure connection management ✅
 - File listing and pattern matching ✅
+- File selection with checkboxes ✅ **NEW!**
 - Schema auto-detection ✅
-- Column selection (NEW!) ✅
+- Column selection ✅
+- Conditional Step 3 (database vs file) ✅ **NEW!**
+- Load strategy clarification ✅ **NEW!**
 - Wizard navigation fixed ✅
 - BigQuery table configuration ✅
+- ProcessedFile model with metadata fields ✅ **NEW!**
+- selected_files database field ✅ **NEW!**
 
-❌ **Flat File ETL - Phase 2 Pending:**
-- ETL Runner implementation for files
-- File loading to BigQuery
-- ProcessedFile tracking
+❌ **Flat File ETL - Backend Implementation Pending:**
+- ETL Runner file extractor (pandas-based)
+- File loading to BigQuery logic
+- ProcessedFile tracking during ETL runs
+- Metadata comparison (file_size, file_last_modified)
 
 ### **📝 Next Steps (Priority Order):**
 
-1. **Implement ETL Runner for Files** (Phase 2) - HIGH PRIORITY
+1. **Implement ETL Runner for Files** (Backend) - HIGH PRIORITY
    - Create file extractor for GCS/S3/Azure
    - Load files with pandas based on configuration
-   - Track processed files in ProcessedFile table
+   - **Use selected_files list** if present, else fall back to pattern
+   - Track processed files in ProcessedFile table with metadata
+   - Compare file_size and file_last_modified to detect changes
    - Validate schema fingerprint on each run
    - Insert to BigQuery using pandas-gbq
-   - Handle latest-only vs all-files strategy
-   - **Estimated effort:** 4-6 hours
+   - Handle "Latest only" vs "All files" catalog strategy
+   - **Estimated effort:** 6-8 hours
 
-2. **End-to-End Testing** - HIGH PRIORITY
+2. **Update Backend API Endpoints** - MEDIUM PRIORITY
+   - Update `detect-file-schema` to accept selected_files parameter
+   - Update `create-job` to save selected_files to database
+   - **Estimated effort:** 1 hour
+
+3. **End-to-End Testing** - HIGH PRIORITY
+   - Test file selection with checkboxes
    - Test complete file ETL workflow
    - Verify column selection works correctly
    - Test with CSV, Parquet, JSON files
+   - Test Transactional mode (file tracking)
+   - Test Catalog mode (latest vs all)
    - Validate BigQuery data integrity
-   - **Estimated effort:** 2 hours
+   - Test file change detection
+   - **Estimated effort:** 3-4 hours
 
 3. **Fix API Authentication** (Minor)
    - ETL runner getting 403 on status update endpoint

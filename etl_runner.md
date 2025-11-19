@@ -1,9 +1,9 @@
 # ETL Runner
 
-**Last Updated:** November 18, 2025
-**Status:** Phase 1 & Phase 2 COMPLETE ✅ | Ready for Data Loading
+**Last Updated:** November 19, 2025
+**Status:** Phase 1 & Phase 2 COMPLETE ✅ | Flat File ETL Wizard COMPLETE ✅
 
-Cloud Run-based ETL execution engine for the B2B Recommendations Platform. Extracts data from source databases (PostgreSQL, MySQL) and loads to BigQuery.
+Cloud Run-based ETL execution engine for the B2B Recommendations Platform. Extracts data from source databases (PostgreSQL, MySQL) and cloud storage files (GCS, S3, Azure Blob) and loads to BigQuery.
 
 ## Current Status
 
@@ -32,10 +32,20 @@ Cloud Run-based ETL execution engine for the B2B Recommendations Platform. Extra
 - ✅ Manual trigger API endpoint ready
 - ✅ Progress tracking infrastructure in place
 
+**Phase 3: Flat File ETL Wizard (November 19, 2025)**
+- ✅ Conditional Step 3 UI for database vs file sources
+- ✅ File metadata tracking (file_size_bytes, file_last_modified)
+- ✅ File selection with checkboxes (user picks specific files)
+- ✅ Transactional vs Catalog load strategies for files
+- ✅ Incremental file loading with metadata comparison
+- ✅ Selected files stored in DataSourceTable.selected_files
+- ✅ Database migration created and applied (0014)
+
 **What's Missing:**
+- ⚠️ ETL Runner implementation for flat files (Phase 4)
 - ⚠️ Cloud Scheduler not yet creating jobs (need to test)
 - ⚠️ Actual data loading not tested end-to-end
-- ⚠️ Real-time status monitoring UI (Phase 3)
+- ⚠️ Real-time status monitoring UI (Phase 5)
 
 ## Overview
 
@@ -58,14 +68,32 @@ Cloud Scheduler → Cloud Run Job → Source Database (PostgreSQL/MySQL)
 
 ## Features
 
+### Database Sources
 - **Multiple Source Types**: PostgreSQL, MySQL support
 - **Two Load Modes**:
   - **Catalog**: Full snapshot (WRITE_TRUNCATE then WRITE_APPEND)
-  - **Transactional**: Incremental (WRITE_APPEND only)
+  - **Transactional**: Incremental by timestamp column (WRITE_APPEND only)
 - **Memory Efficient**: Streams data in batches (default: 10K rows)
 - **Progress Tracking**: Real-time status updates to Django
 - **Error Handling**: Retry logic with exponential backoff
 - **Cloud Logging**: JSON-formatted logs for Cloud Logging integration
+
+### Flat File Sources (NEW - Nov 19, 2025)
+- **Cloud Storage Support**: Google Cloud Storage (GCS), AWS S3, Azure Blob Storage
+- **File Formats**: CSV, Parquet, JSON/JSONL
+- **File Selection**: User can select specific files via checkboxes (prevents accidental loading)
+- **Two Load Strategies**:
+  - **Transactional (Incremental)**:
+    - Tracks processed files by path, size, and modification date
+    - Only loads new or changed files
+    - Appends to BigQuery table
+    - Detects file changes automatically
+  - **Catalog (Snapshot)**:
+    - User chooses: "Latest file only" or "All matched files"
+    - Replaces BigQuery table on each run
+    - Best for daily snapshots or multi-region merges
+- **Schema Detection**: Automatic schema inference from sample file
+- **ProcessedFile Tracking**: Prevents duplicate loads and detects file changes
 
 ## Directory Structure
 

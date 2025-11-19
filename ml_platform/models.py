@@ -357,6 +357,11 @@ class DataSourceTable(models.Model):
         blank=True,
         help_text="MD5 hash of column names + types for schema validation"
     )
+    selected_files = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="List of specific file paths selected by user to include in ETL (empty = use pattern only)"
+    )
 
     # Schedule configuration
     SCHEDULE_TYPE_CHOICES = [

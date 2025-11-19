@@ -4,20 +4,20 @@ A multi-tenant B2B SaaS platform for building, training, and deploying productio
 
 ## 📊 Project Stats
 
-- **14** Database Models (including ProcessedFile model)
+- **14** Database Models (including ProcessedFile + selected_files field)
 - **45+** Files Created (including schema_mapper.py, bigquery_manager.py)
 - **11** HTML Templates (with responsive UI)
 - **24** View Functions (including flat file APIs)
 - **74** URL Patterns
 - **100%** Authentication Coverage
-- **~2,600** Lines of Code Added (Milestone 13 - Flat File ETL Wizard Complete)
-- **Status**: Frontend Skeleton + Advanced ETL Wizard + BigQuery Integration + **Flat File ETL Wizard** ✅
+- **~3,300** Lines of Code Added (Milestone 14 - Intelligent File Selection Complete)
+- **Status**: Frontend Skeleton + Advanced ETL Wizard + BigQuery Integration + **Intelligent File ETL** ✅
 
 ## Project Status
 
-**Current Phase**: Flat File ETL - Phase 1 Complete ✅ (Nov 19, 2025)
+**Current Phase**: Flat File ETL - UI/UX Complete ✅ (Nov 19, 2025)
 
-**Latest Milestone**: 🎉 **Flat File ETL Wizard Complete** - Full UI workflow with column selection, wizard navigation fixes, and consistent UX (Nov 19, 2025)
+**Latest Milestone**: 🎉 **Intelligent File Selection & Load Strategy Redesign** - Conditional Step 3 UI, file selection with checkboxes, metadata-based file tracking (Nov 19, 2025)
 
 ### 🚀 Production Deployment
 
@@ -70,14 +70,30 @@ A multi-tenant B2B SaaS platform for building, training, and deploying productio
 - ✅ **Cloud Storage Flat File Ingestion**: CSV, Parquet, JSON files from GCS/S3/Azure Blob (Nov 19, 2025)
   - Auto-schema detection using pandas (downloads first 5MB sample)
   - Glob pattern matching for file selection (*.csv, transactions_*.parquet)
+  - **File selection with checkboxes** - Choose specific files to load, prevent accidental loading ✨ **NEW** (Nov 19, Evening)
+  - "Select All" / "Deselect All" buttons with real-time counter (e.g., "2 of 3 selected")
+  - Smart "Detect Schema" button: disabled if no files selected, shows count
+  - Files >1GB automatically disabled and unselectable
+  - **Conditional Step 3 UI** - Separate configuration for databases vs files ✨ **NEW** (Nov 19, Evening)
+    - Database sources: Show timestamp column + historical backfill
+    - File sources: Show file tracking explanation (NO confusing timestamp column)
+  - **Intelligent Load Strategies** ✨ **NEW** (Nov 19, Evening)
+    - **Transactional (Incremental)**: Automatic file tracking by metadata (size + modification date)
+      - Loads only new or changed files
+      - No user choice needed (always "all new files")
+      - Prevents duplicates via ProcessedFile table
+    - **Catalog (Snapshot)**: User chooses in Step 3
+      - "Latest file only" - load newest file by modification date
+      - "All matched files" - merge all files, replace table
   - File format options (delimiters, encoding, headers for CSV)
   - Schema fingerprinting for validation (MD5 hash of columns and types)
-  - Processed file tracking to avoid duplicates
-  - Load strategies: Latest file only OR all unprocessed files
+  - Metadata-based file change detection (file_size + file_last_modified)
+  - **ProcessedFile model** with file_size_bytes and file_last_modified fields
+  - **selected_files field** in DataSourceTable (JSONField, migration 0014 applied)
   - 1GB file size limit (pandas-based processing)
   - Recursive folder scanning support
-  - **Column selection for files** - Checkboxes, "Select All"/"Deselect All" buttons, real-time counter ✨ NEW (Nov 19, 2025)
-  - **Fixed wizard navigation** - Proper Step 2 → Step 3 → Step 4 flow for file sources ✨ FIXED (Nov 19, 2025)
+  - **Column selection for files** - Checkboxes, "Select All"/"Deselect All" buttons, real-time counter
+  - **Fixed wizard navigation** - Proper Step 2 → Step 3 → Step 4 flow for file sources
   - **Consistent UX** - Unified column selection across database and file sources ✨ NEW (Nov 19, 2025)
 - ✅ **BigQuery Integration**: Intelligent type mapping (70+ types), schema validation, table creation with partitioning/clustering
 - ✅ **Schema Mapper**: Auto-detection of dates, timestamps, booleans in VARCHAR fields with confidence scoring

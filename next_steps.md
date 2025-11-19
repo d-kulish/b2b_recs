@@ -30,20 +30,65 @@
   - Fixed static files, Cloud SQL connection, Tailwind CDN
   - Database migrations and superuser created
 
+### **📝 Latest Milestone: Cloud Storage Flat File Ingestion (Nov 19, 2024)**
+
+**Status:** ✅ Phase 1 Complete - Wizard & Configuration System
+
+- **Flat File Support Added:**
+  - CSV, Parquet, JSON file ingestion from cloud storage
+  - GCS support fully implemented (S3 and Azure placeholders ready)
+  - Auto-schema detection from file samples using pandas
+  - 1GB file size limit (pandas-based processing)
+  - Glob pattern matching for file selection
+  - Recursive folder scanning support
+
+- **ETL Wizard Enhanced:**
+  - Branching UI: Database vs Cloud Storage workflows
+  - Step 2 file selection for cloud sources:
+    - Folder path prefix (optional)
+    - File pattern matching (e.g., `*.csv`, `transactions_*.parquet`)
+    - Format selector with CSV options (delimiter, encoding, header)
+    - Preview matching files from bucket
+    - Load strategy (latest file vs all files)
+    - Schema detection & preview
+  - Smart navigation: Skips Step 3 for file sources (jumps 2→4)
+
+- **Database Updates:**
+  - Added 7 new fields to DataSourceTable model for file configuration
+  - Created ProcessedFile model to track loaded files
+  - Migration 0013 applied successfully
+
+- **API Endpoints:**
+  - `/api/connections/{id}/list-files/` - List files from bucket with pattern matching
+  - `/api/connections/{id}/detect-file-schema/` - Auto-detect schema from file sample
+  - Updated `/api/models/{id}/etl/create-job/` - Handle file-based configurations
+
+- **Total Implementation:** ~1000 lines of new code across backend and frontend
+
+**Documentation Created:**
+- `docs/flat_file_etl_implementation.md` - Complete 850-line technical specification
+
 ### **📝 Next Steps:**
-1. **Fix API Authentication** (Minor):
+1. **Implement ETL Runner for Files** (Phase 2):
+   - Load files with pandas based on configuration
+   - Track processed files in ProcessedFile table
+   - Validate schema on each run using fingerprint
+   - Insert to BigQuery using pandas-gbq
+   - Handle latest-only vs all-files strategy
+
+2. **Fix API Authentication** (Minor):
    - ETL runner getting 403 on status update endpoint
    - Currently cosmetic issue - ETL works but can't report status back to Django
 
-2. **Implement Cloud Scheduler** (Phase 3):
+3. **Implement Cloud Scheduler** (Phase 3):
    - Test automated ETL job scheduling
    - Validate cron expressions and timing
 
-3. **Production Database Security**:
+4. **Production Database Security**:
    - Replace `0.0.0.0/0` with specific IP ranges or Cloud NAT
    - Current setup allows access from anywhere (testing only)
 
-4. **Real-Time Monitoring UI** (Phase 4):
+5. **Real-Time Monitoring UI** (Phase 4):
    - Show ETL run progress in real-time
    - Error alerts and notifications
 

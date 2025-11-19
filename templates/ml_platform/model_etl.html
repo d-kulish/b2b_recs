@@ -264,27 +264,224 @@
             </div>
 
 
-            <!-- Step 2: Schema & Table Selection -->
+            <!-- Step 2: Schema & Table Selection (for Databases) OR File Selection (for Cloud Storage) -->
             <div id="step2" class="wizard-step hidden">
-                <h4 class="text-base font-bold text-gray-900 mb-3">Select Schema & Table</h4>
 
-                <p class="text-sm text-gray-600 mb-3">Choose the schema and table to extract data from.</p>
+                <!-- Step 2A: Database Schema & Table Selection -->
+                <div id="step2-database" class="hidden">
+                    <h4 class="text-base font-bold text-gray-900 mb-3">Select Schema & Table</h4>
 
-                <!-- Schema Selection -->
-                <div class="mb-4">
-                    <label class="block text-sm font-semibold text-gray-700 mb-1.5">Schema*</label>
-                    <select id="schemaSelector" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" onchange="onSchemaChange()">
-                        <option value="">Loading schemas...</option>
-                    </select>
-                    <p class="text-xs text-gray-500 mt-1">Select the database schema containing your target table</p>
+                    <p class="text-sm text-gray-600 mb-3">Choose the schema and table to extract data from.</p>
+
+                    <!-- Schema Selection -->
+                    <div class="mb-4">
+                        <label class="block text-sm font-semibold text-gray-700 mb-1.5">Schema*</label>
+                        <select id="schemaSelector" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" onchange="onSchemaChange()">
+                            <option value="">Loading schemas...</option>
+                        </select>
+                        <p class="text-xs text-gray-500 mt-1">Select the database schema containing your target table</p>
+                    </div>
+
+                    <!-- Table Selection -->
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1.5">Table*</label>
+                        <div id="tablesListContainer" class="space-y-2 border border-gray-200 rounded-lg p-3 max-h-80 overflow-y-auto">
+                            <!-- Tables will be populated dynamically -->
+                            <p class="text-xs text-gray-500 text-center py-8">Select a schema to load tables</p>
+                        </div>
+                    </div>
                 </div>
 
-                <!-- Table Selection -->
-                <div>
-                    <label class="block text-sm font-semibold text-gray-700 mb-1.5">Table*</label>
-                    <div id="tablesListContainer" class="space-y-2 border border-gray-200 rounded-lg p-3 max-h-80 overflow-y-auto">
-                        <!-- Tables will be populated dynamically -->
-                        <p class="text-xs text-gray-500 text-center py-8">Select a schema to load tables</p>
+                <!-- Step 2B: Cloud Storage File Selection -->
+                <div id="step2-files" class="hidden">
+                    <h4 class="text-base font-bold text-gray-900 mb-3">Select Files to Load</h4>
+
+                    <p class="text-sm text-gray-600 mb-3">Configure which files to extract from your cloud storage bucket.</p>
+
+                    <!-- File Path Prefix -->
+                    <div class="mb-4">
+                        <label class="block text-sm font-semibold text-gray-700 mb-1.5">
+                            Folder Path (Prefix)
+                            <span class="font-normal text-gray-500">(Optional)</span>
+                        </label>
+                        <input
+                            type="text"
+                            id="filePathPrefix"
+                            class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            placeholder="e.g., data/transactions/ or leave empty for root"
+                            onchange="onFilePatternChange()"
+                        >
+                        <p class="text-xs text-gray-500 mt-1">
+                            <i class="fas fa-folder-open mr-1"></i>
+                            Searches recursively in all subfolders under this path
+                        </p>
+                    </div>
+
+                    <!-- File Pattern -->
+                    <div class="mb-4">
+                        <label class="block text-sm font-semibold text-gray-700 mb-1.5">File Pattern*</label>
+                        <input
+                            type="text"
+                            id="filePattern"
+                            class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            placeholder="e.g., *.csv or transactions_*.csv"
+                            value="*.csv"
+                            onchange="onFilePatternChange()"
+                        >
+                        <p class="text-xs text-gray-500 mt-1">
+                            <i class="fas fa-info-circle mr-1"></i>
+                            Examples: <code class="bg-gray-100 px-1 rounded">*.csv</code>,
+                            <code class="bg-gray-100 px-1 rounded">data_*.parquet</code>,
+                            <code class="bg-gray-100 px-1 rounded">export_*.json</code>
+                        </p>
+                    </div>
+
+                    <!-- File Format Selection -->
+                    <div class="mb-4">
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">File Format*</label>
+                        <div class="grid grid-cols-3 gap-2">
+                            <label class="flex items-center p-3 border-2 border-gray-200 rounded-lg hover:bg-blue-50 hover:border-blue-400 cursor-pointer transition has-[:checked]:border-blue-600 has-[:checked]:bg-blue-50">
+                                <input type="radio" name="fileFormat" value="csv" class="mr-2" checked onchange="onFileFormatChange()">
+                                <div class="text-sm font-semibold">CSV</div>
+                            </label>
+                            <label class="flex items-center p-3 border-2 border-gray-200 rounded-lg hover:bg-blue-50 hover:border-blue-400 cursor-pointer transition has-[:checked]:border-blue-600 has-[:checked]:bg-blue-50">
+                                <input type="radio" name="fileFormat" value="parquet" class="mr-2" onchange="onFileFormatChange()">
+                                <div class="text-sm font-semibold">Parquet</div>
+                            </label>
+                            <label class="flex items-center p-3 border-2 border-gray-200 rounded-lg hover:bg-blue-50 hover:border-blue-400 cursor-pointer transition has-[:checked]:border-blue-600 has-[:checked]:bg-blue-50">
+                                <input type="radio" name="fileFormat" value="json" class="mr-2" onchange="onFileFormatChange()">
+                                <div class="text-sm font-semibold">JSON</div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- CSV Options (shown only for CSV) -->
+                    <div id="csvOptions" class="mb-4">
+                        <div class="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                            <h6 class="font-semibold text-sm text-gray-900 mb-2">CSV Options</h6>
+
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-xs font-semibold text-gray-700 mb-1">Delimiter</label>
+                                    <select id="csvDelimiter" class="w-full px-2.5 py-1.5 text-xs border border-gray-300 rounded-lg">
+                                        <option value=",">Comma (,)</option>
+                                        <option value="|">Pipe (|)</option>
+                                        <option value="\t">Tab</option>
+                                        <option value=";">Semicolon (;)</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold text-gray-700 mb-1">Encoding</label>
+                                    <select id="csvEncoding" class="w-full px-2.5 py-1.5 text-xs border border-gray-300 rounded-lg">
+                                        <option value="utf-8">UTF-8</option>
+                                        <option value="latin1">Latin-1</option>
+                                        <option value="iso-8859-1">ISO-8859-1</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="mt-3">
+                                <label class="flex items-center">
+                                    <input type="checkbox" id="csvHasHeader" checked class="mr-2">
+                                    <span class="text-xs font-semibold text-gray-700">File has header row</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Preview Matching Files Button -->
+                    <div class="mb-4">
+                        <button
+                            id="previewFilesBtn"
+                            onclick="previewMatchingFiles()"
+                            class="btn btn-secondary w-full"
+                            style="height: 38px;">
+                            <i class="fas fa-search mr-2"></i>
+                            Preview Matching Files
+                        </button>
+                    </div>
+
+                    <!-- Matching Files Preview -->
+                    <div id="matchingFilesContainer" class="hidden">
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">
+                            Matching Files
+                            <span id="matchingFilesCount" class="text-gray-500 font-normal"></span>
+                        </label>
+                        <div id="matchingFilesList" class="border border-gray-200 rounded-lg p-3 bg-gray-50 max-h-60 overflow-y-auto">
+                            <!-- Will be populated by JavaScript -->
+                        </div>
+                        <p class="text-xs text-gray-500 mt-2">
+                            <i class="fas fa-info-circle mr-1"></i>
+                            On each scheduled run, the <strong>latest unprocessed file</strong> will be loaded
+                        </p>
+                    </div>
+
+                    <!-- Load Strategy (for files) -->
+                    <div id="fileLoadStrategy" class="mt-4 hidden">
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Load Strategy*</label>
+                        <div class="space-y-2">
+                            <label class="flex items-start p-3 border-2 border-gray-200 rounded-lg hover:bg-blue-50 hover:border-blue-400 cursor-pointer transition has-[:checked]:border-blue-600 has-[:checked]:bg-blue-50">
+                                <input type="radio" name="fileLoadStrategy" value="latest" class="mt-1 mr-3" checked>
+                                <div>
+                                    <div class="font-semibold text-sm text-gray-900">Latest File Only</div>
+                                    <div class="text-xs text-gray-600 mt-0.5">Recommended for scheduled runs</div>
+                                    <div class="text-xs text-gray-500 mt-0.5">→ Loads newest unprocessed file on each run</div>
+                                </div>
+                            </label>
+                            <label class="flex items-start p-3 border-2 border-gray-200 rounded-lg hover:bg-blue-50 hover:border-blue-400 cursor-pointer transition has-[:checked]:border-blue-600 has-[:checked]:bg-blue-50">
+                                <input type="radio" name="fileLoadStrategy" value="all" class="mt-1 mr-3">
+                                <div>
+                                    <div class="font-semibold text-sm text-gray-900">All Unprocessed Files</div>
+                                    <div class="text-xs text-gray-600 mt-0.5">Use for manual backfills</div>
+                                    <div class="text-xs text-gray-500 mt-0.5">⚠️ Loads all unprocessed files at once</div>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Detect Schema Button -->
+                    <div id="detectSchemaContainer" class="mt-4 hidden">
+                        <button
+                            id="detectSchemaBtn"
+                            onclick="detectFileSchema()"
+                            class="btn btn-primary w-full"
+                            style="height: 38px;">
+                            <i class="fas fa-magic mr-2"></i>
+                            Detect Schema & Continue
+                        </button>
+                        <p class="text-xs text-gray-500 mt-2 text-center">
+                            <i class="fas fa-info-circle mr-1"></i>
+                            We'll analyze the latest file to detect column types automatically
+                        </p>
+                    </div>
+
+                    <!-- Schema Preview (after detection) -->
+                    <div id="schemaPreviewContainer" class="mt-4 hidden">
+                        <div class="bg-green-50 border border-green-200 rounded-lg p-3 mb-3">
+                            <div class="flex items-center">
+                                <i class="fas fa-check-circle text-green-600 mr-2"></i>
+                                <div>
+                                    <div class="font-semibold text-sm text-green-900">Schema Detected Successfully</div>
+                                    <div class="text-xs text-green-700 mt-0.5">
+                                        <span id="schemaColumnCount"></span> columns detected from sample file
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="border border-gray-200 rounded-lg overflow-hidden max-h-60 overflow-y-auto">
+                            <table class="w-full text-xs">
+                                <thead class="bg-gray-50 sticky top-0">
+                                    <tr>
+                                        <th class="text-left py-2 px-3">Column Name</th>
+                                        <th class="text-left py-2 px-3">Type</th>
+                                        <th class="text-left py-2 px-3">Sample Values</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="schemaPreviewTableBody">
+                                    <!-- Will be populated by JavaScript -->
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -577,10 +774,10 @@
             <div class="flex items-center justify-between">
                 <!-- Left: Back/Next buttons -->
                 <div class="flex gap-2">
-                    <button id="backButton" onclick="previousStep()" class="btn btn-secondary" style="width: 142px; height: 38px;" disabled>
+                    <button id="backButton" onclick="previousStep()" class="btn btn-secondary opacity-50 cursor-not-allowed bg-gray-300" style="width: 142px; height: 38px;" disabled>
                         <i class="fas fa-chevron-left"></i>
                     </button>
-                    <button id="nextButton" onclick="nextStep()" class="btn btn-secondary" style="width: 142px; height: 38px;" disabled>
+                    <button id="nextButton" onclick="nextStep()" class="btn btn-secondary opacity-50 cursor-not-allowed bg-gray-300" style="width: 142px; height: 38px;" disabled>
                         <i class="fas fa-chevron-right"></i>
                     </button>
                 </div>
@@ -1378,9 +1575,19 @@ function updateStep1NextButton() {
 
     // Enable next button only if BOTH conditions are met
     if (jobName !== '' && selectedConnection) {
+        // Functionally enable
         nextButton.disabled = false;
+
+        // Visually enable - remove disabled styling
+        nextButton.classList.remove('opacity-50', 'cursor-not-allowed', 'bg-gray-300');
+        nextButton.classList.add('bg-white', 'hover:bg-gray-50');
     } else {
+        // Functionally disable
         nextButton.disabled = true;
+
+        // Visually disable - add disabled styling
+        nextButton.classList.add('opacity-50', 'cursor-not-allowed', 'bg-gray-300');
+        nextButton.classList.remove('bg-white', 'hover:bg-gray-50');
     }
 }
 
@@ -3145,9 +3352,11 @@ function showStep(step) {
 
     // Step 1: Connection Selection
     if (step === 1) {
-        if (backButton) backButton.disabled = true;
+        // Hide back button on step 1 (no step 0 to go back to)
+        if (backButton) backButton.style.display = 'none';
         updateStep1NextButton();
         if (nextButton) {
+            nextButton.style.display = 'block';
             nextButton.classList.remove('hidden');
             nextButton.innerHTML = '<i class="fas fa-chevron-right"></i>';
         }
@@ -3156,8 +3365,16 @@ function showStep(step) {
 
     // Step 2: Schema & Table Selection
     else if (step === 2) {
-        if (backButton) backButton.disabled = false;
+        // Show back button on step 2+
+        if (backButton) {
+            backButton.style.display = 'block';
+            backButton.disabled = false;
+            // Remove visual disabled classes
+            backButton.classList.remove('opacity-50', 'cursor-not-allowed', 'bg-gray-300');
+            backButton.classList.add('bg-white', 'hover:bg-gray-50');
+        }
         if (nextButton) {
+            nextButton.style.display = 'block';
             nextButton.disabled = false;
             nextButton.classList.remove('hidden');
             nextButton.innerHTML = '<i class="fas fa-chevron-right"></i>';
@@ -3167,8 +3384,15 @@ function showStep(step) {
 
     // Step 3: Load Strategy Configuration
     else if (step === 3) {
-        if (backButton) backButton.disabled = false;
+        if (backButton) {
+            backButton.style.display = 'block';
+            backButton.disabled = false;
+            // Remove visual disabled classes
+            backButton.classList.remove('opacity-50', 'cursor-not-allowed', 'bg-gray-300');
+            backButton.classList.add('bg-white', 'hover:bg-gray-50');
+        }
         if (nextButton) {
+            nextButton.style.display = 'block';
             nextButton.disabled = false;
             nextButton.classList.remove('hidden');
             nextButton.innerHTML = '<i class="fas fa-chevron-right"></i>';
@@ -3178,8 +3402,15 @@ function showStep(step) {
 
     // Step 4: BigQuery Table Setup (NEW)
     else if (step === 4) {
-        if (backButton) backButton.disabled = false;
+        if (backButton) {
+            backButton.style.display = 'block';
+            backButton.disabled = false;
+            // Remove visual disabled classes
+            backButton.classList.remove('opacity-50', 'cursor-not-allowed', 'bg-gray-300');
+            backButton.classList.add('bg-white', 'hover:bg-gray-50');
+        }
         if (nextButton) {
+            nextButton.style.display = 'block';
             nextButton.disabled = false;
             nextButton.classList.remove('hidden');
             nextButton.innerHTML = '<i class="fas fa-chevron-right"></i>';
@@ -3189,8 +3420,17 @@ function showStep(step) {
 
     // Step 5: Schedule & Review (Final Step, formerly Step 4)
     else if (step === 5) {
-        if (backButton) backButton.disabled = false;
-        if (nextButton) nextButton.classList.add('hidden');
+        if (backButton) {
+            backButton.style.display = 'block';
+            backButton.disabled = false;
+            // Remove visual disabled classes
+            backButton.classList.remove('opacity-50', 'cursor-not-allowed', 'bg-gray-300');
+            backButton.classList.add('bg-white', 'hover:bg-gray-50');
+        }
+        if (nextButton) {
+            nextButton.style.display = 'none';
+            nextButton.classList.add('hidden');
+        }
         if (createButton) {
             createButton.classList.remove('hidden');
             createButton.onclick = createETLJob;
@@ -3277,28 +3517,57 @@ function nextStep() {
         return;
     }
 
-    // STEP 2 -> STEP 3: Validate schema and table selection
+    // STEP 2 -> STEP 3 (or STEP 4 for files): Validate schema and table selection
     if (currentWizardStep === 2) {
-        // Check if schema is selected
-        const schemaSelector = document.getElementById('schemaSelector');
-        if (!schemaSelector.value) {
-            alert('Please select a schema');
-            return;
+        const connection = window.selectedConnection;
+        const isCloudStorage = connection && ['gcs', 's3', 'azure_blob'].includes(connection.source_type);
+
+        if (isCloudStorage) {
+            // File-based source validation
+            if (!window.detectedFileSchema || !window.schemaFingerprint) {
+                alert('Please detect schema from files first');
+                return;
+            }
+
+            // Store file configuration
+            window.fileConfig = {
+                file_path_prefix: document.getElementById('filePathPrefix').value.trim(),
+                file_pattern: document.getElementById('filePattern').value.trim(),
+                file_format: document.querySelector('input[name="fileFormat"]:checked').value,
+                file_format_options: {
+                    delimiter: document.getElementById('csvDelimiter')?.value || ',',
+                    encoding: document.getElementById('csvEncoding')?.value || 'utf-8',
+                    has_header: document.getElementById('csvHasHeader')?.checked !== false
+                },
+                load_latest_only: document.querySelector('input[name="fileLoadStrategy"]:checked').value === 'latest',
+                schema_fingerprint: window.schemaFingerprint
+            };
+
+            // Skip Step 3 (Load Strategy) and go directly to Step 4 (BigQuery Table Setup)
+            currentWizardStep = 4;
+            showStep(4);
+            populateBigQuerySchemaFromDetected();
+        } else {
+            // Database source validation
+            const schemaSelector = document.getElementById('schemaSelector');
+            if (!schemaSelector.value) {
+                alert('Please select a schema');
+                return;
+            }
+
+            const selectedTable = document.querySelector('input[name="selectedTable"]:checked');
+            if (!selectedTable) {
+                alert('Please select a table to extract');
+                return;
+            }
+
+            // Store selected schema and table
+            window.selectedSchema = schemaSelector.value;
+            window.selectedTableName = selectedTable.value;
+
+            // Proceed to Step 3 (Load Strategy)
+            proceedToStep3();
         }
-
-        // Check if table is selected
-        const selectedTable = document.querySelector('input[name="selectedTable"]:checked');
-        if (!selectedTable) {
-            alert('Please select a table to extract');
-            return;
-        }
-
-        // Store selected schema and table
-        window.selectedSchema = schemaSelector.value;
-        window.selectedTableName = selectedTable.value;
-
-        // Proceed to Step 3 (Load Strategy)
-        proceedToStep3();
         return;
     }
 
@@ -3367,8 +3636,24 @@ function nextStep() {
 }
 
 function proceedToStep2() {
-    // Fetch schemas for the selected connection
-    fetchSchemasForConnection(window.selectedConnectionId);
+    // Check if selected connection is cloud storage or database
+    const connection = window.selectedConnection;
+    const isCloudStorage = ['gcs', 's3', 'azure_blob'].includes(connection.source_type);
+
+    console.log('Proceeding to Step 2, connection type:', connection.source_type, 'isCloudStorage:', isCloudStorage);
+
+    if (isCloudStorage) {
+        // Show file selection UI for cloud storage
+        document.getElementById('step2-database').classList.add('hidden');
+        document.getElementById('step2-files').classList.remove('hidden');
+    } else {
+        // Show schema/table selection UI for databases
+        document.getElementById('step2-database').classList.remove('hidden');
+        document.getElementById('step2-files').classList.add('hidden');
+
+        // Fetch schemas for the selected database connection
+        fetchSchemasForConnection(window.selectedConnectionId);
+    }
 
     // Move to Step 2
     currentWizardStep = 2;
@@ -3513,9 +3798,22 @@ function updateSummary() {
 
 async function createETLJob() {
     const jobName = document.getElementById('sourceName').value.trim();
+    const connection = window.selectedConnection;
+    const isCloudStorage = connection && ['gcs', 's3', 'azure_blob'].includes(connection.source_type);
 
-    if (!jobName || !window.selectedConnectionId || !window.selectedSchema || !window.selectedTableName) {
+    // Validate based on source type
+    if (!jobName || !window.selectedConnectionId) {
         alert('Missing required information. Please go back and complete all steps.');
+        return;
+    }
+
+    if (!isCloudStorage && (!window.selectedSchema || !window.selectedTableName)) {
+        alert('Missing required information. Please go back and complete all steps.');
+        return;
+    }
+
+    if (isCloudStorage && !window.fileConfig) {
+        alert('Missing file configuration. Please go back and configure file settings.');
         return;
     }
 
@@ -3553,29 +3851,44 @@ async function createETLJob() {
         createButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Creating...';
     }
 
+    // Build payload based on source type
     const payload = {
         name: jobName,
         connection_id: window.selectedConnectionId,
-        schema_name: window.selectedSchema,
         load_type: loadType,
         timestamp_column: timestampColumn,
         historical_start_date: historicalStartDate,
         selected_columns: selectedColumns,
         schedule_type: scheduleType,
 
-        // NEW: BigQuery table configuration
+        // BigQuery table configuration
         bigquery_table_name: bqTableName,
         bigquery_schema: bqSchemaColumns,  // Full schema with types
 
-        tables: [
+        // Source type flag
+        is_file_based: isCloudStorage
+    };
+
+    if (isCloudStorage) {
+        // File-based source configuration
+        payload.file_path_prefix = window.fileConfig.file_path_prefix;
+        payload.file_pattern = window.fileConfig.file_pattern;
+        payload.file_format = window.fileConfig.file_format;
+        payload.file_format_options = window.fileConfig.file_format_options;
+        payload.load_latest_only = window.fileConfig.load_latest_only;
+        payload.schema_fingerprint = window.fileConfig.schema_fingerprint;
+    } else {
+        // Database source configuration
+        payload.schema_name = window.selectedSchema;
+        payload.tables = [
             {
                 source_table_name: window.selectedTableName,
-                dest_table_name: bqTableName,  // Use custom BQ table name
+                dest_table_name: bqTableName,
                 sync_mode: loadType === 'transactional' ? 'incremental' : 'replace',
                 incremental_column: timestampColumn
             }
-        ]
-    };
+        ];
+    }
 
     console.log('Creating ETL job with payload:', payload);
 
@@ -4580,6 +4893,287 @@ function selectSavedConnection(connectionId) {
 function createNewConnection() {
     // Switch to Relational tab to create a new connection
     switchTab('relational');
+}
+
+// ============================================================================
+// File Selection Functions (for Cloud Storage)
+// ============================================================================
+
+function onFileFormatChange() {
+    const selectedFormat = document.querySelector('input[name="fileFormat"]:checked').value;
+    const csvOptions = document.getElementById('csvOptions');
+
+    // Show CSV options only when CSV is selected
+    if (selectedFormat === 'csv') {
+        csvOptions.classList.remove('hidden');
+    } else {
+        csvOptions.classList.add('hidden');
+    }
+
+    console.log('File format changed to:', selectedFormat);
+}
+
+function onFilePatternChange() {
+    const pattern = document.getElementById('filePattern').value.trim();
+    const prefix = document.getElementById('filePathPrefix').value.trim();
+
+    console.log('File pattern changed:', pattern, 'prefix:', prefix);
+
+    // Hide matching files container until user clicks preview
+    document.getElementById('matchingFilesContainer').classList.add('hidden');
+    document.getElementById('fileLoadStrategy').classList.add('hidden');
+}
+
+function previewMatchingFiles() {
+    const connectionId = window.selectedConnectionId;
+    const prefix = document.getElementById('filePathPrefix').value.trim();
+    const pattern = document.getElementById('filePattern').value.trim();
+
+    if (!pattern) {
+        alert('Please enter a file pattern');
+        return;
+    }
+
+    const previewBtn = document.getElementById('previewFilesBtn');
+    const filesList = document.getElementById('matchingFilesList');
+    const filesContainer = document.getElementById('matchingFilesContainer');
+
+    // Show loading state
+    previewBtn.disabled = true;
+    previewBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Loading files...';
+    filesList.innerHTML = '<p class="text-xs text-gray-500 text-center py-4">Fetching files from bucket...</p>';
+    filesContainer.classList.remove('hidden');
+
+    // Fetch matching files from backend
+    fetch(`/api/connections/${connectionId}/list-files/?prefix=${encodeURIComponent(prefix)}&pattern=${encodeURIComponent(pattern)}`, {
+        method: 'GET',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrftoken
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        previewBtn.disabled = false;
+        previewBtn.innerHTML = '<i class="fas fa-search mr-2"></i>Preview Matching Files';
+
+        if (data.status === 'success') {
+            const files = data.files || [];
+
+            if (files.length === 0) {
+                filesList.innerHTML = `
+                    <div class="text-center py-4">
+                        <i class="fas fa-folder-open text-3xl text-gray-300 mb-2"></i>
+                        <p class="text-sm text-gray-600">No files match this pattern</p>
+                        <p class="text-xs text-gray-500 mt-1">Try a different prefix or pattern</p>
+                    </div>
+                `;
+                document.getElementById('fileLoadStrategy').classList.add('hidden');
+            } else {
+                // Store files for later use
+                window.matchingFiles = files;
+
+                // Render file list
+                const fileItems = files.map(file => {
+                    const sizeInMB = (file.size / (1024 * 1024)).toFixed(2);
+                    const exceeds1GB = file.size > 1024 * 1024 * 1024;
+                    const fileClass = exceeds1GB ? 'text-gray-400' : 'text-gray-700';
+                    const warningIcon = exceeds1GB ? '<i class="fas fa-exclamation-triangle text-red-500 ml-2" title="File exceeds 1GB limit"></i>' : '';
+
+                    return `
+                        <div class="flex items-center justify-between py-2 px-3 bg-white rounded border border-gray-200 ${exceeds1GB ? 'opacity-50' : ''}">
+                            <div class="flex-1 min-w-0">
+                                <p class="text-xs font-semibold ${fileClass} truncate">${file.name}</p>
+                                <p class="text-xs text-gray-500">${file.last_modified || 'N/A'}</p>
+                            </div>
+                            <div class="flex items-center">
+                                <span class="text-xs ${fileClass} ml-3">${sizeInMB} MB</span>
+                                ${warningIcon}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+                filesList.innerHTML = fileItems;
+                document.getElementById('matchingFilesCount').textContent = `(${files.length} files)`;
+
+                // Show load strategy options and detect schema button
+                document.getElementById('fileLoadStrategy').classList.remove('hidden');
+                document.getElementById('detectSchemaContainer').classList.remove('hidden');
+            }
+        } else {
+            filesList.innerHTML = `
+                <p class="text-xs text-red-600 text-center py-4">
+                    <i class="fas fa-exclamation-circle mr-1"></i>
+                    ${data.message || 'Error loading files'}
+                </p>
+            `;
+            document.getElementById('fileLoadStrategy').classList.add('hidden');
+            document.getElementById('detectSchemaContainer').classList.add('hidden');
+        }
+    })
+    .catch(error => {
+        previewBtn.disabled = false;
+        previewBtn.innerHTML = '<i class="fas fa-search mr-2"></i>Preview Matching Files';
+        filesList.innerHTML = `
+            <p class="text-xs text-red-600 text-center py-4">
+                <i class="fas fa-exclamation-circle mr-1"></i>
+                Failed to fetch files: ${error.message}
+            </p>
+        `;
+        console.error('Error fetching files:', error);
+    });
+}
+
+function populateBigQuerySchemaFromDetected() {
+    /**
+     * Populate BigQuery schema editor (Step 4) with detected file schema
+     */
+    if (!window.detectedFileSchema) {
+        console.error('No detected schema available');
+        return;
+    }
+
+    const tableBody = document.getElementById('bqSchemaTableBody');
+    if (!tableBody) return;
+
+    // Clear existing rows
+    tableBody.innerHTML = '';
+
+    // Create rows for each column
+    window.detectedFileSchema.forEach((col, index) => {
+        const row = document.createElement('tr');
+        row.className = 'border-t border-gray-200';
+        row.innerHTML = `
+            <td class="py-2 px-3 font-semibold">${col.name}</td>
+            <td class="py-2 px-3 text-gray-600">${col.type}</td>
+            <td class="py-2 px-3">
+                <select class="w-full px-2 py-1 text-xs border border-gray-300 rounded" data-column-name="${col.name}" data-field="bigquery_type">
+                    <option value="STRING" ${col.bigquery_type === 'STRING' ? 'selected' : ''}>STRING</option>
+                    <option value="INT64" ${col.bigquery_type === 'INT64' ? 'selected' : ''}>INT64</option>
+                    <option value="FLOAT64" ${col.bigquery_type === 'FLOAT64' ? 'selected' : ''}>FLOAT64</option>
+                    <option value="BOOL" ${col.bigquery_type === 'BOOL' ? 'selected' : ''}>BOOL</option>
+                    <option value="TIMESTAMP" ${col.bigquery_type === 'TIMESTAMP' ? 'selected' : ''}>TIMESTAMP</option>
+                    <option value="DATE" ${col.bigquery_type === 'DATE' ? 'selected' : ''}>DATE</option>
+                    <option value="NUMERIC" ${col.bigquery_type === 'NUMERIC' ? 'selected' : ''}>NUMERIC</option>
+                </select>
+            </td>
+            <td class="py-2 px-3">
+                <select class="w-full px-2 py-1 text-xs border border-gray-300 rounded" data-column-name="${col.name}" data-field="bigquery_mode">
+                    <option value="NULLABLE" ${col.bigquery_mode === 'NULLABLE' ? 'selected' : ''}>NULLABLE</option>
+                    <option value="REQUIRED" ${col.bigquery_mode === 'REQUIRED' ? 'selected' : ''}>REQUIRED</option>
+                </select>
+            </td>
+            <td class="py-2 px-3 text-xs text-gray-600">
+                ${col.sample_values.slice(0, 2).join(', ')}
+            </td>
+        `;
+        tableBody.appendChild(row);
+    });
+
+    // Set default BigQuery table name based on file pattern
+    const bqTableNameInput = document.getElementById('bqTableName');
+    if (bqTableNameInput && window.fileConfig) {
+        // Extract base name from file pattern (e.g., "transactions_*.csv" -> "transactions")
+        const pattern = window.fileConfig.file_pattern || '';
+        const baseName = pattern.replace(/[*_\-\.]/g, '_').replace(/_{2,}/g, '_').replace(/^_|_$/g, '').toLowerCase();
+        bqTableNameInput.value = `bq_${baseName}`;
+        document.getElementById('sourceTableNamePreview').textContent = baseName;
+    }
+}
+
+function detectFileSchema() {
+    const connectionId = window.selectedConnectionId;
+    const files = window.matchingFiles;
+
+    if (!files || files.length === 0) {
+        alert('No files available. Please preview files first.');
+        return;
+    }
+
+    // Use the latest file for schema detection
+    const latestFile = files[0];  // Already sorted by last_modified desc
+    const fileFormat = document.querySelector('input[name="fileFormat"]:checked').value;
+    const formatOptions = {
+        delimiter: document.getElementById('csvDelimiter')?.value || ',',
+        encoding: document.getElementById('csvEncoding')?.value || 'utf-8',
+        has_header: document.getElementById('csvHasHeader')?.checked !== false
+    };
+
+    const detectBtn = document.getElementById('detectSchemaBtn');
+
+    // Show loading state
+    detectBtn.disabled = true;
+    detectBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Detecting schema...';
+
+    // Call API to detect schema
+    fetch(`/api/connections/${connectionId}/detect-file-schema/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrftoken
+        },
+        body: JSON.stringify({
+            file_path: latestFile.name,
+            file_format: fileFormat,
+            format_options: formatOptions
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        detectBtn.disabled = false;
+        detectBtn.innerHTML = '<i class="fas fa-magic mr-2"></i>Detect Schema & Continue';
+
+        if (data.status === 'success') {
+            // Store detected schema globally
+            window.detectedFileSchema = data.columns;
+            window.schemaFingerprint = data.schema_fingerprint;
+
+            // Display schema preview
+            const tableBody = document.getElementById('schemaPreviewTableBody');
+            const columnCount = document.getElementById('schemaColumnCount');
+
+            columnCount.textContent = data.columns.length;
+
+            const schemaRows = data.columns.map(col => {
+                const samples = col.sample_values.slice(0, 3).join(', ');
+                return `
+                    <tr class="border-t border-gray-200">
+                        <td class="py-2 px-3 font-semibold">${col.name}</td>
+                        <td class="py-2 px-3">
+                            <span class="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs">
+                                ${col.bigquery_type}
+                            </span>
+                        </td>
+                        <td class="py-2 px-3 text-gray-600">${samples}</td>
+                    </tr>
+                `;
+            }).join('');
+
+            tableBody.innerHTML = schemaRows;
+
+            // Show schema preview, hide detect button
+            document.getElementById('schemaPreviewContainer').classList.remove('hidden');
+            document.getElementById('detectSchemaContainer').classList.add('hidden');
+
+            // Enable wizard navigation
+            const nextButton = document.getElementById('nextButton');
+            if (nextButton) {
+                nextButton.disabled = false;
+                nextButton.classList.remove('opacity-50', 'cursor-not-allowed', 'bg-gray-300');
+                nextButton.classList.add('bg-white', 'hover:bg-gray-50');
+            }
+
+        } else {
+            alert(`Schema detection failed: ${data.message}`);
+        }
+    })
+    .catch(error => {
+        detectBtn.disabled = false;
+        detectBtn.innerHTML = '<i class="fas fa-magic mr-2"></i>Detect Schema & Continue';
+        alert(`Error detecting schema: ${error.message}`);
+        console.error('Error detecting schema:', error);
+    });
 }
 
 function createNewConnectionFromTest(connectionName, connectionData, messageDiv, nextButton) {

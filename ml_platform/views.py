@@ -2014,8 +2014,21 @@ def api_etl_create_job(request, model_id):
         # Extract and validate required fields
         job_name = data.get('name', '').strip()
         connection_id = data.get('connection_id')
+
+        # Check if this is a file-based source
+        is_file_based = data.get('is_file_based', False)
+
+        # Database source fields
         schema_name = data.get('schema_name', '').strip()
         tables = data.get('tables', [])
+
+        # File-based source fields (for cloud storage)
+        file_path_prefix = data.get('file_path_prefix', '').strip()
+        file_pattern = data.get('file_pattern', '').strip()
+        file_format = data.get('file_format', '').strip()
+        file_format_options = data.get('file_format_options', {})
+        load_latest_only = data.get('load_latest_only', True)
+        schema_fingerprint = data.get('schema_fingerprint', '').strip()
 
         # Extract Step 3 fields (Load Strategy)
         load_type = data.get('load_type', 'transactional')
@@ -2042,11 +2055,27 @@ def api_etl_create_job(request, model_id):
                 'message': 'Connection is required',
             }, status=400)
 
-        if not tables or len(tables) == 0:
-            return JsonResponse({
-                'status': 'error',
-                'message': 'At least one table must be selected',
-            }, status=400)
+        # Validate based on source type
+        if is_file_based:
+            # File-based source validation
+            if not file_pattern:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': 'File pattern is required for cloud storage sources',
+                }, status=400)
+
+            if not file_format:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': 'File format is required for cloud storage sources',
+                }, status=400)
+        else:
+            # Database source validation
+            if not tables or len(tables) == 0:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': 'At least one table must be selected',
+                }, status=400)
 
         if not bq_table_name:
             return JsonResponse({
@@ -2098,13 +2127,19 @@ def api_etl_create_job(request, model_id):
                 'message': f'Failed to create/verify dataset: {dataset_result["message"]}',
             }, status=500)
 
+        # Create description based on source type
+        if is_file_based:
+            table_description = f"ETL source: {file_pattern} files from {connection.name}"
+        else:
+            table_description = f"ETL source: {schema_name}.{tables[0]['source_table_name']} from {connection.name}"
+
         # Create BigQuery table
         table_result = bq_manager.create_table_from_schema(
             table_name=bq_table_name,
             schema_columns=bq_schema_columns,
             load_type=load_type,
             timestamp_column=timestamp_column if load_type == 'transactional' else None,
-            description=f"ETL source: {schema_name}.{tables[0]['source_table_name']} from {connection.name}",
+            description=table_description,
             overwrite=False  # Don't overwrite existing tables
         )
 
@@ -2134,29 +2169,57 @@ def api_etl_create_job(request, model_id):
             historical_start_date=historical_start_date,
         )
 
-        # Create DataSourceTable objects for each selected table
-        for table_config in tables:
-            source_table = table_config.get('source_table_name', '').strip()
-            dest_table = table_config.get('dest_table_name', bq_table_name).strip()  # Use BigQuery table name
-            sync_mode = table_config.get('sync_mode', 'replace')
-            incremental_column = table_config.get('incremental_column', '').strip()
+        # Create DataSourceTable objects
+        if is_file_based:
+            # For file-based sources, create a single DataSourceTable with file config
+            DataSourceTable.objects.create(
+                data_source=data_source,
+                schema_name='',  # Not applicable for files
+                source_table_name=file_pattern,  # Use file pattern as source "table" name
+                dest_table_name=bq_table_name,
+                sync_mode='replace',  # Files don't use sync_mode
+                # File-specific fields
+                is_file_based=True,
+                file_path_prefix=file_path_prefix,
+                file_pattern=file_pattern,
+                file_format=file_format,
+                file_format_options=file_format_options,
+                load_latest_only=load_latest_only,
+                schema_fingerprint=schema_fingerprint,
+                # Common fields from Step 3, 4 & 5
+                load_type=load_type,
+                timestamp_column=timestamp_column if load_type == 'transactional' else '',
+                historical_start_date=historical_start_date,
+                selected_columns=selected_columns,
+                schedule_type=schedule_type,
+                is_enabled=True,
+            )
+        else:
+            # For database sources, create DataSourceTable for each selected table
+            for table_config in tables:
+                source_table = table_config.get('source_table_name', '').strip()
+                dest_table = table_config.get('dest_table_name', bq_table_name).strip()
+                sync_mode = table_config.get('sync_mode', 'replace')
+                incremental_column = table_config.get('incremental_column', '').strip()
 
-            if source_table:
-                DataSourceTable.objects.create(
-                    data_source=data_source,
-                    schema_name=schema_name,
-                    source_table_name=source_table,
-                    dest_table_name=dest_table,
-                    sync_mode=sync_mode,
-                    incremental_column=incremental_column if sync_mode == 'incremental' else '',
-                    # New fields from Step 3, 4 & 5
-                    load_type=load_type,
-                    timestamp_column=timestamp_column,
-                    historical_start_date=historical_start_date,
-                    selected_columns=selected_columns,
-                    schedule_type=schedule_type,
-                    is_enabled=True,
-                )
+                if source_table:
+                    DataSourceTable.objects.create(
+                        data_source=data_source,
+                        schema_name=schema_name,
+                        source_table_name=source_table,
+                        dest_table_name=dest_table,
+                        sync_mode=sync_mode,
+                        incremental_column=incremental_column if sync_mode == 'incremental' else '',
+                        # Database-specific
+                        is_file_based=False,
+                        # Common fields from Step 3, 4 & 5
+                        load_type=load_type,
+                        timestamp_column=timestamp_column,
+                        historical_start_date=historical_start_date,
+                        selected_columns=selected_columns,
+                        schedule_type=schedule_type,
+                        is_enabled=True,
+                    )
 
         # Update connection last_used_at
         connection.last_used_at = timezone.now()
@@ -2355,6 +2418,352 @@ def api_connection_fetch_tables_for_schema(request, connection_id):
             'status': 'error',
             'message': str(e),
         }, status=500)
+
+
+@login_required
+@require_http_methods(["GET"])
+def api_connection_list_files(request, connection_id):
+    """
+    List files in cloud storage bucket matching a pattern.
+    Used in ETL wizard Step 2 for cloud storage connections (GCS, S3, Azure).
+
+    Query params:
+        prefix: Folder path prefix (optional)
+        pattern: File pattern using glob syntax (e.g., "*.csv", "data_*.parquet")
+
+    Returns: {
+        "status": "success",
+        "files": [
+            {
+                "name": "data/file.csv",
+                "size": 1024000,
+                "last_modified": "2024-11-19 10:30:00"
+            },
+            ...
+        ]
+    }
+    """
+    from .utils.connection_manager import get_credentials_from_secret_manager
+    from .models import Connection
+    from google.cloud import storage
+    from google.oauth2 import service_account
+    import json
+    import fnmatch
+
+    try:
+        connection = get_object_or_404(Connection, id=connection_id)
+
+        # Get query parameters
+        prefix = request.GET.get('prefix', '').strip()
+        pattern = request.GET.get('pattern', '*').strip()
+
+        # Validate connection is cloud storage type
+        if connection.source_type not in ['gcs', 's3', 'azure_blob']:
+            return JsonResponse({
+                'status': 'error',
+                'message': f'Connection type "{connection.source_type}" is not a cloud storage type',
+            }, status=400)
+
+        # Retrieve credentials from Secret Manager
+        if not connection.credentials_secret_name:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'No credentials stored for this connection',
+            }, status=400)
+
+        credentials = get_credentials_from_secret_manager(connection.credentials_secret_name)
+
+        # Handle different cloud storage types
+        files = []
+
+        if connection.source_type == 'gcs':
+            # Google Cloud Storage
+            bucket_path = connection.source_host  # gs://bucket-name
+
+            if not bucket_path.startswith('gs://'):
+                return JsonResponse({
+                    'status': 'error',
+                    'message': 'Invalid GCS bucket path. Must start with gs://',
+                }, status=400)
+
+            bucket_name = bucket_path.replace('gs://', '').split('/')[0]
+
+            # Parse service account JSON
+            service_account_json = credentials.get('service_account_json', '')
+            credentials_info = json.loads(service_account_json)
+            creds = service_account.Credentials.from_service_account_info(credentials_info)
+
+            # Create GCS client
+            client = storage.Client(credentials=creds, project=credentials_info.get('project_id'))
+            bucket = client.get_bucket(bucket_name)
+
+            # List all blobs with prefix (recursive)
+            all_blobs = list(bucket.list_blobs(prefix=prefix, max_results=1000))
+
+            # Filter by pattern (only filename, not full path)
+            for blob in all_blobs:
+                # Skip directories
+                if blob.name.endswith('/'):
+                    continue
+
+                # Extract filename from full path
+                filename = blob.name.split('/')[-1]
+
+                # Match pattern against filename only
+                if fnmatch.fnmatch(filename, pattern):
+                    files.append({
+                        'name': blob.name,
+                        'size': blob.size,
+                        'last_modified': blob.updated.strftime('%Y-%m-%d %H:%M:%S') if blob.updated else 'N/A'
+                    })
+
+        elif connection.source_type == 's3':
+            # AWS S3 - to be implemented
+            return JsonResponse({
+                'status': 'error',
+                'message': 'S3 file listing not yet implemented',
+            }, status=501)
+
+        elif connection.source_type == 'azure_blob':
+            # Azure Blob Storage - to be implemented
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Azure Blob file listing not yet implemented',
+            }, status=501)
+
+        # Sort files by last modified (newest first)
+        files.sort(key=lambda f: f['last_modified'], reverse=True)
+
+        return JsonResponse({
+            'status': 'success',
+            'files': files,
+            'count': len(files),
+            'prefix': prefix,
+            'pattern': pattern,
+        })
+
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'status': 'error',
+            'message': 'Invalid service account JSON format',
+        }, status=400)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e),
+        }, status=500)
+
+
+@login_required
+@require_http_methods(["POST"])
+def api_connection_detect_file_schema(request, connection_id):
+    """
+    Detect schema from a cloud storage file by downloading and analyzing a sample.
+    Used in ETL wizard Step 2 for cloud storage connections.
+
+    POST body: {
+        "file_path": "data/transactions/file.csv",
+        "file_format": "csv",
+        "format_options": {
+            "delimiter": ",",
+            "encoding": "utf-8",
+            "has_header": true
+        }
+    }
+
+    Returns: {
+        "status": "success",
+        "columns": [
+            {
+                "name": "id",
+                "type": "INTEGER",
+                "bigquery_type": "INT64",
+                "bigquery_mode": "NULLABLE",
+                "sample_values": ["1", "2", "3"]
+            },
+            ...
+        ],
+        "total_rows": 1000 (estimated from sample),
+        "schema_fingerprint": "abc123..."
+    }
+    """
+    from .utils.connection_manager import get_credentials_from_secret_manager
+    from .models import Connection
+    from google.cloud import storage
+    from google.oauth2 import service_account
+    import json
+    import pandas as pd
+    import io
+    import hashlib
+
+    try:
+        connection = get_object_or_404(Connection, id=connection_id)
+
+        # Parse request body
+        data = json.loads(request.body)
+        file_path = data.get('file_path')
+        file_format = data.get('file_format', 'csv')
+        format_options = data.get('format_options', {})
+
+        if not file_path:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'file_path is required',
+            }, status=400)
+
+        # Validate connection is cloud storage
+        if connection.source_type not in ['gcs', 's3', 'azure_blob']:
+            return JsonResponse({
+                'status': 'error',
+                'message': f'Connection type "{connection.source_type}" is not a cloud storage type',
+            }, status=400)
+
+        # Retrieve credentials
+        credentials = get_credentials_from_secret_manager(connection.credentials_secret_name)
+
+        # Download sample of file
+        df_sample = None
+
+        if connection.source_type == 'gcs':
+            # Google Cloud Storage
+            bucket_path = connection.source_host
+            bucket_name = bucket_path.replace('gs://', '').split('/')[0]
+
+            # Parse service account JSON
+            service_account_json = credentials.get('service_account_json', '')
+            credentials_info = json.loads(service_account_json)
+            creds = service_account.Credentials.from_service_account_info(credentials_info)
+
+            # Create GCS client
+            client = storage.Client(credentials=creds, project=credentials_info.get('project_id'))
+            bucket = client.get_bucket(bucket_name)
+            blob = bucket.blob(file_path)
+
+            # Check file size
+            blob.reload()  # Get metadata
+            file_size = blob.size
+
+            if file_size > 1024 * 1024 * 1024:  # 1GB
+                return JsonResponse({
+                    'status': 'error',
+                    'message': f'File size ({file_size / (1024**3):.2f} GB) exceeds 1GB limit',
+                }, status=400)
+
+            # Download file content (limit to first 5MB for schema detection)
+            max_bytes_to_download = min(file_size, 5 * 1024 * 1024)  # 5MB max
+            file_content = blob.download_as_bytes(end=max_bytes_to_download)
+
+            # Parse based on format
+            if file_format == 'csv':
+                delimiter = format_options.get('delimiter', ',')
+                encoding = format_options.get('encoding', 'utf-8')
+                has_header = format_options.get('has_header', True)
+
+                # Handle tab delimiter
+                if delimiter == '\\t':
+                    delimiter = '\t'
+
+                # Read CSV with pandas (limited rows)
+                df_sample = pd.read_csv(
+                    io.BytesIO(file_content),
+                    delimiter=delimiter,
+                    encoding=encoding,
+                    header=0 if has_header else None,
+                    nrows=1000,  # Sample first 1000 rows
+                    low_memory=False
+                )
+
+                # If no header, create column names
+                if not has_header:
+                    df_sample.columns = [f'column_{i}' for i in range(len(df_sample.columns))]
+
+            elif file_format == 'parquet':
+                df_sample = pd.read_parquet(io.BytesIO(file_content))
+
+            elif file_format == 'json':
+                df_sample = pd.read_json(io.BytesIO(file_content), lines=True, nrows=1000)
+
+            else:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': f'File format "{file_format}" not yet supported',
+                }, status=400)
+
+        else:
+            # S3 and Azure not yet implemented
+            return JsonResponse({
+                'status': 'error',
+                'message': f'{connection.source_type.upper()} schema detection not yet implemented',
+            }, status=501)
+
+        # Detect schema from pandas DataFrame
+        columns = []
+        for col_name in df_sample.columns:
+            col_data = df_sample[col_name]
+            pandas_dtype = str(col_data.dtype)
+
+            # Map pandas dtype to BigQuery type
+            if pandas_dtype.startswith('int'):
+                bq_type = 'INT64'
+            elif pandas_dtype.startswith('float'):
+                bq_type = 'FLOAT64'
+            elif pandas_dtype == 'bool':
+                bq_type = 'BOOL'
+            elif pandas_dtype == 'datetime64':
+                bq_type = 'TIMESTAMP'
+            elif pandas_dtype == 'object':
+                # Try to infer if it's a date
+                try:
+                    pd.to_datetime(col_data.dropna().iloc[:10])
+                    bq_type = 'TIMESTAMP'
+                except:
+                    bq_type = 'STRING'
+            else:
+                bq_type = 'STRING'
+
+            # Get sample values (first 5 non-null values)
+            sample_values = col_data.dropna().head(5).astype(str).tolist()
+
+            # Determine if column has nulls
+            has_nulls = col_data.isnull().any()
+            bq_mode = 'NULLABLE' if has_nulls else 'REQUIRED'
+
+            columns.append({
+                'name': col_name,
+                'type': pandas_dtype,
+                'bigquery_type': bq_type,
+                'bigquery_mode': bq_mode,
+                'sample_values': sample_values,
+                'nullable': has_nulls
+            })
+
+        # Generate schema fingerprint (hash of column names + types)
+        schema_string = '|'.join([f"{c['name']}:{c['bigquery_type']}" for c in columns])
+        schema_fingerprint = hashlib.md5(schema_string.encode()).hexdigest()
+
+        return JsonResponse({
+            'status': 'success',
+            'columns': columns,
+            'total_rows': len(df_sample),
+            'schema_fingerprint': schema_fingerprint,
+            'file_size': file_size,
+        })
+
+    except pd.errors.ParserError as e:
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Failed to parse file: {str(e)}. Check delimiter and encoding settings.',
+        }, status=400)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e),
+        }, status=500)
+
 
 @login_required
 @require_http_methods(["POST"])

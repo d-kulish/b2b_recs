@@ -318,6 +318,46 @@ class DataSourceTable(models.Model):
         help_text="List of column names to sync (empty = all columns)"
     )
 
+    # Cloud Storage File Configuration (for GCS, S3, Azure Blob)
+    is_file_based = models.BooleanField(
+        default=False,
+        help_text="True if source is cloud storage files (GCS/S3/Azure), False for databases"
+    )
+    file_path_prefix = models.CharField(
+        max_length=500,
+        blank=True,
+        help_text="Folder path prefix for file search (e.g., 'data/transactions/')"
+    )
+    file_pattern = models.CharField(
+        max_length=200,
+        blank=True,
+        help_text="File pattern using glob syntax (e.g., '*.csv', 'data_*.parquet')"
+    )
+    file_format = models.CharField(
+        max_length=50,
+        blank=True,
+        choices=[
+            ('csv', 'CSV'),
+            ('parquet', 'Parquet'),
+            ('json', 'JSON/JSONL'),
+        ],
+        help_text="File format for cloud storage sources"
+    )
+    file_format_options = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Format-specific options (e.g., CSV delimiter, encoding, has_header)"
+    )
+    load_latest_only = models.BooleanField(
+        default=True,
+        help_text="If True, load only the latest unprocessed file. If False, load all unprocessed files."
+    )
+    schema_fingerprint = models.CharField(
+        max_length=64,
+        blank=True,
+        help_text="MD5 hash of column names + types for schema validation"
+    )
+
     # Schedule configuration
     SCHEDULE_TYPE_CHOICES = [
         ('manual', 'Manual Only'),
@@ -437,6 +477,50 @@ class ETLRun(models.Model):
         if self.started_at and self.completed_at:
             return (self.completed_at - self.started_at).total_seconds()
         return None
+
+
+class ProcessedFile(models.Model):
+    """
+    Track which files from cloud storage have been successfully processed.
+    Used for file-based ETL jobs to avoid reprocessing the same files.
+    """
+    data_source_table = models.ForeignKey(
+        DataSourceTable,
+        on_delete=models.CASCADE,
+        related_name='processed_files',
+        help_text="The ETL job that processed this file"
+    )
+    file_path = models.CharField(
+        max_length=1000,
+        help_text="Full path to the file in cloud storage (e.g., 'data/transactions/file.csv')"
+    )
+    file_size_bytes = models.BigIntegerField(help_text="File size in bytes")
+    file_last_modified = models.DateTimeField(help_text="Last modified timestamp from cloud storage")
+
+    # Processing details
+    processed_at = models.DateTimeField(auto_now_add=True, help_text="When this file was successfully loaded")
+    rows_loaded = models.IntegerField(null=True, blank=True, help_text="Number of rows loaded from this file")
+    etl_run = models.ForeignKey(
+        ETLRun,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='processed_files',
+        help_text="The ETL run that processed this file"
+    )
+
+    class Meta:
+        ordering = ['-processed_at']
+        unique_together = ['data_source_table', 'file_path']
+        verbose_name = 'Processed File'
+        verbose_name_plural = 'Processed Files'
+        indexes = [
+            models.Index(fields=['data_source_table', 'file_path']),
+            models.Index(fields=['processed_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.file_path} (processed {self.processed_at.strftime('%Y-%m-%d %H:%M')})"
 
 
 class PipelineConfiguration(models.Model):

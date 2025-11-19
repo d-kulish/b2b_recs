@@ -4,20 +4,20 @@ A multi-tenant B2B SaaS platform for building, training, and deploying productio
 
 ## 📊 Project Stats
 
-- **13** Database Models (including ETL models)
+- **14** Database Models (including ProcessedFile model)
 - **45+** Files Created (including schema_mapper.py, bigquery_manager.py)
 - **11** HTML Templates (with responsive UI)
-- **22** View Functions (including ETL & BigQuery APIs)
-- **19** URL Patterns
+- **24** View Functions (including flat file APIs)
+- **74** URL Patterns
 - **100%** Authentication Coverage
-- **~1,100** Lines of Code Added (Milestone 11.5)
-- **Status**: Frontend Skeleton + Advanced 5-Step ETL Wizard + BigQuery Integration ✅
+- **~2,100** Lines of Code Added (Milestone 12 - Flat File Support)
+- **Status**: Frontend Skeleton + Advanced ETL Wizard + BigQuery Integration + Cloud Storage Flat File Ingestion ✅
 
 ## Project Status
 
 **Current Phase**: Production Deployment to Cloud Run ✅ **COMPLETE** (Nov 18, 2025)
 
-**Latest Milestone**: 🎉 **First Successful ETL Run!** Data extracted from memo2 PostgreSQL and loaded to BigQuery
+**Latest Milestone**: 🎉 **Cloud Storage Flat File Ingestion** - CSV, Parquet, JSON support with auto-schema detection (Nov 19, 2024)
 
 ### 🚀 Production Deployment
 
@@ -67,6 +67,15 @@ A multi-tenant B2B SaaS platform for building, training, and deploying productio
 - ✅ **Cloud Storage Integration**: GCS, AWS S3, Azure Blob Storage with storage-first architecture
 - ✅ **Standalone Connections UI**: Independent connection CRUD with live status indicators
 - ✅ **19 Data Source Types**: PostgreSQL, MySQL, Oracle, SQL Server, BigQuery, Snowflake, Firestore, MongoDB, GCS, S3, Azure Blob, and more
+- ✅ **Cloud Storage Flat File Ingestion**: CSV, Parquet, JSON files from GCS/S3/Azure Blob (Nov 19, 2024)
+  - Auto-schema detection using pandas (downloads first 5MB sample)
+  - Glob pattern matching for file selection (*.csv, transactions_*.parquet)
+  - File format options (delimiters, encoding, headers for CSV)
+  - Schema fingerprinting for validation (MD5 hash of columns and types)
+  - Processed file tracking to avoid duplicates
+  - Load strategies: Latest file only OR all unprocessed files
+  - 1GB file size limit (pandas-based processing)
+  - Recursive folder scanning support
 - ✅ **BigQuery Integration**: Intelligent type mapping (70+ types), schema validation, table creation with partitioning/clustering
 - ✅ **Schema Mapper**: Auto-detection of dates, timestamps, booleans in VARCHAR fields with confidence scoring
 - ✅ **BigQuery Manager**: Dataset creation, table creation, schema validation, performance optimization
@@ -79,6 +88,9 @@ A multi-tenant B2B SaaS platform for building, training, and deploying productio
 - ✅ Model Dashboard (status cards, recent runs, quick actions)
 - ✅ Login/logout functionality
 - ✅ **5-Step ETL Wizard**: Connection → Schema/Table → Load Strategy → BigQuery Setup → Schedule
+- ✅ **Branching Wizard UI**: Database sources vs Cloud Storage file sources
+- ✅ **File Selection Interface**: Path prefix, glob patterns, format selection (CSV/Parquet/JSON)
+- ✅ **Schema Preview**: Auto-detected columns with sample values and BigQuery type mapping
 - ✅ **ETL Page**: 2-column layout with Connections section and ETL Jobs section
 - ✅ **BigQuery Schema Editor**: Interactive table with editable types/modes, confidence indicators, warnings
 - ✅ **Smart Type Detection**: Auto-mapping with 🟢🟡🔴 confidence indicators
@@ -399,6 +411,10 @@ The ETL system uses a **single Docker container template** deployed per client w
 - `POST /api/connections/{id}/test-and-fetch-tables/` - Test connection and fetch tables using stored credentials (for edit mode)
 - `POST /api/connections/{id}/delete/` - Delete connection (checks for dependent jobs)
 
+*Cloud Storage File Operations:*
+- `GET /api/connections/{id}/list-files/` - List files from cloud storage bucket with glob pattern matching
+- `POST /api/connections/{id}/detect-file-schema/` - Auto-detect schema from file sample using pandas
+
 **Database Models**:
 - **ETLConfiguration**: Schedule settings and Cloud Run service configuration
 - **Connection**: Reusable named database connections (NEW)
@@ -415,6 +431,11 @@ The ETL system uses a **single Docker container template** deployed per client w
   - Draft vs finalized status (is_enabled)
   - Wizard step tracking (wizard_last_step, wizard_completed_steps) for resume functionality
 - **DataSourceTable**: Table-level extraction config (sync mode, incremental column, row limits)
+  - **File-based sources** (NEW): is_file_based, file_path_prefix, file_pattern, file_format, file_format_options, load_latest_only, schema_fingerprint
+  - Supports both database tables and cloud storage files
+- **ProcessedFile** (NEW): Tracks successfully loaded files from cloud storage
+  - Unique constraint on (data_source_table, file_path) to prevent duplicate processing
+  - Stores file metadata (size, last_modified) and processing stats (rows_loaded, processed_at)
 - **ETLRun**: Execution history with per-source and per-table success tracking
 
 **Security Architecture**:
@@ -576,19 +597,79 @@ The ETL page features a 2-column layout:
 - **Timestamp display** shows "Tested 5m ago" for freshness awareness
 - **Comprehensive debug logs** in browser console with emoji indicators
 
-### 🔨 Pending Components (For Production Deployment)
+**Creating ETL Jobs for Cloud Storage Files (CSV, Parquet, JSON):**
+
+When selecting a cloud storage connection (GCS, S3, Azure Blob) at Step 1, the wizard automatically branches to the file ingestion flow:
+
+**ETL Wizard - Step 2: File Selection** (replaces Schema/Table for cloud storage sources)
+- **File Path Prefix** (optional): Folder path within bucket (e.g., `data/transactions/`)
+- **File Pattern**: Glob pattern to match files (e.g., `*.csv`, `transactions_*.parquet`, `events_2024*.json`)
+  - Supports wildcards: `*` (any characters), `?` (single character)
+  - Example patterns: `*.csv`, `sales_*.parquet`, `events_202411*.json`
+- **File Format**: CSV, Parquet, or JSON/JSONL
+- **CSV Format Options** (shown for CSV only):
+  - Delimiter: Comma, Pipe, Tab, Semicolon
+  - Encoding: UTF-8, ISO-8859-1, Windows-1252
+  - Has Header Row: Yes/No
+- **Preview Matching Files**: Button to list all files matching the pattern
+  - Shows file name, size (MB/KB), and last modified date
+  - Sorted by last modified (newest first)
+  - Displays total count and combined size
+- **Detect Schema & Continue**: Downloads first 5MB of latest file, detects schema using pandas
+  - Auto-maps pandas dtypes to BigQuery types
+  - Shows detected columns with sample values
+  - Displays schema preview before proceeding
+  - Calculates schema fingerprint (MD5 hash) for validation
+
+**ETL Wizard - Step 3: Load Strategy** (auto-configured for files)
+- **Load Latest Only**: Process only the most recent file matching the pattern on each run
+- **Load All New Files**: Process all unprocessed files (tracked in ProcessedFile table)
+- **Schema Validation**: Future runs validate schema fingerprint to detect changes
+  - If schema changes, ETL job fails and requires new job creation
+
+**ETL Wizard - Step 4: BigQuery Setup**
+- Pre-populated with detected schema from file sample
+- Edit column names, BigQuery types, and modes (NULLABLE/REQUIRED) as needed
+- Configure BigQuery destination table name
+- Set up partitioning and clustering (optional)
+
+**ETL Wizard - Step 5: Schedule & Review**
+- Same scheduling options as database sources (Manual, Hourly, Daily, etc.)
+- Review shows file configuration summary:
+  - Bucket/container name
+  - File path prefix and pattern
+  - File format and options
+  - Load strategy (latest only vs all new files)
+  - Detected schema with column count
+
+**File Processing Notes:**
+- 1GB file size limit per file (uses pandas for processing)
+- Compressed files not supported (client must decompress before upload)
+- Schema evolution causes job failure (create new ETL job for new schema)
+- Processed files tracked to avoid duplicate loads
+- Recursive folder scanning supported (pattern matches files in all subdirectories)
+
+### 🔨 Pending Components (Phase 2 - ETL Runner Implementation)
 
 **ETL Container** (Not yet built - needed for actual data extraction):
-- `etl_runner.py` - Python script with database connectors
-- Database drivers: psycopg2 (PostgreSQL), PyMySQL (MySQL), pyodbc (SQL Server)
-- BigQuery loading via `pandas-gbq`
+- `etl_runner.py` - Python script with database and file connectors
+- **Database drivers**: psycopg2 (PostgreSQL), PyMySQL (MySQL), pyodbc (SQL Server)
+- **File processing**: pandas (CSV, JSON), pyarrow (Parquet)
+- **Cloud storage clients**: google-cloud-storage (GCS), boto3 (S3), azure-storage-blob (Azure)
+- **File processor utility** (NEW):
+  - List files matching glob pattern from cloud storage
+  - Download file samples or full files (based on size)
+  - Parse using pandas with format-specific options
+  - Validate schema fingerprint on each run
+  - Track processed files in ProcessedFile table
+  - Load to BigQuery using pandas-gbq
 - Reads Django configuration via REST API
 - Dockerfile for Cloud Run deployment
 
 **When Needed**:
 - First client goes to production
-- Actual database connections required
-- For now, Django simulates ETL runs for testing
+- Actual database connections or file processing required
+- For now, Django UI and configuration layer complete, ready for backend implementation
 
 ### Key Design Decisions
 

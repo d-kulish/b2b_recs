@@ -1,10 +1,119 @@
 # Next Steps: ETL & Connection Management System
 
-**Last Updated:** November 18, 2025
+**Last Updated:** November 19, 2025
 
 ---
 
-## 🚀 Latest Update: ETL End-to-End Success! (Nov 18, 2025)
+## 🚀 Latest Update: Flat File ETL Wizard Complete! (Nov 19, 2025)
+
+### **✅ Completed Today:**
+
+#### **Phase 1: Bug Fixes - Field Mapping Issues**
+- **Fixed GCS bucket path bug** in file listing and schema detection APIs
+  - Changed `connection.source_host` → `connection.bucket_path` (2 locations)
+  - Added validation for empty/invalid bucket paths
+  - Fixed connection auto-test to include `bucket_path` parameter
+
+#### **Phase 2: Missing Dependencies**
+- **Installed pandas ecosystem** for file processing
+  - `pandas>=2.3.0` (Python 3.13 compatible)
+  - `pyarrow>=22.0.0` (Parquet support)
+  - `pandas-gbq>=0.31.0` (BigQuery integration)
+- **Fixed JSON serialization** bug (numpy.bool_ → Python bool)
+- **Suppressed pandas warnings** for cleaner logs
+
+#### **Phase 3: Wizard Navigation Fix** ⭐ **MAJOR FIX**
+- **Corrected wizard flow** for file sources
+  - **Before:** Step 2 → Step 4 (skipped Step 3) ❌
+  - **After:** Step 2 → Step 3 → Step 4 ✅
+- **Created `populateFilePreviewInStep3()` function**
+  - Shows file configuration summary
+  - Displays detected schema in table format
+  - Shows column types and sample values
+- **Updated Step 3 → Step 4 navigation**
+  - Transfers schema data correctly
+  - Validates at least 1 column selected
+  - Populates BigQuery schema editor
+
+#### **Phase 4: Column Selection Feature** 🎉 **NEW FEATURE**
+- **Implemented column selection for flat files**
+  - Checkboxes for each detected column
+  - "Select All" / "Deselect All" styled buttons with icons
+  - Real-time selection counter ("X of Y selected")
+  - Default: All columns selected
+  - Validation: Requires at least 1 column
+- **Upgraded database column selection** for consistency
+  - Replaced text links with styled buttons
+  - Added selection counter
+  - Added FontAwesome icons
+  - Unified UX across database and file sources
+
+### **📊 Implementation Summary:**
+
+**Files Modified:**
+- `ml_platform/views.py` - 8 bug fixes + schema detection improvements
+- `templates/ml_platform/model_etl.html` - Wizard navigation + column selection UI
+- `requirements.txt` - Added pandas ecosystem dependencies
+
+**New Functions Created:**
+- `populateFilePreviewInStep3()` - File schema preview in Step 3
+- `selectAllFileColumns()` / `deselectAllFileColumns()` - File column selection
+- `updateFileColumnCount()` - Real-time counter for files
+- `selectAllColumns()` / `deselectAllColumns()` - Database column selection
+- `updateColumnCount()` - Real-time counter for databases
+- `syncBigQuerySchemaFromUI()` - Sync schema from UI to validation
+
+**Total Changes:** ~500 lines of code across backend and frontend
+
+### **🎯 Current Status:**
+
+✅ **Flat File ETL - Phase 1 Complete:**
+- GCS connection management ✅
+- File listing and pattern matching ✅
+- Schema auto-detection ✅
+- Column selection (NEW!) ✅
+- Wizard navigation fixed ✅
+- BigQuery table configuration ✅
+
+❌ **Flat File ETL - Phase 2 Pending:**
+- ETL Runner implementation for files
+- File loading to BigQuery
+- ProcessedFile tracking
+
+### **📝 Next Steps (Priority Order):**
+
+1. **Implement ETL Runner for Files** (Phase 2) - HIGH PRIORITY
+   - Create file extractor for GCS/S3/Azure
+   - Load files with pandas based on configuration
+   - Track processed files in ProcessedFile table
+   - Validate schema fingerprint on each run
+   - Insert to BigQuery using pandas-gbq
+   - Handle latest-only vs all-files strategy
+   - **Estimated effort:** 4-6 hours
+
+2. **End-to-End Testing** - HIGH PRIORITY
+   - Test complete file ETL workflow
+   - Verify column selection works correctly
+   - Test with CSV, Parquet, JSON files
+   - Validate BigQuery data integrity
+   - **Estimated effort:** 2 hours
+
+3. **Fix API Authentication** (Minor)
+   - ETL runner getting 403 on status update endpoint
+   - Currently cosmetic issue
+   - **Estimated effort:** 1 hour
+
+4. **Implement Cloud Scheduler** (Phase 3)
+   - Test automated ETL job scheduling
+   - **Estimated effort:** 2-3 hours
+
+5. **Production Database Security**
+   - Replace `0.0.0.0/0` with specific IP ranges or Cloud NAT
+   - **Estimated effort:** 1-2 hours
+
+---
+
+## 🚀 Previous Update: ETL End-to-End Success! (Nov 18, 2025)
 
 ### **✅ Completed Today:**
 - **FIRST SUCCESSFUL ETL RUN** 🎉

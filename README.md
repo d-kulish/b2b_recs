@@ -10,14 +10,14 @@ A multi-tenant B2B SaaS platform for building, training, and deploying productio
 - **24** View Functions (including flat file APIs)
 - **74** URL Patterns
 - **100%** Authentication Coverage
-- **~2,100** Lines of Code Added (Milestone 12 - Flat File Support)
-- **Status**: Frontend Skeleton + Advanced ETL Wizard + BigQuery Integration + Cloud Storage Flat File Ingestion ✅
+- **~2,600** Lines of Code Added (Milestone 13 - Flat File ETL Wizard Complete)
+- **Status**: Frontend Skeleton + Advanced ETL Wizard + BigQuery Integration + **Flat File ETL Wizard** ✅
 
 ## Project Status
 
-**Current Phase**: Production Deployment to Cloud Run ✅ **COMPLETE** (Nov 18, 2025)
+**Current Phase**: Flat File ETL - Phase 1 Complete ✅ (Nov 19, 2025)
 
-**Latest Milestone**: 🎉 **Cloud Storage Flat File Ingestion** - CSV, Parquet, JSON support with auto-schema detection (Nov 19, 2024)
+**Latest Milestone**: 🎉 **Flat File ETL Wizard Complete** - Full UI workflow with column selection, wizard navigation fixes, and consistent UX (Nov 19, 2025)
 
 ### 🚀 Production Deployment
 
@@ -67,7 +67,7 @@ A multi-tenant B2B SaaS platform for building, training, and deploying productio
 - ✅ **Cloud Storage Integration**: GCS, AWS S3, Azure Blob Storage with storage-first architecture
 - ✅ **Standalone Connections UI**: Independent connection CRUD with live status indicators
 - ✅ **19 Data Source Types**: PostgreSQL, MySQL, Oracle, SQL Server, BigQuery, Snowflake, Firestore, MongoDB, GCS, S3, Azure Blob, and more
-- ✅ **Cloud Storage Flat File Ingestion**: CSV, Parquet, JSON files from GCS/S3/Azure Blob (Nov 19, 2024)
+- ✅ **Cloud Storage Flat File Ingestion**: CSV, Parquet, JSON files from GCS/S3/Azure Blob (Nov 19, 2025)
   - Auto-schema detection using pandas (downloads first 5MB sample)
   - Glob pattern matching for file selection (*.csv, transactions_*.parquet)
   - File format options (delimiters, encoding, headers for CSV)
@@ -76,6 +76,9 @@ A multi-tenant B2B SaaS platform for building, training, and deploying productio
   - Load strategies: Latest file only OR all unprocessed files
   - 1GB file size limit (pandas-based processing)
   - Recursive folder scanning support
+  - **Column selection for files** - Checkboxes, "Select All"/"Deselect All" buttons, real-time counter ✨ NEW (Nov 19, 2025)
+  - **Fixed wizard navigation** - Proper Step 2 → Step 3 → Step 4 flow for file sources ✨ FIXED (Nov 19, 2025)
+  - **Consistent UX** - Unified column selection across database and file sources ✨ NEW (Nov 19, 2025)
 - ✅ **BigQuery Integration**: Intelligent type mapping (70+ types), schema validation, table creation with partitioning/clustering
 - ✅ **Schema Mapper**: Auto-detection of dates, timestamps, booleans in VARCHAR fields with confidence scoring
 - ✅ **BigQuery Manager**: Dataset creation, table creation, schema validation, performance optimization

@@ -1583,6 +1583,8 @@ def api_connection_test(request, connection_id):
             'dataset': connection.bigquery_dataset,
             'service_account_json': credentials.get('service_account_json', ''),
             'connection_string': connection.connection_string,
+            # Cloud storage parameters
+            'bucket_path': connection.bucket_path,
         }
 
         # Test connection
@@ -2478,7 +2480,13 @@ def api_connection_list_files(request, connection_id):
 
         if connection.source_type == 'gcs':
             # Google Cloud Storage
-            bucket_path = connection.source_host  # gs://bucket-name
+            bucket_path = connection.bucket_path  # gs://bucket-name
+
+            if not bucket_path:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': 'Bucket path not configured for this connection. Please edit the connection and set the bucket path.',
+                }, status=400)
 
             if not bucket_path.startswith('gs://'):
                 return JsonResponse({
@@ -2599,13 +2607,19 @@ def api_connection_detect_file_schema(request, connection_id):
     import hashlib
 
     try:
+        print(f"[SCHEMA DETECTION] Starting schema detection for connection_id={connection_id}")
         connection = get_object_or_404(Connection, id=connection_id)
+        print(f"[SCHEMA DETECTION] Connection found: {connection.name} (type={connection.source_type})")
 
         # Parse request body
         data = json.loads(request.body)
         file_path = data.get('file_path')
         file_format = data.get('file_format', 'csv')
         format_options = data.get('format_options', {})
+
+        print(f"[SCHEMA DETECTION] Request params: file_path={file_path}, format={file_format}, options={format_options}")
+        print(f"[SCHEMA DETECTION] Bucket path: {connection.bucket_path}")
+        print(f"[SCHEMA DETECTION] Has credentials: {bool(connection.credentials_secret_name)}")
 
         if not file_path:
             return JsonResponse({
@@ -2628,7 +2642,20 @@ def api_connection_detect_file_schema(request, connection_id):
 
         if connection.source_type == 'gcs':
             # Google Cloud Storage
-            bucket_path = connection.source_host
+            bucket_path = connection.bucket_path
+
+            if not bucket_path:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': 'Bucket path not configured for this connection. Please edit the connection and set the bucket path.',
+                }, status=400)
+
+            if not bucket_path.startswith('gs://'):
+                return JsonResponse({
+                    'status': 'error',
+                    'message': 'Invalid GCS bucket path. Must start with gs://',
+                }, status=400)
+
             bucket_name = bucket_path.replace('gs://', '').split('/')[0]
 
             # Parse service account JSON
@@ -2716,7 +2743,10 @@ def api_connection_detect_file_schema(request, connection_id):
             elif pandas_dtype == 'object':
                 # Try to infer if it's a date
                 try:
-                    pd.to_datetime(col_data.dropna().iloc[:10])
+                    import warnings
+                    with warnings.catch_warnings():
+                        warnings.simplefilter("ignore")
+                        pd.to_datetime(col_data.dropna().iloc[:10])
                     bq_type = 'TIMESTAMP'
                 except:
                     bq_type = 'STRING'
@@ -2736,7 +2766,7 @@ def api_connection_detect_file_schema(request, connection_id):
                 'bigquery_type': bq_type,
                 'bigquery_mode': bq_mode,
                 'sample_values': sample_values,
-                'nullable': has_nulls
+                'nullable': bool(has_nulls)  # Convert numpy.bool_ to Python bool for JSON serialization
             })
 
         # Generate schema fingerprint (hash of column names + types)
@@ -2752,16 +2782,22 @@ def api_connection_detect_file_schema(request, connection_id):
         })
 
     except pd.errors.ParserError as e:
+        import traceback
+        print(f"[SCHEMA DETECTION] Parser error: {str(e)}")
+        traceback.print_exc()
         return JsonResponse({
             'status': 'error',
             'message': f'Failed to parse file: {str(e)}. Check delimiter and encoding settings.',
         }, status=400)
     except Exception as e:
         import traceback
+        print(f"[SCHEMA DETECTION] Unexpected error: {str(e)}")
+        print(f"[SCHEMA DETECTION] Error type: {type(e).__name__}")
+        print(f"[SCHEMA DETECTION] Connection ID: {connection_id}")
         traceback.print_exc()
         return JsonResponse({
             'status': 'error',
-            'message': str(e),
+            'message': f'{type(e).__name__}: {str(e)}',
         }, status=500)
 
 

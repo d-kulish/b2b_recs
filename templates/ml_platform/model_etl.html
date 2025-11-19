@@ -3543,10 +3543,10 @@ function nextStep() {
                 schema_fingerprint: window.schemaFingerprint
             };
 
-            // Skip Step 3 (Load Strategy) and go directly to Step 4 (BigQuery Table Setup)
-            currentWizardStep = 4;
-            showStep(4);
-            populateBigQuerySchemaFromDetected();
+            // Go to Step 3 to show file schema preview
+            currentWizardStep = 3;
+            showStep(3);
+            populateFilePreviewInStep3();
         } else {
             // Database source validation
             const schemaSelector = document.getElementById('schemaSelector');
@@ -3573,6 +3573,35 @@ function nextStep() {
 
     // STEP 3 -> STEP 4: Validate load configuration and proceed to BigQuery Table Setup
     if (currentWizardStep === 3) {
+        const connection = window.selectedConnection;
+        const isCloudStorage = connection && ['gcs', 's3', 'azure_blob'].includes(connection.source_type);
+
+        if (isCloudStorage) {
+            // File-based source: Get selected columns
+            const selectedColumnCheckboxes = Array.from(document.querySelectorAll('.file-column-checkbox:checked'));
+            const selectedColumnNames = selectedColumnCheckboxes.map(cb => cb.value);
+
+            // Validate at least one column is selected
+            if (selectedColumnNames.length === 0) {
+                alert('Please select at least one column to load');
+                return;
+            }
+
+            // Filter detectedFileSchema to only include selected columns
+            window.detectedFileSchema = window.detectedFileSchema.filter(col =>
+                selectedColumnNames.includes(col.name)
+            );
+
+            console.log(`Proceeding with ${selectedColumnNames.length} selected columns:`, selectedColumnNames);
+
+            // Go to Step 4 with filtered schema
+            currentWizardStep = 4;
+            showStep(4);
+            populateBigQuerySchemaFromDetected();
+            return;
+        }
+
+        // Database source: Validate load configuration
         const loadType = document.querySelector('input[name="loadType"]:checked').value;
 
         // Validate transactional configuration
@@ -3611,6 +3640,9 @@ function nextStep() {
             alert('Table name must start with a letter or underscore, and contain only letters, numbers, and underscores');
             return;
         }
+
+        // Sync schema from UI to window.bqSchemaColumns (in case user modified dropdowns)
+        syncBigQuerySchemaFromUI();
 
         // Validate schema has columns
         if (!window.bqSchemaColumns || window.bqSchemaColumns.length === 0) {
@@ -5025,6 +5057,181 @@ function previewMatchingFiles() {
     });
 }
 
+function populateFilePreviewInStep3() {
+    /**
+     * Populate Step 3 with file schema preview for cloud storage sources
+     * Shows detected schema as a table preview
+     */
+    if (!window.detectedFileSchema || !window.fileConfig) {
+        console.error('No detected schema or file config available');
+        return;
+    }
+
+    const container = document.getElementById('tablePreviewContainer');
+    if (!container) return;
+
+    // Build file info summary
+    const fileInfo = `
+        <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3">
+            <h6 class="text-sm font-semibold text-blue-900 mb-2">
+                <i class="fas fa-file-alt mr-1"></i>File Configuration
+            </h6>
+            <div class="text-xs text-blue-800 space-y-1">
+                <div><strong>Pattern:</strong> ${window.fileConfig.file_pattern}</div>
+                <div><strong>Format:</strong> ${window.fileConfig.file_format.toUpperCase()}</div>
+                <div><strong>Load Strategy:</strong> ${window.fileConfig.load_latest_only ? 'Latest file only' : 'All unprocessed files'}</div>
+                ${window.fileConfig.file_path_prefix ? `<div><strong>Folder:</strong> ${window.fileConfig.file_path_prefix}</div>` : ''}
+            </div>
+        </div>
+    `;
+
+    // Build schema table with column selection
+    const schemaTable = `
+        <div class="mb-3 flex items-center justify-between">
+            <div class="flex gap-2">
+                <button onclick="selectAllFileColumns()" class="px-3 py-1 text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-200 rounded hover:bg-blue-100">
+                    <i class="fas fa-check-square mr-1"></i>Select All
+                </button>
+                <button onclick="deselectAllFileColumns()" class="px-3 py-1 text-xs font-semibold text-gray-700 bg-gray-50 border border-gray-200 rounded hover:bg-gray-100">
+                    <i class="fas fa-square mr-1"></i>Deselect All
+                </button>
+            </div>
+            <div id="fileColumnSelectionCount" class="text-xs font-semibold text-gray-700">
+                <i class="fas fa-list mr-1"></i><span id="selectedFileColumnsCount">${window.detectedFileSchema.length}</span> of ${window.detectedFileSchema.length} selected
+            </div>
+        </div>
+        <div class="bg-white border border-gray-200 rounded-lg overflow-hidden">
+            <table class="w-full text-xs">
+                <thead class="bg-gray-100 border-b border-gray-200">
+                    <tr>
+                        <th class="text-center py-2 px-2 font-semibold" style="width: 40px;">
+                            <input type="checkbox" id="selectAllFileColumnsCheckbox" checked onclick="toggleAllFileColumns(this)" class="cursor-pointer">
+                        </th>
+                        <th class="text-left py-2 px-3 font-semibold">Column Name</th>
+                        <th class="text-left py-2 px-3 font-semibold">Detected Type</th>
+                        <th class="text-left py-2 px-3 font-semibold">BigQuery Type</th>
+                        <th class="text-left py-2 px-3 font-semibold">Sample Values</th>
+                    </tr>
+                </thead>
+                <tbody id="fileColumnsTableBody">
+                    ${window.detectedFileSchema.map(col => `
+                        <tr class="border-t border-gray-200 hover:bg-gray-50">
+                            <td class="text-center py-2 px-2">
+                                <input type="checkbox" class="file-column-checkbox cursor-pointer" value="${col.name}" checked onchange="updateFileColumnCount()">
+                            </td>
+                            <td class="py-2 px-3 font-semibold">${col.name}</td>
+                            <td class="py-2 px-3 text-gray-600">${col.type}</td>
+                            <td class="py-2 px-3">
+                                <span class="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs font-semibold">
+                                    ${col.bigquery_type}
+                                </span>
+                            </td>
+                            <td class="py-2 px-3 text-gray-600">${col.sample_values.slice(0, 3).join(', ')}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </div>
+        <p class="text-xs text-gray-500 mt-2">
+            <i class="fas fa-info-circle mr-1"></i>
+            ${window.detectedFileSchema.length} columns detected from file sample. Deselect columns you don't want to load.
+        </p>
+    `;
+
+    container.innerHTML = fileInfo + schemaTable;
+
+    console.log('Step 3 populated with file preview');
+}
+
+function selectAllFileColumns() {
+    /**
+     * Select all file columns in Step 3
+     */
+    const checkboxes = document.querySelectorAll('.file-column-checkbox');
+    checkboxes.forEach(cb => cb.checked = true);
+
+    const selectAllCheckbox = document.getElementById('selectAllFileColumnsCheckbox');
+    if (selectAllCheckbox) selectAllCheckbox.checked = true;
+
+    updateFileColumnCount();
+}
+
+function deselectAllFileColumns() {
+    /**
+     * Deselect all file columns in Step 3
+     */
+    const checkboxes = document.querySelectorAll('.file-column-checkbox');
+    checkboxes.forEach(cb => cb.checked = false);
+
+    const selectAllCheckbox = document.getElementById('selectAllFileColumnsCheckbox');
+    if (selectAllCheckbox) selectAllCheckbox.checked = false;
+
+    updateFileColumnCount();
+}
+
+function toggleAllFileColumns(masterCheckbox) {
+    /**
+     * Toggle all file columns based on master checkbox
+     */
+    const checkboxes = document.querySelectorAll('.file-column-checkbox');
+    checkboxes.forEach(cb => cb.checked = masterCheckbox.checked);
+    updateFileColumnCount();
+}
+
+function updateFileColumnCount() {
+    /**
+     * Update the count of selected file columns
+     */
+    const checkboxes = document.querySelectorAll('.file-column-checkbox');
+    const selectedCount = Array.from(checkboxes).filter(cb => cb.checked).length;
+    const totalCount = checkboxes.length;
+
+    const countElement = document.getElementById('selectedFileColumnsCount');
+    if (countElement) {
+        countElement.textContent = selectedCount;
+    }
+
+    // Update master checkbox state
+    const selectAllCheckbox = document.getElementById('selectAllFileColumnsCheckbox');
+    if (selectAllCheckbox) {
+        selectAllCheckbox.checked = selectedCount === totalCount;
+        selectAllCheckbox.indeterminate = selectedCount > 0 && selectedCount < totalCount;
+    }
+
+    console.log(`File columns selected: ${selectedCount} of ${totalCount}`);
+}
+
+function syncBigQuerySchemaFromUI() {
+    /**
+     * Sync window.bqSchemaColumns from the UI table in Step 4
+     * Called before validation to capture any user edits to types/modes
+     */
+    const tableBody = document.getElementById('bqSchemaTableBody');
+    if (!tableBody) return;
+
+    const rows = tableBody.querySelectorAll('tr');
+    window.bqSchemaColumns = [];
+
+    rows.forEach(row => {
+        const cells = row.querySelectorAll('td');
+        if (cells.length >= 4) {
+            const columnName = cells[0].textContent.trim();
+            const typeSelect = row.querySelector('select[data-field="bigquery_type"]');
+            const modeSelect = row.querySelector('select[data-field="bigquery_mode"]');
+
+            if (columnName && typeSelect && modeSelect) {
+                window.bqSchemaColumns.push({
+                    name: columnName,
+                    bigquery_type: typeSelect.value,
+                    bigquery_mode: modeSelect.value
+                });
+            }
+        }
+    });
+
+    console.log('Synced schema from UI:', window.bqSchemaColumns);
+}
+
 function populateBigQuerySchemaFromDetected() {
     /**
      * Populate BigQuery schema editor (Step 4) with detected file schema
@@ -5039,6 +5246,13 @@ function populateBigQuerySchemaFromDetected() {
 
     // Clear existing rows
     tableBody.innerHTML = '';
+
+    // Store schema in window.bqSchemaColumns for validation
+    window.bqSchemaColumns = window.detectedFileSchema.map(col => ({
+        name: col.name,
+        bigquery_type: col.bigquery_type,
+        bigquery_mode: col.bigquery_mode
+    }));
 
     // Create rows for each column
     window.detectedFileSchema.forEach((col, index) => {
@@ -5119,7 +5333,22 @@ function detectFileSchema() {
             format_options: formatOptions
         })
     })
-    .then(response => response.json())
+    .then(response => {
+        // Check if response is OK before parsing JSON
+        if (!response.ok) {
+            // Try to parse as JSON first, fallback to text
+            return response.text().then(text => {
+                try {
+                    const errorData = JSON.parse(text);
+                    throw new Error(errorData.message || `Server error: ${response.status}`);
+                } catch (e) {
+                    // Response is HTML or plain text
+                    throw new Error(`Server error (${response.status}). Check browser console for details. Response preview: ${text.substring(0, 200)}`);
+                }
+            });
+        }
+        return response.json();
+    })
     .then(data => {
         detectBtn.disabled = false;
         detectBtn.innerHTML = '<i class="fas fa-magic mr-2"></i>Detect Schema & Continue';
@@ -5171,8 +5400,8 @@ function detectFileSchema() {
     .catch(error => {
         detectBtn.disabled = false;
         detectBtn.innerHTML = '<i class="fas fa-magic mr-2"></i>Detect Schema & Continue';
+        console.error('Schema detection error:', error);
         alert(`Error detecting schema: ${error.message}`);
-        console.error('Error detecting schema:', error);
     });
 }
 
@@ -5437,7 +5666,7 @@ function renderTablePreview(metadata) {
     let rowsHTML = metadata.columns.map(col => {
         return '<tr class="border-b border-gray-100 hover:bg-gray-50">' +
             '<td class="py-1 px-2">' +
-            '<input type="checkbox" class="column-checkbox" value="' + col.name + '" data-column="' + col.name + '">' +
+            '<input type="checkbox" class="column-checkbox cursor-pointer" value="' + col.name + '" data-column="' + col.name + '" onchange="updateColumnCount()">' +
             '</td>' +
             '<td class="py-1 px-2 font-medium">' +
             col.name +
@@ -5452,6 +5681,19 @@ function renderTablePreview(metadata) {
     const html = '<div class="text-xs mb-2 font-semibold text-gray-700">' +
         metadata.columns.length + ' columns · ' + metadata.total_rows.toLocaleString() + ' rows' +
         '</div>' +
+        '<div class="mb-3 flex items-center justify-between">' +
+        '<div class="flex gap-2">' +
+        '<button onclick="selectAllColumns()" class="px-3 py-1 text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-200 rounded hover:bg-blue-100">' +
+        '<i class="fas fa-check-square mr-1"></i>Select All' +
+        '</button>' +
+        '<button onclick="deselectAllColumns()" class="px-3 py-1 text-xs font-semibold text-gray-700 bg-gray-50 border border-gray-200 rounded hover:bg-gray-100">' +
+        '<i class="fas fa-square mr-1"></i>Deselect All' +
+        '</button>' +
+        '</div>' +
+        '<div id="columnSelectionCount" class="text-xs font-semibold text-gray-700">' +
+        '<i class="fas fa-list mr-1"></i><span id="selectedColumnsCount">0</span> of ' + metadata.columns.length + ' selected' +
+        '</div>' +
+        '</div>' +
         '<table class="w-full text-xs">' +
         '<thead>' +
         '<tr class="border-b border-gray-300">' +
@@ -5464,19 +5706,59 @@ function renderTablePreview(metadata) {
         '<tbody>' +
         rowsHTML +
         '</tbody>' +
-        '</table>' +
-        '<div class="mt-2 flex items-center justify-between">' +
-        '<button onclick="toggleAllColumns(true)" class="text-xs text-blue-600 hover:underline">Select All</button>' +
-        '<button onclick="toggleAllColumns(false)" class="text-xs text-blue-600 hover:underline">Deselect All</button>' +
-        '</div>';
+        '</table>';
 
     container.innerHTML = html;
+
+    // Initialize counter after rendering
+    updateColumnCount();
+}
+
+function selectAllColumns() {
+    /**
+     * Select all database columns in Step 3
+     */
+    document.querySelectorAll('.column-checkbox').forEach(cb => {
+        cb.checked = true;
+    });
+    updateColumnCount();
+}
+
+function deselectAllColumns() {
+    /**
+     * Deselect all database columns in Step 3
+     */
+    document.querySelectorAll('.column-checkbox').forEach(cb => {
+        cb.checked = false;
+    });
+    updateColumnCount();
+}
+
+function updateColumnCount() {
+    /**
+     * Update the count of selected database columns
+     */
+    const checkboxes = document.querySelectorAll('.column-checkbox');
+    const selectedCount = Array.from(checkboxes).filter(cb => cb.checked).length;
+    const totalCount = checkboxes.length;
+
+    const countElement = document.getElementById('selectedColumnsCount');
+    if (countElement) {
+        countElement.textContent = selectedCount;
+    }
+
+    console.log(`Database columns selected: ${selectedCount} of ${totalCount}`);
 }
 
 function toggleAllColumns(select) {
+    /**
+     * Legacy function - kept for backward compatibility
+     * Toggles all database columns based on boolean parameter
+     */
     document.querySelectorAll('.column-checkbox').forEach(cb => {
         cb.checked = select;
     });
+    updateColumnCount();
 }
 
 function populateTimestampColumns(columns, recommended) {

@@ -10,7 +10,7 @@
     background-color: #ffffff;
     border: 1px solid #d1d5db;
     border-radius: 8px;
-    padding: 12px;
+    padding: 11px;  /* Reduced from 12px (5% reduction) */
     transition: all 0.2s ease-in-out;
 }
 
@@ -93,10 +93,18 @@
     color: #6b7280;
 }
 
-/* Card Layout: 3-Column Structure (60% + 30% + 10%) */
+/* Card Layout: 3-Column Structure (60% + 30% + 10%) - For Connections */
 .card-container {
     display: grid;
     grid-template-columns: 1fr 0.5fr auto;
+    gap: 12px;
+    align-items: center;
+}
+
+/* Card Layout: 4-Column Structure (icon + content + meta + actions) - For ETL Jobs */
+.card-container-4col {
+    display: grid;
+    grid-template-columns: auto 1fr 0.5fr auto;
     gap: 12px;
     align-items: center;
 }
@@ -124,6 +132,68 @@
     justify-self: end;
 }
 
+/* Horizontal actions layout (for ETL Jobs with Run button) */
+.card-actions.horizontal {
+    flex-direction: row;
+    gap: 6px;
+}
+
+/* Card Icon (for ETL Jobs) */
+.card-icon {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #f3f4f6;
+    border-radius: 6px;
+    flex-shrink: 0;
+    font-size: 14px;
+}
+
+.card-icon i {
+    line-height: 1;
+}
+
+/* Status Badge (for ETL Jobs) */
+.card-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.card-status-badge.enabled {
+    background-color: #d1fae5;
+    color: #065f46;
+}
+
+.card-status-badge.disabled {
+    background-color: #f3f4f6;
+    color: #6b7280;
+}
+
+.card-status-badge i {
+    font-size: 10px;
+}
+
+/* Schedule Info (for ETL Jobs) */
+.card-schedule-info {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    color: #9ca3af;
+}
+
+.card-schedule-info i {
+    font-size: 10px;
+}
+
 /* Card Action Buttons */
 .card-action-btn {
     width: 32px;
@@ -131,11 +201,13 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    gap: 4px;
     border-radius: 6px;
     font-size: 12px;
     cursor: pointer;
     transition: all 0.2s ease-in-out;
     border: 1px solid transparent;
+    white-space: nowrap;
 }
 
 .card-action-btn.edit {
@@ -156,6 +228,23 @@
 .card-action-btn.delete:hover {
     background-color: #fee2e2;
     border-color: #fecaca;
+}
+
+/* Primary Action Button (e.g., Run Now) */
+.card-action-btn.run {
+    width: auto;
+    padding: 6px 12px;
+    background-color: #10b981;
+    color: #ffffff;
+    font-weight: 600;
+}
+
+.card-action-btn.run:hover {
+    background-color: #059669;
+}
+
+.card-action-btn.run i {
+    font-size: 11px;
 }
 
 /* Empty State */

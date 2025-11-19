@@ -55,87 +55,60 @@
                     {% if data_sources %}
                     <div class="space-y-3">
                         {% for source in data_sources %}
-            <div class="border border-gray-300 rounded-lg p-4 hover:border-blue-400 transition bg-white">
-                <div class="flex items-center justify-between">
-                    <!-- Left: Job Info -->
-                    <div class="flex-1">
-                        <div class="flex items-center gap-3 mb-2">
-                            <!-- Source Type Icon -->
-                            <span class="w-8 h-8 bg-gray-100 rounded flex items-center justify-center">
-                                {% if source.source_type == 'postgresql' %}
-                                <i class="fas fa-database text-blue-600"></i>
-                                {% elif source.source_type == 'mysql' %}
-                                <i class="fas fa-database text-orange-600"></i>
-                                {% elif source.source_type == 'csv' %}
-                                <i class="fas fa-file-csv text-green-600"></i>
-                                {% else %}
-                                <i class="fas fa-database text-gray-600"></i>
-                                {% endif %}
-                            </span>
+                        <div class="card">
+                            <div class="card-container">
+                                <!-- Column 1: Job Info -->
+                                <div class="card-content">
+                                    <!-- Row 1: Status Dot + Job Name -->
+                                    <div class="card-header">
+                                        <span class="status-dot {% if source.is_enabled %}green{% else %}gray{% endif %}"></span>
+                                        <h4 class="card-title">{{ source.name }}</h4>
+                                    </div>
 
-                            <!-- Job Title -->
-                            <div class="flex-1">
-                                <h4 class="text-base font-bold text-gray-900">{{ source.name }}</h4>
-                                <div class="text-sm text-gray-600">
-                                    <span class="font-medium">{{ source.get_source_type_display }}</span>
-                                    {% if source.source_type == 'postgresql' or source.source_type == 'mysql' or source.source_type == 'sqlserver' %}
-                                    <span class="mx-1">•</span>
-                                    <span>{{ source.source_host }}</span>
-                                    {% endif %}
-                                    {% for table in source.tables.all %}
-                                    <span class="mx-1">•</span>
-                                    <span class="font-medium">{{ table.source_table_name }} → {{ table.dest_table_name }}</span>
-                                    {% endfor %}
+                                    <!-- Row 2: Source Type + Host/Tables -->
+                                    <div class="card-body">
+                                        <span class="card-label">{{ source.get_source_type_display }}</span>
+                                        {% if source.source_type == 'postgresql' or source.source_type == 'mysql' or source.source_type == 'sqlserver' %}
+                                        <span class="card-value"> • {{ source.source_host }}</span>
+                                        {% endif %}
+                                        {% for table in source.tables.all %}
+                                        <span class="card-value"> • {{ table.source_table_name }} → {{ table.dest_table_name }}</span>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+
+                                <!-- Column 2: Status Badge + Schedule -->
+                                <div class="card-meta-column">
+                                    <span class="card-status-badge {% if source.is_enabled %}enabled{% else %}disabled{% endif %}">
+                                        <i class="fas {% if source.is_enabled %}fa-check-circle{% else %}fa-pause-circle{% endif %}"></i>
+                                        {% if source.is_enabled %}Enabled{% else %}Disabled{% endif %}
+                                    </span>
+                                    <span class="card-schedule-info">
+                                        <i class="fas fa-clock"></i>
+                                        {% if source.last_test_at %}{{ source.last_test_at|timesince }} ago{% else %}Never run{% endif %}
+                                    </span>
+                                </div>
+
+                                <!-- Column 3: Actions -->
+                                <div class="card-actions horizontal">
+                                    <button onclick="runSourceNow({{ source.id }})" class="card-action-btn run" title="Run ETL job now">
+                                        <i class="fas fa-play"></i>Run Now
+                                    </button>
+                                    <button onclick="editSource({{ source.id }})" class="card-action-btn edit" title="Edit ETL job">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button onclick="deleteSource({{ source.id }})" class="card-action-btn delete" title="Delete ETL job">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
                                 </div>
                             </div>
                         </div>
-                    </div>
-
-                    <!-- Middle: Status & Schedule -->
-                    <div class="flex items-center gap-4 mx-6">
-                        <!-- Status -->
-                        <div class="text-center">
-                            {% if source.is_enabled %}
-                            <span class="px-3 py-1 bg-green-100 text-green-700 rounded text-sm font-semibold">
-                                <i class="fas fa-check-circle mr-1"></i>Enabled
-                            </span>
-                            {% else %}
-                            <span class="px-3 py-1 bg-gray-100 text-gray-600 rounded text-sm font-semibold">
-                                <i class="fas fa-pause-circle mr-1"></i>Disabled
-                            </span>
-                            {% endif %}
-                        </div>
-
-                        <!-- Schedule Info -->
-                        <div class="text-sm text-gray-600">
-                            {% if source.last_test_at %}
-                            <div><i class="fas fa-clock mr-1"></i>Last: {{ source.last_test_at|timesince }} ago</div>
-                            {% else %}
-                            <div class="text-gray-400"><i class="fas fa-clock mr-1"></i>Never run</div>
-                            {% endif %}
-                        </div>
-                    </div>
-
-                    <!-- Right: Actions -->
-                    <div class="flex gap-2">
-                        <button onclick="runSourceNow({{ source.id }})" class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-semibold transition shadow-sm">
-                            <i class="fas fa-play mr-1"></i>Run Now
-                        </button>
-                        <button onclick="editSource({{ source.id }})" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-semibold transition">
-                            <i class="fas fa-edit"></i>
-                        </button>
-                        <button onclick="deleteSource({{ source.id }})" class="px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg text-sm font-semibold transition">
-                            <i class="fas fa-trash"></i>
-                        </button>
-                    </div>
-                </div>
-            </div>
                         {% endfor %}
                     </div>
                     {% else %}
-                    <div class="text-center py-12 px-4">
-                        <p class="text-base font-medium text-gray-700 mb-1">No ETL jobs configured</p>
-                        <p class="text-sm text-gray-500">Set up your first data pipeline to begin importing data</p>
+                    <div class="card-empty-state">
+                        <p class="card-empty-state-title">No ETL jobs configured</p>
+                        <p class="card-empty-state-text">Set up your first data pipeline to begin importing data</p>
                     </div>
                     {% endif %}
                 </div>

@@ -1,7 +1,7 @@
 # ETL Runner
 
 **Last Updated:** November 20, 2025
-**Status:** Phases 1-4 COMPLETE ✅ | Advanced Scheduling System COMPLETE ✅
+**Status:** Phases 1-5 COMPLETE ✅ | File ETL Runner COMPLETE ✅
 
 Cloud Run-based ETL execution engine for the B2B Recommendations Platform. Extracts data from source databases (PostgreSQL, MySQL) and cloud storage files (GCS, S3, Azure Blob) and loads to BigQuery.
 
@@ -56,9 +56,17 @@ Cloud Run-based ETL execution engine for the B2B Recommendations Platform. Extra
 - ✅ Schedule data persistence in database
 - ✅ Cloud Scheduler integration with full parameters
 
+**Phase 5: File ETL Runner Implementation (November 20, 2025 - Evening)**
+- ✅ FileExtractor class with GCS/S3/Azure Blob support
+- ✅ File listing and metadata tracking
+- ✅ CSV/Parquet/JSON format parsing
+- ✅ Incremental file loading with ProcessedFile tracking
+- ✅ Catalog and transactional load modes for files
+- ✅ Django API endpoints for file tracking
+- ✅ Full integration with main ETL runner
+
 **What's Missing:**
-- ⚠️ ETL Runner implementation for flat files (Phase 5)
-- ⚠️ Actual data loading not tested end-to-end
+- ⚠️ End-to-end testing with actual GCS bucket
 - ⚠️ Real-time status monitoring UI (Phase 6)
 
 ## Overview

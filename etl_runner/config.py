@@ -188,3 +188,87 @@ class Config:
         except requests.exceptions.RequestException as e:
             logger.warning(f"Failed to update ETL run progress: {str(e)}")
             return False
+
+    def get_processed_files(self, data_source_id: int) -> list:
+        """
+        Get list of previously processed files for a data source.
+
+        Args:
+            data_source_id: DataSource ID
+
+        Returns:
+            List of dicts with file metadata:
+                - file_path: Full path to file
+                - file_size_bytes: Size in bytes
+                - file_last_modified: Last modified datetime
+        """
+        url = f"{self.django_api_url}/api/etl/sources/{data_source_id}/processed-files/"
+
+        headers = {}
+        if self.api_token:
+            headers['Authorization'] = f'Bearer {self.api_token}'
+
+        logger.info(f"Fetching processed files for DataSource {data_source_id}")
+
+        try:
+            response = requests.get(url, headers=headers, timeout=30)
+            response.raise_for_status()
+
+            data = response.json()
+            processed_files = data.get('processed_files', [])
+
+            logger.info(f"Found {len(processed_files)} previously processed files")
+            return processed_files
+
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Failed to fetch processed files: {str(e)}")
+            # Return empty list to continue with first-time load
+            return []
+
+    def record_processed_file(
+        self,
+        data_source_id: int,
+        file_path: str,
+        file_size_bytes: int,
+        file_last_modified: str,
+        rows_loaded: int
+    ) -> bool:
+        """
+        Record a file as processed in the ProcessedFile table.
+
+        Args:
+            data_source_id: DataSource ID
+            file_path: Full path to the processed file
+            file_size_bytes: File size in bytes
+            file_last_modified: File last modified datetime (ISO format string)
+            rows_loaded: Number of rows loaded from this file
+
+        Returns:
+            True if recorded successfully, False otherwise
+        """
+        url = f"{self.django_api_url}/api/etl/sources/{data_source_id}/record-processed-file/"
+
+        headers = {'Content-Type': 'application/json'}
+        if self.api_token:
+            headers['Authorization'] = f'Bearer {self.api_token}'
+
+        payload = {
+            'file_path': file_path,
+            'file_size_bytes': file_size_bytes,
+            'file_last_modified': file_last_modified,
+            'rows_loaded': rows_loaded
+        }
+
+        logger.info(f"Recording processed file: {file_path} ({rows_loaded:,} rows)")
+
+        try:
+            response = requests.post(url, json=payload, headers=headers, timeout=30)
+            response.raise_for_status()
+
+            logger.info(f"File recorded successfully in ProcessedFile table")
+            return True
+
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Failed to record processed file: {str(e)}")
+            # Don't fail the entire ETL job if tracking fails
+            return False

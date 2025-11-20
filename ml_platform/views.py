@@ -3143,3 +3143,146 @@ def api_etl_trigger_now(request, data_source_id):
             'status': 'error',
             'message': str(e)
         }, status=500)
+
+
+@require_http_methods(["GET"])
+def api_etl_get_processed_files(request, data_source_id):
+    """
+    Get list of previously processed files for a file-based data source.
+    Used by ETL runner for incremental file loading.
+
+    Returns:
+        JSON with list of processed files including metadata
+    """
+    try:
+        data_source = get_object_or_404(DataSource, id=data_source_id)
+
+        # Get all tables for this data source
+        tables = data_source.tables.filter(is_file_based=True)
+
+        if not tables.exists():
+            return JsonResponse({
+                'status': 'success',
+                'processed_files': []
+            })
+
+        # Get processed files from the first (and typically only) table
+        # Note: File-based sources have one DataSourceTable per DataSource
+        table = tables.first()
+
+        processed_files = ProcessedFile.objects.filter(
+            data_source_table=table
+        ).order_by('-processed_at')
+
+        # Convert to list of dicts
+        files_data = []
+        for pf in processed_files:
+            files_data.append({
+                'file_path': pf.file_path,
+                'file_size_bytes': pf.file_size_bytes,
+                'file_last_modified': pf.file_last_modified.isoformat() if pf.file_last_modified else None,
+                'rows_loaded': pf.rows_loaded,
+                'processed_at': pf.processed_at.isoformat() if pf.processed_at else None
+            })
+
+        return JsonResponse({
+            'status': 'success',
+            'processed_files': files_data,
+            'count': len(files_data)
+        })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_etl_record_processed_file(request, data_source_id):
+    """
+    Record a file as processed in the ProcessedFile table.
+    Called by ETL runner after successfully loading a file to BigQuery.
+
+    Payload:
+        {
+            "file_path": "path/to/file.csv",
+            "file_size_bytes": 12345,
+            "file_last_modified": "2024-11-20T10:30:00",
+            "rows_loaded": 1000
+        }
+    """
+    try:
+        data_source = get_object_or_404(DataSource, id=data_source_id)
+
+        # Parse request body
+        data = json.loads(request.body)
+
+        file_path = data.get('file_path')
+        file_size_bytes = data.get('file_size_bytes')
+        file_last_modified_str = data.get('file_last_modified')
+        rows_loaded = data.get('rows_loaded', 0)
+
+        if not file_path or file_size_bytes is None:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'file_path and file_size_bytes are required'
+            }, status=400)
+
+        # Parse file_last_modified datetime
+        from dateutil import parser as date_parser
+        from django.utils import timezone as django_timezone
+
+        file_last_modified = None
+        if file_last_modified_str:
+            try:
+                # Parse ISO format datetime
+                file_last_modified = date_parser.isoparse(file_last_modified_str)
+                # Make timezone-aware if needed
+                if file_last_modified.tzinfo is None:
+                    file_last_modified = django_timezone.make_aware(file_last_modified)
+            except Exception as e:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': f'Invalid file_last_modified format: {str(e)}'
+                }, status=400)
+
+        # Get the DataSourceTable (should be only one for file-based sources)
+        tables = data_source.tables.filter(is_file_based=True)
+        if not tables.exists():
+            return JsonResponse({
+                'status': 'error',
+                'message': 'No file-based table found for this data source'
+            }, status=404)
+
+        table = tables.first()
+
+        # Create or update ProcessedFile record
+        processed_file, created = ProcessedFile.objects.update_or_create(
+            data_source_table=table,
+            file_path=file_path,
+            defaults={
+                'file_size_bytes': file_size_bytes,
+                'file_last_modified': file_last_modified,
+                'rows_loaded': rows_loaded,
+                'processed_at': django_timezone.now()
+            }
+        )
+
+        return JsonResponse({
+            'status': 'success',
+            'message': 'File recorded successfully',
+            'file_path': file_path,
+            'created': created  # True if new record, False if updated
+        })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e)
+        }, status=500)

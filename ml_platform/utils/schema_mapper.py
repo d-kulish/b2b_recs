@@ -131,6 +131,58 @@ class SchemaMapper:
         'GEOGRAPHY',
     ]
 
+    @staticmethod
+    def sanitize_column_name(column_name: str) -> Dict[str, Any]:
+        """
+        Sanitize column name for BigQuery compatibility.
+
+        BigQuery column name rules:
+        - Must contain only letters (a-z, A-Z), numbers (0-9), or underscores (_)
+        - Must start with a letter or underscore
+        - Maximum 300 characters
+
+        Args:
+            column_name: Original column name
+
+        Returns:
+            {
+                'original_name': str,
+                'sanitized_name': str,
+                'name_changed': bool
+            }
+        """
+        original_name = column_name
+
+        # Replace invalid characters with underscore
+        sanitized = re.sub(r'[^a-zA-Z0-9_]', '_', column_name)
+
+        # Remove consecutive underscores
+        sanitized = re.sub(r'_+', '_', sanitized)
+
+        # Remove leading/trailing underscores
+        sanitized = sanitized.strip('_')
+
+        # If starts with a number, prefix with 'col_'
+        if sanitized and sanitized[0].isdigit():
+            sanitized = f'col_{sanitized}'
+
+        # If empty after sanitization, generate default name
+        if not sanitized:
+            sanitized = 'column'
+
+        # Enforce max length (300 chars)
+        if len(sanitized) > 300:
+            sanitized = sanitized[:300].rstrip('_')
+
+        # Convert to lowercase for consistency
+        sanitized = sanitized.lower()
+
+        return {
+            'original_name': original_name,
+            'sanitized_name': sanitized,
+            'name_changed': original_name != sanitized
+        }
+
     @classmethod
     def map_column(
         cls,
@@ -152,7 +204,9 @@ class SchemaMapper:
 
         Returns:
             {
-                'name': column_name,
+                'name': sanitized column name,
+                'original_name': original column name,
+                'name_changed': whether name was sanitized,
                 'source_type': 'varchar(50)',
                 'bigquery_type': 'STRING',
                 'bigquery_mode': 'NULLABLE',
@@ -161,6 +215,8 @@ class SchemaMapper:
                 'auto_detected': True/False
             }
         """
+        # Sanitize column name for BigQuery
+        name_info = cls.sanitize_column_name(column_name)
         # Normalize column type
         col_type_lower = column_type.lower().strip()
 
@@ -201,7 +257,9 @@ class SchemaMapper:
         bigquery_mode = 'NULLABLE' if nullable else 'REQUIRED'
 
         return {
-            'name': column_name,
+            'name': name_info['sanitized_name'],  # Use sanitized name for BigQuery
+            'original_name': name_info['original_name'],  # Preserve original name
+            'name_changed': name_info['name_changed'],  # Flag if name was changed
             'source_type': column_type,
             'bigquery_type': bigquery_type,
             'bigquery_mode': bigquery_mode,

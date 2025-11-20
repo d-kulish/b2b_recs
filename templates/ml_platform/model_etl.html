@@ -839,39 +839,42 @@
                     <!-- Monthly Schedule Options (show when monthly selected) -->
                     <div id="monthlyOptions" class="hidden">
                         <label class="block text-sm font-semibold text-gray-700 mb-1.5">Day of Month</label>
-                        <select id="scheduleDayOfMonth" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                            <option value="1">1st</option>
-                            <option value="2">2nd</option>
-                            <option value="3">3rd</option>
-                            <option value="4">4th</option>
-                            <option value="5">5th</option>
-                            <option value="6">6th</option>
-                            <option value="7">7th</option>
-                            <option value="8">8th</option>
-                            <option value="9">9th</option>
-                            <option value="10">10th</option>
-                            <option value="11">11th</option>
-                            <option value="12">12th</option>
-                            <option value="13">13th</option>
-                            <option value="14">14th</option>
-                            <option value="15">15th</option>
-                            <option value="16">16th</option>
-                            <option value="17">17th</option>
-                            <option value="18">18th</option>
-                            <option value="19">19th</option>
-                            <option value="20">20th</option>
-                            <option value="21">21st</option>
-                            <option value="22">22nd</option>
-                            <option value="23">23rd</option>
-                            <option value="24">24th</option>
-                            <option value="25">25th</option>
-                            <option value="26">26th</option>
-                            <option value="27">27th</option>
-                            <option value="28">28th</option>
-                            <option value="29">29th</option>
-                            <option value="30">30th</option>
-                            <option value="31">31st</option>
-                        </select>
+                        <input type="hidden" id="scheduleDayOfMonth" value="1">
+                        <!-- Grid of day buttons -->
+                        <div class="grid grid-cols-7 gap-1 mb-2">
+                            <button type="button" class="day-btn px-2 py-1 text-xs border border-gray-300 rounded hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500" data-day="1">1</button>
+                            <button type="button" class="day-btn px-2 py-1 text-xs border border-gray-300 rounded hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500" data-day="2">2</button>
+                            <button type="button" class="day-btn px-2 py-1 text-xs border border-gray-300 rounded hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500" data-day="3">3</button>
+                            <button type="button" class="day-btn px-2 py-1 text-xs border border-gray-300 rounded hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500" data-day="4">4</button>
+                            <button type="button" class="day-btn px-2 py-1 text-xs border border-gray-300 rounded hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500" data-day="5">5</button>
+                            <button type="button" class="day-btn px-2 py-1 text-xs border border-gray-300 rounded hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500" data-day="6">6</button>
+                            <button type="button" class="day-btn px-2 py-1 text-xs border border-gray-300 rounded hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500" data-day="7">7</button>
+                            <button type="button" class="day-btn px-2 py-1 text-xs border border-gray-300 rounded hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500" data-day="8">8</button>
+                            <button type="button" class="day-btn px-2 py-1 text-xs border border-gray-300 rounded hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500" data-day="9">9</button>
+                            <button type="button" class="day-btn px-2 py-1 text-xs border border-gray-300 rounded hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500" data-day="10">10</button>
+                            <button type="button" class="day-btn px-2 py-1 text-xs border border-gray-300 rounded hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500" data-day="11">11</button>
+                            <button type="button" class="day-btn px-2 py-1 text-xs border border-gray-300 rounded hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500" data-day="12">12</button>
+                            <button type="button" class="day-btn px-2 py-1 text-xs border border-gray-300 rounded hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500" data-day="13">13</button>
+                            <button type="button" class="day-btn px-2 py-1 text-xs border border-gray-300 rounded hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500" data-day="14">14</button>
+                            <button type="button" class="day-btn px-2 py-1 text-xs border border-gray-300 rounded hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500" data-day="15">15</button>
+                            <button type="button" class="day-btn px-2 py-1 text-xs border border-gray-300 rounded hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500" data-day="16">16</button>
+                            <button type="button" class="day-btn px-2 py-1 text-xs border border-gray-300 rounded hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500" data-day="17">17</button>
+                            <button type="button" class="day-btn px-2 py-1 text-xs border border-gray-300 rounded hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500" data-day="18">18</button>
+                            <button type="button" class="day-btn px-2 py-1 text-xs border border-gray-300 rounded hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500" data-day="19">19</button>
+                            <button type="button" class="day-btn px-2 py-1 text-xs border border-gray-300 rounded hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500" data-day="20">20</button>
+                            <button type="button" class="day-btn px-2 py-1 text-xs border border-gray-300 rounded hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500" data-day="21">21</button>
+                            <button type="button" class="day-btn px-2 py-1 text-xs border border-gray-300 rounded hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500" data-day="22">22</button>
+                            <button type="button" class="day-btn px-2 py-1 text-xs border border-gray-300 rounded hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500" data-day="23">23</button>
+                            <button type="button" class="day-btn px-2 py-1 text-xs border border-gray-300 rounded hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500" data-day="24">24</button>
+                            <button type="button" class="day-btn px-2 py-1 text-xs border border-gray-300 rounded hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500" data-day="25">25</button>
+                            <button type="button" class="day-btn px-2 py-1 text-xs border border-gray-300 rounded hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500" data-day="26">26</button>
+                            <button type="button" class="day-btn px-2 py-1 text-xs border border-gray-300 rounded hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500" data-day="27">27</button>
+                            <button type="button" class="day-btn px-2 py-1 text-xs border border-gray-300 rounded hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500" data-day="28">28</button>
+                            <button type="button" class="day-btn px-2 py-1 text-xs border border-gray-300 rounded hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500" data-day="29">29</button>
+                            <button type="button" class="day-btn px-2 py-1 text-xs border border-gray-300 rounded hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500" data-day="30">30</button>
+                            <button type="button" class="day-btn px-2 py-1 text-xs border border-gray-300 rounded hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500" data-day="31">31</button>
+                        </div>
+                        <p class="text-xs text-gray-500">Selected: <span id="selectedDay" class="font-semibold">1st</span> of every month</p>
                     </div>
 
                     <div class="bg-gray-50 border border-gray-200 rounded-lg p-3">
@@ -4048,8 +4051,8 @@ function updateSummary() {
             const time = document.getElementById('scheduleTime')?.value || '09:00';
             scheduleDisplay = `Weekly on ${days[dayOfWeek]} at ${time} (${tzAbbr})`;
         } else if (scheduleType === 'monthly') {
-            const dayOfMonth = document.getElementById('scheduleDayOfMonth')?.value || '1';
-            const ordinal = dayOfMonth + (dayOfMonth == 1 ? 'st' : dayOfMonth == 2 ? 'nd' : dayOfMonth == 3 ? 'rd' : dayOfMonth >= 21 && dayOfMonth <= 23 ? (dayOfMonth == 21 ? 'st' : dayOfMonth == 22 ? 'nd' : 'rd') : 'th');
+            const dayOfMonth = parseInt(document.getElementById('scheduleDayOfMonth')?.value || '1');
+            const ordinal = getOrdinal(dayOfMonth);
             const time = document.getElementById('scheduleTime')?.value || '09:00';
             scheduleDisplay = `Monthly on ${ordinal} at ${time} (${tzAbbr})`;
         }
@@ -6259,8 +6262,70 @@ function onScheduleTypeChange() {
         monthlyOptions.classList.remove('hidden');
     }
 
+    // Setup day button click handlers for monthly schedule
+    if (scheduleType === 'monthly') {
+        setupDayButtonHandlers();
+    }
+
     // Update summary whenever schedule changes
     updateSummary();
+}
+
+function setupDayButtonHandlers() {
+    /**
+     * Setup click handlers for day of month buttons.
+     * Highlights selected day and updates hidden input.
+     */
+    const dayButtons = document.querySelectorAll('.day-btn');
+    const hiddenInput = document.getElementById('scheduleDayOfMonth');
+    const selectedDayText = document.getElementById('selectedDay');
+
+    dayButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            const day = parseInt(this.getAttribute('data-day'));
+
+            // Remove active class from all buttons
+            dayButtons.forEach(btn => {
+                btn.classList.remove('bg-blue-500', 'text-white', 'border-blue-500');
+                btn.classList.add('border-gray-300');
+            });
+
+            // Add active class to clicked button
+            this.classList.add('bg-blue-500', 'text-white', 'border-blue-500');
+            this.classList.remove('border-gray-300');
+
+            // Update hidden input
+            hiddenInput.value = day;
+
+            // Update selected day text with ordinal
+            const ordinal = getOrdinal(day);
+            selectedDayText.textContent = ordinal;
+
+            // Update summary
+            updateSummary();
+        });
+    });
+
+    // Set default selected day (1st)
+    if (dayButtons.length > 0) {
+        dayButtons[0].classList.add('bg-blue-500', 'text-white', 'border-blue-500');
+        dayButtons[0].classList.remove('border-gray-300');
+    }
+}
+
+function getOrdinal(day) {
+    /**
+     * Convert day number to ordinal (1st, 2nd, 3rd, etc.)
+     */
+    if (day >= 11 && day <= 13) {
+        return day + 'th';
+    }
+    switch (day % 10) {
+        case 1: return day + 'st';
+        case 2: return day + 'nd';
+        case 3: return day + 'rd';
+        default: return day + 'th';
+    }
 }
 
 // ============================================================================

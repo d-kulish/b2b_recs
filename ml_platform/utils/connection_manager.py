@@ -1509,8 +1509,14 @@ def fetch_table_metadata_postgresql(schema_name, table_name, host, port, databas
             except Exception:
                 sample_values = []
 
+            # Sanitize column name for BigQuery
+            from ..utils.schema_mapper import SchemaMapper
+            name_info = SchemaMapper.sanitize_column_name(column_name)
+
             columns.append({
-                'name': column_name,
+                'name': name_info['sanitized_name'],  # Use sanitized name for BigQuery
+                'original_name': name_info['original_name'],  # Preserve original name
+                'name_changed': name_info['name_changed'],  # Flag if name was changed
                 'type': data_type,
                 'nullable': nullable,
                 'is_primary_key': is_pk,
@@ -1614,8 +1620,14 @@ def fetch_table_metadata_mysql(schema_name, table_name, host, port, database, us
             except Exception:
                 sample_values = []
 
+            # Sanitize column name for BigQuery
+            from ..utils.schema_mapper import SchemaMapper
+            name_info = SchemaMapper.sanitize_column_name(column_name)
+
             columns.append({
-                'name': column_name,
+                'name': name_info['sanitized_name'],  # Use sanitized name for BigQuery
+                'original_name': name_info['original_name'],  # Preserve original name
+                'name_changed': name_info['name_changed'],  # Flag if name was changed
                 'type': data_type,
                 'nullable': nullable,
                 'is_primary_key': is_pk,

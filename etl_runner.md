@@ -357,18 +357,136 @@ Updates ETL run status:
 }
 ```
 
-## Permissions
+## Permissions & IAM Configuration
 
-The Cloud Run service account needs the following permissions:
+### Required Service Accounts
 
-### BigQuery
-- `bigquery.tables.get` - Check if table exists
-- `bigquery.tables.getData` - Read table metadata
-- `bigquery.tables.updateData` - Load data to table
+**1. Django App Service Account:** `django-app@b2b-recs.iam.gserviceaccount.com`
+- Used by Django app running on Cloud Run
+- Creates and manages Cloud Scheduler jobs
+- Triggers ETL runner executions
 
-### Source Databases
-- Network access to source database
-- Valid database credentials (provided via Django API)
+**2. ETL Runner Service Account:** `etl-runner@b2b-recs.iam.gserviceaccount.com`
+- Used by ETL runner Cloud Run Job
+- Accesses source data (databases, cloud storage)
+- Writes to BigQuery
+
+### IAM Roles Granted
+
+#### Django App Service Account Permissions:
+```bash
+# Cloud Scheduler management
+roles/cloudscheduler.admin
+  - cloudscheduler.jobs.create
+  - cloudscheduler.jobs.delete
+  - cloudscheduler.jobs.get
+  - cloudscheduler.jobs.update
+  - cloudscheduler.jobs.run
+  - cloudscheduler.jobs.pause
+  - cloudscheduler.jobs.resume
+
+# Service account impersonation (to act as etl-runner)
+roles/iam.serviceAccountUser on etl-runner@b2b-recs.iam.gserviceaccount.com
+  - iam.serviceAccounts.actAs
+  - iam.serviceAccounts.getAccessToken
+
+# BigQuery (for table creation during wizard)
+roles/bigquery.admin
+  - bigquery.datasets.create
+  - bigquery.tables.create
+  - bigquery.tables.get
+
+# Cloud Run (for triggering etl-runner)
+roles/run.admin
+  - run.jobs.run
+  - run.operations.get
+
+# Secret Manager (for fetching credentials)
+roles/secretmanager.admin
+  - secretmanager.versions.access
+```
+
+#### ETL Runner Service Account Permissions:
+```bash
+# BigQuery data operations
+roles/bigquery.dataEditor
+  - bigquery.tables.get
+  - bigquery.tables.getData
+  - bigquery.tables.updateData
+
+roles/bigquery.user
+  - bigquery.jobs.create
+
+# Cloud Run invocation (so Cloud Scheduler can trigger it)
+roles/run.invoker
+  - run.jobs.run
+
+# Cloud Storage (for file-based sources)
+roles/storage.objectViewer (inherited from project)
+  - storage.buckets.get
+  - storage.objects.get
+  - storage.objects.list
+```
+
+### Setup Commands
+
+**Enable required APIs:**
+```bash
+gcloud services enable cloudscheduler.googleapis.com --project=b2b-recs
+gcloud services enable run.googleapis.com --project=b2b-recs
+gcloud services enable bigquery.googleapis.com --project=b2b-recs
+```
+
+**Grant permissions to Django app:**
+```bash
+# Cloud Scheduler admin
+gcloud projects add-iam-policy-binding b2b-recs \
+    --member="serviceAccount:django-app@b2b-recs.iam.gserviceaccount.com" \
+    --role="roles/cloudscheduler.admin"
+
+# Service account user (to act as etl-runner)
+gcloud iam service-accounts add-iam-policy-binding \
+    etl-runner@b2b-recs.iam.gserviceaccount.com \
+    --member="serviceAccount:django-app@b2b-recs.iam.gserviceaccount.com" \
+    --role="roles/iam.serviceAccountUser"
+```
+
+**Grant permissions to ETL runner:**
+```bash
+# Cloud Run invoker
+gcloud projects add-iam-policy-binding b2b-recs \
+    --member="serviceAccount:etl-runner@b2b-recs.iam.gserviceaccount.com" \
+    --role="roles/run.invoker"
+
+# BigQuery permissions (already configured in project IAM)
+```
+
+### For Local Development:
+
+Grant your user account the same permissions for testing:
+```bash
+# Cloud Scheduler admin
+gcloud projects add-iam-policy-binding b2b-recs \
+    --member="user:kulish.dmytro@gmail.com" \
+    --role="roles/cloudscheduler.admin"
+
+# Service account user
+gcloud iam service-accounts add-iam-policy-binding \
+    etl-runner@b2b-recs.iam.gserviceaccount.com \
+    --member="user:kulish.dmytro@gmail.com" \
+    --role="roles/iam.serviceAccountUser"
+```
+
+### Source Data Access
+
+#### For Database Sources:
+- Network access to source database (IP whitelisting if needed)
+- Valid database credentials stored in Secret Manager
+- Firewall rules allowing outbound connections from Cloud Run
+
+#### For Cloud Storage Sources:
+- Service account JSON credentials stored in Secret Manager
+- Bucket-level IAM permissions (already handled by service account credentials)
 
 ## Error Handling
 

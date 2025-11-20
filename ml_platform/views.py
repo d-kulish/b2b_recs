@@ -2747,10 +2747,14 @@ def api_connection_detect_file_schema(request, connection_id):
             }, status=501)
 
         # Detect schema from pandas DataFrame
+        from .utils.schema_mapper import SchemaMapper
         columns = []
         for col_name in df_sample.columns:
             col_data = df_sample[col_name]
             pandas_dtype = str(col_data.dtype)
+
+            # Sanitize column name for BigQuery
+            name_info = SchemaMapper.sanitize_column_name(str(col_name))
 
             # Map pandas dtype to BigQuery type
             if pandas_dtype.startswith('int'):
@@ -2782,7 +2786,9 @@ def api_connection_detect_file_schema(request, connection_id):
             bq_mode = 'NULLABLE' if has_nulls else 'REQUIRED'
 
             columns.append({
-                'name': col_name,
+                'name': name_info['sanitized_name'],  # Use sanitized name for BigQuery
+                'original_name': name_info['original_name'],  # Preserve original name
+                'name_changed': name_info['name_changed'],  # Flag if name was changed
                 'type': pandas_dtype,
                 'bigquery_type': bq_type,
                 'bigquery_mode': bq_mode,

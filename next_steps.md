@@ -1,10 +1,124 @@
 # Next Steps: ETL & Connection Management System
 
-**Last Updated:** November 20, 2025
+**Last Updated:** November 20, 2025 (Late Night)
 
 ---
 
-## 🎉 Latest Update: File ETL Runner Implementation Complete! (Nov 20, 2025 - Late Evening)
+## 🎉 Latest Update: Production Deployment & Bug Fixes Complete! (Nov 20, 2025 - Late Night)
+
+### **✅ Completed: Phase 5.1 - Production Deployment & Critical Fixes**
+
+#### **1. Column Name Sanitization (BigQuery Compatibility)**
+**Problem Solved:** BigQuery rejected column names with special characters like `DiscountApplied(%)`.
+
+**Implementation:**
+- ✅ Created `sanitize_column_name()` in `ml_platform/utils/schema_mapper.py`
+  - Replaces invalid chars `()%- ` with underscores
+  - Handles leading numbers (prefix with `col_`)
+  - Converts to lowercase
+  - Enforces 300 char limit
+- ✅ Updated file schema detection (`api_connection_detect_file_schema`)
+- ✅ Updated database table preview (`fetch_table_metadata_postgresql/mysql`)
+- ✅ Preserves original names in metadata (`original_name`, `sanitized_name`, `name_changed` fields)
+
+**Example Transformations:**
+- `DiscountApplied(%)` → `discountapplied`
+- `Order Date` → `order_date`
+- `2023_Sales` → `col_2023_sales`
+
+**Files Modified:** 3 files (~150 lines)
+
+#### **2. Cloud Scheduler & IAM Permissions**
+**Problem Solved:** Cloud Scheduler jobs were failing silently due to missing IAM permissions.
+
+**IAM Permissions Granted:**
+- ✅ Enabled Cloud Scheduler API (`cloudscheduler.googleapis.com`)
+- ✅ Granted `roles/cloudscheduler.admin` to:
+  - `kulish.dmytro@gmail.com` (local development)
+  - `django-app@b2b-recs.iam.gserviceaccount.com` (Cloud Run)
+- ✅ Granted `roles/iam.serviceAccountUser` on `etl-runner` service account to:
+  - `kulish.dmytro@gmail.com`
+  - `django-app@b2b-recs.iam.gserviceaccount.com`
+- ✅ Granted `roles/run.invoker` to `etl-runner@b2b-recs.iam.gserviceaccount.com`
+
+**Result:** Django app can now create Cloud Scheduler jobs, which can trigger etl-runner executions.
+
+#### **3. Missing Python Package**
+- ✅ Added `google-cloud-scheduler==2.17.0` to requirements.txt
+- ✅ Installed in virtual environment
+
+#### **4. Production Deployment (Both Services)**
+
+**Django App Deployed to Cloud Run:**
+- ✅ Service: `django-app`
+- ✅ Region: `europe-central2`
+- ✅ Memory: 2GB, CPU: 2
+- ✅ Connected to Cloud SQL PostgreSQL
+- ✅ Public URL: `https://django-app-[hash]-lm.a.run.app`
+
+**ETL Runner Deployed to Cloud Run Job:**
+- ✅ Job: `etl-runner`
+- ✅ Region: `europe-central2`
+- ✅ Memory: 8GB, CPU: 4, Timeout: 1 hour
+- ✅ Service Account: `etl-runner@b2b-recs.iam.gserviceaccount.com`
+- ✅ Environment: `DJANGO_API_URL` set to Django Cloud Run URL
+
+**Architecture Now Complete:**
+```
+Cloud Scheduler (etl-job-5)
+    ↓ (triggers daily at 9 AM Kiev time)
+Cloud Run Job (etl-runner)
+    ↓ (calls Django API for config)
+Django App (django-app on Cloud Run)
+    ↓ (returns job config from PostgreSQL)
+etl-runner executes:
+    ↓ (connects to GCS)
+    ↓ (extracts CSV files)
+    ↓ (loads to BigQuery)
+BigQuery (bq_csv_v2 table)
+```
+
+#### **5. First Production ETL Job Created**
+- ✅ Job: `retail_csv_v2` (DataSource ID: 5)
+- ✅ Source: GCS bucket (`gs://your-bucket/*.csv`)
+- ✅ Destination: BigQuery `b2b-recs.raw_data.bq_csv_v2`
+- ✅ Schedule: Daily at 9:00 AM (Europe/Kiev timezone)
+- ✅ Load Type: Transactional (incremental)
+- ✅ Cloud Scheduler: `etl-job-5` created successfully
+- ✅ Status: Ready for first execution **tomorrow morning (Nov 21, 9 AM)**
+
+#### **What Needs Testing Tomorrow:**
+🔍 **Manual Verification Required (Nov 21, 9:00 AM Kiev time):**
+1. Check Cloud Scheduler triggers successfully
+2. Verify etl-runner execution starts
+3. Confirm GCS connection works
+4. Validate CSV file extraction
+5. Check BigQuery data loads correctly
+6. Review Cloud Run Job logs for any errors
+
+**Monitoring Commands:**
+```bash
+# Check scheduler status
+gcloud scheduler jobs list --location=europe-central2
+
+# Check etl-runner executions
+gcloud run jobs executions list etl-runner --region=europe-central2
+
+# View logs
+gcloud logging tail 'resource.type=cloud_run_job'
+```
+
+#### **Total Work Completed:**
+- **Files Modified:** 5 files
+- **Lines Added/Modified:** ~200 lines
+- **IAM Changes:** 5 permission grants
+- **Deployments:** 2 services deployed
+- **Time Spent:** ~3 hours
+- **Status:** ✅ **DEPLOYED & AWAITING FIRST SCHEDULED RUN**
+
+---
+
+## 🚀 Previous Update: File ETL Runner Implementation Complete! (Nov 20, 2025 - Late Evening)
 
 ### **✅ Completed: Phase 5 - ETL Runner for Flat Files**
 
@@ -1735,6 +1849,62 @@ Extend ETL wizard to support NoSQL databases:
 3. **DynamoDB Extractor** (if needed)
 
 **Outcome:** Complete coverage of all major data sources.
+
+---
+
+## 🔮 Phase 6: Dataflow Integration for Large Datasets (Future Enhancement)
+
+### **Objective:**
+Implement Apache Beam/Dataflow pipeline for databases with > 1 million rows to enable parallel processing and handle multi-million/billion row datasets efficiently.
+
+### **Current Limitation:**
+- All ETL jobs run on single Cloud Run Job (8GB memory, 1-hour timeout)
+- Works well for files and small-medium databases (< 1M rows)
+- May struggle with very large database extractions
+
+### **What Needs to Be Built:**
+
+#### **1. Configuration Layer**
+- Add `execution_mode` field to DataSource model:
+  - Options: `cloud_run` (default), `dataflow`, `auto` (row count-based)
+- Add `row_count_threshold` field (default: 1,000,000)
+- Update ETL wizard to allow users to select execution mode
+
+#### **2. Row Count Detection**
+- Implement pre-extraction row count check:
+  - Use existing `get_row_count()` method in extractors
+  - If `execution_mode == 'auto'` and rows > threshold → use Dataflow
+  - Otherwise → use current Cloud Run Job
+
+#### **3. Dataflow Pipeline**
+- Create Apache Beam pipeline: `etl_runner/pipelines/dataflow_extractor.py`
+- Implement:
+  - Parallel database extraction with configurable number of workers
+  - BigQuery write using Beam I/O connectors
+  - Error handling and retry logic
+  - Progress monitoring
+
+#### **4. Dataflow Runner**
+- Add `run_with_dataflow()` method in `etl_runner/main.py`
+- Launch Dataflow job programmatically
+- Pass job configuration (connection, schema, columns, etc.)
+- Monitor execution and report status back to Django
+
+#### **5. Django Integration**
+- Update `api_etl_create_job()` to handle Dataflow execution mode
+- Add Dataflow job monitoring endpoints
+- Display execution mode in ETL job list
+
+### **Benefits:**
+- ✅ Handle multi-million row datasets efficiently
+- ✅ Parallel processing across multiple workers
+- ✅ Auto-scaling based on data volume
+- ✅ No timeout limitations
+- ✅ Better cost optimization for large datasets
+
+### **Estimated Effort:** 2-3 days of development
+
+### **Priority:** Medium (only needed if hitting performance issues with current single-VM approach)
 
 ---
 

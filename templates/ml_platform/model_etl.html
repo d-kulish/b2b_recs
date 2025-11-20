@@ -214,6 +214,31 @@
     </div>
 </div>
 
+<!-- Modern Notification Modal -->
+<div id="notificationModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-[110] flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-md border border-gray-300">
+        <!-- Header -->
+        <div id="notificationHeader" class="px-5 py-4 border-b border-gray-200">
+            <div class="flex items-center gap-3">
+                <i id="notificationIcon" class="fas fa-info-circle text-blue-600 text-xl"></i>
+                <h3 id="notificationTitle" class="text-base font-bold text-gray-900">Notification</h3>
+            </div>
+        </div>
+
+        <!-- Body -->
+        <div class="px-5 py-4">
+            <p id="notificationMessage" class="text-sm text-gray-700"></p>
+        </div>
+
+        <!-- Footer -->
+        <div class="px-5 py-4 border-t border-gray-200 flex justify-end">
+            <button onclick="closeNotification()" class="btn btn-secondary btn-sm">
+                OK
+            </button>
+        </div>
+    </div>
+</div>
+
 <!-- Add Data Source Wizard Modal -->
 <div id="addSourceModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-[100] flex items-center justify-center p-4 pt-20">
     <div class="bg-white rounded-xl shadow-2xl w-full max-h-[75vh] min-h-[500px] flex flex-col" style="max-width: 634px;">
@@ -407,7 +432,7 @@
                             Matching Files
                             <span id="matchingFilesCount" class="text-gray-500 font-normal"></span>
                         </label>
-                        <div id="matchingFilesList" class="border border-gray-200 rounded-lg p-3 bg-gray-50 max-h-60 overflow-y-auto">
+                        <div id="matchingFilesList" class="border border-gray-200 rounded-lg p-3 bg-white max-h-60 overflow-y-auto">
                             <!-- Will be populated by JavaScript -->
                         </div>
                         <p class="text-xs text-gray-500 mt-2">
@@ -470,7 +495,7 @@
                 <!-- Table/File Preview Section -->
                 <div class="mb-4" id="previewSection">
                     <h5 class="text-sm font-semibold text-gray-700 mb-2" id="previewTitle">Table Preview</h5>
-                    <div id="tablePreviewContainer" class="border border-gray-200 rounded-lg p-2 bg-gray-50" style="max-height: 300px; overflow-y: auto;">
+                    <div id="tablePreviewContainer" class="border border-gray-200 rounded-lg p-2 bg-white" style="max-height: 300px; overflow-y: auto;">
                         <p class="text-xs text-gray-500 text-center py-4">Loading preview...</p>
                     </div>
                     <p class="text-xs text-gray-500 mt-1" id="previewHint">
@@ -746,7 +771,7 @@
                 </div>
 
                 <!-- Summary -->
-                <div class="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                <div class="bg-white border border-gray-200 rounded-lg p-3">
                     <h6 class="font-semibold text-sm text-gray-900 mb-2">Summary</h6>
                     <div class="space-y-1 text-xs">
                         <div class="flex">
@@ -1646,6 +1671,37 @@ function updateStep1NextButton() {
         // Visually disable - add disabled styling
         nextButton.classList.add('opacity-50', 'cursor-not-allowed', 'bg-gray-300');
         nextButton.classList.remove('bg-white', 'hover:bg-gray-50');
+    }
+}
+
+// Update next button state on step 2
+function updateStep2NextButton() {
+    const nextButton = document.getElementById('nextButton');
+    if (!nextButton) return;
+
+    const connection = window.selectedConnection;
+    const isCloudStorage = connection && ['gcs', 's3', 'azure_blob'].includes(connection.source_type);
+
+    // For cloud storage sources, require schema detection before proceeding
+    if (isCloudStorage) {
+        const schemaDetected = window.detectedFileSchema && window.schemaFingerprint;
+
+        if (schemaDetected) {
+            // Enable button
+            nextButton.disabled = false;
+            nextButton.classList.remove('opacity-50', 'cursor-not-allowed', 'bg-gray-300');
+            nextButton.classList.add('bg-white', 'hover:bg-gray-50');
+        } else {
+            // Disable button - user must detect schema first
+            nextButton.disabled = true;
+            nextButton.classList.add('opacity-50', 'cursor-not-allowed', 'bg-gray-300');
+            nextButton.classList.remove('bg-white', 'hover:bg-gray-50');
+        }
+    } else {
+        // For database sources, button is always enabled on step 2
+        nextButton.disabled = false;
+        nextButton.classList.remove('opacity-50', 'cursor-not-allowed', 'bg-gray-300');
+        nextButton.classList.add('bg-white', 'hover:bg-gray-50');
     }
 }
 
@@ -3433,9 +3489,10 @@ function showStep(step) {
         }
         if (nextButton) {
             nextButton.style.display = 'block';
-            nextButton.disabled = false;
             nextButton.classList.remove('hidden');
             nextButton.innerHTML = '<i class="fas fa-chevron-right"></i>';
+            // Update button state based on whether it's a cloud storage source
+            updateStep2NextButton();
         }
         if (createButton) createButton.classList.add('hidden');
     }
@@ -3536,7 +3593,7 @@ function nextStep() {
 
         // Check connection is selected
         if (!window.selectedConnectionId) {
-            alert('Please select a connection');
+            showNotification('Please select a connection from the list to continue.', 'warning', 'Connection Required');
             return;
         }
 
@@ -3583,7 +3640,7 @@ function nextStep() {
         if (isCloudStorage) {
             // File-based source validation
             if (!window.detectedFileSchema || !window.schemaFingerprint) {
-                alert('Please detect schema from files first');
+                // Schema not detected - button should be disabled, but just in case
                 return;
             }
 
@@ -3610,13 +3667,13 @@ function nextStep() {
             // Database source validation
             const schemaSelector = document.getElementById('schemaSelector');
             if (!schemaSelector.value) {
-                alert('Please select a schema');
+                showNotification('Please select a database schema to continue.', 'warning', 'Schema Required');
                 return;
             }
 
             const selectedTable = document.querySelector('input[name="selectedTable"]:checked');
             if (!selectedTable) {
-                alert('Please select a table to extract');
+                showNotification('Please select a table from the list to extract data.', 'warning', 'Table Required');
                 return;
             }
 
@@ -3642,7 +3699,7 @@ function nextStep() {
 
             // Validate at least one column is selected
             if (selectedColumnNames.length === 0) {
-                alert('Please select at least one column to load');
+                showNotification('Please select at least one column to load into BigQuery.', 'warning', 'Column Selection Required');
                 return;
             }
 
@@ -3667,7 +3724,7 @@ function nextStep() {
         if (loadType === 'transactional') {
             const timestampColumn = document.getElementById('timestampColumn').value;
             if (!timestampColumn) {
-                alert('Please select a timestamp column for incremental tracking');
+                showNotification('Please select a timestamp column for incremental tracking. This column is used to identify new records.', 'warning', 'Timestamp Column Required');
                 return;
             }
         }
@@ -3675,7 +3732,7 @@ function nextStep() {
         // Validate at least one column is selected
         const selectedColumns = Array.from(document.querySelectorAll('.column-checkbox:checked')).map(cb => cb.value);
         if (selectedColumns.length === 0) {
-            alert('Please select at least one column to sync');
+            showNotification('Please select at least one column to sync to BigQuery.', 'warning', 'Column Selection Required');
             return;
         }
 
@@ -3689,14 +3746,14 @@ function nextStep() {
         const bqTableName = document.getElementById('bqTableName').value.trim();
 
         if (!bqTableName) {
-            alert('Please provide a BigQuery table name');
+            showNotification('Please provide a BigQuery table name.', 'warning', 'Table Name Required');
             return;
         }
 
         // Validate table name format (alphanumeric + underscores)
         const tableNameRegex = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
         if (!tableNameRegex.test(bqTableName)) {
-            alert('Table name must start with a letter or underscore, and contain only letters, numbers, and underscores');
+            showNotification('Table name must start with a letter or underscore, and contain only letters, numbers, and underscores.', 'error', 'Invalid Table Name');
             return;
         }
 
@@ -5085,11 +5142,11 @@ function previewMatchingFiles() {
                 // Render Select All/Deselect All buttons
                 const selectionButtons = `
                     <div class="flex gap-2 mb-2">
-                        <button onclick="selectAllFiles()" class="px-3 py-1 text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-200 rounded hover:bg-blue-100">
-                            <i class="fas fa-check-square mr-1"></i>Select All
+                        <button onclick="selectAllFiles()" class="btn btn-secondary btn-sm" style="width: 140px;">
+                            <i class="fas fa-check-square"></i>Select All
                         </button>
-                        <button onclick="deselectAllFiles()" class="px-3 py-1 text-xs font-semibold text-gray-700 bg-gray-50 border border-gray-200 rounded hover:bg-gray-100">
-                            <i class="fas fa-square mr-1"></i>Deselect All
+                        <button onclick="deselectAllFiles()" class="btn btn-secondary btn-sm" style="width: 140px;">
+                            <i class="fas fa-square"></i>Deselect All
                         </button>
                     </div>
                 `;
@@ -5175,37 +5232,37 @@ function populateFilePreviewInStep3() {
     // Build selected files list
     const selectedFilesCount = window.fileConfig.selected_files ? window.fileConfig.selected_files.length : 0;
     const selectedFilesDisplay = selectedFilesCount > 0 ? `
-        <div><strong>Selected Files:</strong> ${selectedFilesCount} file${selectedFilesCount > 1 ? 's' : ''}</div>
-        ${selectedFilesCount <= 5 ? `
-            <div class="ml-4 text-xs text-blue-700 space-y-0.5 mt-1">
-                ${window.fileConfig.selected_files.map(f => {
-                    const fileName = f.split('/').pop();
-                    return `<div>✓ ${fileName}</div>`;
-                }).join('')}
-            </div>
-        ` : `
-            <div class="ml-4 text-xs text-blue-700 mt-1">
-                (Showing first 5 of ${selectedFilesCount})
-                ${window.fileConfig.selected_files.slice(0, 5).map(f => {
-                    const fileName = f.split('/').pop();
-                    return `<div>✓ ${fileName}</div>`;
-                }).join('')}
-            </div>
-        `}
+        <div class="text-xs text-gray-700 border-t border-gray-200 pt-2 mt-2">
+            <span class="text-gray-500">Selected Files:</span> <span class="font-medium text-gray-900">${selectedFilesCount} file${selectedFilesCount > 1 ? 's' : ''}</span>
+            ${selectedFilesCount <= 5 ? `
+                <div class="ml-4 text-xs text-gray-600 space-y-0.5 mt-1.5">
+                    ${window.fileConfig.selected_files.map(f => {
+                        const fileName = f.split('/').pop();
+                        return `<div class="flex items-center gap-1.5"><span class="text-green-600">✓</span><span>${fileName}</span></div>`;
+                    }).join('')}
+                </div>
+            ` : `
+                <div class="ml-4 text-xs text-gray-600 mt-1.5">
+                    <div class="text-gray-500 mb-1">(Showing first 5 of ${selectedFilesCount})</div>
+                    ${window.fileConfig.selected_files.slice(0, 5).map(f => {
+                        const fileName = f.split('/').pop();
+                        return `<div class="flex items-center gap-1.5"><span class="text-green-600">✓</span><span>${fileName}</span></div>`;
+                    }).join('')}
+                </div>
+            `}
+        </div>
     ` : '';
 
     // Build file info summary
     const fileInfo = `
-        <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3">
-            <h6 class="text-sm font-semibold text-blue-900 mb-2">
-                <i class="fas fa-file-alt mr-1"></i>File Configuration
-            </h6>
-            <div class="text-xs text-blue-800 space-y-1">
-                <div><strong>Pattern:</strong> ${window.fileConfig.file_pattern}</div>
-                <div><strong>Format:</strong> ${window.fileConfig.file_format.toUpperCase()}</div>
-                ${window.fileConfig.file_path_prefix ? `<div><strong>Folder:</strong> ${window.fileConfig.file_path_prefix}</div>` : ''}
-                ${selectedFilesDisplay}
+        <div class="border border-gray-300 rounded-lg p-3 mb-3">
+            <h6 class="text-sm font-semibold text-gray-900 mb-2.5">File Configuration</h6>
+            <div class="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
+                <div><span class="text-gray-500">Pattern:</span> <span class="font-medium text-gray-900">${window.fileConfig.file_pattern}</span></div>
+                <div><span class="text-gray-500">Format:</span> <span class="font-medium text-gray-900">${window.fileConfig.file_format.toUpperCase()}</span></div>
+                ${window.fileConfig.file_path_prefix ? `<div class="col-span-2"><span class="text-gray-500">Folder:</span> <span class="font-medium text-gray-900">${window.fileConfig.file_path_prefix}</span></div>` : ''}
             </div>
+            ${selectedFilesDisplay}
         </div>
     `;
 
@@ -5213,11 +5270,11 @@ function populateFilePreviewInStep3() {
     const schemaTable = `
         <div class="mb-3 flex items-center justify-between">
             <div class="flex gap-2">
-                <button onclick="selectAllFileColumns()" class="px-3 py-1 text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-200 rounded hover:bg-blue-100">
-                    <i class="fas fa-check-square mr-1"></i>Select All
+                <button onclick="selectAllFileColumns()" class="btn btn-secondary btn-sm" style="width: 140px;">
+                    <i class="fas fa-check-square"></i>Select All
                 </button>
-                <button onclick="deselectAllFileColumns()" class="px-3 py-1 text-xs font-semibold text-gray-700 bg-gray-50 border border-gray-200 rounded hover:bg-gray-100">
-                    <i class="fas fa-square mr-1"></i>Deselect All
+                <button onclick="deselectAllFileColumns()" class="btn btn-secondary btn-sm" style="width: 140px;">
+                    <i class="fas fa-square"></i>Deselect All
                 </button>
             </div>
             <div id="fileColumnSelectionCount" class="text-xs font-semibold text-gray-700">
@@ -5603,13 +5660,8 @@ function detectFileSchema() {
             document.getElementById('schemaPreviewContainer').classList.remove('hidden');
             document.getElementById('detectSchemaContainer').classList.add('hidden');
 
-            // Enable wizard navigation
-            const nextButton = document.getElementById('nextButton');
-            if (nextButton) {
-                nextButton.disabled = false;
-                nextButton.classList.remove('opacity-50', 'cursor-not-allowed', 'bg-gray-300');
-                nextButton.classList.add('bg-white', 'hover:bg-gray-50');
-            }
+            // Enable wizard navigation (Next button)
+            updateStep2NextButton();
 
         } else {
             alert(`Schema detection failed: ${data.message}`);
@@ -5928,11 +5980,11 @@ function renderTablePreview(metadata) {
         '</div>' +
         '<div class="mb-3 flex items-center justify-between">' +
         '<div class="flex gap-2">' +
-        '<button onclick="selectAllColumns()" class="px-3 py-1 text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-200 rounded hover:bg-blue-100">' +
-        '<i class="fas fa-check-square mr-1"></i>Select All' +
+        '<button onclick="selectAllColumns()" class="btn btn-secondary btn-sm" style="width: 140px;">' +
+        '<i class="fas fa-check-square"></i>Select All' +
         '</button>' +
-        '<button onclick="deselectAllColumns()" class="px-3 py-1 text-xs font-semibold text-gray-700 bg-gray-50 border border-gray-200 rounded hover:bg-gray-100">' +
-        '<i class="fas fa-square mr-1"></i>Deselect All' +
+        '<button onclick="deselectAllColumns()" class="btn btn-secondary btn-sm" style="width: 140px;">' +
+        '<i class="fas fa-square"></i>Deselect All' +
         '</button>' +
         '</div>' +
         '<div id="columnSelectionCount" class="text-xs font-semibold text-gray-700">' +
@@ -6274,6 +6326,50 @@ document.addEventListener('DOMContentLoaded', function() {
         bqTableNameInput.addEventListener('input', function() {
             document.getElementById('bqTableNamePreview').textContent = this.value || 'bq_table';
         });
+    }
+});
+
+// Modern Notification Modal Functions
+function showNotification(message, type = 'info', title = null) {
+    const modal = document.getElementById('notificationModal');
+    const icon = document.getElementById('notificationIcon');
+    const titleEl = document.getElementById('notificationTitle');
+    const messageEl = document.getElementById('notificationMessage');
+
+    // Set message
+    messageEl.textContent = message;
+
+    // Set icon and colors based on type
+    if (type === 'error') {
+        icon.className = 'fas fa-exclamation-circle text-red-600 text-xl';
+        titleEl.textContent = title || 'Error';
+    } else if (type === 'warning') {
+        icon.className = 'fas fa-exclamation-triangle text-yellow-600 text-xl';
+        titleEl.textContent = title || 'Warning';
+    } else if (type === 'success') {
+        icon.className = 'fas fa-check-circle text-green-600 text-xl';
+        titleEl.textContent = title || 'Success';
+    } else {
+        icon.className = 'fas fa-info-circle text-blue-600 text-xl';
+        titleEl.textContent = title || 'Information';
+    }
+
+    // Show modal
+    modal.classList.remove('hidden');
+}
+
+function closeNotification() {
+    const modal = document.getElementById('notificationModal');
+    modal.classList.add('hidden');
+}
+
+// Close on ESC key
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        const modal = document.getElementById('notificationModal');
+        if (!modal.classList.contains('hidden')) {
+            closeNotification();
+        }
     }
 });
 

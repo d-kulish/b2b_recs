@@ -38,7 +38,11 @@ class CloudSchedulerManager:
         schedule_type: str,
         cloud_run_job_url: str,
         service_account_email: str,
-        timezone: str = 'UTC'
+        timezone: str = 'UTC',
+        schedule_time: Optional[str] = None,
+        schedule_minute: Optional[int] = None,
+        schedule_day_of_week: Optional[int] = None,
+        schedule_day_of_month: Optional[int] = None
     ) -> Dict[str, Any]:
         """
         Create a Cloud Scheduler job for ETL automation.
@@ -50,6 +54,10 @@ class CloudSchedulerManager:
             cloud_run_job_url: URL to trigger Cloud Run job
             service_account_email: Service account email for authentication
             timezone: Timezone for schedule (default: UTC)
+            schedule_time: Time in HH:MM format for daily/weekly/monthly
+            schedule_minute: Minute (0-59) for hourly schedules
+            schedule_day_of_week: Day of week (0=Monday, 6=Sunday) for weekly
+            schedule_day_of_month: Day of month (1-31) for monthly
 
         Returns:
             Dict with:
@@ -63,8 +71,14 @@ class CloudSchedulerManager:
             scheduler_job_name = f"etl-job-{data_source_id}"
             full_job_name = f"{self.parent}/jobs/{scheduler_job_name}"
 
-            # Get cron expression
-            cron_schedule = self._get_cron_expression(schedule_type)
+            # Get cron expression with all parameters
+            cron_schedule = self._get_cron_expression(
+                schedule_type,
+                schedule_time=schedule_time,
+                schedule_minute=schedule_minute,
+                schedule_day_of_week=schedule_day_of_week,
+                schedule_day_of_month=schedule_day_of_month
+            )
 
             # Build HTTP target for Cloud Run Jobs
             # Cloud Run Jobs use the Jobs API, not direct HTTP
@@ -297,30 +311,76 @@ class CloudSchedulerManager:
                 'message': str(e)
             }
 
-    def _get_cron_expression(self, schedule_type: str) -> str:
+    def _get_cron_expression(
+        self,
+        schedule_type: str,
+        schedule_time: Optional[str] = None,
+        schedule_minute: Optional[int] = None,
+        schedule_day_of_week: Optional[int] = None,
+        schedule_day_of_month: Optional[int] = None
+    ) -> str:
         """
-        Convert schedule type to cron expression.
+        Convert schedule parameters to cron expression.
 
         Args:
-            schedule_type: Schedule type
+            schedule_type: Schedule type ('hourly', 'daily', 'weekly', 'monthly')
+            schedule_time: Time in HH:MM format (for daily/weekly/monthly)
+            schedule_minute: Minute 0-59 (for hourly)
+            schedule_day_of_week: Day of week 0-6 where 0=Monday (for weekly)
+            schedule_day_of_month: Day of month 1-31 (for monthly)
 
         Returns:
-            Cron expression string
+            Cron expression string (format: minute hour day_of_month month day_of_week)
         """
-        cron_map = {
-            'hourly': '0 * * * *',        # Every hour at minute 0
-            'daily': '0 2 * * *',          # Daily at 2:00 AM UTC
-            'weekly': '0 2 * * 0',         # Weekly on Sunday at 2:00 AM
-            'monthly': '0 2 1 * *',        # Monthly on 1st at 2:00 AM
-            'every_15_min': '*/15 * * * *', # Every 15 minutes
-            'every_30_min': '*/30 * * * *', # Every 30 minutes
-        }
+        if schedule_type == 'hourly':
+            minute = schedule_minute if schedule_minute is not None else 0
+            return f'{minute} * * * *'
 
-        if schedule_type not in cron_map:
-            logger.warning(f"Unknown schedule type: {schedule_type}, defaulting to daily")
-            return cron_map['daily']
+        elif schedule_type == 'daily':
+            if schedule_time:
+                hour, minute = self._parse_time(schedule_time)
+                return f'{minute} {hour} * * *'
+            return '0 2 * * *'  # Default fallback
 
-        return cron_map[schedule_type]
+        elif schedule_type == 'weekly':
+            # Convert our 0=Monday format to cron's 0=Sunday format
+            # Our format: 0=Mon, 1=Tue, 2=Wed, 3=Thu, 4=Fri, 5=Sat, 6=Sun
+            # Cron format: 0=Sun, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat
+            cron_day = ((schedule_day_of_week + 1) % 7) if schedule_day_of_week is not None else 0
+
+            if schedule_time:
+                hour, minute = self._parse_time(schedule_time)
+                return f'{minute} {hour} * * {cron_day}'
+            return f'0 2 * * {cron_day}'  # Default fallback
+
+        elif schedule_type == 'monthly':
+            day_of_month = schedule_day_of_month if schedule_day_of_month is not None else 1
+
+            if schedule_time:
+                hour, minute = self._parse_time(schedule_time)
+                return f'{minute} {hour} {day_of_month} * *'
+            return f'0 2 {day_of_month} * *'  # Default fallback
+
+        # Default fallback for unknown types
+        logger.warning(f"Unknown schedule type: {schedule_type}, defaulting to daily at 2 AM")
+        return '0 2 * * *'
+
+    def _parse_time(self, time_str: str) -> tuple:
+        """
+        Parse HH:MM format time string to (hour, minute) tuple.
+
+        Args:
+            time_str: Time in HH:MM format (e.g., "09:30")
+
+        Returns:
+            Tuple of (hour, minute) as integers
+        """
+        try:
+            hour, minute = time_str.split(':')
+            return int(hour), int(minute)
+        except (ValueError, AttributeError) as e:
+            logger.warning(f"Invalid time format: {time_str}, defaulting to 02:00")
+            return 2, 0
 
     def trigger_job_now(
         self,

@@ -798,23 +798,79 @@
 
                 <div class="space-y-3">
                     <div>
-                        <label class="block text-sm font-semibold text-gray-700 mb-1.5">Sync Mode</label>
-                        <select id="syncMode" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                            <option value="replace">Replace All (Full Refresh)</option>
-                            <option value="append">Append New Records</option>
-                            <option value="incremental">Incremental (Date-based)</option>
-                        </select>
-                        <p class="text-xs text-gray-500 mt-1">Choose how data should be synced to BigQuery</p>
-                    </div>
-
-                    <div>
                         <label class="block text-sm font-semibold text-gray-700 mb-1.5">Schedule</label>
-                        <select id="scheduleType" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <select id="scheduleType" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" onchange="onScheduleTypeChange()">
                             <option value="manual">Manual Only - No automatic runs</option>
                             <option value="hourly">Hourly - Every hour</option>
                             <option value="daily">Daily - Once per day</option>
                             <option value="weekly">Weekly - Once per week</option>
                             <option value="monthly">Monthly - Once per month</option>
+                        </select>
+                    </div>
+
+                    <!-- Hourly Schedule Options (show when hourly selected) -->
+                    <div id="hourlyOptions" class="hidden">
+                        <label class="block text-sm font-semibold text-gray-700 mb-1.5">Run at Minute</label>
+                        <input type="number" id="scheduleMinute" min="0" max="59" value="0" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <p class="text-xs text-gray-500 mt-1">0 = on the hour (:00), 15 = quarter past (:15), 30 = half past (:30), 45 = quarter to (:45)</p>
+                    </div>
+
+                    <!-- Daily/Weekly/Monthly Schedule Options (show when selected) -->
+                    <div id="timeOptions" class="hidden">
+                        <label class="block text-sm font-semibold text-gray-700 mb-1.5">Time</label>
+                        <input type="time" id="scheduleTime" value="09:00" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <p class="text-xs text-gray-500 mt-1">Time in your local timezone</p>
+                    </div>
+
+                    <!-- Weekly Schedule Options (show when weekly selected) -->
+                    <div id="weeklyOptions" class="hidden">
+                        <label class="block text-sm font-semibold text-gray-700 mb-1.5">Day of Week</label>
+                        <select id="scheduleDayOfWeek" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <option value="0">Monday</option>
+                            <option value="1">Tuesday</option>
+                            <option value="2">Wednesday</option>
+                            <option value="3">Thursday</option>
+                            <option value="4">Friday</option>
+                            <option value="5">Saturday</option>
+                            <option value="6">Sunday</option>
+                        </select>
+                    </div>
+
+                    <!-- Monthly Schedule Options (show when monthly selected) -->
+                    <div id="monthlyOptions" class="hidden">
+                        <label class="block text-sm font-semibold text-gray-700 mb-1.5">Day of Month</label>
+                        <select id="scheduleDayOfMonth" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <option value="1">1st</option>
+                            <option value="2">2nd</option>
+                            <option value="3">3rd</option>
+                            <option value="4">4th</option>
+                            <option value="5">5th</option>
+                            <option value="6">6th</option>
+                            <option value="7">7th</option>
+                            <option value="8">8th</option>
+                            <option value="9">9th</option>
+                            <option value="10">10th</option>
+                            <option value="11">11th</option>
+                            <option value="12">12th</option>
+                            <option value="13">13th</option>
+                            <option value="14">14th</option>
+                            <option value="15">15th</option>
+                            <option value="16">16th</option>
+                            <option value="17">17th</option>
+                            <option value="18">18th</option>
+                            <option value="19">19th</option>
+                            <option value="20">20th</option>
+                            <option value="21">21st</option>
+                            <option value="22">22nd</option>
+                            <option value="23">23rd</option>
+                            <option value="24">24th</option>
+                            <option value="25">25th</option>
+                            <option value="26">26th</option>
+                            <option value="27">27th</option>
+                            <option value="28">28th</option>
+                            <option value="29">29th</option>
+                            <option value="30">30th</option>
+                            <option value="31">31st</option>
                         </select>
                     </div>
 
@@ -826,16 +882,16 @@
                                 <span class="font-semibold text-gray-900 text-xs" id="summaryConnection"></span>
                             </div>
                             <div class="flex">
-                                <span class="w-28 text-gray-600 text-xs">Source Table:</span>
-                                <span class="font-semibold text-gray-900 text-xs" id="summarySourceTable"></span>
+                                <span class="w-28 text-gray-600 text-xs">Source:</span>
+                                <span class="font-semibold text-gray-900 text-xs" id="summarySource"></span>
                             </div>
                             <div class="flex">
                                 <span class="w-28 text-gray-600 text-xs">Destination:</span>
                                 <span class="font-semibold text-gray-900 text-xs" id="summaryDestination"></span>
                             </div>
                             <div class="flex">
-                                <span class="w-28 text-gray-600 text-xs">Sync Mode:</span>
-                                <span class="font-semibold text-gray-900 text-xs" id="summarySyncMode"></span>
+                                <span class="w-28 text-gray-600 text-xs">Load Strategy:</span>
+                                <span class="font-semibold text-gray-900 text-xs" id="summaryLoadType"></span>
                             </div>
                             <div class="flex">
                                 <span class="w-28 text-gray-600 text-xs">Schedule:</span>
@@ -1939,9 +1995,6 @@ function editSource(sourceId) {
                     wizardEditTableData = table;
 
                     // Store table info for later steps
-                    if (document.getElementById('syncMode')) {
-                        document.getElementById('syncMode').value = table.sync_mode || 'replace';
-                    }
                     if (document.getElementById('incrementalColumn')) {
                         document.getElementById('incrementalColumn').value = table.incremental_column || '';
                     }
@@ -3350,7 +3403,6 @@ function resetWizard() {
     setFieldValue('sourceUsername', '');
     setFieldValue('sourcePassword', '');
     setFieldValue('connectionName', '');
-    setFieldValue('syncMode', 'replace');
     setFieldValue('rowLimit', '');
     setFieldChecked('enableImmediately', true);
 
@@ -3923,25 +3975,87 @@ function fetchTablesForSchema(connectionId, schemaName) {
 }
 
 function updateSummary() {
-    // Update summary section in Step 3
+    // Update summary section in Step 5
     const connection = window.selectedConnection;
-    if (connection) {
-        document.getElementById('summaryConnection').textContent = connection.name || 'N/A';
+    const isFileSource = connection && ['gcs', 's3', 'azure_blob'].includes(connection.source_type);
+
+    // 1. Connection
+    document.getElementById('summaryConnection').textContent = connection?.name || 'N/A';
+
+    // 2. Source (different display for DATABASE vs FILE sources)
+    if (isFileSource) {
+        // FILE SOURCE: Show pattern + format + file count
+        const pattern = window.fileConfig?.file_pattern || 'N/A';
+        const format = window.fileConfig?.file_format?.toUpperCase() || '';
+        const selectedCount = window.fileConfig?.selected_files?.length || 0;
+
+        let sourceText = pattern;
+        if (format) {
+            sourceText += ` (${format}`;
+            if (selectedCount > 0) {
+                sourceText += `, ${selectedCount} file${selectedCount > 1 ? 's' : ''} selected`;
+            }
+            sourceText += ')';
+        }
+
+        document.getElementById('summarySource').textContent = sourceText;
+    } else {
+        // DATABASE SOURCE: Show schema.table_name format
+        const fullTableName = window.selectedSchema && window.selectedTableName
+            ? `${window.selectedSchema}.${window.selectedTableName}`
+            : (window.selectedTableName || 'N/A');
+
+        document.getElementById('summarySource').textContent = fullTableName;
     }
 
-    // Show schema.table_name format
-    const fullTableName = window.selectedSchema && window.selectedTableName
-        ? `${window.selectedSchema}.${window.selectedTableName}`
-        : (window.selectedTableName || 'N/A');
+    // 3. Destination (BigQuery full path)
+    const bqTableName = window.bqDestTableName || document.getElementById('bqTableName')?.value || 'N/A';
+    const projectId = 'PROJECT';  // Placeholder - could be retrieved from settings
+    const destinationText = bqTableName !== 'N/A'
+        ? `${projectId}.raw_data.${bqTableName}`
+        : 'N/A';
 
-    document.getElementById('summarySourceTable').textContent = fullTableName;
-    document.getElementById('summaryDestination').textContent = window.selectedTableName || 'N/A';
+    document.getElementById('summaryDestination').textContent = destinationText;
 
-    const syncMode = document.getElementById('syncMode')?.value || 'replace';
-    document.getElementById('summarySyncMode').textContent = syncMode.charAt(0).toUpperCase() + syncMode.slice(1);
+    // 4. Load Strategy (NEW)
+    const loadType = document.querySelector('input[name="loadType"]:checked')?.value || 'transactional';
+    const loadTypeDisplay = loadType === 'transactional'
+        ? 'Transactional (Append-Only)'
+        : 'Catalog (Daily Snapshot)';
 
-    const schedule = document.getElementById('scheduleType')?.value || 'manual';
-    document.getElementById('summarySchedule').textContent = schedule.charAt(0).toUpperCase() + schedule.slice(1);
+    document.getElementById('summaryLoadType').textContent = loadTypeDisplay;
+
+    // 5. Schedule (detailed display)
+    const scheduleType = document.getElementById('scheduleType')?.value || 'manual';
+    let scheduleDisplay = '';
+
+    if (scheduleType === 'manual') {
+        scheduleDisplay = 'Manual Only';
+    } else {
+        // Get user's timezone abbreviation
+        const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        const tzAbbr = new Date().toLocaleTimeString('en-us', {timeZoneName: 'short'}).split(' ')[2];
+
+        if (scheduleType === 'hourly') {
+            const minute = document.getElementById('scheduleMinute')?.value || '0';
+            scheduleDisplay = `Hourly at :${minute.padStart(2, '0')} (${tzAbbr})`;
+        } else if (scheduleType === 'daily') {
+            const time = document.getElementById('scheduleTime')?.value || '09:00';
+            scheduleDisplay = `Daily at ${time} (${tzAbbr})`;
+        } else if (scheduleType === 'weekly') {
+            const dayOfWeek = parseInt(document.getElementById('scheduleDayOfWeek')?.value || 0);
+            const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+            const time = document.getElementById('scheduleTime')?.value || '09:00';
+            scheduleDisplay = `Weekly on ${days[dayOfWeek]} at ${time} (${tzAbbr})`;
+        } else if (scheduleType === 'monthly') {
+            const dayOfMonth = document.getElementById('scheduleDayOfMonth')?.value || '1';
+            const ordinal = dayOfMonth + (dayOfMonth == 1 ? 'st' : dayOfMonth == 2 ? 'nd' : dayOfMonth == 3 ? 'rd' : dayOfMonth >= 21 && dayOfMonth <= 23 ? (dayOfMonth == 21 ? 'st' : dayOfMonth == 22 ? 'nd' : 'rd') : 'th');
+            const time = document.getElementById('scheduleTime')?.value || '09:00';
+            scheduleDisplay = `Monthly on ${ordinal} at ${time} (${tzAbbr})`;
+        }
+    }
+
+    document.getElementById('summarySchedule').textContent = scheduleDisplay;
 }
 
 async function createETLJob() {
@@ -3996,6 +4110,25 @@ async function createETLJob() {
     // Collect Step 5 data: Schedule (RENAMED from Step 4)
     const scheduleType = document.getElementById('scheduleType')?.value || 'manual';
 
+    // Collect schedule configuration based on type
+    const scheduleConfig = {
+        schedule_type: scheduleType,
+        schedule_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone  // Auto-detect user's timezone
+    };
+
+    // Add type-specific schedule details
+    if (scheduleType === 'hourly') {
+        scheduleConfig.schedule_minute = parseInt(document.getElementById('scheduleMinute')?.value || 0);
+    } else if (scheduleType === 'daily') {
+        scheduleConfig.schedule_time = document.getElementById('scheduleTime')?.value || '09:00';
+    } else if (scheduleType === 'weekly') {
+        scheduleConfig.schedule_time = document.getElementById('scheduleTime')?.value || '09:00';
+        scheduleConfig.schedule_day_of_week = parseInt(document.getElementById('scheduleDayOfWeek')?.value || 0);
+    } else if (scheduleType === 'monthly') {
+        scheduleConfig.schedule_time = document.getElementById('scheduleTime')?.value || '09:00';
+        scheduleConfig.schedule_day_of_month = parseInt(document.getElementById('scheduleDayOfMonth')?.value || 1);
+    }
+
     // Disable create button to prevent double-clicks
     const createButton = document.getElementById('createButton');
     if (createButton) {
@@ -4009,7 +4142,7 @@ async function createETLJob() {
         connection_id: window.selectedConnectionId,
         load_type: loadType,
         selected_columns: selectedColumns,
-        schedule_type: scheduleType,
+        schedule_config: scheduleConfig,  // Send full schedule configuration
 
         // BigQuery table configuration
         bigquery_table_name: bqTableName,
@@ -4264,39 +4397,19 @@ function previousStep() {
     showStep(currentWizardStep);
 }
 
-function toggleIncrementalFields() {
-    const syncMode = document.getElementById('syncMode').value;
-    const incrementalFields = document.getElementById('incrementalFields');
-    const syncModeHelp = document.getElementById('syncModeHelp');
-
-    if (syncMode === 'incremental') {
-        incrementalFields.classList.remove('hidden');
-        syncModeHelp.textContent = 'Only syncs rows modified after last run';
-    } else {
-        incrementalFields.classList.add('hidden');
-        if (syncMode === 'replace') {
-            syncModeHelp.textContent = 'Deletes all existing data and reloads from source';
-        } else {
-            syncModeHelp.textContent = 'Adds new rows without deleting existing data';
-        }
-    }
-}
-
 function populateSummary() {
     const sourceType = document.getElementById('sourceType').options[document.getElementById('sourceType').selectedIndex].text;
     const sourceName = document.getElementById('sourceName').value;
     const sourceHost = document.getElementById('sourceHost').value;
     const selectedTable = document.querySelector('input[name="selectedTable"]:checked');
-    const syncMode = document.getElementById('syncMode').options[document.getElementById('syncMode').selectedIndex].text;
     const schedule = document.getElementById('scheduleType').options[document.getElementById('scheduleType').selectedIndex].text;
 
     document.getElementById('summaryConnection').textContent = `${sourceType} - ${sourceName}`;
     if (sourceHost) {
         document.getElementById('summaryConnection').textContent += ` (${sourceHost})`;
     }
-    document.getElementById('summarySourceTable').textContent = selectedTable ? selectedTable.value : '';
+    document.getElementById('summarySource').textContent = selectedTable ? selectedTable.value : '';
     document.getElementById('summaryDestination').textContent = `raw_data.${selectedTable ? selectedTable.value : ''}`;
-    document.getElementById('summarySyncMode').textContent = syncMode;
     document.getElementById('summarySchedule').textContent = schedule;
 }
 
@@ -4899,10 +5012,8 @@ function createDataSource() {
             source_table_name: selectedTable.value,
             dest_table_name: selectedTable.value,
             dest_dataset: 'raw_data',
-            sync_mode: document.getElementById('syncMode').value,
-            incremental_column: document.getElementById('syncMode').value === 'incremental'
-                ? document.getElementById('incrementalColumn').value
-                : '',
+            sync_mode: 'replace',  // Legacy: no longer configurable
+            incremental_column: '',  // Legacy: no longer configurable
             row_limit: document.getElementById('rowLimit').value || null,
             is_enabled: true
         }]
@@ -6112,6 +6223,44 @@ function onLoadTypeChange() {
             catalogConfigFile.classList.add('hidden');
         }
     }
+}
+
+function onScheduleTypeChange() {
+    /**
+     * Show/hide schedule configuration options based on selected schedule type.
+     * Conditional inputs: hourly (minute), daily/weekly/monthly (time), weekly (day of week), monthly (day of month)
+     */
+    const scheduleType = document.getElementById('scheduleType').value;
+
+    // Get all conditional option containers
+    const hourlyOptions = document.getElementById('hourlyOptions');
+    const timeOptions = document.getElementById('timeOptions');
+    const weeklyOptions = document.getElementById('weeklyOptions');
+    const monthlyOptions = document.getElementById('monthlyOptions');
+
+    // Hide all by default
+    hourlyOptions.classList.add('hidden');
+    timeOptions.classList.add('hidden');
+    weeklyOptions.classList.add('hidden');
+    monthlyOptions.classList.add('hidden');
+
+    // Show relevant options based on schedule type
+    if (scheduleType === 'manual') {
+        // No additional options for manual
+    } else if (scheduleType === 'hourly') {
+        hourlyOptions.classList.remove('hidden');
+    } else if (scheduleType === 'daily') {
+        timeOptions.classList.remove('hidden');
+    } else if (scheduleType === 'weekly') {
+        timeOptions.classList.remove('hidden');
+        weeklyOptions.classList.remove('hidden');
+    } else if (scheduleType === 'monthly') {
+        timeOptions.classList.remove('hidden');
+        monthlyOptions.classList.remove('hidden');
+    }
+
+    // Update summary whenever schedule changes
+    updateSummary();
 }
 
 // ============================================================================

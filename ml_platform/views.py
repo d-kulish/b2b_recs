@@ -2043,7 +2043,13 @@ def api_etl_create_job(request, model_id):
         bq_schema_columns = data.get('bigquery_schema', [])
 
         # Extract Step 5 fields (Schedule) - RENAMED from Step 4
-        schedule_type = data.get('schedule_type', 'manual')
+        schedule_config = data.get('schedule_config', {})
+        schedule_type = schedule_config.get('schedule_type', 'manual')
+        schedule_timezone = schedule_config.get('schedule_timezone', 'UTC')
+        schedule_time = schedule_config.get('schedule_time')  # HH:MM format
+        schedule_minute = schedule_config.get('schedule_minute')  # 0-59 for hourly
+        schedule_day_of_week = schedule_config.get('schedule_day_of_week')  # 0-6
+        schedule_day_of_month = schedule_config.get('schedule_day_of_month')  # 1-31
 
         if not job_name:
             return JsonResponse({
@@ -2194,6 +2200,11 @@ def api_etl_create_job(request, model_id):
                 historical_start_date=historical_start_date,
                 selected_columns=selected_columns,
                 schedule_type=schedule_type,
+                schedule_time=schedule_time,
+                schedule_minute=schedule_minute,
+                schedule_day_of_week=schedule_day_of_week,
+                schedule_day_of_month=schedule_day_of_month,
+                schedule_timezone=schedule_timezone,
                 is_enabled=True,
             )
         else:
@@ -2220,6 +2231,11 @@ def api_etl_create_job(request, model_id):
                         historical_start_date=historical_start_date,
                         selected_columns=selected_columns,
                         schedule_type=schedule_type,
+                        schedule_time=schedule_time,
+                        schedule_minute=schedule_minute,
+                        schedule_day_of_week=schedule_day_of_week,
+                        schedule_day_of_month=schedule_day_of_month,
+                        schedule_timezone=schedule_timezone,
                         is_enabled=True,
                     )
 
@@ -2252,7 +2268,12 @@ def api_etl_create_job(request, model_id):
                     job_name=job_name,
                     schedule_type=schedule_type,
                     cloud_run_job_url=cloud_run_job_url,
-                    service_account_email=service_account
+                    service_account_email=service_account,
+                    timezone=schedule_timezone,
+                    schedule_time=schedule_time,
+                    schedule_minute=schedule_minute,
+                    schedule_day_of_week=schedule_day_of_week,
+                    schedule_day_of_month=schedule_day_of_month
                 )
 
                 if scheduler_result['success']:

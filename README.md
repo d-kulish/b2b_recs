@@ -4,20 +4,20 @@ A multi-tenant B2B SaaS platform for building, training, and deploying productio
 
 ## 📊 Project Stats
 
-- **14** Database Models (including ProcessedFile + selected_files field)
-- **45+** Files Created (including schema_mapper.py, bigquery_manager.py)
+- **14** Database Models (including ProcessedFile + selected_files field + schedule fields)
+- **45+** Files Created (including schema_mapper.py, bigquery_manager.py, cloud_scheduler.py)
 - **11** HTML Templates (with responsive UI)
 - **24** View Functions (including flat file APIs)
 - **74** URL Patterns
 - **100%** Authentication Coverage
-- **~3,300** Lines of Code Added (Milestone 14 - Intelligent File Selection Complete)
-- **Status**: Frontend Skeleton + Advanced ETL Wizard + BigQuery Integration + **Intelligent File ETL** ✅
+- **~3,700** Lines of Code Added (Milestone 15 - Professional Scheduling System Complete)
+- **Status**: Frontend Skeleton + Advanced ETL Wizard + BigQuery Integration + **Professional Scheduling** ✅
 
 ## Project Status
 
-**Current Phase**: Flat File ETL - UI/UX Complete ✅ (Nov 19, 2025)
+**Current Phase**: Advanced Scheduling System Complete ✅ (Nov 20, 2025)
 
-**Latest Milestone**: 🎉 **Intelligent File Selection & Load Strategy Redesign** - Conditional Step 3 UI, file selection with checkboxes, metadata-based file tracking (Nov 19, 2025)
+**Latest Milestone**: 🚀 **Professional Scheduling System** - Minute-level precision, automatic timezone detection, dynamic cron generation, full Cloud Scheduler integration (Nov 20, 2025)
 
 ### 🚀 Production Deployment
 
@@ -543,18 +543,37 @@ The ETL page features a 2-column layout:
     - No incremental tracking needed
 - Click "Next"
 
-**ETL Wizard - Step 4: Schedule & Review**
-- Configure schedule: Manual, Hourly, Daily, Weekly, or Monthly
+**ETL Wizard - Step 4: Schedule & Review** ⭐ **UPGRADED (Nov 20, 2025)**
+- **Professional Scheduling System**:
+  - **Manual**: Run on demand only
+  - **Hourly**: Minute-level precision (0-59) - "Run at :00, :15, :30, :45"
+    - Example: "Hourly at :30" runs at 9:30, 10:30, 11:30, etc.
+  - **Daily**: Time picker with 24-hour format
+    - Example: "Daily at 09:30" runs every day at 9:30 AM
+  - **Weekly**: Day-of-week selection + Time picker
+    - Example: "Weekly on Friday at 17:00"
+  - **Monthly**: Day-of-month selection (1st-31st) + Time picker
+    - Example: "Monthly on 15th at 14:00"
+- **Automatic Timezone Detection**: Uses browser's timezone (no manual selection)
+- **Dynamic UI**: Schedule inputs show/hide based on selected type
+- **Detailed Summary Display**: Shows full schedule with timezone
+  - Example: "Hourly at :30 (PST)" or "Weekly on Friday at 17:00 (EST)"
+- **Cloud Scheduler Integration**: Automatically generates and creates cron expressions
+  - Hourly at :30 → `30 * * * *`
+  - Daily at 14:30 → `30 14 * * *`
+  - Weekly (Fri 17:00) → `0 17 * * 5`
+  - Monthly (15th 14:00) → `0 14 15 * *`
 - Review summary:
   - Job name
   - Connection details
   - Schema and table name (schema.table format)
   - Load type and configuration
   - Selected columns
-  - Schedule
+  - **Detailed schedule** with timezone
 - Click "Create ETL Job" to finalize:
   - ETL job created atomically (no drafts)
-  - All configuration stored in database
+  - All schedule configuration saved (timezone, time, day, minute)
+  - Cloud Scheduler job created with correct cron expression
   - Connection.last_used_at updated
   - Job enabled immediately
   - Modal closes, jobs list reloads

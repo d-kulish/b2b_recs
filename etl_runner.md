@@ -1,7 +1,7 @@
 # ETL Runner
 
 **Last Updated:** November 20, 2025
-**Status:** Phase 1 & Phase 2 COMPLETE ✅ | Flat File ETL Wizard UI/UX COMPLETE ✅
+**Status:** Phases 1-4 COMPLETE ✅ | Advanced Scheduling System COMPLETE ✅
 
 Cloud Run-based ETL execution engine for the B2B Recommendations Platform. Extracts data from source databases (PostgreSQL, MySQL) and cloud storage files (GCS, S3, Azure Blob) and loads to BigQuery.
 
@@ -45,11 +45,21 @@ Cloud Run-based ETL execution engine for the B2B Recommendations Platform. Extra
 - ✅ Smart navigation button states (Nov 20)
 - ✅ Standardized button styling across all modals (Nov 20)
 
+**Phase 4: Advanced Scheduling System (November 20, 2025)**
+- ✅ Professional scheduling interface in Step 5
+- ✅ Automatic timezone detection (uses browser timezone)
+- ✅ Minute-level control for hourly schedules (0-59)
+- ✅ Time picker for daily/weekly/monthly schedules
+- ✅ Day-of-week selection for weekly schedules
+- ✅ Day-of-month selection for monthly schedules (1st-31st)
+- ✅ Dynamic cron expression generation
+- ✅ Schedule data persistence in database
+- ✅ Cloud Scheduler integration with full parameters
+
 **What's Missing:**
-- ⚠️ ETL Runner implementation for flat files (Phase 4)
-- ⚠️ Cloud Scheduler not yet creating jobs (need to test)
+- ⚠️ ETL Runner implementation for flat files (Phase 5)
 - ⚠️ Actual data loading not tested end-to-end
-- ⚠️ Real-time status monitoring UI (Phase 5)
+- ⚠️ Real-time status monitoring UI (Phase 6)
 
 ## Overview
 
@@ -98,6 +108,52 @@ Cloud Scheduler → Cloud Run Job → Source Database (PostgreSQL/MySQL)
     - Best for daily snapshots or multi-region merges
 - **Schema Detection**: Automatic schema inference from sample file
 - **ProcessedFile Tracking**: Prevents duplicate loads and detects file changes
+
+### Advanced Scheduling (NEW - Nov 20, 2025)
+
+Professional-grade scheduling system integrated with Google Cloud Scheduler:
+
+**Schedule Types:**
+- **Manual**: No automatic execution (run on demand only)
+- **Hourly**: Every hour at a specified minute (0-59)
+  - Example: `:00`, `:15`, `:30`, `:45`
+  - Use case: Near real-time data sync
+- **Daily**: Once per day at a specific time
+  - Example: `09:00`, `14:30`, `23:00`
+  - Use case: Daily reports, overnight batch processing
+- **Weekly**: Once per week on a specific day and time
+  - Days: Monday through Sunday
+  - Example: "Every Friday at 17:00"
+  - Use case: Weekly aggregations, end-of-week reports
+- **Monthly**: Once per month on a specific day and time
+  - Days: 1st through 31st
+  - Example: "15th of every month at 14:00"
+  - Use case: Monthly reconciliation, billing cycles
+
+**Key Features:**
+- ✅ **Automatic Timezone Detection**: Uses user's browser timezone (no manual selection needed)
+- ✅ **Minute-level Precision**: Hourly jobs can run at any minute (:00, :15, :30, :45, etc.)
+- ✅ **Flexible Time Selection**: 24-hour time picker for daily/weekly/monthly schedules
+- ✅ **Dynamic UI**: Schedule options appear/disappear based on selected type
+- ✅ **Cloud Scheduler Integration**: Automatically creates/updates Cloud Scheduler jobs
+- ✅ **Cron Expression Generation**: Converts user-friendly selections to cron syntax
+
+**Generated Cron Examples:**
+```
+Hourly at :30     → 30 * * * *
+Daily at 09:00    → 0 9 * * *
+Daily at 14:30    → 30 14 * * *
+Weekly (Fri 17:00)→ 0 17 * * 5
+Monthly (15th 14:00)→ 0 14 15 * *
+```
+
+**Database Fields:**
+- `schedule_type`: Schedule frequency (manual/hourly/daily/weekly/monthly)
+- `schedule_timezone`: User's timezone (auto-detected)
+- `schedule_time`: Time in HH:MM format (for daily/weekly/monthly)
+- `schedule_minute`: Minute 0-59 (for hourly)
+- `schedule_day_of_week`: 0=Monday through 6=Sunday
+- `schedule_day_of_month`: 1-31 for monthly schedules
 
 ## Directory Structure
 

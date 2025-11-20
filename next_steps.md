@@ -4,7 +4,77 @@
 
 ---
 
-## 🎉 Latest Update: UI/UX Polish & Navigation Improvements! (Nov 20, 2025)
+## 🚀 Latest Update: Professional Scheduling System! (Nov 20, 2025 - Evening)
+
+### **✅ Completed: Advanced Scheduling Implementation (Phase 4)**
+
+#### **What Was Built:**
+A complete professional-grade scheduling system with minute-level precision, automatic timezone detection, and full Cloud Scheduler integration.
+
+#### **Key Features Implemented:**
+
+**1. Database Layer**
+- ✅ Added `schedule_minute` field (IntegerField) for hourly precision
+- ✅ Added `schedule_timezone` field (CharField) for timezone support
+- ✅ Utilized existing fields: `schedule_time`, `schedule_day_of_week`, `schedule_day_of_month`
+- ✅ Created and applied migration: `0015_datasourcetable_schedule_minute_and_more`
+
+**2. Frontend UI (Step 5: Schedule & Review)**
+- ✅ Conditional input system (shows/hides based on schedule type)
+- ✅ **Hourly**: Minute selector (0-59) - "Run at :00, :15, :30, :45"
+- ✅ **Daily**: Time picker (HH:MM) with 24-hour format
+- ✅ **Weekly**: Day-of-week dropdown (Mon-Sun) + Time picker
+- ✅ **Monthly**: Day-of-month dropdown (1st-31st) + Time picker
+- ✅ **Automatic timezone detection** using browser's `Intl.DateTimeFormat()`
+
+**3. JavaScript Logic**
+- ✅ `onScheduleTypeChange()` - Dynamic UI show/hide
+- ✅ `createETLJob()` - Collects all schedule data including timezone
+- ✅ `updateSummary()` - Displays detailed schedule info:
+  - Example: "Hourly at :30 (PST)"
+  - Example: "Weekly on Friday at 17:00 (EST)"
+  - Example: "Monthly on 15th at 14:00 (PST)"
+
+**4. Backend API**
+- ✅ Updated `api_etl_create_job()` to extract `schedule_config` object
+- ✅ Saves all schedule fields to database (both file-based and database sources)
+- ✅ Passes complete schedule parameters to Cloud Scheduler
+
+**5. Cloud Scheduler Integration**
+- ✅ Updated `CloudSchedulerManager.create_etl_schedule()` signature
+- ✅ Rewrote `_get_cron_expression()` for dynamic cron generation:
+  - Hourly: `{minute} * * * *`
+  - Daily: `{minute} {hour} * * *`
+  - Weekly: `{minute} {hour} * * {day}`
+  - Monthly: `{minute} {hour} {day} * *`
+- ✅ Added `_parse_time()` helper for HH:MM parsing
+- ✅ Handles timezone and day-of-week conversions
+
+#### **Examples of Generated Schedules:**
+
+| User Selection | Cron Expression | Description |
+|----------------|----------------|-------------|
+| Hourly at :30 | `30 * * * *` | Every hour at 30 minutes past |
+| Daily at 14:30 | `30 14 * * *` | Every day at 2:30 PM |
+| Weekly (Fri 17:00) | `0 17 * * 5` | Every Friday at 5:00 PM |
+| Monthly (15th 14:00) | `0 14 15 * *` | 15th of every month at 2:00 PM |
+
+#### **Files Modified:**
+1. `ml_platform/models.py` - Database fields
+2. `ml_platform/migrations/0015_*.py` - Migration (applied ✅)
+3. `templates/ml_platform/model_etl.html` - UI + JavaScript (~150 lines)
+4. `ml_platform/views.py` - Backend API handling
+5. `ml_platform/utils/cloud_scheduler.py` - Cron generation logic
+
+#### **Total Implementation:**
+- **Time Spent:** ~3 hours
+- **Lines Changed:** ~400 lines across 5 files
+- **Database Migration:** Successfully applied
+- **Status:** ✅ **COMPLETE & READY FOR TESTING**
+
+---
+
+## 🎉 Previous Update: UI/UX Polish & Navigation Improvements! (Nov 20, 2025 - Afternoon)
 
 ### **✅ Completed This Session:**
 
@@ -1505,6 +1575,122 @@ All dependencies are in `requirements.txt` and installed.
 ✅ Store in Secret Manager: `model-{id}-source-{id}-credentials`
 ✅ Store secret name in Django: `credentials_secret_name = "model-5-source-12..."`
 ❌ Don't store actual password in Django DB
+
+---
+
+## 🎯 What's Next? (Priority Order)
+
+### **Phase 5: ETL Runner for Flat Files** ⚠️ **HIGH PRIORITY**
+**Estimated Time:** 6-8 hours
+
+Currently, the ETL wizard can configure file-based jobs, but the ETL Runner cannot execute them yet. Need to implement:
+
+1. **File Extractor Module** (`etl_runner/extractors/file_extractor.py`)
+   - GCS file reading (using `google-cloud-storage`)
+   - S3 file reading (using `boto3`)
+   - Azure Blob reading (using `azure-storage-blob`)
+   - Pandas integration for CSV/Parquet/JSON parsing
+
+2. **ProcessedFile Tracking Logic**
+   - Check if file was already processed (by path + size + modified_date)
+   - Load only new or changed files
+   - Update ProcessedFile records after successful load
+
+3. **File Loading Flow**
+   - For **Transactional**: Load only unprocessed/changed files, append to BigQuery
+   - For **Catalog**: Load selected files (latest or all), replace BigQuery table
+
+4. **Testing**
+   - Test with GCS bucket (CSV, Parquet, JSON)
+   - Verify incremental loading (only new files loaded)
+   - Verify catalog mode (full replacement)
+
+**Outcome:** Users can create file-based ETL jobs and run them successfully.
+
+---
+
+### **Phase 6: End-to-End Testing** ⚠️ **CRITICAL**
+**Estimated Time:** 3-4 hours
+
+Full testing of the complete ETL pipeline:
+
+1. **Database ETL Testing**
+   - Create PostgreSQL ETL job (transactional mode)
+   - Run manually → Verify data appears in BigQuery
+   - Create Cloud Scheduler job → Verify it runs automatically
+
+2. **File ETL Testing** (after Phase 5)
+   - Create GCS file ETL job
+   - Run manually → Verify data loaded to BigQuery
+   - Upload new file → Verify incremental load
+
+3. **Schedule Testing**
+   - Create hourly job (e.g., :30 past each hour)
+   - Create daily job (e.g., 9:00 AM)
+   - Verify Cloud Scheduler jobs created with correct cron expressions
+   - Verify jobs run at correct times in user's timezone
+
+**Outcome:** Confidence that the entire system works end-to-end.
+
+---
+
+### **Phase 7: Real-Time Monitoring UI** 📊
+**Estimated Time:** 4-5 hours
+
+Build a dashboard to monitor ETL job execution:
+
+1. **ETL Jobs List Page**
+   - Show all ETL jobs with status badges
+   - Display last run time, next scheduled run
+   - Show success/failure rates
+
+2. **Job Detail Page**
+   - Run history (last 10-20 runs)
+   - Row counts (extracted/loaded)
+   - Duration graphs
+   - Error logs if failed
+
+3. **Live Run Monitoring**
+   - Real-time status updates during execution
+   - Progress bar (rows processed)
+   - Cancel/pause functionality
+
+**Outcome:** Users can monitor their ETL jobs without checking Cloud Run logs.
+
+---
+
+### **Phase 8: Error Handling & Notifications** 🔔
+**Estimated Time:** 3-4 hours
+
+1. **Email Notifications**
+   - Send email on job failure
+   - Weekly summary reports
+
+2. **Slack Integration** (optional)
+   - Post alerts to Slack channel
+
+3. **Retry Logic Enhancement**
+   - Auto-retry on transient failures
+   - Exponential backoff
+
+4. **Error Recovery**
+   - Checkpoint support for large extracts
+   - Resume from last successful batch
+
+**Outcome:** Users get notified of issues proactively.
+
+---
+
+### **Phase 9: NoSQL Support** (Future)
+**Estimated Time:** 8-10 hours
+
+Extend ETL wizard to support NoSQL databases:
+
+1. **MongoDB Extractor**
+2. **Firestore Extractor**
+3. **DynamoDB Extractor** (if needed)
+
+**Outcome:** Complete coverage of all major data sources.
 
 ---
 

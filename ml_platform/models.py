@@ -399,6 +399,16 @@ class DataSourceTable(models.Model):
         blank=True,
         help_text="Custom cron expression"
     )
+    schedule_minute = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="Minute for hourly schedules (0-59)"
+    )
+    schedule_timezone = models.CharField(
+        max_length=50,
+        default='UTC',
+        help_text="Timezone for schedule (auto-detected from user's browser)"
+    )
 
     # Table settings
     is_enabled = models.BooleanField(default=True)

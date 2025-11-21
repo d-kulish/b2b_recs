@@ -151,23 +151,34 @@ def validate_job_config(config: dict) -> None:
             f"Must be 'transactional' or 'catalog'"
         )
 
+    # Validate source type first
+    database_source_types = ['postgresql', 'mysql', 'bigquery']
+    file_source_types = ['gcs', 's3', 'azure_blob']
+    valid_source_types = database_source_types + file_source_types
+
+    source_type = config['source_type']
+    if source_type not in valid_source_types:
+        raise ConfigurationError(
+            f"Invalid source_type: {source_type}. "
+            f"Must be one of: {', '.join(valid_source_types)}"
+        )
+
+    is_file_source = source_type in file_source_types
+
     # Validate transactional load requirements
+    # For database sources: timestamp_column is required
+    # For file sources: files are tracked by metadata, no timestamp_column needed
     if config['load_type'] == 'transactional':
-        if not config.get('timestamp_column'):
+        if not is_file_source and not config.get('timestamp_column'):
             raise ConfigurationError(
-                "timestamp_column is required for transactional loads"
+                "timestamp_column is required for transactional loads from database sources"
             )
 
     # Validate selected columns
-    if not config['selected_columns'] or len(config['selected_columns']) == 0:
-        raise ConfigurationError("selected_columns cannot be empty")
-
-    # Validate source type
-    valid_source_types = ['postgresql', 'mysql', 'bigquery']
-    if config['source_type'] not in valid_source_types:
-        raise ConfigurationError(
-            f"Invalid source_type: {config['source_type']}. "
-            f"Must be one of: {', '.join(valid_source_types)}"
-        )
+    # For database sources: selected_columns is required
+    # For file sources: empty selected_columns means "load all columns"
+    if not is_file_source:
+        if not config['selected_columns'] or len(config['selected_columns']) == 0:
+            raise ConfigurationError("selected_columns cannot be empty for database sources")
 
     logger.info("Job configuration validated successfully")

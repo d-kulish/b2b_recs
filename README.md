@@ -7,17 +7,20 @@ A multi-tenant B2B SaaS platform for building, training, and deploying productio
 - **14** Database Models (including ProcessedFile + selected_files field + schedule fields)
 - **45+** Files Created (including schema_mapper.py, bigquery_manager.py, cloud_scheduler.py)
 - **11** HTML Templates (with responsive UI)
-- **24** View Functions (including flat file APIs)
+- **24** View Functions (including flat file APIs + scheduler webhook)
 - **74** URL Patterns
 - **100%** Authentication Coverage
-- **~3,700** Lines of Code Added (Milestone 15 - Professional Scheduling System Complete)
-- **Status**: Frontend Skeleton + Advanced ETL Wizard + BigQuery Integration + **Professional Scheduling** ✅
+- **~3,850** Lines of Code Added (Phase 6 - Cloud Scheduler Integration Fixed)
+- **Status**: Frontend + ETL + Scheduling + **Cloud Scheduler WORKING** ✅
 
 ## Project Status
 
-**Current Phase**: Advanced Scheduling System Complete ✅ (Nov 20, 2025)
+**Current Phase**: Cloud Scheduler Integration Fixed ✅ (Nov 21, 2025)
 
-**Latest Milestone**: 🚀 **Professional Scheduling System** - Minute-level precision, automatic timezone detection, dynamic cron generation, full Cloud Scheduler integration (Nov 20, 2025)
+**Latest Milestones**:
+- 🎉 **Phase 6A**: Cloud Scheduler authentication fixed - automated ETL scheduling now working! (Nov 21, 2025)
+- 🎉 **Phase 6B**: File-based ETL validation fixed - GCS/S3/Azure sources fully supported (Nov 21, 2025)
+- 🚀 **Phase 5**: Professional Scheduling System - minute-level precision, timezones, Cloud Scheduler integration (Nov 20, 2025)
 
 ### 🚀 Production Deployment
 
@@ -31,7 +34,8 @@ A multi-tenant B2B SaaS platform for building, training, and deploying productio
   - Database: `b2b_recs_dev`
   - User: `django_user`
   - Password: **Secret Manager** (`django-db-password`)
-- **ETL Runner**: Cloud Run Job (connected to Django API)
+- **ETL Runner**: Cloud Run Job (8Gi RAM, 4 CPU, connected to Django API)
+- **Cloud Scheduler**: Automated ETL job triggers via Django webhook
 - **Secrets**: Secret Manager integration
 - **Data Warehouse**: BigQuery (`raw_data` dataset)
 
@@ -41,16 +45,31 @@ A multi-tenant B2B SaaS platform for building, training, and deploying productio
 - ✅ Production middleware (WhiteNoise for static files)
 - ✅ Credentials stored in Secret Manager
 - ✅ Service account IAM configured
+- ✅ OIDC authentication for Cloud Scheduler
 
 **Deployment Features:**
 - ✅ Automated Docker image builds
 - ✅ Database migrations via Cloud Run Jobs
 - ✅ Superuser creation scripts
 - ✅ Health checks and logging
+- ✅ Cloud Scheduler integration with webhook pattern
 
-**Current Status:** ✅ ETL pipeline working end-to-end! Extracted 264 rows from external database to BigQuery
+**Scheduler Architecture:**
+```
+Cloud Scheduler (OIDC)
+    ↓
+Django Webhook (/api/etl/sources/<id>/scheduler-webhook/)
+    ↓
+Cloud Run Job (ETL Runner) execution
+```
 
-**Next Phase**: API authentication fixes → Cloud Scheduler automation → Real-time monitoring (Phase 3) - See `next_steps.md`
+**Current Status:**
+- ✅ ETL pipeline working end-to-end (database & file sources)
+- ✅ Cloud Scheduler automated triggers working
+- ✅ File-based ETL (GCS/S3/Azure) fully supported
+- ⚠️ Bucket configuration needed for GCS data sources
+
+**Next Phase**: Complete GCS bucket setup → Production data testing → Real-time monitoring - See `next_steps.md`
 
 ### ✅ Completed Components
 

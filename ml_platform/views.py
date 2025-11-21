@@ -2958,19 +2958,31 @@ def api_etl_job_config(request, data_source_id):
 
         credentials = get_credentials_from_secret_manager(connection.credentials_secret_name)
 
-        # Build connection parameters
-        connection_params = {
-            'host': connection.source_host,
-            'port': connection.source_port,
-            'database': connection.source_database,
-            'username': credentials.get('username', ''),
-            'password': credentials.get('password', ''),
-        }
+        # Determine if this is a file-based source
+        is_file_source = connection.source_type in ['gcs', 's3', 'azure_blob']
+
+        # Build connection parameters based on source type
+        if is_file_source:
+            # File-based sources (GCS, S3, Azure Blob)
+            connection_params = {
+                'source_type': connection.source_type,
+                'bucket': connection.source_host,  # For file sources, source_host stores bucket/container name
+                'credentials': credentials,  # Cloud storage credentials (service account JSON or access keys)
+            }
+        else:
+            # Database sources (PostgreSQL, MySQL, BigQuery)
+            connection_params = {
+                'host': connection.source_host,
+                'port': connection.source_port,
+                'database': connection.source_database,
+                'username': credentials.get('username', ''),
+                'password': credentials.get('password', ''),
+            }
 
         # Determine load type
         load_type = table.load_type if hasattr(table, 'load_type') else ('transactional' if data_source.use_incremental else 'catalog')
 
-        # Build job configuration
+        # Build base job configuration
         config = {
             'source_type': connection.source_type,
             'connection_params': connection_params,
@@ -2978,11 +2990,22 @@ def api_etl_job_config(request, data_source_id):
             'schema_name': table.schema_name or connection.source_database,
             'dest_table_name': table.dest_table_name,
             'load_type': load_type,
-            'timestamp_column': data_source.incremental_column or table.incremental_column,
+            'timestamp_column': data_source.incremental_column or table.incremental_column or '',
             'selected_columns': table.selected_columns if hasattr(table, 'selected_columns') and table.selected_columns else [],
-            'last_sync_value': data_source.last_sync_value,
+            'last_sync_value': data_source.last_sync_value or '',
             'historical_start_date': data_source.historical_start_date.isoformat() if data_source.historical_start_date else None,
         }
+
+        # Add file-specific configuration if this is a file source
+        if is_file_source:
+            config.update({
+                'file_path_prefix': table.file_path_prefix if hasattr(table, 'file_path_prefix') else '',
+                'file_pattern': table.file_pattern if hasattr(table, 'file_pattern') else '*',
+                'file_format': table.file_format if hasattr(table, 'file_format') else 'csv',
+                'file_format_options': table.file_format_options if hasattr(table, 'file_format_options') else {},
+                'selected_files': table.selected_files if hasattr(table, 'selected_files') else [],
+                'load_latest_only': table.load_latest_only if hasattr(table, 'load_latest_only') else False,
+            })
 
         return JsonResponse(config)
 
@@ -3050,6 +3073,87 @@ def api_etl_run_update(request, run_id):
             'status': 'success',
             'message': 'ETL run updated successfully'
         })
+
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e)
+        }, status=500)
+
+
+@require_http_methods(["POST"])
+@csrf_exempt
+def api_etl_scheduler_webhook(request, data_source_id):
+    """
+    Webhook for Cloud Scheduler to trigger ETL runs.
+    Accepts OIDC authenticated requests from Cloud Scheduler.
+    No login required as this uses OIDC token authentication.
+    """
+    from django.utils import timezone
+    from google.cloud import run_v2
+    from django.conf import settings
+    import os
+
+    try:
+        data_source = get_object_or_404(DataSource, id=data_source_id)
+        model = data_source.etl_config.model_endpoint
+
+        # Get GCP project ID
+        project_id = getattr(settings, 'GCP_PROJECT_ID', os.getenv('GCP_PROJECT_ID'))
+        if not project_id:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'GCP_PROJECT_ID not configured'
+            }, status=500)
+
+        # Create ETL run record (no user for scheduled runs)
+        etl_run = ETLRun.objects.create(
+            etl_config=data_source.etl_config,
+            model_endpoint=model,
+            status='pending',
+            triggered_by=None,  # Scheduled runs have no user
+            started_at=timezone.now(),
+        )
+
+        # Trigger Cloud Run job
+        try:
+            client = run_v2.JobsClient()
+            job_name = f'projects/{project_id}/locations/europe-central2/jobs/etl-runner'
+
+            # Build execution request with arguments
+            exec_request = run_v2.RunJobRequest(
+                name=job_name,
+                overrides=run_v2.RunJobRequest.Overrides(
+                    container_overrides=[
+                        run_v2.RunJobRequest.Overrides.ContainerOverride(
+                            args=[
+                                '--data_source_id', str(data_source_id),
+                                '--etl_run_id', str(etl_run.id)
+                            ]
+                        )
+                    ]
+                )
+            )
+
+            # Execute the job
+            operation = client.run_job(request=exec_request)
+
+            return JsonResponse({
+                'status': 'success',
+                'message': 'ETL job triggered successfully',
+                'etl_run_id': etl_run.id
+            })
+
+        except Exception as e:
+            etl_run.status = 'failed'
+            etl_run.error_message = str(e)
+            etl_run.save()
+
+            return JsonResponse({
+                'status': 'error',
+                'message': f'Failed to trigger Cloud Run job: {str(e)}',
+                'etl_run_id': etl_run.id
+            }, status=500)
 
     except Exception as e:
         return JsonResponse({

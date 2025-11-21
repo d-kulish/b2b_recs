@@ -1,10 +1,69 @@
 # Next Steps: ETL & Connection Management System
 
-**Last Updated:** November 20, 2025 (Late Night)
+**Last Updated:** November 21, 2025
 
 ---
 
-## 🎉 Latest Update: Production Deployment & Bug Fixes Complete! (Nov 20, 2025 - Late Night)
+## 🎉 Latest Update: Cloud Scheduler & File ETL Validation Fixed! (Nov 21, 2025)
+
+### **✅ Completed: Phase 6 - Cloud Scheduler Integration & File ETL Fixes**
+
+#### **Phase 6A: Cloud Scheduler Authentication Fix**
+
+**Problem Solved:** Cloud Scheduler was failing with 401 UNAUTHENTICATED when triggering ETL jobs.
+
+**Root Causes Identified:**
+1. Cloud Scheduler service agent lacked `iam.serviceAccountTokenCreator` permission
+2. Incorrect Cloud Run API v1 endpoint (should use v2)
+3. Direct OIDC invocation of Cloud Run Jobs API was problematic
+
+**Solution Implemented:**
+- ✅ Implemented Django webhook pattern: `Cloud Scheduler → Django → Cloud Run Job`
+- ✅ Added scheduler-specific endpoint: `/api/etl/sources/<id>/scheduler-webhook/`
+- ✅ Configured proper IAM permissions for OIDC authentication
+- ✅ Updated Cloud Scheduler to use correct Cloud Run Admin API v2 endpoint
+
+**Files Modified:**
+- `ml_platform/views.py` - Added webhook endpoint (80 lines)
+- `ml_platform/urls.py` - Added route (1 line)
+
+**Result:** Cloud Scheduler now successfully triggers ETL jobs automatically! ✅
+
+---
+
+#### **Phase 6B: File-Based ETL Validation Fixes**
+
+**Problem Solved:** ETL runner validation logic was database-centric and rejected file sources.
+
+**Issues Fixed:**
+1. ✅ Validation now recognizes file source types (`gcs`, `s3`, `azure_blob`)
+2. ✅ `timestamp_column` no longer required for file transactional loads
+3. ✅ `selected_columns` can be empty for file sources (= load all columns)
+4. ✅ API now builds file-specific configuration (connection_params, file_pattern, file_format, etc.)
+
+**Files Modified:**
+- `etl_runner/utils/error_handling.py` - Updated validation (30 lines)
+- `ml_platform/views.py` - Updated API config builder (60 lines)
+
+**Result:** File-based data sources now pass validation and can be scheduled! ✅
+
+---
+
+#### **Current Status:**
+
+✅ **Working:**
+- Cloud Scheduler triggers ETL jobs via webhook
+- File and database sources pass validation
+- OIDC authentication configured correctly
+- Automated scheduling active
+
+⚠️ **Remaining:**
+- GCS bucket configuration needed in DataSource #5 connection
+- End-to-end file processing test with actual GCS bucket data
+
+---
+
+## 🎉 Previous Update: Production Deployment & Bug Fixes Complete! (Nov 20, 2025 - Late Night)
 
 ### **✅ Completed: Phase 5.1 - Production Deployment & Critical Fixes**
 

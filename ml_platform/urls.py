@@ -42,6 +42,7 @@ urlpatterns = [
     path('api/etl/job-config/<int:data_source_id>/', views.api_etl_job_config, name='api_etl_job_config'),
     path('api/etl/runs/<int:run_id>/update/', views.api_etl_run_update, name='api_etl_run_update'),
     path('api/etl/sources/<int:data_source_id>/trigger/', views.api_etl_trigger_now, name='api_etl_trigger_now'),
+    path('api/etl/sources/<int:data_source_id>/scheduler-webhook/', views.api_etl_scheduler_webhook, name='api_etl_scheduler_webhook'),
     path('api/etl/sources/<int:data_source_id>/processed-files/', views.api_etl_get_processed_files, name='api_etl_get_processed_files'),
     path('api/etl/sources/<int:data_source_id>/record-processed-file/', views.api_etl_record_processed_file, name='api_etl_record_processed_file'),
 

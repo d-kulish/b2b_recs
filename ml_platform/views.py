@@ -2294,6 +2294,14 @@ def api_etl_create_job(request, model_id):
 
         # Create DataSourceTable objects
         if is_file_based:
+            # Build column mapping from BigQuery schema (original_name -> sanitized_name)
+            column_mapping = {}
+            for col in bq_schema_columns:
+                original_name = col.get('original_name')
+                sanitized_name = col.get('name')
+                if original_name and sanitized_name:
+                    column_mapping[original_name] = sanitized_name
+
             # For file-based sources, create a single DataSourceTable with file config
             DataSourceTable.objects.create(
                 data_source=data_source,
@@ -2309,6 +2317,7 @@ def api_etl_create_job(request, model_id):
                 file_format_options=file_format_options,
                 load_latest_only=load_latest_only,
                 schema_fingerprint=schema_fingerprint,
+                column_mapping=column_mapping,  # NEW: Store column name mapping
                 # Common fields from Step 3, 4 & 5
                 load_type=load_type,
                 timestamp_column=timestamp_column if load_type == 'transactional' else '',
@@ -3079,9 +3088,30 @@ def api_etl_job_config(request, data_source_id):
         # Build connection parameters based on source type
         if is_file_source:
             # File-based sources (GCS, S3, Azure Blob)
+            # Extract bucket name with backward compatibility (bucket_path first, fallback to source_host)
+            bucket_name = None
+
+            if connection.source_type == 'gcs':
+                # Try bucket_path first (primary), fallback to source_host (legacy)
+                bucket_path = connection.bucket_path or (f'gs://{connection.source_host}' if connection.source_host else '')
+                if bucket_path and bucket_path.startswith('gs://'):
+                    bucket_name = bucket_path.replace('gs://', '').split('/')[0]
+                elif bucket_path:
+                    bucket_name = bucket_path.split('/')[0]
+
+            elif connection.source_type == 's3':
+                bucket_path = connection.bucket_path or (f's3://{connection.source_host}' if connection.source_host else '')
+                if bucket_path and bucket_path.startswith('s3://'):
+                    bucket_name = bucket_path.replace('s3://', '').split('/')[0]
+                elif bucket_path:
+                    bucket_name = bucket_path.split('/')[0]
+
+            elif connection.source_type == 'azure_blob':
+                bucket_name = connection.bucket_path or connection.source_host
+
             connection_params = {
                 'source_type': connection.source_type,
-                'bucket': connection.source_host,  # For file sources, source_host stores bucket/container name
+                'bucket': bucket_name,
                 'credentials': credentials,  # Cloud storage credentials (service account JSON or access keys)
             }
         else:
@@ -3120,6 +3150,7 @@ def api_etl_job_config(request, data_source_id):
                 'file_format_options': table.file_format_options if hasattr(table, 'file_format_options') else {},
                 'selected_files': table.selected_files if hasattr(table, 'selected_files') else [],
                 'load_latest_only': table.load_latest_only if hasattr(table, 'load_latest_only') else False,
+                'column_mapping': table.column_mapping if hasattr(table, 'column_mapping') else {},  # NEW: Column name mapping
             })
 
         return JsonResponse(config)

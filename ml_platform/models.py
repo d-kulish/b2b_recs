@@ -357,6 +357,11 @@ class DataSourceTable(models.Model):
         blank=True,
         help_text="MD5 hash of column names + types for schema validation"
     )
+    column_mapping = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Mapping of original column names to sanitized BigQuery column names (e.g., {'DiscountApplied(%)': 'discountapplied'})"
+    )
     selected_files = models.JSONField(
         default=list,
         blank=True,

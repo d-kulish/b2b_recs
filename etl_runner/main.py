@@ -134,6 +134,149 @@ class ETLRunner:
                 rows_loaded=self.total_rows_loaded
             )
 
+    def _get_bigquery_table_columns(self) -> list:
+        """
+        Get list of column names from BigQuery table schema.
+
+        Returns:
+            List of column names in the BigQuery table
+        """
+        from google.cloud import bigquery
+
+        try:
+            client = bigquery.Client(project=self.config.gcp_project_id)
+            table_ref = f"{self.config.gcp_project_id}.{self.config.bigquery_dataset}.{self.job_config['dest_table_name']}"
+            table = client.get_table(table_ref)
+            return [field.name for field in table.schema]
+        except Exception as e:
+            logger.warning(f"Could not fetch BigQuery table schema: {e}. Proceeding without column filtering.")
+            return []
+
+    def _get_bigquery_table_schema(self) -> dict:
+        """
+        Get BigQuery table schema with column types.
+
+        Returns:
+            Dict mapping column names to their BigQuery types
+        """
+        from google.cloud import bigquery
+
+        try:
+            client = bigquery.Client(project=self.config.gcp_project_id)
+            table_ref = f"{self.config.gcp_project_id}.{self.config.bigquery_dataset}.{self.job_config['dest_table_name']}"
+            table = client.get_table(table_ref)
+            return {field.name: field.field_type for field in table.schema}
+        except Exception as e:
+            logger.warning(f"Could not fetch BigQuery table schema: {e}. Proceeding without type conversion.")
+            return {}
+
+    def _convert_dataframe_types(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Convert DataFrame column types to match BigQuery table schema.
+
+        Args:
+            df: DataFrame with columns that may have incorrect types
+
+        Returns:
+            DataFrame with converted column types
+        """
+        import numpy as np
+
+        bq_schema = self._get_bigquery_table_schema()
+
+        if not bq_schema:
+            return df
+
+        conversions_made = []
+
+        for column in df.columns:
+            if column not in bq_schema:
+                continue
+
+            bq_type = bq_schema[column]
+
+            try:
+                if bq_type == 'INTEGER':
+                    # Convert to integer, handling NaN and invalid values
+                    df[column] = pd.to_numeric(df[column], errors='coerce')
+                    df[column] = df[column].fillna(0).astype('Int64')  # Use nullable integer type
+                    conversions_made.append(f"{column}→INT")
+
+                elif bq_type == 'FLOAT':
+                    # Convert to float, handling invalid values
+                    df[column] = pd.to_numeric(df[column], errors='coerce')
+                    conversions_made.append(f"{column}→FLOAT")
+
+                elif bq_type == 'STRING':
+                    # Convert to string
+                    df[column] = df[column].astype(str)
+                    conversions_made.append(f"{column}→STR")
+
+                elif bq_type == 'TIMESTAMP':
+                    # Convert to datetime, handling invalid values
+                    df[column] = pd.to_datetime(df[column], errors='coerce')
+                    conversions_made.append(f"{column}→TIMESTAMP")
+
+            except Exception as e:
+                logger.warning(f"Could not convert column '{column}' to {bq_type}: {e}")
+
+        if conversions_made:
+            logger.info(f"Converted {len(conversions_made)} column types: {', '.join(conversions_made)}")
+
+        return df
+
+    def _rename_dataframe_columns(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Rename DataFrame columns from original names to sanitized BigQuery column names,
+        filter to only include columns that exist in the BigQuery table,
+        and convert column types to match BigQuery schema.
+
+        For file sources, columns may have special characters that are invalid in BigQuery.
+        This method:
+        1. Renames columns using the column_mapping stored in the job config
+        2. Filters DataFrame to only include columns that exist in BigQuery table
+        3. Converts DataFrame column types to match BigQuery schema
+
+        Args:
+            df: DataFrame with original column names
+
+        Returns:
+            DataFrame with renamed, filtered, and type-converted columns
+        """
+        column_mapping = self.job_config.get('column_mapping', {})
+
+        if not column_mapping:
+            return df
+
+        # Step 1: Rename columns (original -> sanitized)
+        rename_dict = {}
+        for original_name, sanitized_name in column_mapping.items():
+            if original_name in df.columns:
+                rename_dict[original_name] = sanitized_name
+
+        if rename_dict:
+            df = df.rename(columns=rename_dict)
+            logger.info(f"Renamed {len(rename_dict)} columns to match BigQuery schema")
+
+        # Step 2: Filter to only columns that exist in BigQuery table
+        bq_table_columns = self._get_bigquery_table_columns()
+
+        if bq_table_columns:
+            df_columns = list(df.columns)
+            columns_to_keep = [col for col in df_columns if col in bq_table_columns]
+            columns_to_drop = [col for col in df_columns if col not in bq_table_columns]
+
+            if columns_to_drop:
+                df = df[columns_to_keep]
+                logger.info(f"Filtered DataFrame: kept {len(columns_to_keep)} columns, dropped {len(columns_to_drop)} columns ({', '.join(columns_to_drop)})")
+            else:
+                logger.info(f"All {len(df_columns)} DataFrame columns exist in BigQuery table")
+
+        # Step 3: Convert DataFrame types to match BigQuery schema
+        df = self._convert_dataframe_types(df)
+
+        return df
+
     def run_catalog_load(self):
         """
         Run catalog (full snapshot) load.
@@ -290,6 +433,9 @@ class ETLRunner:
             combined_df = pd.concat(all_dataframes, ignore_index=True)
             logger.info(f"Combined {len(files_processed)} files → {len(combined_df):,} total rows")
 
+            # Rename columns to match BigQuery schema (original -> sanitized names)
+            combined_df = self._rename_dataframe_columns(combined_df)
+
             # Load to BigQuery (full replacement)
             logger.info("Starting data load to BigQuery...")
 
@@ -360,6 +506,9 @@ class ETLRunner:
                 logger.info(
                     f"Extracted {len(df):,} rows from {file_metadata['file_path']}"
                 )
+
+                # Rename columns to match BigQuery schema (original -> sanitized names)
+                df = self._rename_dataframe_columns(df)
 
                 # Load to BigQuery (append)
                 def df_generator():

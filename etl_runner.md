@@ -287,6 +287,47 @@ The `openEditConnectionModal()` JavaScript function only populated database conn
 
 ---
 
+### **Issue 4: File ETL Runtime Bugs (November 21, 2025)**
+
+**Problem:** File-based ETL jobs failed during execution with multiple errors despite passing validation.
+
+#### **Bugs Fixed:**
+
+**A. GCS Credential Initialization**
+- **Issue:** File extractor initialized GCS client without user credentials, falling back to default service account
+- **Fix:** Updated `file_extractor.py` to extract and use service account credentials from `connection_params`
+- **Impact:** ETL runner now authenticates with user-provided service accounts
+
+**B. Column Name Mismatch**
+- **Issue:** DataFrames had original CSV column names (e.g., `"DiscountApplied(%)"`) but BigQuery tables had sanitized names (e.g., `"discountapplied"`)
+- **Root Cause:** ETL wizard sanitized names during table creation but didn't persist the mapping
+- **Fix:**
+  - Added `column_mapping` JSONField to `DataSourceTable` model
+  - ETL wizard now saves mapping: `{"DiscountApplied(%)": "discountapplied"}`
+  - ETL runner renames DataFrame columns using the mapping before loading
+- **Files Changed:** `ml_platform/models.py`, `ml_platform/views.py`, `etl_runner/main.py`
+
+**C. DataFrame Schema Mismatch**
+- **Issue:** DataFrame had 14 columns from CSV, but BigQuery table only had 10 selected columns
+- **Fix:** ETL runner now fetches BigQuery table schema and filters DataFrame to only include columns that exist in the table
+- **Impact:** Handles cases where user selected subset of columns
+
+**D. Data Type Conversion**
+- **Issue:** DataFrame had string types but BigQuery expected INT/FLOAT/TIMESTAMP, causing `"object of type <class 'str'> cannot be converted to int"` error
+- **Fix:** ETL runner now fetches BigQuery schema types and converts DataFrame column types to match (INT64, FLOAT64, STRING, TIMESTAMP)
+- **Files Changed:** `etl_runner/main.py` (added `_convert_dataframe_types` method)
+
+**Files Modified:**
+- `ml_platform/models.py` - Added `column_mapping` field
+- `ml_platform/migrations/0016_add_column_mapping_field.py` - Database migration
+- `ml_platform/views.py` - Save and return column mapping
+- `etl_runner/extractors/file_extractor.py` - Credential handling
+- `etl_runner/main.py` - Column renaming, filtering, type conversion
+
+**Result:** ✅ File ETL now works end-to-end - successfully loads CSV files to BigQuery with proper authentication, column mapping, and type conversion
+
+---
+
 ## Deployment
 
 ### **Infrastructure**

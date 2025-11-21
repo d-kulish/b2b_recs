@@ -17,6 +17,7 @@ from typing import Generator, List, Dict, Any, Optional, Tuple
 from datetime import datetime
 import pandas as pd
 import io
+import json
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -69,13 +70,33 @@ class FileExtractor:
         """Initialize the appropriate cloud storage client."""
         if self.source_type == 'gcs':
             from google.cloud import storage
-            self.storage_client = storage.Client()
-            logger.info("Initialized Google Cloud Storage client")
+            from google.oauth2 import service_account
+
+            # Extract service account credentials from connection params
+            credentials_dict = self.connection_params.get('credentials', {})
+            service_account_json = credentials_dict.get('service_account_json', '')
+
+            if service_account_json:
+                # Parse and use provided service account credentials
+                try:
+                    credentials_info = json.loads(service_account_json)
+                    creds = service_account.Credentials.from_service_account_info(credentials_info)
+                    project_id = credentials_info.get('project_id')
+                    self.storage_client = storage.Client(credentials=creds, project=project_id)
+                    logger.info(f"Initialized Google Cloud Storage client with service account (project: {project_id})")
+                except (json.JSONDecodeError, KeyError) as e:
+                    logger.error(f"Failed to parse service account JSON: {e}")
+                    raise ValueError(f"Invalid service account credentials: {e}")
+            else:
+                # Fallback to default credentials (for backward compatibility)
+                self.storage_client = storage.Client()
+                logger.warning("No service account credentials provided, using default credentials")
 
         elif self.source_type == 's3':
             import boto3
-            aws_access_key = self.connection_params.get('aws_access_key_id')
-            aws_secret_key = self.connection_params.get('aws_secret_access_key')
+            credentials_dict = self.connection_params.get('credentials', {})
+            aws_access_key = credentials_dict.get('aws_access_key_id') or self.connection_params.get('aws_access_key_id')
+            aws_secret_key = credentials_dict.get('aws_secret_access_key') or self.connection_params.get('aws_secret_access_key')
             region = self.connection_params.get('region', 'us-east-1')
 
             self.storage_client = boto3.client(
@@ -88,7 +109,8 @@ class FileExtractor:
 
         elif self.source_type == 'azure_blob':
             from azure.storage.blob import BlobServiceClient
-            connection_string = self.connection_params.get('connection_string')
+            credentials_dict = self.connection_params.get('credentials', {})
+            connection_string = credentials_dict.get('connection_string') or self.connection_params.get('connection_string')
             self.storage_client = BlobServiceClient.from_connection_string(connection_string)
             logger.info("Initialized Azure Blob Storage client")
 

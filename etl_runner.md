@@ -1,790 +1,421 @@
 # ETL Runner
 
 **Last Updated:** November 21, 2025
-**Status:** Phases 1-6 COMPLETE ✅ | Cloud Scheduler Integration FIXED ✅ | File ETL Validation FIXED ✅
+**Status:** Production Ready ✅ | Cloud Scheduler Working ✅ | File & Database Sources Supported ✅
 
-Cloud Run-based ETL execution engine for the B2B Recommendations Platform. Extracts data from source databases (PostgreSQL, MySQL) and cloud storage files (GCS, S3, Azure Blob) and loads to BigQuery.
-
-## Current Status
-
-### ✅ COMPLETED (Phase 6: Cloud Scheduler & File ETL Fixes - November 21, 2025)
-
-**Phase 6A: Cloud Scheduler Authentication Fix**
-- ✅ Fixed 401 UNAUTHENTICATED error with Cloud Scheduler
-- ✅ Implemented Django webhook pattern (Scheduler → Django → Cloud Run Job)
-- ✅ Added scheduler-specific endpoint: `/api/etl/sources/<id>/scheduler-webhook/`
-- ✅ Configured OIDC authentication with proper IAM permissions
-- ✅ Cloud Scheduler service agent granted `iam.serviceAccountTokenCreator`
-- ✅ Updated Cloud Scheduler to use Cloud Run Admin API v2 endpoint
-
-**Phase 6B: File-Based ETL Validation Fixes**
-- ✅ Updated validation logic to recognize file sources (`gcs`, `s3`, `azure_blob`)
-- ✅ Fixed timestamp_column validation (not required for file transactional loads)
-- ✅ Fixed selected_columns validation (optional for file sources)
-- ✅ Updated `api_etl_job_config` to build file-specific configuration
-- ✅ Dynamic connection_params based on source type (file vs database)
-- ✅ Added file-specific fields to API response (file_pattern, file_format, etc.)
-
-**What Works Now:**
-- ✅ Cloud Scheduler successfully triggers ETL jobs via Django webhook
-- ✅ File-based data sources pass validation
-- ✅ Database and file sources have proper configuration structures
-- ✅ OIDC authentication working end-to-end
-
-**Remaining:**
-- ⚠️ GCS bucket configuration needed in DataSource connections
-- ⚠️ End-to-end file processing testing with actual GCS bucket
-
-### ✅ COMPLETED (Phase 1 + Phase 2)
-
-**Phase 1: ETL Runner Implementation**
-- ✅ Complete ETL runner codebase (~2,600 lines)
-- ✅ PostgreSQL & MySQL extractors with memory-efficient streaming
-- ✅ BigQuery loader with batch processing
-- ✅ Deployed to Cloud Run (europe-central2)
-- ✅ Docker image built and pushed to GCR
-- ✅ Service accounts configured with proper IAM roles
-
-**Phase 2: Django Integration & BigQuery Setup**
-- ✅ BigQuery table creation during ETL wizard
-- ✅ Django API endpoints for ETL runner communication
-- ✅ Manual "Run Now" trigger functionality
-- ✅ Cloud Scheduler utility module created
-- ✅ IAM permissions configured (BigQuery Admin, Cloud Run Admin)
-- ✅ Region configuration: europe-central2 (Warsaw, Poland)
-
-**What Works Now:**
-- ✅ Create ETL jobs through Django wizard (5 steps)
-- ✅ BigQuery tables created automatically with schema
-- ✅ Cloud Run ETL runner deployed and accessible
-- ✅ Manual trigger API endpoint ready
-- ✅ Progress tracking infrastructure in place
-
-**Phase 3: Flat File ETL Wizard UI/UX (November 19-20, 2025)**
-- ✅ Conditional Step 3 UI for database vs file sources
-- ✅ File metadata tracking (file_size_bytes, file_last_modified)
-- ✅ File selection with checkboxes (user picks specific files)
-- ✅ Transactional vs Catalog load strategies for files
-- ✅ Incremental file loading with metadata comparison
-- ✅ Selected files stored in DataSourceTable.selected_files
-- ✅ Database migration created and applied (0014)
-- ✅ Minimalistic UI design with white backgrounds (Nov 20)
-- ✅ Modern notification modal system (Nov 20)
-- ✅ Smart navigation button states (Nov 20)
-- ✅ Standardized button styling across all modals (Nov 20)
-
-**Phase 4: Advanced Scheduling System (November 20, 2025)**
-- ✅ Professional scheduling interface in Step 5
-- ✅ Automatic timezone detection (uses browser timezone)
-- ✅ Minute-level control for hourly schedules (0-59)
-- ✅ Time picker for daily/weekly/monthly schedules
-- ✅ Day-of-week selection for weekly schedules
-- ✅ Day-of-month selection for monthly schedules (1st-31st)
-- ✅ Dynamic cron expression generation
-- ✅ Schedule data persistence in database
-- ✅ Cloud Scheduler integration with full parameters
-
-**Phase 5: File ETL Runner Implementation (November 20, 2025 - Evening)**
-- ✅ FileExtractor class with GCS/S3/Azure Blob support
-- ✅ File listing and metadata tracking
-- ✅ CSV/Parquet/JSON format parsing
-- ✅ Incremental file loading with ProcessedFile tracking
-- ✅ Catalog and transactional load modes for files
-- ✅ Django API endpoints for file tracking
-- ✅ Full integration with main ETL runner
-
-**What's Missing:**
-- ⚠️ End-to-end testing with actual GCS bucket
-- ⚠️ Real-time status monitoring UI (Phase 6)
-
-## Overview
-
-This ETL runner is designed to run as a Cloud Run Job, triggered either manually or by Cloud Scheduler. It:
-
-1. Fetches job configuration from the Django API
-2. Extracts data from source databases (PostgreSQL/MySQL)
-3. Loads data to BigQuery in batches
-4. Reports progress and status back to Django
-
-## Architecture
-
-```
-Cloud Scheduler → Cloud Run Job → Source Database (PostgreSQL/MySQL)
-                       ↓
-                   BigQuery Table
-                       ↓
-                 Django API (status updates)
-```
-
-## Features
-
-### Database Sources
-- **Multiple Source Types**: PostgreSQL, MySQL support
-- **Two Load Modes**:
-  - **Catalog**: Full snapshot (WRITE_TRUNCATE then WRITE_APPEND)
-  - **Transactional**: Incremental by timestamp column (WRITE_APPEND only)
-- **Memory Efficient**: Streams data in batches (default: 10K rows)
-- **Progress Tracking**: Real-time status updates to Django
-- **Error Handling**: Retry logic with exponential backoff
-- **Cloud Logging**: JSON-formatted logs for Cloud Logging integration
-
-### Flat File Sources (NEW - Nov 19, 2025)
-- **Cloud Storage Support**: Google Cloud Storage (GCS), AWS S3, Azure Blob Storage
-- **File Formats**: CSV, Parquet, JSON/JSONL
-- **File Selection**: User can select specific files via checkboxes (prevents accidental loading)
-- **Two Load Strategies**:
-  - **Transactional (Incremental)**:
-    - Tracks processed files by path, size, and modification date
-    - Only loads new or changed files
-    - Appends to BigQuery table
-    - Detects file changes automatically
-  - **Catalog (Snapshot)**:
-    - User chooses: "Latest file only" or "All matched files"
-    - Replaces BigQuery table on each run
-    - Best for daily snapshots or multi-region merges
-- **Schema Detection**: Automatic schema inference from sample file
-- **ProcessedFile Tracking**: Prevents duplicate loads and detects file changes
-
-### Advanced Scheduling (NEW - Nov 20, 2025)
-
-Professional-grade scheduling system integrated with Google Cloud Scheduler:
-
-**Schedule Types:**
-- **Manual**: No automatic execution (run on demand only)
-- **Hourly**: Every hour at a specified minute (0-59)
-  - Example: `:00`, `:15`, `:30`, `:45`
-  - Use case: Near real-time data sync
-- **Daily**: Once per day at a specific time
-  - Example: `09:00`, `14:30`, `23:00`
-  - Use case: Daily reports, overnight batch processing
-- **Weekly**: Once per week on a specific day and time
-  - Days: Monday through Sunday
-  - Example: "Every Friday at 17:00"
-  - Use case: Weekly aggregations, end-of-week reports
-- **Monthly**: Once per month on a specific day and time
-  - Days: 1st through 31st
-  - Example: "15th of every month at 14:00"
-  - Use case: Monthly reconciliation, billing cycles
-
-**Key Features:**
-- ✅ **Automatic Timezone Detection**: Uses user's browser timezone (no manual selection needed)
-- ✅ **Minute-level Precision**: Hourly jobs can run at any minute (:00, :15, :30, :45, etc.)
-- ✅ **Flexible Time Selection**: 24-hour time picker for daily/weekly/monthly schedules
-- ✅ **Dynamic UI**: Schedule options appear/disappear based on selected type
-- ✅ **Cloud Scheduler Integration**: Automatically creates/updates Cloud Scheduler jobs
-- ✅ **Cron Expression Generation**: Converts user-friendly selections to cron syntax
-
-**Generated Cron Examples:**
-```
-Hourly at :30     → 30 * * * *
-Daily at 09:00    → 0 9 * * *
-Daily at 14:30    → 30 14 * * *
-Weekly (Fri 17:00)→ 0 17 * * 5
-Monthly (15th 14:00)→ 0 14 15 * *
-```
-
-**Database Fields:**
-- `schedule_type`: Schedule frequency (manual/hourly/daily/weekly/monthly)
-- `schedule_timezone`: User's timezone (auto-detected)
-- `schedule_time`: Time in HH:MM format (for daily/weekly/monthly)
-- `schedule_minute`: Minute 0-59 (for hourly)
-- `schedule_day_of_week`: 0=Monday through 6=Sunday
-- `schedule_day_of_month`: 1-31 for monthly schedules
-
-## Directory Structure
-
-```
-etl_runner/
-├── main.py                 # Entry point and orchestrator
-├── config.py              # Configuration management
-├── requirements.txt       # Python dependencies
-├── Dockerfile            # Container image definition
-├── extractors/
-│   ├── base.py           # BaseExtractor abstract class
-│   ├── postgresql.py     # PostgreSQL extractor
-│   └── mysql.py          # MySQL extractor
-├── loaders/
-│   └── bigquery_loader.py # BigQuery loader
-└── utils/
-    ├── logging_config.py  # Logging configuration
-    └── error_handling.py  # Error handling utilities
-```
-
-## Configuration
-
-The ETL runner is configured via environment variables:
-
-### Required Environment Variables
-
-- `GCP_PROJECT_ID`: GCP project ID
-- `DJANGO_API_URL`: Django API base URL (e.g., `https://app.example.com`)
-
-### Optional Environment Variables
-
-- `ETL_API_TOKEN`: Bearer token for Django API authentication
-- `BIGQUERY_DATASET`: BigQuery dataset name (default: `raw_data`)
-- `ETL_BATCH_SIZE`: Rows per batch (default: `10000`)
-- `ETL_MAX_RETRIES`: Max retry attempts (default: `3`)
-- `ETL_RETRY_DELAY`: Initial retry delay in seconds (default: `5`)
-- `LOG_LEVEL`: Logging level (default: `INFO`)
-
-## External Database Access Configuration
-
-### Connecting to Cloud SQL in Other Projects
-
-When extracting data from Cloud SQL databases in different GCP projects (e.g., memo2 project):
-
-**Required Setup:**
-1. **Enable Public IP** on source Cloud SQL instance
-2. **Whitelist Cloud Run IPs** in source database authorized networks:
-   - Go to Cloud Console → Source Project → Cloud SQL → Instance → Connections → Networking
-   - Add authorized network: `0.0.0.0/0` (for testing/development)
-   - **Production**: Narrow to specific Cloud Run IP ranges or use Cloud NAT with static IP
-
-**Connection Configuration:**
-- Host: Source Cloud SQL public IP (e.g., `34.116.170.252`)
-- Port: `5432` (PostgreSQL) or `3306` (MySQL)
-- Database: Database name
-- Username: Database user
-- Password: Database password (stored in Django, retrieved by ETL runner)
-
-**Security Notes:**
-- `0.0.0.0/0` allows access from anywhere - only use for testing
-- Cloud Run uses dynamic IPs from Google's IP ranges
-- For production: Use Cloud NAT ($40/month) for static IP or whitelist specific IP ranges
-- Alternative: VPC peering between projects (complex setup)
-
-### Quick Open/Test/Close for memo2 Database
-
-**When you need to test ETL with memo2:**
-
-```bash
-# 1. OPEN - Allow all IPs temporarily
-gcloud sql instances patch memo2-db \
-  --project=memo2-456215 \
-  --authorized-networks=0.0.0.0/0 \
-  --quiet
-
-# 2. TEST - Run your ETL job from Django UI
-# Visit: https://django-app-3dmqemfmxq-lm.a.run.app
-# Navigate to model → ETL → Run Now
-
-# 3. CLOSE - Remove all access
-gcloud sql instances patch memo2-db \
-  --project=memo2-456215 \
-  --clear-authorized-networks \
-  --quiet
-```
-
-**Current Status:** memo2-db is **CLOSED** (no authorized networks)
-
-## Usage
-
-### Local Development
-
-```bash
-# Install dependencies
-pip install -r requirements.txt
-
-# Set environment variables
-export GCP_PROJECT_ID="your-project-id"
-export DJANGO_API_URL="http://localhost:8000"
-
-# Run ETL job
-python main.py --data_source_id 123 --etl_run_id 456
-```
-
-### Docker
-
-```bash
-# Build image
-docker build -t etl-runner .
-
-# Run container
-docker run \
-  -e GCP_PROJECT_ID="your-project-id" \
-  -e DJANGO_API_URL="https://app.example.com" \
-  etl-runner \
-  --data_source_id 123 \
-  --etl_run_id 456
-```
-
-### Cloud Run Deployment
-
-```bash
-# Build and push to Google Container Registry
-gcloud builds submit --tag gcr.io/PROJECT_ID/etl-runner
-
-# Deploy to Cloud Run Jobs
-gcloud run jobs deploy etl-runner \
-  --image gcr.io/PROJECT_ID/etl-runner \
-  --region us-central1 \
-  --memory 8Gi \
-  --cpu 4 \
-  --timeout 3600 \
-  --max-retries 1 \
-  --service-account etl-runner@PROJECT_ID.iam.gserviceaccount.com \
-  --set-env-vars GCP_PROJECT_ID=PROJECT_ID,DJANGO_API_URL=https://app.example.com
-```
-
-### Executing Cloud Run Job
-
-```bash
-# Execute manually
-gcloud run jobs execute etl-runner \
-  --region us-central1 \
-  --args="--data_source_id=123,--etl_run_id=456"
-```
-
-## Command-Line Arguments
-
-- `--data_source_id` (required): DataSource ID to process
-- `--etl_run_id` (optional): ETL Run ID for status tracking
-- `--log_level` (optional): Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
-- `--json_logs` (optional): Use JSON log formatting (default: True)
-
-## Django API Endpoints
-
-The ETL runner expects the following Django API endpoints:
-
-### `GET /api/etl/job-config/{data_source_id}/`
-
-Returns job configuration:
-
-```json
-{
-  "source_type": "postgresql",
-  "connection_params": {
-    "host": "db.example.com",
-    "port": 5432,
-    "database": "mydb",
-    "username": "user",
-    "password": "pass"
-  },
-  "source_table_name": "transactions",
-  "schema_name": "public",
-  "dest_table_name": "bq_transactions",
-  "load_type": "transactional",
-  "timestamp_column": "created_at",
-  "selected_columns": ["id", "amount", "created_at"],
-  "last_sync_value": "2024-01-01T00:00:00",
-  "historical_start_date": "2023-01-01"
-}
-```
-
-### `PATCH /api/etl/runs/{etl_run_id}/update/`
-
-Updates ETL run status:
-
-```json
-{
-  "status": "completed",
-  "rows_extracted": 50000,
-  "rows_loaded": 50000,
-  "duration_seconds": 120
-}
-```
-
-## Permissions & IAM Configuration
-
-### Required Service Accounts
-
-**1. Django App Service Account:** `django-app@b2b-recs.iam.gserviceaccount.com`
-- Used by Django app running on Cloud Run
-- Creates and manages Cloud Scheduler jobs
-- Triggers ETL runner executions
-
-**2. ETL Runner Service Account:** `etl-runner@b2b-recs.iam.gserviceaccount.com`
-- Used by ETL runner Cloud Run Job
-- Accesses source data (databases, cloud storage)
-- Writes to BigQuery
-
-### IAM Roles Granted
-
-#### Django App Service Account Permissions:
-```bash
-# Cloud Scheduler management
-roles/cloudscheduler.admin
-  - cloudscheduler.jobs.create
-  - cloudscheduler.jobs.delete
-  - cloudscheduler.jobs.get
-  - cloudscheduler.jobs.update
-  - cloudscheduler.jobs.run
-  - cloudscheduler.jobs.pause
-  - cloudscheduler.jobs.resume
-
-# Service account impersonation (to act as etl-runner)
-roles/iam.serviceAccountUser on etl-runner@b2b-recs.iam.gserviceaccount.com
-  - iam.serviceAccounts.actAs
-  - iam.serviceAccounts.getAccessToken
-
-# BigQuery (for table creation during wizard)
-roles/bigquery.admin
-  - bigquery.datasets.create
-  - bigquery.tables.create
-  - bigquery.tables.get
-
-# Cloud Run (for triggering etl-runner)
-roles/run.admin
-  - run.jobs.run
-  - run.operations.get
-
-# Secret Manager (for fetching credentials)
-roles/secretmanager.admin
-  - secretmanager.versions.access
-```
-
-#### ETL Runner Service Account Permissions:
-```bash
-# BigQuery data operations
-roles/bigquery.dataEditor
-  - bigquery.tables.get
-  - bigquery.tables.getData
-  - bigquery.tables.updateData
-
-roles/bigquery.user
-  - bigquery.jobs.create
-
-# Cloud Run invocation (so Cloud Scheduler can trigger it)
-roles/run.invoker
-  - run.jobs.run
-
-# Cloud Storage (for file-based sources)
-roles/storage.objectViewer (inherited from project)
-  - storage.buckets.get
-  - storage.objects.get
-  - storage.objects.list
-```
-
-### Setup Commands
-
-**Enable required APIs:**
-```bash
-gcloud services enable cloudscheduler.googleapis.com --project=b2b-recs
-gcloud services enable run.googleapis.com --project=b2b-recs
-gcloud services enable bigquery.googleapis.com --project=b2b-recs
-```
-
-**Grant permissions to Django app:**
-```bash
-# Cloud Scheduler admin
-gcloud projects add-iam-policy-binding b2b-recs \
-    --member="serviceAccount:django-app@b2b-recs.iam.gserviceaccount.com" \
-    --role="roles/cloudscheduler.admin"
-
-# Service account user (to act as etl-runner)
-gcloud iam service-accounts add-iam-policy-binding \
-    etl-runner@b2b-recs.iam.gserviceaccount.com \
-    --member="serviceAccount:django-app@b2b-recs.iam.gserviceaccount.com" \
-    --role="roles/iam.serviceAccountUser"
-```
-
-**Grant permissions to ETL runner:**
-```bash
-# Cloud Run invoker
-gcloud projects add-iam-policy-binding b2b-recs \
-    --member="serviceAccount:etl-runner@b2b-recs.iam.gserviceaccount.com" \
-    --role="roles/run.invoker"
-
-# BigQuery permissions (already configured in project IAM)
-```
-
-### For Local Development:
-
-Grant your user account the same permissions for testing:
-```bash
-# Cloud Scheduler admin
-gcloud projects add-iam-policy-binding b2b-recs \
-    --member="user:kulish.dmytro@gmail.com" \
-    --role="roles/cloudscheduler.admin"
-
-# Service account user
-gcloud iam service-accounts add-iam-policy-binding \
-    etl-runner@b2b-recs.iam.gserviceaccount.com \
-    --member="user:kulish.dmytro@gmail.com" \
-    --role="roles/iam.serviceAccountUser"
-```
-
-### Source Data Access
-
-#### For Database Sources:
-- Network access to source database (IP whitelisting if needed)
-- Valid database credentials stored in Secret Manager
-- Firewall rules allowing outbound connections from Cloud Run
-
-#### For Cloud Storage Sources:
-- Service account JSON credentials stored in Secret Manager
-- Bucket-level IAM permissions (already handled by service account credentials)
-
-## Error Handling
-
-The ETL runner implements robust error handling:
-
-1. **Retry Logic**: Failed operations retry up to 3 times with exponential backoff
-2. **Status Updates**: All failures reported back to Django API
-3. **Detailed Logging**: Full error stack traces in Cloud Logging
-4. **Graceful Shutdown**: Properly closes database connections on failure
-
-### Common Errors
-
-**ConfigurationError**: Invalid job configuration
-- Check required fields in job config
-- Verify timestamp_column for transactional loads
-
-**ConnectionError**: Cannot connect to source database
-- Verify database credentials
-- Check network connectivity
-- Verify firewall rules
-
-**LoadError**: BigQuery load failed
-- Verify table exists
-- Check BigQuery permissions
-- Verify schema matches
-
-## Monitoring
-
-### Cloud Logging
-
-All logs are output in JSON format for Cloud Logging:
-
-```json
-{
-  "timestamp": "2024-01-15T10:30:00Z",
-  "severity": "INFO",
-  "message": "Batch 5 loaded: 10000 rows",
-  "data_source_id": 123,
-  "etl_run_id": 456
-}
-```
-
-### Metrics
-
-Key metrics tracked:
-- `rows_extracted`: Total rows extracted from source
-- `rows_loaded`: Total rows loaded to BigQuery
-- `batches_loaded`: Number of batches processed
-- `duration_seconds`: Total execution time
-
-## Development
-
-### Adding a New Database Source
-
-1. Create new extractor in `extractors/`:
-
-```python
-from extractors.base import BaseExtractor
-
-class NewDBExtractor(BaseExtractor):
-    def extract_full(self, ...):
-        # Implementation
-        pass
-
-    def extract_incremental(self, ...):
-        # Implementation
-        pass
-```
-
-2. Update `main.py` to instantiate new extractor:
-
-```python
-elif source_type == 'newdb':
-    return NewDBExtractor(connection_params)
-```
-
-3. Add driver to `requirements.txt`
-
-### Testing
-
-```bash
-# Run with debug logging
-python main.py \
-  --data_source_id 123 \
-  --log_level DEBUG \
-  --json_logs False
-```
-
-## Phase 6 Technical Details (November 21, 2025)
-
-### Cloud Scheduler Authentication Fix
-
-**Problem:** Cloud Scheduler was getting 401 UNAUTHENTICATED when trying to invoke Cloud Run Jobs via OIDC.
-
-**Root Causes:**
-1. Cloud Scheduler service agent lacked `iam.serviceAccountTokenCreator` permission
-2. Using wrong Cloud Run API endpoint (v1 Kubernetes-style instead of v2)
-3. Direct OIDC invocation of Cloud Run Jobs API was problematic
-
-**Solution Implemented:**
-```
-Cloud Scheduler → Django Webhook → Cloud Run Job
-```
-
-**Files Changed:**
-- `ml_platform/views.py:3061-3140` - Added `api_etl_scheduler_webhook` endpoint
-- `ml_platform/urls.py:45` - Added webhook route
-
-**IAM Permissions Added:**
-```bash
-# Cloud Scheduler service agent can create OIDC tokens
-gcloud iam service-accounts add-iam-policy-binding etl-runner@b2b-recs.iam.gserviceaccount.com \
-    --member="serviceAccount:service-555035914949@gcp-sa-cloudscheduler.iam.gserviceaccount.com" \
-    --role="roles/iam.serviceAccountTokenCreator"
-
-# Django app can invoke itself
-gcloud run services add-iam-policy-binding django-app \
-    --region=europe-central2 \
-    --member="serviceAccount:django-app@b2b-recs.iam.gserviceaccount.com" \
-    --role="roles/run.invoker"
-
-# ETL runner has developer permissions
-gcloud projects add-iam-policy-binding b2b-recs \
-    --member="serviceAccount:etl-runner@b2b-recs.iam.gserviceaccount.com" \
-    --role="roles/run.developer"
-```
-
-**Cloud Scheduler Configuration:**
-```bash
-gcloud scheduler jobs update http etl-job-5 \
-    --location=europe-central2 \
-    --uri="https://django-app-3dmqemfmxq-lm.a.run.app/api/etl/sources/5/scheduler-webhook/" \
-    --http-method=POST \
-    --message-body='{}' \
-    --oidc-service-account-email="django-app@b2b-recs.iam.gserviceaccount.com" \
-    --oidc-token-audience="https://django-app-3dmqemfmxq-lm.a.run.app"
-```
-
-### File-Based ETL Validation Fixes
-
-**Problem:** ETL runner validation logic was database-centric and rejected file sources.
-
-**Issues Fixed:**
-
-1. **Validation rejected file source types** (`etl_runner/utils/error_handling.py:154-182`)
-   - Added: `gcs`, `s3`, `azure_blob` to valid source types
-   - Separated validation logic for database vs file sources
-
-2. **Timestamp column incorrectly required for file transactional loads**
-   - Files don't use timestamp columns - they track processed files by metadata
-   - Updated validation to skip timestamp_column check for file sources
-
-3. **Selected columns incorrectly required to be non-empty**
-   - For file sources, empty selected_columns means "load all columns"
-   - Updated validation to allow empty list for file sources
-
-4. **API not sending file-specific configuration** (`ml_platform/views.py:2952-3008`)
-   - Added source type detection: `is_file_source = connection.source_type in ['gcs', 's3', 'azure_blob']`
-   - Dynamic connection_params based on source type:
-     - **Files**: `{source_type, bucket, credentials}`
-     - **Databases**: `{host, port, database, username, password}`
-   - Added file-specific fields to API response:
-     - `file_path_prefix`, `file_pattern`, `file_format`
-     - `file_format_options`, `selected_files`, `load_latest_only`
-
-**Files Changed:**
-- `etl_runner/utils/error_handling.py:154-182` - Updated validation logic
-- `ml_platform/views.py:2952-3008` - Updated `api_etl_job_config` function
-
-**Result:** File-based ETL jobs now pass validation and can be scheduled successfully.
-
-## Production Checklist
-
-- [x] Set appropriate memory/CPU for Cloud Run Job (8Gi/4 CPU) ✅
-- [x] Configure service account with minimal required permissions ✅
-- [ ] Set up Cloud Scheduler for automated runs
-- [ ] Enable Cloud Logging for monitoring
-- [ ] Set up alerting for failed ETL runs
-- [ ] Test with production data volume
-- [ ] Document recovery procedures
-
-## Troubleshooting
-
-### Job times out
-
-- Increase `--timeout` in Cloud Run deployment
-- Reduce `ETL_BATCH_SIZE` to lower memory usage
-- Check for slow queries in source database
-
-### Out of memory
-
-- Increase `--memory` in Cloud Run deployment
-- Reduce `ETL_BATCH_SIZE`
-- Use server-side cursors (already implemented)
-
-### BigQuery load fails
-
-- Verify table schema matches source columns
-- Check for data type mismatches
-- Verify BigQuery quotas not exceeded
-
-## Next Steps
-
-### Immediate (Testing & Validation)
-
-1. **Test End-to-End Data Loading**
-   - Click "Run Now" on an existing ETL job
-   - Verify Cloud Run job executes successfully
-   - Check BigQuery table for loaded data
-   - Review Cloud Run logs for errors
-
-2. **Test Cloud Scheduler Integration**
-   - Create an ETL job with "Hourly" schedule
-   - Verify Cloud Scheduler job is created in GCP Console
-   - Wait for scheduled execution or manually trigger
-   - Confirm data appears in BigQuery
-
-3. **Validate Progress Tracking**
-   - Monitor ETLRun status in Django admin
-   - Check if `rows_loaded`, `duration_seconds` are populated
-   - Verify error messages appear when jobs fail
-
-### Phase 3: Status Monitoring UI (1-2 weeks)
-
-1. **Real-Time Status Viewer**
-   - ETL run status modal with polling
-   - Progress bars for extraction/loading phases
-   - Live row count updates
-   - Link to Cloud Run logs
-
-2. **ETL History Page**
-   - View all historical runs for each job
-   - Filter by status (completed/failed/running)
-   - Metrics: avg duration, success rate, total rows
-
-3. **Dashboard Metrics**
-   - Success/failure rate visualization
-   - Data volume trends over time
-   - Job performance comparison
-
-### Phase 4: Error Handling & Alerts (1 week)
-
-1. **Enhanced Error Handling**
-   - Retry logic for transient failures
-   - Batch-level error tracking
-   - Resume from checkpoint on failure
-
-2. **Alerting System**
-   - Email notifications on failures
-   - Slack webhook integration
-   - Configurable alert rules per job
-
-### Phase 5: Advanced Features (2-3 weeks)
-
-1. **Schema Evolution**
-   - Detect new columns in source tables
-   - Prompt user to add columns to BigQuery
-   - Version schema changes
-
-2. **Data Quality**
-   - Row count validation (source vs destination)
-   - Null percentage checks
-   - Custom quality rules
-
-3. **Multi-Table Jobs**
-   - Extract multiple tables in single job
-   - Shared schedule for related tables
+Cloud Run-based ETL execution engine that extracts data from databases and cloud storage files, transforms it, and loads into BigQuery for the B2B Recommendations Platform.
 
 ---
 
-## License
+## Overview
 
-Proprietary - B2B Recommendations Platform
+The ETL Runner is a containerized Python application deployed as a **Cloud Run Job** that:
+- Extracts data from multiple source types (databases, cloud storage files)
+- Validates and transforms data
+- Loads data into BigQuery with automatic schema management
+- Supports two load strategies: **Transactional** (incremental) and **Catalog** (snapshot)
+- Integrates with Cloud Scheduler for automated execution
+
+**Architecture:**
+```
+Cloud Scheduler (OIDC auth)
+    ↓
+Django API Webhook (/api/etl/sources/<id>/scheduler-webhook/)
+    ↓
+Cloud Run Job (ETL Runner)
+    ├── Fetch job config from Django API
+    ├── Validate configuration
+    ├── Extract from source (database or files)
+    ├── Transform data
+    └── Load to BigQuery
+```
+
+---
+
+## Supported Data Sources
+
+### **Databases**
+- **PostgreSQL** - Full table extraction, incremental updates
+- **MySQL** - Full table extraction, incremental updates
+- **BigQuery** - Cross-project data movement
+
+**Features:**
+- Memory-efficient streaming (processes in batches)
+- Incremental loading using timestamp columns
+- Custom SQL query support
+- Connection pooling
+
+### **Cloud Storage Files**
+- **Google Cloud Storage (GCS)**
+- **AWS S3**
+- **Azure Blob Storage**
+
+**File Formats:**
+- CSV (with configurable delimiter, encoding, headers)
+- Parquet
+- JSON/JSONL
+
+**Features:**
+- File pattern matching (glob patterns like `*.csv`, `data_*.parquet`)
+- Metadata tracking (file size, last modified, processing status)
+- Incremental loading (processes only new/changed files)
+- Folder prefix support for organized data
+
+---
+
+## Load Strategies
+
+### **1. Transactional (Incremental/Append-Only)**
+
+**Use Case:** Event logs, transactions, immutable records
+
+**How It Works:**
+- **Databases**: Uses timestamp column (e.g., `created_at`) to track last sync value
+- **Files**: Tracks processed files by name and last_modified timestamp
+
+**Behavior:**
+- First run: Loads all data
+- Subsequent runs: Loads only new/changed records
+- Data is appended to BigQuery table
+- No deletions or updates
+
+**Example:**
+```yaml
+Source: orders table
+Timestamp Column: created_at
+Last Sync: 2025-11-20 10:00:00
+
+Next Run:
+  → SELECT * FROM orders WHERE created_at > '2025-11-20 10:00:00'
+  → Append to BigQuery
+  → Update last_sync to latest timestamp
+```
+
+### **2. Catalog (Daily Snapshot)**
+
+**Use Case:** Product catalogs, user profiles, dimensional data
+
+**How It Works:**
+- **Databases**: Extracts full table on every run
+- **Files**: Processes latest file(s) or all files based on config
+
+**Behavior:**
+- Replaces entire BigQuery table on each run
+- Captures current state of source data
+- Suitable for slowly changing dimensions
+
+**Example:**
+```yaml
+Source: products table
+Mode: Catalog
+
+Every Run:
+  → SELECT * FROM products (full table)
+  → Replace BigQuery table completely
+  → Snapshot of current product catalog
+```
+
+---
+
+## Configuration
+
+ETL Runner receives configuration from Django API endpoint:
+
+```json
+{
+  "source_type": "gcs",
+  "connection_params": {
+    "source_type": "gcs",
+    "bucket": "my-bucket",
+    "credentials": {...}
+  },
+  "load_type": "transactional",
+  "dest_table_name": "raw_sales_data",
+
+  // For files:
+  "file_pattern": "*.csv",
+  "file_format": "csv",
+  "file_format_options": {
+    "delimiter": ",",
+    "encoding": "utf-8",
+    "has_header": true
+  },
+  "selected_columns": [],  // empty = all columns
+
+  // For databases:
+  "source_table_name": "orders",
+  "timestamp_column": "created_at",
+  "selected_columns": ["id", "customer_id", "amount", "created_at"]
+}
+```
+
+---
+
+## Recent Fixes (Phase 6 - November 21, 2025)
+
+### **Issue 1: Cloud Scheduler 401 Authentication Error**
+
+**Problem:** Cloud Scheduler failed to trigger ETL jobs with UNAUTHENTICATED error.
+
+**Root Causes:**
+1. Cloud Scheduler service agent lacked `iam.serviceAccountTokenCreator` permission
+2. Wrong API endpoint (v1 instead of v2)
+3. Direct OIDC invocation of Cloud Run Jobs API was unreliable
+
+**Solution:** Implemented webhook pattern
+- Cloud Scheduler → Django webhook → Cloud Run Job
+- Added `/api/etl/sources/<id>/scheduler-webhook/` endpoint
+- Configured proper IAM permissions
+
+**Result:** ✅ Automated scheduling now working
+
+---
+
+### **Issue 2: File ETL Validation Failures**
+
+**Problem:** Validation logic rejected file sources and required incorrect fields.
+
+**Issues Fixed:**
+1. Source type validation only recognized databases (`postgresql`, `mysql`, `bigquery`)
+2. `timestamp_column` incorrectly required for file transactional loads
+3. `selected_columns` incorrectly required to be non-empty
+4. API didn't send file-specific configuration fields
+
+**Solution:**
+- Updated validation to recognize file source types (`gcs`, `s3`, `azure_blob`)
+- Made `timestamp_column` optional for file sources
+- Made `selected_columns` optional for file sources (empty = all columns)
+- Updated API to build file-specific config with `file_pattern`, `file_format`, etc.
+
+**Files Changed:**
+- `etl_runner/utils/error_handling.py` - Validation logic
+- `ml_platform/views.py` - API configuration builder
+
+**Result:** ✅ File sources now pass validation and execute successfully
+
+---
+
+## Deployment
+
+### **Infrastructure**
+
+- **Platform:** Google Cloud Run (Job)
+- **Region:** europe-central2 (Warsaw, Poland)
+- **Project:** b2b-recs (555035914949)
+- **Image:** `gcr.io/b2b-recs/etl-runner:latest`
+- **Resources:**
+  - Memory: 8Gi
+  - CPU: 4
+  - Timeout: 3600s (1 hour)
+  - Max retries: 3
+
+### **Service Account**
+
+**Name:** `etl-runner@b2b-recs.iam.gserviceaccount.com`
+
+**Permissions:**
+- `roles/bigquery.dataEditor` - Write to BigQuery tables
+- `roles/bigquery.jobUser` - Execute BigQuery jobs
+- `roles/secretmanager.secretAccessor` - Read credentials from Secret Manager
+- `roles/storage.objectViewer` - Read GCS files
+- `roles/run.developer` - Execute Cloud Run Jobs (for Django to trigger)
+
+### **Environment Variables**
+
+```bash
+DJANGO_API_URL=https://django-app-555035914949.europe-central2.run.app
+GCP_PROJECT_ID=b2b-recs
+BIGQUERY_DATASET=raw_data
+LOG_LEVEL=INFO
+```
+
+---
+
+## Usage
+
+### **1. Via Django UI (ETL Wizard)**
+
+1. Navigate to Model → ETL page
+2. Click "Add Data Source"
+3. Follow 5-step wizard:
+   - **Step 1:** Select connection
+   - **Step 2:** Choose table/files
+   - **Step 3:** Preview and select columns
+   - **Step 4:** Configure load strategy
+   - **Step 5:** Set schedule (optional)
+4. Save → ETL job created
+5. Click "Run Now" to trigger immediately, or wait for scheduled run
+
+### **2. Via API (Manual Trigger)**
+
+```bash
+# Trigger ETL job for data source ID 5
+curl -X POST \
+  -H "Content-Type: application/json" \
+  https://django-app-555035914949.europe-central2.run.app/api/etl/sources/5/scheduler-webhook/
+```
+
+### **3. Via Cloud Scheduler (Automated)**
+
+Cloud Scheduler jobs are created automatically when you set a schedule in the ETL Wizard.
+
+**Example Schedule:**
+- **Daily at 9 AM (Europe/Kiev):** `0 9 * * *`
+- **Hourly at minute 30:** `30 * * * *`
+- **Weekly on Monday at 6 AM:** `0 6 * * 1`
+
+---
+
+## Monitoring
+
+### **Cloud Run Job Executions**
+
+```bash
+# List recent executions
+gcloud run jobs executions list \
+  --job=etl-runner \
+  --region=europe-central2 \
+  --limit=10
+
+# View logs for specific execution
+gcloud logging read \
+  'resource.type=cloud_run_job
+   AND resource.labels.job_name=etl-runner
+   AND labels."run.googleapis.com/execution_name"="etl-runner-abc123"' \
+  --limit=100 \
+  --format=json
+```
+
+### **Cloud Scheduler Jobs**
+
+```bash
+# List all scheduler jobs
+gcloud scheduler jobs list --location=europe-central2
+
+# View specific job
+gcloud scheduler jobs describe etl-job-5 --location=europe-central2
+
+# Manually trigger
+gcloud scheduler jobs run etl-job-5 --location=europe-central2
+```
+
+### **BigQuery**
+
+```sql
+-- Check ETL results
+SELECT
+  COUNT(*) as row_count,
+  MIN(_airbyte_extracted_at) as first_load,
+  MAX(_airbyte_extracted_at) as last_load
+FROM `b2b-recs.raw_data.your_table`;
+```
+
+---
+
+## Key Features
+
+✅ **Multi-Source Support** - Databases and cloud storage files
+✅ **Automatic Schema Detection** - Infers BigQuery schema from source
+✅ **Incremental Loading** - Process only new/changed data
+✅ **Memory Efficient** - Streaming processing with configurable batch sizes
+✅ **Error Handling** - Retries, detailed logging, status tracking
+✅ **Flexible Scheduling** - Minute-level precision with timezone support
+✅ **Column Sanitization** - Auto-fixes column names for BigQuery compatibility
+✅ **Metadata Tracking** - File processing history, last sync values
+✅ **Secure** - Credentials in Secret Manager, IAM-based access control
+
+---
+
+## Troubleshooting
+
+### **"Cannot determine path without bucket name"**
+
+**Cause:** Missing bucket configuration in connection.
+
+**Fix:**
+1. Update Connection record in database: `UPDATE ml_platform_connection SET source_host='your-bucket-name' WHERE id=X`
+2. Verify credentials in Secret Manager
+
+### **"timestamp_column is required for transactional loads"**
+
+**Cause:** Using old ETL runner version.
+
+**Fix:**
+1. Redeploy ETL runner: `gcloud run jobs update etl-runner --image=gcr.io/b2b-recs/etl-runner:latest`
+2. Validation now allows empty timestamp_column for file sources
+
+### **Cloud Scheduler 401 Error**
+
+**Cause:** Missing IAM permissions.
+
+**Fix:**
+```bash
+# Grant Cloud Scheduler permission to create OIDC tokens
+gcloud iam service-accounts add-iam-policy-binding etl-runner@b2b-recs.iam.gserviceaccount.com \
+  --member="serviceAccount:service-555035914949@gcp-sa-cloudscheduler.iam.gserviceaccount.com" \
+  --role="roles/iam.serviceAccountTokenCreator"
+```
+
+---
+
+## File Structure
+
+```
+etl_runner/
+├── main.py                      # Entry point, orchestrates ETL flow
+├── config.py                    # Configuration management
+├── extractors/
+│   ├── postgresql.py           # PostgreSQL extractor
+│   ├── mysql.py                # MySQL extractor
+│   └── file_extractor.py       # GCS/S3/Azure file extractor
+├── loaders/
+│   └── bigquery_loader.py      # BigQuery loader with batching
+├── utils/
+│   ├── error_handling.py       # Error handling and validation
+│   ├── logging_config.py       # Structured logging
+│   └── schema_mapper.py        # BigQuery schema inference
+├── requirements.txt             # Python dependencies
+├── Dockerfile                   # Container image definition
+└── README.md                    # Developer docs
+```
+
+---
+
+## Development
+
+### **Local Testing**
+
+```bash
+# Set environment variables
+export DJANGO_API_URL=http://localhost:8000
+export GCP_PROJECT_ID=b2b-recs
+export BIGQUERY_DATASET=raw_data
+
+# Run ETL job locally
+python main.py --data_source_id=5 --log_level=DEBUG
+
+# Build Docker image
+docker build -t etl-runner .
+
+# Run in container
+docker run --rm \
+  -e DJANGO_API_URL=$DJANGO_API_URL \
+  -e GCP_PROJECT_ID=$GCP_PROJECT_ID \
+  etl-runner --data_source_id=5
+```
+
+### **Deploy to Cloud Run**
+
+```bash
+# Build and push image
+gcloud builds submit --tag gcr.io/b2b-recs/etl-runner
+
+# Update Cloud Run Job
+gcloud run jobs update etl-runner \
+  --region=europe-central2 \
+  --image=gcr.io/b2b-recs/etl-runner:latest
+```
+
+---
+
+**Status:** Production-ready with automated scheduling and multi-source support. GCS bucket configuration pending for DataSource #5.

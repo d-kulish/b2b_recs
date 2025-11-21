@@ -1176,10 +1176,11 @@ def api_connection_test_wizard(request, model_id):
 @require_http_methods(["POST"])
 def api_connection_create(request, model_id):
     """
-    Create a new reusable Connection.
-    This is called after successful connection test in the wizard.
+    UNIFIED Connection Creation API - Source-Type Aware
+    Handles ALL source types: Databases, Cloud Storage, NoSQL
+    Replaces both old wizard and standalone APIs.
     """
-    from .utils.connection_manager import save_connection_credentials
+    from .utils.connection_manager import test_and_fetch_metadata, save_connection_credentials
     from .models import Connection
 
     try:
@@ -1189,11 +1190,18 @@ def api_connection_create(request, model_id):
         # Extract connection details
         connection_name = data.get('name', 'Untitled Connection')
         source_type = data.get('source_type')
-        connection_params = data.get('connection_params', {})
+        test_first = data.get('test_first', False)  # Standalone mode tests first
 
-        print(f"=== CONNECTION CREATE DEBUG ===")
-        print(f"Received connection name: '{connection_name}'")
+        # Get connection params (can be nested or flat depending on caller)
+        connection_params = data.get('connection_params', {})
+        if not connection_params:
+            # Flat structure - extract from data directly
+            connection_params = data
+
+        print(f"=== UNIFIED CONNECTION CREATE ===")
+        print(f"Connection name: '{connection_name}'")
         print(f"Source type: {source_type}")
+        print(f"Test first: {test_first}")
 
         # Check for duplicate connection name
         if Connection.objects.filter(model_endpoint=model, name=connection_name).exists():
@@ -1202,35 +1210,154 @@ def api_connection_create(request, model_id):
                 'message': f'A connection named "{connection_name}" already exists. Please choose a different name.',
             }, status=400)
 
-        # Create Connection
-        connection = Connection.objects.create(
-            model_endpoint=model,
-            name=connection_name,
-            source_type=source_type,
-            description=data.get('description', ''),
-            source_host=connection_params.get('host', ''),
-            source_port=connection_params.get('port'),
-            source_database=connection_params.get('database', ''),
-            source_schema=connection_params.get('schema', ''),
-            source_username=connection_params.get('username', ''),
-            bigquery_project=connection_params.get('project_id', ''),
-            bigquery_dataset=connection_params.get('dataset', ''),
-            connection_string=connection_params.get('connection_string', ''),
-            is_enabled=True,
-            connection_tested=True,
-        )
+        # Define source type categories
+        DB_TYPES = {'postgresql', 'mysql', 'oracle', 'sqlserver', 'db2', 'redshift', 'synapse', 'bigquery', 'snowflake', 'mariadb', 'teradata'}
+        STORAGE_TYPES = {'gcs', 's3', 'azure_blob'}
+        NOSQL_TYPES = {'mongodb', 'firestore', 'cassandra', 'dynamodb', 'redis'}
 
-        # Save credentials to Secret Manager
+        # === SOURCE-TYPE AWARE FIELD EXTRACTION ===
+        connection_data = {
+            'model_endpoint': model,
+            'name': connection_name,
+            'source_type': source_type,
+            'description': data.get('description', ''),
+            'is_enabled': True,
+        }
+        credentials_dict = {}
+
+        # Extract fields based on source type
+        if source_type in DB_TYPES:
+            # === RELATIONAL DATABASES ===
+            connection_data.update({
+                'source_host': connection_params.get('host', ''),
+                'source_port': connection_params.get('port'),
+                'source_database': connection_params.get('database', ''),
+                'source_schema': connection_params.get('schema', ''),
+                'source_username': connection_params.get('username', ''),
+            })
+            credentials_dict.update({
+                'host': connection_params.get('host', ''),
+                'port': connection_params.get('port'),
+                'database': connection_params.get('database', ''),
+                'schema': connection_params.get('schema', ''),
+                'username': connection_params.get('username', ''),
+                'password': connection_params.get('password', ''),
+            })
+
+            if source_type == 'bigquery':
+                connection_data['bigquery_project'] = connection_params.get('project_id', '')
+                connection_data['bigquery_dataset'] = connection_params.get('dataset', '')
+                credentials_dict['project_id'] = connection_params.get('project_id', '')
+                credentials_dict['dataset'] = connection_params.get('dataset', '')
+                credentials_dict['service_account_json'] = connection_params.get('service_account_json', '')
+
+        elif source_type == 'gcs':
+            # === GOOGLE CLOUD STORAGE ===
+            bucket_path = connection_params.get('bucket_path', '')
+            # Extract bucket name from path (gs://bucket-name or just bucket-name)
+            if bucket_path.startswith('gs://'):
+                bucket_name = bucket_path.replace('gs://', '').split('/')[0]
+            else:
+                bucket_name = bucket_path.split('/')[0]
+                bucket_path = f'gs://{bucket_path}' if bucket_path and not bucket_path.startswith('gs://') else bucket_path
+
+            connection_data.update({
+                'source_host': bucket_name,  # For backward compatibility (troubleshooting docs)
+                'bucket_path': bucket_path,
+            })
+            credentials_dict.update({
+                'bucket_path': bucket_path,
+                'service_account_json': connection_params.get('service_account_json', ''),
+            })
+
+        elif source_type == 's3':
+            # === AWS S3 ===
+            bucket_path = connection_params.get('bucket_path', '')
+            # Extract bucket name from path (s3://bucket-name or just bucket-name)
+            if bucket_path.startswith('s3://'):
+                bucket_name = bucket_path.replace('s3://', '').split('/')[0]
+            else:
+                bucket_name = bucket_path.split('/')[0]
+                bucket_path = f's3://{bucket_path}' if bucket_path and not bucket_path.startswith('s3://') else bucket_path
+
+            connection_data.update({
+                'source_host': bucket_name,  # Bucket name
+                'bucket_path': bucket_path,
+                'aws_access_key_id': connection_params.get('aws_access_key_id', ''),
+                'aws_region': connection_params.get('aws_region', 'us-east-1'),
+            })
+            credentials_dict.update({
+                'bucket_path': bucket_path,
+                'aws_access_key_id': connection_params.get('aws_access_key_id', ''),
+                'aws_secret_access_key': connection_params.get('aws_secret_access_key', ''),
+                'aws_region': connection_params.get('aws_region', 'us-east-1'),
+            })
+
+        elif source_type == 'azure_blob':
+            # === AZURE BLOB STORAGE ===
+            bucket_path = connection_params.get('bucket_path', '')
+            connection_data.update({
+                'bucket_path': bucket_path,
+                'azure_storage_account': connection_params.get('azure_storage_account', ''),
+            })
+            credentials_dict.update({
+                'bucket_path': bucket_path,
+                'azure_storage_account': connection_params.get('azure_storage_account', ''),
+                'azure_account_key': connection_params.get('azure_account_key', ''),
+                'azure_sas_token': connection_params.get('azure_sas_token', ''),
+            })
+
+        elif source_type in NOSQL_TYPES:
+            # === NOSQL DATABASES ===
+            connection_data.update({
+                'connection_string': connection_params.get('connection_string', ''),
+                'connection_params': connection_params.get('connection_params', {}),
+            })
+            credentials_dict.update({
+                'connection_string': connection_params.get('connection_string', ''),
+            })
+
+            if source_type == 'firestore':
+                connection_data['bigquery_project'] = connection_params.get('project_id', '')
+                credentials_dict['project_id'] = connection_params.get('project_id', '')
+                credentials_dict['service_account_json'] = connection_params.get('service_account_json', '')
+        else:
+            return JsonResponse({
+                'status': 'error',
+                'message': f'Unsupported source type: {source_type}',
+            }, status=400)
+
+        # === TEST CONNECTION IF REQUESTED (standalone mode) ===
+        if test_first:
+            test_result = test_and_fetch_metadata(source_type, credentials_dict)
+            if not test_result['success']:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': f'Connection test failed: {test_result["message"]}',
+                }, status=400)
+
+        # === CREATE CONNECTION ===
+        try:
+            connection = Connection.objects.create(**connection_data)
+        except IntegrityError:
+            # Duplicate credentials detected (based on unique_together constraint)
+            return JsonResponse({
+                'status': 'error',
+                'message': f'A connection with these credentials already exists. Please check existing connections.',
+            }, status=400)
+
+        # === SAVE CREDENTIALS TO SECRET MANAGER ===
         try:
             secret_name = save_connection_credentials(
                 model_id=model_id,
                 connection_id=connection.id,
-                credentials_dict=connection_params
+                credentials_dict=credentials_dict
             )
 
             connection.credentials_secret_name = secret_name
             connection.last_test_at = timezone.now()
-            connection.last_test_status = 'success'
+            connection.last_test_status = 'success' if test_first else ''
+            connection.connection_tested = test_first
             connection.save()
 
             return JsonResponse({
@@ -1249,165 +1376,9 @@ def api_connection_create(request, model_id):
             }, status=500)
 
     except Exception as e:
-        return JsonResponse({
-            'status': 'error',
-            'message': f'Failed to create connection: {str(e)}',
-        }, status=500)
-
-
-@login_required
-@require_http_methods(["POST"])
-def api_connection_create_standalone(request, model_id):
-    """
-    Create a new connection in standalone mode (not from ETL wizard).
-    Tests connection first, creates only if test succeeds.
-    """
-    from .utils.connection_manager import test_and_fetch_metadata, save_connection_credentials
-    from .models import Connection
-
-    try:
-        model = get_object_or_404(ModelEndpoint, id=model_id)
-        data = json.loads(request.body)
-
-        # Extract connection details
-        connection_name = data.get('name', '').strip()
-        source_type = data.get('source_type')
-        host = data.get('host', '')
-        port = data.get('port')
-        database = data.get('database', '')
-        username = data.get('username', '')
-        password = data.get('password', '')
-        schema = data.get('schema', 'public')
-
-        # Validate required fields
-        if not connection_name:
-            return JsonResponse({
-                'status': 'error',
-                'message': 'Connection name is required.',
-            }, status=400)
-
-        # Check for duplicate connection name
-        if Connection.objects.filter(model_endpoint=model, name=connection_name).exists():
-            return JsonResponse({
-                'status': 'error',
-                'message': f'A connection named "{connection_name}" already exists. Please choose a different name.',
-            }, status=400)
-
-        # Prepare connection params for testing
-        connection_params = {
-            'host': host,
-            'port': port,
-            'database': database,
-            'username': username,
-            'password': password,
-            'schema': schema,
-            'project_id': data.get('project_id', ''),
-            'dataset': data.get('dataset', ''),
-            'service_account_json': data.get('service_account_json', ''),
-            'connection_string': data.get('connection_string', ''),
-            # Cloud Storage parameters
-            'bucket_path': data.get('bucket_path', ''),
-            'aws_access_key_id': data.get('aws_access_key_id', ''),
-            'aws_secret_access_key': data.get('aws_secret_access_key', ''),
-            'aws_region': data.get('aws_region', ''),
-            'azure_storage_account': data.get('azure_storage_account', ''),
-            'azure_account_key': data.get('azure_account_key', ''),
-            'azure_sas_token': data.get('azure_sas_token', ''),
-        }
-
-        # Test the connection first
-        test_result = test_and_fetch_metadata(source_type, connection_params)
-
-        if not test_result['success']:
-            return JsonResponse({
-                'status': 'error',
-                'message': f'Connection test failed: {test_result["message"]}',
-            }, status=400)
-
-        # Connection test successful - create the Connection object
-        try:
-            connection = Connection.objects.create(
-                model_endpoint=model,
-                name=connection_name,
-                source_type=source_type,
-                description=data.get('description', ''),
-                source_host=host,
-                source_port=port,
-                source_database=database,
-                source_schema=schema,
-                source_username=username,
-                bigquery_project=data.get('project_id', ''),
-                bigquery_dataset=data.get('dataset', ''),
-                connection_string=data.get('connection_string', ''),
-                # Cloud Storage fields
-                bucket_path=data.get('bucket_path', ''),
-                service_account_json=data.get('service_account_json', ''),
-                aws_access_key_id=data.get('aws_access_key_id', ''),
-                aws_region=data.get('aws_region', ''),
-                azure_storage_account=data.get('azure_storage_account', ''),
-                is_enabled=True,
-                connection_tested=True,
-                last_test_at=timezone.now(),
-                last_test_status='success',
-                last_test_message=test_result['message'],
-            )
-        except IntegrityError:
-            # Duplicate credentials detected
-            existing_conn = Connection.objects.filter(
-                model_endpoint=model,
-                source_type=source_type,
-                source_host=host,
-                source_port=port,
-                source_database=database,
-                source_username=username,
-            ).first()
-
-            return JsonResponse({
-                'status': 'error',
-                'message': f'A connection with these credentials already exists.\n\n'
-                          f'Existing connection: "{existing_conn.name}"\n'
-                          f'Database: {existing_conn.source_database}\n'
-                          f'Host: {existing_conn.source_host}:{existing_conn.source_port}\n'
-                          f'Username: {existing_conn.source_username}\n\n'
-                          f'Please use a different database or reuse the existing connection.',
-            }, status=400)
-
-        # Save credentials to Secret Manager
-        try:
-            secret_name = save_connection_credentials(
-                model_id=model_id,
-                connection_id=connection.id,
-                credentials_dict=connection_params
-            )
-
-            connection.credentials_secret_name = secret_name
-            connection.save()
-
-            return JsonResponse({
-                'status': 'success',
-                'message': 'Connection created successfully',
-                'connection_id': connection.id,
-                'connection': {
-                    'id': connection.id,
-                    'name': connection.name,
-                    'source_type': connection.source_type,
-                    'source_type_display': connection.get_source_type_display(),
-                    'source_host': connection.source_host,
-                    'source_database': connection.source_database,
-                    'last_test_status': connection.last_test_status,
-                    'jobs_count': 0,
-                },
-            })
-
-        except Exception as secret_error:
-            # If Secret Manager fails, delete the Connection
-            connection.delete()
-            return JsonResponse({
-                'status': 'error',
-                'message': f'Failed to save credentials: {str(secret_error)}',
-            }, status=500)
-
-    except Exception as e:
+        import traceback
+        print(f"ERROR in api_connection_create: {str(e)}")
+        print(traceback.format_exc())
         return JsonResponse({
             'status': 'error',
             'message': f'Failed to create connection: {str(e)}',
@@ -1463,26 +1434,26 @@ def api_connection_list(request, model_id):
 @require_http_methods(["GET"])
 def api_connection_get(request, connection_id):
     """
-    Get details of a single connection.
+    Get details of a single connection - SOURCE-TYPE AWARE
+    Returns appropriate fields based on connection type (DB, Cloud Storage, NoSQL).
     """
     from .models import Connection
 
     try:
         connection = get_object_or_404(Connection, id=connection_id)
 
+        # Define source type categories
+        DB_TYPES = {'postgresql', 'mysql', 'oracle', 'sqlserver', 'db2', 'redshift', 'synapse', 'bigquery', 'snowflake', 'mariadb', 'teradata'}
+        STORAGE_TYPES = {'gcs', 's3', 'azure_blob'}
+        NOSQL_TYPES = {'mongodb', 'firestore', 'cassandra', 'dynamodb', 'redis'}
+
+        # Base fields (common to all types)
         connection_data = {
             'id': connection.id,
             'name': connection.name,
             'source_type': connection.source_type,
             'source_type_display': connection.get_source_type_display(),
             'description': connection.description,
-            'source_host': connection.source_host,
-            'source_port': connection.source_port,
-            'source_database': connection.source_database,
-            'source_schema': connection.source_schema,
-            'source_username': connection.source_username,
-            'bigquery_project': connection.bigquery_project,
-            'bigquery_dataset': connection.bigquery_dataset,
             'is_enabled': connection.is_enabled,
             'connection_tested': connection.connection_tested,
             'last_test_at': connection.last_test_at.isoformat() if connection.last_test_at else None,
@@ -1491,12 +1462,65 @@ def api_connection_get(request, connection_id):
             'jobs_count': connection.get_dependent_jobs_count(),
         }
 
+        # === ADD SOURCE-TYPE SPECIFIC FIELDS ===
+        if connection.source_type in DB_TYPES:
+            # === RELATIONAL DATABASES ===
+            connection_data.update({
+                'source_host': connection.source_host or '',
+                'source_port': connection.source_port,
+                'source_database': connection.source_database or '',
+                'source_schema': connection.source_schema or '',
+                'source_username': connection.source_username or '',
+            })
+            if connection.source_type == 'bigquery':
+                connection_data.update({
+                    'bigquery_project': connection.bigquery_project or '',
+                    'bigquery_dataset': connection.bigquery_dataset or '',
+                })
+
+        elif connection.source_type == 'gcs':
+            # === GOOGLE CLOUD STORAGE ===
+            # Handle backward compatibility: check bucket_path first, fallback to source_host
+            bucket_path = connection.bucket_path or (f'gs://{connection.source_host}' if connection.source_host else '')
+            connection_data.update({
+                'bucket_path': bucket_path,
+                'source_host': connection.source_host or '',  # Bucket name (legacy)
+            })
+
+        elif connection.source_type == 's3':
+            # === AWS S3 ===
+            connection_data.update({
+                'bucket_path': connection.bucket_path or '',
+                'source_host': connection.source_host or '',  # Bucket name
+                'aws_access_key_id': connection.aws_access_key_id or '',
+                'aws_region': connection.aws_region or 'us-east-1',
+            })
+
+        elif connection.source_type == 'azure_blob':
+            # === AZURE BLOB STORAGE ===
+            connection_data.update({
+                'bucket_path': connection.bucket_path or '',
+                'azure_storage_account': connection.azure_storage_account or '',
+            })
+
+        elif connection.source_type in NOSQL_TYPES:
+            # === NOSQL DATABASES ===
+            connection_data.update({
+                'connection_string': connection.connection_string or '',
+                'connection_params': connection.connection_params or {},
+            })
+            if connection.source_type == 'firestore':
+                connection_data['bigquery_project'] = connection.bigquery_project or ''
+
         return JsonResponse({
             'status': 'success',
             'connection': connection_data,
         })
 
     except Exception as e:
+        import traceback
+        print(f"ERROR in api_connection_get: {str(e)}")
+        print(traceback.format_exc())
         return JsonResponse({
             'status': 'error',
             'message': str(e),
@@ -1622,7 +1646,8 @@ def api_connection_test(request, connection_id):
 @require_http_methods(["POST"])
 def api_connection_update(request, connection_id):
     """
-    Update an existing connection (credentials, connection details, name).
+    Update an existing connection - SOURCE-TYPE AWARE
+    Handles ALL source types: Databases, Cloud Storage, NoSQL
     Tests connection before updating. Affects all ETL jobs using this connection.
     """
     from .utils.connection_manager import test_and_fetch_metadata, save_connection_credentials
@@ -1635,12 +1660,6 @@ def api_connection_update(request, connection_id):
         # Extract updated connection details
         connection_name = data.get('name', connection.name)
         source_type = data.get('source_type', connection.source_type)
-        host = data.get('host', connection.source_host)
-        port = data.get('port', connection.source_port)
-        database = data.get('database', connection.source_database)
-        username = data.get('username', connection.source_username)
-        password = data.get('password', '')  # Password required for update
-        schema = data.get('schema', connection.source_schema)
 
         # Check if connection name changed and if new name is taken
         if connection_name != connection.name:
@@ -1653,21 +1672,121 @@ def api_connection_update(request, connection_id):
                     'message': f'A connection named "{connection_name}" already exists. Please choose a different name.',
                 }, status=400)
 
-        # Prepare connection params for testing
-        connection_params = {
-            'host': host,
-            'port': port,
-            'database': database,
-            'username': username,
-            'password': password,
-            'project_id': data.get('project_id', connection.bigquery_project),
-            'dataset': data.get('dataset', connection.bigquery_dataset),
-            'service_account_json': data.get('service_account_json', ''),
-            'connection_string': data.get('connection_string', connection.connection_string),
-        }
+        # Define source type categories
+        DB_TYPES = {'postgresql', 'mysql', 'oracle', 'sqlserver', 'db2', 'redshift', 'synapse', 'bigquery', 'snowflake', 'mariadb', 'teradata'}
+        STORAGE_TYPES = {'gcs', 's3', 'azure_blob'}
+        NOSQL_TYPES = {'mongodb', 'firestore', 'cassandra', 'dynamodb', 'redis'}
 
-        # Test the connection first
-        test_result = test_and_fetch_metadata(source_type, connection_params)
+        # === SOURCE-TYPE AWARE FIELD EXTRACTION ===
+        connection_updates = {
+            'name': connection_name,
+            'source_type': source_type,
+            'description': data.get('description', connection.description),
+        }
+        credentials_dict = {}
+
+        # Extract fields based on source type
+        if source_type in DB_TYPES:
+            # === RELATIONAL DATABASES ===
+            connection_updates.update({
+                'source_host': data.get('host', connection.source_host),
+                'source_port': data.get('port', connection.source_port),
+                'source_database': data.get('database', connection.source_database),
+                'source_schema': data.get('schema', connection.source_schema),
+                'source_username': data.get('username', connection.source_username),
+            })
+            credentials_dict.update({
+                'host': data.get('host', connection.source_host),
+                'port': data.get('port', connection.source_port),
+                'database': data.get('database', connection.source_database),
+                'schema': data.get('schema', connection.source_schema),
+                'username': data.get('username', connection.source_username),
+                'password': data.get('password', ''),
+            })
+
+            if source_type == 'bigquery':
+                connection_updates['bigquery_project'] = data.get('project_id', connection.bigquery_project)
+                connection_updates['bigquery_dataset'] = data.get('dataset', connection.bigquery_dataset)
+                credentials_dict['project_id'] = data.get('project_id', connection.bigquery_project)
+                credentials_dict['dataset'] = data.get('dataset', connection.bigquery_dataset)
+                credentials_dict['service_account_json'] = data.get('service_account_json', '')
+
+        elif source_type == 'gcs':
+            # === GOOGLE CLOUD STORAGE ===
+            bucket_path = data.get('bucket_path', connection.bucket_path)
+            # Extract bucket name from path
+            if bucket_path and bucket_path.startswith('gs://'):
+                bucket_name = bucket_path.replace('gs://', '').split('/')[0]
+            elif bucket_path:
+                bucket_name = bucket_path.split('/')[0]
+                bucket_path = f'gs://{bucket_path}'
+            else:
+                bucket_name = ''
+
+            connection_updates.update({
+                'source_host': bucket_name,
+                'bucket_path': bucket_path,
+            })
+            credentials_dict.update({
+                'bucket_path': bucket_path,
+                'service_account_json': data.get('service_account_json', ''),
+            })
+
+        elif source_type == 's3':
+            # === AWS S3 ===
+            bucket_path = data.get('bucket_path', connection.bucket_path)
+            # Extract bucket name from path
+            if bucket_path and bucket_path.startswith('s3://'):
+                bucket_name = bucket_path.replace('s3://', '').split('/')[0]
+            elif bucket_path:
+                bucket_name = bucket_path.split('/')[0]
+                bucket_path = f's3://{bucket_path}'
+            else:
+                bucket_name = ''
+
+            connection_updates.update({
+                'source_host': bucket_name,
+                'bucket_path': bucket_path,
+                'aws_access_key_id': data.get('aws_access_key_id', connection.aws_access_key_id),
+                'aws_region': data.get('aws_region', connection.aws_region),
+            })
+            credentials_dict.update({
+                'bucket_path': bucket_path,
+                'aws_access_key_id': data.get('aws_access_key_id', connection.aws_access_key_id),
+                'aws_secret_access_key': data.get('aws_secret_access_key', ''),
+                'aws_region': data.get('aws_region', connection.aws_region),
+            })
+
+        elif source_type == 'azure_blob':
+            # === AZURE BLOB STORAGE ===
+            connection_updates.update({
+                'bucket_path': data.get('bucket_path', connection.bucket_path),
+                'azure_storage_account': data.get('azure_storage_account', connection.azure_storage_account),
+            })
+            credentials_dict.update({
+                'bucket_path': data.get('bucket_path', connection.bucket_path),
+                'azure_storage_account': data.get('azure_storage_account', connection.azure_storage_account),
+                'azure_account_key': data.get('azure_account_key', ''),
+                'azure_sas_token': data.get('azure_sas_token', ''),
+            })
+
+        elif source_type in NOSQL_TYPES:
+            # === NOSQL DATABASES ===
+            connection_updates.update({
+                'connection_string': data.get('connection_string', connection.connection_string),
+                'connection_params': data.get('connection_params', connection.connection_params),
+            })
+            credentials_dict.update({
+                'connection_string': data.get('connection_string', connection.connection_string),
+            })
+
+            if source_type == 'firestore':
+                connection_updates['bigquery_project'] = data.get('project_id', connection.bigquery_project)
+                credentials_dict['project_id'] = data.get('project_id', connection.bigquery_project)
+                credentials_dict['service_account_json'] = data.get('service_account_json', '')
+
+        # === TEST CONNECTION FIRST ===
+        test_result = test_and_fetch_metadata(source_type, credentials_dict)
 
         if not test_result['success']:
             return JsonResponse({
@@ -1675,28 +1794,21 @@ def api_connection_update(request, connection_id):
                 'message': f'Connection test failed: {test_result["message"]}',
             }, status=400)
 
-        # Connection test successful - update the Connection object
-        connection.name = connection_name
-        connection.source_type = source_type
-        connection.source_host = host
-        connection.source_port = port
-        connection.source_database = database
-        connection.source_schema = schema
-        connection.source_username = username
-        connection.bigquery_project = data.get('project_id', '')
-        connection.bigquery_dataset = data.get('dataset', '')
-        connection.connection_string = data.get('connection_string', '')
+        # === UPDATE CONNECTION OBJECT ===
+        for field, value in connection_updates.items():
+            setattr(connection, field, value)
+
         connection.last_test_at = timezone.now()
         connection.last_test_status = 'success'
         connection.last_test_message = test_result['message']
         connection.connection_tested = True
 
-        # Update credentials in Secret Manager
+        # === UPDATE CREDENTIALS IN SECRET MANAGER ===
         try:
             secret_name = save_connection_credentials(
                 model_id=connection.model_endpoint.id,
                 connection_id=connection.id,
-                credentials_dict=connection_params
+                credentials_dict=credentials_dict
             )
             connection.credentials_secret_name = secret_name
             connection.save()
@@ -1719,6 +1831,9 @@ def api_connection_update(request, connection_id):
             }, status=500)
 
     except Exception as e:
+        import traceback
+        print(f"ERROR in api_connection_update: {str(e)}")
+        print(traceback.format_exc())
         return JsonResponse({
             'status': 'error',
             'message': str(e),

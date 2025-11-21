@@ -46,10 +46,10 @@ urlpatterns = [
     path('api/etl/sources/<int:data_source_id>/processed-files/', views.api_etl_get_processed_files, name='api_etl_get_processed_files'),
     path('api/etl/sources/<int:data_source_id>/record-processed-file/', views.api_etl_record_processed_file, name='api_etl_record_processed_file'),
 
-    # Connection Management API (New Architecture)
+    # Connection Management API (Unified Source-Type Aware Architecture)
     path('api/models/<int:model_id>/connections/test-wizard/', views.api_connection_test_wizard, name='api_connection_test_wizard'),
     path('api/models/<int:model_id>/connections/create/', views.api_connection_create, name='api_connection_create'),
-    path('api/models/<int:model_id>/connections/create-standalone/', views.api_connection_create_standalone, name='api_connection_create_standalone'),
+    path('api/models/<int:model_id>/connections/create-standalone/', views.api_connection_create, name='api_connection_create_standalone'),  # Points to unified API
     path('api/models/<int:model_id>/connections/', views.api_connection_list, name='api_connection_list'),
     path('api/connections/<int:connection_id>/', views.api_connection_get, name='api_connection_get'),
     path('api/connections/<int:connection_id>/credentials/', views.api_connection_get_credentials, name='api_connection_get_credentials'),

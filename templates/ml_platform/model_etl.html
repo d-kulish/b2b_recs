@@ -3115,25 +3115,59 @@ function openEditConnectionModal(connectionId) {
                     connShowStep(2);
                     connShowForm(connSelectedType); // Show the form for this connection type
 
-                    // Populate connection fields with correct IDs
-                    const connNameField = document.getElementById('connName');
+                    // === POPULATE CONNECTION NAME (SOURCE-TYPE AWARE) ===
+                    let connNameField;
+                    if (connection.source_type === 'bigquery' || connection.source_type === 'firestore') {
+                        connNameField = document.getElementById('connNameBQ');
+                    } else if (connection.source_type === 'gcs') {
+                        connNameField = document.getElementById('connNameGCS');
+                    } else if (connection.source_type === 's3') {
+                        connNameField = document.getElementById('connNameS3');
+                    } else if (connection.source_type === 'azure_blob') {
+                        connNameField = document.getElementById('connNameAzureBlob');
+                    } else {
+                        // Database connections and other types
+                        connNameField = document.getElementById('connName');
+                    }
+
+                    if (connNameField) {
+                        connNameField.value = connection.name || '';
+                        console.log(`Populated connection name for ${connection.source_type}:`, connection.name);
+                    } else {
+                        console.error(`Connection name field not found for source_type: ${connection.source_type}`);
+                    }
+
+                    // === POPULATE DATABASE-SPECIFIC FIELDS ===
                     const connHostField = document.getElementById('connHost');
                     const connPortField = document.getElementById('connPort');
                     const connDatabaseField = document.getElementById('connDatabase');
                     const connUsernameField = document.getElementById('connUsername');
 
-                    if (connNameField) connNameField.value = connection.name || '';
                     if (connHostField) connHostField.value = connection.source_host || '';
                     if (connPortField) connPortField.value = connection.source_port || '';
                     if (connDatabaseField) connDatabaseField.value = connection.source_database || '';
                     if (connUsernameField) connUsernameField.value = connection.source_username || '';
 
-                    // BigQuery fields
-                    if (connection.source_type === 'bigquery') {
+                    // BigQuery/Firestore fields
+                    if (connection.source_type === 'bigquery' || connection.source_type === 'firestore') {
                         const bqProjectField = document.getElementById('connBigQueryProject');
                         const bqDatasetField = document.getElementById('connBigQueryDataset');
                         if (bqProjectField) bqProjectField.value = connection.bigquery_project || '';
                         if (bqDatasetField) bqDatasetField.value = connection.bigquery_dataset || '';
+
+                        // Fetch and populate service account JSON
+                        fetch(`/api/connections/${connectionId}/credentials/`)
+                            .then(r => r.json())
+                            .then(credData => {
+                                if (credData.status === 'success') {
+                                    const serviceAccountField = document.getElementById('connServiceAccountJson');
+                                    if (serviceAccountField) {
+                                        serviceAccountField.value = credData.credentials.service_account_json || '';
+                                        console.log('Populated BigQuery/Firestore service_account_json');
+                                    }
+                                }
+                            })
+                            .catch(err => console.error('Error loading BigQuery/Firestore credentials:', err));
                     }
 
                     // NoSQL fields
@@ -3148,6 +3182,75 @@ function openEditConnectionModal(connectionId) {
                     if (['csv', 'json', 'parquet', 'avro', 'excel', 'text'].includes(connection.source_type)) {
                         const filePathField = document.getElementById('connFilePath');
                         if (filePathField) filePathField.value = connection.file_path || '';
+                    }
+
+                    // === CLOUD STORAGE FIELDS (GCS, S3, Azure) - FIX FOR BUG ===
+                    if (connection.source_type === 'gcs') {
+                        const bucketPathField = document.getElementById('connGCSBucketPath');
+                        if (bucketPathField) bucketPathField.value = connection.bucket_path || '';
+                        console.log('Populated GCS bucket_path:', connection.bucket_path);
+
+                        // Fetch and populate service account JSON from credentials endpoint
+                        fetch(`/api/connections/${connectionId}/credentials/`)
+                            .then(r => r.json())
+                            .then(credData => {
+                                if (credData.status === 'success') {
+                                    const serviceAccountField = document.getElementById('connGCSServiceAccountJson');
+                                    if (serviceAccountField) {
+                                        serviceAccountField.value = credData.credentials.service_account_json || '';
+                                        console.log('Populated GCS service_account_json');
+                                    }
+                                }
+                            })
+                            .catch(err => console.error('Error loading GCS credentials:', err));
+                    }
+
+                    if (connection.source_type === 's3') {
+                        const bucketPathField = document.getElementById('connS3BucketPath');
+                        const accessKeyField = document.getElementById('connS3AccessKeyId');
+                        const regionField = document.getElementById('connS3Region');
+
+                        if (bucketPathField) bucketPathField.value = connection.bucket_path || '';
+                        if (accessKeyField) accessKeyField.value = connection.aws_access_key_id || '';
+                        if (regionField) regionField.value = connection.aws_region || 'us-east-1';
+                        console.log('Populated S3 fields - bucket_path:', connection.bucket_path);
+
+                        // Fetch and populate secret access key from credentials endpoint
+                        fetch(`/api/connections/${connectionId}/credentials/`)
+                            .then(r => r.json())
+                            .then(credData => {
+                                if (credData.status === 'success') {
+                                    const secretKeyField = document.getElementById('connS3SecretAccessKey');
+                                    if (secretKeyField) {
+                                        secretKeyField.value = credData.credentials.aws_secret_access_key || '';
+                                        console.log('Populated S3 secret_access_key');
+                                    }
+                                }
+                            })
+                            .catch(err => console.error('Error loading S3 credentials:', err));
+                    }
+
+                    if (connection.source_type === 'azure_blob') {
+                        const containerPathField = document.getElementById('connAzureContainerPath');
+                        const storageAccountField = document.getElementById('connAzureStorageAccount');
+
+                        if (containerPathField) containerPathField.value = connection.bucket_path || '';
+                        if (storageAccountField) storageAccountField.value = connection.azure_storage_account || '';
+                        console.log('Populated Azure fields - container_path:', connection.bucket_path);
+
+                        // Fetch and populate account key/SAS token from credentials endpoint
+                        fetch(`/api/connections/${connectionId}/credentials/`)
+                            .then(r => r.json())
+                            .then(credData => {
+                                if (credData.status === 'success') {
+                                    const accountKeyField = document.getElementById('connAzureAccountKey');
+                                    if (accountKeyField) {
+                                        accountKeyField.value = credData.credentials.azure_account_key || credData.credentials.azure_sas_token || '';
+                                        console.log('Populated Azure account_key/sas_token');
+                                    }
+                                }
+                            })
+                            .catch(err => console.error('Error loading Azure credentials:', err));
                     }
 
                     // Update button states
@@ -4259,18 +4362,57 @@ function proceedFromStep1() {
                         console.error('Could not find radio button for source type:', conn.source_type);
                     }
 
-                    // Populate Step 2 form fields (with null checks)
+                    // Populate Step 2 form fields (with null checks) - SOURCE-TYPE AWARE
                     const setFieldValue = (id, value) => {
                         const field = document.getElementById(id);
                         if (field) field.value = value || '';
                     };
 
-                    setFieldValue('sourceHost', conn.source_host);
-                    setFieldValue('sourcePort', conn.source_port);
-                    setFieldValue('sourceDatabase', conn.source_database);
-                    setFieldValue('sourceSchema', conn.source_schema);
-                    setFieldValue('sourceUsername', creds.username);
-                    setFieldValue('sourcePassword', creds.password);
+                    // === POPULATE FIELDS BASED ON SOURCE TYPE ===
+                    const dbTypes = ['postgresql', 'mysql', 'oracle', 'sqlserver', 'db2', 'redshift', 'synapse', 'bigquery', 'snowflake', 'mariadb', 'teradata'];
+                    const storageTypes = ['gcs', 's3', 'azure_blob'];
+                    const nosqlTypes = ['mongodb', 'firestore', 'cassandra', 'dynamodb', 'redis'];
+
+                    if (dbTypes.includes(conn.source_type)) {
+                        // === DATABASE CONNECTIONS ===
+                        setFieldValue('sourceHost', conn.source_host);
+                        setFieldValue('sourcePort', conn.source_port);
+                        setFieldValue('sourceDatabase', conn.source_database);
+                        setFieldValue('sourceSchema', conn.source_schema);
+                        setFieldValue('sourceUsername', creds.username);
+                        setFieldValue('sourcePassword', creds.password);
+
+                        if (conn.source_type === 'bigquery') {
+                            setFieldValue('connProjectId', conn.bigquery_project);
+                            setFieldValue('connDataset', conn.bigquery_dataset);
+                            setFieldValue('connGCSServiceAccountJson', creds.service_account_json);
+                        }
+                    } else if (conn.source_type === 'gcs') {
+                        // === GOOGLE CLOUD STORAGE ===
+                        setFieldValue('connGCSBucketPath', conn.bucket_path);
+                        setFieldValue('connGCSServiceAccountJson', creds.service_account_json);
+                        console.log('Populated GCS fields - bucket_path:', conn.bucket_path);
+                    } else if (conn.source_type === 's3') {
+                        // === AWS S3 ===
+                        setFieldValue('connS3BucketPath', conn.bucket_path);
+                        setFieldValue('connS3AccessKeyId', creds.aws_access_key_id);
+                        setFieldValue('connS3SecretAccessKey', creds.aws_secret_access_key);
+                        setFieldValue('connS3Region', creds.aws_region || conn.aws_region);
+                        console.log('Populated S3 fields - bucket_path:', conn.bucket_path);
+                    } else if (conn.source_type === 'azure_blob') {
+                        // === AZURE BLOB STORAGE ===
+                        setFieldValue('connAzureContainerPath', conn.bucket_path);
+                        setFieldValue('connAzureStorageAccount', conn.azure_storage_account);
+                        setFieldValue('connAzureAccountKey', creds.azure_account_key || creds.azure_sas_token);
+                        console.log('Populated Azure fields - container_path:', conn.bucket_path);
+                    } else if (nosqlTypes.includes(conn.source_type)) {
+                        // === NOSQL DATABASES ===
+                        setFieldValue('connConnectionString', conn.connection_string);
+                        if (conn.source_type === 'firestore') {
+                            setFieldValue('connProjectId', conn.bigquery_project);
+                            setFieldValue('connServiceAccountJson', creds.service_account_json);
+                        }
+                    }
 
                     // Populate Connection Name field (read-only since we're reusing)
                     const connectionNameField = document.getElementById('connectionName');

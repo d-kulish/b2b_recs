@@ -253,6 +253,39 @@ class MySQLExtractor(BaseExtractor):
             logger.error(f"Row count failed: {str(e)}")
             raise
 
+    def estimate_row_count(
+        self,
+        table_name: str,
+        schema_name: str,
+        timestamp_column: Optional[str] = None,
+        since_datetime: Optional[str] = None
+    ) -> int:
+        """
+        Estimate row count for ETL job (handles both full and incremental loads).
+
+        For full loads: Returns total row count
+        For incremental loads: Returns count of rows since timestamp
+
+        Args:
+            table_name: Name of the source table
+            schema_name: Schema/database name
+            timestamp_column: Column name for incremental filtering (optional)
+            since_datetime: Start datetime for incremental filtering (optional)
+
+        Returns:
+            Estimated number of rows to be extracted
+        """
+        if timestamp_column and since_datetime:
+            # Incremental load: count rows since last sync
+            timestamp_col_sanitized = self._sanitize_column_name(timestamp_column)
+            where_clause = f'`{timestamp_col_sanitized}` >= \'{since_datetime}\''
+            logger.info(f"Estimating incremental row count: {where_clause}")
+            return self.get_row_count(table_name, schema_name, where_clause)
+        else:
+            # Full load: count all rows
+            logger.info(f"Estimating full row count for {schema_name}.{table_name}")
+            return self.get_row_count(table_name, schema_name)
+
     def close(self):
         """Close the MySQL connection"""
         if self._connection and self._connection.open:

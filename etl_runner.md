@@ -37,13 +37,18 @@ Cloud Run Job (ETL Runner)
 ### **Databases**
 - **PostgreSQL** - Full table extraction, incremental updates
 - **MySQL** - Full table extraction, incremental updates
-- **BigQuery** - Cross-project data movement
+- **BigQuery** - Cross-project data movement, public dataset access
 
 **Features:**
 - Memory-efficient streaming (processes in batches)
 - Incremental loading using timestamp columns
 - Custom SQL query support
 - Connection pooling
+- **BigQuery-to-BigQuery:** Native support for copying data between BigQuery projects/datasets
+  - Public dataset access (e.g., `bigquery-public-data.stackoverflow`)
+  - Cross-project data movement
+  - Incremental loading with timestamp filters
+  - Row count estimation using `COUNT(*)` queries
 
 ### **Cloud Storage Files**
 - **Google Cloud Storage (GCS)**
@@ -151,9 +156,65 @@ ETL Runner receives configuration from Django API endpoint:
 
 ---
 
-## Recent Fixes (Phase 6 - November 21, 2025)
+## Recent Fixes (Phase 6-7 - November 21, 2025)
 
-### **Issue 1: Cloud Scheduler 401 Authentication Error**
+### **Issue 1: ETL Wizard Cloud Scheduler Creation Bug**
+
+**Problem:** ETL Wizard created Cloud Scheduler jobs with null httpTarget fields, preventing jobs from executing.
+
+**Root Cause:**
+1. **Wrong URL approach**: Wizard used Cloud Run Jobs API URL (`https://region-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/{project}/jobs/etl-runner:run`) which requires complex authentication
+2. **Missing OIDC audience**: `cloud_scheduler.py` didn't set the `audience` parameter in OIDC token configuration
+3. **Static configuration**: Used hardcoded Cloud Run Jobs API URL instead of dynamic Django webhook URL
+
+**Investigation:**
+- Manually created scheduler jobs worked fine using webhook pattern
+- Wizard-created jobs had all httpTarget fields as `null` (uri, httpMethod, serviceAccountEmail, audience)
+- Direct Cloud Run Jobs API approach consistently failed with 401 errors despite correct IAM permissions
+
+**Solution:**
+1. **Updated views.py (ETL Wizard)**:
+   ```python
+   # OLD (BROKEN):
+   cloud_run_job_url = f"https://europe-central2-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/{project_id}/jobs/etl-runner:run"
+
+   # NEW (WORKING):
+   django_base_url = f"{request.scheme}://{request.get_host()}"
+   webhook_url = f"{django_base_url}/api/etl/sources/{data_source.id}/scheduler-webhook/"
+   ```
+   - Builds webhook URL dynamically from request object
+   - Works in both local dev and Cloud Run environments
+   - No configuration needed
+
+2. **Updated cloud_scheduler.py**:
+   ```python
+   # Extract base URL for OIDC audience
+   from urllib.parse import urlparse
+   parsed_url = urlparse(cloud_run_job_url)
+   audience = f"{parsed_url.scheme}://{parsed_url.netloc}"
+
+   oidc_token=scheduler_v1.OidcToken(
+       service_account_email=service_account_email,
+       audience=audience  # <- Added this
+   )
+   ```
+
+**Architecture Change:**
+```
+OLD: Cloud Scheduler → Cloud Run Jobs API → ETL Runner (❌ 401 errors)
+
+NEW: Cloud Scheduler → Django Webhook → Django triggers Cloud Run Job → ETL Runner (✅ Working)
+```
+
+**Files Changed:**
+- `ml_platform/views.py` - Wizard scheduler creation (lines 2385-2398)
+- `ml_platform/utils/cloud_scheduler.py` - OIDC token configuration (lines 83-101)
+
+**Result:** ✅ ETL Wizard now creates working Cloud Scheduler jobs with proper authentication
+
+---
+
+### **Issue 2: Cloud Scheduler 401 Authentication Error (Manual Jobs)**
 
 **Problem:** Cloud Scheduler failed to trigger ETL jobs with UNAUTHENTICATED error.
 
@@ -171,7 +232,51 @@ ETL Runner receives configuration from Django API endpoint:
 
 ---
 
-### **Issue 2: File ETL Validation Failures**
+### **Issue 3: ETL Runner API Authentication (403 Forbidden)**
+
+**Problem:** ETL Runner received 403 errors when trying to POST status updates back to Django API.
+
+**Error Messages:**
+```
+Failed to update ETL run status: 403 Client Error: Forbidden for url:
+https://django-app-.../api/etl/runs/24/update/
+```
+
+**Root Cause:**
+Django API endpoints were missing `@csrf_exempt` decorator, requiring CSRF tokens that the ETL Runner (service-to-service call) doesn't provide.
+
+**Affected Endpoints:**
+- `/api/etl/runs/<id>/update/` - Status updates (running, completed, failed)
+- `/api/etl/job-config/<id>/` - Job configuration fetch
+
+**Solution:**
+Added `@csrf_exempt` decorator to service-to-service API endpoints:
+
+```python
+# ml_platform/views.py
+
+@csrf_exempt  # <- Added
+@require_http_methods(["PATCH"])
+def api_etl_run_update(request, run_id):
+    """Update ETL run status and progress."""
+    ...
+
+@csrf_exempt  # <- Added
+@require_http_methods(["GET"])
+def api_etl_job_config(request, data_source_id):
+    """Get ETL job configuration for the ETL runner."""
+    ...
+```
+
+**Note:** Other service-to-service endpoints already had `@csrf_exempt`:
+- `api_etl_scheduler_webhook` (webhook endpoint)
+- `api_etl_record_processed_file` (file metadata tracking)
+
+**Result:** ✅ ETL Runner now successfully updates job status throughout execution lifecycle
+
+---
+
+### **Issue 4: File ETL Validation Failures**
 
 **Problem:** Validation logic rejected file sources and required incorrect fields.
 
@@ -195,7 +300,7 @@ ETL Runner receives configuration from Django API endpoint:
 
 ---
 
-### **Issue 3: Connection Management System Bugs (November 21, 2025)**
+### **Issue 5: Connection Management System Bugs (November 21, 2025)**
 
 **Problem:** Connection edit forms displayed empty fields for cloud storage and NoSQL connections, making it impossible to edit existing connections.
 
@@ -287,7 +392,7 @@ The `openEditConnectionModal()` JavaScript function only populated database conn
 
 ---
 
-### **Issue 4: File ETL Runtime Bugs (November 21, 2025)**
+### **Issue 6: File ETL Runtime Bugs (November 21, 2025)**
 
 **Problem:** File-based ETL jobs failed during execution with multiple errors despite passing validation.
 
@@ -325,6 +430,67 @@ The `openEditConnectionModal()` JavaScript function only populated database conn
 - `etl_runner/main.py` - Column renaming, filtering, type conversion
 
 **Result:** ✅ File ETL now works end-to-end - successfully loads CSV files to BigQuery with proper authentication, column mapping, and type conversion
+
+---
+
+### **Issue 7: BigQuery Source Implementation (November 21, 2025)**
+
+**Goal:** Enable BigQuery-to-BigQuery ETL for accessing public datasets and cross-project data movement.
+
+**Use Case:** Testing with Stack Overflow public dataset (`bigquery-public-data.stackoverflow.posts_questions`) to validate ETL system with real-world data.
+
+**Implementation:**
+
+**A. Created BigQuery Extractor** (`etl_runner/extractors/bigquery.py`):
+- Authenticates with service account credentials
+- Supports incremental extraction using timestamp columns
+- Row count estimation using `COUNT(*)` queries
+- Batch extraction for memory efficiency
+
+**B. Updated ETL Wizard** (`ml_platform/views.py`):
+- Added BigQuery connection parameter handling
+- Maps `source_database` → `bigquery_project`, `schema_name` → `bigquery_dataset`
+- Passes BigQuery-specific credentials to job config
+
+**C. Updated Main ETL Runner** (`etl_runner/main.py`):
+- Imports BigQuery extractor
+- Routes BigQuery source type to appropriate extractor
+
+**Testing Results:**
+- ✅ Successfully connected to `bigquery-public-data.stackoverflow`
+- ✅ Schema detection working (14 columns from `posts_questions`)
+- ✅ Row count estimation working (used for processing mode decision)
+- ✅ Incremental extraction with timestamp filters
+- ✅ End-to-end ETL completed successfully
+
+**Bugs Discovered During BigQuery Testing:**
+
+**Bug 1: Schema Validation Error**
+- **Issue:** ETL Wizard validation failed with "Schema must have at least one column"
+- **Root Cause:** JavaScript function `syncBigQuerySchemaFromUI()` used wrong CSS selectors (`select[data-field="bigquery_type"]` instead of `select.bq-type-select`)
+- **Fix:** Updated selectors in `model_etl.html` (lines ~2850)
+
+**Bug 2: Column Names with Emojis**
+- **Issue:** BigQuery rejected column names like `community_owned_date\n\n🕐` (included emoji icons)
+- **Root Cause:** JavaScript extracted column names from `textContent` which included emoji HTML
+- **Fix:** Added `data-column-name` attribute to table rows, read from attribute instead of text
+- **Files:** `templates/ml_platform/model_etl.html`
+
+**Bug 3: Missing GCP_PROJECT_ID**
+- **Issue:** Environment variable not configured
+- **Fix:** Added `GCP_PROJECT_ID=b2b-recs` to `.env` and Cloud Run environment
+
+**Bug 4: Missing Cloud Scheduler Package**
+- **Issue:** `google-cloud-scheduler` not installed
+- **Fix:** `pip install google-cloud-scheduler==2.17.0`
+
+**Files Changed:**
+- `etl_runner/extractors/bigquery.py` - New file (~150 lines)
+- `etl_runner/main.py` - Added BigQuery import
+- `ml_platform/views.py` - BigQuery connection handling in `api_etl_job_config()`
+- `templates/ml_platform/model_etl.html` - Schema validation and column name extraction fixes
+
+**Result:** ✅ BigQuery-to-BigQuery ETL fully operational with public dataset access
 
 ---
 
@@ -531,6 +697,7 @@ etl_runner/
 ├── extractors/
 │   ├── postgresql.py           # PostgreSQL extractor
 │   ├── mysql.py                # MySQL extractor
+│   ├── bigquery.py             # BigQuery extractor (cross-project, public datasets)
 │   └── file_extractor.py       # GCS/S3/Azure file extractor
 ├── loaders/
 │   └── bigquery_loader.py      # BigQuery loader with batching
@@ -600,7 +767,11 @@ gcloud run jobs update etl-runner \
 - ⚠️ Test Connection button not visible in edit mode (workaround available)
 
 **Recent Fixes (Nov 21, 2025):**
+- ✅ ETL Wizard scheduler creation (webhook URL + OIDC audience)
 - ✅ Cloud Scheduler authentication (webhook pattern)
+- ✅ ETL Runner API authentication (CSRF exemption for service-to-service calls)
+- ✅ BigQuery source implementation (public datasets + cross-project ETL)
 - ✅ File ETL validation logic
 - ✅ Connection management system (source-type aware CRUD)
 - ✅ Connection edit form population for all connection types
+- ✅ File ETL runtime bugs (credentials, column mapping, type conversion)

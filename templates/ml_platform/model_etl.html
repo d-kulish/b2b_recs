@@ -5652,9 +5652,9 @@ function syncBigQuerySchemaFromUI() {
     rows.forEach(row => {
         const cells = row.querySelectorAll('td');
         if (cells.length >= 4) {
-            const columnName = cells[0].textContent.trim();
-            const typeSelect = row.querySelector('select[data-field="bigquery_type"]');
-            const modeSelect = row.querySelector('select[data-field="bigquery_mode"]');
+            const columnName = row.getAttribute('data-column-name');
+            const typeSelect = row.querySelector('select.bq-type-select');
+            const modeSelect = row.querySelector('select.bq-mode-select');
 
             if (columnName && typeSelect && modeSelect) {
                 window.bqSchemaColumns.push({
@@ -5695,11 +5695,12 @@ function populateBigQuerySchemaFromDetected() {
     window.detectedFileSchema.forEach((col, index) => {
         const row = document.createElement('tr');
         row.className = 'border-t border-gray-200';
+        row.setAttribute('data-column-name', col.name);
         row.innerHTML = `
             <td class="py-2 px-3 font-semibold">${col.name}</td>
             <td class="py-2 px-3 text-gray-600">${col.type}</td>
             <td class="py-2 px-3">
-                <select class="w-full px-2 py-1 text-xs border border-gray-300 rounded" data-column-name="${col.name}" data-field="bigquery_type">
+                <select class="bq-type-select w-full px-2 py-1 text-xs border border-gray-300 rounded" data-column-name="${col.name}" data-field="bigquery_type">
                     <option value="STRING" ${col.bigquery_type === 'STRING' ? 'selected' : ''}>STRING</option>
                     <option value="INT64" ${col.bigquery_type === 'INT64' ? 'selected' : ''}>INT64</option>
                     <option value="FLOAT64" ${col.bigquery_type === 'FLOAT64' ? 'selected' : ''}>FLOAT64</option>
@@ -5710,7 +5711,7 @@ function populateBigQuerySchemaFromDetected() {
                 </select>
             </td>
             <td class="py-2 px-3">
-                <select class="w-full px-2 py-1 text-xs border border-gray-300 rounded" data-column-name="${col.name}" data-field="bigquery_mode">
+                <select class="bq-mode-select w-full px-2 py-1 text-xs border border-gray-300 rounded" data-column-name="${col.name}" data-field="bigquery_mode">
                     <option value="NULLABLE" ${col.bigquery_mode === 'NULLABLE' ? 'selected' : ''}>NULLABLE</option>
                     <option value="REQUIRED" ${col.bigquery_mode === 'REQUIRED' ? 'selected' : ''}>REQUIRED</option>
                 </select>
@@ -6550,7 +6551,7 @@ function renderBigQuerySchemaEditor() {
         }[col.confidence || 'high'];
 
         return `
-            <tr class="border-b border-gray-100 hover:bg-gray-50">
+            <tr class="border-b border-gray-100 hover:bg-gray-50" data-column-name="${col.name}">
                 <!-- Column Name -->
                 <td class="py-2 px-3 font-medium">
                     ${col.name}

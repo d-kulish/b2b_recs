@@ -2382,16 +2382,19 @@ def api_etl_create_job(request, model_id):
                     region='europe-central2'
                 )
 
-                # Cloud Run Jobs execution URL
-                # Format: https://{region}-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/{project_id}/jobs/{job_name}:run
-                cloud_run_job_url = f"https://europe-central2-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/{project_id}/jobs/etl-runner:run"
+                # Build Django webhook URL dynamically from request
+                # This works in both local dev and Cloud Run environments
+                django_base_url = f"{request.scheme}://{request.get_host()}"
+                webhook_url = f"{django_base_url}/api/etl/sources/{data_source.id}/scheduler-webhook/"
                 service_account = f"etl-runner@{project_id}.iam.gserviceaccount.com"
+
+                logger.info(f"Creating scheduler with webhook URL: {webhook_url}")
 
                 scheduler_result = scheduler_manager.create_etl_schedule(
                     data_source_id=data_source.id,
                     job_name=job_name,
                     schedule_type=schedule_type,
-                    cloud_run_job_url=cloud_run_job_url,
+                    cloud_run_job_url=webhook_url,
                     service_account_email=service_account,
                     timezone=schedule_timezone,
                     schedule_time=schedule_time,
@@ -3044,6 +3047,7 @@ def api_connection_fetch_table_preview(request, connection_id):
 # ETL RUNNER API ENDPOINTS (Phase 2)
 # ============================================================
 
+@csrf_exempt
 @require_http_methods(["GET"])
 def api_etl_job_config(request, data_source_id):
     """
@@ -3114,9 +3118,20 @@ def api_etl_job_config(request, data_source_id):
                 'bucket': bucket_name,
                 'credentials': credentials,  # Cloud storage credentials (service account JSON or access keys)
             }
-        else:
-            # Database sources (PostgreSQL, MySQL, BigQuery)
+        elif connection.source_type == 'bigquery':
+            # BigQuery source - different parameters
             connection_params = {
+                'source_type': 'bigquery',
+                'source_project': connection.bigquery_project or connection.source_database,
+                'source_dataset': connection.bigquery_dataset or table.schema_name,
+                'bigquery_project': connection.bigquery_project or connection.source_database,
+                'bigquery_dataset': connection.bigquery_dataset or table.schema_name,
+                'credentials': credentials,  # Service account JSON
+            }
+        else:
+            # Database sources (PostgreSQL, MySQL, etc.)
+            connection_params = {
+                'source_type': connection.source_type,
                 'host': connection.source_host,
                 'port': connection.source_port,
                 'database': connection.source_database,
@@ -3139,6 +3154,9 @@ def api_etl_job_config(request, data_source_id):
             'selected_columns': table.selected_columns if hasattr(table, 'selected_columns') and table.selected_columns else [],
             'last_sync_value': data_source.last_sync_value or '',
             'historical_start_date': data_source.historical_start_date.isoformat() if data_source.historical_start_date else None,
+            # Processing mode configuration (for conditional Dataflow usage)
+            'processing_mode': table.processing_mode if hasattr(table, 'processing_mode') else 'auto',
+            'row_count_threshold': table.row_count_threshold if hasattr(table, 'row_count_threshold') else 1_000_000,
         }
 
         # Add file-specific configuration if this is a file source
@@ -3164,6 +3182,7 @@ def api_etl_job_config(request, data_source_id):
         }, status=500)
 
 
+@csrf_exempt
 @require_http_methods(["PATCH"])
 def api_etl_run_update(request, run_id):
     """

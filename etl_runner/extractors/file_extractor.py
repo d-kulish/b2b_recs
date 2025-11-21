@@ -416,6 +416,66 @@ class FileExtractor:
                 # Continue with next file instead of failing entire job
                 continue
 
+    def estimate_row_count(
+        self,
+        table_name: Optional[str] = None,
+        schema_name: Optional[str] = None,
+        timestamp_column: Optional[str] = None,
+        since_datetime: Optional[str] = None
+    ) -> int:
+        """
+        Estimate row count for file-based ETL jobs.
+
+        Since we can't know exact row count without reading files, we estimate based on:
+        1. Total file size
+        2. Heuristic rows per MB for each file format
+
+        Args:
+            table_name: Not used for file sources (kept for interface compatibility)
+            schema_name: Not used for file sources (kept for interface compatibility)
+            timestamp_column: Not used for file sources
+            since_datetime: Not used for file sources
+
+        Returns:
+            Estimated number of rows across all files
+        """
+        try:
+            # Get list of files matching pattern
+            files = self.list_files()
+
+            if not files:
+                logger.warning("No files found matching pattern")
+                return 0
+
+            # Calculate total file size in bytes
+            total_size_bytes = sum(f['file_size_bytes'] for f in files)
+            total_size_mb = total_size_bytes / (1024 * 1024)
+
+            logger.info(f"Total file size: {total_size_mb:.2f} MB ({len(files)} files)")
+
+            # Estimate rows per MB based on file format
+            # These are conservative estimates
+            rows_per_mb = {
+                'csv': 20000,      # Depends on columns, ~20k rows per MB is typical
+                'parquet': 100000, # Parquet is highly compressed
+                'json': 10000      # JSON is verbose
+            }
+
+            estimated_rows_per_mb = rows_per_mb.get(self.file_format, 20000)
+            estimated_rows = int(total_size_mb * estimated_rows_per_mb)
+
+            logger.info(
+                f"Estimated {estimated_rows:,} rows "
+                f"(~{estimated_rows_per_mb:,} rows/MB for {self.file_format} format)"
+            )
+
+            return estimated_rows
+
+        except Exception as e:
+            logger.error(f"Failed to estimate row count: {str(e)}")
+            # Return 0 to fallback to standard processing
+            return 0
+
     def close(self):
         """Close storage client connections."""
         # Most cloud storage clients don't need explicit closing

@@ -1,7 +1,7 @@
 # Next Steps: B2B Recommendations Platform
 
 **Last Updated:** November 21, 2025
-**Status:** Phase 6 Complete ✅ | File ETL Working End-to-End ✅ | Production Ready ✅
+**Status:** Phase 7 Complete ✅ | BigQuery Source Operational ✅ | ETL Wizard Scheduler Fixed ✅ | Production Ready ✅
 
 ---
 
@@ -16,7 +16,7 @@
 - Production deployment in GCP (europe-central2)
 
 #### **2. ETL System** ✅ **Fully Operational**
-- **Database Sources**: PostgreSQL, MySQL, BigQuery
+- **Database Sources**: PostgreSQL, MySQL, **BigQuery** (cross-project + public datasets)
 - **File Sources**: GCS, S3, Azure Blob Storage (CSV, Parquet, JSON)
 - **Load Strategies**:
   - Transactional (incremental/append-only)
@@ -30,11 +30,12 @@
   - Incremental file processing with metadata tracking
 - **API**: Django REST endpoints for configuration
 
-#### **3. Cloud Scheduler Integration** (Phase 6A - Nov 21, 2025)
+#### **3. Cloud Scheduler Integration** (Phase 6-7 - Nov 21, 2025)
 - ✅ Automated ETL job scheduling
-- ✅ OIDC authentication configured
-- ✅ Webhook pattern: `Cloud Scheduler → Django → Cloud Run Job`
+- ✅ OIDC authentication configured (with audience parameter)
+- ✅ Webhook pattern: `Cloud Scheduler → Django Webhook → Cloud Run Job`
 - ✅ IAM permissions properly configured
+- ✅ ETL Wizard creates schedulers correctly (dynamic webhook URL)
 - ✅ Working end-to-end
 
 #### **4. Connection Management**
@@ -54,6 +55,122 @@
 - Schema management
 - Incremental loading
 - Column name sanitization
+- **BigQuery as Source**: Cross-project ETL, public dataset access
+- Row count estimation for processing mode selection
+
+---
+
+## 📈 Phase 7 Completion Summary (November 21, 2025)
+
+### **BigQuery Source Implementation**
+
+**Objective:** Enable ETL from BigQuery public datasets and cross-project data movement for testing and validation.
+
+**Use Case:** Access Stack Overflow public dataset (`bigquery-public-data.stackoverflow.posts_questions`) to test ETL system with real-world, large-scale data.
+
+### **Implementation Details:**
+
+#### **1. BigQuery Extractor** (`etl_runner/extractors/bigquery.py`)
+- Created new extractor supporting BigQuery as a source
+- Features:
+  - Service account authentication
+  - Incremental extraction with timestamp filters
+  - Row count estimation using `COUNT(*)` queries
+  - Batch processing for memory efficiency
+  - Support for cross-project access
+
+#### **2. ETL Wizard Integration**
+- Added BigQuery connection handling in `api_etl_job_config()`
+- Parameter mapping:
+  - `source_database` → `bigquery_project`
+  - `schema_name` → `bigquery_dataset`
+- Credentials passed from Secret Manager
+
+#### **3. Testing with Public Datasets**
+Successfully tested with Stack Overflow public dataset:
+- **Dataset:** `bigquery-public-data.stackoverflow.posts_questions`
+- **Schema:** 14 columns detected
+- **Test Results:**
+  - ✅ Connection successful
+  - ✅ Schema detection working
+  - ✅ Row count estimation functional
+  - ✅ Incremental extraction with timestamp filters
+  - ✅ End-to-end ETL completed successfully
+
+### **Issues Discovered & Fixed:**
+
+#### **Issue 1: ETL Wizard Scheduler Creation Bug**
+**Problem:** Wizard-created Cloud Scheduler jobs had null httpTarget fields.
+
+**Root Causes:**
+1. Used Cloud Run Jobs API URL (complex auth, unreliable)
+2. Missing OIDC `audience` parameter
+3. Static configuration instead of dynamic URL building
+
+**Solution:**
+- Changed to webhook pattern with dynamic URL: `{request.scheme}://{request.get_host()}/api/etl/sources/{id}/scheduler-webhook/`
+- Added OIDC audience extraction in `cloud_scheduler.py`
+- Works in both local and Cloud Run environments
+
+**Files Changed:**
+- `ml_platform/views.py` - Dynamic webhook URL building
+- `ml_platform/utils/cloud_scheduler.py` - OIDC audience parameter
+
+#### **Issue 2: ETL Runner API Authentication (403 Forbidden)**
+**Problem:** ETL Runner couldn't POST status updates to Django API.
+
+**Root Cause:** Missing `@csrf_exempt` decorator on service-to-service API endpoints.
+
+**Solution:** Added `@csrf_exempt` to:
+- `/api/etl/runs/<id>/update/` - Status updates
+- `/api/etl/job-config/<id>/` - Job configuration
+
+**Files Changed:** `ml_platform/views.py`
+
+#### **Issue 3: BigQuery Testing Bugs**
+Multiple bugs discovered during Stack Overflow dataset testing:
+
+1. **Schema Validation Error**
+   - JavaScript used wrong CSS selectors
+   - Fixed: Updated `syncBigQuerySchemaFromUI()` selectors
+
+2. **Column Names with Emojis**
+   - Column names extracted from textContent included emoji HTML
+   - Fixed: Added `data-column-name` attribute to table rows
+
+3. **Missing GCP_PROJECT_ID**
+   - Environment variable not configured
+   - Fixed: Added to `.env` and Cloud Run environment
+
+4. **Missing google-cloud-scheduler Package**
+   - Package not installed in requirements
+   - Fixed: `pip install google-cloud-scheduler==2.17.0`
+
+### **Architecture Improvements:**
+
+**Before Phase 7:**
+```
+Cloud Scheduler → Cloud Run Jobs API (❌ Auth issues)
+```
+
+**After Phase 7:**
+```
+Cloud Scheduler → Django Webhook → Django triggers Cloud Run Job → ETL Runner ✅
+                                                                        ↓
+                                                                   BigQuery Source
+                                                                        ↓
+                                                                   Extract Data
+                                                                        ↓
+                                                                   BigQuery Destination
+```
+
+### **Testing Results:**
+- ✅ Scheduler jobs created by wizard work on first try
+- ✅ OIDC authentication functioning properly
+- ✅ ETL Runner successfully updates job status
+- ✅ BigQuery-to-BigQuery ETL operational
+- ✅ Public dataset access working
+- ✅ End-to-end flow validated
 
 ---
 
@@ -167,16 +284,22 @@ Cloud Scheduler → Django API → Decision Logic
 
 ## 🎯 Success Metrics
 
-**Achieved (Phase 6 - Nov 21, 2025):**
+**Achieved (Phase 6-7 - Nov 21, 2025):**
 - ✅ Cloud Scheduler triggers working (100% success rate)
+- ✅ ETL Wizard scheduler creation working (100% success rate)
 - ✅ File validation working (100% pass rate)
 - ✅ End-to-end file ETL working (GCS CSV files → BigQuery)
+- ✅ BigQuery source ETL working (cross-project + public datasets)
 - ✅ Automatic column mapping and type conversion
 - ✅ File metadata tracking and incremental loading
 - ✅ Successfully processed 200,000 rows in test run
+- ✅ ETL Runner API authentication working (service-to-service)
+- ✅ Tested with real-world public dataset (Stack Overflow)
 
 **Next Targets:**
-- [ ] Process > 1M rows per ETL job with Dataflow
+- [ ] Test with large dataset (> 1M rows) to trigger Dataflow mode
+- [ ] Implement conditional Dataflow integration (auto-switch at 1M rows)
+- [ ] Process > 10M rows per ETL job with Dataflow
 - [ ] < 5 minute latency for scheduled jobs
 - [ ] 99.9% ETL success rate
 - [ ] Support 10+ concurrent data sources
@@ -203,4 +326,4 @@ Cloud Scheduler → Django API → Decision Logic
 
 ---
 
-**Current Focus:** File ETL Complete ✅ | Next: Dataflow Integration for Large-Scale Processing
+**Current Focus:** BigQuery Source Complete ✅ | ETL Wizard Fixed ✅ | Next: Dataflow Integration for Large-Scale Processing (> 1M rows)

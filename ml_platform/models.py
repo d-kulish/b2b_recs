@@ -415,6 +415,29 @@ class DataSourceTable(models.Model):
         help_text="Timezone for schedule (auto-detected from user's browser)"
     )
 
+    # Processing mode configuration (for conditional Dataflow usage)
+    PROCESSING_MODE_CHOICES = [
+        ('auto', 'Auto-detect (based on row count)'),
+        ('standard', 'Standard (Cloud Run, < 1M rows)'),
+        ('dataflow', 'Dataflow (large-scale, >= 1M rows)'),
+    ]
+
+    processing_mode = models.CharField(
+        max_length=20,
+        choices=PROCESSING_MODE_CHOICES,
+        default='auto',
+        help_text="Processing engine selection: auto-detect, standard (pandas), or dataflow (Apache Beam)"
+    )
+    row_count_threshold = models.IntegerField(
+        default=1_000_000,
+        help_text="Threshold for switching to Dataflow when processing_mode='auto' (default: 1 million rows)"
+    )
+    estimated_row_count = models.BigIntegerField(
+        null=True,
+        blank=True,
+        help_text="Last estimated row count from most recent ETL run (used for planning/display)"
+    )
+
     # Table settings
     is_enabled = models.BooleanField(default=True)
     row_limit = models.IntegerField(null=True, blank=True, help_text="Optional: limit rows for testing")

@@ -80,9 +80,12 @@ class CloudSchedulerManager:
                 schedule_day_of_month=schedule_day_of_month
             )
 
-            # Build HTTP target for Cloud Run Jobs
-            # Cloud Run Jobs use the Jobs API, not direct HTTP
-            # We'll use HTTP POST to trigger the job via Cloud Run Jobs API
+            # Build HTTP target for Django webhook
+            # Extract base URL for OIDC audience (scheme + netloc)
+            from urllib.parse import urlparse
+            parsed_url = urlparse(cloud_run_job_url)
+            audience = f"{parsed_url.scheme}://{parsed_url.netloc}"
+
             http_target = scheduler_v1.HttpTarget(
                 uri=cloud_run_job_url,
                 http_method=scheduler_v1.HttpMethod.POST,
@@ -92,7 +95,8 @@ class CloudSchedulerManager:
                     'trigger': 'scheduled'
                 }).encode('utf-8'),
                 oidc_token=scheduler_v1.OidcToken(
-                    service_account_email=service_account_email
+                    service_account_email=service_account_email,
+                    audience=audience
                 )
             )
 

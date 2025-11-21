@@ -16,6 +16,7 @@ import pandas as pd
 from config import Config
 from extractors.postgresql import PostgreSQLExtractor
 from extractors.mysql import MySQLExtractor
+from extractors.bigquery import BigQueryExtractor
 from extractors.file_extractor import FileExtractor
 from loaders.bigquery_loader import BigQueryLoader
 from utils.logging_config import setup_logging, LogContext
@@ -80,6 +81,8 @@ class ETLRunner:
             return PostgreSQLExtractor(connection_params)
         elif source_type == 'mysql':
             return MySQLExtractor(connection_params)
+        elif source_type == 'bigquery':
+            return BigQueryExtractor(connection_params)
 
         # File extractors (GCS, S3, Azure Blob)
         elif source_type in ['gcs', 's3', 'azure_blob']:
@@ -276,6 +279,83 @@ class ETLRunner:
         df = self._convert_dataframe_types(df)
 
         return df
+
+    def estimate_row_count(self) -> int:
+        """
+        Estimate number of rows for this ETL job.
+
+        For databases: Runs SELECT COUNT(*) query
+        For files: Estimates based on file size
+
+        Returns:
+            Estimated number of rows to be extracted
+        """
+        try:
+            load_type = self.job_config.get('load_type', 'transactional')
+            source_type = self.job_config['source_type']
+
+            # Build parameters for estimation
+            table_name = self.job_config.get('source_table_name', '')
+            schema_name = self.job_config.get('schema_name', '')
+            timestamp_column = self.job_config.get('timestamp_column')
+            since_datetime = None
+
+            # For transactional loads, get the last sync value
+            if load_type == 'transactional' and timestamp_column:
+                since_datetime = self.job_config.get('last_sync_value') or \
+                               self.job_config.get('historical_start_date')
+
+            # Call extractor's estimate_row_count method
+            estimated_rows = self.extractor.estimate_row_count(
+                table_name=table_name,
+                schema_name=schema_name,
+                timestamp_column=timestamp_column,
+                since_datetime=since_datetime
+            )
+
+            logger.info(f"Estimated row count: {estimated_rows:,}")
+            return estimated_rows
+
+        except Exception as e:
+            logger.warning(f"Failed to estimate row count: {str(e)}")
+            # On error, return 0 (will fall back to standard processing)
+            return 0
+
+    def determine_processing_mode(self) -> str:
+        """
+        Determine whether to use standard (pandas) or dataflow (Beam) processing.
+
+        Decision logic:
+        1. If processing_mode is explicitly set to 'standard' or 'dataflow', use that
+        2. If processing_mode is 'auto', estimate row count and compare to threshold
+        3. Default to 'standard' if estimation fails
+
+        Returns:
+            'standard' or 'dataflow'
+        """
+        processing_mode = self.job_config.get('processing_mode', 'auto')
+
+        logger.info(f"Processing mode configuration: {processing_mode}")
+
+        if processing_mode == 'standard':
+            logger.info("Forcing standard processing (user configured)")
+            return 'standard'
+        elif processing_mode == 'dataflow':
+            logger.info("Forcing Dataflow processing (user configured)")
+            return 'dataflow'
+        else:
+            # Auto-detect based on row count
+            threshold = self.job_config.get('row_count_threshold', 1_000_000)
+            estimated_rows = self.estimate_row_count()
+
+            logger.info(f"Auto-detection: {estimated_rows:,} rows vs {threshold:,} threshold")
+
+            if estimated_rows >= threshold:
+                logger.info("✓ Using Dataflow processing (large dataset)")
+                return 'dataflow'
+            else:
+                logger.info("✓ Using standard processing (small dataset)")
+                return 'standard'
 
     def run_catalog_load(self):
         """
@@ -552,6 +632,74 @@ class ETLRunner:
         finally:
             self.extractor.close()
 
+    def run_with_dataflow(self):
+        """
+        Execute ETL using Dataflow + Apache Beam for large datasets.
+
+        This method submits a Dataflow job to GCP and monitors its execution.
+        Suitable for datasets with >= 1M rows.
+
+        Returns:
+            Dict with execution results
+        """
+        logger.info("=" * 80)
+        logger.info("STARTING DATAFLOW EXECUTION")
+        logger.info("=" * 80)
+
+        try:
+            from dataflow_pipelines.etl_pipeline import run_database_pipeline, run_file_pipeline
+
+            # Update status to running
+            if self.etl_run_id:
+                self.config.update_etl_run_status(self.etl_run_id, 'running')
+
+            # Prepare GCP configuration
+            gcp_config = {
+                'project_id': self.config.gcp_project_id,
+                'region': 'europe-central2',  # Warsaw region
+                'bucket': 'b2b-recs-dataflow',  # TODO: Make configurable
+                'dataset_id': self.config.bigquery_dataset
+            }
+
+            # Add runtime context to job config
+            job_config_with_context = self.job_config.copy()
+            job_config_with_context['data_source_id'] = self.data_source_id
+            job_config_with_context['etl_run_id'] = self.etl_run_id
+
+            # Determine source type and run appropriate pipeline
+            source_type = self.job_config['source_type']
+            is_file_source = source_type in ['gcs', 's3', 'azure_blob']
+
+            if is_file_source:
+                logger.info("Launching Dataflow pipeline for FILE source")
+                result = run_file_pipeline(job_config_with_context, gcp_config)
+            else:
+                logger.info("Launching Dataflow pipeline for DATABASE source")
+                result = run_database_pipeline(job_config_with_context, gcp_config)
+
+            logger.info("=" * 80)
+            logger.info("DATAFLOW JOB SUBMITTED")
+            logger.info(f"Job Name: {result['job_name']}")
+            logger.info(f"Monitor at: https://console.cloud.google.com/dataflow/jobs/{gcp_config['region']}/{result['job_name']}")
+            logger.info("=" * 80)
+
+            # Note: Dataflow jobs run asynchronously
+            # For now, we mark as running and let GCP handle execution
+            # In production, you might want to poll job status and update Django accordingly
+
+            return {
+                'status': 'success',
+                'processing_mode': 'dataflow',
+                'dataflow_job_name': result['job_name'],
+                'message': result['message'],
+                'rows_extracted': 0,  # Will be updated by Dataflow
+                'rows_loaded': 0      # Will be updated by Dataflow
+            }
+
+        except Exception as e:
+            logger.error(f"Dataflow execution failed: {str(e)}")
+            raise
+
     def run(self):
         """
         Execute ETL job based on load type.
@@ -578,27 +726,36 @@ class ETLRunner:
                     f"Please create the table first using the ETL wizard."
                 )
 
-            # Execute load based on source type and load type
-            source_type = self.job_config['source_type']
-            load_type = self.job_config['load_type']
-            is_file_source = source_type in ['gcs', 's3', 'azure_blob']
+            # Determine processing mode (standard vs dataflow)
+            processing_mode = self.determine_processing_mode()
+            logger.info(f"Selected processing mode: {processing_mode}")
 
-            if is_file_source:
-                # File-based sources
-                if load_type == 'catalog':
-                    result = self.run_catalog_load_files()
-                elif load_type == 'transactional':
-                    result = self.run_transactional_load_files()
-                else:
-                    raise ConfigurationError(f"Invalid load type: {load_type}")
+            # Execute based on processing mode
+            if processing_mode == 'dataflow':
+                # Use Dataflow + Apache Beam for large datasets
+                result = self.run_with_dataflow()
             else:
-                # Database sources
-                if load_type == 'catalog':
-                    result = self.run_catalog_load()
-                elif load_type == 'transactional':
-                    result = self.run_transactional_load()
+                # Use standard pandas processing for smaller datasets
+                source_type = self.job_config['source_type']
+                load_type = self.job_config['load_type']
+                is_file_source = source_type in ['gcs', 's3', 'azure_blob']
+
+                if is_file_source:
+                    # File-based sources
+                    if load_type == 'catalog':
+                        result = self.run_catalog_load_files()
+                    elif load_type == 'transactional':
+                        result = self.run_transactional_load_files()
+                    else:
+                        raise ConfigurationError(f"Invalid load type: {load_type}")
                 else:
-                    raise ConfigurationError(f"Invalid load type: {load_type}")
+                    # Database sources
+                    if load_type == 'catalog':
+                        result = self.run_catalog_load()
+                    elif load_type == 'transactional':
+                        result = self.run_transactional_load()
+                    else:
+                        raise ConfigurationError(f"Invalid load type: {load_type}")
 
             # Calculate duration
             self.end_time = datetime.utcnow()

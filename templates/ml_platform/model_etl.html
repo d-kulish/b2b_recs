@@ -547,16 +547,24 @@
                             <label class="block text-xs font-semibold text-gray-700 mb-1">Historical Backfill</label>
                             <select id="historicalRange" class="w-full px-2.5 py-1.5 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                                 <option value="all">Load all data (from beginning)</option>
-                                <option value="30">Last 30 days</option>
+                                <option value="30" selected>Last 30 days</option>
                                 <option value="60">Last 60 days</option>
-                                <option value="90" selected>Last 90 days</option>
+                                <option value="90">Last 90 days</option>
+                                <option value="custom_days">Last X days (custom)...</option>
                                 <option value="custom">Custom date...</option>
                             </select>
                             <div id="customDateContainer" class="mt-2 hidden">
                                 <input type="date" id="customStartDate" class="w-full px-2.5 py-1.5 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                             </div>
+                            <div id="customDaysContainer" class="mt-2 hidden">
+                                <input type="number" id="customDaysInput" min="1" max="99" placeholder="Enter number of days (1-99)" class="w-full px-2.5 py-1.5 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                <p class="text-xs text-gray-500 mt-1">
+                                    <i class="fas fa-info-circle mr-1"></i>
+                                    Enter a value between 1 and 99 days
+                                </p>
+                            </div>
                             <p class="text-xs text-gray-500 mt-1" id="historicalRangeHint">
-                                First sync will load records from the last 90 days
+                                First sync will load records from the last 30 days
                             </p>
                         </div>
                     </div>
@@ -4195,13 +4203,27 @@ async function createETLJob() {
 
     if (!isCloudStorage && loadType === 'transactional') {
         timestampColumn = document.getElementById('timestampColumn')?.value || '';
-        const historicalRange = document.getElementById('historicalRange')?.value || '90';
+        const historicalRange = document.getElementById('historicalRange')?.value || '30';
         const customStartDate = document.getElementById('customStartDate')?.value || '';
+        const customDaysInput = document.getElementById('customDaysInput')?.value || '';
 
         // Calculate historical_start_date
         if (historicalRange === 'custom' && customStartDate) {
+            // Custom date selected
             historicalStartDate = customStartDate;
+        } else if (historicalRange === 'custom_days' && customDaysInput) {
+            // Custom X days selected
+            const customDays = parseInt(customDaysInput);
+            if (customDays > 0 && customDays <= 99) {
+                const date = new Date();
+                date.setDate(date.getDate() - customDays);
+                historicalStartDate = date.toISOString().split('T')[0];
+            } else {
+                alert('Please enter a valid number of days between 1 and 99');
+                return; // Stop submission
+            }
         } else if (historicalRange !== 'all') {
+            // Preset options (30, 60, 90)
             const days = parseInt(historicalRange);
             const date = new Date();
             date.setDate(date.getDate() - days);
@@ -6043,6 +6065,34 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     });
+
+    // Handle Historical Backfill custom options (Custom date / Last X days)
+    const historicalRangeSelect = document.getElementById('historicalRange');
+    if (historicalRangeSelect) {
+        historicalRangeSelect.addEventListener('change', function() {
+            const customDateContainer = document.getElementById('customDateContainer');
+            const customDaysContainer = document.getElementById('customDaysContainer');
+            const hint = document.getElementById('historicalRangeHint');
+
+            // Hide both custom containers by default
+            if (customDateContainer) customDateContainer.classList.add('hidden');
+            if (customDaysContainer) customDaysContainer.classList.add('hidden');
+
+            // Show appropriate container and update hint based on selection
+            if (this.value === 'custom') {
+                if (customDateContainer) customDateContainer.classList.remove('hidden');
+                if (hint) hint.textContent = 'First sync will load records from your custom start date';
+            } else if (this.value === 'custom_days') {
+                if (customDaysContainer) customDaysContainer.classList.remove('hidden');
+                if (hint) hint.textContent = 'First sync will load records from the last X days (custom)';
+            } else if (this.value === 'all') {
+                if (hint) hint.textContent = 'First sync will load all historical data';
+            } else {
+                // Preset options (30, 60, 90)
+                if (hint) hint.textContent = `First sync will load records from the last ${this.value} days`;
+            }
+        });
+    }
 
     // Handle Service Account JSON file upload (for BigQuery/Firestore)
     const serviceAccountFileInput = document.getElementById('connServiceAccountFile');

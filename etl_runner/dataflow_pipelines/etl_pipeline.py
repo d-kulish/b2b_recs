@@ -11,6 +11,7 @@ from apache_beam.options.pipeline_options import (
     PipelineOptions, GoogleCloudOptions, StandardOptions, WorkerOptions, SetupOptions
 )
 from apache_beam.io.gcp.bigquery import WriteToBigQuery, BigQueryDisposition
+from apache_beam.io.gcp.internal.clients.bigquery import TableSchema, TableFieldSchema
 from typing import Dict, Any, List
 import json
 
@@ -172,6 +173,57 @@ def create_pipeline_options(job_config: Dict[str, Any], gcp_config: Dict[str, An
     return options
 
 
+def get_bq_table_schema(project_id: str, dataset_id: str, table_name: str) -> TableSchema:
+    """
+    Fetch BigQuery table schema and convert to Beam's TableSchema format.
+
+    Args:
+        project_id: GCP project ID
+        dataset_id: BigQuery dataset ID
+        table_name: BigQuery table name
+
+    Returns:
+        TableSchema object for use with WriteToBigQuery
+    """
+    from google.cloud import bigquery
+
+    # Initialize BigQuery client
+    client = bigquery.Client(project=project_id)
+
+    # Get table schema
+    table_ref = f"{project_id}.{dataset_id}.{table_name}"
+    table = client.get_table(table_ref)
+
+    # Convert BigQuery schema to Beam TableSchema
+    beam_schema = TableSchema()
+    beam_fields = []
+
+    for field in table.schema:
+        beam_field = TableFieldSchema(
+            name=field.name,
+            type=field.field_type,
+            mode=field.mode or 'NULLABLE'
+        )
+
+        # Handle nested/repeated fields
+        if field.fields:
+            beam_field.fields = []
+            for subfield in field.fields:
+                beam_subfield = TableFieldSchema(
+                    name=subfield.name,
+                    type=subfield.field_type,
+                    mode=subfield.mode or 'NULLABLE'
+                )
+                beam_field.fields.append(beam_subfield)
+
+        beam_fields.append(beam_field)
+
+    beam_schema.fields = beam_fields
+
+    logger.info(f"Fetched schema for {table_ref}: {len(beam_fields)} fields")
+    return beam_schema
+
+
 def run_database_pipeline(job_config: Dict[str, Any], gcp_config: Dict[str, Any]) -> Dict[str, Any]:
     """
     Create and run Beam pipeline for database sources.
@@ -187,6 +239,13 @@ def run_database_pipeline(job_config: Dict[str, Any], gcp_config: Dict[str, Any]
 
     # Build BigQuery table reference
     table_ref = f"{gcp_config['project_id']}:{gcp_config['dataset_id']}.{job_config['dest_table_name']}"
+
+    # Fetch BigQuery table schema (required for STORAGE_WRITE_API)
+    bq_schema = get_bq_table_schema(
+        project_id=gcp_config['project_id'],
+        dataset_id=gcp_config['dataset_id'],
+        table_name=job_config['dest_table_name']
+    )
 
     # Determine write disposition based on load type
     write_disposition = (
@@ -217,8 +276,10 @@ def run_database_pipeline(job_config: Dict[str, Any], gcp_config: Dict[str, Any]
             )
             | 'WriteToBigQuery' >> WriteToBigQuery(
                 table=table_ref,
+                schema=bq_schema,  # Required for STORAGE_WRITE_API
                 write_disposition=write_disposition,
-                create_disposition=BigQueryDisposition.CREATE_NEVER  # Table must exist
+                create_disposition=BigQueryDisposition.CREATE_NEVER,  # Table must exist
+                method='STORAGE_WRITE_API'  # Use Storage Write API for complex types (NUMERIC, REPEATED, etc.)
             )
         )
 
@@ -246,6 +307,13 @@ def run_file_pipeline(job_config: Dict[str, Any], gcp_config: Dict[str, Any]) ->
 
     # Build BigQuery table reference
     table_ref = f"{gcp_config['project_id']}:{gcp_config['dataset_id']}.{job_config['dest_table_name']}"
+
+    # Fetch BigQuery table schema (required for STORAGE_WRITE_API)
+    bq_schema = get_bq_table_schema(
+        project_id=gcp_config['project_id'],
+        dataset_id=gcp_config['dataset_id'],
+        table_name=job_config['dest_table_name']
+    )
 
     # Determine write disposition
     write_disposition = (
@@ -277,8 +345,10 @@ def run_file_pipeline(job_config: Dict[str, Any], gcp_config: Dict[str, Any]) ->
             )
             | 'WriteToBigQuery' >> WriteToBigQuery(
                 table=table_ref,
+                schema=bq_schema,  # Required for STORAGE_WRITE_API
                 write_disposition=write_disposition,
-                create_disposition=BigQueryDisposition.CREATE_NEVER
+                create_disposition=BigQueryDisposition.CREATE_NEVER,
+                method='STORAGE_WRITE_API'  # Use Storage Write API for complex types (NUMERIC, REPEATED, etc.)
             )
         )
 

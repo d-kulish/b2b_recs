@@ -7,7 +7,9 @@ using Apache Beam. Supports both database and file sources.
 
 import logging
 import apache_beam as beam
-from apache_beam.options.pipeline_options import PipelineOptions, GoogleCloudOptions, StandardOptions, WorkerOptions
+from apache_beam.options.pipeline_options import (
+    PipelineOptions, GoogleCloudOptions, StandardOptions, WorkerOptions, SetupOptions
+)
 from apache_beam.io.gcp.bigquery import WriteToBigQuery, BigQueryDisposition
 from typing import Dict, Any, List
 import json
@@ -37,11 +39,14 @@ class DatabaseToDataFrame(beam.DoFn):
         source_type = self.connection_params.get('source_type')
 
         if source_type == 'postgresql':
-            from etl_runner.extractors.postgresql import PostgreSQLExtractor
+            from extractors.postgresql import PostgreSQLExtractor
             self.extractor = PostgreSQLExtractor(self.connection_params)
         elif source_type == 'mysql':
-            from etl_runner.extractors.mysql import MySQLExtractor
+            from extractors.mysql import MySQLExtractor
             self.extractor = MySQLExtractor(self.connection_params)
+        elif source_type == 'bigquery':
+            from extractors.bigquery import BigQueryExtractor
+            self.extractor = BigQueryExtractor(self.connection_params)
         else:
             raise ValueError(f"Unsupported source type for Dataflow: {source_type}")
 
@@ -94,7 +99,7 @@ class FileToRows(beam.DoFn):
 
     def setup(self):
         """Initialize cloud storage client"""
-        from etl_runner.extractors.file_extractor import FileExtractor
+        from extractors.file_extractor import FileExtractor
         self.extractor = FileExtractor(self.connection_params, self.file_config)
 
     def process(self, file_metadata):
@@ -124,6 +129,8 @@ def create_pipeline_options(job_config: Dict[str, Any], gcp_config: Dict[str, An
     Returns:
         PipelineOptions configured for Dataflow
     """
+    import os
+
     options = PipelineOptions()
 
     # Google Cloud options
@@ -150,6 +157,15 @@ def create_pipeline_options(job_config: Dict[str, Any], gcp_config: Dict[str, An
     # For production, consider removing this or using a mix (some preemptible, some regular)
     worker_options.use_public_ips = True
     options.view_as(beam.options.pipeline_options.WorkerOptions).num_workers = 2  # Start with 2 workers
+
+    # CRITICAL: Package custom code for Dataflow workers
+    # This uploads all custom modules (dataflow_pipelines, extractors, loaders, utils) to workers
+    setup_file_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'setup.py')
+    if os.path.exists(setup_file_path):
+        options.view_as(beam.options.pipeline_options.SetupOptions).setup_file = setup_file_path
+        logger.info(f"Using setup.py for custom code packaging: {setup_file_path}")
+    else:
+        logger.warning(f"setup.py not found at {setup_file_path} - custom code may not be available on workers!")
 
     logger.info(f"Created Dataflow pipeline options: {google_cloud_options.job_name}")
 
@@ -196,7 +212,7 @@ def run_database_pipeline(job_config: Dict[str, Any], gcp_config: Dict[str, Any]
                     selected_columns=job_config['selected_columns'],
                     load_type=job_config['load_type'],
                     timestamp_column=job_config.get('timestamp_column'),
-                    since_datetime=job_config.get('last_sync_value')
+                    since_datetime=job_config.get('last_sync_value') or job_config.get('historical_start_date')
                 )
             )
             | 'WriteToBigQuery' >> WriteToBigQuery(
@@ -242,7 +258,7 @@ def run_file_pipeline(job_config: Dict[str, Any], gcp_config: Dict[str, Any]) ->
     logger.info(f"Destination: {table_ref}, Write mode: {write_disposition}")
 
     # Get list of files to process
-    from etl_runner.extractors.file_extractor import FileExtractor
+    from extractors.file_extractor import FileExtractor
     temp_extractor = FileExtractor(job_config['connection_params'], job_config)
     files_list = temp_extractor.list_files()
     temp_extractor.close()

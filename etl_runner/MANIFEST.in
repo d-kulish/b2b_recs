@@ -1,0 +1,15 @@
+# Include all Python files
+recursive-include dataflow_pipelines *.py
+recursive-include extractors *.py
+recursive-include loaders *.py
+recursive-include utils *.py
+
+# Include package metadata
+include README.md
+include requirements.txt
+include setup.py
+
+# Exclude unnecessary files
+global-exclude *.pyc
+global-exclude __pycache__
+global-exclude .DS_Store

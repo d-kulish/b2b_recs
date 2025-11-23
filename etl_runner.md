@@ -1,7 +1,7 @@
 # ETL Runner
 
-**Last Updated:** November 21, 2025
-**Status:** Production Ready ✅ | Cloud Scheduler Working ✅ | File & Database Sources Supported ✅
+**Last Updated:** November 23, 2025
+**Status:** Production Ready ✅ | Cloud Scheduler Working ✅ | File & Database Sources Supported ✅ | Dataflow Working ✅
 
 Cloud Run-based ETL execution engine that extracts data from databases and cloud storage files, transforms it, and loads into BigQuery for the B2B Recommendations Platform.
 
@@ -494,6 +494,214 @@ The `openEditConnectionModal()` JavaScript function only populated database conn
 
 ---
 
+### **Issue 8: Dataflow Pipeline - Custom Code Packaging (November 23, 2025)**
+
+**Problem:** Dataflow workers failed with `ModuleNotFoundError: No module named 'dataflow_pipelines'` when processing large datasets (>1M rows).
+
+**Context:**
+- ETL Runner automatically switches to Dataflow for datasets >= 1M rows
+- Dataflow distributes processing across multiple worker VMs
+- Workers only receive Apache Beam + `requirements.txt` packages by default
+- Custom modules (`dataflow_pipelines`, `extractors`, `loaders`, `utils`) were not being uploaded
+
+**Testing Dataset:** `crypto_bitcoin.transactions` (~45M rows, 500K rows/day)
+
+#### **Errors Encountered and Fixes:**
+
+**Error 1: ModuleNotFoundError - Custom Modules Not Found**
+```
+ModuleNotFoundError: No module named 'dataflow_pipelines'
+```
+
+**Root Cause:** Apache Beam doesn't automatically package custom Python code for workers. Only standard packages from `requirements.txt` were available.
+
+**Solution:** Implemented Python packaging with `setup.py` and `MANIFEST.in`
+
+**Files Created:**
+
+**1. `setup.py`** - Packages custom code for Dataflow workers:
+```python
+from setuptools import setup, find_packages
+
+with open('requirements.txt') as f:
+    requirements = [line.strip() for line in f if line.strip() and not line.startswith('#')]
+
+setup(
+    name='etl-runner-pipeline',
+    version='1.0.0',
+    description='B2B Recommendations ETL Runner - Dataflow Pipeline Package',
+    author='B2B Recs Team',
+    packages=find_packages(exclude=['tests', 'tests.*']),
+    install_requires=requirements,
+    python_requires='>=3.10',
+    include_package_data=True,
+    zip_safe=False,
+)
+```
+
+**2. `MANIFEST.in`** - Specifies which files to include in package:
+```python
+# Include all Python files
+recursive-include dataflow_pipelines *.py
+recursive-include extractors *.py
+recursive-include loaders *.py
+recursive-include utils *.py
+
+# Include package metadata
+include README.md
+include requirements.txt
+include setup.py
+
+# Exclude unnecessary files
+global-exclude *.pyc
+global-exclude __pycache__
+global-exclude .DS_Store
+```
+
+**Files Modified:**
+
+**3. `dataflow_pipelines/etl_pipeline.py`** - Added setup.py packaging to pipeline options:
+
+```python
+# Added import
+from apache_beam.options.pipeline_options import SetupOptions
+
+# Added to create_pipeline_options() function (lines 161-168):
+def create_pipeline_options(job_config, gcp_config):
+    # ... existing code ...
+
+    # CRITICAL: Package custom code for Dataflow workers
+    setup_file_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'setup.py')
+    if os.path.exists(setup_file_path):
+        options.view_as(SetupOptions).setup_file = setup_file_path
+        logger.info(f"Using setup.py for custom code packaging: {setup_file_path}")
+    else:
+        logger.warning(f"setup.py not found - custom code may not be available on workers!")
+
+    return options
+```
+
+---
+
+**Error 2: Unsupported Source Type - BigQuery**
+```
+ValueError: Unsupported source type for Dataflow: bigquery
+```
+
+**Root Cause:** `DatabaseToDataFrame` DoFn only supported PostgreSQL and MySQL sources.
+
+**Solution:** Added BigQuery support in `setup()` method (dataflow_pipelines/etl_pipeline.py:47-49):
+
+```python
+def setup(self):
+    """Initialize database connection (runs once per worker)"""
+    source_type = self.connection_params.get('source_type')
+
+    if source_type == 'postgresql':
+        from extractors.postgresql import PostgreSQLExtractor
+        self.extractor = PostgreSQLExtractor(self.connection_params)
+    elif source_type == 'mysql':
+        from extractors.mysql import MySQLExtractor
+        self.extractor = MySQLExtractor(self.connection_params)
+    elif source_type == 'bigquery':  # <- Added
+        from extractors.bigquery import BigQueryExtractor
+        self.extractor = BigQueryExtractor(self.connection_params)
+    else:
+        raise ValueError(f"Unsupported source type for Dataflow: {source_type}")
+```
+
+---
+
+**Error 3: Invalid Timestamp - Empty String**
+```
+BadRequest: 400 Invalid timestamp: ''
+```
+
+**Root Cause:** Dataflow pipeline only used `last_sync_value` (empty on first run), didn't fall back to `historical_start_date`.
+
+**Solution:** Added fallback logic matching standard ETL runner pattern (dataflow_pipelines/etl_pipeline.py:215):
+
+```python
+# Before:
+since_datetime=job_config.get('last_sync_value')
+
+# After:
+since_datetime=job_config.get('last_sync_value') or job_config.get('historical_start_date')
+```
+
+This matches the pattern in `main.py:423-424`:
+```python
+since_datetime = self.job_config.get('last_sync_value') or \
+                self.job_config.get('historical_start_date')
+```
+
+---
+
+#### **How It Works:**
+
+**Code Packaging Flow:**
+```
+1. Developer runs: gcloud builds submit --tag gcr.io/b2b-recs/etl-runner:latest
+2. Docker image includes setup.py and all custom modules
+3. Dataflow worker starts → Beam detects --setup_file option
+4. Beam packages etl-runner-pipeline using setup.py
+5. Package uploaded to GCS staging location
+6. Workers download and install package
+7. Custom modules available: from extractors.bigquery import BigQueryExtractor
+```
+
+**Standard vs Dataflow Processing:**
+```
+Standard ETL (< 1M rows):
+  Django triggers Cloud Run Job
+    → ETL Runner main.py
+    → Direct import: from extractors.bigquery import BigQueryExtractor
+    → Process in-memory with pandas
+    → Load to BigQuery
+
+Dataflow ETL (>= 1M rows):
+  Django triggers Cloud Run Job
+    → ETL Runner main.py detects large dataset
+    → Launches Dataflow pipeline (etl_pipeline.py)
+    → Beam packages custom code via setup.py
+    → Distributes across workers
+    → Each worker imports: from extractors.bigquery import BigQueryExtractor
+    → Parallel processing with Apache Beam
+    → Direct write to BigQuery
+```
+
+#### **Files Modified:**
+- `setup.py` - New file, packages custom code
+- `MANIFEST.in` - New file, specifies package contents
+- `dataflow_pipelines/etl_pipeline.py` - Added setup.py packaging, BigQuery support, timestamp fallback
+  - Lines 10-12: Added SetupOptions import
+  - Lines 47-49: Added BigQuery extractor support
+  - Lines 161-168: Added setup.py packaging configuration
+  - Line 215: Added timestamp fallback for first runs
+
+#### **Deployment:**
+```bash
+# Rebuild Docker image with packaging fixes
+cd /Users/dkulish/Projects/b2b_recs/etl_runner
+gcloud builds submit --tag gcr.io/b2b-recs/etl-runner:latest
+
+# Update Cloud Run job
+gcloud run jobs update etl-runner \
+  --region=europe-central2 \
+  --image=gcr.io/b2b-recs/etl-runner:latest
+```
+
+#### **Testing Results:**
+- ✅ Custom modules successfully loaded on Dataflow workers
+- ✅ BigQuery source connector working in distributed mode
+- ✅ Timestamp fallback prevents empty string errors
+- ✅ 45M row Bitcoin dataset processing successfully
+- ✅ Incremental loads using `historical_start_date` on first run
+
+**Result:** ✅ Dataflow pipeline fully operational for large-scale data processing (>= 1M rows) with proper custom code packaging
+
+---
+
 ## Deployment
 
 ### **Infrastructure**
@@ -766,7 +974,7 @@ gcloud run jobs update etl-runner \
 **Known Issues:**
 - ⚠️ Test Connection button not visible in edit mode (workaround available)
 
-**Recent Fixes (Nov 21, 2025):**
+**Recent Fixes (Nov 21-23, 2025):**
 - ✅ ETL Wizard scheduler creation (webhook URL + OIDC audience)
 - ✅ Cloud Scheduler authentication (webhook pattern)
 - ✅ ETL Runner API authentication (CSRF exemption for service-to-service calls)
@@ -775,3 +983,6 @@ gcloud run jobs update etl-runner \
 - ✅ Connection management system (source-type aware CRUD)
 - ✅ Connection edit form population for all connection types
 - ✅ File ETL runtime bugs (credentials, column mapping, type conversion)
+- ✅ **Dataflow pipeline custom code packaging (setup.py + MANIFEST.in)**
+- ✅ **Dataflow BigQuery connector support**
+- ✅ **Dataflow timestamp fallback for first runs**

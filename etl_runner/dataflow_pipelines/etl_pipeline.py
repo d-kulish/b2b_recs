@@ -173,6 +173,48 @@ def create_pipeline_options(job_config: Dict[str, Any], gcp_config: Dict[str, An
     return options
 
 
+def _map_bq_type_to_beam_type(bq_type: str) -> str:
+    """
+    Map BigQuery field type to Beam-compatible type.
+
+    Args:
+        bq_type: BigQuery field type (e.g., 'DATE', 'STRING', 'INT64')
+
+    Returns:
+        Beam-compatible type string
+    """
+    # BigQuery types that need mapping to Beam types
+    type_mapping = {
+        # Temporal types -> STRING (Beam doesn't support DATE/TIME/DATETIME directly)
+        'DATE': 'STRING',
+        'TIME': 'STRING',
+        'DATETIME': 'STRING',
+
+        # Numeric types
+        'INT64': 'INTEGER',
+        'INTEGER': 'INTEGER',
+        'FLOAT64': 'FLOAT',
+        'FLOAT': 'FLOAT',
+
+        # Other types (pass through)
+        'STRING': 'STRING',
+        'BYTES': 'BYTES',
+        'BOOL': 'BOOLEAN',
+        'BOOLEAN': 'BOOLEAN',
+        'TIMESTAMP': 'TIMESTAMP',
+        'NUMERIC': 'NUMERIC',
+        'BIGNUMERIC': 'NUMERIC',
+        'GEOGRAPHY': 'GEOGRAPHY',
+        'RECORD': 'RECORD',
+    }
+
+    mapped_type = type_mapping.get(bq_type, bq_type)
+    if mapped_type != bq_type:
+        logger.debug(f"Mapped BigQuery type '{bq_type}' to Beam type '{mapped_type}'")
+
+    return mapped_type
+
+
 def get_bq_table_schema(project_id: str, dataset_id: str, table_name: str) -> TableSchema:
     """
     Fetch BigQuery table schema and convert to Beam's TableSchema format.
@@ -199,9 +241,12 @@ def get_bq_table_schema(project_id: str, dataset_id: str, table_name: str) -> Ta
     beam_fields = []
 
     for field in table.schema:
+        # Map BigQuery type to Beam type
+        beam_type = _map_bq_type_to_beam_type(field.field_type)
+
         beam_field = TableFieldSchema(
             name=field.name,
-            type=field.field_type,
+            type=beam_type,
             mode=field.mode or 'NULLABLE'
         )
 
@@ -209,9 +254,12 @@ def get_bq_table_schema(project_id: str, dataset_id: str, table_name: str) -> Ta
         if field.fields:
             beam_field.fields = []
             for subfield in field.fields:
+                # Map subfield type as well
+                beam_subtype = _map_bq_type_to_beam_type(subfield.field_type)
+
                 beam_subfield = TableFieldSchema(
                     name=subfield.name,
-                    type=subfield.field_type,
+                    type=beam_subtype,
                     mode=subfield.mode or 'NULLABLE'
                 )
                 beam_field.fields.append(beam_subfield)
@@ -240,13 +288,6 @@ def run_database_pipeline(job_config: Dict[str, Any], gcp_config: Dict[str, Any]
     # Build BigQuery table reference
     table_ref = f"{gcp_config['project_id']}:{gcp_config['dataset_id']}.{job_config['dest_table_name']}"
 
-    # Fetch BigQuery table schema (required for STORAGE_WRITE_API)
-    bq_schema = get_bq_table_schema(
-        project_id=gcp_config['project_id'],
-        dataset_id=gcp_config['dataset_id'],
-        table_name=job_config['dest_table_name']
-    )
-
     # Determine write disposition based on load type
     write_disposition = (
         BigQueryDisposition.WRITE_TRUNCATE if job_config['load_type'] == 'catalog'
@@ -255,6 +296,7 @@ def run_database_pipeline(job_config: Dict[str, Any], gcp_config: Dict[str, Any]
 
     logger.info(f"Starting Dataflow pipeline for database source")
     logger.info(f"Destination: {table_ref}, Write mode: {write_disposition}")
+    logger.info(f"Using FILE_LOADS method (schema inferred from existing table)")
 
     with beam.Pipeline(options=options) as pipeline:
         # For simplicity, we'll use Beam's built-in JDBC connector
@@ -276,10 +318,9 @@ def run_database_pipeline(job_config: Dict[str, Any], gcp_config: Dict[str, Any]
             )
             | 'WriteToBigQuery' >> WriteToBigQuery(
                 table=table_ref,
-                schema=bq_schema,  # Required for STORAGE_WRITE_API
                 write_disposition=write_disposition,
                 create_disposition=BigQueryDisposition.CREATE_NEVER,  # Table must exist
-                method='STORAGE_WRITE_API'  # Use Storage Write API for complex types (NUMERIC, REPEATED, etc.)
+                method='FILE_LOADS'  # FILE_LOADS uses existing table schema automatically
             )
         )
 
@@ -308,13 +349,6 @@ def run_file_pipeline(job_config: Dict[str, Any], gcp_config: Dict[str, Any]) ->
     # Build BigQuery table reference
     table_ref = f"{gcp_config['project_id']}:{gcp_config['dataset_id']}.{job_config['dest_table_name']}"
 
-    # Fetch BigQuery table schema (required for STORAGE_WRITE_API)
-    bq_schema = get_bq_table_schema(
-        project_id=gcp_config['project_id'],
-        dataset_id=gcp_config['dataset_id'],
-        table_name=job_config['dest_table_name']
-    )
-
     # Determine write disposition
     write_disposition = (
         BigQueryDisposition.WRITE_TRUNCATE if job_config['load_type'] == 'catalog'
@@ -324,6 +358,7 @@ def run_file_pipeline(job_config: Dict[str, Any], gcp_config: Dict[str, Any]) ->
     logger.info(f"Starting Dataflow pipeline for file source")
     logger.info(f"File pattern: {job_config['file_pattern']}, Format: {job_config['file_format']}")
     logger.info(f"Destination: {table_ref}, Write mode: {write_disposition}")
+    logger.info(f"Using FILE_LOADS method (schema inferred from existing table)")
 
     # Get list of files to process
     from extractors.file_extractor import FileExtractor
@@ -345,10 +380,9 @@ def run_file_pipeline(job_config: Dict[str, Any], gcp_config: Dict[str, Any]) ->
             )
             | 'WriteToBigQuery' >> WriteToBigQuery(
                 table=table_ref,
-                schema=bq_schema,  # Required for STORAGE_WRITE_API
                 write_disposition=write_disposition,
                 create_disposition=BigQueryDisposition.CREATE_NEVER,
-                method='STORAGE_WRITE_API'  # Use Storage Write API for complex types (NUMERIC, REPEATED, etc.)
+                method='FILE_LOADS'  # FILE_LOADS uses existing table schema automatically
             )
         )
 

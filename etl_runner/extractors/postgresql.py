@@ -266,6 +266,144 @@ class PostgreSQLExtractor(BaseExtractor):
             logger.info(f"Estimating full row count for {schema_name}.{table_name}")
             return self.get_row_count(table_name, schema_name)
 
+    def extract_incremental_raw(
+        self,
+        table_name: str,
+        schema_name: str,
+        timestamp_column: str,
+        since_datetime: str,
+        selected_columns: List[str],
+        batch_size: int = 10000
+    ) -> Generator[Dict[str, Any], None, None]:
+        """
+        Extract data incrementally, yielding dicts (NO PANDAS).
+
+        This is optimized for Dataflow - no DataFrame overhead.
+        Each row is yielded as a dict immediately after fetching from cursor.
+
+        Args:
+            table_name: Name of the source table
+            schema_name: Schema name
+            timestamp_column: Column name for filtering (e.g., 'created_at')
+            since_datetime: Start datetime in ISO format (e.g., '2024-01-01T00:00:00')
+            selected_columns: List of column names to extract
+            batch_size: Number of rows to fetch per batch (default: 10000)
+
+        Yields:
+            Dict representing a single row (keys are column names)
+        """
+        conn = self._get_connection()
+        column_list = self._build_column_list(selected_columns)
+        timestamp_col_sanitized = self._sanitize_column_name(timestamp_column)
+
+        query = f"""
+            SELECT {column_list}
+            FROM "{schema_name}"."{table_name}"
+            WHERE "{timestamp_col_sanitized}" >= %s
+            ORDER BY "{timestamp_col_sanitized}"
+        """
+
+        logger.info(f"Starting raw incremental extraction: {schema_name}.{table_name}")
+        logger.info(f"Timestamp column: {timestamp_column}, Since: {since_datetime}")
+        logger.debug(f"Query: {query}")
+
+        try:
+            # Use server-side cursor for memory efficiency
+            with conn.cursor(name='etl_raw_incremental_cursor') as cursor:
+                cursor.itersize = batch_size
+                cursor.execute(query, (since_datetime,))
+
+                # Get column names from cursor description
+                column_names = [desc[0] for desc in cursor.description]
+
+                row_count = 0
+                batch_num = 0
+                while True:
+                    rows = cursor.fetchmany(batch_size)
+                    if not rows:
+                        break
+
+                    batch_num += 1
+                    # Convert each tuple to dict and yield immediately
+                    for row_tuple in rows:
+                        row_dict = dict(zip(column_names, row_tuple))
+                        row_count += 1
+                        yield row_dict
+
+                    if batch_num % 10 == 0:  # Log every 10 batches
+                        logger.info(f"Extracted {row_count} rows (batch {batch_num})")
+
+            logger.info(f"Raw incremental extraction completed: {row_count} total rows")
+
+        except Exception as e:
+            logger.error(f"Raw incremental extraction failed: {str(e)}")
+            raise
+
+    def extract_full_raw(
+        self,
+        table_name: str,
+        schema_name: str,
+        selected_columns: List[str],
+        batch_size: int = 10000
+    ) -> Generator[Dict[str, Any], None, None]:
+        """
+        Extract all data from table, yielding dicts (NO PANDAS).
+
+        This is optimized for Dataflow - no DataFrame overhead.
+        Each row is yielded as a dict immediately after fetching from cursor.
+
+        Args:
+            table_name: Name of the source table
+            schema_name: Schema name
+            selected_columns: List of column names to extract
+            batch_size: Number of rows to fetch per batch (default: 10000)
+
+        Yields:
+            Dict representing a single row (keys are column names)
+        """
+        conn = self._get_connection()
+        column_list = self._build_column_list(selected_columns)
+
+        query = f"""
+            SELECT {column_list}
+            FROM "{schema_name}"."{table_name}"
+        """
+
+        logger.info(f"Starting raw full extraction: {schema_name}.{table_name}")
+        logger.debug(f"Query: {query}")
+
+        try:
+            # Use server-side cursor for memory efficiency
+            with conn.cursor(name='etl_raw_full_cursor') as cursor:
+                cursor.itersize = batch_size
+                cursor.execute(query)
+
+                # Get column names from cursor description
+                column_names = [desc[0] for desc in cursor.description]
+
+                row_count = 0
+                batch_num = 0
+                while True:
+                    rows = cursor.fetchmany(batch_size)
+                    if not rows:
+                        break
+
+                    batch_num += 1
+                    # Convert each tuple to dict and yield immediately
+                    for row_tuple in rows:
+                        row_dict = dict(zip(column_names, row_tuple))
+                        row_count += 1
+                        yield row_dict
+
+                    if batch_num % 10 == 0:  # Log every 10 batches
+                        logger.info(f"Extracted {row_count} rows (batch {batch_num})")
+
+            logger.info(f"Raw full extraction completed: {row_count} total rows")
+
+        except Exception as e:
+            logger.error(f"Raw full extraction failed: {str(e)}")
+            raise
+
     def close(self):
         """Close the PostgreSQL connection"""
         if self._connection and not self._connection.closed:

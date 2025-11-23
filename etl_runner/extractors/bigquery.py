@@ -308,6 +308,136 @@ class BigQueryExtractor(BaseExtractor):
             logger.info(f"Estimating full row count for {schema_name}.{table_name}")
             return self.get_row_count(table_name, schema_name)
 
+    def extract_incremental_raw(
+        self,
+        table_name: str,
+        schema_name: str,
+        timestamp_column: str,
+        since_datetime: str,
+        selected_columns: List[str],
+        batch_size: int = 10000
+    ) -> Generator[Dict[str, Any], None, None]:
+        """
+        Extract data incrementally, yielding dicts (NO PANDAS).
+
+        This is optimized for Dataflow - no DataFrame overhead.
+        Each row is yielded as a dict immediately.
+
+        Args:
+            table_name: Name of the source table
+            schema_name: Dataset name
+            timestamp_column: Column name for filtering
+            since_datetime: Start datetime in ISO format
+            selected_columns: List of column names to extract
+            batch_size: Not used (BigQuery handles batching internally)
+
+        Yields:
+            Dict representing a single row
+        """
+        # Build column list
+        column_list = self._build_column_list(selected_columns)
+
+        # Use schema_name as dataset if provided
+        dataset = schema_name if schema_name else self.source_dataset
+
+        # Build fully qualified table reference
+        table_ref = f"`{self.source_project}.{dataset}.{table_name}`"
+
+        query = f"""
+            SELECT {column_list}
+            FROM {table_ref}
+            WHERE `{timestamp_column}` >= @since_datetime
+            ORDER BY `{timestamp_column}`
+        """
+
+        logger.info(f"Starting raw incremental extraction from {table_ref}")
+        logger.info(f"Timestamp column: {timestamp_column}, Since: {since_datetime}")
+        logger.debug(f"Query: {query}")
+
+        try:
+            # Execute query with parameter
+            job_config = bigquery.QueryJobConfig(
+                query_parameters=[
+                    bigquery.ScalarQueryParameter("since_datetime", "TIMESTAMP", since_datetime)
+                ]
+            )
+
+            query_job = self._client.query(query, job_config=job_config)
+
+            row_count = 0
+            for row in query_job.result():
+                # BigQuery Row objects can be converted to dict
+                row_dict = dict(row)
+                row_count += 1
+                yield row_dict
+
+                if row_count % 10000 == 0:
+                    logger.info(f"Extracted {row_count} rows")
+
+            logger.info(f"Raw incremental extraction completed: {row_count} total rows")
+
+        except Exception as e:
+            logger.error(f"Raw incremental extraction failed: {str(e)}")
+            raise
+
+    def extract_full_raw(
+        self,
+        table_name: str,
+        schema_name: str,
+        selected_columns: List[str],
+        batch_size: int = 10000
+    ) -> Generator[Dict[str, Any], None, None]:
+        """
+        Extract all data from table, yielding dicts (NO PANDAS).
+
+        This is optimized for Dataflow - no DataFrame overhead.
+        Each row is yielded as a dict immediately.
+
+        Args:
+            table_name: Name of the source table
+            schema_name: Dataset name
+            selected_columns: List of column names to extract
+            batch_size: Not used (BigQuery handles batching internally)
+
+        Yields:
+            Dict representing a single row
+        """
+        # Build column list
+        column_list = self._build_column_list(selected_columns)
+
+        # Use schema_name as dataset if provided
+        dataset = schema_name if schema_name else self.source_dataset
+
+        # Build fully qualified table reference
+        table_ref = f"`{self.source_project}.{dataset}.{table_name}`"
+
+        query = f"""
+            SELECT {column_list}
+            FROM {table_ref}
+        """
+
+        logger.info(f"Starting raw full extraction from {table_ref}")
+        logger.debug(f"Query: {query}")
+
+        try:
+            query_job = self._client.query(query)
+
+            row_count = 0
+            for row in query_job.result():
+                # BigQuery Row objects can be converted to dict
+                row_dict = dict(row)
+                row_count += 1
+                yield row_dict
+
+                if row_count % 10000 == 0:
+                    logger.info(f"Extracted {row_count} rows")
+
+            logger.info(f"Raw full extraction completed: {row_count} total rows")
+
+        except Exception as e:
+            logger.error(f"Raw full extraction failed: {str(e)}")
+            raise
+
     def close(self):
         """Close the BigQuery client connection"""
         if self._client:

@@ -647,7 +647,11 @@ class ETLRunner:
         logger.info("=" * 80)
 
         try:
-            from dataflow_pipelines.etl_pipeline import run_database_pipeline, run_file_pipeline
+            from dataflow_pipelines.etl_pipeline import (
+                run_scalable_pipeline,
+                run_bigquery_native_pipeline
+            )
+            from dataflow_pipelines.partitioning import calculate_work_units
 
             # Update status to running
             if self.etl_run_id:
@@ -666,16 +670,32 @@ class ETLRunner:
             job_config_with_context['data_source_id'] = self.data_source_id
             job_config_with_context['etl_run_id'] = self.etl_run_id
 
-            # Determine source type and run appropriate pipeline
-            source_type = self.job_config['source_type']
-            is_file_source = source_type in ['gcs', 's3', 'azure_blob']
+            # CRITICAL: Calculate work partitions for parallel processing
+            logger.info("=" * 80)
+            logger.info("CALCULATING WORK PARTITIONS")
+            logger.info("=" * 80)
 
-            if is_file_source:
-                logger.info("Launching Dataflow pipeline for FILE source")
-                result = run_file_pipeline(job_config_with_context, gcp_config)
+            estimated_rows = self.estimate_row_count()
+            work_units = calculate_work_units(
+                job_config=job_config_with_context,
+                extractor=self.extractor,
+                estimated_rows=estimated_rows
+            )
+
+            logger.info(f"✓ Created {len(work_units)} work units for parallel processing")
+            logger.info("=" * 80)
+
+            # Determine which pipeline to use based on work unit type
+            source_type = self.job_config['source_type']
+
+            if work_units and work_units[0].get('type') == 'bigquery_native':
+                # Use BigQuery native I/O for BigQuery sources
+                logger.info("Launching BIGQUERY NATIVE Dataflow pipeline")
+                result = run_bigquery_native_pipeline(job_config_with_context, gcp_config, work_units)
             else:
-                logger.info("Launching Dataflow pipeline for DATABASE source")
-                result = run_database_pipeline(job_config_with_context, gcp_config)
+                # Use scalable pipeline for all other sources
+                logger.info("Launching SCALABLE Dataflow pipeline")
+                result = run_scalable_pipeline(job_config_with_context, gcp_config, work_units)
 
             logger.info("=" * 80)
             logger.info("DATAFLOW JOB SUBMITTED")

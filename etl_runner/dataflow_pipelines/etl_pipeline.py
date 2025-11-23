@@ -14,8 +14,539 @@ from apache_beam.io.gcp.bigquery import WriteToBigQuery, BigQueryDisposition
 from apache_beam.io.gcp.internal.clients.bigquery import TableSchema, TableFieldSchema
 from typing import Dict, Any, List
 import json
+from datetime import date, datetime
+from decimal import Decimal
 
 logger = logging.getLogger(__name__)
+
+
+def _serialize_value(value: Any) -> Any:
+    """
+    Serialize value to JSON-compatible format using PURE PYTHON.
+    NO pandas, NO numpy - only standard Python types from database cursors.
+
+    Database cursors return:
+    - None, int, float, str, bool (pass through)
+    - datetime.datetime, datetime.date (convert to ISO string)
+    - decimal.Decimal (convert to float)
+    - bytes (convert to base64)
+    - list/tuple (for PostgreSQL arrays - recursive)
+    - dict (for PostgreSQL JSON/JSONB - recursive)
+
+    Args:
+        value: Any Python value to serialize
+
+    Returns:
+        JSON-serializable value
+    """
+    from datetime import datetime, date
+    from decimal import Decimal
+    import math
+
+    # 1. Handle None first (most common case)
+    if value is None:
+        return None
+
+    # 2. Handle complex types FIRST (before any type checks)
+    # PostgreSQL arrays: [1, 2, 3], BigQuery REPEATED fields
+    if isinstance(value, (list, tuple)):
+        if len(value) == 0:
+            return []
+        return [_serialize_value(item) for item in value]
+
+    # PostgreSQL JSON/JSONB, BigQuery RECORD fields
+    if isinstance(value, dict):
+        if len(value) == 0:
+            return {}
+        return {k: _serialize_value(v) for k, v in value.items()}
+
+    # 3. Handle datetime types (from database)
+    if isinstance(value, datetime):
+        return value.isoformat()
+
+    if isinstance(value, date):
+        return value.isoformat()
+
+    # 4. Handle Decimal (from database NUMERIC/DECIMAL columns)
+    if isinstance(value, Decimal):
+        # Check for special values
+        if value.is_nan():
+            return None
+        if value.is_infinite():
+            return None
+        return float(value)
+
+    # 5. Handle floats - check for NaN/Inf (JSON doesn't support these)
+    if isinstance(value, float):
+        if math.isnan(value) or math.isinf(value):
+            return None
+        return value
+
+    # 6. Handle bytes (from database BYTEA columns)
+    if isinstance(value, bytes):
+        import base64
+        return base64.b64encode(value).decode('utf-8')
+
+    # 7. Pass through JSON-safe types
+    if isinstance(value, (int, bool, str)):
+        return value
+
+    # 8. Unknown type - log warning and convert to string
+    logger.warning(f"Unknown type in serialization: {type(value).__name__} - value: {str(value)[:100]}")
+    try:
+        return str(value)
+    except:
+        return None
+
+
+def serialize_value_for_schema(value: Any, target_type: str) -> Any:
+    """
+    Convert a value to match the target BigQuery field type.
+
+    Handles schema mismatches by converting values to the expected type:
+    - ARRAY value → STRING type: Convert to JSON string
+    - STRING value → INTEGER type: Parse to int
+    - Etc.
+
+    Args:
+        value: The value to convert
+        target_type: BigQuery field type (STRING, INTEGER, etc.)
+
+    Returns:
+        Value converted to match target type
+    """
+    import json
+
+    # Handle None/null values
+    if value is None:
+        return None
+
+    # Handle schema mismatches
+    if target_type == 'STRING':
+        # If destination is STRING but value is array/dict, convert to JSON
+        if isinstance(value, (list, dict)):
+            return json.dumps(value)
+        # Otherwise convert to string
+        return str(value) if not isinstance(value, str) else value
+
+    elif target_type in ('INTEGER', 'INT64'):
+        # If destination is INTEGER, ensure we have int
+        if isinstance(value, str):
+            try:
+                return int(value)
+            except (ValueError, TypeError):
+                return None
+        return int(value) if not isinstance(value, int) else value
+
+    elif target_type in ('FLOAT', 'FLOAT64', 'NUMERIC', 'BIGNUMERIC'):
+        # If destination is FLOAT, ensure we have float
+        if isinstance(value, str):
+            try:
+                return float(value)
+            except (ValueError, TypeError):
+                return None
+        return float(value) if not isinstance(value, float) else value
+
+    # For other types, return as-is (already serialized by _serialize_value)
+    return value
+
+
+def serialize_row_for_bigquery(row_dict: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Convert row dict to BigQuery-compatible JSON-serializable dict.
+
+    This function handles all types that can come from database cursors:
+    - datetime.date → 'YYYY-MM-DD' string
+    - datetime.datetime → 'YYYY-MM-DDTHH:MM:SS' ISO string
+    - Decimal → float
+    - Lists (PostgreSQL arrays, BigQuery REPEATED) → Recursively serialized list
+    - Dicts (PostgreSQL JSON, BigQuery RECORD) → Recursively serialized dict
+    - bytes → base64 string
+    - None → None
+    - float NaN/Inf → None
+
+    Args:
+        row_dict: Dictionary representing a row from database cursor
+
+    Returns:
+        JSON-serializable dictionary safe for BigQuery WriteToBigQuery
+
+    Examples:
+        >>> from datetime import date
+        >>> from decimal import Decimal
+        >>> row = {'date': date(2025, 11, 23), 'amount': Decimal('123.45')}
+        >>> serialize_row_for_bigquery(row)
+        {'date': '2025-11-23', 'amount': 123.45}
+
+        >>> # Arrays (PostgreSQL array type)
+        >>> row = {'tags': ['python', 'bigquery', 'dataflow'], 'count': 3}
+        >>> serialize_row_for_bigquery(row)
+        {'tags': ['python', 'bigquery', 'dataflow'], 'count': 3}
+
+        >>> # Nested dicts (PostgreSQL JSONB)
+        >>> row = {'user': {'name': 'Alice', 'age': 30}, 'active': True}
+        >>> serialize_row_for_bigquery(row)
+        {'user': {'name': 'Alice', 'age': 30}, 'active': True}
+    """
+    # Use the recursive pure Python serialization for each field
+    return {key: _serialize_value(value) for key, value in row_dict.items()}
+
+
+class SchemaAwareConverter(beam.DoFn):
+    """
+    Schema-aware converter that matches values to BigQuery destination schema types.
+
+    This is CRITICAL for handling schema mismatches:
+    - Source has array → Destination expects STRING → Convert array to JSON string
+    - Source has dict → Destination expects STRING → Convert dict to JSON string
+    - Source has string datetime → Destination expects TIMESTAMP → Keep as ISO string
+
+    This DoFn runs AFTER pure Python serialization (_serialize_value) which handles
+    datetime/Decimal/NaN conversion. This DoFn ONLY handles type mismatches.
+    """
+
+    def __init__(self, schema_map: Dict[str, str]):
+        """
+        Initialize with destination schema type mapping.
+
+        Args:
+            schema_map: Dict of {field_name: field_type} from BigQuery schema
+        """
+        self.schema_map = schema_map
+
+    def process(self, row_dict: Dict[str, Any]):
+        """
+        Convert row values to match destination schema types.
+
+        Args:
+            row_dict: Row dictionary (already serialized by _serialize_value)
+
+        Yields:
+            Schema-matched dictionary ready for BigQuery
+        """
+        import json
+
+        schema_matched_row = {}
+        for key, value in row_dict.items():
+            if value is None:
+                schema_matched_row[key] = None
+                continue
+
+            # Get expected type from schema
+            target_type = self.schema_map.get(key)
+
+            if target_type == 'STRING':
+                # If destination is STRING but value is array/dict, convert to JSON string
+                if isinstance(value, (list, dict)):
+                    schema_matched_row[key] = json.dumps(value)
+                else:
+                    # Already a string or will be converted to string
+                    schema_matched_row[key] = str(value) if not isinstance(value, str) else value
+
+            elif target_type in ('INTEGER', 'INT64'):
+                # Ensure integer type
+                if isinstance(value, str):
+                    try:
+                        schema_matched_row[key] = int(value)
+                    except (ValueError, TypeError):
+                        schema_matched_row[key] = None
+                else:
+                    schema_matched_row[key] = int(value) if value is not None else None
+
+            elif target_type in ('FLOAT', 'FLOAT64', 'NUMERIC', 'BIGNUMERIC'):
+                # Ensure float type
+                if isinstance(value, str):
+                    try:
+                        schema_matched_row[key] = float(value)
+                    except (ValueError, TypeError):
+                        schema_matched_row[key] = None
+                else:
+                    schema_matched_row[key] = float(value) if value is not None else None
+
+            elif target_type in ('TIMESTAMP', 'DATE', 'DATETIME'):
+                # These should already be ISO strings from _serialize_value
+                schema_matched_row[key] = value
+
+            elif target_type == 'BOOLEAN':
+                # Ensure boolean type
+                if isinstance(value, str):
+                    schema_matched_row[key] = value.lower() in ('true', '1', 'yes')
+                else:
+                    schema_matched_row[key] = bool(value) if value is not None else None
+
+            else:
+                # Unknown or RECORD/REPEATED type - pass through
+                schema_matched_row[key] = value
+
+        yield schema_matched_row
+
+
+class UnifiedExtractor(beam.DoFn):
+    """
+    Unified DoFn that processes any work unit type without pandas.
+
+    This DoFn replaces DatabaseToDataFrame and FileToRows with a single,
+    source-agnostic implementation that:
+    1. Processes different work unit types (date ranges, ID ranges, files, etc.)
+    2. Extracts data WITHOUT pandas (uses database cursors, file readers directly)
+    3. Yields JSON-serializable dicts
+    4. Runs in parallel across Dataflow workers
+
+    Supported work unit types:
+    - db_date_range: Database extraction filtered by date range
+    - db_id_range: Database extraction filtered by ID range
+    - db_hash_partition: Database extraction using hash partitioning
+    - file: File extraction (CSV, Parquet, JSON)
+    - bigquery_native: Handled by ReadFromBigQuery (not used by this DoFn)
+    """
+
+    def __init__(self, connection_params: Dict[str, Any]):
+        """
+        Initialize extractor with connection parameters.
+
+        Args:
+            connection_params: Connection details (varies by source type)
+        """
+        self.connection_params = connection_params
+        self.source_type = connection_params.get('source_type')
+
+    def setup(self):
+        """
+        Initialize connections (runs once per worker).
+
+        For databases: Establish connection pool
+        For files: Initialize cloud storage client
+        """
+        logger.info(f"UnifiedExtractor.setup() - Source type: {self.source_type}")
+
+        if self.source_type in ('postgresql', 'mysql', 'bigquery'):
+            # Database connections will be created per work unit
+            # (lighter weight than maintaining persistent connections)
+            self.db_connection = None
+        elif self.source_type in ('gcs', 's3', 'azure_blob'):
+            # Initialize file storage client
+            from extractors.file_extractor import FileExtractor
+            # Create temporary extractor for client initialization
+            self.storage_client = None
+
+        logger.info("UnifiedExtractor setup complete")
+
+    def process(self, work_unit: Dict[str, Any]):
+        """
+        Process a single work unit and yield rows.
+
+        Args:
+            work_unit: Dict describing what to extract
+                      {'type': 'db_date_range', 'table_name': '...', ...}
+
+        Yields:
+            Dicts representing rows (JSON-serializable, ready for BigQuery)
+        """
+        work_type = work_unit.get('type')
+        logger.info(f"Processing work unit type: {work_type}")
+
+        try:
+            if work_type == 'db_date_range':
+                yield from self._process_db_date_range(work_unit)
+            elif work_type == 'db_date_range_full':
+                yield from self._process_db_full(work_unit)
+            elif work_type == 'db_id_range':
+                yield from self._process_db_id_range(work_unit)
+            elif work_type == 'db_hash_partition':
+                yield from self._process_db_hash_partition(work_unit)
+            elif work_type == 'file':
+                yield from self._process_file(work_unit)
+            else:
+                raise ValueError(f"Unknown work unit type: {work_type}")
+
+        except Exception as e:
+            logger.error(f"Failed to process work unit: {work_unit}")
+            logger.error(f"Error: {e}", exc_info=True)
+            raise
+
+    def _process_db_date_range(self, work_unit: Dict[str, Any]):
+        """
+        Process database work unit with date range filter.
+
+        Extracts rows where timestamp BETWEEN start_date AND end_date.
+        Uses database cursor directly (no pandas).
+        """
+        table_name = work_unit['table_name']
+        schema_name = work_unit['schema_name']
+        timestamp_column = work_unit['timestamp_column']
+        start_date = work_unit['start_date']
+        end_date = work_unit['end_date']
+        selected_columns = work_unit.get('selected_columns', [])
+
+        logger.info(f"Extracting {schema_name}.{table_name} where {timestamp_column} between {start_date} and {end_date}")
+
+        # Get database extractor
+        extractor = self._get_database_extractor()
+
+        # Use RAW cursor-based extraction (NO PANDAS - yields dicts directly)
+        row_gen = extractor.extract_incremental_raw(
+            table_name=table_name,
+            schema_name=schema_name,
+            timestamp_column=timestamp_column,
+            since_datetime=start_date,
+            selected_columns=selected_columns,
+            batch_size=10000
+        )
+
+        row_count = 0
+        for row_dict in row_gen:
+            # Filter to end_date (extractor only filters >= start)
+            row_timestamp = row_dict.get(timestamp_column)
+            if row_timestamp and row_timestamp >= end_date:
+                continue  # Skip rows beyond end_date
+
+            # Serialize using pure Python (no pandas)
+            serialized_row = {key: _serialize_value(value) for key, value in row_dict.items()}
+            yield serialized_row
+            row_count += 1
+
+        logger.info(f"Extracted {row_count} rows from work unit")
+
+    def _process_db_full(self, work_unit: Dict[str, Any]):
+        """Process full table extraction (no date filter)"""
+        table_name = work_unit['table_name']
+        schema_name = work_unit['schema_name']
+        timestamp_column = work_unit.get('timestamp_column')
+        selected_columns = work_unit.get('selected_columns', [])
+
+        logger.info(f"Extracting full table {schema_name}.{table_name}")
+
+        extractor = self._get_database_extractor()
+
+        # Use RAW cursor-based extraction (NO PANDAS - yields dicts directly)
+        row_gen = extractor.extract_full_raw(
+            table_name=table_name,
+            schema_name=schema_name,
+            selected_columns=selected_columns,
+            batch_size=10000
+        )
+
+        row_count = 0
+        for row_dict in row_gen:
+            # Serialize using pure Python (no pandas)
+            serialized_row = {key: _serialize_value(value) for key, value in row_dict.items()}
+            yield serialized_row
+            row_count += 1
+
+        logger.info(f"Extracted {row_count} rows from work unit")
+
+    def _process_db_id_range(self, work_unit: Dict[str, Any]):
+        """
+        Process database work unit with ID range filter.
+
+        Extracts rows where id BETWEEN min_id AND max_id.
+        """
+        # Similar to date range, but filter by ID
+        # TODO: Implement when ID range partitioning is fully supported
+        logger.warning("ID range partitioning not yet fully implemented, using hash partition")
+        yield from self._process_db_hash_partition(work_unit)
+
+    def _process_db_hash_partition(self, work_unit: Dict[str, Any]):
+        """
+        Process database work unit with hash partitioning.
+
+        Extracts rows where MOD(HASH(id), total_partitions) = partition_id.
+        This distributes rows evenly across workers.
+        """
+        table_name = work_unit['table_name']
+        schema_name = work_unit['schema_name']
+        partition_id = work_unit['partition_id']
+        total_partitions = work_unit['total_partitions']
+        selected_columns = work_unit.get('selected_columns', [])
+
+        logger.info(f"Extracting partition {partition_id}/{total_partitions} from {schema_name}.{table_name}")
+
+        extractor = self._get_database_extractor()
+
+        # Use RAW cursor-based extraction and filter in-memory
+        # TODO: Push filter to database query for better performance
+        row_gen = extractor.extract_full_raw(
+            table_name=table_name,
+            schema_name=schema_name,
+            selected_columns=selected_columns,
+            batch_size=10000
+        )
+
+        row_count = 0
+        idx = 0
+        for row_dict in row_gen:
+            # Simple hash partition: row_number % total_partitions == partition_id
+            # This is inefficient (loads all rows), but works as fallback
+            if hash(str(idx)) % total_partitions == partition_id:
+                # Serialize using pure Python (no pandas)
+                serialized_row = {key: _serialize_value(value) for key, value in row_dict.items()}
+                yield serialized_row
+                row_count += 1
+            idx += 1
+
+        logger.info(f"Extracted {row_count} rows from partition {partition_id}")
+
+    def _process_file(self, work_unit: Dict[str, Any]):
+        """
+        Process file work unit.
+
+        Reads file from cloud storage and yields rows.
+        Uses file extractor (which uses pandas for now).
+        """
+        file_path = work_unit['file_path']
+        file_format = work_unit.get('file_format')
+        format_options = work_unit.get('format_options', {})
+
+        logger.info(f"Extracting file: {file_path} (format: {file_format})")
+
+        # Use existing file extractor
+        from extractors.file_extractor import FileExtractor
+
+        file_config = {
+            'file_pattern': file_path,
+            'file_format': file_format,
+            'file_format_options': format_options,
+        }
+
+        extractor = FileExtractor(self.connection_params, file_config)
+
+        # Extract file (may still use pandas for file parsing - CSV/Parquet)
+        df = extractor.extract_file(file_path)
+
+        row_count = 0
+        for _, row in df.iterrows():
+            row_dict = row.to_dict()
+            # Serialize using pure Python (no pandas/numpy in serialization)
+            serialized_row = {key: _serialize_value(value) for key, value in row_dict.items()}
+            yield serialized_row
+            row_count += 1
+
+        logger.info(f"Extracted {row_count} rows from file")
+
+    def _get_database_extractor(self):
+        """Get appropriate database extractor based on source type"""
+        if self.source_type == 'postgresql':
+            from extractors.postgresql import PostgreSQLExtractor
+            return PostgreSQLExtractor(self.connection_params)
+        elif self.source_type == 'mysql':
+            from extractors.mysql import MySQLExtractor
+            return MySQLExtractor(self.connection_params)
+        elif self.source_type == 'bigquery':
+            from extractors.bigquery import BigQueryExtractor
+            return BigQueryExtractor(self.connection_params)
+        else:
+            raise ValueError(f"Unsupported database type: {self.source_type}")
+
+    def teardown(self):
+        """Cleanup resources"""
+        logger.info("UnifiedExtractor.teardown()")
+        # Close any open connections
+        if hasattr(self, 'db_connection') and self.db_connection:
+            self.db_connection.close()
+
+
+# DEPRECATED: Old DoFns kept for backward compatibility during migration
+# Will be removed once UnifiedExtractor is fully tested
 
 
 class DatabaseToDataFrame(beam.DoFn):
@@ -79,9 +610,17 @@ class DatabaseToDataFrame(beam.DoFn):
             )
 
         # Convert DataFrame rows to dicts and yield
+        # IMPORTANT: Serialize datetime types to JSON-compatible strings
         for df in df_gen:
             for _, row in df.iterrows():
-                yield row.to_dict()
+                try:
+                    row_dict = row.to_dict()
+                    serialized_row = serialize_row_for_bigquery(row_dict)
+                    yield serialized_row
+                except Exception as e:
+                    logger.error(f"Failed to serialize row: {row_dict}")
+                    logger.error(f"Serialization error: {e}")
+                    raise
 
     def teardown(self):
         """Close database connection"""
@@ -115,8 +654,16 @@ class FileToRows(beam.DoFn):
         df = self.extractor.extract_file(file_path)
 
         # Convert DataFrame rows to dicts
+        # IMPORTANT: Serialize datetime types to JSON-compatible strings
         for _, row in df.iterrows():
-            yield row.to_dict()
+            try:
+                row_dict = row.to_dict()
+                serialized_row = serialize_row_for_bigquery(row_dict)
+                yield serialized_row
+            except Exception as e:
+                logger.error(f"Failed to serialize row from file {file_path}: {row_dict}")
+                logger.error(f"Serialization error: {e}")
+                raise
 
 
 def create_pipeline_options(job_config: Dict[str, Any], gcp_config: Dict[str, Any]) -> PipelineOptions:
@@ -320,7 +867,7 @@ def run_database_pipeline(job_config: Dict[str, Any], gcp_config: Dict[str, Any]
                 table=table_ref,
                 write_disposition=write_disposition,
                 create_disposition=BigQueryDisposition.CREATE_NEVER,  # Table must exist
-                method='FILE_LOADS'  # FILE_LOADS uses existing table schema automatically
+                method='FILE_LOADS'  # Batch-optimized method, no Java dependency
             )
         )
 
@@ -393,4 +940,202 @@ def run_file_pipeline(job_config: Dict[str, Any], gcp_config: Dict[str, Any]) ->
         'job_name': options.view_as(GoogleCloudOptions).job_name,
         'message': 'Dataflow job submitted - check GCP console for progress',
         'files_count': len(files_list)
+    }
+
+
+# ============================================================================
+# NEW SCALABLE DATAFLOW PIPELINES WITH WORK PARTITIONING
+# ============================================================================
+
+
+def run_scalable_pipeline(
+    job_config: Dict[str, Any],
+    gcp_config: Dict[str, Any],
+    work_units: List[Dict[str, Any]]
+) -> Dict[str, Any]:
+    """
+    Run scalable Dataflow pipeline with work partitioning.
+
+    This is the NEW recommended pipeline that:
+    1. Uses work_units for true parallel processing
+    2. Uses UnifiedExtractor (source-agnostic)
+    3. Scales linearly with worker count
+    4. Works for ALL source types (databases, files)
+
+    Args:
+        job_config: ETL job configuration
+        gcp_config: GCP configuration (project, bucket, etc.)
+        work_units: List of work unit dicts (from partitioning module)
+
+    Returns:
+        Dict with execution results
+
+    Example work_units:
+        [
+            {'type': 'db_date_range', 'table_name': 'events', 'start_date': '2024-01-01', ...},
+            {'type': 'db_date_range', 'table_name': 'events', 'start_date': '2024-01-02', ...},
+            ...
+        ]
+    """
+
+    logger.info("=" * 80)
+    logger.info("STARTING SCALABLE DATAFLOW PIPELINE")
+    logger.info("=" * 80)
+    logger.info(f"Work units: {len(work_units)}")
+    logger.info(f"Source type: {job_config.get('connection_params', {}).get('source_type')}")
+
+    # Create pipeline options
+    options = create_pipeline_options(job_config, gcp_config)
+
+    # Build BigQuery table reference
+    table_ref = f"{gcp_config['project_id']}:{gcp_config['dataset_id']}.{job_config['dest_table_name']}"
+
+    # Determine write disposition
+    write_disposition = (
+        BigQueryDisposition.WRITE_TRUNCATE if job_config['load_type'] == 'catalog'
+        else BigQueryDisposition.WRITE_APPEND
+    )
+
+    logger.info(f"Destination: {table_ref}")
+    logger.info(f"Write mode: {write_disposition}")
+    logger.info(f"Workers: 2 initial, up to 10 max (autoscaling)")
+    logger.info(f"Method: FILE_LOADS (uses existing table schema)")
+    logger.info("=" * 80)
+
+    # No schema fetching needed - FILE_LOADS uses existing table schema automatically
+
+    with beam.Pipeline(options=options) as pipeline:
+        (
+            pipeline
+            # Create PCollection from work units (MULTIPLE elements!)
+            | 'CreateWorkUnits' >> beam.Create(work_units)
+
+            # Each worker processes its assigned work units
+            # UnifiedExtractor uses raw cursor methods (no pandas) and pure Python serialization
+            | 'ExtractData' >> beam.ParDo(
+                UnifiedExtractor(
+                    connection_params=job_config['connection_params']
+                )
+            )
+
+            # Write all rows to BigQuery
+            # FILE_LOADS uses existing table schema automatically
+            | 'WriteToBigQuery' >> WriteToBigQuery(
+                table=table_ref,
+                # No schema parameter - BigQuery infers from existing table
+                write_disposition=write_disposition,
+                create_disposition=BigQueryDisposition.CREATE_NEVER,
+                method='FILE_LOADS'  # Simple, reliable, no Java dependency
+            )
+        )
+
+    logger.info("Dataflow pipeline submitted successfully")
+    logger.info("=" * 80)
+
+    return {
+        'status': 'submitted',
+        'job_name': options.view_as(GoogleCloudOptions).job_name,
+        'message': 'Dataflow job submitted - check GCP console for progress',
+        'work_units_count': len(work_units)
+    }
+
+
+def run_bigquery_native_pipeline(
+    job_config: Dict[str, Any],
+    gcp_config: Dict[str, Any],
+    work_units: List[Dict[str, Any]]
+) -> Dict[str, Any]:
+    """
+    Run Dataflow pipeline for BigQuery sources using native Beam I/O.
+
+    This is optimized for BigQuery-to-BigQuery ETL:
+    - Uses beam.io.ReadFromBigQuery (automatic partitioning)
+    - No custom extractors needed
+    - Handles complex types (RECORD, ARRAY) natively
+    - Better performance than custom extraction
+
+    Args:
+        job_config: ETL job configuration
+        gcp_config: GCP configuration
+        work_units: Should contain single work unit with BigQuery query
+
+    Returns:
+        Dict with execution results
+    """
+
+    logger.info("=" * 80)
+    logger.info("STARTING BIGQUERY NATIVE DATAFLOW PIPELINE")
+    logger.info("=" * 80)
+
+    # Extract query from work unit
+    if not work_units or work_units[0].get('type') != 'bigquery_native':
+        raise ValueError("BigQuery native pipeline requires work_unit with type='bigquery_native'")
+
+    work_unit = work_units[0]
+    query = work_unit['query']
+    use_standard_sql = work_unit.get('use_standard_sql', True)
+
+    logger.info(f"Query: {query}")
+
+    # Create pipeline options
+    options = create_pipeline_options(job_config, gcp_config)
+
+    # Build BigQuery table reference
+    table_ref = f"{gcp_config['project_id']}:{gcp_config['dataset_id']}.{job_config['dest_table_name']}"
+
+    # Determine write disposition
+    write_disposition = (
+        BigQueryDisposition.WRITE_TRUNCATE if job_config['load_type'] == 'catalog'
+        else BigQueryDisposition.WRITE_APPEND
+    )
+
+    logger.info(f"Destination: {table_ref}")
+    logger.info(f"Write mode: {write_disposition}")
+    logger.info("=" * 80)
+
+    # Fetch destination schema for type conversion (array → string, etc.)
+    table_schema = get_bq_table_schema(
+        project_id=gcp_config['project_id'],
+        dataset_id=gcp_config['dataset_id'],
+        table_name=job_config['dest_table_name']
+    )
+    schema_map = {field.name: field.type for field in table_schema.fields}
+    logger.info(f"Fetched schema: {len(schema_map)} fields for type conversion")
+
+    with beam.Pipeline(options=options) as pipeline:
+        (
+            pipeline
+            # Read from BigQuery using native I/O
+            # Beam automatically partitions using BigQuery Storage Read API
+            | 'ReadFromBigQuery' >> beam.io.ReadFromBigQuery(
+                query=query,
+                use_standard_sql=use_standard_sql,
+                # BigQuery Storage API automatically parallelizes reads
+            )
+
+            # Serialize datetime/Decimal/NaN with pure Python
+            | 'SerializeValues' >> beam.Map(
+                lambda row: {key: _serialize_value(value) for key, value in row.items()}
+            )
+
+            # Convert types to match destination schema (e.g., array → JSON string)
+            | 'ConvertToSchema' >> beam.ParDo(SchemaAwareConverter(schema_map))
+
+            # Write to destination table
+            | 'WriteToBigQuery' >> WriteToBigQuery(
+                table=table_ref,
+                write_disposition=write_disposition,
+                create_disposition=BigQueryDisposition.CREATE_NEVER,
+                method='FILE_LOADS'  # Simple, reliable, no Java dependency
+            )
+        )
+
+    logger.info("BigQuery native pipeline submitted successfully")
+    logger.info("=" * 80)
+
+    return {
+        'status': 'submitted',
+        'job_name': options.view_as(GoogleCloudOptions).job_name,
+        'message': 'Dataflow job submitted - check GCP console for progress',
+        'method': 'bigquery_native'
     }

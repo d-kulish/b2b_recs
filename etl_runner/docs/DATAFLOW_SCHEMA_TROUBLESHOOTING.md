@@ -385,4 +385,369 @@ def _map_bq_type_to_beam_type(bq_type: str) -> str:
 
 ---
 
+## Understanding Dataflow Execution Model
+
+### How Dataflow Actually Works (vs How You Might Think It Works)
+
+#### **Common Misconception: Sequential Batch Processing**
+
+Many developers assume Dataflow works like traditional batch processing:
+
+```
+Traditional Batch Loop (Standard ETL Runner):
+┌─────────────────────────────────────────┐
+│ 1. Connect to database                  │
+│ 2. SELECT * LIMIT 10000 OFFSET 0        │
+│ 3. Transform batch                      │
+│ 4. INSERT into BigQuery                 │
+│ 5. SELECT * LIMIT 10000 OFFSET 10000    │
+│ 6. Transform batch                      │
+│ 7. INSERT into BigQuery                 │
+│ ... repeat until done                   │
+└─────────────────────────────────────────┘
+
+Characteristics:
+- Sequential execution
+- One batch at a time
+- Direct INSERT to BigQuery
+- Simple to understand
+```
+
+**This IS how the standard ETL runner works for < 1M rows!**
+
+---
+
+#### **Reality: Parallel Distributed Processing**
+
+Dataflow uses a fundamentally different execution model:
+
+```
+Dataflow Pipeline Execution:
+
+┌─────────────────────────────────────────────────┐
+│ Step 1: Pipeline Definition (Local)             │
+├─────────────────────────────────────────────────┤
+│  pipeline = beam.Pipeline(options)              │
+│    | 'Create' >> beam.Create([(0, 10000)])      │
+│    | 'Extract' >> beam.ParDo(DatabaseToDataFrame)│
+│    | 'Load' >> WriteToBigQuery(FILE_LOADS)      │
+│                                                  │
+│  → This just DESCRIBES the pipeline             │
+│  → Nothing executes yet!                        │
+└─────────────────────────────────────────────────┘
+                      ↓
+┌─────────────────────────────────────────────────┐
+│ Step 2: Pipeline Submission                     │
+├─────────────────────────────────────────────────┤
+│  - Beam serializes pipeline definition          │
+│  - Uploads to Dataflow service                  │
+│  - ETL runner exits immediately                 │
+│  - Returns: "Pipeline submitted"                │
+└─────────────────────────────────────────────────┘
+                      ↓
+┌─────────────────────────────────────────────────┐
+│ Step 3: Dataflow Service (Asynchronous)        │
+├─────────────────────────────────────────────────┤
+│  Dataflow Master:                               │
+│  - Provisions 2-10 worker VMs                   │
+│  - Distributes work across workers              │
+│  - Monitors execution                           │
+│  - Handles failures/retries                     │
+└─────────────────────────────────────────────────┘
+                      ↓
+┌─────────────────────────────────────────────────┐
+│ Step 4: Worker Execution (PARALLEL)            │
+├─────────────────────────────────────────────────┤
+│  Worker 1        Worker 2        Worker 3       │
+│  ─────────       ─────────       ─────────      │
+│  Setup           Setup           Setup          │
+│  Extract         Extract         Extract        │
+│  Transform       Transform       Transform      │
+│  Write→GCS       Write→GCS       Write→GCS      │
+└─────────────────────────────────────────────────┘
+                      ↓
+┌─────────────────────────────────────────────────┐
+│ Step 5: BigQuery Load (Single Operation)       │
+├─────────────────────────────────────────────────┤
+│  LOAD DATA FROM 'gs://bucket/temp/*.json'      │
+│  INTO TABLE raw_data.table_name                 │
+│                                                  │
+│  - Reads ALL temp files in parallel             │
+│  - Validates against table schema               │
+│  - Inserts all rows atomically                  │
+└─────────────────────────────────────────────────┘
+```
+
+---
+
+### Current Pipeline Implementation
+
+#### **What We Actually Have:**
+
+```python
+# Current implementation
+pipeline
+  | 'CreateBatches' >> beam.Create([(0, 10000)])  # ← Single element!
+  | 'ExtractFromDB' >> beam.ParDo(DatabaseToDataFrame(...))
+  | 'WriteToBigQuery' >> WriteToBigQuery(...)
+```
+
+**Input PCollection:** `[(0, 10000)]` - **ONE element only**
+
+#### **Execution Flow:**
+
+```
+Input: [(0, 10000)]  ← Single element
+
+Dataflow Distribution:
+- Element 0: (0, 10000) → Assigned to Worker 1
+- No more elements to distribute
+- Workers 2-10: Idle (no work)
+
+Worker 1 Processing:
+┌────────────────────────────────────────┐
+│ DatabaseToDataFrame.process()          │
+├────────────────────────────────────────┤
+│ 1. Receives element: (batch_num=0,    │
+│                       batch_size=10000)│
+│                                         │
+│ 2. Calls extractor.extract_full()     │
+│    → Returns Python generator          │
+│    → Yields DataFrames in batches     │
+│                                         │
+│ 3. For each DataFrame:                │
+│    → Iterates through rows             │
+│    → Converts to dicts                 │
+│    → Yields to next transform          │
+│                                         │
+│ 4. Generator yields many batches:      │
+│    - Batch 1: 10,000 rows              │
+│    - Batch 2: 10,000 rows              │
+│    - Batch 3: 10,000 rows              │
+│    - ... continues until all data done │
+└────────────────────────────────────────┘
+         ↓
+┌────────────────────────────────────────┐
+│ WriteToBigQuery (FILE_LOADS)          │
+├────────────────────────────────────────┤
+│ Worker 1 writes all rows to:          │
+│ - gs://bucket/temp/worker1_0001.json   │
+│ - gs://bucket/temp/worker1_0002.json   │
+│ - gs://bucket/temp/worker1_0003.json   │
+│ - ... (many files)                     │
+│                                         │
+│ Then triggers BigQuery Load:           │
+│ LOAD FROM gs://bucket/temp/*.json      │
+└────────────────────────────────────────┘
+```
+
+#### **Performance Characteristics:**
+
+| Aspect | Current Implementation |
+|--------|----------------------|
+| **Parallelism** | ❌ Single worker only |
+| **Memory Efficiency** | ✅ Batched extraction (generator) |
+| **Speed** | ~Same as standard ETL runner |
+| **Dataflow Overhead** | ❌ Pays for 10 workers, uses 1 |
+| **Correctness** | ✅ Works correctly |
+| **Cost** | ❌ Inefficient (idle workers) |
+
+---
+
+### How to Achieve True Parallelism
+
+To fully utilize Dataflow's distributed processing, you need **multiple input elements**:
+
+#### **Ideal Implementation:**
+
+```python
+# Step 1: Get total row count
+total_rows = extractor.get_row_count(table_name, schema_name)
+# Result: 5,000,000 rows
+
+# Step 2: Calculate batch ranges
+batch_size = 10_000
+num_batches = total_rows // batch_size + 1
+# Result: 500 batches
+
+# Step 3: Create batch elements
+batch_elements = [(i, batch_size) for i in range(num_batches)]
+# Result: [(0,10000), (1,10000), ..., (499,10000)]
+
+# Step 4: Create pipeline with multiple elements
+pipeline
+  | 'CreateBatches' >> beam.Create(batch_elements)  # ← 500 elements!
+  | 'ExtractFromDB' >> beam.ParDo(DatabaseToDataFrame(...))
+  | 'WriteToBigQuery' >> WriteToBigQuery(...)
+```
+
+#### **Parallel Execution:**
+
+```
+Input: 500 elements [(0,10k), (1,10k), ..., (499,10k)]
+
+Dataflow Distribution (10 workers):
+┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐
+│ Worker 1 │  │ Worker 2 │  │ Worker 3 │  │ Worker 4 │
+├──────────┤  ├──────────┤  ├──────────┤  ├──────────┤
+│ Batch 0  │  │ Batch 1  │  │ Batch 2  │  │ Batch 3  │
+│ Batch 4  │  │ Batch 5  │  │ Batch 6  │  │ Batch 7  │
+│ Batch 8  │  │ Batch 9  │  │ Batch 10 │  │ Batch 11 │
+│   ...    │  │   ...    │  │   ...    │  │   ...    │
+└──────────┘  └──────────┘  └──────────┘  └──────────┘
+
+Each worker:
+1. Gets assigned batches
+2. Queries: SELECT * LIMIT 10000 OFFSET (batch_num * 10000)
+3. Processes rows
+4. Writes to temp GCS files
+
+Performance Gain:
+- 10 workers × 10x faster
+- Better resource utilization
+- Justified Dataflow costs
+```
+
+---
+
+### FILE_LOADS Write Strategy
+
+Understanding when BigQuery writes actually happen:
+
+```
+Worker Processing Timeline:
+
+Workers 1-10 (Parallel):
+├─ Extract rows from database
+├─ Transform/validate data
+├─ Write to temporary GCS files
+│  └─ Incrementally as rows are processed
+│     - worker1_bundle0_0001.json
+│     - worker1_bundle1_0002.json
+│     - worker2_bundle0_0001.json
+│     - ... potentially hundreds of files
+│
+└─ All workers finish writing
+         ↓
+┌────────────────────────────────────────┐
+│ BigQuery Load Job (SINGLE OPERATION)  │
+├────────────────────────────────────────┤
+│ Triggered once all workers complete    │
+│                                         │
+│ LOAD DATA FROM 'gs://bucket/temp/*.json'│
+│ INTO TABLE raw_data.table_name         │
+│ FORMAT = NEWLINE_DELIMITED_JSON        │
+│                                         │
+│ BigQuery Engine:                       │
+│ - Reads ALL temp files in parallel     │
+│ - Validates rows against table schema  │
+│ - Inserts in single atomic transaction │
+│ - Success: All rows loaded             │
+│ - Failure: No rows loaded (rollback)   │
+└────────────────────────────────────────┘
+         ↓
+    Cleanup temp files
+```
+
+**Key Insights:**
+
+1. **No INSERT batching** - Workers don't INSERT directly to BigQuery
+2. **Staged writes** - Data written to GCS first, loaded later
+3. **Single load operation** - One BigQuery Load job for entire dataset
+4. **Atomic transaction** - All-or-nothing (important for data consistency)
+5. **Schema validation** - Happens during load, not during write
+
+---
+
+### Why Current Implementation Still Works
+
+Despite not being fully parallel, the current pipeline is still valuable:
+
+#### **Advantages:**
+
+✅ **Memory Efficient**
+- Uses generator pattern for extraction
+- Processes data in batches
+- Doesn't load entire dataset into memory
+
+✅ **Uses Dataflow Infrastructure**
+- Automatic retries on failure
+- Monitoring and logging
+- Autoscaling (even if underutilized)
+
+✅ **Correct Results**
+- Successfully loads data to BigQuery
+- Handles DATE/TIME/DATETIME types
+- Validates against table schema
+
+✅ **Handles Large Datasets**
+- Tested with 45M Bitcoin transactions
+- Works for datasets that would crash standard ETL runner
+
+#### **Disadvantages:**
+
+❌ **Not Parallel**
+- Only uses 1 worker out of 2-10 provisioned
+- Speed similar to standard ETL runner
+- Doesn't justify Dataflow costs
+
+❌ **Cost Inefficient**
+- Pays for multiple workers
+- Most workers sit idle
+- Better to use standard ETL runner for this pattern
+
+---
+
+### Recommendations
+
+#### **For Current State (Single Element):**
+
+**When to Use:**
+- Datasets < 10M rows
+- Quick implementation needed
+- Acceptable to use single-worker processing
+
+**Cost Optimization:**
+```python
+# Set max_num_workers to 1 if not parallelizing
+worker_options.max_num_workers = 1
+worker_options.num_workers = 1
+```
+
+#### **For True Parallelism (Multiple Elements):**
+
+**When to Implement:**
+- Datasets > 10M rows
+- Need maximum speed
+- Can afford complexity of batch coordination
+
+**Required Changes:**
+1. Add row count estimation before pipeline creation
+2. Calculate batch ranges
+3. Modify `beam.Create()` to accept multiple elements
+4. Update `DatabaseToDataFrame.process()` to use OFFSET/LIMIT
+
+**Implementation Complexity:**
+- Medium (requires refactoring)
+- Need to handle edge cases (last batch size)
+- Database may have OFFSET performance issues for large offsets
+
+---
+
+### Comparison Matrix
+
+| Aspect | Standard ETL | Current Dataflow | Ideal Dataflow |
+|--------|-------------|-----------------|----------------|
+| **Dataset Size** | < 1M rows | >= 1M rows | >= 10M rows |
+| **Workers** | 1 (Cloud Run) | 1 (of 2-10) | 10 parallel |
+| **Speed** | Fast | Same | 10x faster |
+| **Memory** | 8GB limit | Distributed | Distributed |
+| **Cost** | Low | Medium-High | High (justified) |
+| **Complexity** | Low | Low | Medium |
+| **When to Use** | Small datasets | Bridge solution | Large datasets |
+
+---
+
 **Status:** Issue resolved. Dataflow pipelines now working correctly for all data types including DATE, TIME, DATETIME fields. ✅
+
+**Note:** Current implementation uses single-worker pattern. For true parallel processing at scale, consider implementing multi-element batch distribution.

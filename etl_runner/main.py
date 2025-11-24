@@ -17,6 +17,7 @@ from config import Config
 from extractors.postgresql import PostgreSQLExtractor
 from extractors.mysql import MySQLExtractor
 from extractors.bigquery import BigQueryExtractor
+from extractors.firestore import FirestoreExtractor
 from extractors.file_extractor import FileExtractor
 from loaders.bigquery_loader import BigQueryLoader
 from utils.logging_config import setup_logging, LogContext
@@ -83,6 +84,10 @@ class ETLRunner:
             return MySQLExtractor(connection_params)
         elif source_type == 'bigquery':
             return BigQueryExtractor(connection_params)
+
+        # NoSQL extractors
+        elif source_type == 'firestore':
+            return FirestoreExtractor(connection_params)
 
         # File extractors (GCS, S3, Azure Blob)
         elif source_type in ['gcs', 's3', 'azure_blob']:

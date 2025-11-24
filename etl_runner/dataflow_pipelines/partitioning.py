@@ -398,6 +398,98 @@ class BigQueryNativeCalculator(PartitionCalculator):
         return "BigQuery Native I/O"
 
 
+class FirestorePartitionCalculator(PartitionCalculator):
+    """
+    Partition Firestore collection by document ID lexicographic ranges.
+
+    Best for: Large Firestore collections (> 1M documents)
+
+    Strategy:
+    - Firestore document IDs are strings (lexicographically sorted)
+    - Partition by ID ranges: [A-D], [E-H], [I-M], etc.
+    - Alternatively: Hash-based partitioning using MOD(HASH(document_id), N)
+
+    For simplicity, we use alphabetic ranges based on first character of document_id.
+    If custom IDs (numeric), we partition by numeric ranges.
+
+    Example work unit:
+    {
+        'type': 'firestore_doc_range',
+        'collection_name': 'users',
+        'start_doc_id': 'A',
+        'end_doc_id': 'E',
+        'timestamp_column': 'updated_at',  # Optional for incremental
+        'since_datetime': '2024-01-01T00:00:00',  # Optional for incremental
+        'selected_columns': ['email', 'name', 'created_at']
+    }
+    """
+
+    def __init__(self, num_partitions: int = 10):
+        """
+        Args:
+            num_partitions: Number of partitions to create (default: 10)
+        """
+        self.num_partitions = num_partitions
+
+    def calculate_partitions(
+        self,
+        job_config: Dict[str, Any],
+        extractor: Any,
+        estimated_rows: int
+    ) -> List[WorkUnit]:
+        """
+        Calculate document ID range partitions for Firestore.
+
+        Uses alphabetic ranges for simplicity:
+        - Partition 1: doc_id starts with A-C
+        - Partition 2: doc_id starts with D-F
+        - etc.
+
+        This assumes document IDs are well-distributed. For numeric IDs,
+        we'd need a different strategy.
+        """
+
+        collection_name = job_config['source_table_name']
+        selected_columns = job_config.get('selected_columns', [])
+        timestamp_column = job_config.get('timestamp_column')
+        since_datetime = job_config.get('last_sync_value') or job_config.get('historical_start_date')
+
+        logger.info(f"Calculating Firestore partitions for collection: {collection_name}")
+        logger.info(f"Target: {self.num_partitions} partitions for {estimated_rows:,} documents")
+
+        # Define alphanumeric ranges for document ID partitioning
+        # ASCII ranges: 0-9, A-Z, a-z, and special chars
+        # For simplicity, use 10 partitions based on common ID patterns
+
+        # Strategy: Create 10 partitions covering all possible document IDs
+        # Firestore document IDs can be auto-generated (random alphanumeric) or custom
+        # We'll use hash-based partitioning to ensure even distribution
+
+        work_units = []
+
+        for partition_num in range(self.num_partitions):
+            work_unit = WorkUnit(
+                work_type='firestore_hash_partition',
+                params={
+                    'collection_name': collection_name,
+                    'partition_num': partition_num,
+                    'total_partitions': self.num_partitions,
+                    'selected_columns': selected_columns,
+                    'timestamp_column': timestamp_column,
+                    'since_datetime': since_datetime,
+                }
+            )
+            work_units.append(work_unit)
+
+        logger.info(f"Created {len(work_units)} Firestore hash partitions")
+        logger.info(f"Each partition will process ~{estimated_rows // len(work_units):,} documents")
+
+        return work_units
+
+    def get_strategy_name(self) -> str:
+        return "Firestore Hash Partitioning"
+
+
 def get_partition_calculator(
     job_config: Dict[str, Any],
     estimated_rows: int
@@ -426,6 +518,12 @@ def get_partition_calculator(
     if source_type == 'bigquery':
         logger.info("Selected BigQuery native I/O partitioning")
         return BigQueryNativeCalculator()
+
+    # Firestore source - use hash partitioning
+    if source_type == 'firestore':
+        logger.info("Selected Firestore hash partitioning")
+        # Use 10 partitions for large collections (adjustable based on cluster size)
+        return FirestorePartitionCalculator(num_partitions=10)
 
     # File source - partition by files
     if source_type in ('gcs', 's3', 'azure_blob'):

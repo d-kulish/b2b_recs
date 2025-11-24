@@ -31,8 +31,8 @@
                     </div>
                 </div>
 
-                <!-- Connections List Container (max 4 items with scroll) -->
-                <div id="connectionsList" class="space-y-3 overflow-y-auto" style="max-height: 400px;">
+                <!-- Connections List Container (max 3 items with scroll) -->
+                <div id="connectionsList" class="space-y-3 overflow-y-auto" style="max-height: 320px;">
                     <!-- Connection cards will be inserted here by JavaScript -->
                     <div class="card-empty-state">
                         <p class="card-empty-state-title">No database connections configured</p>
@@ -52,8 +52,8 @@
                     </div>
                 </div>
 
-                <!-- ETL Jobs List Container (max 4 items with scroll) -->
-                <div id="etlJobsList" class="space-y-3 overflow-y-auto" style="max-height: 400px;">
+                <!-- ETL Jobs List Container (max 3 items with scroll) -->
+                <div id="etlJobsList" class="space-y-3 overflow-y-auto" style="max-height: 320px;">
                     {% if data_sources %}
                     <div class="space-y-3">
                         {% for source in data_sources %}
@@ -502,6 +502,12 @@
                         <i class="fas fa-info-circle mr-1"></i>
                         Select columns to sync. Deselect large TEXT/BLOB fields to improve performance.
                     </p>
+                    <div id="firestoreHint" class="mt-2 bg-blue-50 border border-blue-200 rounded-lg p-2 hidden">
+                        <p class="text-xs text-blue-800">
+                            <i class="fas fa-lightbulb mr-1"></i>
+                            <strong>Firestore Note:</strong> Nested objects and arrays are stored as JSON strings. You can parse them in BigQuery using <code class="bg-blue-100 px-1 rounded">JSON_EXTRACT()</code> functions.
+                        </p>
+                    </div>
                 </div>
 
                 <!-- Load Type Selection -->
@@ -6221,6 +6227,17 @@ function proceedToStep3() {
         previewHint.innerHTML = '<i class="fas fa-info-circle mr-1"></i>Select columns to sync. Deselect large TEXT/BLOB fields to improve performance.';
         transactionalDesc.textContent = 'Best for: Transactions, logs, events, orders';
         transactionalBehavior.textContent = '→ Only inserts new records, never updates';
+    }
+
+    // Show Firestore-specific hint if applicable
+    const firestoreHint = document.getElementById('firestoreHint');
+    if (firestoreHint) {
+        const connection = window.selectedConnection;
+        if (connection && connection.source_type === 'firestore') {
+            firestoreHint.classList.remove('hidden');
+        } else {
+            firestoreHint.classList.add('hidden');
+        }
     }
 
     // Fetch table/file preview

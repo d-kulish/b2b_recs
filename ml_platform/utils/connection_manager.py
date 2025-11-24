@@ -1009,6 +1009,8 @@ def fetch_schemas(source_type, connection_params):
         return fetch_schemas_mysql(**connection_params)
     elif source_type == 'bigquery':
         return fetch_schemas_bigquery(**connection_params)
+    elif source_type == 'firestore':
+        return fetch_schemas_firestore(**connection_params)
     else:
         # For databases without schema support, return a default schema
         return {
@@ -1124,6 +1126,64 @@ def fetch_schemas_bigquery(project_id, dataset, service_account_json, **kwargs):
         }
 
 
+def fetch_schemas_firestore(project_id, dataset, service_account_json, **kwargs):
+    """
+    Fetch schemas from Firestore.
+
+    Note: Firestore doesn't have schemas - collections are at root level.
+    We return a single "default" schema to fit the wizard flow.
+    The actual collections will be fetched in fetch_tables_for_schema.
+
+    Returns:
+        dict: Single default schema
+    """
+    try:
+        from google.cloud import firestore
+        from google.oauth2 import service_account
+
+        # Parse service account JSON and test connection
+        credentials = service_account.Credentials.from_service_account_info(
+            json.loads(service_account_json)
+        )
+
+        # Create Firestore client to test connection
+        db = firestore.Client(
+            project=project_id,
+            credentials=credentials
+        )
+
+        # Test connection by attempting to list collections
+        # (This will raise an exception if credentials are invalid)
+        try:
+            collections = list(db.collections())
+            num_collections = len(collections)
+        except Exception as e:
+            return {
+                'success': False,
+                'message': f'Failed to access Firestore: {str(e)}',
+                'schemas': []
+            }
+
+        return {
+            'success': True,
+            'message': f'Connected to Firestore project "{project_id}" ({num_collections} collections found)',
+            'schemas': ['default']  # Firestore has no schema concept, use default
+        }
+
+    except json.JSONDecodeError:
+        return {
+            'success': False,
+            'message': 'Invalid service account JSON format',
+            'schemas': []
+        }
+    except Exception as e:
+        return {
+            'success': False,
+            'message': f'Error connecting to Firestore: {str(e)}',
+            'schemas': []
+        }
+
+
 def fetch_tables_for_schema(source_type, schema_name, connection_params):
     """
     Fetch tables for a specific schema.
@@ -1146,6 +1206,8 @@ def fetch_tables_for_schema(source_type, schema_name, connection_params):
         return fetch_tables_mysql(schema_name, **connection_params)
     elif source_type == 'bigquery':
         return fetch_tables_bigquery(schema_name, **connection_params)
+    elif source_type == 'firestore':
+        return fetch_collections_firestore(**connection_params)
     else:
         return {
             'success': False,
@@ -1350,6 +1412,105 @@ def fetch_tables_bigquery(dataset_name, project_id, service_account_json, **kwar
         }
 
 
+def fetch_collections_firestore(project_id, service_account_json, **kwargs):
+    """
+    Fetch collections (equivalent to "tables") from Firestore database.
+
+    For each collection, we estimate document count by sampling up to 1000 documents.
+
+    Returns:
+        dict: {
+            'success': True/False,
+            'message': 'Success message',
+            'tables': [
+                {'name': 'users', 'row_count': '500+', 'last_updated': 'N/A'},
+                {'name': 'orders', 'row_count': '1000+', 'last_updated': 'N/A'},
+                ...
+            ]
+        }
+    """
+    try:
+        from google.cloud import firestore
+        from google.oauth2 import service_account
+
+        # Parse service account JSON
+        credentials = service_account.Credentials.from_service_account_info(
+            json.loads(service_account_json)
+        )
+
+        # Create Firestore client
+        db = firestore.Client(
+            project=project_id,
+            credentials=credentials
+        )
+
+        # List all root-level collections
+        collections_list = []
+        collection_refs = db.collections()
+
+        for collection_ref in collection_refs:
+            collection_name = collection_ref.id
+
+            # Estimate document count (sample up to 1000 docs)
+            try:
+                docs = list(collection_ref.limit(1000).stream())
+                doc_count = len(docs)
+
+                # If we got exactly 1000, there might be more
+                if doc_count == 1000:
+                    row_count_display = "1000+"
+                elif doc_count == 0:
+                    row_count_display = "0 (empty)"
+                else:
+                    row_count_display = str(doc_count)
+
+            except Exception as e:
+                # If we can't count, show unknown
+                row_count_display = "Unknown"
+
+            collections_list.append({
+                'name': collection_name,
+                'row_count': row_count_display,
+                'last_updated': 'N/A'  # Firestore doesn't provide collection-level timestamps
+            })
+
+        if not collections_list:
+            return {
+                'success': True,
+                'message': f'Firestore database is empty (no collections found)',
+                'tables': []
+            }
+
+        return {
+            'success': True,
+            'message': f'Found {len(collections_list)} collections in Firestore project "{project_id}"',
+            'tables': collections_list
+        }
+
+    except json.JSONDecodeError:
+        return {
+            'success': False,
+            'message': 'Invalid service account JSON format',
+            'tables': []
+        }
+    except Exception as e:
+        error_msg = str(e)
+
+        # Provide helpful error messages
+        if 'permission' in error_msg.lower() or 'forbidden' in error_msg.lower():
+            return {
+                'success': False,
+                'message': f'Permission denied. Service account needs "Cloud Datastore User" role for project "{project_id}"',
+                'tables': []
+            }
+        else:
+            return {
+                'success': False,
+                'message': f'Error fetching Firestore collections: {error_msg}',
+                'tables': []
+            }
+
+
 # ============================================================================
 # Table Metadata & Preview Functions
 # ============================================================================
@@ -1401,6 +1562,8 @@ def fetch_table_metadata(source_type, schema_name, table_name, connection_params
         result = fetch_table_metadata_mysql(schema_name, table_name, **connection_params)
     elif source_type == 'bigquery':
         result = fetch_table_metadata_bigquery(schema_name, table_name, **connection_params)
+    elif source_type == 'firestore':
+        result = fetch_collection_metadata_firestore(table_name, **connection_params)
     else:
         return {
             'success': False,
@@ -1748,6 +1911,183 @@ def fetch_table_metadata_bigquery(dataset_name, table_name, project_id, service_
         return {
             'success': False,
             'message': f'Error fetching BigQuery table metadata: {str(e)}',
+            'columns': [],
+            'total_rows': 0
+        }
+
+
+def fetch_collection_metadata_firestore(collection_name, project_id, service_account_json, **kwargs):
+    """
+    Fetch collection metadata for Firestore by sampling documents and inferring schema.
+
+    Strategy:
+    1. Sample first 100 documents from the collection
+    2. Union all fields found across documents
+    3. Infer type of each field from sample values
+    4. Map to BigQuery types
+    5. Return column metadata with sample values
+
+    Args:
+        collection_name (str): Firestore collection name
+        project_id (str): GCP project ID
+        service_account_json (str): Service account JSON key
+
+    Returns:
+        dict: Column metadata similar to SQL database format
+    """
+    try:
+        from google.cloud import firestore
+        from google.oauth2 import service_account
+        from datetime import datetime
+
+        # Parse credentials
+        credentials = service_account.Credentials.from_service_account_info(
+            json.loads(service_account_json)
+        )
+
+        # Create Firestore client
+        db = firestore.Client(
+            project=project_id,
+            credentials=credentials
+        )
+
+        # Get collection reference
+        collection_ref = db.collection(collection_name)
+
+        # Sample first 100 documents
+        docs_sample = list(collection_ref.limit(100).stream())
+
+        if not docs_sample:
+            return {
+                'success': False,
+                'message': f'Collection "{collection_name}" is empty. Cannot infer schema from empty collection.',
+                'columns': [],
+                'total_rows': 0
+            }
+
+        # Extract all fields across all sampled documents
+        all_fields = {}  # field_name -> list of sample values
+
+        for doc in docs_sample:
+            doc_dict = doc.to_dict()
+
+            # Add document_id as a special field
+            if 'document_id' not in all_fields:
+                all_fields['document_id'] = []
+            all_fields['document_id'].append(doc.id)
+
+            # Iterate through all fields in this document
+            for field_name, field_value in doc_dict.items():
+                if field_name not in all_fields:
+                    all_fields[field_name] = []
+                all_fields[field_name].append(field_value)
+
+        # Infer schema for each field
+        columns = []
+        timestamp_columns = []
+
+        for field_name, sample_values in all_fields.items():
+            # Filter out None values for type inference
+            non_null_values = [v for v in sample_values if v is not None]
+
+            if not non_null_values:
+                # All values are None - treat as STRING
+                field_type = 'STRING'
+                is_timestamp = False
+                nullable = True
+            else:
+                # Infer type from first non-null value
+                first_value = non_null_values[0]
+
+                if isinstance(first_value, bool):
+                    field_type = 'BOOLEAN'
+                    is_timestamp = False
+                elif isinstance(first_value, int):
+                    field_type = 'INTEGER'
+                    is_timestamp = False
+                elif isinstance(first_value, float):
+                    field_type = 'FLOAT'
+                    is_timestamp = False
+                elif isinstance(first_value, datetime):
+                    field_type = 'TIMESTAMP'
+                    is_timestamp = True
+                    timestamp_columns.append(field_name)
+                elif isinstance(first_value, (list, dict)):
+                    # Nested structures -> store as JSON STRING
+                    field_type = 'STRING (JSON)'
+                    is_timestamp = False
+                else:
+                    # Default to STRING
+                    field_type = 'STRING'
+                    is_timestamp = False
+
+                    # Check if field name suggests timestamp
+                    timestamp_keywords = ['timestamp', 'created', 'updated', 'date', 'time']
+                    if any(keyword in field_name.lower() for keyword in timestamp_keywords):
+                        is_timestamp = True
+                        timestamp_columns.append(field_name)
+
+                nullable = len(non_null_values) < len(sample_values)
+
+            # Prepare sample values for display (limit to 5)
+            display_samples = []
+            for val in sample_values[:5]:
+                if val is None:
+                    display_samples.append('NULL')
+                elif isinstance(val, datetime):
+                    display_samples.append(val.isoformat())
+                elif isinstance(val, (list, dict)):
+                    display_samples.append(json.dumps(val)[:50] + '...')  # Truncate long JSON
+                else:
+                    display_samples.append(str(val))
+
+            columns.append({
+                'name': field_name,
+                'type': field_type,
+                'nullable': nullable,
+                'is_primary_key': field_name == 'document_id',  # document_id acts as PK
+                'is_timestamp': is_timestamp,
+                'sample_values': display_samples
+            })
+
+        # Estimate total document count
+        # (We already sampled 100, if got exactly 100, there might be more)
+        if len(docs_sample) == 100:
+            total_rows_estimate = "100+"
+        else:
+            total_rows_estimate = len(docs_sample)
+
+        # Recommend timestamp column
+        recommended_timestamp = None
+        for col in ['created_at', 'createdAt', 'updated_at', 'updatedAt', 'timestamp', 'date']:
+            if col in timestamp_columns:
+                recommended_timestamp = col
+                break
+        if not recommended_timestamp and timestamp_columns:
+            recommended_timestamp = timestamp_columns[0]
+
+        return {
+            'success': True,
+            'message': f'Inferred schema from {len(docs_sample)} documents in collection "{collection_name}"',
+            'columns': columns,
+            'total_rows': total_rows_estimate,
+            'recommended': {
+                'timestamp_column': recommended_timestamp,
+                'primary_key': 'document_id'
+            }
+        }
+
+    except json.JSONDecodeError:
+        return {
+            'success': False,
+            'message': 'Invalid service account JSON format',
+            'columns': [],
+            'total_rows': 0
+        }
+    except Exception as e:
+        return {
+            'success': False,
+            'message': f'Error fetching Firestore collection metadata: {str(e)}',
             'columns': [],
             'total_rows': 0
         }

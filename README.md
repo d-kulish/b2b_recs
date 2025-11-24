@@ -2,7 +2,7 @@
 
 A production-ready multi-tenant SaaS platform for building, training, and deploying B2B recommendation models with automated ETL pipelines.
 
-**Status:** Production Deployed ✅ | Cloud Scheduler Working ✅ | Multi-Source ETL Active ✅
+**Status:** Production Deployed ✅ | Cloud Scheduler Working ✅ | SQL/NoSQL/File ETL Active ✅ | Dataflow Ready ✅
 
 **Live:** https://django-app-555035914949.europe-central2.run.app
 
@@ -11,10 +11,11 @@ A production-ready multi-tenant SaaS platform for building, training, and deploy
 ## 🎯 What It Does
 
 This platform enables businesses to:
-- **Extract** data from databases (PostgreSQL, MySQL, BigQuery) and cloud storage (GCS, S3, Azure)
-- **Transform** data with automatic schema detection and column sanitization
+- **Extract** data from SQL databases (PostgreSQL, MySQL, BigQuery), NoSQL databases (Firestore 🔥), and cloud storage (GCS, S3, Azure)
+- **Transform** data with automatic schema detection, inference, and column sanitization
 - **Load** data into BigQuery for analytics and ML model training
 - **Automate** ETL pipelines with Cloud Scheduler (minute-level precision)
+- **Scale** with Dataflow for large datasets (> 1M rows)
 - **Build** recommendation models (future phase)
 
 ---
@@ -22,11 +23,22 @@ This platform enables businesses to:
 ## ✨ Key Features
 
 ### **ETL System**
-- 📊 Multiple data sources (6 types: PostgreSQL, MySQL, BigQuery, GCS, S3, Azure Blob)
-- 📁 File formats: CSV, Parquet, JSON/JSONL
-- 🔄 Load strategies: Transactional (incremental) and Catalog (snapshot)
+- 📊 **Data Sources** (7 types):
+  - **SQL Databases:** PostgreSQL, MySQL, BigQuery (cross-project + public datasets)
+  - **NoSQL Databases:** Firestore 🔥 (with automatic schema inference)
+  - **Cloud Storage:** GCS, S3, Azure Blob Storage
+- 📁 **File Formats:** CSV, Parquet, JSON/JSONL
+- 🔄 **Load Strategies:**
+  - Transactional (incremental/append-only)
+  - Catalog (daily snapshots)
+- ⚙️ **Processing Modes:**
+  - Standard (< 1M rows): Single Cloud Run instance
+  - Dataflow (≥ 1M rows): Distributed processing with partitioning
+- 🧠 **Smart Features:**
+  - Automatic schema inference for NoSQL (samples 100 documents)
+  - Nested data handling (JSON strings for complex objects)
+  - Column name sanitization and type mapping
 - ⏰ Automated scheduling with Cloud Scheduler
-- 🎯 Column mapping and schema management
 - 🔐 Secret Manager integration for credentials
 
 ### **Platform Features**
@@ -50,7 +62,8 @@ This platform enables businesses to:
 | Component | Type | Resources | Purpose |
 |-----------|------|-----------|---------|
 | **Django App** | Cloud Run Service | 2Gi RAM, 2 CPU | Web UI + API |
-| **ETL Runner** | Cloud Run Job | 8Gi RAM, 4 CPU | ETL execution |
+| **ETL Runner** | Cloud Run Job | 8Gi RAM, 4 CPU | ETL execution (< 1M rows) |
+| **Dataflow** | Dataflow Jobs | Auto-scaling | Large-scale ETL (≥ 1M rows) |
 | **Database** | Cloud SQL PostgreSQL 15 | Standard | Application data |
 | **Data Warehouse** | BigQuery | `raw_data` dataset | Analytics storage |
 | **Scheduler** | Cloud Scheduler | - | Automated triggers |

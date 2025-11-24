@@ -560,13 +560,24 @@ class ETLRunner:
             processed_files_list = self.config.get_processed_files(self.data_source_id)
 
             # Convert to dict for easy lookup
-            processed_files = {
-                f['file_path']: {
+            # Parse ISO datetime strings to datetime objects for accurate comparison
+            from dateutil import parser as date_parser
+
+            processed_files = {}
+            for f in processed_files_list:
+                # Parse ISO string to datetime object (for comparison with GCS/S3/Azure blob timestamps)
+                file_last_modified = f['file_last_modified']
+                if file_last_modified and isinstance(file_last_modified, str):
+                    try:
+                        file_last_modified = date_parser.isoparse(file_last_modified)
+                    except Exception as e:
+                        logger.warning(f"Failed to parse datetime for {f['file_path']}: {e}")
+                        file_last_modified = None
+
+                processed_files[f['file_path']] = {
                     'file_size_bytes': f['file_size_bytes'],
-                    'file_last_modified': f['file_last_modified']
+                    'file_last_modified': file_last_modified
                 }
-                for f in processed_files_list
-            }
 
             logger.info(f"Found {len(processed_files)} previously processed files")
 

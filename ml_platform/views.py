@@ -3420,6 +3420,7 @@ def api_etl_trigger_now(request, data_source_id):
         }, status=500)
 
 
+@csrf_exempt
 @require_http_methods(["GET"])
 def api_etl_get_processed_files(request, data_source_id):
     """

@@ -1279,6 +1279,132 @@ Dataflow ETL (>= 1M rows):
 
 ---
 
+### **Issue 10: File ETL Incremental Loading Bug (November 24, 2025)**
+
+**Problem:** File-based ETL jobs (CSV, Parquet, JSON) were reprocessing ALL files on every run instead of loading only new/changed files, even when configured as transactional (incremental) mode.
+
+**Context:**
+- User reported `retail_csv` job reloading all 3 CSV files daily instead of only new files
+- Transactional mode is designed to track processed files and skip unchanged files
+- Files were being recorded in ProcessedFile table after processing
+- However, all files were still reprocessed on every run
+
+#### **Root Causes Identified:**
+
+**A. API Endpoint Missing CSRF Exemption**
+
+The `api_etl_get_processed_files` endpoint (used by ETL runner to fetch list of processed files) was missing `@csrf_exempt` decorator, causing 500 Internal Server Error on service-to-service calls from Cloud Run.
+
+**Error in logs:**
+```
+Failed to fetch processed files: 500 Server Error: Internal Server Error
+Found 0 previously processed files
+Processing 3 files  # ← Should be 0 if all already processed
+```
+
+**Impact:** ETL runner couldn't retrieve processed file list, defaulted to empty list, treated all files as new.
+
+**B. Datetime Type Mismatch in Comparison Logic**
+
+File metadata comparison failed due to type mismatch:
+- **GCS/S3/Azure blobs** return `file_last_modified` as **Python datetime objects**
+- **Django API** returns `file_last_modified` as **ISO format strings** (e.g., "2025-11-24T09:00:00")
+- **Comparison** in `file_extractor.py:393` failed: `datetime_object == iso_string` → always `False`
+
+**Code flow:**
+```
+1. GCS blob.updated → datetime object (file_extractor.py:198)
+2. Django DB saves → DateTimeField (models.py:541)
+3. API returns → .isoformat() string (views.py:3458)
+4. ETL runner stores → ISO string in dict (main.py:566)
+5. Comparison → datetime != string → always False (file_extractor.py:393)
+```
+
+**Impact:** Every file was considered "changed" and reprocessed even if size/timestamp unchanged.
+
+#### **Solutions Implemented:**
+
+**1. Added @csrf_exempt to API Endpoint** (`ml_platform/views.py:3423`)
+
+```python
+# Before:
+@require_http_methods(["GET"])
+def api_etl_get_processed_files(request, data_source_id):
+
+# After:
+@csrf_exempt  # ← Added for service-to-service calls
+@require_http_methods(["GET"])
+def api_etl_get_processed_files(request, data_source_id):
+```
+
+**2. Fixed Datetime Comparison** (`etl_runner/main.py:563-580`)
+
+Parse ISO datetime strings to datetime objects before storing in processed_files dict:
+
+```python
+# Before:
+processed_files = {
+    f['file_path']: {
+        'file_size_bytes': f['file_size_bytes'],
+        'file_last_modified': f['file_last_modified']  # ← ISO string
+    }
+    for f in processed_files_list
+}
+
+# After:
+from dateutil import parser as date_parser
+
+processed_files = {}
+for f in processed_files_list:
+    # Parse ISO string to datetime object
+    file_last_modified = f['file_last_modified']
+    if file_last_modified and isinstance(file_last_modified, str):
+        try:
+            file_last_modified = date_parser.isoparse(file_last_modified)
+        except Exception as e:
+            logger.warning(f"Failed to parse datetime: {e}")
+            file_last_modified = None
+
+    processed_files[f['file_path']] = {
+        'file_size_bytes': f['file_size_bytes'],
+        'file_last_modified': file_last_modified  # ← datetime object
+    }
+```
+
+**Result:** Now compares datetime to datetime (apples to apples), files correctly identified as unchanged.
+
+#### **Files Modified:**
+- `ml_platform/views.py:3423` - Added @csrf_exempt decorator
+- `etl_runner/main.py:563-580` - Added datetime parsing logic
+
+#### **Testing Results:**
+
+**Before Fix:**
+```
+Found 0 previously processed files  # ← API 500 error
+Processing 3 files                  # ← All files reprocessed
+Loaded 200k rows                    # ← Duplicate data every run
+```
+
+**After Fix:**
+```
+Found 3 previously processed files  # ← API returns data
+Processing 0 new/changed files      # ← Skips unchanged files
+Skipping unchanged file: data_v2.csv
+Skipping unchanged file: data_v3.csv
+```
+
+**With New File:**
+```
+Found 3 previously processed files
+Processing 1 new/changed files      # ← Only new file loaded
+Extracted 100k rows from data_v4.csv
+```
+
+**Result:** ✅ File-based transactional ETL now correctly loads only new/changed files, avoiding duplicate data loads
+
+---
+
 ## Deployment
 
 ### **Infrastructure**

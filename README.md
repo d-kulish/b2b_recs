@@ -200,22 +200,20 @@ gcloud run jobs execute django-migrate-and-createsuperuser --region europe-centr
 ## 📊 Current Status
 
 ### **✅ Working**
-- Multi-source ETL (databases + cloud storage files)
+- Multi-source ETL (databases + cloud storage files + NoSQL)
+- **Firestore ETL** - Load NoSQL documents to BigQuery with automatic schema inference
 - Automated scheduling via Cloud Scheduler
 - BigQuery integration with auto-schema
 - Connection management with Secret Manager
 - ETL Wizard UI (5-step configuration)
 - File validation and processing
 - Incremental and snapshot loading
-
-### **⚠️ In Progress**
-- GCS bucket configuration for DataSource #5
-- End-to-end file ETL testing
+- Dataflow for large datasets (> 1M rows)
 
 ### **🔮 Next Up**
-1. Complete GCS bucket setup and testing
-2. Integrate Dataflow for big data volumes (> 1M rows)
-3. ML model training pipeline integration
+1. ML model training pipeline integration
+2. Real-time streaming ETL (Pub/Sub)
+3. Data quality validation rules
 
 See [`next_steps.md`](next_steps.md) for detailed roadmap.
 
@@ -292,11 +290,18 @@ WHERE source_type='gcs';
 
 ## 📝 Recent Updates
 
-**November 21, 2025 - Phase 6 Complete**
+**November 25, 2025 - Firestore ETL Fix**
+- ✅ Fixed Firestore timestamp conversion (DatetimeWithNanoseconds → strftime)
+- ✅ Schema-aware BigQuery loader with column filtering
+- ✅ NULL handling for REQUIRED fields in NoSQL data
+- ✅ Successfully loaded 558 Firestore documents to BigQuery
+
+**November 21-24, 2025 - Phase 6-8 Complete**
 - ✅ Fixed Cloud Scheduler authentication (401 → webhook pattern)
 - ✅ Fixed file ETL validation (GCS/S3/Azure now supported)
-- ✅ Updated validation logic for file vs database sources
-- ✅ Dynamic API configuration based on source type
+- ✅ Dataflow integration for large datasets (> 1M rows)
+- ✅ BigQuery Storage Write API with schema conversion
+- ✅ Complete Firestore/NoSQL ETL support
 
 **November 20, 2025 - Phase 5 Complete**
 - ✅ Professional scheduling system (minute-level, timezone support)

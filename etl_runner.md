@@ -1,6 +1,6 @@
 # ETL Runner
 
-**Last Updated:** November 24, 2025
+**Last Updated:** November 25, 2025
 **Status:** Production Ready ✅ | Cloud Scheduler Working ✅ | SQL/NoSQL/File Sources Supported ✅ | Dataflow Working ✅ | **NEW: Firestore Support** 🔥
 
 Cloud Run-based ETL execution engine that extracts data from databases and cloud storage files, transforms it, and loads into BigQuery for the B2B Recommendations Platform.
@@ -1455,6 +1455,177 @@ Extracted 100k rows from data_v4.csv
 
 ---
 
+### **Issue 11: Firestore ETL - BigQuery Load Failures (November 25, 2025)**
+
+**Problem:** Firestore ETL jobs consistently failed when loading data into BigQuery with PyArrow type conversion errors.
+
+**Context:**
+- New Firestore data source `memo2_firestore_memos_v2` (DataSource ID: 14)
+- ~600 documents in collection
+- Firestore connector implemented but never successfully loaded data
+- Multiple fix attempts (10+) over several days
+
+**Error Messages:**
+```
+Error converting Pandas column with name: "last_modified" and datatype: "object"
+to an appropriate pyarrow datatype: Array, ListArray, or StructArray
+```
+
+#### **Root Causes Identified:**
+
+**A. Firestore's DatetimeWithNanoseconds Object**
+
+Firestore timestamps are returned as `google.cloud.firestore_v1._helpers.DatetimeWithNanoseconds` objects, which inherit from Python's `datetime` but have special behavior:
+
+1. **`isinstance(value, datetime)` returns `True`** - so it passes the datetime check
+2. **`isoformat()` doesn't return a pure Python string** - may return datetime-like object
+3. **PyArrow sees the complex object** - fails to convert to BigQuery-compatible type
+
+**Code flow (before fix):**
+```
+Firestore doc.to_dict()
+    ↓
+"last_modified" = DatetimeWithNanoseconds(2024-11-25 10:00:00.123456789)
+    ↓
+isinstance(field_value, datetime) → True
+    ↓
+field_value.isoformat() → Returns DatetimeWithNanoseconds (not pure string!)
+    ↓
+DataFrame stores the object, not the string
+    ↓
+PyArrow sees complex object → ERROR
+```
+
+**B. Schema Mismatch - DataFrame vs BigQuery Table**
+
+The Firestore extractor added `_extracted_at` column, but BigQuery table didn't have this column:
+```
+Cannot add fields (field: _extracted_at)
+```
+
+**C. REQUIRED Fields with NULL Values**
+
+BigQuery table had fields defined as `REQUIRED` mode, but Firestore documents had null/missing values:
+```
+Required field correct_percentage cannot be null
+Required field copied_from_user cannot be null
+```
+
+#### **Solutions Implemented:**
+
+**1. Fixed Timestamp Conversion** (`extractors/firestore.py`)
+
+Use `strftime()` instead of `isoformat()` to guarantee pure Python string output:
+
+```python
+# Import Firestore's special datetime type
+try:
+    from google.cloud.firestore_v1._helpers import DatetimeWithNanoseconds
+except ImportError:
+    DatetimeWithNanoseconds = None
+
+# In _flatten_document():
+elif isinstance(field_value, datetime):
+    # Check if it's Firestore's special DatetimeWithNanoseconds
+    if DatetimeWithNanoseconds and isinstance(field_value, DatetimeWithNanoseconds):
+        # Use strftime to get a pure Python string (not a datetime-like object)
+        flat_doc[field_name] = field_value.strftime('%Y-%m-%dT%H:%M:%S.%f')
+    else:
+        # Regular Python datetime - strftime is safer than isoformat
+        flat_doc[field_name] = field_value.strftime('%Y-%m-%dT%H:%M:%S.%f')
+```
+
+**2. Schema-Aware BigQuery Loader** (`loaders/bigquery_loader.py`)
+
+Added schema fetching and column filtering:
+
+```python
+def _get_table_schema(self) -> dict:
+    """Get BigQuery table schema as dict mapping column names to types."""
+    table = self.client.get_table(self.table_ref)
+    self._schema_cache = {field.name: field.field_type for field in table.schema}
+    self._required_fields = {field.name for field in table.schema if field.mode == 'REQUIRED'}
+    return self._schema_cache
+
+# In load_batch():
+# Drop columns not in BigQuery schema
+cols_to_drop = [col for col in df.columns if col not in bq_schema]
+if cols_to_drop:
+    logger.warning(f"Dropping columns not in BigQuery schema: {cols_to_drop}")
+    df = df.drop(columns=cols_to_drop)
+```
+
+**3. NULL Handling for REQUIRED Fields** (`loaders/bigquery_loader.py`)
+
+Fill nulls with appropriate defaults for NoSQL data:
+
+```python
+# Fill nulls for REQUIRED fields (NoSQL data may have missing fields)
+required_fields = getattr(self, '_required_fields', set())
+for col in df.columns:
+    if col in required_fields and df[col].isnull().any():
+        target_type = bq_schema.get(col)
+        null_count = df[col].isnull().sum()
+        if target_type in ('INTEGER', 'INT64'):
+            logger.info(f"Filling {null_count} nulls in REQUIRED field '{col}' with 0")
+            df[col] = df[col].fillna(0).astype(int)
+        elif target_type in ('FLOAT', 'FLOAT64', 'NUMERIC'):
+            df[col] = df[col].fillna(0.0)
+        elif target_type == 'TIMESTAMP':
+            df[col] = df[col].fillna(pd.Timestamp('1970-01-01'))
+        else:
+            # STRING or other types
+            df[col] = df[col].fillna('')
+```
+
+**4. Defensive Type Conversion** (`loaders/bigquery_loader.py`)
+
+Added secondary defense for any datetime-like objects that slip through:
+
+```python
+# Check for datetime-like objects that PyArrow can't handle
+if df[col].dtype == 'object':
+    has_datetime_like = df[col].apply(
+        lambda x: hasattr(x, 'isoformat') and not isinstance(x, str)
+    ).any()
+
+    if has_datetime_like:
+        if target_type == 'INTEGER':
+            # Convert datetime to Unix timestamp
+            df[col] = df[col].apply(lambda x: int(x.timestamp()) if hasattr(x, 'timestamp') else x)
+        elif target_type == 'TIMESTAMP':
+            df[col] = pd.to_datetime(df[col], errors='coerce')
+        else:
+            # Convert to string
+            df[col] = df[col].apply(
+                lambda x: x.strftime('%Y-%m-%dT%H:%M:%S.%f') if hasattr(x, 'strftime')
+                else (str(x.isoformat()) if hasattr(x, 'isoformat') else x)
+            )
+```
+
+#### **Files Modified:**
+- `extractors/firestore.py` - Timestamp conversion with strftime
+- `loaders/bigquery_loader.py` - Schema-aware loading with null handling
+
+#### **Testing Results:**
+- ✅ 558 Firestore documents successfully loaded to BigQuery
+- ✅ `last_modified` timestamps converted to proper strings
+- ✅ Extra columns (`_extracted_at`) dropped automatically
+- ✅ NULL values filled with defaults (0 for integers, "" for strings)
+- ✅ No PyArrow conversion errors
+
+#### **Key Learnings:**
+
+1. **Firestore's DatetimeWithNanoseconds is tricky** - `isinstance(datetime)` returns True but `isoformat()` may not return pure string
+2. **Use `strftime()` not `isoformat()`** for guaranteed pure Python strings
+3. **Schema mismatches are common** - Always filter DataFrame columns to match BigQuery schema
+4. **NoSQL → BigQuery needs null handling** - Document databases have optional fields, BigQuery has REQUIRED mode
+5. **Defense in depth** - Add defensive conversions in both extractor AND loader
+
+**Result:** ✅ Firestore ETL now works end-to-end, successfully loading NoSQL documents into BigQuery
+
+---
+
 ## Deployment
 
 ### **Infrastructure**
@@ -1727,7 +1898,7 @@ gcloud run jobs update etl-runner \
 **Known Issues:**
 - ⚠️ Test Connection button not visible in edit mode (workaround available)
 
-**Recent Fixes (Nov 21-23, 2025):**
+**Recent Fixes (Nov 21-25, 2025):**
 - ✅ ETL Wizard scheduler creation (webhook URL + OIDC audience)
 - ✅ Cloud Scheduler authentication (webhook pattern)
 - ✅ ETL Runner API authentication (CSRF exemption for service-to-service calls)
@@ -1741,3 +1912,5 @@ gcloud run jobs update etl-runner \
 - ✅ **Dataflow timestamp fallback for first runs**
 - ✅ **BigQuery Storage Write API schema requirement**
 - ✅ **Dataflow schema fetching and conversion for complex types**
+- ✅ **Firestore ETL - DatetimeWithNanoseconds conversion fix**
+- ✅ **Firestore ETL - Schema-aware BigQuery loader with null handling**

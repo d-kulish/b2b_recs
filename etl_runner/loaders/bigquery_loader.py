@@ -34,6 +34,72 @@ class BigQueryLoader:
         self.client = bigquery.Client(project=project_id)
         logger.info(f"Initialized BigQuery loader for {self.table_ref}")
 
+        # Cache for table schema
+        self._schema_cache = None
+
+    def _get_table_schema(self) -> dict:
+        """
+        Get BigQuery table schema as a dict mapping column names to types.
+
+        Returns:
+            Dict like {'column_name': 'INTEGER', 'other_column': 'STRING', ...}
+        """
+        if self._schema_cache is not None:
+            return self._schema_cache
+
+        try:
+            table = self.client.get_table(self.table_ref)
+            self._schema_cache = {field.name: field.field_type for field in table.schema}
+            # Also cache required fields for null handling
+            self._required_fields = {field.name for field in table.schema if field.mode == 'REQUIRED'}
+            return self._schema_cache
+        except Exception as e:
+            logger.warning(f"Failed to fetch BigQuery schema: {e}")
+            self._required_fields = set()
+            return {}
+
+    def _convert_to_integer(self, value):
+        """
+        Convert a value to integer, handling ISO datetime strings.
+
+        Args:
+            value: The value to convert (could be string, datetime, int, etc.)
+
+        Returns:
+            Integer value or None if conversion fails
+        """
+        from datetime import datetime
+        from dateutil import parser as date_parser
+
+        if value is None or (isinstance(value, str) and value.lower() in ['none', 'nan', '']):
+            return None
+
+        # Already an integer
+        if isinstance(value, (int, float)):
+            return int(value)
+
+        # Try to parse as ISO datetime string and convert to Unix timestamp
+        if isinstance(value, str):
+            try:
+                # Try parsing as ISO datetime
+                dt = date_parser.isoparse(value)
+                return int(dt.timestamp())
+            except (ValueError, TypeError):
+                pass
+
+            # Try parsing as plain integer string
+            try:
+                return int(value)
+            except (ValueError, TypeError):
+                pass
+
+        # If it's a datetime object, convert to timestamp
+        if hasattr(value, 'timestamp'):
+            return int(value.timestamp())
+
+        logger.warning(f"Could not convert value to integer: {value} (type: {type(value).__name__})")
+        return None
+
     def load_batch(
         self,
         df: pd.DataFrame,
@@ -84,18 +150,96 @@ class BigQueryLoader:
                 autodetect=False  # Use existing table schema
             )
 
-            # CRITICAL FIX: Convert all values to strings to prevent PyArrow errors
-            logger.info("Converting all columns to prevent PyArrow errors...")
+            # Fetch BigQuery table schema to match types correctly
+            bq_schema = self._get_table_schema()
+            logger.info(f"BigQuery table schema: {bq_schema}")
+
+            # CRITICAL FIX: Drop columns not in BigQuery schema
+            cols_to_drop = [col for col in df.columns if col not in bq_schema]
+            if cols_to_drop:
+                logger.warning(f"Dropping columns not in BigQuery schema: {cols_to_drop}")
+                df = df.drop(columns=cols_to_drop)
+
+            # Convert values to match BigQuery schema types
+            logger.info("Converting columns to match BigQuery schema...")
             for col in df.columns:
-                # Check if column contains complex types
+                target_type = bq_schema.get(col)
+                if not target_type:
+                    continue  # Shouldn't happen after dropping above, but safety check
+
+                # Check if column contains complex types (lists, dicts)
                 if df[col].apply(lambda x: isinstance(x, (list, dict))).any():
                     logger.warning(f"Column '{col}' contains lists/dicts, converting to JSON strings")
                     df[col] = df[col].apply(lambda x: str(x) if isinstance(x, (list, dict)) else x)
 
-                # Convert object dtypes to string
+                # DEFENSIVE FIX: Check for datetime-like objects that PyArrow can't handle
+                # This catches Firestore's DatetimeWithNanoseconds and similar types
                 if df[col].dtype == 'object':
-                    df[col] = df[col].astype(str)
-                    logger.info(f"Converted column '{col}' to string dtype")
+                    # Check if any values have isoformat method (datetime-like but not pure datetime)
+                    has_datetime_like = df[col].apply(
+                        lambda x: hasattr(x, 'isoformat') and not isinstance(x, str)
+                    ).any()
+
+                    if has_datetime_like:
+                        logger.warning(f"Column '{col}' contains datetime-like objects")
+                        # Convert based on target BigQuery type
+                        if target_type == 'INTEGER':
+                            # Convert datetime to Unix timestamp (integer)
+                            logger.info(f"Converting '{col}' datetime to INTEGER (Unix timestamp)")
+                            df[col] = df[col].apply(
+                                lambda x: int(x.timestamp()) if hasattr(x, 'timestamp') else x
+                            )
+                        elif target_type == 'TIMESTAMP':
+                            # Keep as datetime for TIMESTAMP type
+                            logger.info(f"Converting '{col}' to TIMESTAMP format")
+                            df[col] = pd.to_datetime(df[col], errors='coerce')
+                        else:
+                            # Convert to string for STRING or other types
+                            logger.info(f"Converting '{col}' datetime to STRING")
+                            df[col] = df[col].apply(
+                                lambda x: x.strftime('%Y-%m-%dT%H:%M:%S.%f') if hasattr(x, 'strftime')
+                                else (str(x.isoformat()) if hasattr(x, 'isoformat') else x)
+                            )
+
+                # Schema-aware type conversion for object columns
+                if df[col].dtype == 'object' and target_type:
+                    if target_type == 'INTEGER':
+                        # Try to convert ISO datetime strings to Unix timestamps
+                        logger.info(f"Converting '{col}' (object) to INTEGER")
+                        df[col] = df[col].apply(self._convert_to_integer)
+                    elif target_type == 'FLOAT':
+                        logger.info(f"Converting '{col}' (object) to FLOAT")
+                        df[col] = pd.to_numeric(df[col], errors='coerce')
+                    elif target_type == 'TIMESTAMP':
+                        logger.info(f"Converting '{col}' (object) to TIMESTAMP")
+                        df[col] = pd.to_datetime(df[col], errors='coerce')
+                    else:
+                        # Default: convert to string
+                        df[col] = df[col].astype(str)
+                        logger.info(f"Converted column '{col}' to string dtype")
+
+            # Fill nulls for REQUIRED fields (NoSQL data may have missing fields)
+            required_fields = getattr(self, '_required_fields', set())
+            for col in df.columns:
+                if col in required_fields and df[col].isnull().any():
+                    target_type = bq_schema.get(col)
+                    null_count = df[col].isnull().sum()
+                    if target_type in ('INTEGER', 'INT64'):
+                        logger.info(f"Filling {null_count} nulls in REQUIRED field '{col}' with 0")
+                        df[col] = df[col].fillna(0).astype(int)
+                    elif target_type in ('FLOAT', 'FLOAT64', 'NUMERIC'):
+                        logger.info(f"Filling {null_count} nulls in REQUIRED field '{col}' with 0.0")
+                        df[col] = df[col].fillna(0.0)
+                    elif target_type == 'BOOLEAN':
+                        logger.info(f"Filling {null_count} nulls in REQUIRED field '{col}' with False")
+                        df[col] = df[col].fillna(False)
+                    elif target_type == 'TIMESTAMP':
+                        logger.info(f"Filling {null_count} nulls in REQUIRED field '{col}' with epoch")
+                        df[col] = df[col].fillna(pd.Timestamp('1970-01-01'))
+                    else:
+                        # STRING or other types
+                        logger.info(f"Filling {null_count} nulls in REQUIRED field '{col}' with empty string")
+                        df[col] = df[col].fillna('')
 
             # Load DataFrame to BigQuery
             load_job = self.client.load_table_from_dataframe(

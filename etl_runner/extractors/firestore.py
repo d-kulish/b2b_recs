@@ -14,6 +14,13 @@ from google.cloud import firestore
 from google.oauth2 import service_account
 from .base import BaseExtractor
 
+# Import Firestore's special datetime type for explicit handling
+try:
+    from google.cloud.firestore_v1._helpers import DatetimeWithNanoseconds
+except ImportError:
+    # Fallback if import path changes in future versions
+    DatetimeWithNanoseconds = None
+
 logger = logging.getLogger(__name__)
 
 
@@ -154,45 +161,59 @@ class FirestoreExtractor(BaseExtractor):
                 # Simple types - keep as-is
                 flat_doc[field_name] = field_value
 
-            elif isinstance(field_value, datetime):
-                # Python datetime - convert to ISO string
-                flat_doc[field_name] = field_value.isoformat()
-
             elif isinstance(field_value, (list, dict)):
                 # Nested structures - convert to JSON string
                 flat_doc[field_name] = json.dumps(field_value)
 
+            elif isinstance(field_value, datetime):
+                # CRITICAL FIX: Handle datetime types carefully
+                # Firestore's DatetimeWithNanoseconds inherits from datetime but
+                # its isoformat() may not return a pure Python string.
+                # Use strftime() to guarantee a pure string output.
+                field_type = type(field_value).__name__
+
+                # Check if it's Firestore's special DatetimeWithNanoseconds
+                if DatetimeWithNanoseconds is not None and isinstance(field_value, DatetimeWithNanoseconds):
+                    logger.debug(f"Converting DatetimeWithNanoseconds field '{field_name}'")
+                    # Use strftime to get a pure Python string (not a datetime-like object)
+                    flat_doc[field_name] = field_value.strftime('%Y-%m-%dT%H:%M:%S.%f')
+                elif field_type == 'DatetimeWithNanoseconds':
+                    # Fallback check by class name if import failed
+                    logger.debug(f"Converting DatetimeWithNanoseconds field '{field_name}' (by name)")
+                    flat_doc[field_name] = field_value.strftime('%Y-%m-%dT%H:%M:%S.%f')
+                else:
+                    # Regular Python datetime - strftime is safer than isoformat
+                    logger.debug(f"Converting datetime field '{field_name}': type={field_type}")
+                    flat_doc[field_name] = field_value.strftime('%Y-%m-%dT%H:%M:%S.%f')
+
             else:
-                # Fallback for unknown types (Firestore timestamps, etc.)
+                # Fallback for unknown types (Firestore protobuf timestamps, GeoPoints, etc.)
                 # Try to convert to datetime first, then to string
                 try:
                     field_type = type(field_value).__name__
 
-                    # Check if it has a timestamp-like interface
+                    # Check if it has a timestamp-like interface (protobuf Timestamp)
                     if hasattr(field_value, 'seconds') and hasattr(field_value, 'nanos'):
                         # Firestore Timestamp object (google.protobuf.timestamp_pb2.Timestamp)
-                        logger.debug(f"Converting Firestore timestamp field {field_name}: type={field_type}")
+                        logger.debug(f"Converting protobuf Timestamp field '{field_name}': type={field_type}")
                         ts = datetime.utcfromtimestamp(field_value.seconds + field_value.nanos / 1e9)
-                        flat_doc[field_name] = ts.isoformat()
+                        # Use strftime to ensure pure string output
+                        flat_doc[field_name] = ts.strftime('%Y-%m-%dT%H:%M:%S.%f')
                     elif hasattr(field_value, 'isoformat'):
-                        # Has isoformat method (datetime-like)
-                        logger.debug(f"Converting datetime-like field {field_name}: type={field_type}")
-                        flat_doc[field_name] = field_value.isoformat()
-                    elif hasattr(field_value, 'timestamp'):
-                        # Firestore DatetimeWithNanoseconds object
-                        logger.debug(f"Converting DatetimeWithNanoseconds field {field_name}: type={field_type}")
-                        flat_doc[field_name] = field_value.isoformat()
+                        # Has isoformat method (datetime-like) - wrap with str() to be safe
+                        logger.debug(f"Converting datetime-like field '{field_name}': type={field_type}")
+                        flat_doc[field_name] = str(field_value.isoformat())
                     else:
                         # Convert to string as last resort
-                        logger.warning(f"Unknown field type for {field_name}: {field_type}, converting to string")
+                        logger.warning(f"Unknown field type for '{field_name}': {field_type}, converting to string")
                         flat_doc[field_name] = str(field_value)
                 except Exception as e:
                     # If all else fails, convert to string
-                    logger.warning(f"Failed to convert field {field_name} of type {type(field_value)}: {e}. Using string representation.")
+                    logger.warning(f"Failed to convert field '{field_name}' of type {type(field_value)}: {e}. Using string representation.")
                     flat_doc[field_name] = str(field_value)
 
-        # Add extraction timestamp
-        flat_doc['_extracted_at'] = datetime.utcnow().isoformat()
+        # Add extraction timestamp (use strftime for consistent pure string output)
+        flat_doc['_extracted_at'] = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.%f')
 
         return flat_doc
 

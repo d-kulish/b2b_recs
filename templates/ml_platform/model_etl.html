@@ -4228,7 +4228,10 @@ async function createETLJob() {
                 alert('Please enter a valid number of days between 1 and 99');
                 return; // Stop submission
             }
-        } else if (historicalRange !== 'all') {
+        } else if (historicalRange === 'all') {
+            // "Load from the beginning" - use epoch to get all documents
+            historicalStartDate = '1970-01-01';
+        } else {
             // Preset options (30, 60, 90)
             const days = parseInt(historicalRange);
             const date = new Date();

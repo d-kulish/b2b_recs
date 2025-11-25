@@ -1,12 +1,15 @@
-# Google Cloud Dependencies
+# Google Cloud Dependencies (install BEFORE apache-beam)
 google-cloud-bigquery==3.25.0
-google-cloud-firestore==2.18.0
 google-cloud-secret-manager==2.20.2
 google-cloud-storage==2.18.2
 google-cloud-run==0.10.8
 
 # Apache Beam & Dataflow (for large-scale ETL)
+# This installs its own google-cloud dependencies
 apache-beam[gcp]==2.60.0
+
+# Firestore (install AFTER apache-beam to override any conflicts)
+google-cloud-firestore==2.18.0
 
 # AWS Dependencies
 boto3==1.35.60

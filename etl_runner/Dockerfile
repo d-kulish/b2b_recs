@@ -14,8 +14,14 @@ RUN apt-get update && apt-get install -y \
 # Copy requirements file
 COPY requirements.txt .
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+# Install Python dependencies with proper upgrade handling
+RUN pip install --no-cache-dir --upgrade -r requirements.txt
+
+# Verify critical imports work (catches namespace package conflicts early)
+RUN python -c "from google.cloud import firestore; print('✓ Firestore import successful')" && \
+    python -c "from google.cloud import bigquery; print('✓ BigQuery import successful')" && \
+    python -c "from google.cloud import storage; print('✓ Storage import successful')" && \
+    python -c "import apache_beam; print('✓ Apache Beam import successful')"
 
 # Copy application code
 COPY . .

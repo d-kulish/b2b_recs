@@ -65,6 +65,17 @@ class BigQueryLoader:
 
         logger.info(f"Loading batch to {self.table_ref}: {len(df)} rows")
 
+        # DIAGNOSTIC: Print DataFrame info
+        logger.info(f"DataFrame dtypes: {df.dtypes.to_dict()}")
+
+        # Check for problematic columns
+        for col in df.columns:
+            sample_value = df[col].iloc[0] if len(df) > 0 else None
+            value_type = type(sample_value).__name__
+            logger.info(f"Column '{col}': dtype={df[col].dtype}, sample_value_type={value_type}")
+            if isinstance(sample_value, (list, dict)):
+                logger.error(f"PROBLEM: Column '{col}' contains {value_type} values: {sample_value}")
+
         try:
             # Configure load job
             job_config = bigquery.LoadJobConfig(
@@ -72,6 +83,19 @@ class BigQueryLoader:
                 create_disposition='CREATE_NEVER',  # Table must exist (created by wizard)
                 autodetect=False  # Use existing table schema
             )
+
+            # CRITICAL FIX: Convert all values to strings to prevent PyArrow errors
+            logger.info("Converting all columns to prevent PyArrow errors...")
+            for col in df.columns:
+                # Check if column contains complex types
+                if df[col].apply(lambda x: isinstance(x, (list, dict))).any():
+                    logger.warning(f"Column '{col}' contains lists/dicts, converting to JSON strings")
+                    df[col] = df[col].apply(lambda x: str(x) if isinstance(x, (list, dict)) else x)
+
+                # Convert object dtypes to string
+                if df[col].dtype == 'object':
+                    df[col] = df[col].astype(str)
+                    logger.info(f"Converted column '{col}' to string dtype")
 
             # Load DataFrame to BigQuery
             load_job = self.client.load_table_from_dataframe(

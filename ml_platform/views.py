@@ -3129,6 +3129,27 @@ def api_etl_job_config(request, data_source_id):
                 'bigquery_dataset': connection.bigquery_dataset or table.schema_name,
                 'credentials': credentials,  # Service account JSON
             }
+        elif connection.source_type == 'firestore':
+            # Firestore (NoSQL) source - similar to BigQuery
+            # DEBUG: Log credentials structure
+            print(f"DEBUG: Raw credentials from Secret Manager: {type(credentials)}")
+            print(f"DEBUG: Credentials keys: {credentials.keys() if isinstance(credentials, dict) else 'N/A'}")
+
+            # Ensure credentials are in the format the extractor expects
+            credentials_wrapped = {
+                'service_account_json': credentials.get('service_account_json', json.dumps(credentials))
+            }
+
+            print(f"DEBUG: Wrapped credentials: {credentials_wrapped}")
+            print(f"DEBUG: service_account_json present: {'service_account_json' in credentials_wrapped}")
+            print(f"DEBUG: service_account_json value length: {len(str(credentials_wrapped.get('service_account_json', '')))}")
+
+            connection_params = {
+                'source_type': 'firestore',
+                'project_id': connection.bigquery_project or connection.source_database,
+                'bigquery_project': connection.bigquery_project or connection.source_database,
+                'credentials': credentials_wrapped,  # Wrapped service account JSON
+            }
         else:
             # Database sources (PostgreSQL, MySQL, etc.)
             connection_params = {

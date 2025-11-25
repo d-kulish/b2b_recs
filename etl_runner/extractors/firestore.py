@@ -82,6 +82,34 @@ class FirestoreExtractor(BaseExtractor):
                 'message': f'Connection failed: {str(e)}'
             }
 
+    def _sanitize_for_dataframe(self, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Final sanitization pass to ensure all values are DataFrame-safe primitives.
+        Catches any complex objects that might have slipped through flattening.
+
+        Args:
+            rows: List of row dictionaries
+
+        Returns:
+            Sanitized list of row dictionaries with only primitive types
+        """
+        sanitized_rows = []
+
+        for row in rows:
+            sanitized_row = {}
+            for key, value in row.items():
+                # Only allow primitive types that Pandas/PyArrow can handle
+                if value is None or isinstance(value, (str, int, float, bool)):
+                    sanitized_row[key] = value
+                else:
+                    # Force convert to string
+                    logger.warning(f"Complex object detected in DataFrame creation: field={key}, type={type(value).__name__}. Converting to string.")
+                    sanitized_row[key] = str(value)
+
+            sanitized_rows.append(sanitized_row)
+
+        return sanitized_rows
+
     def _flatten_document(self, doc: firestore.DocumentSnapshot, selected_columns: List[str] = None) -> Dict[str, Any]:
         """
         Flatten a Firestore document to a dictionary suitable for BigQuery.
@@ -127,7 +155,7 @@ class FirestoreExtractor(BaseExtractor):
                 flat_doc[field_name] = field_value
 
             elif isinstance(field_value, datetime):
-                # Firestore timestamp - convert to ISO string
+                # Python datetime - convert to ISO string
                 flat_doc[field_name] = field_value.isoformat()
 
             elif isinstance(field_value, (list, dict)):
@@ -135,8 +163,33 @@ class FirestoreExtractor(BaseExtractor):
                 flat_doc[field_name] = json.dumps(field_value)
 
             else:
-                # Fallback: convert to string
-                flat_doc[field_name] = str(field_value)
+                # Fallback for unknown types (Firestore timestamps, etc.)
+                # Try to convert to datetime first, then to string
+                try:
+                    field_type = type(field_value).__name__
+
+                    # Check if it has a timestamp-like interface
+                    if hasattr(field_value, 'seconds') and hasattr(field_value, 'nanos'):
+                        # Firestore Timestamp object (google.protobuf.timestamp_pb2.Timestamp)
+                        logger.debug(f"Converting Firestore timestamp field {field_name}: type={field_type}")
+                        ts = datetime.utcfromtimestamp(field_value.seconds + field_value.nanos / 1e9)
+                        flat_doc[field_name] = ts.isoformat()
+                    elif hasattr(field_value, 'isoformat'):
+                        # Has isoformat method (datetime-like)
+                        logger.debug(f"Converting datetime-like field {field_name}: type={field_type}")
+                        flat_doc[field_name] = field_value.isoformat()
+                    elif hasattr(field_value, 'timestamp'):
+                        # Firestore DatetimeWithNanoseconds object
+                        logger.debug(f"Converting DatetimeWithNanoseconds field {field_name}: type={field_type}")
+                        flat_doc[field_name] = field_value.isoformat()
+                    else:
+                        # Convert to string as last resort
+                        logger.warning(f"Unknown field type for {field_name}: {field_type}, converting to string")
+                        flat_doc[field_name] = str(field_value)
+                except Exception as e:
+                    # If all else fails, convert to string
+                    logger.warning(f"Failed to convert field {field_name} of type {type(field_value)}: {e}. Using string representation.")
+                    flat_doc[field_name] = str(field_value)
 
         # Add extraction timestamp
         flat_doc['_extracted_at'] = datetime.utcnow().isoformat()
@@ -184,7 +237,15 @@ class FirestoreExtractor(BaseExtractor):
                 # Yield batch when buffer is full
                 if len(rows_buffer) >= batch_size:
                     batch_num += 1
-                    df = pd.DataFrame(rows_buffer)
+                    # Sanitize before creating DataFrame to ensure all values are primitives
+                    sanitized_rows = self._sanitize_for_dataframe(rows_buffer)
+                    df = pd.DataFrame(sanitized_rows)
+
+                    # Force convert any 'object' dtype columns to string to avoid PyArrow conversion errors
+                    for col in df.select_dtypes(include=['object']).columns:
+                        logger.info(f"Converting object column '{col}' to string dtype")
+                        df[col] = df[col].astype(str)
+
                     logger.info(f"Extracted batch {batch_num}: {len(df)} documents")
                     yield df
                     rows_buffer = []
@@ -192,7 +253,15 @@ class FirestoreExtractor(BaseExtractor):
             # Yield remaining documents
             if rows_buffer:
                 batch_num += 1
-                df = pd.DataFrame(rows_buffer)
+                # Sanitize before creating DataFrame
+                sanitized_rows = self._sanitize_for_dataframe(rows_buffer)
+                df = pd.DataFrame(sanitized_rows)
+
+                # Force convert any 'object' dtype columns to string
+                for col in df.select_dtypes(include=['object']).columns:
+                    logger.info(f"Converting object column '{col}' to string dtype")
+                    df[col] = df[col].astype(str)
+
                 logger.info(f"Extracted final batch {batch_num}: {len(df)} documents")
                 yield df
 
@@ -265,7 +334,15 @@ class FirestoreExtractor(BaseExtractor):
                 # Yield batch when buffer is full
                 if len(rows_buffer) >= batch_size:
                     batch_num += 1
-                    df = pd.DataFrame(rows_buffer)
+                    # Sanitize before creating DataFrame to ensure all values are primitives
+                    sanitized_rows = self._sanitize_for_dataframe(rows_buffer)
+                    df = pd.DataFrame(sanitized_rows)
+
+                    # Force convert any 'object' dtype columns to string to avoid PyArrow conversion errors
+                    for col in df.select_dtypes(include=['object']).columns:
+                        logger.info(f"Converting object column '{col}' to string dtype")
+                        df[col] = df[col].astype(str)
+
                     logger.info(f"Extracted batch {batch_num}: {len(df)} documents")
                     yield df
                     rows_buffer = []
@@ -273,7 +350,15 @@ class FirestoreExtractor(BaseExtractor):
             # Yield remaining documents
             if rows_buffer:
                 batch_num += 1
-                df = pd.DataFrame(rows_buffer)
+                # Sanitize before creating DataFrame
+                sanitized_rows = self._sanitize_for_dataframe(rows_buffer)
+                df = pd.DataFrame(sanitized_rows)
+
+                # Force convert any 'object' dtype columns to string
+                for col in df.select_dtypes(include=['object']).columns:
+                    logger.info(f"Converting object column '{col}' to string dtype")
+                    df[col] = df[col].astype(str)
+
                 logger.info(f"Extracted final batch {batch_num}: {len(df)} documents")
                 yield df
 

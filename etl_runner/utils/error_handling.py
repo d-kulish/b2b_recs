@@ -154,7 +154,8 @@ def validate_job_config(config: dict) -> None:
     # Validate source type first
     database_source_types = ['postgresql', 'mysql', 'bigquery']
     file_source_types = ['gcs', 's3', 'azure_blob']
-    valid_source_types = database_source_types + file_source_types
+    nosql_source_types = ['firestore']
+    valid_source_types = database_source_types + file_source_types + nosql_source_types
 
     source_type = config['source_type']
     if source_type not in valid_source_types:
@@ -164,20 +165,22 @@ def validate_job_config(config: dict) -> None:
         )
 
     is_file_source = source_type in file_source_types
+    is_nosql_source = source_type in nosql_source_types
 
     # Validate transactional load requirements
-    # For database sources: timestamp_column is required
+    # For database/NoSQL sources: timestamp_column is required
     # For file sources: files are tracked by metadata, no timestamp_column needed
     if config['load_type'] == 'transactional':
         if not is_file_source and not config.get('timestamp_column'):
+            source_category = "NoSQL" if is_nosql_source else "database"
             raise ConfigurationError(
-                "timestamp_column is required for transactional loads from database sources"
+                f"timestamp_column is required for transactional loads from {source_category} sources"
             )
 
     # Validate selected columns
     # For database sources: selected_columns is required
-    # For file sources: empty selected_columns means "load all columns"
-    if not is_file_source:
+    # For file/NoSQL sources: empty selected_columns means "load all columns"
+    if not is_file_source and not is_nosql_source:
         if not config['selected_columns'] or len(config['selected_columns']) == 0:
             raise ConfigurationError("selected_columns cannot be empty for database sources")
 

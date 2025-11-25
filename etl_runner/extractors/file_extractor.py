@@ -421,7 +421,8 @@ class FileExtractor:
         table_name: Optional[str] = None,
         schema_name: Optional[str] = None,
         timestamp_column: Optional[str] = None,
-        since_datetime: Optional[str] = None
+        since_datetime: Optional[str] = None,
+        processed_files: Optional[Dict[str, Dict[str, Any]]] = None
     ) -> int:
         """
         Estimate row count for file-based ETL jobs.
@@ -430,28 +431,66 @@ class FileExtractor:
         1. Total file size
         2. Heuristic rows per MB for each file format
 
+        IMPORTANT: For transactional loads, only estimates NEW/CHANGED files to avoid
+        triggering Dataflow unnecessarily when most files are already processed.
+
         Args:
             table_name: Not used for file sources (kept for interface compatibility)
             schema_name: Not used for file sources (kept for interface compatibility)
             timestamp_column: Not used for file sources
             since_datetime: Not used for file sources
+            processed_files: Dict mapping file_path -> metadata (size, last_modified)
+                           from ProcessedFile table. Used to filter out unchanged files.
 
         Returns:
-            Estimated number of rows across all files
+            Estimated number of rows for files that will actually be processed
         """
         try:
-            # Get list of files matching pattern
-            files = self.list_files()
+            # Get list of all available files matching pattern
+            available_files = self.list_files()
 
-            if not files:
+            if not available_files:
                 logger.warning("No files found matching pattern")
                 return 0
 
-            # Calculate total file size in bytes
-            total_size_bytes = sum(f['file_size_bytes'] for f in files)
+            # Filter to only NEW/CHANGED files (same logic as extract_files)
+            if processed_files:
+                files_to_estimate = []
+                for file in available_files:
+                    file_path = file['file_path']
+
+                    # Check if file was already processed
+                    if file_path in processed_files:
+                        # Check if file has changed (size or modification time)
+                        prev_metadata = processed_files[file_path]
+                        if (file['file_size_bytes'] == prev_metadata['file_size_bytes'] and
+                            file['file_last_modified'] == prev_metadata['file_last_modified']):
+                            # File unchanged, skip from estimation
+                            logger.debug(f"Skipping unchanged file from estimation: {file_path}")
+                            continue
+                        else:
+                            logger.info(f"File changed, including in estimation: {file_path}")
+
+                    files_to_estimate.append(file)
+
+                logger.info(
+                    f"Estimating rows for {len(files_to_estimate)} new/changed files "
+                    f"(out of {len(available_files)} total files in bucket)"
+                )
+            else:
+                # No processed_files info, estimate all files (catalog mode or first run)
+                files_to_estimate = available_files
+                logger.info(f"Estimating rows for all {len(files_to_estimate)} files")
+
+            if not files_to_estimate:
+                logger.info("No new or changed files to estimate")
+                return 0
+
+            # Calculate total file size in bytes (only for files that will be processed)
+            total_size_bytes = sum(f['file_size_bytes'] for f in files_to_estimate)
             total_size_mb = total_size_bytes / (1024 * 1024)
 
-            logger.info(f"Total file size: {total_size_mb:.2f} MB ({len(files)} files)")
+            logger.info(f"Total file size to process: {total_size_mb:.2f} MB ({len(files_to_estimate)} files)")
 
             # Estimate rows per MB based on file format
             # These are conservative estimates

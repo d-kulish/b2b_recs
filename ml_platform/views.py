@@ -19,6 +19,7 @@ from .models import (
     TrainedModel,
     Deployment,
     SystemMetrics,
+    ProcessedFile,
 )
 
 

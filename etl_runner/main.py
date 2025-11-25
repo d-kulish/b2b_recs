@@ -289,8 +289,8 @@ class ETLRunner:
         """
         Estimate number of rows for this ETL job.
 
-        For databases: Runs SELECT COUNT(*) query
-        For files: Estimates based on file size
+        For databases: Runs SELECT COUNT(*) query with WHERE clause for incremental loads
+        For files: Estimates based on file size, filtering to only NEW/CHANGED files for transactional loads
 
         Returns:
             Estimated number of rows to be extracted
@@ -310,12 +310,39 @@ class ETLRunner:
                 since_datetime = self.job_config.get('last_sync_value') or \
                                self.job_config.get('historical_start_date')
 
+            # For file sources in transactional mode, get processed files to estimate only new files
+            processed_files = None
+            if source_type in ['gcs', 's3', 'azure_blob'] and load_type == 'transactional':
+                logger.info("Fetching processed files for accurate volume estimation...")
+                processed_files_list = self.config.get_processed_files(self.data_source_id)
+
+                # Convert to dict format (same as in run_transactional_load_files)
+                from dateutil import parser as date_parser
+                processed_files = {}
+                for f in processed_files_list:
+                    # Parse ISO string to datetime object for comparison
+                    file_last_modified = f['file_last_modified']
+                    if file_last_modified and isinstance(file_last_modified, str):
+                        try:
+                            file_last_modified = date_parser.isoparse(file_last_modified)
+                        except Exception as e:
+                            logger.warning(f"Failed to parse datetime: {e}")
+                            file_last_modified = None
+
+                    processed_files[f['file_path']] = {
+                        'file_size_bytes': f['file_size_bytes'],
+                        'file_last_modified': file_last_modified
+                    }
+
+                logger.info(f"Found {len(processed_files)} previously processed files")
+
             # Call extractor's estimate_row_count method
             estimated_rows = self.extractor.estimate_row_count(
                 table_name=table_name,
                 schema_name=schema_name,
                 timestamp_column=timestamp_column,
-                since_datetime=since_datetime
+                since_datetime=since_datetime,
+                processed_files=processed_files  # Pass for file sources
             )
 
             logger.info(f"Estimated row count: {estimated_rows:,}")

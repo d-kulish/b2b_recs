@@ -18,13 +18,13 @@ setup(
     author='B2B Recs Team',
     packages=find_packages(exclude=['tests', 'tests.*']),
     install_requires=requirements,
-    python_requires='>=3.10',
+    python_requires='>=3.12',
     include_package_data=True,
     zip_safe=False,
     classifiers=[
         'Development Status :: 4 - Beta',
         'Intended Audience :: Developers',
-        'Programming Language :: Python :: 3.10',
+        'Programming Language :: Python :: 3.12',
         'Operating System :: OS Independent',
     ],
 )

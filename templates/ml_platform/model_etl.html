@@ -6,6 +6,7 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'css/cards.css' %}?v=4">
+<link rel="stylesheet" href="{% static 'css/modals.css' %}?v=2">
 {% endblock %}
 
 {% block model_content %}
@@ -299,48 +300,53 @@
 </div>
 
 <!-- Add Data Source Wizard Modal -->
-<div id="addSourceModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-[100] flex items-center justify-center p-4 pt-20">
-    <div class="bg-white rounded-xl shadow-2xl w-full max-h-[75vh] min-h-[500px] flex flex-col" style="max-width: 634px;">
+<div id="addSourceModal" class="modal-overlay hidden">
+    <div class="modal-container modal-container-wizard">
         <!-- Modal Header -->
-        <div class="px-5 py-3 border-b border-gray-200 sticky top-0 bg-white z-10 rounded-t-xl">
-            <div class="flex items-center justify-between">
-                <div>
-                    <h3 class="text-base font-bold text-gray-900">Add ETL Job</h3>
-                    <p class="text-xs text-gray-600 mt-0.5">Step <span id="currentStep">1</span> of 5</p>
+        <div class="modal-header-wizard">
+            <div class="modal-header-content">
+                <div class="modal-header-icon info">
+                    <i class="fas fa-database text-lg"></i>
+                </div>
+                <div class="modal-header-info">
+                    <h3 class="modal-header-title">Add ETL Job</h3>
+                    <p class="modal-step-counter">Step <span id="currentStep">1</span> of 5</p>
                 </div>
             </div>
 
             <!-- Progress Bar -->
-            <div class="mt-2 flex gap-1.5">
-                <div id="progress1" class="flex-1 h-1 bg-blue-600 rounded"></div>
-                <div id="progress2" class="flex-1 h-1 bg-gray-200 rounded"></div>
-                <div id="progress3" class="flex-1 h-1 bg-gray-200 rounded"></div>
-                <div id="progress4" class="flex-1 h-1 bg-gray-200 rounded"></div>
-                <div id="progress5" class="flex-1 h-1 bg-gray-200 rounded"></div>
+            <div class="modal-progress-bar">
+                <div id="progress1" class="modal-progress-segment active"></div>
+                <div id="progress2" class="modal-progress-segment"></div>
+                <div id="progress3" class="modal-progress-segment"></div>
+                <div id="progress4" class="modal-progress-segment"></div>
+                <div id="progress5" class="modal-progress-segment"></div>
             </div>
         </div>
 
         <!-- Modal Body -->
-        <div class="px-5 py-3 flex-1 overflow-y-auto">
+        <div class="modal-body-wizard">
             <!-- Step 1: Select Connection & Job Name -->
-            <div id="step1" class="wizard-step">
-                <h4 class="text-sm font-bold text-gray-900 mb-3">Select Connection</h4>
+            <div id="step1" class="wizard-step active">
+                <h4 class="wizard-section-title">Select Connection</h4>
 
                 <!-- Job Name Field -->
-                <div class="mb-3">
-                    <label class="block text-xs font-semibold text-gray-700 mb-1">ETL Job Name*</label>
-                    <input type="text" id="sourceName" placeholder="e.g., Daily Transactions Extract" class="w-full px-2.5 py-1.5 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" oninput="validateJobName()">
-                    <p id="jobNameError" class="text-xs text-red-600 mt-0.5 invisible">Job name is required</p>
+                <div class="wizard-field-group">
+                    <label class="wizard-field-label">ETL Job Name <span class="required">*</span></label>
+                    <input type="text" id="sourceName" placeholder="e.g., Daily Transactions Extract" class="form-input w-full" oninput="validateJobName()">
+                    <p id="jobNameError" class="text-xs text-red-600 mt-1 hidden">Job name is required</p>
                 </div>
 
                 <!-- Saved Connections List -->
-                <div>
-                    <label class="block text-xs font-semibold text-gray-700 mb-1">Select Connection*</label>
-                    <div id="savedConnectionsList" class="space-y-2 h-64 overflow-y-auto border border-gray-200 rounded-lg p-3">
-                        <!-- Will be populated dynamically via JavaScript -->
-                        <p class="text-xs text-gray-500 text-center py-8">Loading connections...</p>
+                <div class="wizard-field-group">
+                    <label class="wizard-field-label">Select Connection <span class="required">*</span></label>
+                    <div class="wizard-list-container">
+                        <div id="savedConnectionsList" class="list-content" style="height: 240px;">
+                            <!-- Will be populated dynamically via JavaScript -->
+                            <p class="text-center text-gray-500 py-8">Loading connections...</p>
+                        </div>
                     </div>
-                    <p class="text-xs text-gray-500 mt-2">
+                    <p class="wizard-field-hint">
                         <i class="fas fa-info-circle mr-1"></i>
                         No connection yet? <a href="javascript:void(0)" onclick="closeWizard()" class="text-blue-600 hover:underline">Create one first</a> in the Connections section.
                     </p>
@@ -349,36 +355,37 @@
 
 
             <!-- Step 2: Schema & Table Selection (for Databases) OR File Selection (for Cloud Storage) -->
-            <div id="step2" class="wizard-step hidden">
+            <div id="step2" class="wizard-step">
 
                 <!-- Step 2A: Database Schema & Table Selection -->
                 <div id="step2-database" class="hidden">
-                    <h4 class="text-base font-bold text-gray-900 mb-3">Select Schema & Table</h4>
-
-                    <p class="text-sm text-gray-600 mb-3">Choose the schema and table to extract data from.</p>
+                    <h4 class="wizard-section-title">Select Schema & Table</h4>
+                    <p class="wizard-section-subtitle">Choose the schema and table to extract data from.</p>
 
                     <!-- Schema Selection -->
-                    <div class="mb-4">
-                        <label class="block text-sm font-semibold text-gray-700 mb-1.5">Schema*</label>
-                        <select id="schemaSelector" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" onchange="onSchemaChange()">
+                    <div class="wizard-field-group">
+                        <label class="wizard-field-label">Schema <span class="required">*</span></label>
+                        <select id="schemaSelector" class="form-select w-full" onchange="onSchemaChange()">
                             <option value="">Loading schemas...</option>
                         </select>
-                        <p class="text-xs text-gray-500 mt-1">Select the database schema containing your target table</p>
+                        <p class="wizard-field-hint">Select the database schema containing your target table</p>
                     </div>
 
                     <!-- Table Selection -->
-                    <div>
-                        <label class="block text-sm font-semibold text-gray-700 mb-1.5">Table*</label>
-                        <div id="tablesListContainer" class="space-y-2 border border-gray-200 rounded-lg p-3 max-h-80 overflow-y-auto">
-                            <!-- Tables will be populated dynamically -->
-                            <p class="text-xs text-gray-500 text-center py-8">Select a schema to load tables</p>
+                    <div class="wizard-field-group">
+                        <label class="wizard-field-label">Table <span class="required">*</span></label>
+                        <div class="wizard-list-container">
+                            <div id="tablesListContainer" class="list-content" style="max-height: 280px;">
+                                <!-- Tables will be populated dynamically -->
+                                <p class="text-center text-gray-500 py-8">Select a schema to load tables</p>
+                            </div>
                         </div>
                     </div>
                 </div>
 
                 <!-- Step 2B: Cloud Storage File Selection -->
                 <div id="step2-files" class="hidden">
-                    <h4 class="text-base font-bold text-gray-900 mb-3">Select Files to Load</h4>
+                    <h4 class="wizard-section-title">Select Files to Load</h4>
 
                     <p class="text-sm text-gray-600 mb-3">Configure which files to extract from your cloud storage bucket.</p>
 
@@ -864,118 +871,118 @@
             </div>
 
             <!-- Step 5: Schedule & Review (RENAMED from Step 4) -->
-            <div id="step5" class="wizard-step hidden">
-                <h4 class="text-base font-bold text-gray-900 mb-3">Schedule & Review</h4>
+            <div id="step5" class="wizard-step">
+                <h4 class="wizard-section-title">Schedule & Review</h4>
 
-                <div class="space-y-3">
+                <div class="space-y-4">
+                    <!-- Schedule Section -->
                     <div>
-                        <label class="block text-sm font-semibold text-gray-700 mb-1.5">Schedule</label>
-                        <select id="scheduleType" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" onchange="onScheduleTypeChange()">
-                            <option value="manual">Manual Only - No automatic runs</option>
-                            <option value="hourly">Hourly - Every hour</option>
-                            <option value="daily">Daily - Once per day</option>
-                            <option value="weekly">Weekly - Once per week</option>
-                            <option value="monthly">Monthly - Once per month</option>
-                        </select>
-                    </div>
+                        <h5 class="text-sm font-semibold text-gray-900 mb-3">
+                            <i class="fas fa-clock mr-2"></i>Schedule
+                        </h5>
 
-                    <!-- Hourly Schedule Options (show when hourly selected) -->
-                    <div id="hourlyOptions" class="hidden">
-                        <label class="block text-sm font-semibold text-gray-700 mb-1.5">Run at Minute</label>
-                        <input type="number" id="scheduleMinute" min="0" max="59" value="0" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                        <p class="text-xs text-gray-500 mt-1">0 = on the hour (:00), 15 = quarter past (:15), 30 = half past (:30), 45 = quarter to (:45)</p>
-                    </div>
-
-                    <!-- Daily/Weekly/Monthly Schedule Options (show when selected) -->
-                    <div id="timeOptions" class="hidden">
-                        <label class="block text-sm font-semibold text-gray-700 mb-1.5">Time</label>
-                        <input type="time" id="scheduleTime" value="09:00" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                        <p class="text-xs text-gray-500 mt-1">Time in your local timezone</p>
-                    </div>
-
-                    <!-- Weekly Schedule Options (show when weekly selected) -->
-                    <div id="weeklyOptions" class="hidden">
-                        <label class="block text-sm font-semibold text-gray-700 mb-1.5">Day of Week</label>
-                        <select id="scheduleDayOfWeek" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                            <option value="0">Monday</option>
-                            <option value="1">Tuesday</option>
-                            <option value="2">Wednesday</option>
-                            <option value="3">Thursday</option>
-                            <option value="4">Friday</option>
-                            <option value="5">Saturday</option>
-                            <option value="6">Sunday</option>
-                        </select>
-                    </div>
-
-                    <!-- Monthly Schedule Options (show when monthly selected) -->
-                    <div id="monthlyOptions" class="hidden">
-                        <label class="block text-sm font-semibold text-gray-700 mb-1.5">Day of Month</label>
-                        <input type="hidden" id="scheduleDayOfMonth" value="1">
-                        <!-- Grid of day buttons -->
-                        <div class="grid grid-cols-7 gap-1 mb-2">
-                            <button type="button" class="day-btn px-2 py-1 text-xs border border-gray-300 rounded hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500" data-day="1">1</button>
-                            <button type="button" class="day-btn px-2 py-1 text-xs border border-gray-300 rounded hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500" data-day="2">2</button>
-                            <button type="button" class="day-btn px-2 py-1 text-xs border border-gray-300 rounded hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500" data-day="3">3</button>
-                            <button type="button" class="day-btn px-2 py-1 text-xs border border-gray-300 rounded hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500" data-day="4">4</button>
-                            <button type="button" class="day-btn px-2 py-1 text-xs border border-gray-300 rounded hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500" data-day="5">5</button>
-                            <button type="button" class="day-btn px-2 py-1 text-xs border border-gray-300 rounded hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500" data-day="6">6</button>
-                            <button type="button" class="day-btn px-2 py-1 text-xs border border-gray-300 rounded hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500" data-day="7">7</button>
-                            <button type="button" class="day-btn px-2 py-1 text-xs border border-gray-300 rounded hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500" data-day="8">8</button>
-                            <button type="button" class="day-btn px-2 py-1 text-xs border border-gray-300 rounded hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500" data-day="9">9</button>
-                            <button type="button" class="day-btn px-2 py-1 text-xs border border-gray-300 rounded hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500" data-day="10">10</button>
-                            <button type="button" class="day-btn px-2 py-1 text-xs border border-gray-300 rounded hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500" data-day="11">11</button>
-                            <button type="button" class="day-btn px-2 py-1 text-xs border border-gray-300 rounded hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500" data-day="12">12</button>
-                            <button type="button" class="day-btn px-2 py-1 text-xs border border-gray-300 rounded hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500" data-day="13">13</button>
-                            <button type="button" class="day-btn px-2 py-1 text-xs border border-gray-300 rounded hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500" data-day="14">14</button>
-                            <button type="button" class="day-btn px-2 py-1 text-xs border border-gray-300 rounded hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500" data-day="15">15</button>
-                            <button type="button" class="day-btn px-2 py-1 text-xs border border-gray-300 rounded hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500" data-day="16">16</button>
-                            <button type="button" class="day-btn px-2 py-1 text-xs border border-gray-300 rounded hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500" data-day="17">17</button>
-                            <button type="button" class="day-btn px-2 py-1 text-xs border border-gray-300 rounded hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500" data-day="18">18</button>
-                            <button type="button" class="day-btn px-2 py-1 text-xs border border-gray-300 rounded hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500" data-day="19">19</button>
-                            <button type="button" class="day-btn px-2 py-1 text-xs border border-gray-300 rounded hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500" data-day="20">20</button>
-                            <button type="button" class="day-btn px-2 py-1 text-xs border border-gray-300 rounded hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500" data-day="21">21</button>
-                            <button type="button" class="day-btn px-2 py-1 text-xs border border-gray-300 rounded hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500" data-day="22">22</button>
-                            <button type="button" class="day-btn px-2 py-1 text-xs border border-gray-300 rounded hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500" data-day="23">23</button>
-                            <button type="button" class="day-btn px-2 py-1 text-xs border border-gray-300 rounded hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500" data-day="24">24</button>
-                            <button type="button" class="day-btn px-2 py-1 text-xs border border-gray-300 rounded hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500" data-day="25">25</button>
-                            <button type="button" class="day-btn px-2 py-1 text-xs border border-gray-300 rounded hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500" data-day="26">26</button>
-                            <button type="button" class="day-btn px-2 py-1 text-xs border border-gray-300 rounded hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500" data-day="27">27</button>
-                            <button type="button" class="day-btn px-2 py-1 text-xs border border-gray-300 rounded hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500" data-day="28">28</button>
-                            <button type="button" class="day-btn px-2 py-1 text-xs border border-gray-300 rounded hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500" data-day="29">29</button>
-                            <button type="button" class="day-btn px-2 py-1 text-xs border border-gray-300 rounded hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500" data-day="30">30</button>
-                            <button type="button" class="day-btn px-2 py-1 text-xs border border-gray-300 rounded hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500" data-day="31">31</button>
-                        </div>
-                        <p class="text-xs text-gray-500">Selected: <span id="selectedDay" class="font-semibold">1st</span> of every month</p>
-                    </div>
-
-                    <div class="bg-white border border-gray-200 rounded-lg p-3">
-                        <h5 class="font-bold text-sm text-gray-900 mb-2">Summary</h5>
-                        <div class="space-y-1.5 text-sm">
-                            <div class="flex">
-                                <span class="w-28 text-gray-600 text-xs">Connection:</span>
-                                <span class="font-semibold text-gray-900 text-xs" id="summaryConnection"></span>
+                        <div class="space-y-3">
+                            <!-- Schedule Type - Button Group -->
+                            <div class="flex flex-wrap gap-2">
+                                <label class="schedule-option">
+                                    <input type="radio" name="scheduleType" value="manual" class="hidden peer" checked onchange="onScheduleTypeChange()">
+                                    <span class="schedule-option-label peer-checked:bg-blue-100 peer-checked:border-blue-500 peer-checked:text-blue-700">
+                                        Manual
+                                    </span>
+                                </label>
+                                <label class="schedule-option">
+                                    <input type="radio" name="scheduleType" value="hourly" class="hidden peer" onchange="onScheduleTypeChange()">
+                                    <span class="schedule-option-label peer-checked:bg-blue-100 peer-checked:border-blue-500 peer-checked:text-blue-700">
+                                        Hourly
+                                    </span>
+                                </label>
+                                <label class="schedule-option">
+                                    <input type="radio" name="scheduleType" value="daily" class="hidden peer" onchange="onScheduleTypeChange()">
+                                    <span class="schedule-option-label peer-checked:bg-blue-100 peer-checked:border-blue-500 peer-checked:text-blue-700">
+                                        Daily
+                                    </span>
+                                </label>
+                                <label class="schedule-option">
+                                    <input type="radio" name="scheduleType" value="weekly" class="hidden peer" onchange="onScheduleTypeChange()">
+                                    <span class="schedule-option-label peer-checked:bg-blue-100 peer-checked:border-blue-500 peer-checked:text-blue-700">
+                                        Weekly
+                                    </span>
+                                </label>
                             </div>
-                            <div class="flex">
-                                <span class="w-28 text-gray-600 text-xs">Source:</span>
-                                <span class="font-semibold text-gray-900 text-xs" id="summarySource"></span>
+
+                            <!-- Hourly Options -->
+                            <div id="hourlyOptions" class="hidden">
+                                <label class="block text-sm text-gray-600 mb-1">Run at minute:</label>
+                                <select id="scheduleMinute" class="form-select" style="width: 120px;" onchange="updateSummary()">
+                                    <option value="0">:00</option>
+                                    <option value="15">:15</option>
+                                    <option value="30">:30</option>
+                                    <option value="45">:45</option>
+                                </select>
                             </div>
-                            <div class="flex">
-                                <span class="w-28 text-gray-600 text-xs">Destination:</span>
-                                <span class="font-semibold text-gray-900 text-xs" id="summaryDestination"></span>
+
+                            <!-- Daily Options -->
+                            <div id="timeOptions" class="hidden">
+                                <label class="block text-sm text-gray-600 mb-1">Run at time:</label>
+                                <input type="time" id="scheduleTime" class="form-input" style="width: 140px;" value="09:00" onchange="updateSummary()">
                             </div>
-                            <div class="flex">
-                                <span class="w-28 text-gray-600 text-xs">Load Strategy:</span>
-                                <span class="font-semibold text-gray-900 text-xs" id="summaryLoadType"></span>
-                            </div>
-                            <div class="flex">
-                                <span class="w-28 text-gray-600 text-xs">Schedule:</span>
-                                <span class="font-semibold text-gray-900 text-xs" id="summarySchedule"></span>
+
+                            <!-- Weekly Options -->
+                            <div id="weeklyOptions" class="hidden">
+                                <div class="flex gap-4 items-end">
+                                    <div>
+                                        <label class="block text-sm text-gray-600 mb-1">Day of week:</label>
+                                        <select id="scheduleDayOfWeek" class="form-select" style="width: 140px;" onchange="updateSummary()">
+                                            <option value="0">Monday</option>
+                                            <option value="1">Tuesday</option>
+                                            <option value="2">Wednesday</option>
+                                            <option value="3">Thursday</option>
+                                            <option value="4">Friday</option>
+                                            <option value="5">Saturday</option>
+                                            <option value="6">Sunday</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm text-gray-600 mb-1">At time:</label>
+                                        <input type="time" id="scheduleTimeWeekly" class="form-input" style="width: 140px;" value="09:00" onchange="updateSummary()">
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
 
+                    <!-- Summary Section -->
+                    <div class="wizard-list-container">
+                        <div class="p-4">
+                            <h5 class="font-bold text-sm text-gray-900 mb-3">Summary</h5>
+                            <div class="space-y-2 text-sm">
+                                <div class="flex">
+                                    <span class="w-28 text-gray-600">Connection:</span>
+                                    <span class="font-semibold text-gray-900" id="summaryConnection"></span>
+                                </div>
+                                <div class="flex">
+                                    <span class="w-28 text-gray-600">Source:</span>
+                                    <span class="font-semibold text-gray-900" id="summarySource"></span>
+                                </div>
+                                <div class="flex">
+                                    <span class="w-28 text-gray-600">Destination:</span>
+                                    <span class="font-semibold text-gray-900" id="summaryDestination"></span>
+                                </div>
+                                <div class="flex">
+                                    <span class="w-28 text-gray-600">Load Strategy:</span>
+                                    <span class="font-semibold text-gray-900" id="summaryLoadType"></span>
+                                </div>
+                                <div class="flex">
+                                    <span class="w-28 text-gray-600">Schedule:</span>
+                                    <span class="font-semibold text-gray-900" id="summarySchedule"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Enable Immediately Checkbox -->
                     <div class="flex items-center">
-                        <input type="checkbox" id="enableImmediately" class="mr-2">
+                        <input type="checkbox" id="enableImmediately" class="mr-2 w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500">
                         <label for="enableImmediately" class="text-sm text-gray-700">Enable immediately after creation</label>
                     </div>
                 </div>
@@ -983,182 +990,190 @@
         </div>
 
         <!-- Modal Footer -->
-        <div class="px-5 py-2.5 border-t border-gray-200 sticky bottom-0 bg-white rounded-b-xl">
-            <div class="flex items-center justify-between">
-                <!-- Left: Back/Next buttons -->
-                <div class="flex gap-2">
-                    <button id="backButton" onclick="previousStep()" class="btn btn-secondary opacity-50 cursor-not-allowed bg-gray-300" style="width: 142px; height: 38px;" disabled>
-                        <i class="fas fa-chevron-left"></i>
-                    </button>
-                    <button id="nextButton" onclick="nextStep()" class="btn btn-secondary opacity-50 cursor-not-allowed bg-gray-300" style="width: 142px; height: 38px;" disabled>
-                        <i class="fas fa-chevron-right"></i>
-                    </button>
-                </div>
+        <div class="modal-footer-wizard">
+            <!-- Left: Back button -->
+            <div class="footer-left">
+                <button id="backButton" onclick="previousStep()" class="btn btn-secondary hidden" disabled>
+                    <i class="fas fa-chevron-left mr-1"></i> Back
+                </button>
+            </div>
 
-                <!-- Right: Cancel and Create buttons -->
-                <div class="flex gap-2">
-                    <button onclick="hideAddSourceModal()" class="btn btn-danger" style="width: 142px; height: 38px;">
-                        <span>Cancel</span>
-                    </button>
-                    <button id="createButton" onclick="createDataSource()" class="btn btn-success hidden" style="width: 142px; height: 38px;">
-                        <span>Create</span>
-                    </button>
-                </div>
+            <!-- Right: Cancel, Next, Create buttons -->
+            <div class="footer-right">
+                <button onclick="hideAddSourceModal()" class="btn btn-secondary">
+                    Cancel
+                </button>
+                <button id="nextButton" onclick="nextStep()" class="btn btn-primary" disabled>
+                    Next <i class="fas fa-chevron-right ml-1"></i>
+                </button>
+                <button id="createButton" onclick="createDataSource()" class="btn btn-success hidden">
+                    <i class="fas fa-check mr-1"></i> Create ETL Job
+                </button>
             </div>
         </div>
     </div>
 </div>
 
 <!-- Standalone Connection Creation Modal (2-Step Wizard) -->
-<div id="createConnectionModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-[100] flex items-center justify-center p-4 pt-20">
-    <div class="bg-white rounded-xl shadow-2xl w-full max-h-[75vh] min-h-[500px] flex flex-col" style="max-width: 634px;">
+<div id="createConnectionModal" class="modal-overlay hidden">
+    <div class="modal-container modal-container-wizard">
         <!-- Modal Header -->
-        <div class="px-5 py-3 border-b border-gray-200 sticky top-0 bg-white z-10 rounded-t-xl">
-            <div class="flex items-center justify-between">
-                <div>
-                    <h3 class="text-base font-bold text-gray-900">Create Connection</h3>
-                    <p class="text-xs text-gray-600 mt-0.5">Step <span id="connModalStep">1</span> of 2</p>
+        <div class="modal-header-wizard">
+            <div class="modal-header-content">
+                <div class="modal-header-icon info">
+                    <i class="fas fa-plug text-lg"></i>
+                </div>
+                <div class="modal-header-info">
+                    <h3 class="modal-header-title">Create Connection</h3>
+                    <p class="modal-step-counter">Step <span id="connModalStep">1</span> of 2</p>
                 </div>
             </div>
 
             <!-- Progress Bar -->
-            <div class="mt-2 flex gap-1.5">
-                <div id="connProgress1" class="flex-1 h-1 bg-blue-600 rounded"></div>
-                <div id="connProgress2" class="flex-1 h-1 bg-gray-200 rounded"></div>
+            <div class="modal-progress-bar">
+                <div id="connProgress1" class="modal-progress-segment active"></div>
+                <div id="connProgress2" class="modal-progress-segment"></div>
             </div>
         </div>
 
         <!-- Modal Body -->
-        <div class="px-5 py-3 flex-1 overflow-y-auto" style="min-height: 450px; max-height: 450px;">
+        <div class="modal-body-wizard">
             <!-- Connection Step 1: Select Type -->
-            <div id="connStep1" class="connection-modal-step">
-                <h4 class="text-sm font-bold text-gray-900 mb-2">Select Connection Type</h4>
+            <div id="connStep1" class="wizard-step active">
+                <h4 class="wizard-section-title">Select Connection Type</h4>
 
                 <!-- Category Tabs -->
-                <div class="mb-3">
-                    <div class="grid grid-cols-3 gap-2">
-                        <button onclick="switchConnTab('relational')" id="connTabRelational" class="px-3 py-2 text-xs font-semibold rounded-lg border border-blue-600 bg-blue-50 text-blue-700 transition">
-                            Relational Databases
-                        </button>
-                        <button onclick="switchConnTab('storage')" id="connTabStorage" class="px-3 py-2 text-xs font-semibold rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition">
-                            Cloud Storage
-                        </button>
-                        <button onclick="switchConnTab('nosql')" id="connTabNosql" class="px-3 py-2 text-xs font-semibold rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition">
-                            NoSQL
-                        </button>
-                    </div>
+                <div class="wizard-tab-group">
+                    <button onclick="switchConnTab('relational')" id="connTabRelational" class="wizard-tab active">
+                        Relational Databases
+                    </button>
+                    <button onclick="switchConnTab('storage')" id="connTabStorage" class="wizard-tab">
+                        Cloud Storage
+                    </button>
+                    <button onclick="switchConnTab('nosql')" id="connTabNosql" class="wizard-tab">
+                        NoSQL
+                    </button>
                 </div>
 
                 <!-- Relational Databases Tab Content -->
                 <div id="connContentRelational" class="conn-tab-content">
-                    <p class="text-xs text-gray-600 mb-2">Select a relational database:</p>
-                    <div class="grid grid-cols-2 gap-2 max-h-80 overflow-y-auto border border-gray-200 rounded-lg p-2">
-                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
-                            <input type="radio" name="connSourceType" value="postgresql" class="mr-1.5 scale-75">
-                            <span class="text-xs">PostgreSQL</span>
-                        </label>
-                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
-                            <input type="radio" name="connSourceType" value="mysql" class="mr-1.5 scale-75">
-                            <span class="text-xs">MySQL</span>
-                        </label>
-                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
-                            <input type="radio" name="connSourceType" value="mariadb" class="mr-1.5 scale-75">
-                            <span class="text-xs">MariaDB</span>
-                        </label>
-                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
-                            <input type="radio" name="connSourceType" value="oracle" class="mr-1.5 scale-75">
-                            <span class="text-xs">Oracle Database</span>
-                        </label>
-                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
-                            <input type="radio" name="connSourceType" value="sqlserver" class="mr-1.5 scale-75">
-                            <span class="text-xs">SQL Server</span>
-                        </label>
-                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
-                            <input type="radio" name="connSourceType" value="db2" class="mr-1.5 scale-75">
-                            <span class="text-xs">IBM DB2</span>
-                        </label>
-                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
-                            <input type="radio" name="connSourceType" value="redshift" class="mr-1.5 scale-75">
-                            <span class="text-xs">Amazon Redshift</span>
-                        </label>
-                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
-                            <input type="radio" name="connSourceType" value="bigquery" class="mr-1.5 scale-75">
-                            <span class="text-xs">BigQuery</span>
-                        </label>
-                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
-                            <input type="radio" name="connSourceType" value="snowflake" class="mr-1.5 scale-75">
-                            <span class="text-xs">Snowflake</span>
-                        </label>
-                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
-                            <input type="radio" name="connSourceType" value="synapse" class="mr-1.5 scale-75">
-                            <span class="text-xs">Azure Synapse</span>
-                        </label>
-                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
-                            <input type="radio" name="connSourceType" value="teradata" class="mr-1.5 scale-75">
-                            <span class="text-xs">Teradata</span>
-                        </label>
+                    <p class="wizard-section-subtitle">Select a relational database:</p>
+                    <div class="wizard-list-container">
+                        <div class="list-content wizard-selection-grid cols-2">
+                            <label class="wizard-selection-card">
+                                <input type="radio" name="connSourceType" value="postgresql">
+                                <span class="card-title">PostgreSQL</span>
+                            </label>
+                            <label class="wizard-selection-card">
+                                <input type="radio" name="connSourceType" value="mysql">
+                                <span class="card-title">MySQL</span>
+                            </label>
+                            <label class="wizard-selection-card">
+                                <input type="radio" name="connSourceType" value="mariadb">
+                                <span class="card-title">MariaDB</span>
+                            </label>
+                            <label class="wizard-selection-card">
+                                <input type="radio" name="connSourceType" value="oracle">
+                                <span class="card-title">Oracle Database</span>
+                            </label>
+                            <label class="wizard-selection-card">
+                                <input type="radio" name="connSourceType" value="sqlserver">
+                                <span class="card-title">SQL Server</span>
+                            </label>
+                            <label class="wizard-selection-card">
+                                <input type="radio" name="connSourceType" value="db2">
+                                <span class="card-title">IBM DB2</span>
+                            </label>
+                            <label class="wizard-selection-card">
+                                <input type="radio" name="connSourceType" value="redshift">
+                                <span class="card-title">Amazon Redshift</span>
+                            </label>
+                            <label class="wizard-selection-card">
+                                <input type="radio" name="connSourceType" value="bigquery">
+                                <span class="card-title">BigQuery</span>
+                            </label>
+                            <label class="wizard-selection-card">
+                                <input type="radio" name="connSourceType" value="snowflake">
+                                <span class="card-title">Snowflake</span>
+                            </label>
+                            <label class="wizard-selection-card">
+                                <input type="radio" name="connSourceType" value="synapse">
+                                <span class="card-title">Azure Synapse</span>
+                            </label>
+                            <label class="wizard-selection-card">
+                                <input type="radio" name="connSourceType" value="teradata">
+                                <span class="card-title">Teradata</span>
+                            </label>
+                        </div>
                     </div>
                 </div>
 
                 <!-- Cloud Storage Tab Content -->
                 <div id="connContentStorage" class="conn-tab-content hidden">
-                    <p class="text-xs text-gray-600 mb-2">Select a cloud storage provider:</p>
-                    <p class="text-xs text-gray-500 mb-3 italic">Connection = access to bucket/container. File type selected during ETL job creation.</p>
-                    <div class="grid grid-cols-1 gap-2 max-h-80 overflow-y-auto border border-gray-200 rounded-lg p-2">
-                        <label class="flex items-center p-2 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
-                            <input type="radio" name="connSourceType" value="gcs" class="mr-2 scale-90">
-                            <div>
-                                <span class="text-sm font-semibold">Google Cloud Storage (GCS)</span>
-                                <p class="text-xs text-gray-500">Access gs:// buckets with service account</p>
-                            </div>
-                        </label>
-                        <label class="flex items-center p-2 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
-                            <input type="radio" name="connSourceType" value="s3" class="mr-2 scale-90">
-                            <div>
-                                <span class="text-sm font-semibold">AWS S3</span>
-                                <p class="text-xs text-gray-500">Access s3:// buckets with AWS credentials</p>
-                            </div>
-                        </label>
-                        <label class="flex items-center p-2 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
-                            <input type="radio" name="connSourceType" value="azure_blob" class="mr-2 scale-90">
-                            <div>
-                                <span class="text-sm font-semibold">Azure Blob Storage</span>
-                                <p class="text-xs text-gray-500">Access Azure containers with account key or SAS token</p>
-                            </div>
-                        </label>
+                    <p class="wizard-section-subtitle">Select a cloud storage provider:</p>
+                    <div class="wizard-info-box info">
+                        <i class="fas fa-info-circle"></i>
+                        <span>Connection = access to bucket/container. File type selected during ETL job creation.</span>
+                    </div>
+                    <div class="wizard-list-container">
+                        <div class="list-content wizard-selection-grid cols-1">
+                            <label class="wizard-selection-card">
+                                <input type="radio" name="connSourceType" value="gcs">
+                                <div class="card-content">
+                                    <span class="card-title">Google Cloud Storage (GCS)</span>
+                                    <p class="card-description">Access gs:// buckets with service account</p>
+                                </div>
+                            </label>
+                            <label class="wizard-selection-card">
+                                <input type="radio" name="connSourceType" value="s3">
+                                <div class="card-content">
+                                    <span class="card-title">AWS S3</span>
+                                    <p class="card-description">Access s3:// buckets with AWS credentials</p>
+                                </div>
+                            </label>
+                            <label class="wizard-selection-card">
+                                <input type="radio" name="connSourceType" value="azure_blob">
+                                <div class="card-content">
+                                    <span class="card-title">Azure Blob Storage</span>
+                                    <p class="card-description">Access Azure containers with account key or SAS token</p>
+                                </div>
+                            </label>
+                        </div>
                     </div>
                 </div>
 
                 <!-- NoSQL Tab Content -->
                 <div id="connContentNosql" class="conn-tab-content hidden">
-                    <p class="text-xs text-gray-600 mb-2">Select a NoSQL database:</p>
-                    <div class="grid grid-cols-2 gap-2 max-h-80 overflow-y-auto border border-gray-200 rounded-lg p-2">
-                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
-                            <input type="radio" name="connSourceType" value="mongodb" class="mr-1.5 scale-75">
-                            <span class="text-xs">MongoDB</span>
-                        </label>
-                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
-                            <input type="radio" name="connSourceType" value="cassandra" class="mr-1.5 scale-75">
-                            <span class="text-xs">Cassandra</span>
-                        </label>
-                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
-                            <input type="radio" name="connSourceType" value="redis" class="mr-1.5 scale-75">
-                            <span class="text-xs">Redis</span>
-                        </label>
-                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
-                            <input type="radio" name="connSourceType" value="firestore" class="mr-1.5 scale-75">
-                            <span class="text-xs">Firestore</span>
-                        </label>
-                        <label class="flex items-center p-1.5 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
-                            <input type="radio" name="connSourceType" value="dynamodb" class="mr-1.5 scale-75">
-                            <span class="text-xs">DynamoDB</span>
-                        </label>
+                    <p class="wizard-section-subtitle">Select a NoSQL database:</p>
+                    <div class="wizard-list-container">
+                        <div class="list-content wizard-selection-grid cols-2">
+                            <label class="wizard-selection-card">
+                                <input type="radio" name="connSourceType" value="mongodb">
+                                <span class="card-title">MongoDB</span>
+                            </label>
+                            <label class="wizard-selection-card">
+                                <input type="radio" name="connSourceType" value="cassandra">
+                                <span class="card-title">Cassandra</span>
+                            </label>
+                            <label class="wizard-selection-card">
+                                <input type="radio" name="connSourceType" value="redis">
+                                <span class="card-title">Redis</span>
+                            </label>
+                            <label class="wizard-selection-card">
+                                <input type="radio" name="connSourceType" value="firestore">
+                                <span class="card-title">Firestore</span>
+                            </label>
+                            <label class="wizard-selection-card">
+                                <input type="radio" name="connSourceType" value="dynamodb">
+                                <span class="card-title">DynamoDB</span>
+                            </label>
+                        </div>
                     </div>
                 </div>
             </div>
 
             <!-- Connection Step 2: Configure Connection -->
-            <div id="connStep2" class="connection-modal-step hidden">
+            <div id="connStep2" class="wizard-step">
                 <!-- Relational Database Form -->
                 <div id="connFormRelationalDB" class="conn-form hidden">
                     <div class="space-y-3">
@@ -1507,27 +1522,25 @@
         </div>
 
         <!-- Modal Footer -->
-        <div class="px-5 py-2.5 border-t border-gray-200 sticky bottom-0 bg-white rounded-b-xl">
-            <div class="flex items-center justify-between">
-                <!-- Left: Navigation Buttons -->
-                <div class="flex gap-2">
-                    <button id="connBackBtn" onclick="connPreviousStep()" class="btn btn-secondary" style="width: 142px; height: 38px;">
-                        <i class="fas fa-chevron-left"></i>
-                    </button>
-                    <button id="connNextBtn" onclick="connNextStep()" class="btn btn-secondary" style="width: 142px; height: 38px;">
-                        <i class="fas fa-chevron-right"></i>
-                    </button>
-                </div>
+        <div class="modal-footer-wizard">
+            <!-- Left: Navigation Buttons -->
+            <div class="footer-left">
+                <button id="connBackBtn" onclick="connPreviousStep()" class="btn btn-secondary">
+                    <i class="fas fa-chevron-left mr-1"></i> Back
+                </button>
+            </div>
 
-                <!-- Right: Action Buttons -->
-                <div class="flex gap-2">
-                    <button id="connSaveBtn" onclick="saveConnectionStandalone()" class="btn btn-success" style="width: 142px; height: 38px;">
-                        <span>Save</span>
-                    </button>
-                    <button id="connCancelBtn" onclick="closeCreateConnectionModal()" class="btn btn-danger" style="width: 142px; height: 38px;">
-                        <span>Cancel</span>
-                    </button>
-                </div>
+            <!-- Right: Action Buttons -->
+            <div class="footer-right">
+                <button id="connCancelBtn" onclick="closeCreateConnectionModal()" class="btn btn-secondary">
+                    Cancel
+                </button>
+                <button id="connNextBtn" onclick="connNextStep()" class="btn btn-primary">
+                    Next <i class="fas fa-chevron-right ml-1"></i>
+                </button>
+                <button id="connSaveBtn" onclick="saveConnectionStandalone()" class="btn btn-success hidden">
+                    <i class="fas fa-save mr-1"></i> Save Connection
+                </button>
             </div>
         </div>
     </div>
@@ -1726,7 +1739,7 @@
 
 <!-- Edit ETL Job Modal -->
 <div id="editJobModal" class="modal-overlay hidden">
-    <div class="modal-container" style="max-width: 600px;">
+    <div class="modal-container" style="max-width: 634px;">
         <!-- Modal Header -->
         <div class="modal-header">
             <div class="modal-header-icon" style="background-color: #dbeafe;">
@@ -2076,19 +2089,9 @@ function updateStep1NextButton() {
 
     // Enable next button only if BOTH conditions are met
     if (jobName !== '' && selectedConnection) {
-        // Functionally enable
         nextButton.disabled = false;
-
-        // Visually enable - remove disabled styling
-        nextButton.classList.remove('opacity-50', 'cursor-not-allowed', 'bg-gray-300');
-        nextButton.classList.add('bg-white', 'hover:bg-gray-50');
     } else {
-        // Functionally disable
         nextButton.disabled = true;
-
-        // Visually disable - add disabled styling
-        nextButton.classList.add('opacity-50', 'cursor-not-allowed', 'bg-gray-300');
-        nextButton.classList.remove('bg-white', 'hover:bg-gray-50');
     }
 }
 
@@ -2103,23 +2106,10 @@ function updateStep2NextButton() {
     // For cloud storage sources, require schema detection before proceeding
     if (isCloudStorage) {
         const schemaDetected = window.detectedFileSchema && window.schemaFingerprint;
-
-        if (schemaDetected) {
-            // Enable button
-            nextButton.disabled = false;
-            nextButton.classList.remove('opacity-50', 'cursor-not-allowed', 'bg-gray-300');
-            nextButton.classList.add('bg-white', 'hover:bg-gray-50');
-        } else {
-            // Disable button - user must detect schema first
-            nextButton.disabled = true;
-            nextButton.classList.add('opacity-50', 'cursor-not-allowed', 'bg-gray-300');
-            nextButton.classList.remove('bg-white', 'hover:bg-gray-50');
-        }
+        nextButton.disabled = !schemaDetected;
     } else {
         // For database sources, button is always enabled on step 2
         nextButton.disabled = false;
-        nextButton.classList.remove('opacity-50', 'cursor-not-allowed', 'bg-gray-300');
-        nextButton.classList.add('bg-white', 'hover:bg-gray-50');
     }
 }
 
@@ -2130,15 +2120,11 @@ function validateJobName() {
     const value = jobNameInput.value.trim();
 
     if (value === '') {
-        jobNameInput.classList.remove('border-gray-300');
         jobNameInput.classList.add('border-red-500');
-        jobNameError.classList.remove('invisible');
-        jobNameError.classList.add('visible');
+        jobNameError.classList.remove('hidden');
     } else {
         jobNameInput.classList.remove('border-red-500');
-        jobNameInput.classList.add('border-gray-300');
-        jobNameError.classList.remove('visible');
-        jobNameError.classList.add('invisible');
+        jobNameError.classList.add('hidden');
     }
 
     // Update Next button state based on job name + connection selection
@@ -3048,18 +3034,16 @@ function showErrorNotification(message) {
 }
 
 function switchConnTab(tab) {
-    // Update tab buttons
+    // Update tab buttons - use wizard-tab class
     const tabs = ['relational', 'storage', 'nosql'];
     tabs.forEach(t => {
         const btnId = 'connTab' + t.charAt(0).toUpperCase() + t.slice(1);
         const btn = document.getElementById(btnId);
         if (btn) {
             if (t === tab) {
-                btn.classList.remove('border-gray-300', 'bg-white', 'text-gray-700');
-                btn.classList.add('border-blue-600', 'bg-blue-50', 'text-blue-700');
+                btn.classList.add('active');
             } else {
-                btn.classList.remove('border-blue-600', 'bg-blue-50', 'text-blue-700');
-                btn.classList.add('border-gray-300', 'bg-white', 'text-gray-700');
+                btn.classList.remove('active');
             }
         }
 
@@ -3084,39 +3068,33 @@ function updateConnectionModalButtons(step) {
 
     if (step === 1) {
         // Step 1: Hide Back, show Next (disabled if no selection)
-        if (backBtn) backBtn.style.display = 'none';
+        if (backBtn) backBtn.classList.add('hidden');
         if (nextBtn) {
-            nextBtn.style.display = 'block';
+            nextBtn.classList.remove('hidden');
             if (connSelectedType) {
                 nextBtn.disabled = false;
-                nextBtn.classList.remove('opacity-50', 'cursor-not-allowed', 'bg-gray-300');
-                nextBtn.classList.add('bg-white', 'hover:bg-gray-50');
             } else {
                 nextBtn.disabled = true;
-                nextBtn.classList.add('opacity-50', 'cursor-not-allowed', 'bg-gray-300');
-                nextBtn.classList.remove('bg-white', 'hover:bg-gray-50');
             }
         }
-        if (saveBtn) saveBtn.style.display = 'none';
+        if (saveBtn) saveBtn.classList.add('hidden');
     } else if (step === 2) {
         // Step 2: Show Back, hide Next, show Save (disabled until test success)
-        if (backBtn) backBtn.style.display = 'block';
-        if (nextBtn) nextBtn.style.display = 'none';
+        if (backBtn) backBtn.classList.remove('hidden');
+        if (nextBtn) nextBtn.classList.add('hidden');
         if (saveBtn) {
-            saveBtn.style.display = 'block';
+            saveBtn.classList.remove('hidden');
             if (connTestedSuccessfully) {
                 saveBtn.disabled = false;
-                saveBtn.classList.remove('opacity-50', 'cursor-not-allowed');
             } else {
                 saveBtn.disabled = true;
-                saveBtn.classList.add('opacity-50', 'cursor-not-allowed');
             }
         }
     }
 
     // Cancel button always visible and enabled
     if (cancelBtn) {
-        cancelBtn.style.display = 'block';
+        cancelBtn.classList.remove('hidden');
         cancelBtn.disabled = false;
     }
 }
@@ -3149,27 +3127,26 @@ function connPreviousStep() {
 }
 
 function connShowStep(step) {
-    // Hide all steps
-    document.querySelectorAll('.connection-modal-step').forEach(s => s.classList.add('hidden'));
+    // Hide all steps - use wizard-step class
+    document.querySelectorAll('#createConnectionModal .wizard-step').forEach(s => s.classList.remove('active'));
 
     // Show current step
     const stepEl = document.getElementById('connStep' + step);
-    if (stepEl) stepEl.classList.remove('hidden');
+    if (stepEl) stepEl.classList.add('active');
 
     // Update step indicator
     const indicator = document.getElementById('connModalStep');
     if (indicator) indicator.textContent = step;
 
-    // Update progress bar
+    // Update progress bar - use new CSS classes
     for (let i = 1; i <= 2; i++) {
         const bar = document.getElementById('connProgress' + i);
         if (bar) {
-            if (i <= step) {
-                bar.classList.remove('bg-gray-200');
-                bar.classList.add('bg-blue-600');
-            } else {
-                bar.classList.remove('bg-blue-600');
-                bar.classList.add('bg-gray-200');
+            bar.classList.remove('active', 'completed');
+            if (i < step) {
+                bar.classList.add('completed');
+            } else if (i === step) {
+                bar.classList.add('active');
             }
         }
     }
@@ -3180,14 +3157,14 @@ function connShowStep(step) {
     const saveBtn = document.getElementById('connSaveBtn');
 
     if (step === 1) {
-        if (backBtn) backBtn.disabled = true;
+        if (backBtn) backBtn.classList.add('hidden');
         if (nextBtn) {
             nextBtn.disabled = false;
             nextBtn.classList.remove('hidden');
         }
         if (saveBtn) saveBtn.classList.add('hidden');
     } else if (step === 2) {
-        if (backBtn) backBtn.disabled = false;
+        if (backBtn) backBtn.classList.remove('hidden');
         if (nextBtn) nextBtn.classList.add('hidden');
         if (saveBtn) saveBtn.classList.add('hidden'); // Only show after successful test
     }
@@ -4148,13 +4125,13 @@ function showConnectionForm() {
 }
 
 function showStep(step) {
-    // Hide all steps
-    document.querySelectorAll('.wizard-step').forEach(s => s.classList.add('hidden'));
+    // Hide all steps - use wizard-step class with active state
+    document.querySelectorAll('#addSourceModal .wizard-step').forEach(s => s.classList.remove('active'));
 
     // Show current step
     const currentStepEl = document.getElementById(`step${step}`);
     if (currentStepEl) {
-        currentStepEl.classList.remove('hidden');
+        currentStepEl.classList.add('active');
     }
 
     // Update step indicator
@@ -4174,12 +4151,11 @@ function showStep(step) {
     // Step 1: Connection Selection
     if (step === 1) {
         // Hide back button on step 1 (no step 0 to go back to)
-        if (backButton) backButton.style.display = 'none';
+        if (backButton) backButton.classList.add('hidden');
         updateStep1NextButton();
         if (nextButton) {
-            nextButton.style.display = 'block';
             nextButton.classList.remove('hidden');
-            nextButton.innerHTML = '<i class="fas fa-chevron-right"></i>';
+            nextButton.innerHTML = 'Next <i class="fas fa-chevron-right ml-1"></i>';
         }
         if (createButton) createButton.classList.add('hidden');
     }
@@ -4188,16 +4164,12 @@ function showStep(step) {
     else if (step === 2) {
         // Show back button on step 2+
         if (backButton) {
-            backButton.style.display = 'block';
+            backButton.classList.remove('hidden');
             backButton.disabled = false;
-            // Remove visual disabled classes
-            backButton.classList.remove('opacity-50', 'cursor-not-allowed', 'bg-gray-300');
-            backButton.classList.add('bg-white', 'hover:bg-gray-50');
         }
         if (nextButton) {
-            nextButton.style.display = 'block';
             nextButton.classList.remove('hidden');
-            nextButton.innerHTML = '<i class="fas fa-chevron-right"></i>';
+            nextButton.innerHTML = 'Next <i class="fas fa-chevron-right ml-1"></i>';
             // Update button state based on whether it's a cloud storage source
             updateStep2NextButton();
         }
@@ -4207,17 +4179,13 @@ function showStep(step) {
     // Step 3: Load Strategy Configuration
     else if (step === 3) {
         if (backButton) {
-            backButton.style.display = 'block';
+            backButton.classList.remove('hidden');
             backButton.disabled = false;
-            // Remove visual disabled classes
-            backButton.classList.remove('opacity-50', 'cursor-not-allowed', 'bg-gray-300');
-            backButton.classList.add('bg-white', 'hover:bg-gray-50');
         }
         if (nextButton) {
-            nextButton.style.display = 'block';
-            nextButton.disabled = false;
             nextButton.classList.remove('hidden');
-            nextButton.innerHTML = '<i class="fas fa-chevron-right"></i>';
+            nextButton.disabled = false;
+            nextButton.innerHTML = 'Next <i class="fas fa-chevron-right ml-1"></i>';
         }
         if (createButton) createButton.classList.add('hidden');
     }
@@ -4225,17 +4193,13 @@ function showStep(step) {
     // Step 4: BigQuery Table Setup (NEW)
     else if (step === 4) {
         if (backButton) {
-            backButton.style.display = 'block';
+            backButton.classList.remove('hidden');
             backButton.disabled = false;
-            // Remove visual disabled classes
-            backButton.classList.remove('opacity-50', 'cursor-not-allowed', 'bg-gray-300');
-            backButton.classList.add('bg-white', 'hover:bg-gray-50');
         }
         if (nextButton) {
-            nextButton.style.display = 'block';
-            nextButton.disabled = false;
             nextButton.classList.remove('hidden');
-            nextButton.innerHTML = '<i class="fas fa-chevron-right"></i>';
+            nextButton.disabled = false;
+            nextButton.innerHTML = 'Next <i class="fas fa-chevron-right ml-1"></i>';
         }
         if (createButton) createButton.classList.add('hidden');
     }
@@ -4243,23 +4207,19 @@ function showStep(step) {
     // Step 5: Schedule & Review (Final Step, formerly Step 4)
     else if (step === 5) {
         if (backButton) {
-            backButton.style.display = 'block';
+            backButton.classList.remove('hidden');
             backButton.disabled = false;
-            // Remove visual disabled classes
-            backButton.classList.remove('opacity-50', 'cursor-not-allowed', 'bg-gray-300');
-            backButton.classList.add('bg-white', 'hover:bg-gray-50');
         }
         if (nextButton) {
-            nextButton.style.display = 'none';
             nextButton.classList.add('hidden');
         }
         if (createButton) {
             createButton.classList.remove('hidden');
             createButton.onclick = createETLJob;
             if (wizardEditMode) {
-                createButton.innerHTML = '<span>Update Job</span>';
+                createButton.innerHTML = '<i class="fas fa-check mr-1"></i> Update Job';
             } else {
-                createButton.innerHTML = '<span>Create ETL Job</span>';
+                createButton.innerHTML = '<i class="fas fa-check mr-1"></i> Create ETL Job';
             }
         }
     }
@@ -4269,12 +4229,11 @@ function updateProgress(step) {
     for (let i = 1; i <= 5; i++) {  // Changed from 4 to 5
         const progressBar = document.getElementById(`progress${i}`);
         if (progressBar) {
-            if (i <= step) {
-                progressBar.classList.remove('bg-gray-200');
-                progressBar.classList.add('bg-blue-600');
-            } else {
-                progressBar.classList.remove('bg-blue-600');
-                progressBar.classList.add('bg-gray-200');
+            progressBar.classList.remove('active', 'completed');
+            if (i < step) {
+                progressBar.classList.add('completed');
+            } else if (i === step) {
+                progressBar.classList.add('active');
             }
         }
     }
@@ -4681,7 +4640,8 @@ function updateSummary() {
     document.getElementById('summaryLoadType').textContent = loadTypeDisplay;
 
     // 5. Schedule (detailed display)
-    const scheduleType = document.getElementById('scheduleType')?.value || 'manual';
+    const selectedScheduleRadio = document.querySelector('input[name="scheduleType"]:checked');
+    const scheduleType = selectedScheduleRadio ? selectedScheduleRadio.value : 'manual';
     let scheduleDisplay = '';
 
     if (scheduleType === 'manual') {
@@ -4700,13 +4660,8 @@ function updateSummary() {
         } else if (scheduleType === 'weekly') {
             const dayOfWeek = parseInt(document.getElementById('scheduleDayOfWeek')?.value || 0);
             const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-            const time = document.getElementById('scheduleTime')?.value || '09:00';
+            const time = document.getElementById('scheduleTimeWeekly')?.value || '09:00';
             scheduleDisplay = `Weekly on ${days[dayOfWeek]} at ${time} (${tzAbbr})`;
-        } else if (scheduleType === 'monthly') {
-            const dayOfMonth = parseInt(document.getElementById('scheduleDayOfMonth')?.value || '1');
-            const ordinal = getOrdinal(dayOfMonth);
-            const time = document.getElementById('scheduleTime')?.value || '09:00';
-            scheduleDisplay = `Monthly on ${ordinal} at ${time} (${tzAbbr})`;
         }
     }
 
@@ -4780,7 +4735,8 @@ async function createETLJob() {
     const bqSchemaColumns = window.bqSchemaColumns || [];
 
     // Collect Step 5 data: Schedule (RENAMED from Step 4)
-    const scheduleType = document.getElementById('scheduleType')?.value || 'manual';
+    const selectedScheduleRadio = document.querySelector('input[name="scheduleType"]:checked');
+    const scheduleType = selectedScheduleRadio ? selectedScheduleRadio.value : 'manual';
 
     // Collect schedule configuration based on type
     const scheduleConfig = {
@@ -4794,11 +4750,8 @@ async function createETLJob() {
     } else if (scheduleType === 'daily') {
         scheduleConfig.schedule_time = document.getElementById('scheduleTime')?.value || '09:00';
     } else if (scheduleType === 'weekly') {
-        scheduleConfig.schedule_time = document.getElementById('scheduleTime')?.value || '09:00';
+        scheduleConfig.schedule_time = document.getElementById('scheduleTimeWeekly')?.value || '09:00';
         scheduleConfig.schedule_day_of_week = parseInt(document.getElementById('scheduleDayOfWeek')?.value || 0);
-    } else if (scheduleType === 'monthly') {
-        scheduleConfig.schedule_time = document.getElementById('scheduleTime')?.value || '09:00';
-        scheduleConfig.schedule_day_of_month = parseInt(document.getElementById('scheduleDayOfMonth')?.value || 1);
     }
 
     // Disable create button to prevent double-clicks
@@ -6979,40 +6932,31 @@ function onLoadTypeChange() {
 function onScheduleTypeChange() {
     /**
      * Show/hide schedule configuration options based on selected schedule type.
-     * Conditional inputs: hourly (minute), daily/weekly/monthly (time), weekly (day of week), monthly (day of month)
+     * Conditional inputs: hourly (minute), daily/weekly (time), weekly (day of week)
      */
-    const scheduleType = document.getElementById('scheduleType').value;
+    // Get schedule type from radio button group
+    const selectedRadio = document.querySelector('input[name="scheduleType"]:checked');
+    const scheduleType = selectedRadio ? selectedRadio.value : 'manual';
 
     // Get all conditional option containers
     const hourlyOptions = document.getElementById('hourlyOptions');
     const timeOptions = document.getElementById('timeOptions');
     const weeklyOptions = document.getElementById('weeklyOptions');
-    const monthlyOptions = document.getElementById('monthlyOptions');
 
     // Hide all by default
-    hourlyOptions.classList.add('hidden');
-    timeOptions.classList.add('hidden');
-    weeklyOptions.classList.add('hidden');
-    monthlyOptions.classList.add('hidden');
+    if (hourlyOptions) hourlyOptions.classList.add('hidden');
+    if (timeOptions) timeOptions.classList.add('hidden');
+    if (weeklyOptions) weeklyOptions.classList.add('hidden');
 
     // Show relevant options based on schedule type
     if (scheduleType === 'manual') {
         // No additional options for manual
     } else if (scheduleType === 'hourly') {
-        hourlyOptions.classList.remove('hidden');
+        if (hourlyOptions) hourlyOptions.classList.remove('hidden');
     } else if (scheduleType === 'daily') {
-        timeOptions.classList.remove('hidden');
+        if (timeOptions) timeOptions.classList.remove('hidden');
     } else if (scheduleType === 'weekly') {
-        timeOptions.classList.remove('hidden');
-        weeklyOptions.classList.remove('hidden');
-    } else if (scheduleType === 'monthly') {
-        timeOptions.classList.remove('hidden');
-        monthlyOptions.classList.remove('hidden');
-    }
-
-    // Setup day button click handlers for monthly schedule
-    if (scheduleType === 'monthly') {
-        setupDayButtonHandlers();
+        if (weeklyOptions) weeklyOptions.classList.remove('hidden');
     }
 
     // Update summary whenever schedule changes

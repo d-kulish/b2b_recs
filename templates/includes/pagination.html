@@ -1,0 +1,85 @@
+{#
+    Reusable Pagination Component
+
+    Usage:
+        {% include 'includes/pagination.html' with page_obj=page_obj %}
+
+    Optional parameters:
+        - show_count: Show "Showing X-Y of Z" text (default: True)
+        - item_name: Name for items being paginated (default: "items")
+        - extra_classes: Additional CSS classes for container (default: "")
+
+    Example with custom parameters:
+        {% include 'includes/pagination.html' with page_obj=page_obj show_count=True item_name="runs" %}
+
+    Requirements:
+        - page_obj: Django Paginator page object
+        - Must have: has_previous, has_next, number, paginator.num_pages, etc.
+#}
+
+{% if page_obj.paginator.num_pages > 1 %}
+<div class="flex flex-col sm:flex-row items-center justify-between mt-4 pt-4 border-t border-gray-200 gap-4{% if extra_classes %} {{ extra_classes }}{% endif %}">
+    <!-- Left side: Results info -->
+    <div class="text-sm text-gray-600">
+        Showing
+        <span class="font-semibold">{{ page_obj.start_index }}</span>-<span class="font-semibold">{{ page_obj.end_index }}</span>
+        of
+        <span class="font-semibold">{{ page_obj.paginator.count }}</span>
+        {% if item_name %}{{ item_name }}{% else %}items{% endif %}
+    </div>
+
+    <!-- Right side: Page buttons -->
+    <div class="flex items-center gap-2">
+        <!-- Previous Button -->
+        {% if page_obj.has_previous %}
+        <a href="?page={{ page_obj.previous_page_number }}"
+           class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold bg-white hover:bg-gray-50">
+            Previous
+        </a>
+        {% else %}
+        <span class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold opacity-50 cursor-not-allowed bg-gray-100">
+            Previous
+        </span>
+        {% endif %}
+
+        <!-- Page Numbers -->
+        {% if page_obj.paginator.num_pages <= 6 %}
+            <!-- Show all pages if 6 or fewer -->
+            {% for num in page_obj.paginator.page_range %}
+                <a href="?page={{ num }}"
+                   class="w-10 h-10 flex items-center justify-center rounded-md text-sm font-semibold
+                          {% if page_obj.number == num %}bg-blue-600 text-white{% else %}border border-gray-300 text-gray-700 hover:bg-blue-50 hover:border-blue-500{% endif %}">
+                    {{ num }}
+                </a>
+            {% endfor %}
+        {% else %}
+            <!-- Show first 5 pages + ellipsis + last page -->
+            {% for num in "12345"|make_list %}
+                <a href="?page={{ num }}"
+                   class="w-10 h-10 flex items-center justify-center rounded-md text-sm font-semibold
+                          {% if page_obj.number == num|add:0 %}bg-blue-600 text-white{% else %}border border-gray-300 text-gray-700 hover:bg-blue-50 hover:border-blue-500{% endif %}">
+                    {{ num }}
+                </a>
+            {% endfor %}
+            <span class="px-2 text-gray-500">...</span>
+            <a href="?page={{ page_obj.paginator.num_pages }}"
+               class="w-10 h-10 flex items-center justify-center rounded-md text-sm font-semibold
+                      {% if page_obj.number == page_obj.paginator.num_pages %}bg-blue-600 text-white{% else %}border border-gray-300 text-gray-700 hover:bg-blue-50 hover:border-blue-500{% endif %}">
+                {{ page_obj.paginator.num_pages }}
+            </a>
+        {% endif %}
+
+        <!-- Next Button -->
+        {% if page_obj.has_next %}
+        <a href="?page={{ page_obj.next_page_number }}"
+           class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold bg-white hover:bg-gray-50">
+            Next
+        </a>
+        {% else %}
+        <span class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold opacity-50 cursor-not-allowed bg-gray-100">
+            Next
+        </span>
+        {% endif %}
+    </div>
+</div>
+{% endif %}

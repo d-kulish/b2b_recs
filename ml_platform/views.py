@@ -6,6 +6,9 @@ from django.views.decorators.csrf import csrf_exempt
 from django.contrib import messages
 from django.utils import timezone
 from django.db import IntegrityError
+from django.core.paginator import Paginator
+from django.db.models import Q
+from datetime import timedelta
 import json
 from .models import (
     ModelEndpoint,
@@ -163,8 +166,21 @@ def model_etl(request, model_id):
     total_tables_count = sum(source.tables.count() for source in data_sources)
     enabled_tables_count = sum(source.tables.filter(is_enabled=True).count() for source in data_sources)
 
-    # Get recent ETL runs
-    recent_runs = model.etl_runs.all()[:10]
+    # Get recent ETL runs with 30-day filter and pagination
+    cutoff_date = timezone.now() - timedelta(days=30)
+
+    # Filter runs from last 30 days, including runs with NULL started_at (pending/running jobs)
+    filtered_runs = model.etl_runs.filter(
+        Q(started_at__gte=cutoff_date) | Q(started_at__isnull=True)
+    )
+
+    # Check if any runs exist at all (for empty state differentiation)
+    has_any_runs = model.etl_runs.exists()
+
+    # Pagination: 6 runs per page
+    paginator = Paginator(filtered_runs, 6)
+    page_number = request.GET.get('page', 1)
+    page_obj = paginator.get_page(page_number)
 
     context = {
         'model': model,
@@ -173,7 +189,10 @@ def model_etl(request, model_id):
         'enabled_sources_count': enabled_sources_count,
         'total_tables_count': total_tables_count,
         'enabled_tables_count': enabled_tables_count,
-        'recent_runs': recent_runs,
+        'recent_runs': page_obj,
+        'page_obj': page_obj,
+        'has_any_runs': has_any_runs,
+        'showing_last_30_days': True,
     }
 
     return render(request, 'ml_platform/model_etl.html', context)

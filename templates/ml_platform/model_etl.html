@@ -137,9 +137,15 @@
 
     <!-- Recent ETL Runs -->
     <div class="bg-white rounded-xl border border-black shadow-lg p-6">
-        <h3 class="text-xl font-bold text-gray-900 mb-4">Recent ETL Runs</h3>
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-xl font-bold text-gray-900">Recent ETL Runs</h3>
+            <span class="text-xs bg-gray-100 text-gray-600 px-3 py-1 rounded-full">
+                <i class="fas fa-calendar mr-1"></i>
+                Last 30 days
+            </span>
+        </div>
 
-        {% if recent_runs %}
+        {% if page_obj.object_list %}
         <div class="overflow-x-auto">
             <table class="min-w-full">
                 <thead class="bg-gray-50 border-b border-gray-200">
@@ -154,7 +160,7 @@
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-200">
-                    {% for run in recent_runs %}
+                    {% for run in page_obj.object_list %}
                     <tr class="hover:bg-gray-50">
                         <td class="px-4 py-3 text-sm font-medium text-gray-900">#{{ run.id }}</td>
                         <td class="px-4 py-3">
@@ -206,9 +212,54 @@
                 </tbody>
             </table>
         </div>
+
+        <!-- Pagination Controls -->
+        {% if page_obj.paginator.num_pages > 1 %}
+        <div class="flex flex-col sm:flex-row items-center justify-between mt-4 pt-4 border-t border-gray-200 gap-4">
+            <div class="text-sm text-gray-600">
+                Showing <span class="font-semibold">{{ page_obj.start_index }}</span>-<span class="font-semibold">{{ page_obj.end_index }}</span>
+                of <span class="font-semibold">{{ page_obj.paginator.count }}</span> runs
+            </div>
+            <div class="flex items-center gap-2">
+                {% if page_obj.has_previous %}
+                <a href="?page={{ page_obj.previous_page_number }}" class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold bg-white hover:bg-gray-50">Previous</a>
+                {% else %}
+                <span class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold opacity-50 cursor-not-allowed bg-gray-100">Previous</span>
+                {% endif %}
+
+                {% if page_obj.paginator.num_pages <= 6 %}
+                    {% for num in page_obj.paginator.page_range %}
+                    <a href="?page={{ num }}" class="w-10 h-10 flex items-center justify-center rounded-md text-sm font-semibold {% if page_obj.number == num %}bg-blue-600 text-white{% else %}border border-gray-300 text-gray-700 hover:bg-blue-50 hover:border-blue-500{% endif %}">{{ num }}</a>
+                    {% endfor %}
+                {% else %}
+                    {% for num in "12345"|make_list %}
+                    <a href="?page={{ num }}" class="w-10 h-10 flex items-center justify-center rounded-md text-sm font-semibold {% if page_obj.number == num|add:0 %}bg-blue-600 text-white{% else %}border border-gray-300 text-gray-700 hover:bg-blue-50 hover:border-blue-500{% endif %}">{{ num }}</a>
+                    {% endfor %}
+                    <span class="px-2 text-gray-500">...</span>
+                    <a href="?page={{ page_obj.paginator.num_pages }}" class="w-10 h-10 flex items-center justify-center rounded-md text-sm font-semibold {% if page_obj.number == page_obj.paginator.num_pages %}bg-blue-600 text-white{% else %}border border-gray-300 text-gray-700 hover:bg-blue-50 hover:border-blue-500{% endif %}">{{ page_obj.paginator.num_pages }}</a>
+                {% endif %}
+
+                {% if page_obj.has_next %}
+                <a href="?page={{ page_obj.next_page_number }}" class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold bg-white hover:bg-gray-50">Next</a>
+                {% else %}
+                <span class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold opacity-50 cursor-not-allowed bg-gray-100">Next</span>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
         {% else %}
         <div class="text-center py-8 bg-gray-50 rounded-lg">
-            <p class="text-gray-600">No ETL runs yet</p>
+            {% if has_any_runs %}
+                <!-- Runs exist, but none in last 30 days -->
+                <i class="fas fa-calendar-times text-gray-400 text-3xl mb-3"></i>
+                <p class="text-gray-700 font-semibold">No runs in last 30 days</p>
+                <p class="text-gray-500 text-sm mt-1">All recent ETL runs are older than 30 days</p>
+            {% else %}
+                <!-- Truly no runs -->
+                <i class="fas fa-inbox text-gray-400 text-3xl mb-3"></i>
+                <p class="text-gray-600">No ETL runs yet</p>
+            {% endif %}
         </div>
         {% endif %}
     </div>
@@ -504,7 +555,6 @@
                     </p>
                     <div id="firestoreHint" class="mt-2 bg-blue-50 border border-blue-200 rounded-lg p-2 hidden">
                         <p class="text-xs text-blue-800">
-                            <i class="fas fa-lightbulb mr-1"></i>
                             <strong>Firestore Note:</strong> Nested objects and arrays are stored as JSON strings. You can parse them in BigQuery using <code class="bg-blue-100 px-1 rounded">JSON_EXTRACT()</code> functions.
                         </p>
                     </div>
@@ -535,7 +585,7 @@
 
                 <!-- DATABASE: Transactional Configuration -->
                 <div id="transactionalConfigDatabase" class="mb-4 hidden">
-                    <div class="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                    <div class="bg-white border border-gray-200 rounded-lg p-3">
                         <h6 class="font-semibold text-sm text-gray-900 mb-2">Incremental Configuration</h6>
 
                         <div class="mb-3">
@@ -743,9 +793,8 @@
 
                 <!-- Partitioning & Clustering (for Transactional loads) -->
                 <div id="bqOptimizationSettings" class="mb-4 hidden">
-                    <div class="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                    <div class="bg-white border border-gray-200 rounded-lg p-3">
                         <h6 class="font-semibold text-sm text-gray-900 mb-2">
-                            <i class="fas fa-bolt text-blue-600 mr-1"></i>
                             Performance Optimization
                         </h6>
 
@@ -891,7 +940,7 @@
                         <p class="text-xs text-gray-500">Selected: <span id="selectedDay" class="font-semibold">1st</span> of every month</p>
                     </div>
 
-                    <div class="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                    <div class="bg-white border border-gray-200 rounded-lg p-3">
                         <h5 class="font-bold text-sm text-gray-900 mb-2">Summary</h5>
                         <div class="space-y-1.5 text-sm">
                             <div class="flex">
@@ -938,15 +987,15 @@
                     </button>
                 </div>
 
-                <!-- Right: Cancel button -->
-                <button onclick="hideAddSourceModal()" class="btn btn-danger" style="width: 142px; height: 38px;">
-                    <span>Cancel</span>
-                </button>
-
-                <!-- Hidden create button -->
-                <button id="createButton" onclick="createDataSource()" class="btn btn-success hidden" style="width: 142px; height: 38px;">
-                    <i class="fas fa-check"></i><span>Create</span>
-                </button>
+                <!-- Right: Cancel and Create buttons -->
+                <div class="flex gap-2">
+                    <button onclick="hideAddSourceModal()" class="btn btn-danger" style="width: 142px; height: 38px;">
+                        <span>Cancel</span>
+                    </button>
+                    <button id="createButton" onclick="createDataSource()" class="btn btn-success hidden" style="width: 142px; height: 38px;">
+                        <span>Create</span>
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -3722,9 +3771,9 @@ function showStep(step) {
             createButton.classList.remove('hidden');
             createButton.onclick = createETLJob;
             if (wizardEditMode) {
-                createButton.innerHTML = '<i class="fas fa-check"></i><span>Update Job</span>';
+                createButton.innerHTML = '<span>Update Job</span>';
             } else {
-                createButton.innerHTML = '<i class="fas fa-check"></i><span>Create ETL Job</span>';
+                createButton.innerHTML = '<span>Create ETL Job</span>';
             }
         }
     }

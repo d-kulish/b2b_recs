@@ -10,6 +10,7 @@ from django.core.paginator import Paginator
 from django.db.models import Q
 from datetime import timedelta
 import json
+import os
 from .models import (
     ModelEndpoint,
     ETLConfiguration,
@@ -534,7 +535,7 @@ def api_etl_get_source(request, source_id):
     try:
         source = get_object_or_404(DataSource, id=source_id)
 
-        # Get tables for this source
+        # Get tables for this source with extended info for Edit modal
         tables = []
         for table in source.tables.all():
             tables.append({
@@ -546,6 +547,11 @@ def api_etl_get_source(request, source_id):
                 'incremental_column': table.incremental_column or '',
                 'row_limit': table.row_limit,
                 'is_enabled': table.is_enabled,
+                # Extended fields for Edit modal
+                'load_type': table.load_type or 'transactional',
+                'selected_columns': table.selected_columns or [],
+                'timestamp_column': table.timestamp_column or '',
+                'schema_name': table.schema_name or '',
             })
 
         # Get connection details (works for both old and new architecture)
@@ -566,8 +572,12 @@ def api_etl_get_source(request, source_id):
             'connection_string': conn_details.get('connection_string') or '',
             'is_enabled': source.is_enabled,
             'tables': tables,
-            'wizard_last_step': source.wizard_last_step,
-            'wizard_completed_steps': source.wizard_completed_steps or [],
+            # Wizard fields (use getattr for backward compatibility)
+            'wizard_last_step': getattr(source, 'wizard_last_step', 5),
+            'wizard_completed_steps': getattr(source, 'wizard_completed_steps', None) or [],
+            # Schedule info for Edit modal
+            'schedule_type': getattr(source, 'schedule_type', 'manual') or 'manual',
+            'cloud_scheduler_job_name': getattr(source, 'cloud_scheduler_job_name', '') or '',
         }
 
         # Add source_username and connection info if using Connection model
@@ -952,6 +962,404 @@ def api_etl_delete_source(request, source_id):
             'status': 'error',
             'message': str(e),
         }, status=400)
+
+
+@login_required
+@require_http_methods(["POST"])
+def api_etl_toggle_pause(request, source_id):
+    """
+    API endpoint to pause/resume a data source's Cloud Scheduler job.
+    """
+    try:
+        source = get_object_or_404(DataSource, id=source_id)
+
+        # Check if source has a scheduler job
+        if not source.cloud_scheduler_job_name:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'This ETL job does not have a scheduler configured. Only scheduled jobs can be paused.',
+            }, status=400)
+
+        # Import CloudSchedulerManager
+        from .utils.cloud_scheduler import CloudSchedulerManager
+        import os
+
+        project_id = os.environ.get('GCP_PROJECT_ID', 'b2b-recs')
+        region = os.environ.get('CLOUD_SCHEDULER_REGION', 'europe-central2')
+
+        scheduler_manager = CloudSchedulerManager(
+            project_id=project_id,
+            region=region
+        )
+
+        # Toggle based on current state
+        if source.is_enabled:
+            # Pause the scheduler
+            result = scheduler_manager.pause_etl_schedule(source.id)
+            if result['success']:
+                source.is_enabled = False
+                source.save()
+                return JsonResponse({
+                    'status': 'success',
+                    'message': f'ETL job "{source.name}" paused successfully',
+                    'is_enabled': False,
+                    'action': 'paused'
+                })
+            else:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': result['message'],
+                }, status=400)
+        else:
+            # Resume the scheduler
+            result = scheduler_manager.resume_etl_schedule(source.id)
+            if result['success']:
+                source.is_enabled = True
+                source.save()
+                return JsonResponse({
+                    'status': 'success',
+                    'message': f'ETL job "{source.name}" resumed successfully',
+                    'is_enabled': True,
+                    'action': 'resumed'
+                })
+            else:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': result['message'],
+                }, status=400)
+
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e),
+        }, status=400)
+
+
+@login_required
+@require_http_methods(["POST"])
+def api_etl_edit_source(request, source_id):
+    """
+    API endpoint to edit an ETL job (name, schedule, columns).
+    Does not allow changing source connection, table, or destination.
+    """
+    try:
+        source = get_object_or_404(DataSource, id=source_id)
+        data = json.loads(request.body)
+
+        # Get the first (and typically only) table for this source
+        table = source.tables.first()
+        if not table:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'No table configuration found for this ETL job',
+            }, status=400)
+
+        # Track what changed for response message
+        changes = []
+
+        # 1. Update job name if changed
+        new_name = data.get('name', '').strip()
+        if new_name and new_name != source.name:
+            source.name = new_name
+            changes.append('name')
+
+        # 2. Update schedule if changed
+        new_schedule_type = data.get('schedule_type', 'manual')
+        old_schedule_type = source.schedule_type or 'manual'
+
+        schedule_changed = new_schedule_type != old_schedule_type
+        if schedule_changed:
+            changes.append('schedule')
+
+        # Handle schedule updates via Cloud Scheduler
+        if schedule_changed or (new_schedule_type != 'manual' and 'schedule_time' in data):
+            from .utils.cloud_scheduler import CloudSchedulerManager
+            import os
+
+            project_id = os.environ.get('GCP_PROJECT_ID', 'b2b-recs')
+            region = os.environ.get('CLOUD_SCHEDULER_REGION', 'europe-central2')
+
+            scheduler_manager = CloudSchedulerManager(
+                project_id=project_id,
+                region=region
+            )
+
+            # Delete existing scheduler if changing from scheduled to manual
+            if new_schedule_type == 'manual' and source.cloud_scheduler_job_name:
+                delete_result = scheduler_manager.delete_etl_schedule(source.id)
+                if not delete_result['success']:
+                    # Log warning but continue (scheduler might not exist)
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.warning(f"Failed to delete scheduler: {delete_result['message']}")
+                source.cloud_scheduler_job_name = ''
+
+            # Create/update scheduler for non-manual schedules
+            elif new_schedule_type != 'manual':
+                # Delete existing scheduler first
+                if source.cloud_scheduler_job_name:
+                    scheduler_manager.delete_etl_schedule(source.id)
+
+                # Build webhook URL
+                django_base_url = f"{request.scheme}://{request.get_host()}"
+                webhook_url = f"{django_base_url}/api/etl/sources/{source.id}/scheduler-webhook/"
+
+                # Get service account
+                service_account_email = os.environ.get(
+                    'ETL_SERVICE_ACCOUNT',
+                    f'etl-runner@{project_id}.iam.gserviceaccount.com'
+                )
+
+                # Create new scheduler
+                create_result = scheduler_manager.create_etl_schedule(
+                    data_source_id=source.id,
+                    job_name=source.name,
+                    schedule_type=new_schedule_type,
+                    cloud_run_job_url=webhook_url,
+                    service_account_email=service_account_email,
+                    timezone='Europe/Kiev',
+                    schedule_time=data.get('schedule_time', '09:00'),
+                    schedule_minute=data.get('schedule_minute', 0),
+                    schedule_day_of_week=data.get('schedule_day_of_week', 0),
+                )
+
+                if create_result['success']:
+                    source.cloud_scheduler_job_name = create_result['job_name']
+                else:
+                    return JsonResponse({
+                        'status': 'error',
+                        'message': f"Failed to create scheduler: {create_result['message']}",
+                    }, status=400)
+
+            source.schedule_type = new_schedule_type
+
+        # 3. Update selected columns if changed
+        new_columns = data.get('selected_columns', [])
+        old_columns = table.selected_columns or []
+
+        if set(new_columns) != set(old_columns):
+            changes.append('columns')
+
+            # Determine columns to add (new columns not in BigQuery)
+            columns_to_add = [col for col in new_columns if col not in old_columns]
+
+            # If there are new columns, we need to ALTER the BigQuery table
+            if columns_to_add:
+                try:
+                    from google.cloud import bigquery
+
+                    bq_client = bigquery.Client(project=os.environ.get('GCP_PROJECT_ID', 'b2b-recs'))
+                    table_ref = f"{os.environ.get('GCP_PROJECT_ID', 'b2b-recs')}.{table.dest_dataset}.{table.dest_table_name}"
+
+                    # Get current BigQuery table schema
+                    bq_table = bq_client.get_table(table_ref)
+                    existing_columns = {field.name for field in bq_table.schema}
+
+                    # Add new columns that don't exist in BigQuery
+                    new_schema = list(bq_table.schema)
+                    for col_name in columns_to_add:
+                        if col_name not in existing_columns:
+                            # Default to STRING type - the actual type will be determined during ETL run
+                            new_schema.append(bigquery.SchemaField(col_name, "STRING", mode="NULLABLE"))
+
+                    if len(new_schema) > len(bq_table.schema):
+                        bq_table.schema = new_schema
+                        bq_client.update_table(bq_table, ["schema"])
+
+                except Exception as bq_error:
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.warning(f"Failed to update BigQuery schema: {bq_error}")
+                    # Continue anyway - the ETL run will handle schema updates
+
+            # Update the selected columns in database
+            table.selected_columns = new_columns
+            table.save()
+
+        # Save source changes
+        source.save()
+
+        # Build response message
+        if changes:
+            message = f"ETL job updated successfully. Changed: {', '.join(changes)}"
+        else:
+            message = "No changes detected"
+
+        return JsonResponse({
+            'status': 'success',
+            'message': message,
+            'changes': changes,
+        })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e),
+        }, status=400)
+
+
+@login_required
+@require_http_methods(["GET"])
+def api_etl_available_columns(request, source_id):
+    """
+    API endpoint to fetch available columns from the source table.
+    Used by the Edit modal to show columns that can be added/removed.
+    Reuses the same connection_manager utility as the ETL wizard for consistency.
+    """
+    try:
+        from .utils.connection_manager import fetch_table_metadata, get_credentials_from_secret_manager
+
+        source = get_object_or_404(DataSource, id=source_id)
+
+        # Get the table configuration
+        table = source.tables.first()
+        if not table:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'No table configuration found',
+            }, status=400)
+
+        # Get currently selected columns
+        currently_selected = table.selected_columns or []
+
+        # Get connection
+        connection = source.connection
+        if not connection:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'No connection found for this ETL job',
+            }, status=400)
+
+        columns = []
+        source_type = connection.source_type
+
+        try:
+            # Build connection params for fetch_table_metadata (same as wizard)
+            connection_params = {}
+
+            if source_type in ('postgresql', 'mysql', 'sqlserver', 'oracle', 'mariadb'):
+                # Relational databases - get credentials from Secret Manager
+                credentials = get_credentials_from_secret_manager(connection.credentials_secret_name)
+
+                connection_params = {
+                    'host': connection.source_host,
+                    'port': connection.source_port,
+                    'database': connection.source_database,
+                    'username': connection.source_username,
+                    'password': credentials.get('password', '') if credentials else '',
+                }
+
+                # Fetch columns using the wizard's utility
+                result = fetch_table_metadata(
+                    source_type=source_type,
+                    schema_name=table.schema_name or 'public',
+                    table_name=table.source_table_name,
+                    connection_params=connection_params
+                )
+
+                if result['success']:
+                    columns = [{'name': col['name'], 'type': col.get('bigquery_type', col.get('type', 'STRING'))} for col in result['columns']]
+                else:
+                    # Fallback to currently selected columns if fetch fails
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.warning(f"Failed to fetch columns: {result.get('message', 'Unknown error')}")
+                    columns = [{'name': col, 'type': 'STRING'} for col in currently_selected]
+
+            elif source_type == 'bigquery':
+                # BigQuery - get credentials from Secret Manager
+                credentials = get_credentials_from_secret_manager(connection.credentials_secret_name)
+                service_account_json = json.dumps(credentials) if credentials else '{}'
+
+                connection_params = {
+                    'project_id': connection.bigquery_project,
+                    'service_account_json': service_account_json,
+                }
+
+                result = fetch_table_metadata(
+                    source_type='bigquery',
+                    schema_name=connection.bigquery_dataset,  # For BQ, schema_name is dataset
+                    table_name=table.source_table_name,
+                    connection_params=connection_params
+                )
+
+                if result['success']:
+                    columns = [{'name': col['name'], 'type': col.get('bigquery_type', col.get('type', 'STRING'))} for col in result['columns']]
+                else:
+                    columns = [{'name': col, 'type': 'STRING'} for col in currently_selected]
+
+            elif source_type == 'firestore':
+                # Firestore - get credentials from Secret Manager
+                credentials = get_credentials_from_secret_manager(connection.credentials_secret_name)
+                service_account_json = json.dumps(credentials) if credentials else '{}'
+
+                connection_params = {
+                    'project_id': connection.bigquery_project,  # Firestore uses bigquery_project field for GCP project
+                    'service_account_json': service_account_json,
+                }
+
+                result = fetch_table_metadata(
+                    source_type='firestore',
+                    schema_name='',  # Firestore doesn't use schema
+                    table_name=table.source_table_name,  # Collection name
+                    connection_params=connection_params
+                )
+
+                if result['success']:
+                    columns = [{'name': col['name'], 'type': col.get('bigquery_type', col.get('type', 'STRING'))} for col in result['columns']]
+                else:
+                    columns = [{'name': col, 'type': 'STRING'} for col in currently_selected]
+
+            elif source_type in ('gcs', 's3', 'azure_blob'):
+                # For file-based sources, get columns from BigQuery destination table
+                columns = _fetch_bq_destination_columns(table)
+
+            else:
+                # Fallback: return currently selected columns as available
+                columns = [{'name': col, 'type': 'STRING'} for col in currently_selected]
+
+        except Exception as fetch_error:
+            import logging
+            import traceback
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Failed to fetch source columns: {fetch_error}")
+            traceback.print_exc()
+            # Fallback: return currently selected columns
+            columns = [{'name': col, 'type': 'STRING'} for col in currently_selected]
+
+        return JsonResponse({
+            'status': 'success',
+            'columns': columns,
+            'currently_selected': currently_selected,
+        })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e),
+        }, status=400)
+
+
+def _fetch_bq_destination_columns(table):
+    """Fetch columns from BigQuery destination table (for file-based sources)."""
+    from google.cloud import bigquery
+    import os
+
+    client = bigquery.Client(project=os.environ.get('GCP_PROJECT_ID', 'b2b-recs'))
+    table_ref = f"{os.environ.get('GCP_PROJECT_ID', 'b2b-recs')}.{table.dest_dataset}.{table.dest_table_name}"
+
+    try:
+        bq_table = client.get_table(table_ref)
+        columns = []
+        for field in bq_table.schema:
+            columns.append({'name': field.name, 'type': field.field_type})
+        return columns
+    except Exception:
+        return []
 
 
 @login_required

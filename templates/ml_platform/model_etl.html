@@ -107,11 +107,19 @@
                                     </button>
                                 </div>
 
-                                <!-- Column 5: Actions (Edit + Delete) -->
+                                <!-- Column 5: Actions (Edit + Pause + Delete) -->
                                 <div class="card-actions">
                                     <button onclick="editSource({{ source.id }})" class="card-action-btn edit" title="Edit ETL job">
                                         <i class="fas fa-edit"></i>
                                     </button>
+                                    {% if source.cloud_scheduler_job_name %}
+                                    <button onclick="togglePauseSource({{ source.id }}, {{ source.is_enabled|yesno:'true,false' }})"
+                                            class="card-action-btn {% if source.is_enabled %}pause{% else %}resume{% endif %}"
+                                            title="{% if source.is_enabled %}Pause scheduling{% else %}Resume scheduling{% endif %}"
+                                            id="pause-btn-{{ source.id }}">
+                                        <i class="fas {% if source.is_enabled %}fa-pause{% else %}fa-play-circle{% endif %}"></i>
+                                    </button>
+                                    {% endif %}
                                     <button onclick="deleteSource({{ source.id }})" class="card-action-btn delete" title="Delete ETL job">
                                         <i class="fas fa-trash"></i>
                                     </button>
@@ -1585,6 +1593,107 @@
     0%, 100% { transform: scale(1); }
     50% { transform: scale(1.05); }
 }
+
+/* Pause/Resume button styles */
+.card-action-btn.pause {
+    color: #f59e0b;
+}
+.card-action-btn.pause:hover {
+    background-color: #fef3c7;
+    color: #d97706;
+}
+.card-action-btn.resume {
+    color: #10b981;
+}
+.card-action-btn.resume:hover {
+    background-color: #d1fae5;
+    color: #059669;
+}
+
+/* Edit Modal - Schedule option styles */
+.schedule-option-label {
+    display: inline-block;
+    padding: 0.5rem 1rem;
+    border: 1px solid #d1d5db;
+    border-radius: 0.375rem;
+    background-color: #fff;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 0.875rem;
+}
+.schedule-option-label:hover {
+    border-color: #9ca3af;
+    background-color: #f9fafb;
+}
+
+/* Edit Modal - Column item styles */
+.edit-column-item {
+    display: flex;
+    align-items: center;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid #e5e7eb;
+}
+.edit-column-item:last-child {
+    border-bottom: none;
+}
+.edit-column-item:hover {
+    background-color: #f9fafb;
+}
+.edit-column-item input[type="checkbox"] {
+    width: 1rem;
+    height: 1rem;
+    margin-right: 0.75rem;
+    accent-color: #2563eb;
+}
+.edit-column-item .column-name {
+    flex: 1;
+    font-size: 0.875rem;
+    color: #374151;
+}
+.edit-column-item .column-type {
+    font-size: 0.75rem;
+    color: #6b7280;
+    padding: 0.125rem 0.5rem;
+    background-color: #f3f4f6;
+    border-radius: 0.25rem;
+    margin-left: 0.5rem;
+}
+.edit-column-item .column-status {
+    font-size: 0.625rem;
+    padding: 0.125rem 0.375rem;
+    border-radius: 0.25rem;
+    margin-left: 0.5rem;
+    font-weight: 500;
+}
+.edit-column-item .column-status.syncing {
+    background-color: #d1fae5;
+    color: #059669;
+}
+.edit-column-item .column-status.new {
+    background-color: #dbeafe;
+    color: #2563eb;
+}
+.edit-column-item .column-status.will-stop {
+    background-color: #fef3c7;
+    color: #d97706;
+}
+
+/* Modal close button */
+.modal-close-btn {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    padding: 0.5rem;
+    border: none;
+    background: none;
+    color: #6b7280;
+    cursor: pointer;
+    border-radius: 0.375rem;
+}
+.modal-close-btn:hover {
+    background-color: #f3f4f6;
+    color: #374151;
+}
 </style>
 
 <!-- Reusable Confirmation Modal -->
@@ -1610,6 +1719,193 @@
             </button>
             <button id="confirmModalConfirmBtn" class="btn btn-danger" style="min-width: 100px;">
                 Confirm
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Edit ETL Job Modal -->
+<div id="editJobModal" class="modal-overlay hidden">
+    <div class="modal-container" style="max-width: 600px;">
+        <!-- Modal Header -->
+        <div class="modal-header">
+            <div class="modal-header-icon" style="background-color: #dbeafe;">
+                <i class="fas fa-edit text-xl" style="color: #2563eb;"></i>
+            </div>
+            <h3 class="modal-header-title">Edit ETL Job</h3>
+            <button onclick="closeEditJobModal()" class="modal-close-btn">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+
+        <!-- Modal Body -->
+        <div class="modal-body" style="max-height: 60vh; overflow-y: auto;">
+            <!-- Loading State -->
+            <div id="editJobLoading" class="text-center py-8">
+                <i class="fas fa-spinner fa-spin text-3xl text-gray-400"></i>
+                <p class="mt-2 text-gray-500">Loading job details...</p>
+            </div>
+
+            <!-- Error State -->
+            <div id="editJobError" class="hidden text-center py-8">
+                <i class="fas fa-exclamation-circle text-3xl text-red-500"></i>
+                <p id="editJobErrorMessage" class="mt-2 text-red-600">Error loading job details</p>
+            </div>
+
+            <!-- Edit Form -->
+            <div id="editJobForm" class="hidden space-y-6">
+                <!-- Hidden field for source ID -->
+                <input type="hidden" id="editJobSourceId" value="">
+
+                <!-- Job Name -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Job Name</label>
+                    <input type="text" id="editJobName" class="form-input w-full"
+                           placeholder="Enter job name">
+                </div>
+
+                <!-- Schedule Section -->
+                <div class="border-t border-gray-200 pt-4">
+                    <h4 class="text-sm font-semibold text-gray-900 mb-3">
+                        <i class="fas fa-clock mr-2"></i>Schedule
+                    </h4>
+
+                    <div class="space-y-3">
+                        <!-- Schedule Type -->
+                        <div class="flex flex-wrap gap-2">
+                            <label class="schedule-option">
+                                <input type="radio" name="editScheduleType" value="manual" class="hidden peer">
+                                <span class="schedule-option-label peer-checked:bg-blue-100 peer-checked:border-blue-500 peer-checked:text-blue-700">
+                                    Manual
+                                </span>
+                            </label>
+                            <label class="schedule-option">
+                                <input type="radio" name="editScheduleType" value="hourly" class="hidden peer">
+                                <span class="schedule-option-label peer-checked:bg-blue-100 peer-checked:border-blue-500 peer-checked:text-blue-700">
+                                    Hourly
+                                </span>
+                            </label>
+                            <label class="schedule-option">
+                                <input type="radio" name="editScheduleType" value="daily" class="hidden peer">
+                                <span class="schedule-option-label peer-checked:bg-blue-100 peer-checked:border-blue-500 peer-checked:text-blue-700">
+                                    Daily
+                                </span>
+                            </label>
+                            <label class="schedule-option">
+                                <input type="radio" name="editScheduleType" value="weekly" class="hidden peer">
+                                <span class="schedule-option-label peer-checked:bg-blue-100 peer-checked:border-blue-500 peer-checked:text-blue-700">
+                                    Weekly
+                                </span>
+                            </label>
+                        </div>
+
+                        <!-- Hourly Options -->
+                        <div id="editHourlyOptions" class="hidden">
+                            <label class="block text-sm text-gray-600 mb-1">Run at minute:</label>
+                            <select id="editScheduleMinute" class="form-select" style="width: 120px;">
+                                <option value="0">:00</option>
+                                <option value="15">:15</option>
+                                <option value="30">:30</option>
+                                <option value="45">:45</option>
+                            </select>
+                        </div>
+
+                        <!-- Daily Options -->
+                        <div id="editDailyOptions" class="hidden">
+                            <label class="block text-sm text-gray-600 mb-1">Run at time:</label>
+                            <input type="time" id="editScheduleTime" class="form-input" style="width: 140px;" value="09:00">
+                        </div>
+
+                        <!-- Weekly Options -->
+                        <div id="editWeeklyOptions" class="hidden">
+                            <div class="flex gap-4 items-end">
+                                <div>
+                                    <label class="block text-sm text-gray-600 mb-1">Day of week:</label>
+                                    <select id="editScheduleDay" class="form-select" style="width: 140px;">
+                                        <option value="0">Monday</option>
+                                        <option value="1">Tuesday</option>
+                                        <option value="2">Wednesday</option>
+                                        <option value="3">Thursday</option>
+                                        <option value="4">Friday</option>
+                                        <option value="5">Saturday</option>
+                                        <option value="6">Sunday</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm text-gray-600 mb-1">At time:</label>
+                                    <input type="time" id="editScheduleTimeWeekly" class="form-input" style="width: 140px;" value="09:00">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Columns Section -->
+                <div class="border-t border-gray-200 pt-4">
+                    <h4 class="text-sm font-semibold text-gray-900 mb-3">
+                        <i class="fas fa-columns mr-2"></i>Columns
+                    </h4>
+
+                    <div class="text-xs text-gray-500 mb-3">
+                        <i class="fas fa-info-circle mr-1"></i>
+                        Check columns to sync. Unchecked columns will stop syncing (data preserved in BigQuery).
+                        New columns will be added to BigQuery with NULLs for historical rows.
+                    </div>
+
+                    <!-- Columns Loading -->
+                    <div id="editColumnsLoading" class="text-center py-4">
+                        <i class="fas fa-spinner fa-spin text-gray-400"></i>
+                        <span class="ml-2 text-gray-500 text-sm">Loading columns...</span>
+                    </div>
+
+                    <!-- Columns List -->
+                    <div id="editColumnsList" class="hidden max-h-48 overflow-y-auto border border-gray-200 rounded-lg">
+                        <!-- Columns will be populated dynamically -->
+                    </div>
+
+                    <!-- Columns Error -->
+                    <div id="editColumnsError" class="hidden text-center py-4">
+                        <i class="fas fa-exclamation-triangle text-yellow-500"></i>
+                        <span class="ml-2 text-yellow-600 text-sm">Could not load available columns. Column editing disabled.</span>
+                    </div>
+                </div>
+
+                <!-- Read-Only Info Section -->
+                <div class="border-t border-gray-200 pt-4">
+                    <h4 class="text-sm font-semibold text-gray-500 mb-3">
+                        <i class="fas fa-lock mr-2"></i>Read-Only Settings
+                        <span class="font-normal text-xs">(create new job to change)</span>
+                    </h4>
+
+                    <div class="bg-gray-50 rounded-lg p-3 space-y-2 text-sm">
+                        <div class="flex justify-between">
+                            <span class="text-gray-500">Connection:</span>
+                            <span id="editJobConnection" class="text-gray-700 font-medium">-</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-500">Source Table:</span>
+                            <span id="editJobSourceTable" class="text-gray-700 font-medium">-</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-500">Destination:</span>
+                            <span id="editJobDestTable" class="text-gray-700 font-medium">-</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-500">Load Strategy:</span>
+                            <span id="editJobLoadStrategy" class="text-gray-700 font-medium">-</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal Footer -->
+        <div class="modal-footer">
+            <button onclick="closeEditJobModal()" class="btn btn-secondary" style="min-width: 100px;">
+                Cancel
+            </button>
+            <button onclick="saveJobChanges()" id="editJobSaveBtn" class="btn btn-primary" style="min-width: 120px;">
+                <i class="fas fa-save mr-1"></i>Save Changes
             </button>
         </div>
     </div>
@@ -1898,6 +2194,59 @@ function runSourceNow(sourceId) {
     }
 }
 
+function togglePauseSource(sourceId, isCurrentlyEnabled) {
+    const action = isCurrentlyEnabled ? 'pause' : 'resume';
+    const confirmMessage = isCurrentlyEnabled
+        ? 'Pause scheduling for this ETL job?\n\nThe job will not run on its schedule until resumed. You can still run it manually.'
+        : 'Resume scheduling for this ETL job?\n\nThe job will resume running on its configured schedule.';
+
+    if (confirm(confirmMessage)) {
+        const button = document.getElementById(`pause-btn-${sourceId}`);
+        if (button) {
+            button.disabled = true;
+            button.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        }
+
+        fetch(`/api/etl/sources/${sourceId}/toggle-pause/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrftoken
+            },
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                alert(`✓ ${data.message}`);
+                location.reload();
+            } else {
+                alert('Error: ' + data.message);
+                // Re-enable button on error
+                if (button) {
+                    button.disabled = false;
+                    if (isCurrentlyEnabled) {
+                        button.innerHTML = '<i class="fas fa-pause"></i>';
+                    } else {
+                        button.innerHTML = '<i class="fas fa-play-circle"></i>';
+                    }
+                }
+            }
+        })
+        .catch(error => {
+            alert('Error: ' + error);
+            // Re-enable button on error
+            if (button) {
+                button.disabled = false;
+                if (isCurrentlyEnabled) {
+                    button.innerHTML = '<i class="fas fa-pause"></i>';
+                } else {
+                    button.innerHTML = '<i class="fas fa-play-circle"></i>';
+                }
+            }
+        });
+    }
+}
+
 function toggleSchedule() {
     alert('Schedule configuration modal will be implemented in the next phase');
 }
@@ -1977,6 +2326,23 @@ function testConnection(sourceId) {
 }
 
 function editSource(sourceId) {
+    // Open the simplified Edit modal
+    openEditJobModal(sourceId);
+}
+
+// Store original column selection for comparison
+let editJobOriginalColumns = [];
+
+function openEditJobModal(sourceId) {
+    // Show modal
+    const modal = document.getElementById('editJobModal');
+    modal.classList.remove('hidden');
+
+    // Show loading, hide form and error
+    document.getElementById('editJobLoading').classList.remove('hidden');
+    document.getElementById('editJobForm').classList.add('hidden');
+    document.getElementById('editJobError').classList.add('hidden');
+
     // Fetch source data
     fetch(`/api/etl/sources/${sourceId}/`)
         .then(response => response.json())
@@ -1984,109 +2350,229 @@ function editSource(sourceId) {
             if (data.status === 'success') {
                 const source = data.source;
 
-                console.log('=== EDIT SOURCE DEBUG ===');
-                console.log('Source data:', source);
-                console.log('Wizard last step:', source.wizard_last_step);
-                console.log('Uses saved connection:', source.uses_saved_connection);
+                // Hide loading, show form
+                document.getElementById('editJobLoading').classList.add('hidden');
+                document.getElementById('editJobForm').classList.remove('hidden');
 
-                // Set wizard to edit mode
-                wizardEditMode = true;
-                wizardEditSourceId = sourceId;
-                draftSourceId = sourceId;  // Treat edit as updating existing draft
+                // Populate form fields
+                document.getElementById('editJobSourceId').value = sourceId;
+                document.getElementById('editJobName').value = source.name || '';
 
-                // Determine which step to resume from: last completed step + 1 (next step to work on)
-                const lastCompletedStep = source.wizard_last_step || 2;
-                const resumeStep = Math.min(lastCompletedStep + 1, 5);  // Next step, capped at 5
+                // Populate schedule
+                const scheduleType = source.schedule_type || 'manual';
+                const scheduleRadio = document.querySelector(`input[name="editScheduleType"][value="${scheduleType}"]`);
+                if (scheduleRadio) {
+                    scheduleRadio.checked = true;
+                }
+                updateEditScheduleOptions();
 
-                console.log(`Last completed step: ${lastCompletedStep}, resuming at step: ${resumeStep}`);
-
-                // Step 1: Populate job name and source type
-                document.getElementById('sourceName').value = source.name;
-
-                // Select the appropriate source type radio button
-                const sourceTypeRadio = document.querySelector(`input[name="sourceType"][value="${source.source_type}"]`);
-                if (sourceTypeRadio) {
-                    sourceTypeRadio.checked = true;
+                // Populate schedule details if available
+                if (source.schedule_time) {
+                    document.getElementById('editScheduleTime').value = source.schedule_time;
+                    document.getElementById('editScheduleTimeWeekly').value = source.schedule_time;
+                }
+                if (source.schedule_minute !== undefined) {
+                    document.getElementById('editScheduleMinute').value = source.schedule_minute;
+                }
+                if (source.schedule_day_of_week !== undefined) {
+                    document.getElementById('editScheduleDay').value = source.schedule_day_of_week;
                 }
 
-                // Step 2: Populate connection details based on source type
-                const sourceType = source.source_type;
+                // Populate read-only info
+                document.getElementById('editJobConnection').textContent = source.connection_name || 'N/A';
 
-                // Show appropriate form based on source type
-                if (['postgresql', 'mysql', 'oracle', 'sqlserver', 'mariadb', 'redshift', 'synapse', 'snowflake', 'teradata', 'db2'].includes(sourceType)) {
-                    // Relational database form
-                    document.getElementById('formRelationalDB').classList.remove('hidden');
-                    document.getElementById('formFilePath').classList.add('hidden');
-                    document.getElementById('formBigQuery').classList.add('hidden');
-
-                    document.getElementById('sourceHost').value = source.source_host || '';
-                    document.getElementById('sourcePort').value = source.source_port || '';
-                    document.getElementById('sourceDatabase').value = source.source_database || '';
-                    document.getElementById('sourceUsername').value = source.source_username || '';
-                    document.getElementById('sourcePassword').value = ''; // Never populate password
-
-                    // If using saved connection, store connection info
-                    if (source.uses_saved_connection && source.connection_id) {
-                        window.usingExistingConnection = true;
-                        window.existingConnectionId = source.connection_id;
-                        wizardEditConnectionId = source.connection_id;  // Track for connection editing
-                        document.getElementById('connectionName').value = source.connection_name || '';
-                        // Don't make connection name read-only - allow editing
-                    }
-
-                } else if (['csv', 'parquet', 'json', 'excel', 'txt', 'avro'].includes(sourceType)) {
-                    // File path form
-                    document.getElementById('formFilePath').classList.remove('hidden');
-                    document.getElementById('formRelationalDB').classList.add('hidden');
-                    document.getElementById('formBigQuery').classList.add('hidden');
-
-                    document.getElementById('filePath').value = source.file_path || '';
-
-                } else if (['bigquery', 'firestore'].includes(sourceType)) {
-                    // BigQuery/Firestore form
-                    document.getElementById('formBigQuery').classList.remove('hidden');
-                    document.getElementById('formRelationalDB').classList.add('hidden');
-                    document.getElementById('formFilePath').classList.add('hidden');
-
-                    document.getElementById('bigqueryProject').value = source.bigquery_project || '';
-                    document.getElementById('bigqueryDataset').value = source.bigquery_dataset || '';
-                }
-
-                // Mark connection as tested since it was previously saved
-                window.connectionTested = true;
-
-                // Step 3+: Handle table selection if tables exist
+                // Get table info
                 if (source.tables && source.tables.length > 0) {
                     const table = source.tables[0];
-                    wizardEditTableData = table;
+                    document.getElementById('editJobSourceTable').textContent = table.source_table_name || 'N/A';
+                    document.getElementById('editJobDestTable').textContent = `${table.dest_dataset || 'raw_data'}.${table.dest_table_name}` || 'N/A';
+                    document.getElementById('editJobLoadStrategy').textContent = table.load_type === 'transactional' ? 'Transactional (Incremental)' : 'Catalog (Snapshot)';
 
-                    // Store table info for later steps
-                    if (document.getElementById('incrementalColumn')) {
-                        document.getElementById('incrementalColumn').value = table.incremental_column || '';
-                    }
-                    if (document.getElementById('rowLimit')) {
-                        document.getElementById('rowLimit').value = table.row_limit || '';
-                    }
+                    // Store original selected columns
+                    editJobOriginalColumns = table.selected_columns || [];
                 }
 
-                // Step 5: Enable immediately checkbox
-                if (document.getElementById('enableImmediately')) {
-                    document.getElementById('enableImmediately').checked = source.is_enabled;
-                }
+                // Load available columns
+                loadEditJobColumns(sourceId);
 
-                // Update modal title
-                document.querySelector('#addSourceModal h3').textContent = 'Edit ETL Job';
-
-                // Show modal at the appropriate resume step
-                showAddSourceModal(resumeStep);
             } else {
-                alert('Error loading source data: ' + data.message);
+                // Show error
+                document.getElementById('editJobLoading').classList.add('hidden');
+                document.getElementById('editJobError').classList.remove('hidden');
+                document.getElementById('editJobErrorMessage').textContent = data.message || 'Error loading job details';
             }
         })
         .catch(error => {
             console.error('Error loading source:', error);
-            alert('Error loading source: ' + error);
+            document.getElementById('editJobLoading').classList.add('hidden');
+            document.getElementById('editJobError').classList.remove('hidden');
+            document.getElementById('editJobErrorMessage').textContent = 'Error loading job details: ' + error;
         });
+
+    // Add event listeners for schedule type changes
+    document.querySelectorAll('input[name="editScheduleType"]').forEach(radio => {
+        radio.addEventListener('change', updateEditScheduleOptions);
+    });
+}
+
+function closeEditJobModal() {
+    document.getElementById('editJobModal').classList.add('hidden');
+}
+
+function updateEditScheduleOptions() {
+    const scheduleType = document.querySelector('input[name="editScheduleType"]:checked')?.value || 'manual';
+
+    // Hide all options
+    document.getElementById('editHourlyOptions').classList.add('hidden');
+    document.getElementById('editDailyOptions').classList.add('hidden');
+    document.getElementById('editWeeklyOptions').classList.add('hidden');
+
+    // Show relevant options
+    if (scheduleType === 'hourly') {
+        document.getElementById('editHourlyOptions').classList.remove('hidden');
+    } else if (scheduleType === 'daily') {
+        document.getElementById('editDailyOptions').classList.remove('hidden');
+    } else if (scheduleType === 'weekly') {
+        document.getElementById('editWeeklyOptions').classList.remove('hidden');
+    }
+}
+
+function loadEditJobColumns(sourceId) {
+    // Show loading, hide list and error
+    document.getElementById('editColumnsLoading').classList.remove('hidden');
+    document.getElementById('editColumnsList').classList.add('hidden');
+    document.getElementById('editColumnsError').classList.add('hidden');
+
+    // Fetch available columns from API
+    fetch(`/api/etl/sources/${sourceId}/available-columns/`)
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('editColumnsLoading').classList.add('hidden');
+
+            if (data.status === 'success') {
+                renderEditJobColumns(data.columns, data.currently_selected || editJobOriginalColumns);
+                document.getElementById('editColumnsList').classList.remove('hidden');
+            } else {
+                document.getElementById('editColumnsError').classList.remove('hidden');
+            }
+        })
+        .catch(error => {
+            console.error('Error loading columns:', error);
+            document.getElementById('editColumnsLoading').classList.add('hidden');
+            document.getElementById('editColumnsError').classList.remove('hidden');
+        });
+}
+
+function renderEditJobColumns(columns, selectedColumns) {
+    const columnsList = document.getElementById('editColumnsList');
+    columnsList.innerHTML = '';
+
+    columns.forEach(col => {
+        const isSelected = selectedColumns.includes(col.name);
+        const isNew = !editJobOriginalColumns.includes(col.name);
+
+        const columnItem = document.createElement('div');
+        columnItem.className = 'edit-column-item';
+        columnItem.innerHTML = `
+            <input type="checkbox" id="col_${col.name}" name="editColumns" value="${col.name}" ${isSelected ? 'checked' : ''}>
+            <label for="col_${col.name}" class="column-name">${col.name}</label>
+            <span class="column-type">${col.type || 'STRING'}</span>
+            ${isSelected && !isNew ? '<span class="column-status syncing">Syncing</span>' : ''}
+            ${isNew ? '<span class="column-status new">New</span>' : ''}
+        `;
+
+        // Add change listener to update status badge
+        columnItem.querySelector('input').addEventListener('change', function() {
+            updateColumnStatusBadge(this, col.name);
+        });
+
+        columnsList.appendChild(columnItem);
+    });
+}
+
+function updateColumnStatusBadge(checkbox, columnName) {
+    const columnItem = checkbox.closest('.edit-column-item');
+    const existingBadge = columnItem.querySelector('.column-status');
+    const isOriginallySelected = editJobOriginalColumns.includes(columnName);
+    const isNowChecked = checkbox.checked;
+
+    // Remove existing badge
+    if (existingBadge) {
+        existingBadge.remove();
+    }
+
+    // Add appropriate badge
+    let badge = null;
+    if (isNowChecked && isOriginallySelected) {
+        badge = document.createElement('span');
+        badge.className = 'column-status syncing';
+        badge.textContent = 'Syncing';
+    } else if (isNowChecked && !isOriginallySelected) {
+        badge = document.createElement('span');
+        badge.className = 'column-status new';
+        badge.textContent = 'Will Add';
+    } else if (!isNowChecked && isOriginallySelected) {
+        badge = document.createElement('span');
+        badge.className = 'column-status will-stop';
+        badge.textContent = 'Will Stop';
+    }
+
+    if (badge) {
+        columnItem.appendChild(badge);
+    }
+}
+
+function saveJobChanges() {
+    const sourceId = document.getElementById('editJobSourceId').value;
+    const saveBtn = document.getElementById('editJobSaveBtn');
+
+    // Disable button and show loading state
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Saving...';
+
+    // Collect form data
+    const formData = {
+        name: document.getElementById('editJobName').value,
+        schedule_type: document.querySelector('input[name="editScheduleType"]:checked')?.value || 'manual',
+        selected_columns: Array.from(document.querySelectorAll('input[name="editColumns"]:checked')).map(cb => cb.value)
+    };
+
+    // Add schedule-specific fields
+    if (formData.schedule_type === 'hourly') {
+        formData.schedule_minute = parseInt(document.getElementById('editScheduleMinute').value);
+    } else if (formData.schedule_type === 'daily') {
+        formData.schedule_time = document.getElementById('editScheduleTime').value;
+    } else if (formData.schedule_type === 'weekly') {
+        formData.schedule_time = document.getElementById('editScheduleTimeWeekly').value;
+        formData.schedule_day_of_week = parseInt(document.getElementById('editScheduleDay').value);
+    }
+
+    // Submit to API
+    fetch(`/api/etl/sources/${sourceId}/edit/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrftoken
+        },
+        body: JSON.stringify(formData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            alert('ETL job updated successfully!');
+            closeEditJobModal();
+            location.reload();
+        } else {
+            alert('Error: ' + data.message);
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = '<i class="fas fa-save mr-1"></i>Save Changes';
+        }
+    })
+    .catch(error => {
+        alert('Error saving changes: ' + error);
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = '<i class="fas fa-save mr-1"></i>Save Changes';
+    });
 }
 
 function deleteSource(sourceId) {

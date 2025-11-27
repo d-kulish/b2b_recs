@@ -1,7 +1,7 @@
 # ETL Runner
 
-**Last Updated:** November 25, 2025
-**Status:** Production Ready ✅ | Cloud Scheduler Working ✅ | SQL/NoSQL/File Sources Supported ✅ | Dataflow Working ✅ | **NEW: Firestore Support** 🔥
+**Last Updated:** November 27, 2025
+**Status:** Production Ready ✅ | Cloud Scheduler Working ✅ | SQL/NoSQL/File Sources Supported ✅ | Dataflow Working ✅ | **NEW: ETL Job Edit & Pause/Resume** 🔥
 
 Cloud Run-based ETL execution engine that extracts data from databases and cloud storage files, transforms it, and loads into BigQuery for the B2B Recommendations Platform.
 
@@ -1626,6 +1626,158 @@ if df[col].dtype == 'object':
 
 ---
 
+### **Issue 12: ETL Job Edit & Pause/Resume Functionality (November 27, 2025)**
+
+**Problem:** Users could not edit existing ETL jobs after creation, and there was no way to temporarily pause scheduled jobs without deleting them.
+
+**Context:**
+- Clicking "Edit" button on ETL Jobs page threw error: `'DataSource' object has no attribute 'get_connection_details'`
+- No pause/resume functionality existed - users had to delete and recreate jobs
+- Full ETL wizard re-run was required for any changes
+
+#### **Features Implemented:**
+
+**A. Pause/Resume Button**
+
+Added ability to pause and resume scheduled ETL jobs without deleting them:
+
+- **Pause:** Disables Cloud Scheduler job, prevents automated runs
+- **Resume:** Re-enables Cloud Scheduler job, resumes schedule
+- **Visual Indicator:** Button shows "Pause" or "Resume" based on current state
+- **Works for:** All jobs with Cloud Scheduler integration
+
+**Implementation:**
+- New API endpoint: `POST /api/etl/sources/<id>/toggle-pause/`
+- Uses Cloud Scheduler API to pause/resume jobs
+- Updates `DataSource.is_paused` field for state tracking
+
+**B. Edit Modal**
+
+Created simplified edit interface (not full wizard) for modifying existing jobs:
+
+**Editable Fields:**
+- **Job Name:** Rename the ETL job
+- **Schedule:** Change frequency (Manual, Hourly, Daily, Weekly) with minute-level precision
+- **Columns:** Add new columns (with ALTER TABLE), remove columns from sync
+
+**Read-Only Fields (Displayed for Reference):**
+- Source connection name
+- Source table/collection
+- Destination BigQuery table
+- Load strategy (Transactional/Catalog)
+
+**Column Management:**
+- **Add Columns:** Available source columns shown, can be added to sync
+- **Remove Columns:** Existing columns can be stopped (not deleted from BigQuery)
+- **ALTER TABLE:** New columns automatically added to BigQuery table with NULL defaults
+- **Stale Data:** Removed columns remain in BigQuery but stop receiving updates
+
+**Schedule Options:**
+- Manual (no automation)
+- Hourly at specific minute (e.g., :15, :30, :45)
+- Daily at specific time (e.g., 09:00, 14:30)
+- Weekly on specific day and time
+
+#### **API Endpoints Added:**
+
+```
+POST /api/etl/sources/<id>/toggle-pause/
+    Pause or resume Cloud Scheduler job
+    Returns: { status: 'success', is_paused: true/false }
+
+PUT /api/etl/sources/<id>/edit/
+    Update job name, schedule, and columns
+    Body: { name, schedule_type, schedule_hour, schedule_minute, schedule_day, columns }
+    Returns: { status: 'success' }
+
+GET /api/etl/sources/<id>/available-columns/
+    Get all columns from source table (for adding new columns)
+    Returns: { columns: [{name, data_type, is_nullable}] }
+```
+
+#### **Files Modified:**
+
+**Backend:**
+- `ml_platform/models.py` - Added `get_connection_details()` method to DataSource model
+- `ml_platform/views.py` - Added `api_etl_toggle_pause()`, `api_etl_edit_source()`, `api_etl_available_columns()` endpoints
+- `ml_platform/urls.py` - Added URL routes for new endpoints
+
+**Frontend:**
+- `templates/ml_platform/model_etl.html`:
+  - Added Edit Modal HTML structure
+  - Added Pause/Resume button to job cards
+  - Added JavaScript functions: `openEditJobModal()`, `closeEditJobModal()`, `updateEditScheduleOptions()`, `loadEditJobColumns()`, `renderEditJobColumns()`, `updateColumnStatusBadge()`, `saveJobChanges()`, `togglePauseSource()`
+  - Added CSS styles for modal, schedule options, and column items
+
+#### **Bug Fixes During Implementation:**
+
+**Bug 1: `'DataSource' object has no attribute 'wizard_last_step'`**
+- **Cause:** `api_etl_get_source` accessed non-existent attributes directly
+- **Fix:** Changed to use `getattr()` with default values for backward compatibility
+
+**Bug 2: Columns not loading for big tables and Firestore**
+- **Cause:** Custom column fetching didn't use proper credential handling
+- **Fix:** Refactored to use existing `fetch_table_metadata` from `connection_manager.py`
+
+#### **Design Decisions:**
+
+| Decision | Choice | Rationale |
+|----------|--------|-----------|
+| Edit interface | Simplified modal (not wizard) | Faster, focused on common changes |
+| Column removal | Stop loading, keep in BigQuery | Preserves historical data |
+| Column addition | ALTER TABLE with NULLs | No data loss, backward compatible |
+| Load strategy changes | Not allowed | Requires new table structure |
+| Source table changes | Not allowed | Create new job instead |
+| Concurrent edits | Single user (no locks) | Simplicity for v1 |
+| Audit trail | Not implemented | Future enhancement |
+
+#### **User Flow:**
+
+```
+1. User clicks "Edit" on existing ETL job
+2. Modal opens with current job configuration
+3. User can:
+   - Rename the job
+   - Change schedule (Manual/Hourly/Daily/Weekly)
+   - Add new columns from source
+   - Remove columns from sync
+4. User clicks "Save Changes"
+5. System:
+   - Updates job name in database
+   - Creates/updates/deletes Cloud Scheduler job
+   - Runs ALTER TABLE for new columns
+   - Updates column sync configuration
+6. Modal closes, job list refreshes
+```
+
+#### **Pause/Resume Flow:**
+
+```
+1. User clicks "Pause" on scheduled job
+2. System calls Cloud Scheduler API to pause job
+3. Button changes to "Resume"
+4. No automated runs until resumed
+
+1. User clicks "Resume" on paused job
+2. System calls Cloud Scheduler API to resume job
+3. Button changes to "Pause"
+4. Automated runs resume per schedule
+```
+
+#### **Testing Results:**
+
+- ✅ Edit modal opens and displays current configuration
+- ✅ Job name updates save correctly
+- ✅ Schedule changes create/update Cloud Scheduler jobs
+- ✅ New columns added via ALTER TABLE
+- ✅ Column removal stops data loading
+- ✅ Pause/Resume toggles Cloud Scheduler state
+- ✅ Works for all source types (databases, files, Firestore)
+
+**Result:** ✅ ETL job editing and pause/resume functionality fully operational
+
+---
+
 ## Deployment
 
 ### **Infrastructure**
@@ -1894,11 +2046,13 @@ gcloud run jobs update etl-runner \
 - ✅ Connection creation and editing for all source types
 - ✅ Incremental loading with file/timestamp tracking
 - ✅ BigQuery schema auto-detection and management
+- ✅ **ETL Job Edit Modal (name, schedule, columns)**
+- ✅ **Pause/Resume for scheduled jobs**
 
 **Known Issues:**
 - ⚠️ Test Connection button not visible in edit mode (workaround available)
 
-**Recent Fixes (Nov 21-25, 2025):**
+**Recent Fixes (Nov 21-27, 2025):**
 - ✅ ETL Wizard scheduler creation (webhook URL + OIDC audience)
 - ✅ Cloud Scheduler authentication (webhook pattern)
 - ✅ ETL Runner API authentication (CSRF exemption for service-to-service calls)
@@ -1914,3 +2068,4 @@ gcloud run jobs update etl-runner \
 - ✅ **Dataflow schema fetching and conversion for complex types**
 - ✅ **Firestore ETL - DatetimeWithNanoseconds conversion fix**
 - ✅ **Firestore ETL - Schema-aware BigQuery loader with null handling**
+- ✅ **ETL Job Edit & Pause/Resume functionality**

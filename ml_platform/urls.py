@@ -36,6 +36,9 @@ urlpatterns = [
     path('api/etl/sources/<int:source_id>/test/', views.api_etl_test_connection, name='api_etl_test_connection'),
     path('api/etl/sources/<int:source_id>/run/', views.api_etl_run_source, name='api_etl_run_source'),
     path('api/etl/sources/<int:source_id>/delete/', views.api_etl_delete_source, name='api_etl_delete_source'),
+    path('api/etl/sources/<int:source_id>/toggle-pause/', views.api_etl_toggle_pause, name='api_etl_toggle_pause'),
+    path('api/etl/sources/<int:source_id>/edit/', views.api_etl_edit_source, name='api_etl_edit_source'),
+    path('api/etl/sources/<int:source_id>/available-columns/', views.api_etl_available_columns, name='api_etl_available_columns'),
     path('api/etl/runs/<int:run_id>/status/', views.api_etl_run_status, name='api_etl_run_status'),
 
     # ETL Runner API endpoints (Phase 2)

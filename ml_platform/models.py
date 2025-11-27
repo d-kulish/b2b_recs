@@ -257,6 +257,40 @@ class DataSource(models.Model):
             self.source_type = self.connection.source_type
         super().save(*args, **kwargs)
 
+    def get_connection_details(self):
+        """
+        Returns connection details from the associated Connection.
+        Used by API endpoints to retrieve connection info for editing.
+        """
+        if self.connection:
+            return {
+                'host': self.connection.source_host or '',
+                'port': self.connection.source_port,
+                'database': self.connection.source_database or '',
+                'schema': self.connection.source_schema or '',
+                'username': self.connection.source_username or '',
+                'bigquery_project': self.connection.bigquery_project or '',
+                'bigquery_dataset': self.connection.bigquery_dataset or '',
+                'bucket_path': self.connection.bucket_path or '',
+                'file_path': self.connection.file_path or '',
+                'connection_string': self.connection.connection_string or '',
+                'source_type': self.connection.source_type or '',
+            }
+        # Fallback for legacy data sources without Connection
+        return {
+            'host': '',
+            'port': None,
+            'database': '',
+            'schema': '',
+            'username': '',
+            'bigquery_project': '',
+            'bigquery_dataset': '',
+            'bucket_path': '',
+            'file_path': '',
+            'connection_string': '',
+            'source_type': self.source_type or '',
+        }
+
 
 class DataSourceTable(models.Model):
     """

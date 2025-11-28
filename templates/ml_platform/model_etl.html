@@ -79,13 +79,27 @@
                                     </div>
                                 </div>
 
-                                <!-- Column 2: Schedule + Connection -->
+                                <!-- Column 2: Schedule + Connection (4 rows) -->
                                 <div class="card-meta-column">
+                                    <span class="card-label">Schedule:</span>
                                     <span class="card-schedule-info">
-                                        <span class="card-label">Schedule:</span> {% if source.schedule_type %}{{ source.schedule_type|title }}{% else %}Manual{% endif %}
+                                        {% with first_table=source.tables.first %}
+                                            {% if source.schedule_type == 'manual' or not source.schedule_type %}
+                                                Manual
+                                            {% elif source.schedule_type == 'hourly' %}
+                                                Hourly at :{% if first_table.schedule_minute %}{{ first_table.schedule_minute|stringformat:"02d" }}{% else %}00{% endif %}
+                                            {% elif source.schedule_type == 'daily' %}
+                                                Daily at {% if first_table.schedule_time %}{{ first_table.schedule_time|time:"H:i" }}{% else %}09:00{% endif %}
+                                            {% elif source.schedule_type == 'weekly' %}
+                                                Weekly on {% if first_table.schedule_day_of_week == 0 %}Mon{% elif first_table.schedule_day_of_week == 1 %}Tue{% elif first_table.schedule_day_of_week == 2 %}Wed{% elif first_table.schedule_day_of_week == 3 %}Thu{% elif first_table.schedule_day_of_week == 4 %}Fri{% elif first_table.schedule_day_of_week == 5 %}Sat{% elif first_table.schedule_day_of_week == 6 %}Sun{% else %}Mon{% endif %} at {% if first_table.schedule_time %}{{ first_table.schedule_time|time:"H:i" }}{% else %}09:00{% endif %}
+                                            {% else %}
+                                                {{ source.schedule_type|title }}
+                                            {% endif %}
+                                        {% endwith %}
                                     </span>
+                                    <span class="card-label">Connection:</span>
                                     <span class="card-schedule-info">
-                                        <span class="card-label">Connection:</span> {{ source.connection_name|default:"None" }}
+                                        {% if source.connection %}{{ source.connection.name }}{% else %}None{% endif %}
                                     </span>
                                 </div>
 
@@ -101,26 +115,26 @@
                                     </span>
                                 </div>
 
-                                <!-- Column 4: Run Button -->
-                                <div style="display: flex; align-items: center; justify-content: center;">
+                                <!-- Column 4: Run + Pause Buttons (stacked) -->
+                                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;">
                                     <button onclick="runSourceNow({{ source.id }})" class="card-action-btn run" title="Run ETL job now">
                                         <i class="fas fa-play"></i>
                                     </button>
-                                </div>
-
-                                <!-- Column 5: Actions (Edit + Pause + Delete) -->
-                                <div class="card-actions">
-                                    <button onclick="editSource({{ source.id }})" class="card-action-btn edit" title="Edit ETL job">
-                                        <i class="fas fa-edit"></i>
-                                    </button>
                                     {% if source.cloud_scheduler_job_name %}
                                     <button onclick="togglePauseSource({{ source.id }}, {{ source.is_enabled|yesno:'true,false' }})"
-                                            class="card-action-btn {% if source.is_enabled %}pause{% else %}resume{% endif %}"
+                                            class="card-action-btn {% if source.is_enabled %}pause-large{% else %}resume-large{% endif %}"
                                             title="{% if source.is_enabled %}Pause scheduling{% else %}Resume scheduling{% endif %}"
                                             id="pause-btn-{{ source.id }}">
                                         <i class="fas {% if source.is_enabled %}fa-pause{% else %}fa-play-circle{% endif %}"></i>
                                     </button>
                                     {% endif %}
+                                </div>
+
+                                <!-- Column 5: Actions (Edit + Delete) -->
+                                <div class="card-actions">
+                                    <button onclick="editSource({{ source.id }})" class="card-action-btn edit" title="Edit ETL job">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
                                     <button onclick="deleteSource({{ source.id }})" class="card-action-btn delete" title="Delete ETL job">
                                         <i class="fas fa-trash"></i>
                                     </button>
@@ -1739,20 +1753,22 @@
 
 <!-- Edit ETL Job Modal -->
 <div id="editJobModal" class="modal-overlay hidden">
-    <div class="modal-container" style="max-width: 634px;">
+    <div class="modal-container modal-container-wizard">
         <!-- Modal Header -->
-        <div class="modal-header">
-            <div class="modal-header-icon" style="background-color: #dbeafe;">
-                <i class="fas fa-edit text-xl" style="color: #2563eb;"></i>
+        <div class="modal-header-wizard">
+            <div class="modal-header-content">
+                <div class="modal-header-icon info">
+                    <i class="fas fa-edit text-lg"></i>
+                </div>
+                <div class="modal-header-info">
+                    <h3 class="modal-header-title">Edit ETL Job</h3>
+                    <p class="modal-step-counter">Modify job settings</p>
+                </div>
             </div>
-            <h3 class="modal-header-title">Edit ETL Job</h3>
-            <button onclick="closeEditJobModal()" class="modal-close-btn">
-                <i class="fas fa-times"></i>
-            </button>
         </div>
 
         <!-- Modal Body -->
-        <div class="modal-body" style="max-height: 60vh; overflow-y: auto;">
+        <div class="modal-body-wizard">
             <!-- Loading State -->
             <div id="editJobLoading" class="text-center py-8">
                 <i class="fas fa-spinner fa-spin text-3xl text-gray-400"></i>
@@ -1766,20 +1782,20 @@
             </div>
 
             <!-- Edit Form -->
-            <div id="editJobForm" class="hidden space-y-6">
+            <div id="editJobForm" class="hidden">
                 <!-- Hidden field for source ID -->
                 <input type="hidden" id="editJobSourceId" value="">
 
                 <!-- Job Name -->
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Job Name</label>
+                <div class="wizard-field-group">
+                    <label class="wizard-field-label">Job Name <span class="required">*</span></label>
                     <input type="text" id="editJobName" class="form-input w-full"
                            placeholder="Enter job name">
                 </div>
 
                 <!-- Schedule Section -->
-                <div class="border-t border-gray-200 pt-4">
-                    <h4 class="text-sm font-semibold text-gray-900 mb-3">
+                <div class="wizard-field-group">
+                    <h4 class="wizard-section-title">
                         <i class="fas fa-clock mr-2"></i>Schedule
                     </h4>
 
@@ -1854,15 +1870,15 @@
                 </div>
 
                 <!-- Columns Section -->
-                <div class="border-t border-gray-200 pt-4">
-                    <h4 class="text-sm font-semibold text-gray-900 mb-3">
+                <div class="wizard-field-group">
+                    <h4 class="wizard-section-title">
                         <i class="fas fa-columns mr-2"></i>Columns
                     </h4>
 
-                    <div class="text-xs text-gray-500 mb-3">
-                        <i class="fas fa-info-circle mr-1"></i>
-                        Check columns to sync. Unchecked columns will stop syncing (data preserved in BigQuery).
-                        New columns will be added to BigQuery with NULLs for historical rows.
+                    <div class="wizard-info-box info">
+                        <i class="fas fa-info-circle"></i>
+                        <span>Check columns to sync. Unchecked columns will stop syncing (data preserved in BigQuery).
+                        New columns will be added to BigQuery with NULLs for historical rows.</span>
                     </div>
 
                     <!-- Columns Loading -->
@@ -1872,8 +1888,10 @@
                     </div>
 
                     <!-- Columns List -->
-                    <div id="editColumnsList" class="hidden max-h-48 overflow-y-auto border border-gray-200 rounded-lg">
-                        <!-- Columns will be populated dynamically -->
+                    <div id="editColumnsList" class="hidden wizard-list-container">
+                        <div class="list-content" style="max-height: 200px;">
+                            <!-- Columns will be populated dynamically -->
+                        </div>
                     </div>
 
                     <!-- Columns Error -->
@@ -1884,10 +1902,10 @@
                 </div>
 
                 <!-- Read-Only Info Section -->
-                <div class="border-t border-gray-200 pt-4">
-                    <h4 class="text-sm font-semibold text-gray-500 mb-3">
+                <div class="wizard-field-group">
+                    <h4 class="wizard-section-title" style="color: #6b7280;">
                         <i class="fas fa-lock mr-2"></i>Read-Only Settings
-                        <span class="font-normal text-xs">(create new job to change)</span>
+                        <span class="wizard-field-label optional">(create new job to change)</span>
                     </h4>
 
                     <div class="bg-gray-50 rounded-lg p-3 space-y-2 text-sm">
@@ -1913,13 +1931,16 @@
         </div>
 
         <!-- Modal Footer -->
-        <div class="modal-footer">
-            <button onclick="closeEditJobModal()" class="btn btn-secondary" style="min-width: 100px;">
-                Cancel
-            </button>
-            <button onclick="saveJobChanges()" id="editJobSaveBtn" class="btn btn-primary" style="min-width: 120px;">
-                <i class="fas fa-save mr-1"></i>Save Changes
-            </button>
+        <div class="modal-footer-wizard">
+            <div class="footer-left"></div>
+            <div class="footer-right">
+                <button onclick="closeEditJobModal()" class="btn btn-secondary" style="min-width: 100px;">
+                    Cancel
+                </button>
+                <button onclick="saveJobChanges()" id="editJobSaveBtn" class="btn btn-primary" style="min-width: 120px;">
+                    <i class="fas fa-save mr-1"></i>Save Changes
+                </button>
+            </div>
         </div>
     </div>
 </div>
@@ -2450,7 +2471,9 @@ function loadEditJobColumns(sourceId) {
 }
 
 function renderEditJobColumns(columns, selectedColumns) {
-    const columnsList = document.getElementById('editColumnsList');
+    const columnsContainer = document.getElementById('editColumnsList');
+    // Target the inner list-content div for rendering
+    const columnsList = columnsContainer.querySelector('.list-content') || columnsContainer;
     columnsList.innerHTML = '';
 
     columns.forEach(col => {

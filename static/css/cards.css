@@ -104,8 +104,8 @@
 /* Card Layout: 5-Column Structure (content + schedule/conn + status + run + actions) - For ETL Jobs */
 .card-container-5col {
     display: grid;
-    grid-template-columns: 1fr 0.5fr auto auto auto;
-    gap: 20px;
+    grid-template-columns: auto auto 1fr auto auto;
+    gap: 16px;
     align-items: center;
 }
 
@@ -117,11 +117,12 @@
 .card-meta-column {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 0;
     font-size: 11px;
     color: #9ca3af;
     min-width: 0;
     white-space: nowrap;
+    line-height: 1.3;
 }
 
 .card-actions {
@@ -186,9 +187,9 @@
     display: flex;
     align-items: center;
     gap: 4px;
-    padding: 4px 8px;
+    padding: 0;
     font-size: 11px;
-    color: #9ca3af;
+    color: #6b7280;
 }
 
 .card-schedule-info i {
@@ -244,6 +245,39 @@
 }
 
 .card-action-btn.run i {
+    font-size: 11px;
+}
+
+/* Pause Action Button (yellow, same size as Run) */
+.card-action-btn.pause-large {
+    width: 64px;
+    background-color: #f59e0b;
+    color: #ffffff;
+    font-weight: 600;
+}
+
+.card-action-btn.pause-large:hover {
+    background-color: #d97706;
+}
+
+.card-action-btn.pause-large i {
+    font-size: 11px;
+}
+
+/* Resume Action Button (green outline, same size as Run) */
+.card-action-btn.resume-large {
+    width: 64px;
+    background-color: #ffffff;
+    color: #10b981;
+    border: 2px solid #10b981;
+    font-weight: 600;
+}
+
+.card-action-btn.resume-large:hover {
+    background-color: #ecfdf5;
+}
+
+.card-action-btn.resume-large i {
     font-size: 11px;
 }
 

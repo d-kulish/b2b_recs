@@ -156,8 +156,8 @@ def model_etl(request, model_id):
             schedule_type='manual',
         )
 
-    # Get all data sources for this model
-    data_sources = etl_config.data_sources.all().prefetch_related('tables')
+    # Get all data sources for this model (prefetch connection and tables for display)
+    data_sources = etl_config.data_sources.all().select_related('connection').prefetch_related('tables')
 
     # Calculate statistics
     enabled_sources = data_sources.filter(is_enabled=True)

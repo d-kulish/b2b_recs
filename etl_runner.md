@@ -1,7 +1,7 @@
 # ETL Runner
 
-**Last Updated:** November 27, 2025
-**Status:** Production Ready ✅ | Cloud Scheduler Working ✅ | SQL/NoSQL/File Sources Supported ✅ | Dataflow Working ✅ | **NEW: ETL Job Edit & Pause/Resume** 🔥
+**Last Updated:** November 29, 2025
+**Status:** Production Ready ✅ | Cloud Scheduler Working ✅ | SQL/NoSQL/File Sources Supported ✅ | Dataflow Working ✅ | **NEW: Load into Existing Tables** 🔥
 
 Cloud Run-based ETL execution engine that extracts data from databases and cloud storage files, transforms it, and loads into BigQuery for the B2B Recommendations Platform.
 
@@ -1778,6 +1778,178 @@ GET /api/etl/sources/<id>/available-columns/
 
 ---
 
+### **Issue 13: ETL Job Delete - Cloud Scheduler Orphan Bug (November 29, 2025)**
+
+**Problem:** When deleting an ETL job, the associated Cloud Scheduler job was not deleted, leaving orphaned scheduler entries.
+
+**Context:**
+- Users deleting ETL jobs via "Delete" button
+- Cloud Scheduler jobs remained active after deletion
+- Orphaned jobs continued executing on schedule (failing with "DataSource not found")
+- Confusing for users seeing stale jobs in Cloud Scheduler
+
+**Root Cause:** The `api_etl_delete_source` function only deleted the Django `DataSource` record without calling `CloudSchedulerManager.delete_etl_schedule()`.
+
+**Solution:** Updated `api_etl_delete_source` to delete Cloud Scheduler job before deleting DataSource:
+
+```python
+@login_required
+@require_http_methods(["POST"])
+def api_etl_delete_source(request, source_id):
+    try:
+        source = get_object_or_404(DataSource, id=source_id)
+        source_name = source.name
+
+        # Delete Cloud Scheduler job if one exists
+        if source.cloud_scheduler_job_name:
+            from .utils.cloud_scheduler import CloudSchedulerManager
+            scheduler_manager = CloudSchedulerManager(project_id, region)
+            delete_result = scheduler_manager.delete_etl_schedule(source.id)
+            if not delete_result['success']:
+                logger.warning(f"Failed to delete scheduler: {delete_result['message']}")
+
+        source.delete()
+        return JsonResponse({'status': 'success', ...})
+```
+
+**Design Decision:** Scheduler deletion failure doesn't block DataSource deletion (graceful degradation). Logs warning but proceeds - scheduler might already be deleted manually.
+
+**Files Modified:**
+- `ml_platform/views.py:946-986` - Added Cloud Scheduler deletion before DataSource deletion
+
+**Result:** ✅ ETL job deletion now properly cleans up both database record and Cloud Scheduler job
+
+---
+
+### **Issue 14: Load Into Existing BigQuery Tables (November 29, 2025)**
+
+**Problem:** ETL Wizard only allowed creating new BigQuery tables. Users could not:
+- Load data from multiple sources into the same table
+- Change source table and continue loading into existing destination
+- Reuse existing BigQuery tables for new ETL jobs
+
+**Context:**
+- Step 4 "BigQuery Table Setup" always created new tables
+- If table existed, wizard failed with "Table already exists" error
+- No way to select existing tables as destination
+
+#### **Features Implemented:**
+
+**A. Destination Mode Selector**
+
+Added radio buttons in Step 4 to choose between:
+- **Create new table** (original behavior)
+- **Use existing table** (new feature)
+
+**B. Existing Table Selection**
+
+When "Use existing table" selected:
+- Dropdown populated with all tables in `raw_data` dataset
+- Tables grouped by load type (Transactional, Catalog, Other)
+- Table info displayed (row count, load type, partitioning)
+
+**C. Schema Compatibility Validation**
+
+Validates source schema against existing table:
+- **Compatible columns:** Columns that exist in both and have compatible types
+- **Columns to add:** Source columns not in destination (auto-added via ALTER TABLE)
+- **Columns missing in source:** Destination columns not in source (will be NULL)
+- **Type mismatches:** Incompatible type conversions (blocks creation)
+
+**D. Load Type Enforcement**
+
+Prevents mixing load types:
+- Transactional table → only transactional loads allowed
+- Catalog table → only catalog loads allowed
+- Prevents data inconsistencies (partitioning, append vs replace)
+
+**E. Automatic ALTER TABLE**
+
+When using existing table with new columns:
+- System automatically runs `ALTER TABLE ADD COLUMN`
+- New columns added as NULLABLE with appropriate types
+- No manual schema changes needed
+
+#### **API Endpoints Added:**
+
+```
+GET /api/etl/datasets/<dataset_id>/tables/
+    List all BigQuery tables with metadata
+    Returns: { tables: [{name, num_rows, load_type, partitioned, ...}] }
+
+POST /api/etl/validate-schema-compatibility/
+    Validate source schema against existing table
+    Body: { source_columns, existing_table_name, load_type }
+    Returns: { compatible, columns_to_add, type_mismatches, warnings, errors }
+```
+
+#### **Files Modified:**
+
+**Backend:**
+- `ml_platform/utils/bigquery_manager.py`:
+  - Added `list_tables()` - lists all tables with metadata
+  - Added `get_table_metadata()` - gets detailed table info
+  - Added `add_columns_to_table()` - ALTER TABLE for new columns
+- `ml_platform/views.py`:
+  - Added `api_etl_list_bq_tables()` - API endpoint for table listing
+  - Added `api_etl_validate_schema_compatibility()` - schema validation
+  - Modified `api_etl_create_job()` - supports `use_existing_table` flag
+- `ml_platform/urls.py` - Added URL routes for new endpoints
+
+**Frontend:**
+- `templates/ml_platform/model_etl.html`:
+  - Added destination mode selector (radio buttons)
+  - Added existing table dropdown and info panel
+  - Added schema compatibility report display
+  - Added JavaScript functions: `toggleDestinationMode()`, `loadExistingTables()`, `onExistingTableSelected()`, `validateSchemaCompatibility()`, `renderCompatibilityReport()`
+  - Updated `nextStep()` validation for existing table mode
+  - Updated `createETLJob()` payload with `use_existing_table`, `existing_table_name`
+
+#### **Type Compatibility Matrix:**
+
+| Source Type | Compatible Destinations |
+|-------------|------------------------|
+| INT64 | INT64, INTEGER, FLOAT64, FLOAT, NUMERIC, STRING |
+| INTEGER | INT64, INTEGER, FLOAT64, FLOAT, NUMERIC, STRING |
+| FLOAT64 | FLOAT64, FLOAT, NUMERIC, STRING |
+| STRING | STRING |
+| BOOLEAN | BOOLEAN, BOOL, STRING |
+| TIMESTAMP | TIMESTAMP, DATETIME, STRING |
+| DATE | DATE, STRING |
+
+Note: INT64/INTEGER and FLOAT64/FLOAT are treated as aliases (same type in BigQuery).
+
+#### **User Flow:**
+
+```
+1. User reaches Step 4 "BigQuery Table Setup"
+2. User selects "Use existing table" radio button
+3. Dropdown loads with available tables (grouped by load type)
+4. User selects a table
+5. System displays table info (rows, load type, partitioning)
+6. System validates schema compatibility
+   - Green box: Compatible (with warnings if applicable)
+   - Red box: Incompatible (shows errors)
+7. If compatible, user proceeds to Step 5
+8. On job creation:
+   - System skips table creation
+   - Runs ALTER TABLE for new columns
+   - Creates DataSource pointing to existing table
+```
+
+#### **Testing Results:**
+
+- ✅ Table listing works with proper grouping
+- ✅ Schema compatibility validation catches type mismatches
+- ✅ INT64/INTEGER treated as compatible (fixed false positive)
+- ✅ Load type enforcement prevents mixing
+- ✅ ALTER TABLE adds new columns automatically
+- ✅ Existing table used as destination successfully
+
+**Result:** ✅ ETL Wizard now supports loading data into existing BigQuery tables with full schema compatibility validation
+
+---
+
 ## Deployment
 
 ### **Infrastructure**
@@ -2069,3 +2241,5 @@ gcloud run jobs update etl-runner \
 - ✅ **Firestore ETL - DatetimeWithNanoseconds conversion fix**
 - ✅ **Firestore ETL - Schema-aware BigQuery loader with null handling**
 - ✅ **ETL Job Edit & Pause/Resume functionality**
+- ✅ **Load into Existing BigQuery Tables (November 29, 2025)**
+- ✅ **ETL Job Delete - Now deletes Cloud Scheduler jobs**

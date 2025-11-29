@@ -234,3 +234,202 @@ class BigQueryTableManager:
                 'success': False,
                 'message': str(e)
             }
+
+    def list_tables(self):
+        """
+        List all tables in the dataset with metadata.
+
+        Returns:
+            {
+                'success': True/False,
+                'tables': [
+                    {
+                        'name': 'table_name',
+                        'full_id': 'project.dataset.table',
+                        'num_rows': 12345,
+                        'num_bytes': 67890,
+                        'created': '2025-01-01T00:00:00',
+                        'modified': '2025-01-15T00:00:00',
+                        'description': '...',
+                        'load_type': 'transactional' or 'catalog' or 'unknown',
+                        'partitioned': True/False,
+                        'partition_field': 'field_name' or None
+                    }
+                ],
+                'message': '...'
+            }
+        """
+        try:
+            dataset_ref = f"{self.project_id}.{self.dataset_id}"
+            tables = list(self.client.list_tables(dataset_ref))
+
+            result = []
+            for table_item in tables:
+                # Get full table details
+                table = self.client.get_table(table_item.reference)
+
+                # Determine load type from description or partitioning
+                load_type = 'unknown'
+                if table.description:
+                    if 'transactional' in table.description.lower():
+                        load_type = 'transactional'
+                    elif 'catalog' in table.description.lower():
+                        load_type = 'catalog'
+                elif table.time_partitioning:
+                    load_type = 'transactional'  # Partitioned tables are typically transactional
+
+                result.append({
+                    'name': table.table_id,
+                    'full_id': f"{self.project_id}.{self.dataset_id}.{table.table_id}",
+                    'num_rows': table.num_rows,
+                    'num_bytes': table.num_bytes,
+                    'created': table.created.isoformat() if table.created else None,
+                    'modified': table.modified.isoformat() if table.modified else None,
+                    'description': table.description,
+                    'load_type': load_type,
+                    'partitioned': table.time_partitioning is not None,
+                    'partition_field': table.time_partitioning.field if table.time_partitioning else None
+                })
+
+            logger.info(f"Listed {len(result)} tables in {self.dataset_id}")
+
+            return {
+                'success': True,
+                'tables': result,
+                'message': f'Found {len(result)} tables'
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to list tables: {str(e)}")
+            return {
+                'success': False,
+                'tables': [],
+                'message': f'Failed to list tables: {str(e)}'
+            }
+
+    def get_table_metadata(self, table_name):
+        """
+        Get detailed metadata for a specific table including schema and partitioning info.
+
+        Returns:
+            {
+                'success': True/False,
+                'table': {
+                    'name': 'table_name',
+                    'full_id': 'project.dataset.table',
+                    'num_rows': 12345,
+                    'description': '...',
+                    'load_type': 'transactional' or 'catalog' or 'unknown',
+                    'partitioned': True/False,
+                    'partition_field': 'field_name' or None,
+                    'schema': [...]
+                },
+                'message': '...'
+            }
+        """
+        table_ref = f"{self.project_id}.{self.dataset_id}.{table_name}"
+        try:
+            table = self.client.get_table(table_ref)
+
+            # Determine load type
+            load_type = 'unknown'
+            if table.description:
+                if 'transactional' in table.description.lower():
+                    load_type = 'transactional'
+                elif 'catalog' in table.description.lower():
+                    load_type = 'catalog'
+            elif table.time_partitioning:
+                load_type = 'transactional'
+
+            return {
+                'success': True,
+                'table': {
+                    'name': table.table_id,
+                    'full_id': f"{self.project_id}.{self.dataset_id}.{table.table_id}",
+                    'num_rows': table.num_rows,
+                    'description': table.description,
+                    'load_type': load_type,
+                    'partitioned': table.time_partitioning is not None,
+                    'partition_field': table.time_partitioning.field if table.time_partitioning else None,
+                    'schema': [
+                        {
+                            'name': field.name,
+                            'type': field.field_type,
+                            'mode': field.mode,
+                            'description': field.description
+                        }
+                        for field in table.schema
+                    ]
+                },
+                'message': 'Table metadata retrieved'
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to get table metadata: {str(e)}")
+            return {
+                'success': False,
+                'table': None,
+                'message': f'Failed to get table metadata: {str(e)}'
+            }
+
+    def add_columns_to_table(self, table_name, new_columns):
+        """
+        Add new columns to an existing table via ALTER TABLE.
+
+        Args:
+            table_name: Name of the table
+            new_columns: List of dicts with name, bigquery_type, bigquery_mode
+
+        Returns:
+            {'success': True/False, 'added_columns': [...], 'message': '...'}
+        """
+        table_ref = f"{self.project_id}.{self.dataset_id}.{table_name}"
+
+        try:
+            table = self.client.get_table(table_ref)
+            original_schema = list(table.schema)
+            existing_column_names = {field.name for field in original_schema}
+
+            # Filter to only truly new columns
+            columns_to_add = [
+                col for col in new_columns
+                if col['name'] not in existing_column_names
+            ]
+
+            if not columns_to_add:
+                return {
+                    'success': True,
+                    'added_columns': [],
+                    'message': 'No new columns to add'
+                }
+
+            # Create new schema fields
+            new_fields = []
+            for col in columns_to_add:
+                new_fields.append(bigquery.SchemaField(
+                    name=col['name'],
+                    field_type=col.get('bigquery_type', 'STRING'),
+                    mode=col.get('bigquery_mode', 'NULLABLE'),
+                    description=col.get('description', f"Added via ETL job")
+                ))
+
+            # Update table schema
+            table.schema = original_schema + new_fields
+            updated_table = self.client.update_table(table, ['schema'])
+
+            added_names = [col['name'] for col in columns_to_add]
+            logger.info(f"Added {len(added_names)} columns to {table_name}: {added_names}")
+
+            return {
+                'success': True,
+                'added_columns': added_names,
+                'message': f'Added {len(added_names)} columns: {", ".join(added_names)}'
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to add columns to {table_name}: {str(e)}")
+            return {
+                'success': False,
+                'added_columns': [],
+                'message': f'Failed to add columns: {str(e)}'
+            }

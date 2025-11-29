@@ -946,10 +946,32 @@ def api_etl_test_connection(request, source_id):
 def api_etl_delete_source(request, source_id):
     """
     API endpoint to delete a data source.
+    Also deletes the associated Cloud Scheduler job if one exists.
     """
     try:
         source = get_object_or_404(DataSource, id=source_id)
         source_name = source.name
+
+        # Delete Cloud Scheduler job if one exists
+        if source.cloud_scheduler_job_name:
+            from .utils.cloud_scheduler import CloudSchedulerManager
+            import os
+
+            project_id = os.environ.get('GCP_PROJECT_ID', 'b2b-recs')
+            region = os.environ.get('CLOUD_SCHEDULER_REGION', 'europe-central2')
+
+            scheduler_manager = CloudSchedulerManager(
+                project_id=project_id,
+                region=region
+            )
+
+            delete_result = scheduler_manager.delete_etl_schedule(source.id)
+            if not delete_result['success']:
+                # Log warning but don't block deletion - scheduler might already be gone
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"Failed to delete Cloud Scheduler job for source {source_id}: {delete_result['message']}")
+
         source.delete()
 
         return JsonResponse({
@@ -2582,7 +2604,9 @@ def api_etl_create_job(request, model_id):
         historical_start_date = data.get('historical_start_date')
         selected_columns = data.get('selected_columns', [])
 
-        # Extract Step 4 fields (BigQuery Table Setup) - NEW
+        # Extract Step 4 fields (BigQuery Table Setup)
+        use_existing_table = data.get('use_existing_table', False)
+        existing_table_name = data.get('existing_table_name', '').strip()
         bq_table_name = data.get('bigquery_table_name', '').strip()
         bq_schema_columns = data.get('bigquery_schema', [])
 
@@ -2629,11 +2653,21 @@ def api_etl_create_job(request, model_id):
                     'message': 'At least one table must be selected',
                 }, status=400)
 
-        if not bq_table_name:
-            return JsonResponse({
-                'status': 'error',
-                'message': 'BigQuery table name is required',
-            }, status=400)
+        # Validate BigQuery table configuration
+        if use_existing_table:
+            if not existing_table_name:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': 'Existing table name is required when using an existing table',
+                }, status=400)
+            # Use existing table name as the destination
+            bq_table_name = existing_table_name
+        else:
+            if not bq_table_name:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': 'BigQuery table name is required',
+                }, status=400)
 
         if not bq_schema_columns or len(bq_schema_columns) == 0:
             return JsonResponse({
@@ -2652,11 +2686,13 @@ def api_etl_create_job(request, model_id):
             }, status=400)
 
         # ============================================================
-        # CREATE BIGQUERY TABLE FIRST
+        # CREATE OR USE EXISTING BIGQUERY TABLE
         # ============================================================
         from .utils.bigquery_manager import BigQueryTableManager
         import os
         from django.conf import settings
+        import logging
+        logger = logging.getLogger(__name__)
 
         # Get project ID (assumes you store it in settings or environment)
         project_id = getattr(settings, 'GCP_PROJECT_ID', os.getenv('GCP_PROJECT_ID'))
@@ -2679,31 +2715,82 @@ def api_etl_create_job(request, model_id):
                 'message': f'Failed to create/verify dataset: {dataset_result["message"]}',
             }, status=500)
 
-        # Create description based on source type
-        if is_file_based:
-            table_description = f"ETL source: {file_pattern} files from {connection.name}"
+        if use_existing_table:
+            # ============================================================
+            # USE EXISTING TABLE MODE
+            # ============================================================
+            logger.info(f"Using existing BigQuery table: {existing_table_name}")
+
+            # Verify table exists
+            if not bq_manager.table_exists(existing_table_name):
+                return JsonResponse({
+                    'status': 'error',
+                    'message': f'Table "{existing_table_name}" does not exist in dataset raw_data',
+                }, status=400)
+
+            # Get table metadata for load type validation
+            table_metadata = bq_manager.get_table_metadata(existing_table_name)
+            if not table_metadata['success']:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': f'Failed to get table metadata: {table_metadata["message"]}',
+                }, status=500)
+
+            existing_load_type = table_metadata['table']['load_type']
+
+            # Validate load type compatibility (don't mix transactional and catalog)
+            if existing_load_type != 'unknown' and existing_load_type != load_type:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': f'Load type mismatch: existing table uses "{existing_load_type}" but you selected "{load_type}". Cannot mix load types.',
+                }, status=400)
+
+            # Add any new columns to existing table via ALTER TABLE
+            add_result = bq_manager.add_columns_to_table(existing_table_name, bq_schema_columns)
+            if not add_result['success']:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': f'Failed to add columns to existing table: {add_result["message"]}',
+                }, status=500)
+
+            if add_result['added_columns']:
+                logger.info(f"Added columns to existing table: {add_result['added_columns']}")
+
+            # Build table_result for consistency with new table path
+            table_result = {
+                'success': True,
+                'full_table_id': f"{project_id}.raw_data.{existing_table_name}",
+                'partitioned': table_metadata['table']['partitioned'],
+                'message': f'Using existing table with {len(add_result["added_columns"])} new columns added' if add_result['added_columns'] else 'Using existing table'
+            }
+
         else:
-            table_description = f"ETL source: {schema_name}.{tables[0]['source_table_name']} from {connection.name}"
+            # ============================================================
+            # CREATE NEW TABLE MODE (original behavior)
+            # ============================================================
+            # Create description based on source type
+            if is_file_based:
+                table_description = f"ETL source: {file_pattern} files from {connection.name} ({load_type} load)"
+            else:
+                table_description = f"ETL source: {schema_name}.{tables[0]['source_table_name']} from {connection.name} ({load_type} load)"
 
-        # Create BigQuery table
-        table_result = bq_manager.create_table_from_schema(
-            table_name=bq_table_name,
-            schema_columns=bq_schema_columns,
-            load_type=load_type,
-            timestamp_column=timestamp_column if load_type == 'transactional' else None,
-            description=table_description,
-            overwrite=False  # Don't overwrite existing tables
-        )
+            # Create BigQuery table
+            table_result = bq_manager.create_table_from_schema(
+                table_name=bq_table_name,
+                schema_columns=bq_schema_columns,
+                load_type=load_type,
+                timestamp_column=timestamp_column if load_type == 'transactional' else None,
+                description=table_description,
+                overwrite=False  # Don't overwrite existing tables
+            )
 
-        if not table_result['success']:
-            return JsonResponse({
-                'status': 'error',
-                'message': f'Failed to create BigQuery table: {table_result["message"]}',
-            }, status=500)
+            if not table_result['success']:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': f'Failed to create BigQuery table: {table_result["message"]}',
+                }, status=500)
 
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.info(f"Created BigQuery table: {table_result['full_table_id']}")
+            logger.info(f"Created BigQuery table: {table_result['full_table_id']}")
 
         # ============================================================
         # CREATE DATA SOURCE
@@ -2863,6 +2950,259 @@ def api_etl_create_job(request, model_id):
         return JsonResponse({
             'status': 'error',
             'message': f'Error creating ETL job: {str(e)}',
+        }, status=500)
+
+
+@login_required
+@require_http_methods(["GET"])
+def api_etl_list_bq_tables(request, dataset_id):
+    """
+    List all existing BigQuery tables in a dataset.
+    Used in ETL wizard Step 4 to allow selecting existing tables.
+
+    Returns:
+        {
+            'status': 'success',
+            'tables': [
+                {
+                    'name': 'table_name',
+                    'full_id': 'project.dataset.table',
+                    'num_rows': 12345,
+                    'load_type': 'transactional' or 'catalog' or 'unknown',
+                    'partitioned': True/False,
+                    'partition_field': 'field_name' or None
+                }
+            ]
+        }
+    """
+    from .utils.bigquery_manager import BigQueryTableManager
+    import os
+    from django.conf import settings
+
+    try:
+        project_id = getattr(settings, 'GCP_PROJECT_ID', os.getenv('GCP_PROJECT_ID'))
+        if not project_id:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'GCP_PROJECT_ID not configured',
+            }, status=500)
+
+        bq_manager = BigQueryTableManager(
+            project_id=project_id,
+            dataset_id=dataset_id
+        )
+
+        result = bq_manager.list_tables()
+
+        if result['success']:
+            return JsonResponse({
+                'status': 'success',
+                'tables': result['tables'],
+                'message': result['message']
+            })
+        else:
+            return JsonResponse({
+                'status': 'error',
+                'message': result['message'],
+            }, status=500)
+
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Error listing tables: {str(e)}',
+        }, status=500)
+
+
+@login_required
+@require_http_methods(["POST"])
+def api_etl_validate_schema_compatibility(request):
+    """
+    Validate schema compatibility between source columns and existing BigQuery table.
+    Used in ETL wizard Step 4 when user selects "Use existing table".
+
+    Payload:
+        {
+            'source_columns': [
+                {'name': 'col1', 'bigquery_type': 'STRING', ...},
+                ...
+            ],
+            'existing_table_name': 'my_table',
+            'load_type': 'transactional' or 'catalog'
+        }
+
+    Returns:
+        {
+            'status': 'success',
+            'compatible': True/False,
+            'load_type_compatible': True/False,
+            'columns_to_add': [...],  # Source columns not in destination (will be added via ALTER TABLE)
+            'columns_missing_in_source': [...],  # Dest columns not in source (will be NULL)
+            'type_mismatches': [...],  # Incompatible type conversions
+            'warnings': [...],
+            'errors': [...]
+        }
+    """
+    from .utils.bigquery_manager import BigQueryTableManager
+    import os
+    from django.conf import settings
+
+    try:
+        data = json.loads(request.body)
+
+        source_columns = data.get('source_columns', [])
+        existing_table_name = data.get('existing_table_name', '').strip()
+        requested_load_type = data.get('load_type', 'transactional')
+
+        if not existing_table_name:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'existing_table_name is required',
+            }, status=400)
+
+        if not source_columns:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'source_columns is required',
+            }, status=400)
+
+        project_id = getattr(settings, 'GCP_PROJECT_ID', os.getenv('GCP_PROJECT_ID'))
+        if not project_id:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'GCP_PROJECT_ID not configured',
+            }, status=500)
+
+        bq_manager = BigQueryTableManager(
+            project_id=project_id,
+            dataset_id='raw_data'
+        )
+
+        # Get existing table metadata
+        table_result = bq_manager.get_table_metadata(existing_table_name)
+
+        if not table_result['success']:
+            return JsonResponse({
+                'status': 'error',
+                'message': f'Table not found: {table_result["message"]}',
+            }, status=404)
+
+        existing_table = table_result['table']
+        existing_schema = {col['name']: col for col in existing_table['schema']}
+        source_schema = {col['name']: col for col in source_columns}
+
+        # Check load type compatibility
+        existing_load_type = existing_table['load_type']
+        load_type_compatible = True
+        load_type_warning = None
+
+        if existing_load_type != 'unknown' and existing_load_type != requested_load_type:
+            load_type_compatible = False
+            load_type_warning = f"Load type mismatch: table was created as '{existing_load_type}' but you selected '{requested_load_type}'. Mixing load types can cause data inconsistencies."
+
+        # Find columns to add (in source but not in destination)
+        columns_to_add = []
+        for col_name, col_info in source_schema.items():
+            if col_name not in existing_schema:
+                columns_to_add.append({
+                    'name': col_name,
+                    'type': col_info.get('bigquery_type', 'STRING'),
+                    'action': 'Will be added via ALTER TABLE'
+                })
+
+        # Find columns missing in source (in destination but not in source)
+        columns_missing_in_source = []
+        for col_name, col_info in existing_schema.items():
+            if col_name not in source_schema:
+                # Skip internal columns that ETL adds automatically
+                if col_name.startswith('_'):
+                    continue
+                columns_missing_in_source.append({
+                    'name': col_name,
+                    'type': col_info['type'],
+                    'action': 'Will be NULL for new rows'
+                })
+
+        # Check for type mismatches
+        type_mismatches = []
+        compatible_type_mappings = {
+            # Source type -> allowed destination types
+            # Note: INT64/INTEGER and FLOAT64/FLOAT are aliases in BigQuery
+            'STRING': ['STRING'],
+            'INT64': ['INT64', 'INTEGER', 'FLOAT64', 'FLOAT', 'NUMERIC', 'STRING'],
+            'INTEGER': ['INT64', 'INTEGER', 'FLOAT64', 'FLOAT', 'NUMERIC', 'STRING'],
+            'FLOAT64': ['FLOAT64', 'FLOAT', 'NUMERIC', 'STRING'],
+            'FLOAT': ['FLOAT64', 'FLOAT', 'NUMERIC', 'STRING'],
+            'NUMERIC': ['NUMERIC', 'FLOAT64', 'FLOAT', 'STRING'],
+            'BIGNUMERIC': ['BIGNUMERIC', 'NUMERIC', 'STRING'],
+            'BOOLEAN': ['BOOLEAN', 'BOOL', 'STRING'],
+            'BOOL': ['BOOLEAN', 'BOOL', 'STRING'],
+            'TIMESTAMP': ['TIMESTAMP', 'DATETIME', 'STRING'],
+            'DATETIME': ['DATETIME', 'TIMESTAMP', 'STRING'],
+            'DATE': ['DATE', 'STRING'],
+            'TIME': ['TIME', 'STRING'],
+            'BYTES': ['BYTES', 'STRING'],
+            'JSON': ['JSON', 'STRING'],
+        }
+
+        for col_name, source_col in source_schema.items():
+            if col_name in existing_schema:
+                source_type = source_col.get('bigquery_type', 'STRING').upper()
+                dest_type = existing_schema[col_name]['type'].upper()
+
+                # Check if types are compatible
+                allowed_types = compatible_type_mappings.get(source_type, [source_type])
+                if dest_type not in allowed_types and source_type != dest_type:
+                    type_mismatches.append({
+                        'column': col_name,
+                        'source_type': source_type,
+                        'dest_type': dest_type,
+                        'compatible': False,
+                        'message': f"Incompatible types: cannot load {source_type} into {dest_type}"
+                    })
+
+        # Build warnings and errors
+        warnings = []
+        errors = []
+
+        if load_type_warning:
+            errors.append(load_type_warning)
+
+        if columns_to_add:
+            warnings.append(f"{len(columns_to_add)} column(s) will be added to the table: {', '.join([c['name'] for c in columns_to_add])}")
+
+        if columns_missing_in_source:
+            warnings.append(f"{len(columns_missing_in_source)} column(s) in destination table will be NULL: {', '.join([c['name'] for c in columns_missing_in_source])}")
+
+        for mismatch in type_mismatches:
+            errors.append(mismatch['message'])
+
+        # Overall compatibility
+        compatible = len(errors) == 0
+
+        return JsonResponse({
+            'status': 'success',
+            'compatible': compatible,
+            'load_type_compatible': load_type_compatible,
+            'existing_table': {
+                'name': existing_table['name'],
+                'num_rows': existing_table['num_rows'],
+                'load_type': existing_load_type,
+                'partitioned': existing_table['partitioned'],
+                'partition_field': existing_table['partition_field']
+            },
+            'columns_to_add': columns_to_add,
+            'columns_missing_in_source': columns_missing_in_source,
+            'type_mismatches': type_mismatches,
+            'warnings': warnings,
+            'errors': errors
+        })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Error validating schema: {str(e)}',
         }, status=500)
 
 

@@ -758,30 +758,110 @@
                 <h4 class="text-base font-bold text-gray-900 mb-3">BigQuery Table Setup</h4>
 
                 <p class="text-sm text-gray-600 mb-4">
-                    Review and customize the BigQuery table schema before creation.
+                    Choose whether to create a new table or load data into an existing BigQuery table.
                 </p>
 
-                <!-- Destination Table Name -->
-                <div class="mb-4">
-                    <label class="block text-sm font-semibold text-gray-700 mb-1.5">
-                        BigQuery Table Name*
+                <!-- Destination Mode Selector -->
+                <div class="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">
+                        Destination Table
                     </label>
-                    <div class="flex gap-2 items-center">
-                        <span class="text-sm text-gray-500 bg-gray-50 px-3 py-2 rounded-lg border border-gray-200">
-                            raw_data.
-                        </span>
-                        <input
-                            type="text"
-                            id="bqTableName"
-                            class="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                            placeholder="bq_transactions"
-                        >
+                    <div class="flex gap-4">
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="radio" name="destMode" value="new" checked onchange="toggleDestinationMode()">
+                            <span class="text-sm text-gray-700">Create new table</span>
+                        </label>
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="radio" name="destMode" value="existing" onchange="toggleDestinationMode()">
+                            <span class="text-sm text-gray-700">Use existing table</span>
+                        </label>
                     </div>
-                    <p class="text-xs text-gray-500 mt-1">
-                        <i class="fas fa-info-circle mr-1"></i>
-                        Default: <code class="bg-gray-100 px-1 rounded">bq_<span id="sourceTableNamePreview"></span></code>
-                        You can customize this name if needed.
-                    </p>
+                </div>
+
+                <!-- NEW TABLE SECTION -->
+                <div id="newTableSection">
+                    <!-- Destination Table Name -->
+                    <div class="mb-4">
+                        <label class="block text-sm font-semibold text-gray-700 mb-1.5">
+                            BigQuery Table Name*
+                        </label>
+                        <div class="flex gap-2 items-center">
+                            <span class="text-sm text-gray-500 bg-gray-50 px-3 py-2 rounded-lg border border-gray-200">
+                                raw_data.
+                            </span>
+                            <input
+                                type="text"
+                                id="bqTableName"
+                                class="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                placeholder="bq_transactions"
+                            >
+                        </div>
+                        <p class="text-xs text-gray-500 mt-1">
+                            <i class="fas fa-info-circle mr-1"></i>
+                            Default: <code class="bg-gray-100 px-1 rounded">bq_<span id="sourceTableNamePreview"></span></code>
+                            You can customize this name if needed.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- EXISTING TABLE SECTION -->
+                <div id="existingTableSection" class="hidden">
+                    <!-- Existing Table Dropdown -->
+                    <div class="mb-4">
+                        <label class="block text-sm font-semibold text-gray-700 mb-1.5">
+                            Select Existing Table*
+                        </label>
+                        <div class="flex gap-2 items-center">
+                            <span class="text-sm text-gray-500 bg-gray-50 px-3 py-2 rounded-lg border border-gray-200">
+                                raw_data.
+                            </span>
+                            <select
+                                id="existingTableDropdown"
+                                class="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                onchange="onExistingTableSelected()">
+                                <option value="">-- Loading tables... --</option>
+                            </select>
+                            <button
+                                onclick="loadExistingTables()"
+                                class="px-3 py-2 text-sm text-blue-600 hover:text-blue-700"
+                                title="Refresh table list">
+                                <i class="fas fa-sync-alt"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Existing Table Info -->
+                    <div id="existingTableInfo" class="hidden mb-4">
+                        <div class="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                            <h6 class="font-semibold text-sm text-blue-900 mb-2">
+                                <i class="fas fa-info-circle mr-1"></i>
+                                Selected Table Info
+                            </h6>
+                            <div class="grid grid-cols-2 gap-2 text-xs">
+                                <div>
+                                    <span class="text-blue-700">Rows:</span>
+                                    <span class="font-semibold text-blue-900" id="existingTableRows">-</span>
+                                </div>
+                                <div>
+                                    <span class="text-blue-700">Load Type:</span>
+                                    <span class="font-semibold text-blue-900" id="existingTableLoadType">-</span>
+                                </div>
+                                <div>
+                                    <span class="text-blue-700">Partitioned:</span>
+                                    <span class="font-semibold text-blue-900" id="existingTablePartitioned">-</span>
+                                </div>
+                                <div>
+                                    <span class="text-blue-700">Partition Field:</span>
+                                    <span class="font-semibold text-blue-900" id="existingTablePartitionField">-</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Schema Compatibility Report -->
+                    <div id="schemaCompatibilityReport" class="hidden mb-4">
+                        <!-- Will be populated by validateSchemaCompatibility() -->
+                    </div>
                 </div>
 
                 <!-- Schema Editor -->
@@ -4437,31 +4517,64 @@ function nextStep() {
 
     // STEP 4 -> STEP 5: Validate BigQuery table configuration
     if (currentWizardStep === 4) {
-        const bqTableName = document.getElementById('bqTableName').value.trim();
+        const destMode = document.querySelector('input[name="destMode"]:checked').value;
 
-        if (!bqTableName) {
-            showNotification('Please provide a BigQuery table name.', 'warning', 'Table Name Required');
-            return;
+        if (destMode === 'existing') {
+            // EXISTING TABLE MODE
+            const existingTableName = document.getElementById('existingTableDropdown').value;
+
+            if (!existingTableName) {
+                showNotification('Please select an existing BigQuery table.', 'warning', 'Table Selection Required');
+                return;
+            }
+
+            // Validate schema compatibility was checked and passed
+            if (!window.schemaCompatibilityResult) {
+                showNotification('Please wait for schema compatibility validation to complete.', 'warning', 'Validation Required');
+                return;
+            }
+
+            if (!window.schemaCompatibilityResult.compatible) {
+                showNotification('Schema is not compatible with the selected table. Please choose a different table or switch to "Create new table" mode.', 'error', 'Incompatible Schema');
+                return;
+            }
+
+            // Sync schema from UI
+            syncBigQuerySchemaFromUI();
+
+            // Store destination table name and mode
+            window.bqDestTableName = existingTableName;
+            window.useExistingTable = true;
+
+        } else {
+            // NEW TABLE MODE (original behavior)
+            const bqTableName = document.getElementById('bqTableName').value.trim();
+
+            if (!bqTableName) {
+                showNotification('Please provide a BigQuery table name.', 'warning', 'Table Name Required');
+                return;
+            }
+
+            // Validate table name format (alphanumeric + underscores)
+            const tableNameRegex = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+            if (!tableNameRegex.test(bqTableName)) {
+                showNotification('Table name must start with a letter or underscore, and contain only letters, numbers, and underscores.', 'error', 'Invalid Table Name');
+                return;
+            }
+
+            // Sync schema from UI to window.bqSchemaColumns (in case user modified dropdowns)
+            syncBigQuerySchemaFromUI();
+
+            // Validate schema has columns
+            if (!window.bqSchemaColumns || window.bqSchemaColumns.length === 0) {
+                alert('Schema must have at least one column');
+                return;
+            }
+
+            // Store BigQuery table name and mode
+            window.bqDestTableName = bqTableName;
+            window.useExistingTable = false;
         }
-
-        // Validate table name format (alphanumeric + underscores)
-        const tableNameRegex = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
-        if (!tableNameRegex.test(bqTableName)) {
-            showNotification('Table name must start with a letter or underscore, and contain only letters, numbers, and underscores.', 'error', 'Invalid Table Name');
-            return;
-        }
-
-        // Sync schema from UI to window.bqSchemaColumns (in case user modified dropdowns)
-        syncBigQuerySchemaFromUI();
-
-        // Validate schema has columns
-        if (!window.bqSchemaColumns || window.bqSchemaColumns.length === 0) {
-            alert('Schema must have at least one column');
-            return;
-        }
-
-        // Store BigQuery table name
-        window.bqDestTableName = bqTableName;
 
         // Proceed to Step 5 (Schedule & Review)
         currentWizardStep = 5;
@@ -4758,8 +4871,10 @@ async function createETLJob() {
         }
     }
 
-    // Collect Step 4 data: BigQuery Table Setup (NEW)
+    // Collect Step 4 data: BigQuery Table Setup
+    const useExistingTable = window.useExistingTable || false;
     const bqTableName = window.bqDestTableName || document.getElementById('bqTableName').value.trim();
+    const existingTableName = useExistingTable ? bqTableName : '';
     const bqSchemaColumns = window.bqSchemaColumns || [];
 
     // Collect Step 5 data: Schedule (RENAMED from Step 4)
@@ -4798,7 +4913,9 @@ async function createETLJob() {
         schedule_config: scheduleConfig,  // Send full schedule configuration
 
         // BigQuery table configuration
-        bigquery_table_name: bqTableName,
+        use_existing_table: useExistingTable,
+        existing_table_name: existingTableName,
+        bigquery_table_name: useExistingTable ? '' : bqTableName,  // Only set for new tables
         bigquery_schema: bqSchemaColumns,  // Full schema with types
 
         // Source type flag
@@ -7251,6 +7368,294 @@ function updateSchemaWarnings() {
     } else {
         warningsContainer.classList.add('hidden');
     }
+}
+
+// ============================================================================
+// STEP 4: Existing Table Mode Functions
+// ============================================================================
+
+// Store existing tables data
+window.existingBqTables = [];
+window.selectedExistingTable = null;
+window.schemaCompatibilityResult = null;
+
+function toggleDestinationMode() {
+    const destMode = document.querySelector('input[name="destMode"]:checked').value;
+    const newTableSection = document.getElementById('newTableSection');
+    const existingTableSection = document.getElementById('existingTableSection');
+
+    if (destMode === 'new') {
+        newTableSection.classList.remove('hidden');
+        existingTableSection.classList.add('hidden');
+        window.selectedExistingTable = null;
+        window.schemaCompatibilityResult = null;
+    } else {
+        newTableSection.classList.add('hidden');
+        existingTableSection.classList.remove('hidden');
+        // Load existing tables when switching to existing mode
+        loadExistingTables();
+    }
+}
+
+async function loadExistingTables() {
+    const dropdown = document.getElementById('existingTableDropdown');
+    dropdown.innerHTML = '<option value="">-- Loading tables... --</option>';
+    dropdown.disabled = true;
+
+    // Hide info and compatibility sections
+    document.getElementById('existingTableInfo').classList.add('hidden');
+    document.getElementById('schemaCompatibilityReport').classList.add('hidden');
+
+    try {
+        const response = await fetch('/api/etl/datasets/raw_data/tables/');
+        const data = await response.json();
+
+        if (data.status === 'success') {
+            window.existingBqTables = data.tables;
+
+            // Build dropdown options
+            let optionsHTML = '<option value="">-- Select a table --</option>';
+
+            if (data.tables.length === 0) {
+                optionsHTML = '<option value="">-- No tables found --</option>';
+            } else {
+                // Group by load type for better UX
+                const transactional = data.tables.filter(t => t.load_type === 'transactional');
+                const catalog = data.tables.filter(t => t.load_type === 'catalog');
+                const unknown = data.tables.filter(t => t.load_type === 'unknown');
+
+                if (transactional.length > 0) {
+                    optionsHTML += '<optgroup label="Transactional Tables">';
+                    transactional.forEach(t => {
+                        const rowCount = t.num_rows ? ` (${t.num_rows.toLocaleString()} rows)` : '';
+                        optionsHTML += `<option value="${t.name}">${t.name}${rowCount}</option>`;
+                    });
+                    optionsHTML += '</optgroup>';
+                }
+
+                if (catalog.length > 0) {
+                    optionsHTML += '<optgroup label="Catalog Tables">';
+                    catalog.forEach(t => {
+                        const rowCount = t.num_rows ? ` (${t.num_rows.toLocaleString()} rows)` : '';
+                        optionsHTML += `<option value="${t.name}">${t.name}${rowCount}</option>`;
+                    });
+                    optionsHTML += '</optgroup>';
+                }
+
+                if (unknown.length > 0) {
+                    optionsHTML += '<optgroup label="Other Tables">';
+                    unknown.forEach(t => {
+                        const rowCount = t.num_rows ? ` (${t.num_rows.toLocaleString()} rows)` : '';
+                        optionsHTML += `<option value="${t.name}">${t.name}${rowCount}</option>`;
+                    });
+                    optionsHTML += '</optgroup>';
+                }
+            }
+
+            dropdown.innerHTML = optionsHTML;
+        } else {
+            dropdown.innerHTML = '<option value="">-- Error loading tables --</option>';
+            showNotification(data.message || 'Failed to load tables', 'error');
+        }
+    } catch (error) {
+        console.error('Error loading existing tables:', error);
+        dropdown.innerHTML = '<option value="">-- Error loading tables --</option>';
+        showNotification('Failed to load existing tables: ' + error.message, 'error');
+    } finally {
+        dropdown.disabled = false;
+    }
+}
+
+function onExistingTableSelected() {
+    const dropdown = document.getElementById('existingTableDropdown');
+    const tableName = dropdown.value;
+
+    if (!tableName) {
+        document.getElementById('existingTableInfo').classList.add('hidden');
+        document.getElementById('schemaCompatibilityReport').classList.add('hidden');
+        window.selectedExistingTable = null;
+        window.schemaCompatibilityResult = null;
+        return;
+    }
+
+    // Find table in cached data
+    const table = window.existingBqTables.find(t => t.name === tableName);
+    window.selectedExistingTable = table;
+
+    if (table) {
+        // Show table info
+        document.getElementById('existingTableRows').textContent =
+            table.num_rows ? table.num_rows.toLocaleString() : '-';
+        document.getElementById('existingTableLoadType').textContent =
+            table.load_type || 'unknown';
+        document.getElementById('existingTablePartitioned').textContent =
+            table.partitioned ? 'Yes' : 'No';
+        document.getElementById('existingTablePartitionField').textContent =
+            table.partition_field || '-';
+
+        document.getElementById('existingTableInfo').classList.remove('hidden');
+
+        // Validate schema compatibility
+        validateSchemaCompatibility(tableName);
+    }
+}
+
+async function validateSchemaCompatibility(tableName) {
+    const reportContainer = document.getElementById('schemaCompatibilityReport');
+    reportContainer.innerHTML = `
+        <div class="bg-gray-50 border border-gray-200 rounded-lg p-3">
+            <div class="flex items-center gap-2 text-sm text-gray-600">
+                <i class="fas fa-spinner fa-spin"></i>
+                Validating schema compatibility...
+            </div>
+        </div>
+    `;
+    reportContainer.classList.remove('hidden');
+
+    try {
+        // Get current load type
+        const loadType = document.querySelector('input[name="loadType"]:checked').value;
+
+        // Get source columns from bqSchemaColumns
+        const sourceColumns = window.bqSchemaColumns.map(col => ({
+            name: col.name,
+            bigquery_type: col.bigquery_type,
+            bigquery_mode: col.bigquery_mode || 'NULLABLE'
+        }));
+
+        const response = await fetch('/api/etl/validate-schema-compatibility/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrftoken
+            },
+            body: JSON.stringify({
+                source_columns: sourceColumns,
+                existing_table_name: tableName,
+                load_type: loadType
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.status === 'success') {
+            window.schemaCompatibilityResult = data;
+            renderCompatibilityReport(data);
+        } else {
+            reportContainer.innerHTML = `
+                <div class="bg-red-50 border border-red-200 rounded-lg p-3">
+                    <h6 class="font-semibold text-sm text-red-900 mb-1">
+                        <i class="fas fa-times-circle mr-1"></i>
+                        Validation Failed
+                    </h6>
+                    <p class="text-xs text-red-700">${data.message}</p>
+                </div>
+            `;
+            window.schemaCompatibilityResult = null;
+        }
+    } catch (error) {
+        console.error('Error validating schema:', error);
+        reportContainer.innerHTML = `
+            <div class="bg-red-50 border border-red-200 rounded-lg p-3">
+                <h6 class="font-semibold text-sm text-red-900 mb-1">
+                    <i class="fas fa-times-circle mr-1"></i>
+                    Validation Error
+                </h6>
+                <p class="text-xs text-red-700">${error.message}</p>
+            </div>
+        `;
+        window.schemaCompatibilityResult = null;
+    }
+}
+
+function renderCompatibilityReport(result) {
+    const reportContainer = document.getElementById('schemaCompatibilityReport');
+
+    let html = '';
+
+    if (result.compatible) {
+        // Compatible - green box
+        html = `
+            <div class="bg-green-50 border border-green-200 rounded-lg p-3">
+                <h6 class="font-semibold text-sm text-green-900 mb-2">
+                    <i class="fas fa-check-circle mr-1"></i>
+                    Schema Compatible
+                </h6>
+        `;
+
+        // Show warnings if any
+        if (result.warnings.length > 0) {
+            html += `
+                <div class="mb-2">
+                    <p class="text-xs font-semibold text-yellow-700 mb-1">Warnings:</p>
+                    <ul class="text-xs text-yellow-700 list-disc pl-4 space-y-0.5">
+                        ${result.warnings.map(w => `<li>${w}</li>`).join('')}
+                    </ul>
+                </div>
+            `;
+        }
+
+        // Show columns to add
+        if (result.columns_to_add.length > 0) {
+            html += `
+                <div class="mb-2">
+                    <p class="text-xs font-semibold text-blue-700 mb-1">
+                        <i class="fas fa-plus-circle mr-1"></i>
+                        Columns to be added (via ALTER TABLE):
+                    </p>
+                    <div class="flex flex-wrap gap-1">
+                        ${result.columns_to_add.map(c => `
+                            <span class="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded">
+                                ${c.name} (${c.type})
+                            </span>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        // Show columns missing in source
+        if (result.columns_missing_in_source.length > 0) {
+            html += `
+                <div>
+                    <p class="text-xs font-semibold text-gray-600 mb-1">
+                        <i class="fas fa-minus-circle mr-1"></i>
+                        Columns not in source (will be NULL):
+                    </p>
+                    <div class="flex flex-wrap gap-1">
+                        ${result.columns_missing_in_source.map(c => `
+                            <span class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
+                                ${c.name}
+                            </span>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        html += '</div>';
+    } else {
+        // Not compatible - red box
+        html = `
+            <div class="bg-red-50 border border-red-200 rounded-lg p-3">
+                <h6 class="font-semibold text-sm text-red-900 mb-2">
+                    <i class="fas fa-times-circle mr-1"></i>
+                    Schema Not Compatible
+                </h6>
+                <p class="text-xs text-red-700 mb-2">
+                    The selected table cannot be used with this source configuration.
+                </p>
+                <div>
+                    <p class="text-xs font-semibold text-red-700 mb-1">Errors:</p>
+                    <ul class="text-xs text-red-700 list-disc pl-4 space-y-0.5">
+                        ${result.errors.map(e => `<li>${e}</li>`).join('')}
+                    </ul>
+                </div>
+            </div>
+        `;
+    }
+
+    reportContainer.innerHTML = html;
 }
 
 // Update table name preview on input

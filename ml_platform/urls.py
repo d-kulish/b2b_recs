@@ -77,4 +77,8 @@ urlpatterns = [
 
     # Table Preview (ETL Wizard Step 3)
     path('api/connections/<int:connection_id>/fetch-table-preview/', views.api_connection_fetch_table_preview, name='api_connection_fetch_table_preview'),
+
+    # BigQuery Table Management (ETL Wizard Step 4 - Use Existing Table)
+    path('api/etl/datasets/<str:dataset_id>/tables/', views.api_etl_list_bq_tables, name='api_etl_list_bq_tables'),
+    path('api/etl/validate-schema-compatibility/', views.api_etl_validate_schema_compatibility, name='api_etl_validate_schema_compatibility'),
 ]

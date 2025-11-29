@@ -1950,6 +1950,153 @@ Note: INT64/INTEGER and FLOAT64/FLOAT are treated as aliases (same type in BigQu
 
 ---
 
+### **Issue 15: Enable Immediately After Creation Not Working (November 29, 2025)**
+
+**Problem:** The "Enable immediately after creation" toggle on Step 5 of the ETL Wizard did not trigger the first ETL run after job creation. Jobs were created but waited for their scheduled run time.
+
+**Context:**
+- Toggle checkbox existed in UI (Step 5: Schedule & Review)
+- Checkbox was checked by default
+- Users expected the job to run immediately after creation
+
+#### **Root Cause:**
+
+**Frontend-Backend Disconnect:**
+
+1. **Frontend (`model_etl.html`):** The `enableImmediately` checkbox existed but `createETLJob()` function never read its value or included it in the API payload.
+
+2. **Backend (`views.py`):** The `api_etl_create_job()` function had no code to:
+   - Read an `enable_immediately` flag from the request
+   - Trigger an immediate run after job creation
+
+**Code flow (before fix):**
+```
+User checks "Enable immediately" → createETLJob() ignores checkbox
+→ API creates job → Returns success → No run triggered
+```
+
+#### **Solution Implemented:**
+
+**Frontend-Only Fix** (simpler, uses existing infrastructure):
+
+After successful job creation, if `enableImmediately` is checked, the frontend calls the existing trigger API:
+
+```javascript
+// In createETLJob() success handler:
+const enableImmediately = document.getElementById('enableImmediately').checked;
+
+if (enableImmediately && data.job_id) {
+    const runResponse = await fetch(`/api/etl/sources/${data.job_id}/trigger/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrftoken
+        }
+    });
+    // Handle response...
+}
+```
+
+**Additional Enhancement:** Replaced browser `alert()` dialogs with modern notification modal for better UX:
+- Success notifications show green checkmark
+- Warning notifications show yellow warning icon
+- Proper multi-line message support
+- Callback to close wizard and reload page after user clicks OK
+
+#### **Files Modified:**
+- `templates/ml_platform/model_etl.html`:
+  - Updated `createETLJob()` to read checkbox and trigger immediate run
+  - Updated notification modal to support multi-line messages (`whitespace-pre-line`)
+  - Added `onClose` callback support to `showNotification()` function
+  - Replaced all `alert()` calls with `showNotification()` for modern UI
+
+#### **Testing Results:**
+- ✅ Checkbox value correctly read after job creation
+- ✅ Trigger API called when checkbox is checked
+- ✅ First run starts immediately after job creation
+- ✅ Modern notification modal displays success/warning messages
+- ✅ Page reloads after user acknowledges notification
+
+**Result:** ✅ "Enable immediately after creation" now works - jobs start their first run right after creation
+
+---
+
+### **Issue 16: Dataflow Build Tools Missing (November 29, 2025)**
+
+**Problem:** Dataflow pipeline failed for large datasets (3M+ rows) with `ModuleNotFoundError: No module named 'setuptools'` when attempting to package custom code for workers.
+
+**Context:**
+- ETL job for 3M+ row CSV file triggered Dataflow mode (threshold: 1M rows)
+- Dataflow needs to package custom Python code (`setup.py`) for worker VMs
+- Build process failed immediately
+
+#### **Error Messages:**
+
+```
+No module named build
+ModuleNotFoundError: No module named 'setuptools'
+
+Command '['/usr/local/bin/python', '-m', 'build', '--no-isolation', '--sdist', ...]'
+returned non-zero exit status 1.
+
+Command '['/usr/local/bin/python', 'setup.py', 'sdist', '--dist-dir', ...]'
+returned non-zero exit status 1.
+```
+
+#### **Root Cause:**
+
+Apache Beam's Dataflow runner uses `setup.py` to package custom code for workers. The build process requires:
+
+1. **`build`** - PEP 517 build frontend (`python -m build`)
+2. **`setuptools`** - Python packaging library (fallback: `python setup.py sdist`)
+
+**Why missing in Python 3.12:**
+- `setuptools` is no longer bundled with Python 3.12 standard library
+- Slim Docker base images don't include build tools
+- These packages weren't in `requirements.txt`
+
+**Build attempt flow:**
+```
+Beam tries: python -m build → "No module named build"
+Beam fallback: python setup.py sdist → "No module named 'setuptools'"
+→ Both fail → Dataflow job cannot start
+```
+
+#### **Solution:**
+
+Added build tools to `etl_runner/requirements.txt`:
+
+```
+# Build tools (required for Dataflow custom code packaging)
+setuptools>=65.0.0
+build>=1.0.0
+```
+
+#### **Files Modified:**
+- `etl_runner/requirements.txt` - Added `setuptools` and `build` packages
+
+#### **Deployment:**
+
+```bash
+# Rebuild Docker image
+cd etl_runner
+gcloud builds submit --tag gcr.io/b2b-recs/etl-runner:latest
+
+# Update Cloud Run Job
+gcloud run jobs update etl-runner \
+  --region=europe-central2 \
+  --image=gcr.io/b2b-recs/etl-runner:latest
+```
+
+#### **Testing Results:**
+- ✅ Docker image builds with setuptools and build packages
+- ✅ Dataflow can now package custom code via setup.py
+- ✅ Large CSV files (3M+ rows) process successfully via Dataflow
+
+**Result:** ✅ Dataflow pipeline now works for large-scale ETL jobs requiring custom code packaging
+
+---
+
 ## Deployment
 
 ### **Infrastructure**
@@ -2243,3 +2390,6 @@ gcloud run jobs update etl-runner \
 - ✅ **ETL Job Edit & Pause/Resume functionality**
 - ✅ **Load into Existing BigQuery Tables (November 29, 2025)**
 - ✅ **ETL Job Delete - Now deletes Cloud Scheduler jobs**
+- ✅ **Enable Immediately After Creation - First run triggers automatically**
+- ✅ **Modern Notification Modal - Replaced browser alerts with styled modals**
+- ✅ **Dataflow Build Tools - Added setuptools/build for custom code packaging**

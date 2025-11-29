@@ -306,7 +306,7 @@
 
         <!-- Body -->
         <div class="px-5 py-4">
-            <p id="notificationMessage" class="text-sm text-gray-700"></p>
+            <div id="notificationMessage" class="text-sm text-gray-700 whitespace-pre-line"></div>
         </div>
 
         <!-- Footer -->
@@ -4973,18 +4973,76 @@ async function createETLJob() {
         const data = await response.json();
 
         if (data.status === 'success') {
-            alert(`ETL job "${data.job_name}" created successfully!\n\nBigQuery table: ${data.bigquery_table}\nSchedule: ${data.schedule_created ? 'Created' : 'Manual only'}`);
-            hideAddSourceModal();
-            location.reload(); // Reload to show new job
+            // Build schedule status text
+            const scheduleStatus = data.schedule_created ? 'Created' : 'Manual only';
+
+            // Check if immediate run was requested
+            const enableImmediately = document.getElementById('enableImmediately').checked;
+
+            // Callback to close wizard and reload page
+            const onNotificationClose = () => {
+                hideAddSourceModal();
+                location.reload();
+            };
+
+            if (enableImmediately && data.job_id) {
+                // Update button to show triggering status
+                if (createButton) {
+                    createButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Starting first run...';
+                }
+
+                // Trigger immediate run
+                try {
+                    const runResponse = await fetch(`/api/etl/sources/${data.job_id}/trigger/`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': csrftoken
+                        }
+                    });
+                    const runData = await runResponse.json();
+
+                    if (runData.status === 'success') {
+                        showNotification(
+                            `BigQuery table: ${data.bigquery_table}\nSchedule: ${scheduleStatus}\nFirst run: Started`,
+                            'success',
+                            `ETL Job "${data.job_name}" Created`,
+                            onNotificationClose
+                        );
+                    } else {
+                        showNotification(
+                            `BigQuery table: ${data.bigquery_table}\nSchedule: ${scheduleStatus}\n\nFailed to start first run: ${runData.message}\n\nYou can manually run it using the "Run Now" button.`,
+                            'warning',
+                            `ETL Job "${data.job_name}" Created`,
+                            onNotificationClose
+                        );
+                    }
+                } catch (runError) {
+                    showNotification(
+                        `BigQuery table: ${data.bigquery_table}\nSchedule: ${scheduleStatus}\n\nFailed to start first run: ${runError.message}\n\nYou can manually run it using the "Run Now" button.`,
+                        'warning',
+                        `ETL Job "${data.job_name}" Created`,
+                        onNotificationClose
+                    );
+                }
+            } else {
+                // No immediate run requested
+                showNotification(
+                    `BigQuery table: ${data.bigquery_table}\nSchedule: ${scheduleStatus}`,
+                    'success',
+                    `ETL Job "${data.job_name}" Created`,
+                    onNotificationClose
+                );
+            }
         } else {
-            alert(`Error: ${data.message}`);
+            showNotification(data.message, 'error', 'Error Creating ETL Job');
             if (createButton) {
                 createButton.disabled = false;
                 createButton.innerHTML = '<i class="fas fa-check"></i><span>Create ETL Job</span>';
             }
         }
     } catch (error) {
-        alert(`Error creating ETL job: ${error.message}`);
+        showNotification(error.message, 'error', 'Error Creating ETL Job');
         if (createButton) {
             createButton.disabled = false;
             createButton.innerHTML = '<i class="fas fa-check"></i><span>Create ETL Job</span>';
@@ -7669,11 +7727,17 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // Modern Notification Modal Functions
-function showNotification(message, type = 'info', title = null) {
+// Store callback for notification close
+let notificationCloseCallback = null;
+
+function showNotification(message, type = 'info', title = null, onClose = null) {
     const modal = document.getElementById('notificationModal');
     const icon = document.getElementById('notificationIcon');
     const titleEl = document.getElementById('notificationTitle');
     const messageEl = document.getElementById('notificationMessage');
+
+    // Store callback
+    notificationCloseCallback = onClose;
 
     // Set message
     messageEl.textContent = message;
@@ -7700,6 +7764,12 @@ function showNotification(message, type = 'info', title = null) {
 function closeNotification() {
     const modal = document.getElementById('notificationModal');
     modal.classList.add('hidden');
+
+    // Execute callback if provided
+    if (notificationCloseCallback) {
+        notificationCloseCallback();
+        notificationCloseCallback = null;
+    }
 }
 
 // Close on ESC key

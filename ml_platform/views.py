@@ -140,6 +140,130 @@ def model_dashboard(request, model_id):
     return render(request, 'ml_platform/model_dashboard.html', context)
 
 
+def sync_running_etl_runs_with_cloud_run(running_etl_runs):
+    """
+    Sync ETL run statuses with Cloud Run execution statuses.
+
+    For any ETLRun records that show 'running' or 'pending', query Cloud Run
+    to get the actual execution status and update the database accordingly.
+
+    Strategy: List recent executions from Cloud Run and match them to our ETL runs
+    by checking the --etl_run_id argument passed to each execution.
+
+    Args:
+        running_etl_runs: QuerySet of ETLRun objects with status 'running' or 'pending'
+
+    Returns:
+        int: Number of runs that were updated
+    """
+    from django.conf import settings
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    if not running_etl_runs.exists():
+        return 0
+
+    # Get GCP project ID
+    project_id = getattr(settings, 'GCP_PROJECT_ID', os.getenv('GCP_PROJECT_ID'))
+    if not project_id:
+        logger.warning("GCP_PROJECT_ID not configured, cannot sync Cloud Run status")
+        return 0
+
+    try:
+        from google.cloud import run_v2
+        client = run_v2.ExecutionsClient()
+    except Exception as e:
+        logger.warning(f"Failed to initialize Cloud Run client: {e}")
+        return 0
+
+    region = 'europe-central2'
+    job_name = f"projects/{project_id}/locations/{region}/jobs/etl-runner"
+
+    # Build a map of ETL run IDs we're looking for
+    etl_run_map = {str(run.id): run for run in running_etl_runs}
+
+    if not etl_run_map:
+        return 0
+
+    updated_count = 0
+
+    try:
+        # List recent executions from Cloud Run
+        # This gets us the actual execution objects with their statuses
+        list_request = run_v2.ListExecutionsRequest(parent=job_name)
+        executions = client.list_executions(request=list_request)
+
+        for execution in executions:
+            # Extract etl_run_id from execution's container overrides/args
+            etl_run_id = None
+
+            # Check the template's container args for --etl_run_id
+            if execution.template and execution.template.containers:
+                for container in execution.template.containers:
+                    if container.args:
+                        args = list(container.args)
+                        for i, arg in enumerate(args):
+                            if arg == '--etl_run_id' and i + 1 < len(args):
+                                etl_run_id = args[i + 1]
+                                break
+                    if etl_run_id:
+                        break
+
+            # Skip if we couldn't find etl_run_id or it's not one we're looking for
+            if not etl_run_id or etl_run_id not in etl_run_map:
+                continue
+
+            etl_run = etl_run_map[etl_run_id]
+
+            # Determine Cloud Run execution status
+            cloud_run_succeeded = execution.succeeded_count > 0 if execution.succeeded_count else False
+            cloud_run_failed = execution.failed_count > 0 if execution.failed_count else False
+            cloud_run_cancelled = execution.cancelled_count > 0 if execution.cancelled_count else False
+
+            new_status = None
+            error_message = None
+
+            if cloud_run_succeeded:
+                new_status = 'completed'
+            elif cloud_run_cancelled:
+                new_status = 'cancelled'
+                error_message = 'Job was cancelled'
+            elif cloud_run_failed:
+                new_status = 'failed'
+                # Try to get error message from conditions
+                if execution.conditions:
+                    for condition in execution.conditions:
+                        if condition.type_ == 'Completed' and condition.message:
+                            error_message = condition.message
+                            break
+                if not error_message:
+                    error_message = 'Job failed in Cloud Run'
+
+            # Update the ETL run if status changed to a terminal state
+            if new_status and new_status != etl_run.status:
+                etl_run.status = new_status
+                if error_message:
+                    etl_run.error_message = error_message
+                if new_status in ('completed', 'failed', 'cancelled') and not etl_run.completed_at:
+                    etl_run.completed_at = timezone.now()
+                etl_run.save()
+                updated_count += 1
+                logger.info(f"Updated ETL run {etl_run.id} status to '{new_status}' from Cloud Run execution {execution.name}")
+
+                # Remove from map so we don't process again
+                del etl_run_map[etl_run_id]
+
+            # Stop if we've matched all running runs
+            if not etl_run_map:
+                break
+
+    except Exception as e:
+        logger.warning(f"Failed to list Cloud Run executions: {e}")
+
+    return updated_count
+
+
 @login_required
 def model_etl(request, model_id):
     """
@@ -171,6 +295,16 @@ def model_etl(request, model_id):
     cutoff_date = timezone.now() - timedelta(days=30)
 
     # Filter runs from last 30 days, including runs with NULL started_at (pending/running jobs)
+    filtered_runs = model.etl_runs.filter(
+        Q(started_at__gte=cutoff_date) | Q(started_at__isnull=True)
+    )
+
+    # Sync any "running" or "pending" runs with Cloud Run to get actual status
+    # This ensures cancelled/failed jobs in Cloud Run are reflected in our UI
+    running_runs = model.etl_runs.filter(status__in=['running', 'pending'])
+    sync_running_etl_runs_with_cloud_run(running_runs)
+
+    # Re-fetch filtered runs after sync (to get updated statuses)
     filtered_runs = model.etl_runs.filter(
         Q(started_at__gte=cutoff_date) | Q(started_at__isnull=True)
     )
@@ -1860,6 +1994,7 @@ def api_connection_list(request, model_id):
             'source_username': conn.source_username,
             'bigquery_project': conn.bigquery_project,
             'bigquery_dataset': conn.bigquery_dataset,
+            'bucket_path': conn.bucket_path,  # For cloud storage connections
             'connection_string': conn.connection_string,
             'is_enabled': conn.is_enabled,
             'connection_tested': conn.connection_tested,
@@ -4158,6 +4293,7 @@ def api_etl_trigger_now(request, data_source_id):
         etl_run = ETLRun.objects.create(
             etl_config=data_source.etl_config,
             model_endpoint=model,
+            data_source=data_source,  # Link run to specific data source for card display
             status='pending',
             triggered_by=request.user,
             started_at=timezone.now(),

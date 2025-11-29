@@ -115,7 +115,7 @@
                                     </span>
                                     <span class="card-label">Last run status:</span>
                                     <span class="card-schedule-info">
-                                        {% if last_run.status == 'completed' %}Success{% elif last_run.status == 'failed' %}Failed{% elif last_run.status %}{{ last_run.status|title }}{% else %}—{% endif %}
+                                        {% if last_run.status == 'completed' %}Success{% elif last_run.status == 'failed' %}Failed{% elif last_run.status == 'cancelled' %}Cancelled{% elif last_run.status %}{{ last_run.status|title }}{% else %}—{% endif %}
                                     </span>
                                     {% endwith %}
                                 </div>
@@ -199,6 +199,10 @@
                             {% elif run.status == 'failed' %}
                             <span class="px-3 py-1 bg-red-100 text-red-700 rounded text-sm font-semibold">
                                 <i class="fas fa-times-circle mr-1"></i>Failed
+                            </span>
+                            {% elif run.status == 'cancelled' %}
+                            <span class="px-3 py-1 bg-gray-100 text-gray-600 rounded text-sm font-semibold">
+                                <i class="fas fa-ban mr-1"></i>Cancelled
                             </span>
                             {% elif run.status == 'running' %}
                             <span class="px-3 py-1 bg-blue-100 text-blue-700 rounded text-sm font-semibold">
@@ -313,6 +317,34 @@
         <div class="px-5 py-4 border-t border-gray-200 flex justify-end">
             <button onclick="closeNotification()" class="btn btn-secondary btn-sm">
                 OK
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Modern Confirmation Modal -->
+<div id="confirmationModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-[110] flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-md border border-gray-300">
+        <!-- Header -->
+        <div id="confirmationHeader" class="px-5 py-4 border-b border-gray-200">
+            <div class="flex items-center gap-3">
+                <i id="confirmationIcon" class="fas fa-question-circle text-blue-600 text-xl"></i>
+                <h3 id="confirmationTitle" class="text-base font-bold text-gray-900">Confirm Action</h3>
+            </div>
+        </div>
+
+        <!-- Body -->
+        <div class="px-5 py-4">
+            <div id="confirmationMessage" class="text-sm text-gray-700 whitespace-pre-line"></div>
+        </div>
+
+        <!-- Footer -->
+        <div class="px-5 py-4 border-t border-gray-200 flex justify-end gap-3">
+            <button onclick="closeConfirmation(false)" class="btn btn-secondary btn-sm">
+                Cancel
+            </button>
+            <button id="confirmationConfirmBtn" onclick="closeConfirmation(true)" class="btn btn-primary btn-sm">
+                Confirm
             </button>
         </div>
     </div>
@@ -2241,8 +2273,15 @@ function validateJobName() {
 // ETL Action Functions
 // ============================================================================
 
-function runSourceNow(sourceId) {
-    if (confirm('Run ETL extraction now for this data source?\n\nThis will trigger the Cloud Run ETL job to extract and load data to BigQuery.')) {
+async function runSourceNow(sourceId) {
+    const confirmed = await showConfirmation(
+        'This will trigger the Cloud Run ETL job to extract and load data to BigQuery.',
+        'info',
+        'Run ETL Job Now?',
+        'Run Now'
+    );
+
+    if (confirmed) {
         // Disable the button to prevent double-clicks
         const button = event.target.closest('button');
         if (button) {
@@ -2260,14 +2299,14 @@ function runSourceNow(sourceId) {
         .then(response => response.json())
         .then(data => {
             if (data.status === 'success') {
-                alert('✓ ETL Run Triggered Successfully!\n\n' +
-                      'Run ID: ' + data.run_id + '\n' +
-                      'Execution: ' + data.execution_name + '\n\n' +
-                      'The ETL job is now running in Cloud Run.\n' +
-                      'You can monitor its progress in the Cloud Console.');
-                location.reload();
+                showNotification(
+                    'Run ID: ' + data.run_id + '\nExecution: ' + data.execution_name + '\n\nThe ETL job is now running in Cloud Run.',
+                    'success',
+                    'ETL Run Triggered Successfully',
+                    () => location.reload()
+                );
             } else {
-                alert('Error: ' + data.message);
+                showNotification('Error: ' + data.message, 'error', 'Failed to Trigger ETL');
                 // Re-enable button on error
                 if (button) {
                     button.disabled = false;
@@ -2276,7 +2315,7 @@ function runSourceNow(sourceId) {
             }
         })
         .catch(error => {
-            alert('Error triggering ETL: ' + error);
+            showNotification('Error triggering ETL: ' + error, 'error', 'Failed to Trigger ETL');
             // Re-enable button on error
             if (button) {
                 button.disabled = false;
@@ -2286,13 +2325,22 @@ function runSourceNow(sourceId) {
     }
 }
 
-function togglePauseSource(sourceId, isCurrentlyEnabled) {
+async function togglePauseSource(sourceId, isCurrentlyEnabled) {
     const action = isCurrentlyEnabled ? 'pause' : 'resume';
     const confirmMessage = isCurrentlyEnabled
-        ? 'Pause scheduling for this ETL job?\n\nThe job will not run on its schedule until resumed. You can still run it manually.'
-        : 'Resume scheduling for this ETL job?\n\nThe job will resume running on its configured schedule.';
+        ? 'The job will not run on its schedule until resumed. You can still run it manually.'
+        : 'The job will resume running on its configured schedule.';
+    const confirmTitle = isCurrentlyEnabled ? 'Pause ETL Schedule?' : 'Resume ETL Schedule?';
+    const confirmBtnText = isCurrentlyEnabled ? 'Pause' : 'Resume';
 
-    if (confirm(confirmMessage)) {
+    const confirmed = await showConfirmation(
+        confirmMessage,
+        'warning',
+        confirmTitle,
+        confirmBtnText
+    );
+
+    if (confirmed) {
         const button = document.getElementById(`pause-btn-${sourceId}`);
         if (button) {
             button.disabled = true;
@@ -2309,10 +2357,9 @@ function togglePauseSource(sourceId, isCurrentlyEnabled) {
         .then(response => response.json())
         .then(data => {
             if (data.status === 'success') {
-                alert(`✓ ${data.message}`);
-                location.reload();
+                showNotification(data.message, 'success', isCurrentlyEnabled ? 'Schedule Paused' : 'Schedule Resumed', () => location.reload());
             } else {
-                alert('Error: ' + data.message);
+                showNotification('Error: ' + data.message, 'error', 'Failed to Update Schedule');
                 // Re-enable button on error
                 if (button) {
                     button.disabled = false;
@@ -2325,7 +2372,7 @@ function togglePauseSource(sourceId, isCurrentlyEnabled) {
             }
         })
         .catch(error => {
-            alert('Error: ' + error);
+            showNotification('Error: ' + error, 'error', 'Failed to Update Schedule');
             // Re-enable button on error
             if (button) {
                 button.disabled = false;
@@ -2669,8 +2716,15 @@ function saveJobChanges() {
     });
 }
 
-function deleteSource(sourceId) {
-    if (confirm('Delete this data source and all its configured tables?\nThis action cannot be undone.')) {
+async function deleteSource(sourceId) {
+    const confirmed = await showConfirmation(
+        'Delete this ETL job and all its configured tables?\n\nThis action cannot be undone.',
+        'danger',
+        'Delete ETL Job?',
+        'Delete'
+    );
+
+    if (confirmed) {
         fetch(`/api/etl/sources/${sourceId}/delete/`, {
             method: 'POST',
             headers: {
@@ -2681,14 +2735,13 @@ function deleteSource(sourceId) {
         .then(response => response.json())
         .then(data => {
             if (data.status === 'success') {
-                alert(data.message);
-                location.reload();
+                showNotification(data.message, 'success', 'ETL Job Deleted', () => location.reload());
             } else {
-                alert('Error: ' + data.message);
+                showNotification('Error: ' + data.message, 'error', 'Failed to Delete');
             }
         })
         .catch(error => {
-            alert('Error deleting source: ' + error);
+            showNotification('Error deleting source: ' + error, 'error', 'Failed to Delete');
         });
     }
 }
@@ -2779,8 +2832,48 @@ function renderConnectionCard(connection, container) {
         }
     }
 
-    // Get database name (handle different source types)
-    const dbName = connection.source_database || connection.bigquery_dataset || 'N/A';
+    // Categorize connection type
+    const storageTypes = ['gcs', 's3', 'azure_blob'];
+    const nosqlTypes = ['mongodb', 'firestore', 'cassandra', 'dynamodb', 'redis'];
+
+    let typeCategory = 'Relational';
+    if (storageTypes.includes(connection.source_type)) {
+        typeCategory = 'Cloud Storage';
+    } else if (nosqlTypes.includes(connection.source_type)) {
+        typeCategory = 'NoSQL';
+    }
+
+    // Determine source info based on connection type
+    let sourceInfo = 'N/A';
+    if (storageTypes.includes(connection.source_type)) {
+        // Cloud Storage: show bucket path or bucket name
+        // bucket_path format: "gs://bucket-name" or "s3://bucket-name"
+        const bucketPath = connection.bucket_path || connection.source_host || '';
+        if (bucketPath) {
+            // Extract just the bucket name from full path (remove gs://, s3://, etc.)
+            sourceInfo = bucketPath.replace(/^(gs|s3|https?):\/\//, '').split('/')[0] || bucketPath;
+        }
+    } else if (connection.source_type === 'bigquery') {
+        // BigQuery: show project.dataset format
+        if (connection.bigquery_project && connection.bigquery_dataset) {
+            sourceInfo = `${connection.bigquery_project}.${connection.bigquery_dataset}`;
+        } else {
+            sourceInfo = connection.bigquery_dataset || connection.bigquery_project || 'N/A';
+        }
+    } else if (connection.source_type === 'firestore') {
+        // Firestore: show project name
+        sourceInfo = connection.bigquery_project || 'N/A';
+    } else if (nosqlTypes.includes(connection.source_type)) {
+        // Other NoSQL: show truncated connection string
+        if (connection.connection_string) {
+            sourceInfo = connection.connection_string.length > 35
+                ? connection.connection_string.substring(0, 35) + '...'
+                : connection.connection_string;
+        }
+    } else {
+        // Relational databases: show database name
+        sourceInfo = connection.source_database || 'N/A';
+    }
 
     card.innerHTML = `
         <div class="card-container">
@@ -2792,10 +2885,10 @@ function renderConnectionCard(connection, container) {
                     <h4 class="card-title">${connection.name}</h4>
                 </div>
 
-                <!-- Row 2: Database Name -->
+                <!-- Row 2: Type and Source -->
                 <div class="card-body">
-                    <span class="card-label">db name:</span>
-                    <span class="card-value">${dbName}</span>
+                    <span class="card-label">${typeCategory}:</span>
+                    <span class="card-value">${sourceInfo}</span>
                 </div>
             </div>
 
@@ -7779,8 +7872,81 @@ document.addEventListener('keydown', function(e) {
         if (!modal.classList.contains('hidden')) {
             closeNotification();
         }
+        // Also close confirmation modal on ESC
+        const confirmModal = document.getElementById('confirmationModal');
+        if (!confirmModal.classList.contains('hidden')) {
+            closeConfirmation(false);
+        }
     }
 });
+
+// Modern Confirmation Modal Functions
+let confirmationResolve = null;
+
+/**
+ * Show a modern confirmation modal
+ * @param {string} message - The message to display
+ * @param {string} type - The type: 'info', 'warning', 'danger', 'success'
+ * @param {string} title - Optional title for the modal
+ * @param {string} confirmText - Optional text for the confirm button (default: 'Confirm')
+ * @param {string} confirmBtnClass - Optional class for the confirm button
+ * @returns {Promise<boolean>} - Resolves to true if confirmed, false if cancelled
+ */
+function showConfirmation(message, type = 'info', title = null, confirmText = 'Confirm', confirmBtnClass = null) {
+    return new Promise((resolve) => {
+        confirmationResolve = resolve;
+
+        const modal = document.getElementById('confirmationModal');
+        const icon = document.getElementById('confirmationIcon');
+        const titleEl = document.getElementById('confirmationTitle');
+        const messageEl = document.getElementById('confirmationMessage');
+        const confirmBtn = document.getElementById('confirmationConfirmBtn');
+
+        // Set message
+        messageEl.textContent = message;
+
+        // Set confirm button text
+        confirmBtn.textContent = confirmText;
+
+        // Set icon, colors, and button style based on type
+        if (type === 'danger') {
+            icon.className = 'fas fa-exclamation-triangle text-red-600 text-xl';
+            titleEl.textContent = title || 'Confirm Delete';
+            confirmBtn.className = 'btn btn-sm bg-red-600 hover:bg-red-700 text-white';
+        } else if (type === 'warning') {
+            icon.className = 'fas fa-exclamation-circle text-yellow-600 text-xl';
+            titleEl.textContent = title || 'Warning';
+            confirmBtn.className = 'btn btn-sm bg-yellow-600 hover:bg-yellow-700 text-white';
+        } else if (type === 'success') {
+            icon.className = 'fas fa-check-circle text-green-600 text-xl';
+            titleEl.textContent = title || 'Confirm';
+            confirmBtn.className = 'btn btn-primary btn-sm';
+        } else {
+            icon.className = 'fas fa-question-circle text-blue-600 text-xl';
+            titleEl.textContent = title || 'Confirm Action';
+            confirmBtn.className = 'btn btn-primary btn-sm';
+        }
+
+        // Override button class if provided
+        if (confirmBtnClass) {
+            confirmBtn.className = confirmBtnClass;
+        }
+
+        // Show modal
+        modal.classList.remove('hidden');
+    });
+}
+
+function closeConfirmation(confirmed) {
+    const modal = document.getElementById('confirmationModal');
+    modal.classList.add('hidden');
+
+    // Resolve the promise
+    if (confirmationResolve) {
+        confirmationResolve(confirmed);
+        confirmationResolve = null;
+    }
+}
 
 </script>
 {% endblock %}

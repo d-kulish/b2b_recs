@@ -829,6 +829,7 @@ class ETLRunner:
                 self.config.update_etl_run_status(
                     etl_run_id=self.etl_run_id,
                     status='completed',
+                    data_source_id=self.data_source_id,
                     rows_extracted=self.total_rows_extracted,
                     rows_loaded=self.total_rows_loaded,
                     duration_seconds=duration_seconds
@@ -854,7 +855,7 @@ class ETLRunner:
             duration_seconds = int((self.end_time - self.start_time).total_seconds())
 
             # Handle error
-            handle_etl_error(e, self.config, self.etl_run_id)
+            handle_etl_error(e, self.config, self.etl_run_id, self.data_source_id)
 
             logger.error("=" * 80)
             logger.error("ETL RUN FAILED")

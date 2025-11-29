@@ -1,6 +1,7 @@
 {% extends 'base_model.html' %}
 {% load humanize %}
 {% load static %}
+{% load tz %}
 
 {% block title %}{{ model.name }} - ETL Configuration{% endblock %}
 
@@ -103,20 +104,24 @@
                                     </span>
                                 </div>
 
-                                <!-- Column 3: Status Badge + Last Run -->
+                                <!-- Column 3: Last Run Info (4 rows, same style as Column 2) -->
                                 <div class="card-meta-column">
-                                    <span class="card-status-badge {% if source.is_enabled %}enabled{% else %}disabled{% endif %}">
-                                        <i class="fas {% if source.is_enabled %}fa-check-circle{% else %}fa-pause-circle{% endif %}"></i>
-                                        {% if source.is_enabled %}Enabled{% else %}Disabled{% endif %}
-                                    </span>
+                                    {% with last_run=source.runs.first %}
+                                    <span class="card-label">Last run:</span>
                                     <span class="card-schedule-info">
-                                        <i class="fas fa-clock"></i>
-                                        {% if source.last_test_at %}{{ source.last_test_at|timesince }} ago{% else %}Never run{% endif %}
+                                        {% timezone "Europe/Kiev" %}
+                                        {% if last_run and last_run.started_at %}{{ last_run.started_at|date:"M d, H:i" }}{% else %}Never{% endif %}
+                                        {% endtimezone %}
                                     </span>
+                                    <span class="card-label">Last run status:</span>
+                                    <span class="card-schedule-info">
+                                        {% if last_run.status == 'completed' %}Success{% elif last_run.status == 'failed' %}Failed{% elif last_run.status %}{{ last_run.status|title }}{% else %}—{% endif %}
+                                    </span>
+                                    {% endwith %}
                                 </div>
 
                                 <!-- Column 4: Run + Pause Buttons (stacked) -->
-                                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;">
+                                <div class="card-run-actions">
                                     <button onclick="runSourceNow({{ source.id }})" class="card-action-btn run" title="Run ETL job now">
                                         <i class="fas fa-play"></i>
                                     </button>
@@ -210,7 +215,7 @@
                             {% endif %}
                         </td>
                         <td class="px-4 py-3 text-sm text-gray-600">
-                            {{ run.started_at|date:"M d, Y g:i A"|default:"—" }}
+                            {% timezone "Europe/Kiev" %}{{ run.started_at|date:"M d, Y g:i A"|default:"—" }}{% endtimezone %}
                         </td>
                         <td class="px-4 py-3 text-sm text-gray-600">
                             {% if run.get_duration_seconds %}

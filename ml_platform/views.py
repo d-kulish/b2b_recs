@@ -156,8 +156,8 @@ def model_etl(request, model_id):
             schedule_type='manual',
         )
 
-    # Get all data sources for this model (prefetch connection and tables for display)
-    data_sources = etl_config.data_sources.all().select_related('connection').prefetch_related('tables')
+    # Get all data sources for this model (prefetch connection, tables, and runs for display)
+    data_sources = etl_config.data_sources.all().select_related('connection').prefetch_related('tables', 'runs')
 
     # Calculate statistics
     enabled_sources = data_sources.filter(is_enabled=True)
@@ -1441,6 +1441,7 @@ def api_etl_run_source(request, source_id):
         etl_run = ETLRun.objects.create(
             etl_config=etl_config,
             model_endpoint=model,
+            data_source=source,  # Link run to specific data source
             status='pending',
             triggered_by=request.user,
             started_at=timezone.now(),
@@ -3639,8 +3640,8 @@ def api_etl_run_update(request, run_id):
     Called by Cloud Run ETL runner to report progress.
 
     Payload examples:
-    {"status": "running"}
-    {"status": "completed", "rows_extracted": 1000, "rows_loaded": 1000, "duration_seconds": 120}
+    {"status": "running", "data_source_id": 5}
+    {"status": "completed", "data_source_id": 5, "rows_extracted": 1000, "rows_loaded": 1000, "duration_seconds": 120}
     {"rows_extracted": 5000, "rows_loaded": 5000}
     """
     from django.utils import timezone
@@ -3683,6 +3684,18 @@ def api_etl_run_update(request, run_id):
 
         etl_run.save()
 
+        # Update DataSource last run info if data_source_id provided and status is terminal
+        if 'data_source_id' in data and 'status' in data and data['status'] in ['completed', 'failed', 'cancelled']:
+            try:
+                data_source = DataSource.objects.get(id=data['data_source_id'])
+                data_source.last_run_at = timezone.now()
+                data_source.last_run_status = data['status']
+                if 'error_message' in data:
+                    data_source.last_run_message = data['error_message']
+                data_source.save(update_fields=['last_run_at', 'last_run_status', 'last_run_message'])
+            except DataSource.DoesNotExist:
+                pass  # Don't fail if data source not found
+
         return JsonResponse({
             'status': 'success',
             'message': 'ETL run updated successfully'
@@ -3724,6 +3737,7 @@ def api_etl_scheduler_webhook(request, data_source_id):
         etl_run = ETLRun.objects.create(
             etl_config=data_source.etl_config,
             model_endpoint=model,
+            data_source=data_source,  # Link run to specific data source
             status='pending',
             triggered_by=None,  # Scheduled runs have no user
             started_at=timezone.now(),

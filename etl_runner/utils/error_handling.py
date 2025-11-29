@@ -97,7 +97,8 @@ def retry_on_exception(
 def handle_etl_error(
     error: Exception,
     config: Any,
-    etl_run_id: Optional[int] = None
+    etl_run_id: Optional[int] = None,
+    data_source_id: Optional[int] = None
 ) -> None:
     """
     Handle ETL error by logging and updating status in Django.
@@ -106,6 +107,7 @@ def handle_etl_error(
         error: Exception that occurred
         config: Config instance
         etl_run_id: ETL run ID (optional)
+        data_source_id: DataSource ID (optional, for updating last run info)
     """
     error_message = f"{type(error).__name__}: {str(error)}"
 
@@ -116,6 +118,7 @@ def handle_etl_error(
         config.update_etl_run_status(
             etl_run_id=etl_run_id,
             status='failed',
+            data_source_id=data_source_id,
             error_message=error_message
         )
 

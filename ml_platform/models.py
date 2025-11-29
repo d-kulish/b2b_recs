@@ -510,6 +510,14 @@ class ETLRun(models.Model):
 
     etl_config = models.ForeignKey(ETLConfiguration, on_delete=models.CASCADE, related_name='runs')
     model_endpoint = models.ForeignKey(ModelEndpoint, on_delete=models.CASCADE, related_name='etl_runs')
+    data_source = models.ForeignKey(
+        'DataSource',
+        on_delete=models.CASCADE,
+        related_name='runs',
+        null=True,
+        blank=True,
+        help_text="The specific data source this run is for"
+    )
 
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     started_at = models.DateTimeField(null=True, blank=True)

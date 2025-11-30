@@ -324,6 +324,54 @@
         </div>
         {% endif %}
     </div>
+
+    <!-- ETL Duration Analysis - Ridge Chart -->
+    <div class="bg-white rounded-xl border border-black shadow-lg p-6 mt-6">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-xl font-bold text-gray-900">ETL Duration Analysis</h3>
+            <div class="flex items-center gap-3">
+                <!-- Legend -->
+                <div class="flex items-center gap-4 text-xs">
+                    <div class="flex items-center gap-1">
+                        <div class="w-3 h-3 rounded-sm bg-green-500"></div>
+                        <span class="text-gray-600">Success</span>
+                    </div>
+                    <div class="flex items-center gap-1">
+                        <div class="w-3 h-3 rounded-sm bg-red-500"></div>
+                        <span class="text-gray-600">Failed</span>
+                    </div>
+                </div>
+                <span class="text-xs bg-gray-100 text-gray-600 px-3 py-1 rounded-full">
+                    <i class="fas fa-chart-area mr-1"></i>
+                    Last 30 days
+                </span>
+            </div>
+        </div>
+
+        <!-- Chart Container -->
+        <div id="ridgeChartContainer" class="relative">
+            <!-- Loading State -->
+            <div id="ridgeChartLoading" class="flex items-center justify-center py-16">
+                <i class="fas fa-spinner fa-spin text-gray-400 text-2xl mr-3"></i>
+                <span class="text-gray-500">Loading chart...</span>
+            </div>
+
+            <!-- Empty State -->
+            <div id="ridgeChartEmpty" class="hidden text-center py-16 bg-gray-50 rounded-lg">
+                <i class="fas fa-chart-line text-gray-400 text-3xl mb-3"></i>
+                <p class="text-gray-700 font-semibold">No duration data available</p>
+                <p class="text-gray-500 text-sm mt-1">Run some ETL jobs to see duration analysis</p>
+            </div>
+
+            <!-- Chart SVG -->
+            <svg id="ridgeChart" class="w-full hidden"></svg>
+
+            <!-- Tooltip -->
+            <div id="ridgeChartTooltip" class="absolute hidden bg-gray-900 text-white text-xs rounded-lg px-3 py-2 pointer-events-none shadow-lg z-10">
+            </div>
+        </div>
+    </div>
+
 </div>
 
 <!-- Modern Notification Modal -->
@@ -2220,7 +2268,324 @@
     </div>
 </div>
 
+<!-- D3.js for Ridge Chart -->
+<script src="https://d3js.org/d3.v7.min.js"></script>
+
 <script>
+// ============================================================================
+// Ridge Chart Data and Configuration
+// ============================================================================
+const ridgeChartData = {{ ridge_chart_data|safe }};
+
+// ============================================================================
+// Ridge Chart Implementation
+// ============================================================================
+
+function initRidgeChart() {
+    const container = document.getElementById('ridgeChartContainer');
+    const loading = document.getElementById('ridgeChartLoading');
+    const empty = document.getElementById('ridgeChartEmpty');
+    const svg = document.getElementById('ridgeChart');
+
+    // Check if we have any data
+    const hasData = ridgeChartData.data.some(day => day.jobs.length > 0);
+
+    if (!hasData) {
+        loading.classList.add('hidden');
+        empty.classList.remove('hidden');
+        svg.classList.add('hidden');
+        return;
+    }
+
+    loading.classList.add('hidden');
+    empty.classList.add('hidden');
+    svg.classList.remove('hidden');
+
+    renderRidgeChart();
+}
+
+function renderRidgeChart() {
+    const svgElement = d3.select('#ridgeChart');
+    svgElement.selectAll('*').remove();
+
+    const container = document.getElementById('ridgeChartContainer');
+    const containerWidth = container.clientWidth;
+
+    // Chart dimensions
+    const margin = { top: 30, right: 30, bottom: 80, left: 100 };
+    const width = containerWidth - margin.left - margin.right;
+    const height = 500;
+    const ridgeHeight = height / 30; // Height per day ridge
+
+    svgElement
+        .attr('width', containerWidth)
+        .attr('height', height + margin.top + margin.bottom);
+
+    const svg = svgElement.append('g')
+        .attr('transform', `translate(${margin.left},${margin.top})`);
+
+    // Define gradients for success and failed states
+    const defs = svgElement.append('defs');
+
+    // Success gradient (green)
+    const successGradient = defs.append('linearGradient')
+        .attr('id', 'successGradient')
+        .attr('x1', '0%')
+        .attr('y1', '0%')
+        .attr('x2', '0%')
+        .attr('y2', '100%');
+    successGradient.append('stop')
+        .attr('offset', '0%')
+        .attr('stop-color', '#22C55E')
+        .attr('stop-opacity', 0.9);
+    successGradient.append('stop')
+        .attr('offset', '100%')
+        .attr('stop-color', '#86EFAC')
+        .attr('stop-opacity', 0.6);
+
+    // Failed gradient (red)
+    const failedGradient = defs.append('linearGradient')
+        .attr('id', 'failedGradient')
+        .attr('x1', '0%')
+        .attr('y1', '0%')
+        .attr('x2', '0%')
+        .attr('y2', '100%');
+    failedGradient.append('stop')
+        .attr('offset', '0%')
+        .attr('stop-color', '#EF4444')
+        .attr('stop-opacity', 0.9);
+    failedGradient.append('stop')
+        .attr('offset', '100%')
+        .attr('stop-color', '#FCA5A5')
+        .attr('stop-opacity', 0.6);
+
+    const data = ridgeChartData.data;
+    const jobNames = ridgeChartData.job_names;
+
+    if (jobNames.length === 0) {
+        svg.append('text')
+            .attr('x', width / 2)
+            .attr('y', height / 2)
+            .attr('text-anchor', 'middle')
+            .attr('fill', '#9CA3AF')
+            .text('No job data available');
+        return;
+    }
+
+    // X scale - job names
+    const xScale = d3.scaleBand()
+        .domain(jobNames)
+        .range([0, width])
+        .padding(0.1);
+
+    // Y scale - dates (newest at bottom)
+    const dates = data.map(d => d.date);
+    const yScale = d3.scaleBand()
+        .domain(dates)
+        .range([0, height])
+        .padding(0);
+
+    // Find max duration for scaling heights
+    const maxDuration = d3.max(data, day =>
+        d3.max(day.jobs, job => job.duration) || 0
+    ) || 1;
+
+    // Height scale for ridge areas using log transformation
+    // This helps visualize both short and long duration jobs better
+    // Using log(1 + duration) to handle zero values gracefully
+    const heightScale = d3.scaleLog()
+        .domain([1, Math.max(maxDuration, 2)]) // Avoid log(0), minimum domain of 2 to prevent issues
+        .range([0, ridgeHeight * 3])
+        .clamp(true);
+
+    // Helper function to apply log transform safely
+    const getScaledHeight = (duration) => {
+        if (duration <= 0) return 0;
+        return heightScale(1 + duration); // log(1 + duration) to handle small values
+    };
+
+    // X axis
+    svg.append('g')
+        .attr('transform', `translate(0,${height})`)
+        .call(d3.axisBottom(xScale))
+        .selectAll('text')
+        .attr('transform', 'rotate(-45)')
+        .style('text-anchor', 'end')
+        .style('font-size', '10px');
+
+    // Y axis - show every 5th date label
+    const yAxis = d3.axisLeft(yScale)
+        .tickValues(dates.filter((d, i) => i % 5 === 0 || i === dates.length - 1))
+        .tickFormat(d => {
+            const date = new Date(d);
+            return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        });
+
+    svg.append('g')
+        .call(yAxis)
+        .selectAll('text')
+        .style('font-size', '11px');
+
+    // Draw ridges for each day
+    data.forEach((day, dayIndex) => {
+        const yPos = yScale(day.date) + yScale.bandwidth() / 2;
+
+        if (day.jobs.length === 0) {
+            // Draw flat line for empty days
+            svg.append('line')
+                .attr('x1', 0)
+                .attr('x2', width)
+                .attr('y1', yPos)
+                .attr('y2', yPos)
+                .attr('stroke', '#E5E7EB')
+                .attr('stroke-width', 1);
+            return;
+        }
+
+        // Draw individual "bump" shapes for each job execution
+        // This creates proper ridge peaks instead of continuous areas
+        const bandWidth = xScale.bandwidth();
+
+        day.jobs.forEach(job => {
+            const xCenter = xScale(job.job_name) + bandWidth / 2;
+            const peakHeight = getScaledHeight(job.duration);
+
+            if (peakHeight <= 0) return; // Skip jobs with 0 duration
+
+            // Create a smooth bump/peak shape for this job
+            // Using a simple triangle-like area with curved edges
+            const bumpWidth = bandWidth * 0.8;
+            const halfWidth = bumpWidth / 2;
+
+            // Define points for a smooth bump shape
+            const bumpPath = d3.area()
+                .x(d => d.x)
+                .y0(yPos)
+                .y1(d => yPos - d.y)
+                .curve(d3.curveBasis);
+
+            const bumpData = [
+                { x: xCenter - halfWidth, y: 0 },
+                { x: xCenter - halfWidth * 0.5, y: peakHeight * 0.7 },
+                { x: xCenter, y: peakHeight },
+                { x: xCenter + halfWidth * 0.5, y: peakHeight * 0.7 },
+                { x: xCenter + halfWidth, y: 0 }
+            ];
+
+            const isSuccess = job.status === 'success';
+            const gradientId = isSuccess ? 'successGradient' : 'failedGradient';
+            const strokeColor = isSuccess ? '#22C55E' : '#EF4444';
+
+            svg.append('path')
+                .datum(bumpData)
+                .attr('fill', `url(#${gradientId})`)
+                .attr('stroke', strokeColor)
+                .attr('stroke-width', 1)
+                .attr('d', bumpPath)
+                .attr('opacity', 0.85)
+                .style('cursor', 'pointer')
+                .on('mouseover', function() {
+                    d3.select(this).attr('opacity', 1);
+                })
+                .on('mouseout', function() {
+                    d3.select(this).attr('opacity', 0.85);
+                })
+                .on('mousemove', function(event) {
+                    const statusColor = isSuccess ? 'text-green-400' : 'text-red-400';
+                    const statusText = isSuccess ? 'Success' : 'Failed';
+                    showTooltip(event, `
+                        <div class="font-semibold">${day.date}</div>
+                        <div>${job.job_name}</div>
+                        <div class="${statusColor}">${statusText} - ${formatDuration(job.duration)}</div>
+                    `);
+                })
+                .on('mouseleave', hideTooltip);
+        });
+
+        // Draw a baseline for days with data
+        svg.append('line')
+            .attr('x1', 0)
+            .attr('x2', width)
+            .attr('y1', yPos)
+            .attr('y2', yPos)
+            .attr('stroke', '#E5E7EB')
+            .attr('stroke-width', 0.5);
+    });
+
+    // Add chart title
+    svg.append('text')
+        .attr('x', width / 2)
+        .attr('y', -10)
+        .attr('text-anchor', 'middle')
+        .attr('fill', '#374151')
+        .attr('font-size', '12px')
+        .attr('font-weight', '600')
+        .text('ETL Job Durations by Day');
+}
+
+function formatDuration(seconds) {
+    if (seconds === null || seconds === undefined || isNaN(seconds)) return '—';
+    if (seconds < 60) return `${Math.round(seconds)}s`;
+    if (seconds < 3600) {
+        const mins = Math.floor(seconds / 60);
+        const secs = Math.round(seconds % 60);
+        return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`;
+    }
+    const hours = Math.floor(seconds / 3600);
+    const mins = Math.round((seconds % 3600) / 60);
+    return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+}
+
+function showTooltip(event, html) {
+    const tooltip = document.getElementById('ridgeChartTooltip');
+    tooltip.innerHTML = html;
+    tooltip.classList.remove('hidden');
+
+    const container = document.getElementById('ridgeChartContainer');
+    const containerRect = container.getBoundingClientRect();
+    const tooltipRect = tooltip.getBoundingClientRect();
+
+    let x = event.clientX - containerRect.left + 15;
+    let y = event.clientY - containerRect.top - 10;
+
+    // Keep tooltip within container bounds
+    if (x + tooltipRect.width > containerRect.width) {
+        x = event.clientX - containerRect.left - tooltipRect.width - 15;
+    }
+    if (y < 0) {
+        y = event.clientY - containerRect.top + 20;
+    }
+
+    tooltip.style.left = `${x}px`;
+    tooltip.style.top = `${y}px`;
+}
+
+function hideTooltip() {
+    const tooltip = document.getElementById('ridgeChartTooltip');
+    tooltip.classList.add('hidden');
+}
+
+// Initialize chart when DOM is ready
+document.addEventListener('DOMContentLoaded', function() {
+    initRidgeChart();
+
+    // Redraw chart on window resize
+    let resizeTimeout;
+    window.addEventListener('resize', function() {
+        clearTimeout(resizeTimeout);
+        resizeTimeout = setTimeout(function() {
+            const hasData = ridgeChartData.data.some(day => day.jobs.length > 0);
+            if (hasData) {
+                renderRidgeChart();
+            }
+        }, 250);
+    });
+});
+
+// ============================================================================
+// Original ETL Page Functions
+// ============================================================================
+
 function getCookie(name) {
     let cookieValue = null;
     if (document.cookie && document.cookie !== '') {

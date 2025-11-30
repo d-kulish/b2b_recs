@@ -8,7 +8,8 @@ from django.utils import timezone
 from django.db import IntegrityError
 from django.core.paginator import Paginator
 from django.db.models import Q
-from datetime import timedelta
+from datetime import timedelta, date
+from collections import defaultdict
 import json
 import os
 from .models import (
@@ -317,6 +318,61 @@ def model_etl(request, model_id):
     page_number = request.GET.get('page', 1)
     page_obj = paginator.get_page(page_number)
 
+    # Prepare ridge chart data for ETL Duration Analysis
+    # Get all runs from the last 30 days (unpaginated) for the chart
+    # Include completed, partial, and failed runs to show status colors
+    all_runs_30_days = model.etl_runs.filter(
+        started_at__gte=cutoff_date,
+        status__in=['completed', 'partial', 'failed']
+    ).select_related('data_source').order_by('started_at')
+
+    # Build data structure for ridge chart - grouped by day, showing job names, durations, and status
+    ridge_chart_data_by_day = defaultdict(list)
+
+    # Collect all unique job names for consistent X-axis
+    all_job_names = set()
+
+    for run in all_runs_30_days:
+        # Skip runs without a data source (Unknown jobs)
+        if not run.data_source or not run.started_at:
+            continue
+
+        day_str = run.started_at.strftime('%Y-%m-%d')
+        job_name = run.data_source.name
+        # For failed jobs, use a default duration if not available
+        duration = run.get_duration_seconds() or 0
+
+        all_job_names.add(job_name)
+        # Determine if job was successful (completed/partial) or failed
+        is_success = run.status in ['completed', 'partial']
+        ridge_chart_data_by_day[day_str].append({
+            'job_name': job_name,
+            'duration': duration,
+            'status': 'success' if is_success else 'failed',
+        })
+
+    # Generate all 30 days (including empty ones) for consistent chart
+    all_days = []
+    today = timezone.now().date()
+    for i in range(30):
+        day = today - timedelta(days=i)
+        day_str = day.strftime('%Y-%m-%d')
+        all_days.append(day_str)
+
+    # Format data for frontend (newest at bottom means we reverse the order)
+    ridge_chart_data = []
+
+    for day_str in reversed(all_days):  # Oldest first, newest last (bottom of chart)
+        ridge_chart_data.append({
+            'date': day_str,
+            'jobs': ridge_chart_data_by_day.get(day_str, [])
+        })
+
+    ridge_chart_json = json.dumps({
+        'data': ridge_chart_data,
+        'job_names': sorted(list(all_job_names)),
+    })
+
     context = {
         'model': model,
         'etl_config': etl_config,
@@ -328,6 +384,7 @@ def model_etl(request, model_id):
         'page_obj': page_obj,
         'has_any_runs': has_any_runs,
         'showing_last_30_days': True,
+        'ridge_chart_data': ridge_chart_json,
     }
 
     return render(request, 'ml_platform/model_etl.html', context)

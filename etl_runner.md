@@ -1,7 +1,7 @@
 # ETL Runner
 
 **Last Updated:** November 30, 2025
-**Status:** Production Ready ✅ | Cloud Scheduler Working ✅ | SQL/NoSQL/File Sources Supported ✅ | Dataflow Working ✅ | **NEW: Enhanced ETL Runs Table** 🔥
+**Status:** Production Ready ✅ | Cloud Scheduler Working ✅ | SQL/NoSQL/File Sources Supported ✅ | Dataflow Working ✅ | **NEW: ETL Duration Analysis Chart** 🔥
 
 Cloud Run-based ETL execution engine that extracts data from databases and cloud storage files, transforms it, and loads into BigQuery for the B2B Recommendations Platform.
 
@@ -2097,6 +2097,141 @@ gcloud run jobs update etl-runner \
 
 ---
 
+### **Issue 17: ETL Duration Analysis Chart (November 30, 2025)**
+
+**Feature:** Added a new ridge-line chart visualization to the ETL page showing job execution durations over the last 30 days.
+
+**Context:**
+- Users needed visual insight into ETL job performance over time
+- Inspired by TensorFlow Board's ridge/joy plot visualization style
+- Helps identify patterns, anomalies, and performance trends
+
+#### **Implementation:**
+
+**A. Chart Design**
+
+The chart displays:
+- **X-axis:** ETL job names
+- **Y-axis:** Days (last 30 days, newest at bottom)
+- **Peak Height:** Duration of each job execution (log-transformed for better visualization)
+- **Color Coding:**
+  - Green gradient: Successful jobs (completed/partial)
+  - Red gradient: Failed jobs
+
+**B. Backend Data Preparation** (`ml_platform/views.py`)
+
+Added ridge chart data aggregation in `model_etl()` view:
+
+```python
+# Prepare ridge chart data for ETL Duration Analysis
+all_runs_30_days = model.etl_runs.filter(
+    started_at__gte=cutoff_date,
+    status__in=['completed', 'partial', 'failed']
+).select_related('data_source').order_by('started_at')
+
+# Build data structure grouped by day
+ridge_chart_data_by_day = defaultdict(list)
+all_job_names = set()
+
+for run in all_runs_30_days:
+    # Skip runs without a data source (Unknown jobs)
+    if not run.data_source or not run.started_at:
+        continue
+
+    day_str = run.started_at.strftime('%Y-%m-%d')
+    job_name = run.data_source.name
+    duration = run.get_duration_seconds() or 0
+    is_success = run.status in ['completed', 'partial']
+
+    ridge_chart_data_by_day[day_str].append({
+        'job_name': job_name,
+        'duration': duration,
+        'status': 'success' if is_success else 'failed',
+    })
+```
+
+**C. Frontend Visualization** (`templates/ml_platform/model_etl.html`)
+
+- Uses **D3.js v7** for SVG rendering
+- **Log transformation** on duration heights to handle wide range of job durations (seconds to hours)
+- **Individual bump shapes** for each job execution (not continuous areas)
+- **Interactive tooltips** showing date, job name, status, and formatted duration
+- **Responsive design** with automatic redraw on window resize
+- **Empty state handling** for days without runs
+
+**Key D3.js Implementation:**
+
+```javascript
+// Log scale for duration heights
+const heightScale = d3.scaleLog()
+    .domain([1, Math.max(maxDuration, 2)])
+    .range([0, ridgeHeight * 3])
+    .clamp(true);
+
+// Helper for safe log transform
+const getScaledHeight = (duration) => {
+    if (duration <= 0) return 0;
+    return heightScale(1 + duration);
+};
+
+// Draw individual bump shapes for each job
+day.jobs.forEach(job => {
+    const peakHeight = getScaledHeight(job.duration);
+    const bumpData = [
+        { x: xCenter - halfWidth, y: 0 },
+        { x: xCenter - halfWidth * 0.5, y: peakHeight * 0.7 },
+        { x: xCenter, y: peakHeight },
+        { x: xCenter + halfWidth * 0.5, y: peakHeight * 0.7 },
+        { x: xCenter + halfWidth, y: 0 }
+    ];
+    // Render with appropriate gradient based on status
+});
+```
+
+**D. Chart Section UI**
+
+New dedicated section below "Recent ETL Runs" table:
+- White container with black border (matching existing design)
+- Header: "ETL Duration Analysis"
+- Legend showing green=Success, red=Failed
+- "Last 30 days" badge
+- Loading and empty states
+
+#### **Design Decisions:**
+
+| Decision | Choice | Rationale |
+|----------|--------|-----------|
+| Log transformation | Yes | Handles wide duration range (5s to 5000s) without long jobs dominating |
+| Individual bumps vs continuous ridges | Individual bumps | Discrete job executions, not continuous distributions |
+| Filter Unknown jobs | Yes | Jobs without data_source are system artifacts, not user-relevant |
+| Color by status | Green/Red | Immediate visual feedback on job health |
+| Newest at bottom | Yes | Matches TensorFlow Board reference, natural time flow |
+
+#### **Files Modified:**
+
+**Backend:**
+- `ml_platform/views.py` - Added ridge chart data preparation (~50 lines)
+
+**Frontend:**
+- `templates/ml_platform/model_etl.html`:
+  - Added D3.js v7 CDN include
+  - Added chart container HTML with legend (~50 lines)
+  - Added chart JavaScript implementation (~250 lines)
+  - Added tooltip and interactivity handlers
+
+#### **Testing Results:**
+- ✅ Chart renders correctly with real ETL run data
+- ✅ Success (green) and failed (red) jobs display with appropriate colors
+- ✅ Log transformation provides balanced visualization across duration ranges
+- ✅ Tooltips show accurate date, job name, status, and duration
+- ✅ Empty days display flat baseline
+- ✅ Unknown jobs filtered out from display
+- ✅ Responsive to window resize
+
+**Result:** ✅ ETL Duration Analysis chart provides visual insight into job performance and health over time
+
+---
+
 ## Deployment
 
 ### **Infrastructure**
@@ -2368,6 +2503,7 @@ gcloud run jobs update etl-runner \
 - ✅ **ETL Job Edit Modal (name, schedule, columns)**
 - ✅ **Pause/Resume for scheduled jobs**
 - ✅ **Enhanced Recent ETL Runs table with View Details modal**
+- ✅ **ETL Duration Analysis Chart (ridge-line visualization)**
 
 **Known Issues:**
 - ⚠️ Test Connection button not visible in edit mode (workaround available)
@@ -2401,3 +2537,4 @@ gcloud run jobs update etl-runner \
 - ✅ **Comprehensive Run Details** - Modal shows Job Info, Timeline, Results, Error Details, and Cloud Run logs link
 - ✅ **API Enhancement** - `api_etl_run_status` now returns full run details including job name, connection, load type, timing breakdown
 - ✅ **Fixed Header Alignment** - Model metadata header now properly aligned with content containers (scrollbar compensation)
+- ✅ **ETL Duration Analysis Chart** - New ridge-line visualization showing job durations over last 30 days (see Issue 17 below)

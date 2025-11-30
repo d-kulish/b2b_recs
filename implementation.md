@@ -1624,6 +1624,239 @@ gcloud auth application-default login
 
 ---
 
+## Code Organization & Architecture Guidelines
+
+### Problem: Monolithic File Growth
+
+As the platform grows, individual files can become unmanageably large. Without architectural discipline, a single `views.py` can grow to 5,000+ lines, making the codebase:
+- Hard to navigate and understand
+- Prone to merge conflicts
+- Difficult to test in isolation
+- Challenging for new developers to onboard
+
+**Example**: The initial `ml_platform/views.py` grew to 4,627 lines mixing ETL, Connections, and core views—an unsustainable pattern.
+
+### Solution: Domain-Driven Sub-Apps
+
+Organize code by **domain** (business capability), not by **layer** (views, models, utils).
+
+#### Directory Structure
+
+```
+ml_platform/
+├── views.py              # Core views only (dashboard, model pages)
+├── models.py             # All Django models (shared across domains)
+├── urls.py               # Main router - includes sub-app URLs
+│
+├── etl/                  # ETL Domain
+│   ├── __init__.py
+│   ├── urls.py           # ETL routes
+│   ├── views.py          # Page rendering (HTML)
+│   ├── api.py            # REST endpoints (JSON)
+│   ├── webhooks.py       # External callbacks
+│   └── services.py       # Complex business logic (if needed)
+│
+├── connections/          # Connection Management Domain
+│   ├── __init__.py
+│   ├── urls.py
+│   └── api.py
+│
+├── datasets/             # Dataset Management Domain (planned)
+│   ├── __init__.py
+│   ├── urls.py
+│   ├── views.py
+│   └── api.py
+│
+├── features/             # Feature Engineering Domain (planned)
+│   └── ...
+│
+├── training/             # Training Domain (planned)
+│   └── ...
+│
+├── experiments/          # Experiments Domain (planned)
+│   └── ...
+│
+├── deployment/           # Deployment Domain (planned)
+│   └── ...
+│
+├── serving/              # Model Serving Domain (planned)
+│   └── ...
+│
+└── utils/                # Shared utilities
+    ├── connection_manager.py
+    ├── bigquery_manager.py
+    └── scheduler_manager.py
+```
+
+### File Responsibility Guidelines
+
+| File | Purpose | Returns | Max Lines |
+|------|---------|---------|-----------|
+| `views.py` | Page rendering, template context | `render()` HTML | 500 |
+| `api.py` | REST endpoints, CRUD operations | `JsonResponse` | 1000 |
+| `webhooks.py` | External service callbacks | `JsonResponse` | 200 |
+| `services.py` | Complex business logic | Python objects | 500 |
+| `urls.py` | Route definitions | URL patterns | 150 |
+
+### When to Create a New Sub-App
+
+Create a new sub-app when the domain:
+1. Has **5+ related API endpoints**
+2. Has its own **page views**
+3. Has **distinct business logic**
+4. Could theoretically be a **separate microservice**
+5. Will be **developed independently** from other domains
+
+### Sub-App Creation Checklist
+
+```bash
+# 1. Create sub-app directory
+mkdir -p ml_platform/{domain}
+touch ml_platform/{domain}/__init__.py
+
+# 2. Create required files
+touch ml_platform/{domain}/urls.py
+touch ml_platform/{domain}/api.py
+
+# 3. Optional files (if needed)
+touch ml_platform/{domain}/views.py      # If page views exist
+touch ml_platform/{domain}/webhooks.py   # If external callbacks exist
+touch ml_platform/{domain}/services.py   # If complex business logic exists
+```
+
+### URL Configuration Pattern
+
+**Main urls.py (ml_platform/urls.py):**
+```python
+from django.urls import path, include
+from . import views
+
+urlpatterns = [
+    # Include sub-app URLs
+    path('', include('ml_platform.etl.urls')),
+    path('', include('ml_platform.connections.urls')),
+    path('', include('ml_platform.datasets.urls')),
+
+    # Core routes (not part of any sub-app)
+    path('', views.system_dashboard, name='system_dashboard'),
+    path('models/<int:model_id>/', views.model_dashboard, name='model_dashboard'),
+]
+```
+
+**Sub-app urls.py (ml_platform/etl/urls.py):**
+```python
+from django.urls import path
+from . import views, api, webhooks
+
+urlpatterns = [
+    # Page views
+    path('models/<int:model_id>/etl/', views.model_etl, name='model_etl'),
+
+    # API endpoints
+    path('api/models/<int:model_id>/etl/add-source/', api.add_source, name='api_etl_add_source'),
+    path('api/etl/sources/<int:source_id>/', api.get_source, name='api_etl_get_source'),
+
+    # Webhooks
+    path('api/etl/sources/<int:data_source_id>/scheduler-webhook/',
+         webhooks.scheduler_webhook, name='api_etl_scheduler_webhook'),
+]
+```
+
+### Import Conventions
+
+```python
+# In sub-app files: Always use ABSOLUTE imports
+from ml_platform.models import DataSource, ETLRun
+from ml_platform.utils.connection_manager import test_connection
+
+# In urls.py: Use RELATIVE imports for same sub-app
+from . import views, api, webhooks
+```
+
+### Naming Conventions
+
+**URL Names:**
+```python
+# Pattern: api_{domain}_{action}
+name='api_etl_add_source'
+name='api_etl_get_source'
+name='api_connection_create'
+name='api_connection_test'
+```
+
+**Function Names (in api.py):**
+```python
+# Short names - context provided by module
+def add_source(request, model_id): ...    # etl/api.py
+def get_source(request, source_id): ...   # etl/api.py
+def create(request, model_id): ...        # connections/api.py
+def test(request, connection_id): ...     # connections/api.py
+```
+
+### API Response Standards
+
+```python
+# Success response
+return JsonResponse({
+    'status': 'success',
+    'message': 'Human-readable message',
+    'data': {...}  # Optional payload
+})
+
+# Error response
+return JsonResponse({
+    'status': 'error',
+    'message': 'Human-readable error description'
+}, status=400)  # or 404, 500
+```
+
+### File Size Triggers
+
+When files exceed these thresholds, consider splitting:
+
+| File | Warning | Action Required |
+|------|---------|-----------------|
+| views.py | 300 lines | 500 lines → split by page group |
+| api.py | 500 lines | 1000 lines → split by resource type |
+| services.py | 300 lines | 500 lines → extract to utils/ |
+| Single function | 100 lines | 150 lines → extract helper functions |
+
+### Testing Structure
+
+```
+ml_platform/tests/
+├── test_etl_baseline.py      # ETL domain tests
+├── test_connections.py       # Connection domain tests
+├── test_datasets.py          # Dataset domain tests
+├── conftest.py               # Shared fixtures
+└── factories.py              # Test data factories
+```
+
+### Migration Procedure
+
+When moving code from a monolithic file to a sub-app:
+
+1. **Create sub-app structure** (directories, __init__.py)
+2. **Copy functions** to appropriate files (views.py, api.py, webhooks.py)
+3. **Fix imports** (change relative to absolute)
+4. **Rename functions** (remove redundant prefixes)
+5. **Create urls.py** with all routes
+6. **Update main urls.py** to include sub-app
+7. **Remove original code** from monolithic file
+8. **Run `python manage.py check`**
+9. **Run tests** to verify functionality
+10. **Document** the migration
+
+### Reference Implementation
+
+See `docs/architecture_refactoring.md` for the complete case study of migrating:
+- ETL code from views.py → ml_platform/etl/
+- Connection code from views.py → ml_platform/connections/
+
+Results: 91.6% reduction in views.py (4,627 → 389 lines)
+
+---
+
 ## Appendix: Reference Architecture from Past Project
 
 ### Existing Working Components
@@ -1694,6 +1927,7 @@ From `past/` folder, these components are production-tested and will be reused:
 |------|---------|---------|--------|
 | 2025-11-09 | 1.0 | Initial document based on architecture discussions | - |
 | 2025-11-17 | 1.1 | Added Network Architecture section (Cloud NAT + Static IPs), updated cost structure | Claude Code |
+| 2025-11-30 | 1.2 | Added Code Organization & Architecture Guidelines section based on views.py refactoring | Claude Code |
 
 ---
 

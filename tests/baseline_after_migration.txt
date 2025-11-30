@@ -1,0 +1,127 @@
+Creating test database for alias 'default' ('test_b2b_recs_dev')...
+Found 26 test(s).
+Operations to perform:
+  Synchronize unmigrated apps: humanize, messages, staticfiles
+  Apply all migrations: admin, auth, contenttypes, ml_platform, sessions
+Synchronizing apps without migrations:
+  Creating tables...
+    Running deferred SQL...
+Running migrations:
+  Applying contenttypes.0001_initial... OK
+  Applying auth.0001_initial... OK
+  Applying admin.0001_initial... OK
+  Applying admin.0002_logentry_remove_auto_add... OK
+  Applying admin.0003_logentry_add_action_flag_choices... OK
+  Applying contenttypes.0002_remove_content_type_name... OK
+  Applying auth.0002_alter_permission_name_max_length... OK
+  Applying auth.0003_alter_user_email_max_length... OK
+  Applying auth.0004_alter_user_username_opts... OK
+  Applying auth.0005_alter_user_last_login_null... OK
+  Applying auth.0006_require_contenttypes_0002... OK
+  Applying auth.0007_alter_validators_add_error_messages... OK
+  Applying auth.0008_alter_user_username_max_length... OK
+  Applying auth.0009_alter_user_last_name_max_length... OK
+  Applying auth.0010_alter_group_name_max_length... OK
+  Applying auth.0011_update_proxy_permissions... OK
+  Applying auth.0012_alter_user_first_name_max_length... OK
+  Applying ml_platform.0001_initial... OK
+  Applying ml_platform.0002_remove_etlconfiguration_source_credentials_secret_and_more... OK
+  Applying ml_platform.0003_datasource_connection_params_and_more... OK
+  Applying ml_platform.0004_alter_datasource_credentials_secret_name_and_more... OK
+  Applying ml_platform.0005_alter_connection_unique_together_and_more... OK
+  Applying ml_platform.0006_alter_datasource_unique_together... OK
+  Applying ml_platform.0007_datasource_wizard_completed_steps_and_more... OK
+  Applying ml_platform.0008_simplify_datasource_model... OK
+  Applying ml_platform.0009_connection_aws_access_key_id_connection_aws_region_and_more... OK
+  Applying ml_platform.0010_add_schema_name_to_datasourcetable... OK
+  Applying ml_platform.0011_add_load_strategy_fields... OK
+  Applying ml_platform.0012_datasource_cloud_scheduler_job_name_and_more... OK
+  Applying ml_platform.0013_datasourcetable_file_format_and_more... OK
+  Applying ml_platform.0014_datasourcetable_selected_files... OK
+  Applying ml_platform.0015_datasourcetable_schedule_minute_and_more... OK
+  Applying ml_platform.0016_add_column_mapping_field... OK
+  Applying ml_platform.0017_add_processing_mode_fields... OK
+  Applying ml_platform.0018_add_data_source_to_etlrun... OK
+  Applying ml_platform.0019_add_last_run_fields_to_datasource... OK
+  Applying sessions.0001_initial... OK
+System check identified no issues (0 silenced).
+test_connection_get_error_for_invalid_id (ml_platform.tests.test_etl_baseline.ConnectionAPIBaselineTests.test_connection_get_error_for_invalid_id)
+Connection get API should return error for non-existent connection. ... ok
+test_connection_get_returns_details (ml_platform.tests.test_etl_baseline.ConnectionAPIBaselineTests.test_connection_get_returns_details)
+Connection get API should return connection details. ... ok
+test_connection_list_empty_for_model_without_connections (ml_platform.tests.test_etl_baseline.ConnectionAPIBaselineTests.test_connection_list_empty_for_model_without_connections)
+Connection list should return empty array for model without connections. ... ok
+test_connection_list_returns_connections (ml_platform.tests.test_etl_baseline.ConnectionAPIBaselineTests.test_connection_list_returns_connections)
+Connection list API should return all connections for model. ... ok
+test_connection_urls_resolve (ml_platform.tests.test_etl_baseline.ConnectionAPIBaselineTests.test_connection_urls_resolve)
+All connection URLs should resolve correctly. ... ok
+test_api_requires_authentication (ml_platform.tests.test_etl_baseline.ETLAPIEndpointsTests.test_api_requires_authentication)
+API endpoints should require authentication. ... ok
+test_check_job_name_detects_duplicate (ml_platform.tests.test_etl_baseline.ETLAPIEndpointsTests.test_check_job_name_detects_duplicate)
+Job name check API should detect existing job names. ... ok
+test_check_job_name_requires_name (ml_platform.tests.test_etl_baseline.ETLAPIEndpointsTests.test_check_job_name_requires_name)
+Job name check API should require name parameter. ... ok
+test_check_job_name_returns_json (ml_platform.tests.test_etl_baseline.ETLAPIEndpointsTests.test_check_job_name_returns_json)
+Job name check API should return JSON response. ... ok
+test_get_source_error_for_invalid_id (ml_platform.tests.test_etl_baseline.ETLAPIEndpointsTests.test_get_source_error_for_invalid_id)
+Get source API should return error for non-existent source. ... ok
+test_get_source_includes_tables (ml_platform.tests.test_etl_baseline.ETLAPIEndpointsTests.test_get_source_includes_tables)
+Get source API should include table configurations. ... ok
+test_get_source_returns_details (ml_platform.tests.test_etl_baseline.ETLAPIEndpointsTests.test_get_source_returns_details)
+Get source API should return source details. ... ok
+test_run_status_returns_details (ml_platform.tests.test_etl_baseline.ETLAPIEndpointsTests.test_run_status_returns_details)
+Run status API should return run details. ... ok
+test_toggle_enabled_works (ml_platform.tests.test_etl_baseline.ETLAPIEndpointsTests.test_toggle_enabled_works)
+Toggle enabled API should update ETL config. ... ok
+test_etl_page_404_for_invalid_model (ml_platform.tests.test_etl_baseline.ETLPageViewsTests.test_etl_page_404_for_invalid_model)
+ETL page should return 404 for non-existent model. ... ok
+test_etl_page_contains_expected_content (ml_platform.tests.test_etl_baseline.ETLPageViewsTests.test_etl_page_contains_expected_content)
+ETL page should contain key elements. ... ok
+test_etl_page_loads_successfully (ml_platform.tests.test_etl_baseline.ETLPageViewsTests.test_etl_page_loads_successfully)
+ETL page should return 200 status code. ... ok
+test_etl_page_requires_authentication (ml_platform.tests.test_etl_baseline.ETLPageViewsTests.test_etl_page_requires_authentication)
+ETL page should redirect unauthenticated users to login. ... ok
+test_etl_page_shows_data_sources (ml_platform.tests.test_etl_baseline.ETLPageViewsTests.test_etl_page_shows_data_sources)
+ETL page should display configured data sources. ... ok
+test_etl_page_shows_recent_runs (ml_platform.tests.test_etl_baseline.ETLPageViewsTests.test_etl_page_shows_recent_runs)
+ETL page should display recent ETL runs. ... ok
+test_create_etl_run (ml_platform.tests.test_etl_baseline.ETLRunModelTests.test_create_etl_run)
+Should be able to create ETL run records. ... ok
+test_etl_run_linked_to_data_source (ml_platform.tests.test_etl_baseline.ETLRunModelTests.test_etl_run_linked_to_data_source)
+ETL run should be linked to data source. ... ok
+test_etl_run_status_transitions (ml_platform.tests.test_etl_baseline.ETLRunModelTests.test_etl_run_status_transitions)
+ETL run should support status transitions. ... ok
+test_etl_api_urls_resolve (ml_platform.tests.test_etl_baseline.ETLURLResolutionTests.test_etl_api_urls_resolve)
+All ETL API URLs should resolve correctly. ... ok
+test_etl_page_urls_resolve (ml_platform.tests.test_etl_baseline.ETLURLResolutionTests.test_etl_page_urls_resolve)
+ETL page URLs should resolve to correct view. ... ok
+test_etl_runner_api_urls_resolve (ml_platform.tests.test_etl_baseline.ETLURLResolutionTests.test_etl_runner_api_urls_resolve)
+ETL Runner API URLs should resolve correctly. ... ok
+
+----------------------------------------------------------------------
+Ran 26 tests in 26.026s
+
+OK
+Destroying test database for alias 'default' ('test_b2b_recs_dev')...
+ERROR in api_connection_get: No Connection matches the given query.
+Traceback (most recent call last):
+  File "/Users/dkulish/Projects/b2b_recs/venv/lib/python3.13/site-packages/django/shortcuts.py", line 85, in get_object_or_404
+    return queryset.get(*args, **kwargs)
+           ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/Users/dkulish/Projects/b2b_recs/venv/lib/python3.13/site-packages/django/db/models/query.py", line 639, in get
+    raise self.model.DoesNotExist(
+        "%s matching query does not exist." % self.model._meta.object_name
+    )
+ml_platform.models.Connection.DoesNotExist: Connection matching query does not exist.
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/dkulish/Projects/b2b_recs/ml_platform/views.py", line 2137, in api_connection_get
+    connection = get_object_or_404(Connection, id=connection_id)
+  File "/Users/dkulish/Projects/b2b_recs/venv/lib/python3.13/site-packages/django/shortcuts.py", line 87, in get_object_or_404
+    raise Http404(
+        "No %s matches the given query." % queryset.model._meta.object_name
+    )
+django.http.response.Http404: No Connection matches the given query.
+

@@ -1,7 +1,7 @@
 # ETL Runner
 
-**Last Updated:** November 29, 2025
-**Status:** Production Ready ✅ | Cloud Scheduler Working ✅ | SQL/NoSQL/File Sources Supported ✅ | Dataflow Working ✅ | **NEW: Load into Existing Tables** 🔥
+**Last Updated:** November 30, 2025
+**Status:** Production Ready ✅ | Cloud Scheduler Working ✅ | SQL/NoSQL/File Sources Supported ✅ | Dataflow Working ✅ | **NEW: Enhanced ETL Runs Table** 🔥
 
 Cloud Run-based ETL execution engine that extracts data from databases and cloud storage files, transforms it, and loads into BigQuery for the B2B Recommendations Platform.
 
@@ -2367,6 +2367,7 @@ gcloud run jobs update etl-runner \
 - ✅ BigQuery schema auto-detection and management
 - ✅ **ETL Job Edit Modal (name, schedule, columns)**
 - ✅ **Pause/Resume for scheduled jobs**
+- ✅ **Enhanced Recent ETL Runs table with View Details modal**
 
 **Known Issues:**
 - ⚠️ Test Connection button not visible in edit mode (workaround available)
@@ -2393,3 +2394,10 @@ gcloud run jobs update etl-runner \
 - ✅ **Enable Immediately After Creation - First run triggers automatically**
 - ✅ **Modern Notification Modal - Replaced browser alerts with styled modals**
 - ✅ **Dataflow Build Tools - Added setuptools/build for custom code packaging**
+
+**Recent Fixes (Nov 30, 2025):**
+- ✅ **Enhanced Recent ETL Runs Table** - Added ETL Job Name and Connection columns, removed redundant Tables column
+- ✅ **Styled View Details Modal** - Replaced browser `alert()` with modern styled modal matching Edit/Delete buttons
+- ✅ **Comprehensive Run Details** - Modal shows Job Info, Timeline, Results, Error Details, and Cloud Run logs link
+- ✅ **API Enhancement** - `api_etl_run_status` now returns full run details including job name, connection, load type, timing breakdown
+- ✅ **Fixed Header Alignment** - Model metadata header now properly aligned with content containers (scrollbar compensation)

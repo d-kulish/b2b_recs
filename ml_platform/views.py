@@ -1628,12 +1628,14 @@ def api_etl_run_source(request, source_id):
 @login_required
 def api_etl_run_status(request, run_id):
     """
-    API endpoint to get ETL run status (for polling).
+    API endpoint to get ETL run status and details (for polling and View Details modal).
     """
     try:
         etl_run = get_object_or_404(ETLRun, id=run_id)
 
-        return JsonResponse({
+        # Build response with comprehensive run details
+        response_data = {
+            'run_id': etl_run.id,
             'status': etl_run.status,
             'started_at': etl_run.started_at.isoformat() if etl_run.started_at else None,
             'completed_at': etl_run.completed_at.isoformat() if etl_run.completed_at else None,
@@ -1642,8 +1644,51 @@ def api_etl_run_status(request, run_id):
             'total_tables': etl_run.total_tables,
             'successful_tables': etl_run.successful_tables,
             'total_rows_extracted': etl_run.total_rows_extracted,
+            'rows_loaded': etl_run.rows_loaded,
+            'bytes_processed': etl_run.bytes_processed,
             'error_message': etl_run.error_message,
-        })
+            'cloud_run_execution_id': etl_run.cloud_run_execution_id,
+            'logs_url': etl_run.logs_url,
+            # Timing breakdown
+            'extraction_started_at': etl_run.extraction_started_at.isoformat() if etl_run.extraction_started_at else None,
+            'extraction_completed_at': etl_run.extraction_completed_at.isoformat() if etl_run.extraction_completed_at else None,
+            'loading_started_at': etl_run.loading_started_at.isoformat() if etl_run.loading_started_at else None,
+            'loading_completed_at': etl_run.loading_completed_at.isoformat() if etl_run.loading_completed_at else None,
+            'duration_seconds': etl_run.get_duration_seconds(),
+            # Detailed results if available
+            'results_detail': etl_run.results_detail,
+        }
+
+        # Add data source info if available
+        if etl_run.data_source:
+            response_data['job_name'] = etl_run.data_source.name
+            response_data['source_type'] = etl_run.data_source.source_type
+            if etl_run.data_source.connection:
+                response_data['connection_name'] = etl_run.data_source.connection.name
+            else:
+                response_data['connection_name'] = None
+            # Get destination table name
+            first_table = etl_run.data_source.tables.first()
+            if first_table:
+                response_data['destination_table'] = first_table.dest_table_name
+                response_data['load_type'] = first_table.load_type
+            else:
+                response_data['destination_table'] = None
+                response_data['load_type'] = None
+        else:
+            response_data['job_name'] = None
+            response_data['source_type'] = None
+            response_data['connection_name'] = None
+            response_data['destination_table'] = None
+            response_data['load_type'] = None
+
+        # Add triggered by info
+        if etl_run.triggered_by:
+            response_data['triggered_by'] = etl_run.triggered_by.email or etl_run.triggered_by.username
+        else:
+            response_data['triggered_by'] = 'Scheduled'
+
+        return JsonResponse(response_data)
 
     except Exception as e:
         return JsonResponse({

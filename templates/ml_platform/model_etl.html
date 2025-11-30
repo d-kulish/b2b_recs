@@ -179,10 +179,11 @@
                 <thead class="bg-gray-50 border-b border-gray-200">
                     <tr>
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Run ID</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">ETL Job</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Connection</th>
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Status</th>
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Started</th>
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Duration</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Tables</th>
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Rows</th>
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Actions</th>
                     </tr>
@@ -191,35 +192,66 @@
                     {% for run in page_obj.object_list %}
                     <tr class="hover:bg-gray-50">
                         <td class="px-4 py-3 text-sm font-medium text-gray-900">#{{ run.id }}</td>
+                        <td class="px-4 py-3 text-sm text-gray-900">
+                            {% if run.data_source %}
+                            <span class="font-medium">{{ run.data_source.name }}</span>
+                            {% else %}
+                            <span class="text-gray-400 italic">Unknown</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3 text-sm text-gray-600">
+                            {% if run.data_source and run.data_source.connection %}
+                            <span class="inline-flex items-center">
+                                {% if run.data_source.source_type == 'postgresql' %}
+                                <i class="fas fa-elephant text-blue-600 mr-1" title="PostgreSQL"></i>
+                                {% elif run.data_source.source_type == 'mysql' %}
+                                <i class="fas fa-database text-orange-500 mr-1" title="MySQL"></i>
+                                {% elif run.data_source.source_type == 'bigquery' %}
+                                <i class="fas fa-cloud text-blue-500 mr-1" title="BigQuery"></i>
+                                {% elif run.data_source.source_type == 'gcs' %}
+                                <i class="fas fa-cloud-upload-alt text-yellow-500 mr-1" title="GCS"></i>
+                                {% elif run.data_source.source_type == 's3' %}
+                                <i class="fab fa-aws text-orange-600 mr-1" title="AWS S3"></i>
+                                {% elif run.data_source.source_type == 'firestore' %}
+                                <i class="fas fa-fire text-yellow-600 mr-1" title="Firestore"></i>
+                                {% else %}
+                                <i class="fas fa-database text-gray-500 mr-1"></i>
+                                {% endif %}
+                                {{ run.data_source.connection.name|truncatechars:20 }}
+                            </span>
+                            {% else %}
+                            <span class="text-gray-400">—</span>
+                            {% endif %}
+                        </td>
                         <td class="px-4 py-3">
                             {% if run.status == 'completed' %}
-                            <span class="px-3 py-1 bg-green-100 text-green-700 rounded text-sm font-semibold">
+                            <span class="px-2 py-1 bg-green-100 text-green-700 rounded text-xs font-semibold">
                                 <i class="fas fa-check-circle mr-1"></i>Completed
                             </span>
                             {% elif run.status == 'failed' %}
-                            <span class="px-3 py-1 bg-red-100 text-red-700 rounded text-sm font-semibold">
+                            <span class="px-2 py-1 bg-red-100 text-red-700 rounded text-xs font-semibold">
                                 <i class="fas fa-times-circle mr-1"></i>Failed
                             </span>
                             {% elif run.status == 'cancelled' %}
-                            <span class="px-3 py-1 bg-gray-100 text-gray-600 rounded text-sm font-semibold">
+                            <span class="px-2 py-1 bg-gray-100 text-gray-600 rounded text-xs font-semibold">
                                 <i class="fas fa-ban mr-1"></i>Cancelled
                             </span>
                             {% elif run.status == 'running' %}
-                            <span class="px-3 py-1 bg-blue-100 text-blue-700 rounded text-sm font-semibold">
+                            <span class="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-semibold">
                                 <i class="fas fa-spinner fa-spin mr-1"></i>Running
                             </span>
                             {% elif run.status == 'partial' %}
-                            <span class="px-3 py-1 bg-yellow-100 text-yellow-700 rounded text-sm font-semibold">
+                            <span class="px-2 py-1 bg-yellow-100 text-yellow-700 rounded text-xs font-semibold">
                                 <i class="fas fa-exclamation-triangle mr-1"></i>Partial
                             </span>
                             {% else %}
-                            <span class="px-3 py-1 bg-gray-100 text-gray-700 rounded text-sm font-semibold">
+                            <span class="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs font-semibold">
                                 {{ run.get_status_display }}
                             </span>
                             {% endif %}
                         </td>
                         <td class="px-4 py-3 text-sm text-gray-600">
-                            {% timezone "Europe/Kiev" %}{{ run.started_at|date:"M d, Y g:i A"|default:"—" }}{% endtimezone %}
+                            {% timezone "Europe/Kiev" %}{{ run.started_at|date:"M d, g:i A"|default:"—" }}{% endtimezone %}
                         </td>
                         <td class="px-4 py-3 text-sm text-gray-600">
                             {% if run.get_duration_seconds %}
@@ -227,9 +259,6 @@
                             {% else %}
                             —
                             {% endif %}
-                        </td>
-                        <td class="px-4 py-3 text-sm text-gray-600">
-                            {{ run.successful_tables }}/{{ run.total_tables }}
                         </td>
                         <td class="px-4 py-3 text-sm text-gray-600">
                             {{ run.total_rows_extracted|intcomma|default:"0" }}
@@ -317,6 +346,135 @@
         <div class="px-5 py-4 border-t border-gray-200 flex justify-end">
             <button onclick="closeNotification()" class="btn btn-secondary btn-sm">
                 OK
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ETL Run Details Modal -->
+<div id="runDetailsModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-[100] flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl border border-gray-300 h-[600px] overflow-hidden flex flex-col">
+        <!-- Header -->
+        <div id="runDetailsHeader" class="px-5 py-4 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
+            <div class="flex items-center gap-3">
+                <div id="runDetailsStatusIcon" class="w-10 h-10 rounded-full flex items-center justify-center bg-gray-100">
+                    <i class="fas fa-spinner fa-spin text-gray-500"></i>
+                </div>
+                <div>
+                    <h3 id="runDetailsTitle" class="text-lg font-bold text-gray-900">ETL Run #—</h3>
+                    <p id="runDetailsSubtitle" class="text-sm text-gray-500">Loading...</p>
+                </div>
+            </div>
+            <button onclick="closeRunDetailsModal()" class="text-gray-400 hover:text-gray-600 transition-colors">
+                <i class="fas fa-times text-xl"></i>
+            </button>
+        </div>
+
+        <!-- Body -->
+        <div class="px-5 py-4 overflow-y-auto flex-1">
+            <!-- Loading State -->
+            <div id="runDetailsLoading" class="text-center py-8">
+                <i class="fas fa-spinner fa-spin text-3xl text-gray-400"></i>
+                <p class="mt-2 text-gray-500">Loading run details...</p>
+            </div>
+
+            <!-- Content (hidden until loaded) -->
+            <div id="runDetailsContent" class="hidden space-y-5">
+                <!-- Job Info Section -->
+                <div class="bg-gray-50 rounded-lg p-4">
+                    <h4 class="text-xs font-semibold text-gray-500 uppercase mb-3">Job Information</h4>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <p class="text-xs text-gray-500">ETL Job Name</p>
+                            <p id="runDetailsJobName" class="text-sm font-medium text-gray-900">—</p>
+                        </div>
+                        <div>
+                            <p class="text-xs text-gray-500">Connection</p>
+                            <p id="runDetailsConnection" class="text-sm font-medium text-gray-900">—</p>
+                        </div>
+                        <div>
+                            <p class="text-xs text-gray-500">Destination Table</p>
+                            <p id="runDetailsDestTable" class="text-sm font-medium text-gray-900">—</p>
+                        </div>
+                        <div>
+                            <p class="text-xs text-gray-500">Load Type</p>
+                            <p id="runDetailsLoadType" class="text-sm font-medium text-gray-900">—</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Timing Section -->
+                <div>
+                    <h4 class="text-xs font-semibold text-gray-500 uppercase mb-3">Timeline</h4>
+                    <div class="space-y-2">
+                        <div class="flex items-center justify-between py-2 border-b border-gray-100">
+                            <span class="text-sm text-gray-600"><i class="fas fa-play text-blue-500 mr-2 w-4"></i>Started</span>
+                            <span id="runDetailsStarted" class="text-sm font-medium text-gray-900">—</span>
+                        </div>
+                        <div id="runDetailsExtractionRow" class="flex items-center justify-between py-2 border-b border-gray-100">
+                            <span class="text-sm text-gray-600"><i class="fas fa-download text-yellow-500 mr-2 w-4"></i>Extraction</span>
+                            <span id="runDetailsExtraction" class="text-sm font-medium text-gray-900">—</span>
+                        </div>
+                        <div id="runDetailsLoadingRow" class="flex items-center justify-between py-2 border-b border-gray-100">
+                            <span class="text-sm text-gray-600"><i class="fas fa-upload text-green-500 mr-2 w-4"></i>Loading</span>
+                            <span id="runDetailsLoading2" class="text-sm font-medium text-gray-900">—</span>
+                        </div>
+                        <div class="flex items-center justify-between py-2">
+                            <span class="text-sm text-gray-600"><i class="fas fa-flag-checkered text-gray-500 mr-2 w-4"></i>Completed</span>
+                            <span id="runDetailsCompleted" class="text-sm font-medium text-gray-900">—</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Results Section -->
+                <div>
+                    <h4 class="text-xs font-semibold text-gray-500 uppercase mb-3">Results</h4>
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        <div class="bg-blue-50 rounded-lg p-3 text-center">
+                            <p class="text-xs text-blue-600 font-medium">Tables</p>
+                            <p id="runDetailsTables" class="text-lg font-bold text-blue-700">—</p>
+                        </div>
+                        <div class="bg-green-50 rounded-lg p-3 text-center">
+                            <p class="text-xs text-green-600 font-medium">Rows Extracted</p>
+                            <p id="runDetailsRowsExtracted" class="text-lg font-bold text-green-700">—</p>
+                        </div>
+                        <div class="bg-purple-50 rounded-lg p-3 text-center">
+                            <p class="text-xs text-purple-600 font-medium">Rows Loaded</p>
+                            <p id="runDetailsRowsLoaded" class="text-lg font-bold text-purple-700">—</p>
+                        </div>
+                        <div class="bg-gray-50 rounded-lg p-3 text-center">
+                            <p class="text-xs text-gray-600 font-medium">Duration</p>
+                            <p id="runDetailsDuration" class="text-lg font-bold text-gray-700">—</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Error Section (hidden by default) -->
+                <div id="runDetailsErrorSection" class="hidden">
+                    <h4 class="text-xs font-semibold text-red-600 uppercase mb-3">Error Details</h4>
+                    <div class="bg-red-50 border border-red-200 rounded-lg p-4 max-h-32 overflow-y-auto">
+                        <p id="runDetailsErrorMessage" class="text-sm text-red-700 font-mono whitespace-pre-wrap break-words"></p>
+                    </div>
+                </div>
+
+                <!-- Triggered By Section -->
+                <div class="flex items-center justify-between text-sm text-gray-500 pt-2 border-t border-gray-100">
+                    <span>Triggered by: <span id="runDetailsTriggeredBy" class="font-medium text-gray-700">—</span></span>
+                    <span id="runDetailsExecutionId" class="text-xs text-gray-400"></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="px-5 py-4 border-t border-gray-200 flex justify-between items-center flex-shrink-0">
+            <div id="runDetailsLogsLink" class="hidden">
+                <a id="runDetailsLogsUrl" href="#" target="_blank" class="text-sm text-blue-600 hover:text-blue-800 font-medium">
+                    <i class="fas fa-external-link-alt mr-1"></i>View Cloud Run Logs
+                </a>
+            </div>
+            <div class="flex-1"></div>
+            <button onclick="closeRunDetailsModal()" class="btn btn-secondary btn-sm">
+                Close
             </button>
         </div>
     </div>
@@ -2747,19 +2905,201 @@ async function deleteSource(sourceId) {
 }
 
 function viewRunDetails(runId) {
-    // Fetch run details and show in modal
+    // Show modal with loading state
+    const modal = document.getElementById('runDetailsModal');
+    const loadingDiv = document.getElementById('runDetailsLoading');
+    const contentDiv = document.getElementById('runDetailsContent');
+
+    // Reset modal state
+    loadingDiv.classList.remove('hidden');
+    contentDiv.classList.add('hidden');
+    document.getElementById('runDetailsTitle').textContent = `ETL Run #${runId}`;
+    document.getElementById('runDetailsSubtitle').textContent = 'Loading...';
+    document.getElementById('runDetailsStatusIcon').innerHTML = '<i class="fas fa-spinner fa-spin text-gray-500"></i>';
+    document.getElementById('runDetailsStatusIcon').className = 'w-10 h-10 rounded-full flex items-center justify-center bg-gray-100';
+
+    // Show modal
+    modal.classList.remove('hidden');
+
+    // Fetch run details
     fetch(`/api/etl/runs/${runId}/status/`)
         .then(response => response.json())
         .then(data => {
-            if (data.status) {
-                alert(`ETL Run #${runId}\n\nStatus: ${data.status}\nSources: ${data.successful_sources}/${data.total_sources}\nTables: ${data.successful_tables}/${data.total_tables}\nRows Extracted: ${data.total_rows_extracted.toLocaleString()}\n\n${data.error_message || ''}`);
+            if (data.status && data.status !== 'error') {
+                populateRunDetailsModal(data);
             } else {
-                alert('Error: ' + data.message);
+                showNotification('Error: ' + (data.message || 'Unknown error'), 'error', 'Failed to Load Details');
+                modal.classList.add('hidden');
             }
         })
         .catch(error => {
-            alert('Error fetching run details: ' + error);
+            showNotification('Error fetching run details: ' + error, 'error', 'Failed to Load Details');
+            modal.classList.add('hidden');
         });
+}
+
+function populateRunDetailsModal(data) {
+    const loadingDiv = document.getElementById('runDetailsLoading');
+    const contentDiv = document.getElementById('runDetailsContent');
+
+    // Update header
+    document.getElementById('runDetailsTitle').textContent = `ETL Run #${data.run_id}`;
+
+    // Set status icon and subtitle
+    const statusIcon = document.getElementById('runDetailsStatusIcon');
+    let statusText = data.status.charAt(0).toUpperCase() + data.status.slice(1);
+
+    if (data.status === 'completed') {
+        statusIcon.innerHTML = '<i class="fas fa-check text-white"></i>';
+        statusIcon.className = 'w-10 h-10 rounded-full flex items-center justify-center bg-green-500';
+    } else if (data.status === 'failed') {
+        statusIcon.innerHTML = '<i class="fas fa-times text-white"></i>';
+        statusIcon.className = 'w-10 h-10 rounded-full flex items-center justify-center bg-red-500';
+    } else if (data.status === 'running') {
+        statusIcon.innerHTML = '<i class="fas fa-spinner fa-spin text-white"></i>';
+        statusIcon.className = 'w-10 h-10 rounded-full flex items-center justify-center bg-blue-500';
+    } else if (data.status === 'cancelled') {
+        statusIcon.innerHTML = '<i class="fas fa-ban text-white"></i>';
+        statusIcon.className = 'w-10 h-10 rounded-full flex items-center justify-center bg-gray-500';
+    } else if (data.status === 'partial') {
+        statusIcon.innerHTML = '<i class="fas fa-exclamation text-white"></i>';
+        statusIcon.className = 'w-10 h-10 rounded-full flex items-center justify-center bg-yellow-500';
+    } else {
+        statusIcon.innerHTML = '<i class="fas fa-circle text-white"></i>';
+        statusIcon.className = 'w-10 h-10 rounded-full flex items-center justify-center bg-gray-400';
+    }
+
+    document.getElementById('runDetailsSubtitle').textContent = statusText;
+
+    // Job Information
+    document.getElementById('runDetailsJobName').textContent = data.job_name || '—';
+    document.getElementById('runDetailsConnection').textContent = data.connection_name || '—';
+    document.getElementById('runDetailsDestTable').textContent = data.destination_table || '—';
+
+    // Format load type
+    const loadType = data.load_type;
+    if (loadType === 'transactional') {
+        document.getElementById('runDetailsLoadType').innerHTML = '<span class="text-blue-600">Transactional</span> (Incremental)';
+    } else if (loadType === 'catalog') {
+        document.getElementById('runDetailsLoadType').innerHTML = '<span class="text-purple-600">Catalog</span> (Full Refresh)';
+    } else {
+        document.getElementById('runDetailsLoadType').textContent = loadType || '—';
+    }
+
+    // Timeline
+    document.getElementById('runDetailsStarted').textContent = formatDateTime(data.started_at);
+    document.getElementById('runDetailsCompleted').textContent = formatDateTime(data.completed_at);
+
+    // Extraction timing
+    if (data.extraction_started_at || data.extraction_completed_at) {
+        document.getElementById('runDetailsExtractionRow').classList.remove('hidden');
+        const extractionDuration = calculateDuration(data.extraction_started_at, data.extraction_completed_at);
+        document.getElementById('runDetailsExtraction').textContent = extractionDuration || '—';
+    } else {
+        document.getElementById('runDetailsExtractionRow').classList.add('hidden');
+    }
+
+    // Loading timing
+    if (data.loading_started_at || data.loading_completed_at) {
+        document.getElementById('runDetailsLoadingRow').classList.remove('hidden');
+        const loadingDuration = calculateDuration(data.loading_started_at, data.loading_completed_at);
+        document.getElementById('runDetailsLoading2').textContent = loadingDuration || '—';
+    } else {
+        document.getElementById('runDetailsLoadingRow').classList.add('hidden');
+    }
+
+    // Results
+    document.getElementById('runDetailsTables').textContent = `${data.successful_tables}/${data.total_tables}`;
+    document.getElementById('runDetailsRowsExtracted').textContent = formatNumber(data.total_rows_extracted);
+    document.getElementById('runDetailsRowsLoaded').textContent = formatNumber(data.rows_loaded || 0);
+
+    // Duration
+    if (data.duration_seconds) {
+        document.getElementById('runDetailsDuration').textContent = formatDuration(data.duration_seconds);
+    } else {
+        document.getElementById('runDetailsDuration').textContent = '—';
+    }
+
+    // Error section
+    const errorSection = document.getElementById('runDetailsErrorSection');
+    if (data.error_message) {
+        errorSection.classList.remove('hidden');
+        document.getElementById('runDetailsErrorMessage').textContent = data.error_message;
+    } else {
+        errorSection.classList.add('hidden');
+    }
+
+    // Triggered by
+    document.getElementById('runDetailsTriggeredBy').textContent = data.triggered_by || '—';
+
+    // Execution ID
+    if (data.cloud_run_execution_id) {
+        document.getElementById('runDetailsExecutionId').textContent = `Execution: ${data.cloud_run_execution_id}`;
+    } else {
+        document.getElementById('runDetailsExecutionId').textContent = '';
+    }
+
+    // Logs link
+    const logsLinkDiv = document.getElementById('runDetailsLogsLink');
+    if (data.logs_url) {
+        logsLinkDiv.classList.remove('hidden');
+        document.getElementById('runDetailsLogsUrl').href = data.logs_url;
+    } else if (data.cloud_run_execution_id) {
+        // Generate Cloud Run logs URL if we have execution ID
+        const logsUrl = `https://console.cloud.google.com/run/jobs/executions/details/europe-central2/etl-runner/${data.cloud_run_execution_id}/logs?project=b2b-recs`;
+        logsLinkDiv.classList.remove('hidden');
+        document.getElementById('runDetailsLogsUrl').href = logsUrl;
+    } else {
+        logsLinkDiv.classList.add('hidden');
+    }
+
+    // Show content, hide loading
+    loadingDiv.classList.add('hidden');
+    contentDiv.classList.remove('hidden');
+}
+
+function closeRunDetailsModal() {
+    document.getElementById('runDetailsModal').classList.add('hidden');
+}
+
+// Helper functions for formatting
+function formatDateTime(isoString) {
+    if (!isoString) return '—';
+    const date = new Date(isoString);
+    return date.toLocaleString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true
+    });
+}
+
+function formatNumber(num) {
+    if (num === null || num === undefined) return '0';
+    return num.toLocaleString();
+}
+
+function formatDuration(seconds) {
+    if (!seconds) return '—';
+    if (seconds < 60) return `${Math.round(seconds)}s`;
+    if (seconds < 3600) {
+        const mins = Math.floor(seconds / 60);
+        const secs = Math.round(seconds % 60);
+        return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`;
+    }
+    const hours = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+}
+
+function calculateDuration(startIso, endIso) {
+    if (!startIso) return null;
+    const start = new Date(startIso);
+    const end = endIso ? new Date(endIso) : new Date();
+    const seconds = (end - start) / 1000;
+    return formatDuration(seconds);
 }
 
 // ============================================================================

@@ -75,7 +75,7 @@
     <!-- Main Content Area -->
     <div class="flex-1 flex flex-col relative" style="margin-left: 50px; z-index: 10;">
         <!-- Fixed Model Info Tablet -->
-        <div class="px-6 py-4">
+        <div class="p-6 pb-0" style="padding-right: calc(1.5rem + 17px);">
             <div class="max-w-7xl mx-auto">
                 <div class="
                     {% if model.is_endpoint_active %}bg-green-50
@@ -153,7 +153,7 @@
         </div>
 
         <!-- Content Area -->
-        <main class="flex-1 overflow-y-auto p-6">
+        <main class="flex-1 overflow-y-scroll p-6" style="scrollbar-gutter: stable;">
             <div class="max-w-7xl mx-auto">
                 {% block model_content %}{% endblock %}
             </div>

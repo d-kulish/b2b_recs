@@ -4117,7 +4117,11 @@ def api_etl_run_update(request, run_id):
     Payload examples:
     {"status": "running", "data_source_id": 5}
     {"status": "completed", "data_source_id": 5, "rows_extracted": 1000, "rows_loaded": 1000, "duration_seconds": 120}
+    {"status": "completed", "data_source_id": 5, "rows_extracted": 100, "max_extracted_timestamp": "2024-11-30T08:30:00"}
     {"rows_extracted": 5000, "rows_loaded": 5000}
+
+    For transactional loads, max_extracted_timestamp updates DataSource.last_sync_value
+    so the next run starts from where the previous run ended.
     """
     from django.utils import timezone
 
@@ -4167,7 +4171,18 @@ def api_etl_run_update(request, run_id):
                 data_source.last_run_status = data['status']
                 if 'error_message' in data:
                     data_source.last_run_message = data['error_message']
-                data_source.save(update_fields=['last_run_at', 'last_run_status', 'last_run_message'])
+
+                update_fields = ['last_run_at', 'last_run_status', 'last_run_message']
+
+                # Update last_sync_value for successful transactional loads
+                if data['status'] == 'completed' and 'max_extracted_timestamp' in data:
+                    max_ts = data['max_extracted_timestamp']
+                    if max_ts:
+                        data_source.last_sync_value = max_ts
+                        update_fields.append('last_sync_value')
+                        logger.info(f"Updated last_sync_value to {max_ts} for DataSource {data_source.id}")
+
+                data_source.save(update_fields=update_fields)
             except DataSource.DoesNotExist:
                 pass  # Don't fail if data source not found
 
@@ -4177,6 +4192,7 @@ def api_etl_run_update(request, run_id):
         })
 
     except Exception as e:
+        logger.exception(f"Error updating ETL run {run_id}: {str(e)}")
         return JsonResponse({
             'status': 'error',
             'message': str(e)

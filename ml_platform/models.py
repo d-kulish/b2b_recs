@@ -239,6 +239,11 @@ class DataSource(models.Model):
     last_sync_value = models.CharField(max_length=255, blank=True, help_text="Last synced value for incremental loads")
     historical_start_date = models.DateField(null=True, blank=True, help_text="Start date for historical backfill")
 
+    # Last run tracking
+    last_run_at = models.DateTimeField(null=True, blank=True, help_text="When this job last ran")
+    last_run_status = models.CharField(max_length=50, blank=True, help_text="Status of last run (completed, failed, etc.)")
+    last_run_message = models.TextField(blank=True, help_text="Error message or summary from last run")
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

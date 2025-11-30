@@ -64,6 +64,7 @@ class ETLRunner:
         self.total_rows_loaded = 0
         self.start_time = None
         self.end_time = None
+        self.max_extracted_timestamp = None  # Track max timestamp for transactional loads
 
     def _create_extractor(self):
         """
@@ -474,10 +475,18 @@ class ETLRunner:
                 batch_size=self.config.batch_size
             )
 
-            # Count extracted rows (generator wrapper)
+            # Count extracted rows and track max timestamp (generator wrapper)
+            timestamp_col = self.job_config.get('timestamp_column')
+
             def counting_generator(gen):
                 for df in gen:
                     self.total_rows_extracted += len(df)
+                    # Track max timestamp for updating last_sync_value
+                    if timestamp_col and timestamp_col in df.columns:
+                        batch_max = df[timestamp_col].max()
+                        if pd.notna(batch_max):
+                            if self.max_extracted_timestamp is None or batch_max > self.max_extracted_timestamp:
+                                self.max_extracted_timestamp = batch_max
                     yield df
 
             # Load to BigQuery
@@ -486,6 +495,10 @@ class ETLRunner:
                 df_generator=counting_generator(df_generator),
                 on_batch_loaded=self._on_batch_loaded
             )
+
+            # Log max timestamp if captured
+            if self.max_extracted_timestamp is not None:
+                logger.info(f"Max extracted timestamp: {self.max_extracted_timestamp}")
 
             logger.info(
                 f"Transactional load completed successfully: "
@@ -826,14 +839,25 @@ class ETLRunner:
 
             # Update final status
             if self.etl_run_id:
-                self.config.update_etl_run_status(
-                    etl_run_id=self.etl_run_id,
-                    status='completed',
-                    data_source_id=self.data_source_id,
-                    rows_extracted=self.total_rows_extracted,
-                    rows_loaded=self.total_rows_loaded,
-                    duration_seconds=duration_seconds
-                )
+                update_kwargs = {
+                    'etl_run_id': self.etl_run_id,
+                    'status': 'completed',
+                    'data_source_id': self.data_source_id,
+                    'rows_extracted': self.total_rows_extracted,
+                    'rows_loaded': self.total_rows_loaded,
+                    'duration_seconds': duration_seconds
+                }
+
+                # Include max_extracted_timestamp for transactional loads
+                if self.job_config.get('load_type') == 'transactional' and self.max_extracted_timestamp is not None:
+                    # Convert to ISO string format
+                    if hasattr(self.max_extracted_timestamp, 'isoformat'):
+                        update_kwargs['max_extracted_timestamp'] = self.max_extracted_timestamp.isoformat()
+                    else:
+                        update_kwargs['max_extracted_timestamp'] = str(self.max_extracted_timestamp)
+                    logger.info(f"Sending max_extracted_timestamp: {update_kwargs['max_extracted_timestamp']}")
+
+                self.config.update_etl_run_status(**update_kwargs)
 
             logger.info("=" * 80)
             logger.info("ETL RUN COMPLETED SUCCESSFULLY")

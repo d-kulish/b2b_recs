@@ -35,7 +35,7 @@
 
 /* Hover State */
 .btn:hover {
-    background-color: #f0fdf4;  /* Light green on hover */
+    background-color: #f9fafb;  /* Light gray on hover */
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);  /* Enhanced shadow on hover */
     transform: translateY(-1px);  /* Subtle lift effect */
 }
@@ -75,8 +75,8 @@
 }
 
 .btn-primary:hover {
-    background-color: #f0fdf4;  /* Light green on hover */
-    color: #166534;  /* Dark green text on hover */
+    background-color: #f9fafb;  /* Light gray on hover */
+    color: #1f2937;  /* Dark gray text */
 }
 
 /* Success Button (confirmations, create, add) */

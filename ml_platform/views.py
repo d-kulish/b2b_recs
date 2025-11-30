@@ -318,59 +318,65 @@ def model_etl(request, model_id):
     page_number = request.GET.get('page', 1)
     page_obj = paginator.get_page(page_number)
 
-    # Prepare ridge chart data for ETL Duration Analysis
-    # Get all runs from the last 30 days (unpaginated) for the chart
-    # Include completed, partial, and failed runs to show status colors
-    all_runs_30_days = model.etl_runs.filter(
-        started_at__gte=cutoff_date,
+    # Prepare ridge chart data for ETL Duration Analysis (3D histogram view)
+    # Get all runs from the last 3 days with hourly granularity
+    # Each individual run is shown as a separate histogram bar (not aggregated)
+    ridge_cutoff_date = timezone.now() - timedelta(days=3)
+    all_runs_3_days = model.etl_runs.filter(
+        started_at__gte=ridge_cutoff_date,
         status__in=['completed', 'partial', 'failed']
     ).select_related('data_source').order_by('started_at')
 
-    # Build data structure for ridge chart - grouped by day, showing job names, durations, and status
-    ridge_chart_data_by_day = defaultdict(list)
+    # Build data structure for ridge chart - grouped by job name
+    # Each job has a list of individual runs with their exact hour timestamp
+    # Structure: {job_name: [{hour: 'YYYY-MM-DD HH:00', duration: X, status: 'success'|'failed'}, ...]}
+    ridge_data_by_job = defaultdict(list)
 
-    # Collect all unique job names for consistent X-axis
+    # Collect all unique job names for Y-axis
     all_job_names = set()
 
-    for run in all_runs_30_days:
+    for run in all_runs_3_days:
         # Skip runs without a data source (Unknown jobs)
         if not run.data_source or not run.started_at:
             continue
 
-        day_str = run.started_at.strftime('%Y-%m-%d')
+        # Format hour as 'YYYY-MM-DD HH:00'
+        hour_str = run.started_at.strftime('%Y-%m-%d %H:00')
         job_name = run.data_source.name
-        # For failed jobs, use a default duration if not available
         duration = run.get_duration_seconds() or 0
+        is_success = run.status in ['completed', 'partial']
 
         all_job_names.add(job_name)
-        # Determine if job was successful (completed/partial) or failed
-        is_success = run.status in ['completed', 'partial']
-        ridge_chart_data_by_day[day_str].append({
-            'job_name': job_name,
+        ridge_data_by_job[job_name].append({
+            'hour': hour_str,
             'duration': duration,
             'status': 'success' if is_success else 'failed',
         })
 
-    # Generate all 30 days (including empty ones) for consistent chart
-    all_days = []
-    today = timezone.now().date()
-    for i in range(30):
-        day = today - timedelta(days=i)
-        day_str = day.strftime('%Y-%m-%d')
-        all_days.append(day_str)
+    # Generate all 72 hours (3 days * 24 hours) for consistent X-axis
+    all_hours = []
+    now = timezone.now()
+    # Start from 3 days ago at hour 0
+    start_time = now.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=2)
+    for i in range(72):  # 3 days * 24 hours
+        hour_time = start_time + timedelta(hours=i)
+        hour_str = hour_time.strftime('%Y-%m-%d %H:00')
+        all_hours.append(hour_str)
 
-    # Format data for frontend (newest at bottom means we reverse the order)
+    # Format data for frontend - grouped by job name with individual runs
     ridge_chart_data = []
+    sorted_job_names = sorted(list(all_job_names))
 
-    for day_str in reversed(all_days):  # Oldest first, newest last (bottom of chart)
+    for job_name in sorted_job_names:
         ridge_chart_data.append({
-            'date': day_str,
-            'jobs': ridge_chart_data_by_day.get(day_str, [])
+            'job_name': job_name,
+            'runs': ridge_data_by_job[job_name],  # List of individual runs
         })
 
     ridge_chart_json = json.dumps({
         'data': ridge_chart_data,
-        'job_names': sorted(list(all_job_names)),
+        'hours': all_hours,
+        'job_names': sorted_job_names,
     })
 
     context = {

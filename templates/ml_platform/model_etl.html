@@ -175,17 +175,17 @@
 
         {% if page_obj.object_list %}
         <div class="overflow-x-auto">
-            <table class="min-w-full">
+            <table class="w-full table-fixed">
                 <thead class="bg-gray-50 border-b border-gray-200">
                     <tr>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Run ID</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">ETL Job</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Connection</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Status</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Started</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Duration</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Rows</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Actions</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase" style="width: 8%">Run ID</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase" style="width: 15%">ETL Job</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase" style="width: 18%">Connection</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase" style="width: 12%">Status</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase" style="width: 17%">Started</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase" style="width: 10%">Duration</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase" style="width: 8%">Rows</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase" style="width: 12%">Actions</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-200">
@@ -194,7 +194,7 @@
                         <td class="px-4 py-3 text-sm font-medium text-gray-900">#{{ run.id }}</td>
                         <td class="px-4 py-3 text-sm text-gray-900">
                             {% if run.data_source %}
-                            <span class="font-medium">{{ run.data_source.name }}</span>
+                            <span class="font-medium block truncate" title="{{ run.data_source.name }}">{{ run.data_source.name }}</span>
                             {% else %}
                             <span class="text-gray-400 italic">Unknown</span>
                             {% endif %}
@@ -342,8 +342,8 @@
                     </div>
                 </div>
                 <span class="text-xs bg-gray-100 text-gray-600 px-3 py-1 rounded-full">
-                    <i class="fas fa-chart-area mr-1"></i>
-                    Last 30 days
+                    <i class="fas fa-chart-bar mr-1"></i>
+                    Last 3 days (hourly)
                 </span>
             </div>
         </div>
@@ -2278,7 +2278,7 @@
 const ridgeChartData = {{ ridge_chart_data|safe }};
 
 // ============================================================================
-// Ridge Chart Implementation
+// 3D Perspective Histogram Chart Implementation
 // ============================================================================
 
 function initRidgeChart() {
@@ -2288,7 +2288,7 @@ function initRidgeChart() {
     const svg = document.getElementById('ridgeChart');
 
     // Check if we have any data
-    const hasData = ridgeChartData.data.some(day => day.jobs.length > 0);
+    const hasData = ridgeChartData.data.some(job => job.runs && job.runs.length > 0);
 
     if (!hasData) {
         loading.classList.add('hidden');
@@ -2311,56 +2311,75 @@ function renderRidgeChart() {
     const container = document.getElementById('ridgeChartContainer');
     const containerWidth = container.clientWidth;
 
-    // Chart dimensions
-    const margin = { top: 30, right: 30, bottom: 80, left: 100 };
+    // Chart dimensions for 3D perspective histogram
+    const margin = { top: 25, right: 40, bottom: 40, left: 140 };
     const width = containerWidth - margin.left - margin.right;
-    const height = 500;
-    const ridgeHeight = height / 30; // Height per day ridge
+    const height = 180;
+
+    // 3D perspective parameters
+    const perspectiveSkew = 0.15; // Horizontal skew for depth effect
+
+    const jobNames = ridgeChartData.job_names;
+    const hours = ridgeChartData.hours;
+    const numJobs = jobNames.length;
+
+    // Calculate ridge spacing
+    const ridgeSpacing = height / (numJobs + 1);
+    const maxBarHeight = ridgeSpacing * 2; // Max height a bar can reach
 
     svgElement
         .attr('width', containerWidth)
         .attr('height', height + margin.top + margin.bottom);
 
-    const svg = svgElement.append('g')
-        .attr('transform', `translate(${margin.left},${margin.top})`);
-
-    // Define gradients for success and failed states
     const defs = svgElement.append('defs');
 
-    // Success gradient (green)
-    const successGradient = defs.append('linearGradient')
-        .attr('id', 'successGradient')
-        .attr('x1', '0%')
-        .attr('y1', '0%')
-        .attr('x2', '0%')
-        .attr('y2', '100%');
-    successGradient.append('stop')
-        .attr('offset', '0%')
-        .attr('stop-color', '#22C55E')
-        .attr('stop-opacity', 0.9);
-    successGradient.append('stop')
-        .attr('offset', '100%')
-        .attr('stop-color', '#86EFAC')
-        .attr('stop-opacity', 0.6);
+    // Create gradients for each job row with depth shading
+    jobNames.forEach((jobName, jobIndex) => {
+        const depthFactor = jobIndex / Math.max(numJobs - 1, 1);
 
-    // Failed gradient (red)
-    const failedGradient = defs.append('linearGradient')
-        .attr('id', 'failedGradient')
-        .attr('x1', '0%')
-        .attr('y1', '0%')
-        .attr('x2', '0%')
-        .attr('y2', '100%');
-    failedGradient.append('stop')
-        .attr('offset', '0%')
-        .attr('stop-color', '#EF4444')
-        .attr('stop-opacity', 0.9);
-    failedGradient.append('stop')
-        .attr('offset', '100%')
-        .attr('stop-color', '#FCA5A5')
-        .attr('stop-opacity', 0.6);
+        // Success gradient (green) with depth shading
+        const successGrad = defs.append('linearGradient')
+            .attr('id', `successGradient-${jobIndex}`)
+            .attr('x1', '0%')
+            .attr('y1', '100%')
+            .attr('x2', '0%')
+            .attr('y2', '0%');
 
-    const data = ridgeChartData.data;
-    const jobNames = ridgeChartData.job_names;
+        const successBaseColor = d3.interpolateRgb('#166534', '#22C55E')(depthFactor);
+        const successLightColor = d3.interpolateRgb('#15803d', '#86EFAC')(depthFactor);
+
+        successGrad.append('stop')
+            .attr('offset', '0%')
+            .attr('stop-color', successBaseColor)
+            .attr('stop-opacity', 0.95);
+        successGrad.append('stop')
+            .attr('offset', '100%')
+            .attr('stop-color', successLightColor)
+            .attr('stop-opacity', 0.8);
+
+        // Failed gradient (red) with depth shading
+        const failedGrad = defs.append('linearGradient')
+            .attr('id', `failedGradient-${jobIndex}`)
+            .attr('x1', '0%')
+            .attr('y1', '100%')
+            .attr('x2', '0%')
+            .attr('y2', '0%');
+
+        const failedBaseColor = d3.interpolateRgb('#991B1B', '#EF4444')(depthFactor);
+        const failedLightColor = d3.interpolateRgb('#B91C1C', '#FCA5A5')(depthFactor);
+
+        failedGrad.append('stop')
+            .attr('offset', '0%')
+            .attr('stop-color', failedBaseColor)
+            .attr('stop-opacity', 0.95);
+        failedGrad.append('stop')
+            .attr('offset', '100%')
+            .attr('stop-color', failedLightColor)
+            .attr('stop-opacity', 0.8);
+    });
+
+    const svg = svgElement.append('g')
+        .attr('transform', `translate(${margin.left},${margin.top})`);
 
     if (jobNames.length === 0) {
         svg.append('text')
@@ -2372,155 +2391,243 @@ function renderRidgeChart() {
         return;
     }
 
-    // X scale - job names
-    const xScale = d3.scaleBand()
-        .domain(jobNames)
+    // X scale - hours (time series, oldest left, newest right)
+    const xScale = d3.scalePoint()
+        .domain(hours)
         .range([0, width])
-        .padding(0.1);
+        .padding(0.02);
 
-    // Y scale - dates (newest at bottom)
-    const dates = data.map(d => d.date);
-    const yScale = d3.scaleBand()
-        .domain(dates)
-        .range([0, height])
-        .padding(0);
+    // Build aggregated data per hour for each job (sum success and failed separately)
+    // Structure: {job_name: {hour: {success: X, failed: Y}}}
+    const aggregatedData = {};
+    ridgeChartData.data.forEach(job => {
+        aggregatedData[job.job_name] = {};
+        hours.forEach(hour => {
+            aggregatedData[job.job_name][hour] = { success: 0, failed: 0 };
+        });
+        job.runs.forEach(run => {
+            if (aggregatedData[job.job_name][run.hour]) {
+                if (run.status === 'success') {
+                    aggregatedData[job.job_name][run.hour].success += run.duration;
+                } else {
+                    aggregatedData[job.job_name][run.hour].failed += run.duration;
+                }
+            }
+        });
+    });
 
     // Find max duration for scaling heights
-    const maxDuration = d3.max(data, day =>
-        d3.max(day.jobs, job => job.duration) || 0
-    ) || 1;
+    let maxDuration = 0;
+    Object.values(aggregatedData).forEach(jobData => {
+        Object.values(jobData).forEach(hourData => {
+            const total = hourData.success + hourData.failed;
+            if (total > maxDuration) maxDuration = total;
+        });
+    });
+    maxDuration = maxDuration || 1;
 
-    // Height scale for ridge areas using log transformation
-    // This helps visualize both short and long duration jobs better
-    // Using log(1 + duration) to handle zero values gracefully
+    // Height scale using log transformation
     const heightScale = d3.scaleLog()
-        .domain([1, Math.max(maxDuration, 2)]) // Avoid log(0), minimum domain of 2 to prevent issues
-        .range([0, ridgeHeight * 3])
+        .domain([1, Math.max(maxDuration, 2)])
+        .range([0, maxBarHeight])
         .clamp(true);
 
-    // Helper function to apply log transform safely
     const getScaledHeight = (duration) => {
         if (duration <= 0) return 0;
-        return heightScale(1 + duration); // log(1 + duration) to handle small values
+        return heightScale(1 + duration);
     };
 
-    // X axis
-    svg.append('g')
-        .attr('transform', `translate(0,${height})`)
-        .call(d3.axisBottom(xScale))
-        .selectAll('text')
-        .attr('transform', 'rotate(-45)')
-        .style('text-anchor', 'end')
-        .style('font-size', '10px');
+    // Area generator for smooth curves
+    const areaGenerator = d3.area()
+        .x(d => d.x)
+        .y0(d => d.y0)
+        .y1(d => d.y1)
+        .curve(d3.curveBasis); // Smooth curve like the reference
 
-    // Y axis - show every 5th date label
-    const yAxis = d3.axisLeft(yScale)
-        .tickValues(dates.filter((d, i) => i % 5 === 0 || i === dates.length - 1))
+    // Draw job rows from back to front (first job at back, last job at front)
+    ridgeChartData.data.forEach((job, jobIndex) => {
+        const depthFactor = jobIndex / Math.max(numJobs - 1, 1);
+
+        // Calculate baseline Y position for this job's row
+        const baselineY = margin.top + ridgeSpacing * (jobIndex + 1);
+
+        // Horizontal offset for perspective
+        const perspectiveOffset = (1 - depthFactor) * width * perspectiveSkew * 0.1;
+
+        // Create row group
+        const rowGroup = svg.append('g')
+            .attr('class', `row-${jobIndex}`)
+            .attr('transform', `translate(0, ${-margin.top})`);
+
+        // Draw baseline
+        rowGroup.append('line')
+            .attr('x1', -perspectiveOffset)
+            .attr('x2', width - perspectiveOffset)
+            .attr('y1', baselineY)
+            .attr('y2', baselineY)
+            .attr('stroke', d3.interpolateRgb('#9CA3AF', '#E5E7EB')(depthFactor))
+            .attr('stroke-width', 0.5);
+
+        // Build area data points for success and failed
+        const successAreaData = [];
+        const failedAreaData = [];
+        const jobAggData = aggregatedData[job.job_name];
+
+        hours.forEach(hour => {
+            const x = xScale(hour) - perspectiveOffset;
+            const hourData = jobAggData[hour];
+            const successHeight = getScaledHeight(hourData.success);
+            const failedHeight = getScaledHeight(hourData.failed);
+
+            successAreaData.push({
+                x: x,
+                y0: baselineY,
+                y1: baselineY - successHeight,
+                hour: hour,
+                duration: hourData.success
+            });
+
+            // Failed area stacks on top of success
+            failedAreaData.push({
+                x: x,
+                y0: baselineY - successHeight,
+                y1: baselineY - successHeight - failedHeight,
+                hour: hour,
+                duration: hourData.failed
+            });
+        });
+
+        // Draw success area (green)
+        const hasSuccessData = successAreaData.some(d => d.duration > 0);
+        if (hasSuccessData) {
+            rowGroup.append('path')
+                .datum(successAreaData)
+                .attr('fill', `url(#successGradient-${jobIndex})`)
+                .attr('stroke', d3.interpolateRgb('#166534', '#22C55E')(depthFactor))
+                .attr('stroke-width', 1)
+                .attr('d', areaGenerator)
+                .attr('opacity', 0.9)
+                .style('cursor', 'pointer')
+                .on('mousemove', function(event) {
+                    const [mouseX] = d3.pointer(event);
+                    const closestPoint = findClosestPoint(successAreaData, mouseX + perspectiveOffset);
+                    if (closestPoint && closestPoint.duration > 0) {
+                        const hourDate = new Date(closestPoint.hour.replace(' ', 'T'));
+                        const formattedTime = hourDate.toLocaleString('en-US', {
+                            month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'
+                        });
+                        showTooltip(event, `
+                            <div class="font-semibold">${job.job_name}</div>
+                            <div class="text-gray-300">${formattedTime}</div>
+                            <div class="text-green-400">Success: ${formatDuration(closestPoint.duration)}</div>
+                        `);
+                    }
+                })
+                .on('mouseleave', hideTooltip);
+        }
+
+        // Draw failed area (red) stacked on top
+        const hasFailedData = failedAreaData.some(d => d.duration > 0);
+        if (hasFailedData) {
+            rowGroup.append('path')
+                .datum(failedAreaData)
+                .attr('fill', `url(#failedGradient-${jobIndex})`)
+                .attr('stroke', d3.interpolateRgb('#991B1B', '#EF4444')(depthFactor))
+                .attr('stroke-width', 1)
+                .attr('d', areaGenerator)
+                .attr('opacity', 0.9)
+                .style('cursor', 'pointer')
+                .on('mousemove', function(event) {
+                    const [mouseX] = d3.pointer(event);
+                    const closestPoint = findClosestPoint(failedAreaData, mouseX + perspectiveOffset);
+                    if (closestPoint && closestPoint.duration > 0) {
+                        const hourDate = new Date(closestPoint.hour.replace(' ', 'T'));
+                        const formattedTime = hourDate.toLocaleString('en-US', {
+                            month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'
+                        });
+                        showTooltip(event, `
+                            <div class="font-semibold">${job.job_name}</div>
+                            <div class="text-gray-300">${formattedTime}</div>
+                            <div class="text-red-400">Failed: ${formatDuration(closestPoint.duration)}</div>
+                        `);
+                    }
+                })
+                .on('mouseleave', hideTooltip);
+        }
+
+        // Add job name label on the left
+        rowGroup.append('text')
+            .attr('x', -10 - perspectiveOffset)
+            .attr('y', baselineY)
+            .attr('text-anchor', 'end')
+            .attr('dominant-baseline', 'middle')
+            .attr('fill', d3.interpolateRgb('#4B5563', '#6B7280')(depthFactor))
+            .attr('font-size', `${10 + depthFactor * 2}px`)
+            .attr('font-weight', depthFactor > 0.5 ? '500' : '400')
+            .text(job.job_name.length > 18 ? job.job_name.substring(0, 16) + '...' : job.job_name);
+    });
+
+    // X axis at the bottom - show only day boundaries
+    const dayBoundaries = hours.filter(h => h.endsWith('00:00'));
+    const xAxis = d3.axisBottom(xScale)
+        .tickValues(dayBoundaries)
         .tickFormat(d => {
-            const date = new Date(d);
+            const date = new Date(d.replace(' ', 'T'));
             return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
         });
 
     svg.append('g')
-        .call(yAxis)
+        .attr('transform', `translate(0,${height - 10})`)
+        .call(xAxis)
         .selectAll('text')
-        .style('font-size', '11px');
+        .style('text-anchor', 'middle')
+        .style('font-size', '10px');
 
-    // Draw ridges for each day
-    data.forEach((day, dayIndex) => {
-        const yPos = yScale(day.date) + yScale.bandwidth() / 2;
-
-        if (day.jobs.length === 0) {
-            // Draw flat line for empty days
-            svg.append('line')
-                .attr('x1', 0)
-                .attr('x2', width)
-                .attr('y1', yPos)
-                .attr('y2', yPos)
-                .attr('stroke', '#E5E7EB')
-                .attr('stroke-width', 1);
-            return;
-        }
-
-        // Draw individual "bump" shapes for each job execution
-        // This creates proper ridge peaks instead of continuous areas
-        const bandWidth = xScale.bandwidth();
-
-        day.jobs.forEach(job => {
-            const xCenter = xScale(job.job_name) + bandWidth / 2;
-            const peakHeight = getScaledHeight(job.duration);
-
-            if (peakHeight <= 0) return; // Skip jobs with 0 duration
-
-            // Create a smooth bump/peak shape for this job
-            // Using a simple triangle-like area with curved edges
-            const bumpWidth = bandWidth * 0.8;
-            const halfWidth = bumpWidth / 2;
-
-            // Define points for a smooth bump shape
-            const bumpPath = d3.area()
-                .x(d => d.x)
-                .y0(yPos)
-                .y1(d => yPos - d.y)
-                .curve(d3.curveBasis);
-
-            const bumpData = [
-                { x: xCenter - halfWidth, y: 0 },
-                { x: xCenter - halfWidth * 0.5, y: peakHeight * 0.7 },
-                { x: xCenter, y: peakHeight },
-                { x: xCenter + halfWidth * 0.5, y: peakHeight * 0.7 },
-                { x: xCenter + halfWidth, y: 0 }
-            ];
-
-            const isSuccess = job.status === 'success';
-            const gradientId = isSuccess ? 'successGradient' : 'failedGradient';
-            const strokeColor = isSuccess ? '#22C55E' : '#EF4444';
-
-            svg.append('path')
-                .datum(bumpData)
-                .attr('fill', `url(#${gradientId})`)
-                .attr('stroke', strokeColor)
-                .attr('stroke-width', 1)
-                .attr('d', bumpPath)
-                .attr('opacity', 0.85)
-                .style('cursor', 'pointer')
-                .on('mouseover', function() {
-                    d3.select(this).attr('opacity', 1);
-                })
-                .on('mouseout', function() {
-                    d3.select(this).attr('opacity', 0.85);
-                })
-                .on('mousemove', function(event) {
-                    const statusColor = isSuccess ? 'text-green-400' : 'text-red-400';
-                    const statusText = isSuccess ? 'Success' : 'Failed';
-                    showTooltip(event, `
-                        <div class="font-semibold">${day.date}</div>
-                        <div>${job.job_name}</div>
-                        <div class="${statusColor}">${statusText} - ${formatDuration(job.duration)}</div>
-                    `);
-                })
-                .on('mouseleave', hideTooltip);
-        });
-
-        // Draw a baseline for days with data
-        svg.append('line')
-            .attr('x1', 0)
-            .attr('x2', width)
-            .attr('y1', yPos)
-            .attr('y2', yPos)
-            .attr('stroke', '#E5E7EB')
-            .attr('stroke-width', 0.5);
+    // Add hour markers (every 6 hours)
+    const hourMarkers = hours.filter(h => {
+        const hour = parseInt(h.split(' ')[1].split(':')[0]);
+        return hour % 6 === 0 && hour !== 0;
     });
+
+    svg.append('g')
+        .attr('transform', `translate(0,${height - 10})`)
+        .selectAll('.hour-tick')
+        .data(hourMarkers)
+        .enter()
+        .append('text')
+        .attr('x', d => xScale(d))
+        .attr('y', 25)
+        .attr('text-anchor', 'middle')
+        .attr('fill', '#9CA3AF')
+        .attr('font-size', '8px')
+        .text(d => {
+            const hour = parseInt(d.split(' ')[1].split(':')[0]);
+            return `${hour}:00`;
+        });
 
     // Add chart title
     svg.append('text')
         .attr('x', width / 2)
-        .attr('y', -10)
+        .attr('y', -15)
         .attr('text-anchor', 'middle')
         .attr('fill', '#374151')
         .attr('font-size', '12px')
         .attr('font-weight', '600')
-        .text('ETL Job Durations by Day');
+        .text('ETL Job Runs (Last 3 Days - Hourly)');
+}
+
+// Helper function to find closest data point to mouse X position
+function findClosestPoint(data, mouseX) {
+    let closest = null;
+    let minDist = Infinity;
+    data.forEach(d => {
+        const dist = Math.abs(d.x - mouseX);
+        if (dist < minDist) {
+            minDist = dist;
+            closest = d;
+        }
+    });
+    return minDist < 30 ? closest : null; // Only return if within 30px
 }
 
 function formatDuration(seconds) {
@@ -2574,7 +2681,7 @@ document.addEventListener('DOMContentLoaded', function() {
     window.addEventListener('resize', function() {
         clearTimeout(resizeTimeout);
         resizeTimeout = setTimeout(function() {
-            const hasData = ridgeChartData.data.some(day => day.jobs.length > 0);
+            const hasData = ridgeChartData.data.some(job => job.runs && job.runs.length > 0);
             if (hasData) {
                 renderRidgeChart();
             }

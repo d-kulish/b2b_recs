@@ -3,7 +3,7 @@
 ## Document Purpose
 This document outlines the agreed-upon architecture and implementation strategy for transforming a client-specific TFRS (Two-Tower Retrieval System) implementation into a multi-tenant B2B SaaS platform.
 
-**Last Updated**: 2025-11-18
+**Last Updated**: 2025-12-01
 
 ---
 
@@ -18,6 +18,7 @@ Build a SaaS platform where business users can build, train, and deploy producti
 3. **Cost Efficiency**: Pay-per-use model, no expensive always-on infrastructure
 4. **Template-Based**: Standardized components, deployed per client
 5. **Iterate Fast**: Build working product first, automate infrastructure later
+6. **TFX-First**: Use TensorFlow Extended (TFX) for production ML pipelines with proper artifact lineage
 
 ---
 
@@ -134,7 +135,59 @@ Build a SaaS platform where business users can build, train, and deploy producti
 - Configuration patterns and best practices
 - Your operational knowledge and support
 
-#### 4. Django as the Control Interface
+#### 4. TFX-Based ML Pipeline Architecture
+
+**Decision**: Use TensorFlow Extended (TFX) for production ML pipelines instead of custom vocabulary/preprocessing scripts.
+
+**Why TFX over Manual Approach:**
+
+| Aspect | Manual (past/) | TFX Approach |
+|--------|---------------|--------------|
+| Vocabularies | JSON file manually created | TFX Transform artifacts with lineage |
+| Schema | Implicit in code | Explicit, versioned, validated |
+| Preprocessing | Separate vocab_builder step | Integrated in Transform component |
+| Artifact Tracking | Manual GCS paths | ML Metadata (MLMD) with full lineage |
+| Reproducibility | Depends on discipline | Built-in via artifact versioning |
+| Serving Consistency | Must manually align | Transform graph saved with model |
+
+**TFX Pipeline Components:**
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                       TFX PIPELINE (Beam/Dataflow)                           │
+│                                                                              │
+│   BigQuery     ExampleGen     StatisticsGen     SchemaGen     Transform     │
+│   (source) ──→ (TFRecords) ──→ (data profile) ──→ (schema) ──→ (preprocess) │
+│                                                                              │
+│                                                       │                      │
+│                                                       ↓                      │
+│                                                                              │
+│                                                   Trainer                    │
+│                                               (TFRS Two-Tower)               │
+│                                                       │                      │
+│                                                       ↓                      │
+│                                                                              │
+│                                              Evaluator + Pusher              │
+│                                             (metrics, deployment)            │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                        │
+                                        ↓
+                              ML Metadata (MLMD)
+                              - artifact lineage
+                              - execution history
+                              - schema versions
+```
+
+**Key Benefits:**
+- **Vocabularies as Artifacts**: `tft.compute_and_apply_vocabulary()` creates vocabulary files tracked by MLMD
+- **Schema Validation**: Automatic schema inference and drift detection
+- **Reproducibility**: Every training run linked to exact data/transform versions
+- **Serving Consistency**: Transform graph embedded in SavedModel
+
+**Reference**: [TFX + TFRS Tutorial](https://www.tensorflow.org/tfx/tutorials/tfx/recommenders)
+
+#### 5. Django as the Control Interface
 **Rationale:**
 - Mature framework with excellent admin interface
 - Strong multi-tenancy support
@@ -154,7 +207,7 @@ Build a SaaS platform where business users can build, train, and deploy producti
 - Cross-project monitoring
 - Support tools
 
-#### 5. Network Architecture & Static IPs
+#### 6. Network Architecture & Static IPs
 **Challenge:**
 - Cloud Run services (Django, ETL) have dynamic outbound IPs by default
 - Client databases often require IP whitelisting for security
@@ -363,51 +416,74 @@ BigQuery Dataset (client project)
 - Cloud Scheduler: $0.10/job/month
 - Estimated: $10-20/month per client
 
-#### 3. ML Pipeline Components
+#### 3. ML Pipeline Components (TFX-Based)
 
-**Purpose**: Four-stage pipeline for building recommendation models
+**Purpose**: TFX pipeline for building production recommendation models with proper artifact lineage.
 
-**Stage 1: Data Extractor (Vertex AI Custom Job)**
-- Reads from BigQuery
-- Extracts 90-day transaction history
-- Includes product metadata (names, categories, subcategories)
-- Filters top 80% revenue products
+**TFX Component Stages:**
+
+| Stage | TFX Component | Purpose | Runner |
+|-------|---------------|---------|--------|
+| 1 | **ExampleGen** | BigQuery → TFRecords | Dataflow |
+| 2 | **StatisticsGen** | Generate data statistics | Dataflow |
+| 3 | **SchemaGen** | Infer/validate schema | Local |
+| 4 | **Transform** | Feature preprocessing, vocabularies | Dataflow |
+| 5 | **Trainer** | Train TFRS two-tower model | Vertex AI (GPU) |
+| 6 | **Evaluator** | Compute metrics, validate model | Local |
+| 7 | **Pusher** | Deploy to serving | Cloud Run |
+
+**Component Details:**
+
+**ExampleGen (BigQueryExampleGen)**
+- Reads from BigQuery based on Dataset definition
+- Applies filters (date range, revenue threshold)
 - Outputs compressed TFRecord files to GCS
-- Machine type: n1-standard-4
-- Runtime: ~30-60 minutes
+- Handles train/eval split
+- Runner: Dataflow for scalability
 
-**Stage 2: Vocab Builder (Vertex AI Custom Job)**
-- Reads TFRecord files from Stage 1
-- Builds vocabularies for all features
-- Creates revenue/timestamp buckets
-- Outputs vocabularies.json to GCS
-- Machine type: n1-standard-4
-- Runtime: ~3-5 minutes
+**StatisticsGen**
+- Generates TFDV statistics for data profiling
+- Detects anomalies and drift
+- Input for schema inference
 
-**Stage 3: Trainer (Vertex AI Custom Job with GPUs)**
-- Two-tower retrieval architecture
-- 8 features: customer_id, product_id, revenue, city, timestamp, art_name, category, subcategory
+**SchemaGen**
+- Infers schema from statistics
+- Can be curated/frozen for production
+- Enables schema validation on new data
+
+**Transform**
+- Executes `preprocessing_fn` defined by Feature Config
+- Creates vocabularies via `tft.compute_and_apply_vocabulary()`
+- Applies bucketization, normalization, crosses
+- Vocabularies saved as artifacts with lineage
+- Transform graph saved for serving consistency
+- Runner: Dataflow
+
+**Trainer**
+- TFRS two-tower model (Query + Candidate towers)
+- Loads Transform output (transformed examples + vocabularies)
 - Multi-GPU training (4x T4/V100/L4)
 - Early stopping and adaptive learning rate
-- MLflow logging for experiments
-- Outputs: saved_model, query_model, candidate_model
-- Machine type: n1-standard-32 with 4x GPUs
-- Runtime: 2-6 hours depending on dataset size
-- Target performance: 45-47% Recall@100
+- Logs to MLflow for experiment comparison
+- Outputs: saved_model with embedded transform
+- Runner: Vertex AI Custom Job
 
-**Stage 4: Deployment (Automated)**
-- Updates Cloud Run model serving service
-- Switches to new model version
+**Evaluator**
+- Computes Recall@k metrics
+- Validates against threshold
+- Gates deployment (must pass evaluation)
+
+**Pusher**
+- Deploys model to Cloud Run serving
+- Version management via Cloud Run revisions
 - Health check validation
-- Rollback capability via Cloud Run revisions
 
 **Orchestration:**
-- Django triggers Stage 1 via Celery task
-- Celery task polls Vertex AI job status
-- On completion, triggers Stage 2
-- Chain continues through all stages
-- Django UI shows real-time progress
-- Email notifications on completion/failure
+- **Vertex AI Pipelines** orchestrates TFX pipeline
+- Pipeline compiled to Kubeflow Pipelines IR
+- Django triggers pipeline via Vertex AI API
+- Django polls pipeline status for UI updates
+- ML Metadata tracks all artifacts and executions
 
 #### 4. MLflow Server
 
@@ -525,6 +601,135 @@ gs://client-acme-prod-ml-platform/
 - `source-db-credentials`: Connection string for client source database
 - `api-keys`: External service API keys
 - `service-account-keys`: For cross-service authentication
+
+---
+
+## ML Platform Domains
+
+The platform is organized into distinct domains that represent the end-to-end ML workflow. Each domain has its own Django sub-app, UI, and business logic.
+
+### Domain Overview
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           ML PLATFORM DOMAINS                                │
+│                                                                              │
+│  ┌──────────────┐    ┌──────────────┐    ┌────────────────────┐            │
+│  │     ETL      │    │   DATASETS   │    │ ENGINEERING &      │            │
+│  │   (Done ✅)  │    │              │    │ TESTING            │            │
+│  │              │    │              │    │                    │            │
+│  │ Source → BQ  │    │ What data?   │    │ How to preprocess? │            │
+│  │              │    │ Which cols?  │    │ Which features?    │            │
+│  │              │    │ Filters?     │    │ Embedding dims?    │            │
+│  │              │    │ Split?       │    │ Quick experiments  │            │
+│  └──────────────┘    └──────┬───────┘    └──────────┬─────────┘            │
+│                             │                       │                       │
+│                             └───────────┬───────────┘                       │
+│                                         ↓                                   │
+│                              ┌──────────────────┐                           │
+│                              │     TRAINING     │                           │
+│                              │                  │                           │
+│                              │ TFX Pipeline:    │                           │
+│                              │ • ExampleGen     │                           │
+│                              │ • StatisticsGen  │                           │
+│                              │ • SchemaGen      │                           │
+│                              │ • Transform      │                           │
+│                              │ • Trainer        │                           │
+│                              │ • Evaluator      │                           │
+│                              └────────┬─────────┘                           │
+│                                       │                                     │
+│         ┌─────────────────────────────┼─────────────────────────┐          │
+│         ↓                             ↓                         ↓          │
+│  ┌─────────────┐           ┌─────────────┐           ┌─────────────┐       │
+│  │ EXPERIMENTS │           │ ML METADATA │           │ DEPLOYMENT  │       │
+│  │             │           │             │           │             │       │
+│  │ MLflow      │           │ Artifacts   │           │ Model       │       │
+│  │ Heatmaps    │           │ Lineage     │           │ Serving     │       │
+│  │ Comparison  │           │ Schemas     │           │ Versioning  │       │
+│  └─────────────┘           └─────────────┘           └─────────────┘       │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Domain Responsibilities
+
+| Domain | Purpose | Status | Documentation |
+|--------|---------|--------|---------------|
+| **ETL** | Extract data from sources → BigQuery | ✅ Done | - |
+| **Datasets** | Define WHAT data goes into training | Planned | [docs/phase_datasets.md](docs/phase_datasets.md) |
+| **Engineering & Testing** | Define HOW to transform features + quick experiments | Planned | [docs/phase_engineering_testing.md](docs/phase_engineering_testing.md) |
+| **Training** | Execute full TFX pipeline | Planned | [docs/phase_training.md](docs/phase_training.md) |
+| **Experiments** | Compare results via MLflow heatmaps | Planned | [docs/phase_experiments.md](docs/phase_experiments.md) |
+| **Deployment** | Deploy and serve models | Planned | [docs/phase_deployment.md](docs/phase_deployment.md) |
+
+### Tool Responsibilities
+
+| Tool | Responsibility |
+|------|---------------|
+| **ML Metadata (MLMD)** | TFX artifact lineage, schema versions, vocabularies, production model tracking |
+| **MLflow** | Experiment comparison UI, metrics heatmaps, "which config scored best" |
+| **Vertex AI Pipelines** | Orchestrate TFX pipeline execution |
+| **Dataflow** | Execute Beam transforms at scale (ExampleGen, Transform) |
+
+### User Journey
+
+```
+1. ETL                    2. DATASETS              3. ENGINEERING & TESTING
+─────────                 ───────────              ─────────────────────────
+
+┌─────────────┐          ┌─────────────┐          ┌─────────────────┐
+│ Configure   │          │ Create      │          │ Create Feature  │
+│ data sources│    →     │ Dataset     │    →     │ Configuration   │
+│             │          │ definition  │          │                 │
+└─────────────┘          └─────────────┘          └────────┬────────┘
+                                                          │
+Data lands in BQ         Maps columns to                  ↓
+raw_data.*               ML concepts             ┌─────────────────┐
+                                                 │ Quick Test      │
+                                                 │ (10% data,      │
+                                                 │  1-2 epochs)    │
+                                                 └────────┬────────┘
+                                                          │
+                                                          ↓
+                                                 ┌─────────────────┐
+                                                 │ See results in  │
+                                                 │ MLflow heatmap  │
+                                                 └────────┬────────┘
+                                                          │
+                                                 Iterate until satisfied
+                                                          │
+                                                          ↓
+
+4. TRAINING                              5. EXPERIMENTS
+────────────                             ──────────────
+
+┌─────────────────┐                      ┌─────────────────┐
+│ Select best     │                      │ MLflow heatmap  │
+│ Feature Config  │        →             │ Compare runs    │
+│ Run full        │                      │ Pick winner     │
+│ TFX pipeline    │                      │                 │
+└─────────────────┘                      └────────┬────────┘
+                                                  │
+Vertex AI Pipelines                               ↓
+executes full pipeline
+ML Metadata tracks                       ┌─────────────────┐
+artifacts                                │ 6. DEPLOYMENT   │
+                                         │ Deploy to       │
+                                         │ production      │
+                                         └─────────────────┘
+```
+
+### Quick Test vs Full Training
+
+| Aspect | Quick Test | Full Training |
+|--------|------------|---------------|
+| Data | 10% sample | 100% |
+| Epochs | 1-2 | 10-50 (with early stopping) |
+| Duration | 5-15 min | 2-6 hours |
+| Cost | $1-3 | $10-50 |
+| Output | Indicative metrics only | Production model |
+| Tracked in | MLflow only | MLflow + ML Metadata |
+| Artifacts | Temporary | Permanent (vocabularies, model) |
 
 ---
 
@@ -1664,23 +1869,36 @@ ml_platform/
 ├── datasets/             # Dataset Management Domain (planned)
 │   ├── __init__.py
 │   ├── urls.py
-│   ├── views.py
-│   └── api.py
+│   ├── views.py          # Dataset wizard pages
+│   ├── api.py            # Dataset CRUD, column analysis
+│   └── services.py       # BigQuery schema analysis
 │
-├── features/             # Feature Engineering Domain (planned)
-│   └── ...
+├── engineering/          # Engineering & Testing Domain (planned)
+│   ├── __init__.py
+│   ├── urls.py
+│   ├── views.py          # Feature config UI, quick test UI
+│   ├── api.py            # Feature config CRUD, quick test trigger
+│   └── services.py       # preprocessing_fn generation
 │
 ├── training/             # Training Domain (planned)
-│   └── ...
+│   ├── __init__.py
+│   ├── urls.py
+│   ├── views.py          # Training pipeline UI
+│   ├── api.py            # Pipeline trigger, status polling
+│   └── services.py       # Vertex AI Pipelines integration
 │
 ├── experiments/          # Experiments Domain (planned)
-│   └── ...
+│   ├── __init__.py
+│   ├── urls.py
+│   ├── views.py          # MLflow heatmap integration
+│   └── api.py            # Experiment comparison data
 │
 ├── deployment/           # Deployment Domain (planned)
-│   └── ...
-│
-├── serving/              # Model Serving Domain (planned)
-│   └── ...
+│   ├── __init__.py
+│   ├── urls.py
+│   ├── views.py          # Model deployment UI
+│   ├── api.py            # Deploy, rollback, version management
+│   └── services.py       # Cloud Run deployment logic
 │
 └── utils/                # Shared utilities
     ├── connection_manager.py
@@ -1928,15 +2146,18 @@ From `past/` folder, these components are production-tested and will be reused:
 | 2025-11-09 | 1.0 | Initial document based on architecture discussions | - |
 | 2025-11-17 | 1.1 | Added Network Architecture section (Cloud NAT + Static IPs), updated cost structure | Claude Code |
 | 2025-11-30 | 1.2 | Added Code Organization & Architecture Guidelines section based on views.py refactoring | Claude Code |
+| 2025-12-01 | 2.0 | Major update: TFX-based ML Pipeline architecture, ML Platform Domains section, updated ML Pipeline Components to TFX approach, added domain documentation links | Claude Code |
 
 ---
 
 ## Next Steps
 
-1. **Review this document** - Ensure alignment on approach
-2. **Set up GCP Organization** - Create folder structure
-3. **Create template-dev project** - First manual client project
-4. **Start Phase 1, Week 1** - Begin Django foundation work
+1. **Review this document** - Ensure alignment on TFX-based approach
+2. **Implement Datasets domain** - See [docs/phase_datasets.md](docs/phase_datasets.md)
+3. **Implement Engineering & Testing domain** - See [docs/phase_engineering_testing.md](docs/phase_engineering_testing.md)
+4. **Implement Training domain** - See [docs/phase_training.md](docs/phase_training.md)
+5. **Implement Experiments domain** - See [docs/phase_experiments.md](docs/phase_experiments.md)
+6. **Implement Deployment domain** - See [docs/phase_deployment.md](docs/phase_deployment.md)
 
 ---
 

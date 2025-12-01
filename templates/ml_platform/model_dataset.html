@@ -1,10 +1,1867 @@
 {% extends 'base_model.html' %}
+{% load humanize %}
+{% load static %}
 
-{% block title %}{{ model.name }} - PLACEHOLDER{% endblock %}
+{% block title %}{{ model.name }} - Dataset Manager{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/cards.css' %}?v=4">
+<link rel="stylesheet" href="{% static 'css/modals.css' %}?v=2">
+{% endblock %}
 
 {% block model_content %}
-<div class="bg-white rounded-lg shadow p-6">
-    <h2 class="text-2xl font-bold text-gray-900 mb-4">PLACEHOLDER_TITLE</h2>
-    <p class="text-gray-600">This page is under development.</p>
+<div class="space-y-6">
+    <!-- Dataset Manager Container -->
+    <div class="bg-white rounded-xl border border-black shadow-lg p-6">
+        <div class="flex items-center justify-between mb-6">
+            <h2 class="text-2xl font-bold text-gray-900">Dataset Manager</h2>
+            <div class="btn-group">
+                <button onclick="refreshDatasets()" class="btn btn-secondary btn-sm" style="width: 120px;">
+                    <i class="fas fa-sync-alt"></i>Refresh
+                </button>
+                <button onclick="openWizard()" class="btn btn-primary btn-sm" style="width: 150px;">
+                    <i class="fas fa-plus"></i>New Dataset
+                </button>
+            </div>
+        </div>
+
+        <!-- Filter Bar -->
+        <div class="flex items-center gap-4 mb-4">
+            <div class="flex items-center gap-2">
+                <label class="text-sm font-medium text-gray-600">Status:</label>
+                <select id="statusFilter" onchange="filterDatasets()" class="form-select text-sm" style="width: 120px;">
+                    <option value="">All</option>
+                    <option value="draft">Draft</option>
+                    <option value="active">Active</option>
+                </select>
+            </div>
+            <div class="flex-1">
+                <input type="text" id="searchInput" placeholder="Search datasets..."
+                       class="form-input w-full text-sm" onkeyup="debounceSearch()">
+            </div>
+        </div>
+
+        <!-- Datasets List Container -->
+        <div id="datasetsList" class="space-y-3" style="min-height: 200px;">
+            <!-- Dataset cards will be inserted here by JavaScript -->
+            <div class="card-empty-state">
+                <p class="card-empty-state-title">No datasets configured</p>
+                <p class="card-empty-state-text">Create your first dataset to define training data for your ML models</p>
+            </div>
+        </div>
+
+        <!-- Pagination -->
+        <div id="paginationContainer" class="hidden mt-4 pt-4 border-t border-gray-200">
+            <div class="flex items-center justify-between">
+                <div id="paginationInfo" class="text-sm text-gray-600"></div>
+                <div id="paginationButtons" class="flex items-center gap-2"></div>
+            </div>
+        </div>
+    </div>
 </div>
+
+<!-- Dataset Wizard Modal -->
+<div id="datasetWizardModal" class="modal-overlay hidden">
+    <div class="modal-container modal-container-wizard">
+        <!-- Modal Header -->
+        <div class="modal-header-wizard">
+            <div class="modal-header-content">
+                <div class="modal-header-icon info">
+                    <i class="fas fa-table text-lg"></i>
+                </div>
+                <div class="modal-header-info">
+                    <h3 class="modal-header-title" id="wizardTitle">Create Dataset</h3>
+                    <p class="modal-step-counter">Step <span id="currentStep">1</span> of 4</p>
+                </div>
+            </div>
+
+            <!-- Progress Bar -->
+            <div class="modal-progress-bar">
+                <div id="progress1" class="modal-progress-segment active"></div>
+                <div id="progress2" class="modal-progress-segment"></div>
+                <div id="progress3" class="modal-progress-segment"></div>
+                <div id="progress4" class="modal-progress-segment"></div>
+            </div>
+        </div>
+
+        <!-- Modal Body -->
+        <div class="modal-body-wizard">
+            <!-- Step 1: Basic Info -->
+            <div id="step1" class="wizard-step active">
+                <h4 class="wizard-section-title">Basic Information</h4>
+
+                <!-- Dataset Name -->
+                <div class="wizard-field-group">
+                    <label class="wizard-field-label">Dataset Name <span class="required">*</span></label>
+                    <input type="text" id="datasetName" placeholder="e.g., Transactions Q4 2024"
+                           class="form-input w-full" oninput="validateDatasetName()">
+                    <p id="nameError" class="text-xs text-red-600 mt-1 hidden"></p>
+                    <p id="nameSuccess" class="text-xs text-green-600 mt-1 hidden">
+                        <i class="fas fa-check-circle mr-1"></i>Name is available
+                    </p>
+                </div>
+
+                <!-- Description -->
+                <div class="wizard-field-group">
+                    <label class="wizard-field-label">Description <span class="optional">(optional)</span></label>
+                    <textarea id="datasetDescription" placeholder="Describe the purpose of this dataset..."
+                              class="form-textarea w-full" rows="3"></textarea>
+                </div>
+
+                <div class="wizard-info-box info">
+                    <i class="fas fa-info-circle"></i>
+                    <div>
+                        <strong>What is a Dataset?</strong><br>
+                        A dataset defines which BigQuery tables, columns, and filters to use for training your ML models.
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 2: Source Tables -->
+            <div id="step2" class="wizard-step">
+                <h4 class="wizard-section-title">Select Source Tables</h4>
+                <p class="wizard-section-subtitle">Choose tables from your BigQuery raw_data dataset.</p>
+
+                <!-- Primary Table -->
+                <div class="wizard-field-group">
+                    <label class="wizard-field-label">Primary Table <span class="required">*</span></label>
+                    <div class="wizard-list-container">
+                        <div id="primaryTableList" class="list-content" style="max-height: 160px;">
+                            <p class="text-center text-gray-500 py-4">
+                                <i class="fas fa-spinner fa-spin mr-2"></i>Loading tables...
+                            </p>
+                        </div>
+                    </div>
+                    <p class="wizard-field-hint">
+                        <i class="fas fa-info-circle mr-1"></i>
+                        The primary table contains your main transaction/interaction data.
+                    </p>
+                </div>
+
+                <!-- Secondary Tables -->
+                <div class="wizard-field-group">
+                    <label class="wizard-field-label">Secondary Tables <span class="optional">(optional)</span></label>
+                    <div class="wizard-list-container">
+                        <div id="secondaryTableList" class="list-content" style="max-height: 140px;">
+                            <p class="text-center text-gray-500 py-4">Select a primary table first</p>
+                        </div>
+                    </div>
+                    <p class="wizard-field-hint">
+                        <i class="fas fa-link mr-1"></i>
+                        Additional tables to join (e.g., products, customers).
+                    </p>
+                </div>
+
+                <!-- Join Configuration (shown when secondary tables selected) -->
+                <div id="joinConfigSection" class="hidden">
+                    <div class="wizard-field-group">
+                        <label class="wizard-field-label">Join Configuration</label>
+                        <div id="joinConfigList" class="space-y-2">
+                            <!-- Join configs will be added dynamically -->
+                        </div>
+                        <button onclick="detectJoins()" class="btn btn-secondary btn-sm mt-2">
+                            <i class="fas fa-magic mr-1"></i>Auto-Detect Joins
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 3: Column Selection & Mapping -->
+            <div id="step3" class="wizard-step">
+                <h4 class="wizard-section-title">Column Selection & Mapping</h4>
+                <p class="wizard-section-subtitle">Select columns and map them to ML concepts.</p>
+
+                <!-- ML Column Suggestions -->
+                <div id="mlSuggestions" class="wizard-info-box success hidden">
+                    <i class="fas fa-lightbulb"></i>
+                    <div id="mlSuggestionsText">
+                        <!-- Will be populated with suggestions -->
+                    </div>
+                </div>
+
+                <!-- Column Selection per Table -->
+                <div id="columnSelectionContainer" style="max-height: 320px; overflow-y: auto;">
+                    <p class="text-center text-gray-500 py-4">Select tables in Step 2 first</p>
+                </div>
+
+                <!-- ML Role Mapping -->
+                <div class="wizard-field-group mt-4">
+                    <label class="wizard-field-label">ML Column Mapping <span class="required">*</span></label>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="text-xs font-medium text-gray-600 mb-1 block">User ID Column</label>
+                            <select id="userIdColumn" class="form-select w-full text-sm" onchange="validateCurrentStep()">
+                                <option value="">Select column...</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="text-xs font-medium text-gray-600 mb-1 block">Product ID Column</label>
+                            <select id="productIdColumn" class="form-select w-full text-sm" onchange="validateCurrentStep()">
+                                <option value="">Select column...</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="text-xs font-medium text-gray-600 mb-1 block">Timestamp Column</label>
+                            <select id="timestampColumn" class="form-select w-full text-sm" onchange="validateCurrentStep()">
+                                <option value="">Select column...</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="text-xs font-medium text-gray-600 mb-1 block">Revenue Column <span class="text-gray-400">(optional)</span></label>
+                            <select id="revenueColumn" class="form-select w-full text-sm" onchange="validateCurrentStep()">
+                                <option value="">Select column...</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 4: Filters & Split -->
+            <div id="step4" class="wizard-step">
+                <h4 class="wizard-section-title">Filters & Train/Eval Split</h4>
+                <p class="wizard-section-subtitle">Configure data filters and how to split data for training.</p>
+
+                <!-- Date Range Filter -->
+                <div class="wizard-field-group">
+                    <label class="wizard-field-label">Date Range Filter</label>
+                    <div class="space-y-2">
+                        <label class="wizard-selection-card">
+                            <input type="radio" name="dateRangeType" value="rolling" checked onchange="onDateRangeTypeChange()">
+                            <div class="card-content">
+                                <div class="card-title">Rolling Window</div>
+                                <div class="card-description">Last N months of data</div>
+                            </div>
+                        </label>
+                        <label class="wizard-selection-card">
+                            <input type="radio" name="dateRangeType" value="fixed" onchange="onDateRangeTypeChange()">
+                            <div class="card-content">
+                                <div class="card-title">Fixed Date Range</div>
+                                <div class="card-description">Specific start and end dates</div>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Rolling Window Config -->
+                <div id="rollingConfig" class="wizard-field-group">
+                    <label class="text-xs font-medium text-gray-600 mb-1 block">Number of Months</label>
+                    <select id="rollingMonths" class="form-select w-full text-sm">
+                        <option value="3">Last 3 months</option>
+                        <option value="6" selected>Last 6 months</option>
+                        <option value="12">Last 12 months</option>
+                        <option value="24">Last 24 months</option>
+                    </select>
+                </div>
+
+                <!-- Fixed Date Config -->
+                <div id="fixedDateConfig" class="wizard-field-group hidden">
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="text-xs font-medium text-gray-600 mb-1 block">Start Date</label>
+                            <input type="date" id="startDate" class="form-input w-full text-sm">
+                        </div>
+                        <div>
+                            <label class="text-xs font-medium text-gray-600 mb-1 block">End Date</label>
+                            <input type="date" id="endDate" class="form-input w-full text-sm">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Advanced Filters (collapsed by default) -->
+                <div class="wizard-field-group">
+                    <button type="button" onclick="toggleAdvancedFilters()" class="text-sm text-blue-600 hover:text-blue-800 flex items-center">
+                        <i id="advancedFiltersIcon" class="fas fa-chevron-right mr-2 transition-transform"></i>
+                        Advanced Filters
+                    </button>
+                    <div id="advancedFilters" class="hidden mt-3 space-y-3">
+                        <!-- Top Products Filter -->
+                        <div class="flex items-center gap-3">
+                            <input type="checkbox" id="enableTopProducts" onchange="toggleTopProductsInput()">
+                            <label class="text-sm text-gray-700">Only include top</label>
+                            <input type="number" id="topProductsPercent" value="80" min="1" max="100"
+                                   class="form-input w-20 text-sm" disabled>
+                            <span class="text-sm text-gray-700">% products by revenue</span>
+                        </div>
+                        <!-- Min Transactions Filter -->
+                        <div class="flex items-center gap-3">
+                            <input type="checkbox" id="enableMinTransactions" onchange="toggleMinTransactionsInput()">
+                            <label class="text-sm text-gray-700">Minimum</label>
+                            <input type="number" id="minTransactions" value="2" min="1"
+                                   class="form-input w-20 text-sm" disabled>
+                            <span class="text-sm text-gray-700">transactions per customer</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Train/Eval Split -->
+                <div class="wizard-field-group">
+                    <label class="wizard-field-label">Train/Eval Split Strategy</label>
+                    <div class="space-y-2">
+                        <label class="wizard-selection-card">
+                            <input type="radio" name="splitStrategy" value="time_based" checked onchange="onSplitStrategyChange()">
+                            <div class="card-content">
+                                <div class="card-title">Time-Based Split</div>
+                                <div class="card-description">Use last N days for evaluation</div>
+                            </div>
+                        </label>
+                        <label class="wizard-selection-card">
+                            <input type="radio" name="splitStrategy" value="random" onchange="onSplitStrategyChange()">
+                            <div class="card-content">
+                                <div class="card-title">Random Split</div>
+                                <div class="card-description">Random percentage for train/eval</div>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Time-Based Split Config -->
+                <div id="timeBasedConfig" class="wizard-field-group">
+                    <label class="text-xs font-medium text-gray-600 mb-1 block">Evaluation Days</label>
+                    <select id="evalDays" class="form-select w-full text-sm">
+                        <option value="7">Last 7 days for evaluation</option>
+                        <option value="14" selected>Last 14 days for evaluation</option>
+                        <option value="30">Last 30 days for evaluation</option>
+                    </select>
+                </div>
+
+                <!-- Random Split Config -->
+                <div id="randomSplitConfig" class="wizard-field-group hidden">
+                    <label class="text-xs font-medium text-gray-600 mb-1 block">Training Percentage</label>
+                    <div class="flex items-center gap-3">
+                        <input type="range" id="trainPercent" min="50" max="95" value="80"
+                               class="flex-1" oninput="updateTrainPercentLabel()">
+                        <span id="trainPercentLabel" class="text-sm font-medium text-gray-700 w-24">80% train</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal Footer -->
+        <div class="modal-footer-wizard">
+            <div class="footer-left">
+                <button onclick="closeWizard()" class="btn btn-secondary">Cancel</button>
+            </div>
+            <div class="footer-right">
+                <button onclick="prevStep()" class="btn btn-secondary hidden" id="prevButton">Previous</button>
+                <button onclick="nextStep()" class="btn btn-primary" id="nextButton" disabled>Next</button>
+                <button onclick="saveDataset()" class="btn btn-primary hidden" id="saveButton">Create Dataset</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div id="deleteModal" class="modal-overlay hidden">
+    <div class="modal-container modal-container-sm">
+        <div class="modal-header">
+            <div class="modal-header-icon danger">
+                <i class="fas fa-trash-alt"></i>
+            </div>
+            <h3 class="modal-header-title">Delete Dataset</h3>
+        </div>
+        <div class="modal-body">
+            <p>Are you sure you want to delete "<strong id="deleteDatasetName"></strong>"?</p>
+            <p class="text-sm text-gray-500 mt-2">This action cannot be undone.</p>
+            <div id="deleteWarning" class="hidden mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <p class="text-sm text-yellow-800">
+                    <i class="fas fa-exclamation-triangle mr-1"></i>
+                    This dataset has version history and may have been used in training.
+                </p>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button onclick="closeDeleteModal()" class="btn btn-secondary">Cancel</button>
+            <button onclick="confirmDelete()" class="btn btn-danger" id="confirmDeleteBtn">Delete</button>
+        </div>
+    </div>
+</div>
+
+<!-- Dataset Detail Modal -->
+<div id="detailModal" class="modal-overlay hidden">
+    <div class="modal-container modal-container-lg">
+        <div class="modal-header">
+            <div class="modal-header-icon info">
+                <i class="fas fa-table"></i>
+            </div>
+            <h3 class="modal-header-title" id="detailModalTitle">Dataset Details</h3>
+        </div>
+        <div class="modal-body" style="max-height: 60vh; overflow-y: auto;">
+            <div id="detailContent">
+                <p class="text-center text-gray-500 py-8">
+                    <i class="fas fa-spinner fa-spin mr-2"></i>Loading...
+                </p>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button onclick="closeDetailModal()" class="btn btn-secondary">Close</button>
+            <button onclick="viewGeneratedQuery()" class="btn btn-secondary">
+                <i class="fas fa-code mr-1"></i>View SQL
+            </button>
+            <button onclick="editDatasetFromDetail()" class="btn btn-primary">
+                <i class="fas fa-edit mr-1"></i>Edit
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Query Preview Modal -->
+<div id="queryModal" class="modal-overlay hidden">
+    <div class="modal-container modal-container-lg">
+        <div class="modal-header">
+            <div class="modal-header-icon info">
+                <i class="fas fa-code"></i>
+            </div>
+            <h3 class="modal-header-title">Generated SQL Query</h3>
+        </div>
+        <div class="modal-body">
+            <div class="mb-3 flex gap-2">
+                <button onclick="showQuery('full')" class="btn btn-sm btn-secondary query-tab active" data-tab="full">Full Query</button>
+                <button onclick="showQuery('train')" class="btn btn-sm btn-secondary query-tab" data-tab="train">Train Query</button>
+                <button onclick="showQuery('eval')" class="btn btn-sm btn-secondary query-tab" data-tab="eval">Eval Query</button>
+            </div>
+            <pre id="queryContent" class="bg-gray-900 text-green-400 p-4 rounded-lg text-sm overflow-x-auto" style="max-height: 400px;"></pre>
+            <div id="queryValidation" class="mt-3 text-sm"></div>
+        </div>
+        <div class="modal-footer">
+            <button onclick="closeQueryModal()" class="btn btn-secondary">Close</button>
+            <button onclick="copyQuery()" class="btn btn-primary">
+                <i class="fas fa-copy mr-1"></i>Copy SQL
+            </button>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// ============================================================================
+// GLOBAL STATE
+// ============================================================================
+const modelId = {{ model.id }};
+const csrftoken = document.querySelector('[name=csrfmiddleware-token]')?.value || '{{ csrf_token }}';
+
+let currentWizardStep = 1;
+let wizardEditMode = false;
+let wizardEditDatasetId = null;
+let searchTimeout = null;
+
+// Wizard data state
+let wizardData = {
+    name: '',
+    description: '',
+    primaryTable: null,
+    secondaryTables: [],
+    joinConfig: {},
+    selectedColumns: {},
+    columnMapping: {},
+    filters: {},
+    splitConfig: {}
+};
+
+// Cached data
+let availableTables = [];
+let tableSchemas = {};
+let currentDatasetId = null;
+let currentQueries = {};
+
+// ============================================================================
+// PAGE INITIALIZATION
+// ============================================================================
+document.addEventListener('DOMContentLoaded', function() {
+    loadDatasets();
+});
+
+// ============================================================================
+// DATASET LIST FUNCTIONS
+// ============================================================================
+function loadDatasets(page = 1) {
+    const status = document.getElementById('statusFilter').value;
+    const search = document.getElementById('searchInput').value;
+
+    let url = `/api/models/${modelId}/datasets/?page=${page}&per_page=10`;
+    if (status) url += `&status=${status}`;
+    if (search) url += `&search=${encodeURIComponent(search)}`;
+
+    fetch(url, {
+        headers: { 'X-CSRFToken': csrftoken }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            renderDatasetsList(data.datasets);
+            renderPagination(data.pagination);
+        } else {
+            showNotification(data.message || 'Failed to load datasets', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error loading datasets:', error);
+        showNotification('Failed to load datasets', 'error');
+    });
+}
+
+function renderDatasetsList(datasets) {
+    const container = document.getElementById('datasetsList');
+
+    if (!datasets || datasets.length === 0) {
+        container.innerHTML = `
+            <div class="card-empty-state">
+                <p class="card-empty-state-title">No datasets found</p>
+                <p class="card-empty-state-text">Create your first dataset to define training data for your ML models</p>
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = datasets.map(ds => `
+        <div class="card">
+            <div class="card-container-5col">
+                <!-- Column 1: Dataset Info -->
+                <div class="card-content">
+                    <div class="card-header">
+                        <span class="status-dot ${ds.status === 'active' ? 'green' : 'gray'}"></span>
+                        <h4 class="card-title">${escapeHtml(ds.name)}</h4>
+                    </div>
+                    <div class="card-body">
+                        <span class="card-value"><span class="card-label">Primary:</span> ${ds.primary_table ? ds.primary_table.replace('raw_data.', '') : 'Not set'}</span>
+                        ${ds.description ? `<span class="card-value text-gray-500 text-xs truncate">${escapeHtml(ds.description.substring(0, 50))}${ds.description.length > 50 ? '...' : ''}</span>` : ''}
+                    </div>
+                </div>
+
+                <!-- Column 2: Tables & Status -->
+                <div class="card-meta-column">
+                    <span class="card-label">Tables:</span>
+                    <span class="card-schedule-info">${ds.table_count} table${ds.table_count !== 1 ? 's' : ''}</span>
+                    <span class="card-label">Status:</span>
+                    <span class="card-schedule-info">
+                        <span class="px-2 py-0.5 rounded text-xs font-medium ${ds.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}">
+                            ${ds.status.charAt(0).toUpperCase() + ds.status.slice(1)}
+                        </span>
+                    </span>
+                </div>
+
+                <!-- Column 3: Estimates -->
+                <div class="card-meta-column">
+                    <span class="card-label">Est. Rows:</span>
+                    <span class="card-schedule-info">${ds.row_count_estimate ? formatNumber(ds.row_count_estimate) : '—'}</span>
+                    <span class="card-label">Users/Products:</span>
+                    <span class="card-schedule-info">${ds.unique_users_estimate ? formatNumber(ds.unique_users_estimate) : '—'} / ${ds.unique_products_estimate ? formatNumber(ds.unique_products_estimate) : '—'}</span>
+                </div>
+
+                <!-- Column 4: Actions - Analyze & Activate -->
+                <div class="card-run-actions">
+                    <button onclick="analyzeDataset(${ds.id})" class="card-action-btn run" title="Analyze dataset">
+                        <i class="fas fa-chart-bar"></i>
+                    </button>
+                    ${ds.status === 'draft' ? `
+                    <button onclick="activateDataset(${ds.id})" class="card-action-btn resume-large" title="Activate dataset">
+                        <i class="fas fa-check-circle"></i>
+                    </button>
+                    ` : ''}
+                </div>
+
+                <!-- Column 5: Edit & Delete -->
+                <div class="card-actions">
+                    <button onclick="viewDataset(${ds.id})" class="card-action-btn edit" title="View details">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                    <button onclick="editDataset(${ds.id})" class="card-action-btn edit" title="Edit dataset">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button onclick="deleteDataset(${ds.id}, '${escapeHtml(ds.name)}')" class="card-action-btn delete" title="Delete dataset">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+
+function renderPagination(pagination) {
+    const container = document.getElementById('paginationContainer');
+    const infoEl = document.getElementById('paginationInfo');
+    const buttonsEl = document.getElementById('paginationButtons');
+
+    if (pagination.total_pages <= 1) {
+        container.classList.add('hidden');
+        return;
+    }
+
+    container.classList.remove('hidden');
+
+    const start = (pagination.page - 1) * pagination.per_page + 1;
+    const end = Math.min(pagination.page * pagination.per_page, pagination.total);
+    infoEl.textContent = `Showing ${start}-${end} of ${pagination.total} datasets`;
+
+    let buttons = '';
+    if (pagination.has_previous) {
+        buttons += `<button onclick="loadDatasets(${pagination.page - 1})" class="btn btn-secondary btn-sm">Previous</button>`;
+    }
+
+    for (let i = 1; i <= pagination.total_pages; i++) {
+        if (i === pagination.page) {
+            buttons += `<button class="btn btn-primary btn-sm">${i}</button>`;
+        } else if (i === 1 || i === pagination.total_pages || Math.abs(i - pagination.page) <= 1) {
+            buttons += `<button onclick="loadDatasets(${i})" class="btn btn-secondary btn-sm">${i}</button>`;
+        } else if (Math.abs(i - pagination.page) === 2) {
+            buttons += `<span class="px-2 text-gray-500">...</span>`;
+        }
+    }
+
+    if (pagination.has_next) {
+        buttons += `<button onclick="loadDatasets(${pagination.page + 1})" class="btn btn-secondary btn-sm">Next</button>`;
+    }
+
+    buttonsEl.innerHTML = buttons;
+}
+
+function refreshDatasets() {
+    loadDatasets();
+    showNotification('Datasets refreshed', 'success');
+}
+
+function filterDatasets() {
+    loadDatasets();
+}
+
+function debounceSearch() {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(() => loadDatasets(), 300);
+}
+
+// ============================================================================
+// WIZARD FUNCTIONS
+// ============================================================================
+function openWizard(datasetId = null) {
+    wizardEditMode = !!datasetId;
+    wizardEditDatasetId = datasetId;
+
+    // Reset wizard state
+    currentWizardStep = 1;
+    wizardData = {
+        name: '',
+        description: '',
+        primaryTable: null,
+        secondaryTables: [],
+        joinConfig: {},
+        selectedColumns: {},
+        columnMapping: {},
+        filters: {},
+        splitConfig: {}
+    };
+
+    // Update UI
+    document.getElementById('wizardTitle').textContent = wizardEditMode ? 'Edit Dataset' : 'Create Dataset';
+    document.getElementById('saveButton').textContent = wizardEditMode ? 'Save Changes' : 'Create Dataset';
+
+    // Reset form fields
+    document.getElementById('datasetName').value = '';
+    document.getElementById('datasetDescription').value = '';
+    document.getElementById('nameError').classList.add('hidden');
+    document.getElementById('nameSuccess').classList.add('hidden');
+
+    // Show modal
+    document.getElementById('datasetWizardModal').classList.remove('hidden');
+
+    // Load tables
+    loadBqTables();
+
+    // If editing, load dataset data
+    if (wizardEditMode) {
+        loadDatasetForEdit(datasetId);
+    }
+
+    showStep(1);
+}
+
+function closeWizard() {
+    document.getElementById('datasetWizardModal').classList.add('hidden');
+    resetWizard();
+}
+
+function resetWizard() {
+    currentWizardStep = 1;
+    wizardEditMode = false;
+    wizardEditDatasetId = null;
+    wizardData = {
+        name: '',
+        description: '',
+        primaryTable: null,
+        secondaryTables: [],
+        joinConfig: {},
+        selectedColumns: {},
+        columnMapping: {},
+        filters: {},
+        splitConfig: {}
+    };
+}
+
+function showStep(step) {
+    // Hide all steps
+    document.querySelectorAll('.wizard-step').forEach(s => s.classList.remove('active'));
+
+    // Show target step
+    document.getElementById(`step${step}`).classList.add('active');
+
+    // Update step counter
+    document.getElementById('currentStep').textContent = step;
+
+    // Update progress bar
+    for (let i = 1; i <= 4; i++) {
+        const segment = document.getElementById(`progress${i}`);
+        segment.classList.remove('active', 'completed');
+        if (i < step) {
+            segment.classList.add('completed');
+        } else if (i === step) {
+            segment.classList.add('active');
+        }
+    }
+
+    // Update navigation buttons
+    updateNavigationButtons(step);
+
+    currentWizardStep = step;
+}
+
+function updateNavigationButtons(step) {
+    const prevBtn = document.getElementById('prevButton');
+    const nextBtn = document.getElementById('nextButton');
+    const saveBtn = document.getElementById('saveButton');
+
+    // Previous button
+    if (step > 1) {
+        prevBtn.classList.remove('hidden');
+    } else {
+        prevBtn.classList.add('hidden');
+    }
+
+    // Next/Save buttons
+    if (step === 4) {
+        nextBtn.classList.add('hidden');
+        saveBtn.classList.remove('hidden');
+    } else {
+        nextBtn.classList.remove('hidden');
+        saveBtn.classList.add('hidden');
+    }
+
+    // Enable/disable next based on validation
+    validateCurrentStep();
+}
+
+function validateCurrentStep() {
+    const nextBtn = document.getElementById('nextButton');
+    const saveBtn = document.getElementById('saveButton');
+    let isValid = false;
+
+    switch (currentWizardStep) {
+        case 1:
+            const name = document.getElementById('datasetName').value.trim();
+            isValid = name.length > 0;
+            break;
+        case 2:
+            isValid = wizardData.primaryTable !== null;
+            break;
+        case 3:
+            // At least user_id and product_id should be mapped
+            const userId = document.getElementById('userIdColumn')?.value;
+            const productId = document.getElementById('productIdColumn')?.value;
+            isValid = userId && productId;
+            break;
+        case 4:
+            isValid = true; // Filters are optional
+            break;
+    }
+
+    nextBtn.disabled = !isValid;
+    saveBtn.disabled = !isValid;
+}
+
+function nextStep() {
+    if (currentWizardStep >= 4) return;
+
+    // Collect data from current step
+    collectStepData(currentWizardStep);
+
+    // Perform step-specific actions
+    if (currentWizardStep === 1) {
+        // Moving to step 2 - tables should already be loaded
+    } else if (currentWizardStep === 2) {
+        // Moving to step 3 - load column selection
+        loadColumnSelection();
+    } else if (currentWizardStep === 3) {
+        // Moving to step 4 - nothing special needed
+    }
+
+    showStep(currentWizardStep + 1);
+}
+
+function prevStep() {
+    if (currentWizardStep <= 1) return;
+    collectStepData(currentWizardStep);
+    showStep(currentWizardStep - 1);
+}
+
+function collectStepData(step) {
+    switch (step) {
+        case 1:
+            wizardData.name = document.getElementById('datasetName').value.trim();
+            wizardData.description = document.getElementById('datasetDescription').value.trim();
+            break;
+        case 2:
+            // Primary and secondary tables already tracked via selection
+            break;
+        case 3:
+            // Column mapping
+            wizardData.columnMapping = {
+                user_id: document.getElementById('userIdColumn')?.value || null,
+                product_id: document.getElementById('productIdColumn')?.value || null,
+                timestamp: document.getElementById('timestampColumn')?.value || null,
+                revenue: document.getElementById('revenueColumn')?.value || null
+            };
+            // Remove null values
+            Object.keys(wizardData.columnMapping).forEach(key => {
+                if (!wizardData.columnMapping[key]) delete wizardData.columnMapping[key];
+            });
+            break;
+        case 4:
+            // Date range filter
+            const dateRangeType = document.querySelector('input[name="dateRangeType"]:checked')?.value;
+            if (dateRangeType === 'rolling') {
+                wizardData.filters.date_range = {
+                    type: 'rolling',
+                    months: parseInt(document.getElementById('rollingMonths').value)
+                };
+            } else if (dateRangeType === 'fixed') {
+                wizardData.filters.date_range = {
+                    type: 'fixed',
+                    start: document.getElementById('startDate').value,
+                    end: document.getElementById('endDate').value
+                };
+            }
+
+            // Product filter
+            if (document.getElementById('enableTopProducts')?.checked) {
+                wizardData.filters.product_filter = {
+                    type: 'top_revenue_percent',
+                    value: parseInt(document.getElementById('topProductsPercent').value)
+                };
+            }
+
+            // Customer filter
+            if (document.getElementById('enableMinTransactions')?.checked) {
+                wizardData.filters.customer_filter = {
+                    type: 'min_transactions',
+                    value: parseInt(document.getElementById('minTransactions').value)
+                };
+            }
+
+            // Split config
+            const splitStrategy = document.querySelector('input[name="splitStrategy"]:checked')?.value;
+            if (splitStrategy === 'time_based') {
+                wizardData.splitConfig = {
+                    strategy: 'time_based',
+                    eval_days: parseInt(document.getElementById('evalDays').value)
+                };
+            } else if (splitStrategy === 'random') {
+                wizardData.splitConfig = {
+                    strategy: 'random',
+                    train_percent: parseInt(document.getElementById('trainPercent').value)
+                };
+            }
+            break;
+    }
+}
+
+// ============================================================================
+// STEP 1: NAME VALIDATION
+// ============================================================================
+let nameCheckTimeout = null;
+
+function validateDatasetName() {
+    const name = document.getElementById('datasetName').value.trim();
+    const errorEl = document.getElementById('nameError');
+    const successEl = document.getElementById('nameSuccess');
+
+    errorEl.classList.add('hidden');
+    successEl.classList.add('hidden');
+
+    if (!name) {
+        validateCurrentStep();
+        return;
+    }
+
+    // Debounce the API call
+    clearTimeout(nameCheckTimeout);
+    nameCheckTimeout = setTimeout(() => {
+        fetch(`/api/models/${modelId}/datasets/check-name/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrftoken
+            },
+            body: JSON.stringify({
+                name: name,
+                exclude_id: wizardEditDatasetId
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.available) {
+                successEl.classList.remove('hidden');
+            } else {
+                errorEl.textContent = data.message || 'Name already exists';
+                errorEl.classList.remove('hidden');
+            }
+            validateCurrentStep();
+        })
+        .catch(error => {
+            console.error('Error checking name:', error);
+        });
+    }, 300);
+
+    validateCurrentStep();
+}
+
+// ============================================================================
+// STEP 2: TABLE SELECTION
+// ============================================================================
+function loadBqTables() {
+    fetch(`/api/models/${modelId}/bq-tables/`, {
+        headers: { 'X-CSRFToken': csrftoken }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            availableTables = data.tables;
+            renderPrimaryTableList();
+        } else {
+            showNotification(data.message || 'Failed to load tables', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error loading tables:', error);
+        document.getElementById('primaryTableList').innerHTML = `
+            <p class="text-center text-red-500 py-4">
+                <i class="fas fa-exclamation-circle mr-2"></i>Failed to load tables
+            </p>
+        `;
+    });
+}
+
+function renderPrimaryTableList() {
+    const container = document.getElementById('primaryTableList');
+
+    if (!availableTables || availableTables.length === 0) {
+        container.innerHTML = `
+            <p class="text-center text-gray-500 py-4">
+                No tables found in raw_data dataset.<br>
+                <span class="text-sm">Run an ETL job first to populate data.</span>
+            </p>
+        `;
+        return;
+    }
+
+    container.innerHTML = availableTables.map(table => `
+        <label class="wizard-selection-card mb-2 ${wizardData.primaryTable === table.full_name ? 'selected' : ''}">
+            <input type="radio" name="primaryTable" value="${table.full_name}"
+                   ${wizardData.primaryTable === table.full_name ? 'checked' : ''}
+                   onchange="onPrimaryTableSelect('${table.full_name}')">
+            <div class="card-content">
+                <div class="card-title">${table.table_id}</div>
+                <div class="card-description">
+                    ${formatNumber(table.row_count)} rows | ${table.column_count} columns | ${formatBytes(table.size_bytes)}
+                </div>
+            </div>
+        </label>
+    `).join('');
+}
+
+function onPrimaryTableSelect(tableName) {
+    wizardData.primaryTable = tableName;
+
+    // Update selection styling
+    document.querySelectorAll('#primaryTableList .wizard-selection-card').forEach(card => {
+        card.classList.remove('selected');
+    });
+    document.querySelector(`#primaryTableList input[value="${tableName}"]`)?.closest('.wizard-selection-card')?.classList.add('selected');
+
+    // Update secondary tables list
+    renderSecondaryTableList();
+
+    // Load schema for primary table
+    loadTableSchema(tableName);
+
+    validateCurrentStep();
+}
+
+function renderSecondaryTableList() {
+    const container = document.getElementById('secondaryTableList');
+
+    const otherTables = availableTables.filter(t => t.full_name !== wizardData.primaryTable);
+
+    if (otherTables.length === 0) {
+        container.innerHTML = `<p class="text-center text-gray-500 py-4">No additional tables available</p>`;
+        return;
+    }
+
+    container.innerHTML = otherTables.map(table => `
+        <label class="wizard-selection-card mb-2 ${wizardData.secondaryTables.includes(table.full_name) ? 'selected' : ''}">
+            <input type="checkbox" value="${table.full_name}"
+                   ${wizardData.secondaryTables.includes(table.full_name) ? 'checked' : ''}
+                   onchange="onSecondaryTableToggle('${table.full_name}', this.checked)">
+            <div class="card-content">
+                <div class="card-title">${table.table_id}</div>
+                <div class="card-description">
+                    ${formatNumber(table.row_count)} rows | ${table.column_count} columns
+                </div>
+            </div>
+        </label>
+    `).join('');
+}
+
+function onSecondaryTableToggle(tableName, isChecked) {
+    if (isChecked) {
+        if (!wizardData.secondaryTables.includes(tableName)) {
+            wizardData.secondaryTables.push(tableName);
+            loadTableSchema(tableName);
+        }
+    } else {
+        wizardData.secondaryTables = wizardData.secondaryTables.filter(t => t !== tableName);
+        delete wizardData.joinConfig[tableName];
+    }
+
+    // Update selection styling
+    const card = document.querySelector(`#secondaryTableList input[value="${tableName}"]`)?.closest('.wizard-selection-card');
+    if (card) {
+        card.classList.toggle('selected', isChecked);
+    }
+
+    // Show/hide join config section
+    const joinSection = document.getElementById('joinConfigSection');
+    if (wizardData.secondaryTables.length > 0) {
+        joinSection.classList.remove('hidden');
+        renderJoinConfig();
+    } else {
+        joinSection.classList.add('hidden');
+    }
+}
+
+function renderJoinConfig() {
+    const container = document.getElementById('joinConfigList');
+
+    container.innerHTML = wizardData.secondaryTables.map(tableName => {
+        const shortName = tableName.replace('raw_data.', '');
+        const config = wizardData.joinConfig[tableName] || {};
+        const primarySchema = tableSchemas[wizardData.primaryTable] || [];
+        const secondarySchema = tableSchemas[tableName] || [];
+
+        return `
+            <div class="p-3 border border-gray-200 rounded-lg bg-gray-50">
+                <div class="font-medium text-sm mb-2">${shortName}</div>
+                <div class="grid grid-cols-3 gap-2">
+                    <div>
+                        <label class="text-xs text-gray-600">Primary Key</label>
+                        <select class="form-select w-full text-xs" onchange="updateJoinConfig('${tableName}', 'primary_key', this.value)">
+                            <option value="">Select...</option>
+                            ${primarySchema.map(col => `<option value="${col.name}" ${config.primary_key === col.name ? 'selected' : ''}>${col.name}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-600">Join Key</label>
+                        <select class="form-select w-full text-xs" onchange="updateJoinConfig('${tableName}', 'join_key', this.value)">
+                            <option value="">Select...</option>
+                            ${secondarySchema.map(col => `<option value="${col.name}" ${config.join_key === col.name ? 'selected' : ''}>${col.name}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-600">Join Type</label>
+                        <select class="form-select w-full text-xs" onchange="updateJoinConfig('${tableName}', 'join_type', this.value)">
+                            <option value="LEFT" ${config.join_type === 'LEFT' ? 'selected' : ''}>LEFT JOIN</option>
+                            <option value="INNER" ${config.join_type === 'INNER' ? 'selected' : ''}>INNER JOIN</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function updateJoinConfig(tableName, field, value) {
+    if (!wizardData.joinConfig[tableName]) {
+        wizardData.joinConfig[tableName] = { join_type: 'LEFT' };
+    }
+    wizardData.joinConfig[tableName][field] = value;
+}
+
+function detectJoins() {
+    const tables = [wizardData.primaryTable, ...wizardData.secondaryTables];
+
+    fetch(`/api/models/${modelId}/detect-joins/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrftoken
+        },
+        body: JSON.stringify({ tables: tables })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success' && data.detected_joins) {
+            // Apply detected joins
+            data.detected_joins.forEach(join => {
+                if (wizardData.secondaryTables.includes(join.table2)) {
+                    wizardData.joinConfig[join.table2] = {
+                        primary_key: join.column1,
+                        join_key: join.column2,
+                        join_type: 'LEFT'
+                    };
+                }
+            });
+            renderJoinConfig();
+            showNotification('Joins detected successfully', 'success');
+        } else {
+            showNotification('No obvious joins detected. Please configure manually.', 'warning');
+        }
+    })
+    .catch(error => {
+        console.error('Error detecting joins:', error);
+        showNotification('Failed to detect joins', 'error');
+    });
+}
+
+function loadTableSchema(tableName) {
+    if (tableSchemas[tableName]) return; // Already loaded
+
+    fetch(`/api/models/${modelId}/bq-tables/${encodeURIComponent(tableName.replace('raw_data.', ''))}/schema/`, {
+        headers: { 'X-CSRFToken': csrftoken }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            tableSchemas[tableName] = data.schema;
+            // Re-render join config if needed
+            if (wizardData.secondaryTables.length > 0) {
+                renderJoinConfig();
+            }
+        }
+    })
+    .catch(error => {
+        console.error('Error loading schema:', error);
+    });
+}
+
+// ============================================================================
+// STEP 3: COLUMN SELECTION
+// ============================================================================
+function loadColumnSelection() {
+    const container = document.getElementById('columnSelectionContainer');
+    const allTables = [wizardData.primaryTable, ...wizardData.secondaryTables].filter(Boolean);
+
+    if (allTables.length === 0) {
+        container.innerHTML = '<p class="text-center text-gray-500 py-4">Select tables in Step 2 first</p>';
+        return;
+    }
+
+    // Load schemas for all tables that aren't loaded yet
+    const loadPromises = allTables.map(table => {
+        if (tableSchemas[table]) {
+            return Promise.resolve();
+        }
+        return fetch(`/api/models/${modelId}/bq-tables/${encodeURIComponent(table.replace('raw_data.', ''))}/schema/`, {
+            headers: { 'X-CSRFToken': csrftoken }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                tableSchemas[table] = data.schema;
+            }
+        });
+    });
+
+    Promise.all(loadPromises).then(() => {
+        renderColumnSelection();
+        suggestMLColumns();
+    });
+}
+
+function renderColumnSelection() {
+    const container = document.getElementById('columnSelectionContainer');
+    const allTables = [wizardData.primaryTable, ...wizardData.secondaryTables].filter(Boolean);
+
+    let html = '';
+
+    allTables.forEach(table => {
+        const shortName = table.replace('raw_data.', '');
+        const schema = tableSchemas[table] || [];
+        const selectedCols = wizardData.selectedColumns[table] || schema.map(c => c.name);
+
+        // Initialize selected columns if not set
+        if (!wizardData.selectedColumns[table]) {
+            wizardData.selectedColumns[table] = selectedCols;
+        }
+
+        html += `
+            <div class="mb-4">
+                <div class="flex items-center justify-between mb-2">
+                    <h5 class="text-sm font-semibold text-gray-700">${shortName}</h5>
+                    <div class="text-xs">
+                        <button onclick="selectAllColumns('${table}')" class="text-blue-600 hover:underline mr-2">Select All</button>
+                        <button onclick="deselectAllColumns('${table}')" class="text-blue-600 hover:underline">Deselect All</button>
+                    </div>
+                </div>
+                <div class="border border-gray-200 rounded-lg p-2 max-h-40 overflow-y-auto">
+                    <div class="grid grid-cols-2 gap-1">
+                        ${schema.map(col => `
+                            <label class="flex items-center text-xs p-1 hover:bg-gray-50 rounded cursor-pointer">
+                                <input type="checkbox" class="mr-2"
+                                       ${selectedCols.includes(col.name) ? 'checked' : ''}
+                                       onchange="toggleColumn('${table}', '${col.name}', this.checked)">
+                                <span class="truncate" title="${col.name} (${col.type})">${col.name}</span>
+                                <span class="ml-1 text-gray-400">${getTypeAbbrev(col.type)}</span>
+                                ${col.suggested_role ? `<span class="ml-1 px-1 bg-blue-100 text-blue-700 rounded text-xs">${col.suggested_role}</span>` : ''}
+                            </label>
+                        `).join('')}
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+
+    container.innerHTML = html;
+
+    // Populate ML mapping dropdowns
+    populateMLMappingDropdowns();
+}
+
+function toggleColumn(table, column, isSelected) {
+    if (!wizardData.selectedColumns[table]) {
+        wizardData.selectedColumns[table] = [];
+    }
+
+    if (isSelected) {
+        if (!wizardData.selectedColumns[table].includes(column)) {
+            wizardData.selectedColumns[table].push(column);
+        }
+    } else {
+        wizardData.selectedColumns[table] = wizardData.selectedColumns[table].filter(c => c !== column);
+    }
+
+    populateMLMappingDropdowns();
+}
+
+function selectAllColumns(table) {
+    const schema = tableSchemas[table] || [];
+    wizardData.selectedColumns[table] = schema.map(c => c.name);
+    renderColumnSelection();
+}
+
+function deselectAllColumns(table) {
+    wizardData.selectedColumns[table] = [];
+    renderColumnSelection();
+}
+
+function populateMLMappingDropdowns() {
+    const allColumns = [];
+    Object.entries(wizardData.selectedColumns).forEach(([table, cols]) => {
+        cols.forEach(col => {
+            const shortTable = table.replace('raw_data.', '');
+            allColumns.push({ table: shortTable, column: col, fullName: `${shortTable}.${col}` });
+        });
+    });
+
+    ['userIdColumn', 'productIdColumn', 'timestampColumn', 'revenueColumn'].forEach(selectId => {
+        const select = document.getElementById(selectId);
+        if (!select) return;
+
+        const currentValue = select.value;
+        select.innerHTML = '<option value="">Select column...</option>' +
+            allColumns.map(c => `<option value="${c.fullName}" ${currentValue === c.fullName ? 'selected' : ''}>${c.fullName}</option>`).join('');
+    });
+
+    validateCurrentStep();
+}
+
+function suggestMLColumns() {
+    const tables = [wizardData.primaryTable, ...wizardData.secondaryTables].filter(Boolean);
+
+    fetch(`/api/models/${modelId}/suggest-columns/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrftoken
+        },
+        body: JSON.stringify({ tables: tables })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success' && data.suggestions) {
+            const suggestionsBox = document.getElementById('mlSuggestions');
+            const suggestionsText = document.getElementById('mlSuggestionsText');
+
+            let suggestionsList = [];
+
+            // Helper to build table.column format from API response
+            const buildColumnValue = (suggestion) => {
+                if (!suggestion) return null;
+                const table = suggestion.table?.replace('raw_data.', '') || '';
+                const column = suggestion.suggested_column || '';
+                return table && column ? `${table}.${column}` : null;
+            };
+
+            if (data.suggestions.user_id) {
+                const value = buildColumnValue(data.suggestions.user_id);
+                if (value) {
+                    suggestionsList.push(`User ID: ${value}`);
+                    document.getElementById('userIdColumn').value = value;
+                }
+            }
+            if (data.suggestions.product_id) {
+                const value = buildColumnValue(data.suggestions.product_id);
+                if (value) {
+                    suggestionsList.push(`Product ID: ${value}`);
+                    document.getElementById('productIdColumn').value = value;
+                }
+            }
+            if (data.suggestions.timestamp) {
+                const value = buildColumnValue(data.suggestions.timestamp);
+                if (value) {
+                    suggestionsList.push(`Timestamp: ${value}`);
+                    document.getElementById('timestampColumn').value = value;
+                }
+            }
+            if (data.suggestions.revenue) {
+                const value = buildColumnValue(data.suggestions.revenue);
+                if (value) {
+                    suggestionsList.push(`Revenue: ${value}`);
+                    document.getElementById('revenueColumn').value = value;
+                }
+            }
+
+            if (suggestionsList.length > 0) {
+                suggestionsText.innerHTML = `<strong>Auto-detected columns:</strong> ${suggestionsList.join(' | ')}`;
+                suggestionsBox.classList.remove('hidden');
+            }
+
+            validateCurrentStep();
+        }
+    })
+    .catch(error => {
+        console.error('Error suggesting columns:', error);
+    });
+}
+
+function getTypeAbbrev(type) {
+    const abbrevs = {
+        'STRING': 'str',
+        'INTEGER': 'int',
+        'INT64': 'int',
+        'FLOAT': 'flt',
+        'FLOAT64': 'flt',
+        'BOOLEAN': 'bool',
+        'TIMESTAMP': 'ts',
+        'DATE': 'date',
+        'DATETIME': 'dt'
+    };
+    return abbrevs[type.toUpperCase()] || type.substring(0, 3).toLowerCase();
+}
+
+// ============================================================================
+// STEP 4: FILTERS & SPLIT
+// ============================================================================
+function onDateRangeTypeChange() {
+    const type = document.querySelector('input[name="dateRangeType"]:checked')?.value;
+    document.getElementById('rollingConfig').classList.toggle('hidden', type !== 'rolling');
+    document.getElementById('fixedDateConfig').classList.toggle('hidden', type !== 'fixed');
+}
+
+function onSplitStrategyChange() {
+    const strategy = document.querySelector('input[name="splitStrategy"]:checked')?.value;
+    document.getElementById('timeBasedConfig').classList.toggle('hidden', strategy !== 'time_based');
+    document.getElementById('randomSplitConfig').classList.toggle('hidden', strategy !== 'random');
+}
+
+function updateTrainPercentLabel() {
+    const value = document.getElementById('trainPercent').value;
+    document.getElementById('trainPercentLabel').textContent = `${value}% train`;
+}
+
+function toggleAdvancedFilters() {
+    const section = document.getElementById('advancedFilters');
+    const icon = document.getElementById('advancedFiltersIcon');
+    section.classList.toggle('hidden');
+    icon.style.transform = section.classList.contains('hidden') ? '' : 'rotate(90deg)';
+}
+
+function toggleTopProductsInput() {
+    const checkbox = document.getElementById('enableTopProducts');
+    document.getElementById('topProductsPercent').disabled = !checkbox.checked;
+}
+
+function toggleMinTransactionsInput() {
+    const checkbox = document.getElementById('enableMinTransactions');
+    document.getElementById('minTransactions').disabled = !checkbox.checked;
+}
+
+// ============================================================================
+// SAVE DATASET
+// ============================================================================
+function saveDataset() {
+    // Collect all data from current step
+    collectStepData(currentWizardStep);
+
+    // Build payload
+    const payload = {
+        name: wizardData.name,
+        description: wizardData.description,
+        primary_table: wizardData.primaryTable,
+        secondary_tables: wizardData.secondaryTables,
+        join_config: wizardData.joinConfig,
+        selected_columns: wizardData.selectedColumns,
+        column_mapping: wizardData.columnMapping,
+        filters: wizardData.filters,
+        split_config: wizardData.splitConfig
+    };
+
+    const url = wizardEditMode
+        ? `/api/datasets/${wizardEditDatasetId}/update/`
+        : `/api/models/${modelId}/datasets/create/`;
+
+    document.getElementById('saveButton').disabled = true;
+    document.getElementById('saveButton').innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Saving...';
+
+    fetch(url, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrftoken
+        },
+        body: JSON.stringify(payload)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            showNotification(wizardEditMode ? 'Dataset updated successfully' : 'Dataset created successfully', 'success');
+            closeWizard();
+            loadDatasets();
+        } else {
+            showNotification(data.message || 'Failed to save dataset', 'error');
+            if (data.errors) {
+                console.error('Validation errors:', data.errors);
+            }
+        }
+    })
+    .catch(error => {
+        console.error('Error saving dataset:', error);
+        showNotification('Failed to save dataset', 'error');
+    })
+    .finally(() => {
+        document.getElementById('saveButton').disabled = false;
+        document.getElementById('saveButton').textContent = wizardEditMode ? 'Save Changes' : 'Create Dataset';
+    });
+}
+
+// ============================================================================
+// DATASET ACTIONS
+// ============================================================================
+function viewDataset(datasetId) {
+    currentDatasetId = datasetId;
+    document.getElementById('detailModal').classList.remove('hidden');
+    document.getElementById('detailContent').innerHTML = '<p class="text-center text-gray-500 py-8"><i class="fas fa-spinner fa-spin mr-2"></i>Loading...</p>';
+
+    fetch(`/api/datasets/${datasetId}/summary/`, {
+        headers: { 'X-CSRFToken': csrftoken }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            renderDatasetDetail(data.summary);
+        } else {
+            document.getElementById('detailContent').innerHTML = `<p class="text-center text-red-500 py-8">${data.message || 'Failed to load details'}</p>`;
+        }
+    })
+    .catch(error => {
+        console.error('Error loading dataset:', error);
+        document.getElementById('detailContent').innerHTML = '<p class="text-center text-red-500 py-8">Failed to load details</p>';
+    });
+}
+
+function renderDatasetDetail(summary) {
+    document.getElementById('detailModalTitle').textContent = summary.name;
+
+    const html = `
+        <div class="space-y-4">
+            <!-- Status & Info -->
+            <div class="flex items-center gap-3">
+                <span class="px-3 py-1 rounded-full text-sm font-medium ${summary.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}">
+                    ${summary.status.charAt(0).toUpperCase() + summary.status.slice(1)}
+                </span>
+                <span class="text-sm text-gray-500">Created ${new Date(summary.timestamps.created_at).toLocaleDateString()}</span>
+            </div>
+
+            ${summary.description ? `<p class="text-gray-600">${escapeHtml(summary.description)}</p>` : ''}
+
+            <!-- Tables -->
+            <div class="bg-gray-50 rounded-lg p-4">
+                <h4 class="font-semibold text-gray-900 mb-2">Tables (${summary.tables.total_count})</h4>
+                <div class="space-y-1">
+                    <div class="flex items-center">
+                        <span class="text-sm font-medium text-gray-700 w-24">Primary:</span>
+                        <span class="text-sm text-gray-900">${summary.tables.primary?.replace('raw_data.', '') || 'Not set'}</span>
+                    </div>
+                    ${summary.tables.secondary.length > 0 ? `
+                    <div class="flex items-start">
+                        <span class="text-sm font-medium text-gray-700 w-24">Secondary:</span>
+                        <span class="text-sm text-gray-900">${summary.tables.secondary.map(t => t.replace('raw_data.', '')).join(', ')}</span>
+                    </div>
+                    ` : ''}
+                </div>
+            </div>
+
+            <!-- Column Mapping -->
+            <div class="bg-gray-50 rounded-lg p-4">
+                <h4 class="font-semibold text-gray-900 mb-2">ML Column Mapping</h4>
+                <div class="grid grid-cols-2 gap-2 text-sm">
+                    ${Object.entries(summary.columns.mapping || {}).map(([role, col]) => `
+                        <div><span class="font-medium text-gray-700">${role}:</span> <span class="text-gray-900">${col}</span></div>
+                    `).join('')}
+                </div>
+                <div class="mt-2 text-sm text-gray-500">${summary.columns.total_selected} columns selected</div>
+            </div>
+
+            <!-- Filters -->
+            <div class="bg-gray-50 rounded-lg p-4">
+                <h4 class="font-semibold text-gray-900 mb-2">Filters</h4>
+                <ul class="list-disc list-inside text-sm text-gray-700">
+                    ${summary.filters.summary.map(f => `<li>${f}</li>`).join('')}
+                </ul>
+            </div>
+
+            <!-- Split -->
+            <div class="bg-gray-50 rounded-lg p-4">
+                <h4 class="font-semibold text-gray-900 mb-2">Train/Eval Split</h4>
+                <p class="text-sm text-gray-700">${summary.split.summary}</p>
+            </div>
+
+            <!-- Cached Analysis -->
+            ${summary.cached_analysis.has_analysis ? `
+            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <h4 class="font-semibold text-blue-900 mb-2">Analysis Results</h4>
+                <div class="grid grid-cols-3 gap-4 text-sm">
+                    <div>
+                        <div class="text-blue-700 font-medium">Rows</div>
+                        <div class="text-blue-900 text-lg font-bold">${formatNumber(summary.cached_analysis.row_count)}</div>
+                    </div>
+                    <div>
+                        <div class="text-blue-700 font-medium">Unique Users</div>
+                        <div class="text-blue-900 text-lg font-bold">${formatNumber(summary.cached_analysis.unique_users)}</div>
+                    </div>
+                    <div>
+                        <div class="text-blue-700 font-medium">Unique Products</div>
+                        <div class="text-blue-900 text-lg font-bold">${formatNumber(summary.cached_analysis.unique_products)}</div>
+                    </div>
+                </div>
+                ${summary.cached_analysis.date_range_start ? `
+                <div class="mt-2 text-sm text-blue-700">
+                    Date range: ${summary.cached_analysis.date_range_start} to ${summary.cached_analysis.date_range_end}
+                </div>
+                ` : ''}
+            </div>
+            ` : `
+            <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                <p class="text-sm text-yellow-800">
+                    <i class="fas fa-info-circle mr-1"></i>
+                    No analysis data yet. Click "Analyze" on the dataset card to run analysis.
+                </p>
+            </div>
+            `}
+        </div>
+    `;
+
+    document.getElementById('detailContent').innerHTML = html;
+}
+
+function editDataset(datasetId) {
+    // Load dataset and open wizard in edit mode
+    fetch(`/api/datasets/${datasetId}/`, {
+        headers: { 'X-CSRFToken': csrftoken }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            openWizard(datasetId);
+            loadDatasetForEdit(datasetId);
+        } else {
+            showNotification(data.message || 'Failed to load dataset', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error loading dataset:', error);
+        showNotification('Failed to load dataset', 'error');
+    });
+}
+
+function loadDatasetForEdit(datasetId) {
+    fetch(`/api/datasets/${datasetId}/`, {
+        headers: { 'X-CSRFToken': csrftoken }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            const ds = data.dataset;
+
+            // Populate wizard data
+            wizardData.name = ds.name;
+            wizardData.description = ds.description || '';
+            wizardData.primaryTable = ds.primary_table;
+            wizardData.secondaryTables = ds.secondary_tables || [];
+            wizardData.joinConfig = ds.join_config || {};
+            wizardData.selectedColumns = ds.selected_columns || {};
+            wizardData.columnMapping = ds.column_mapping || {};
+            wizardData.filters = ds.filters || {};
+            wizardData.splitConfig = ds.split_config || {};
+
+            // Update form fields
+            document.getElementById('datasetName').value = ds.name;
+            document.getElementById('datasetDescription').value = ds.description || '';
+
+            // Update table selections
+            renderPrimaryTableList();
+            renderSecondaryTableList();
+
+            validateCurrentStep();
+        }
+    })
+    .catch(error => {
+        console.error('Error loading dataset for edit:', error);
+    });
+}
+
+function editDatasetFromDetail() {
+    closeDetailModal();
+    editDataset(currentDatasetId);
+}
+
+function deleteDataset(datasetId, name) {
+    document.getElementById('deleteDatasetName').textContent = name;
+    document.getElementById('deleteModal').classList.remove('hidden');
+    document.getElementById('deleteModal').dataset.datasetId = datasetId;
+    document.getElementById('deleteWarning').classList.add('hidden');
+}
+
+function closeDeleteModal() {
+    document.getElementById('deleteModal').classList.add('hidden');
+}
+
+function confirmDelete() {
+    const datasetId = document.getElementById('deleteModal').dataset.datasetId;
+
+    document.getElementById('confirmDeleteBtn').disabled = true;
+    document.getElementById('confirmDeleteBtn').innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Deleting...';
+
+    fetch(`/api/datasets/${datasetId}/delete/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrftoken
+        },
+        body: JSON.stringify({ force: true })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            showNotification('Dataset deleted successfully', 'success');
+            closeDeleteModal();
+            loadDatasets();
+        } else {
+            showNotification(data.message || 'Failed to delete dataset', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error deleting dataset:', error);
+        showNotification('Failed to delete dataset', 'error');
+    })
+    .finally(() => {
+        document.getElementById('confirmDeleteBtn').disabled = false;
+        document.getElementById('confirmDeleteBtn').textContent = 'Delete';
+    });
+}
+
+function analyzeDataset(datasetId) {
+    showNotification('Analyzing dataset...', 'info');
+
+    fetch(`/api/datasets/${datasetId}/analyze/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrftoken
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            showNotification('Analysis complete', 'success');
+            loadDatasets(); // Refresh to show new stats
+
+            // If detail modal is open, refresh it
+            if (!document.getElementById('detailModal').classList.contains('hidden') && currentDatasetId === datasetId) {
+                viewDataset(datasetId);
+            }
+        } else {
+            showNotification(data.message || 'Analysis failed', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error analyzing dataset:', error);
+        showNotification('Analysis failed', 'error');
+    });
+}
+
+function activateDataset(datasetId) {
+    fetch(`/api/datasets/${datasetId}/activate/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrftoken
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            showNotification('Dataset activated', 'success');
+            loadDatasets();
+        } else {
+            showNotification(data.message || 'Failed to activate dataset', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error activating dataset:', error);
+        showNotification('Failed to activate dataset', 'error');
+    });
+}
+
+// ============================================================================
+// QUERY PREVIEW
+// ============================================================================
+function viewGeneratedQuery() {
+    if (!currentDatasetId) return;
+
+    document.getElementById('queryModal').classList.remove('hidden');
+    document.getElementById('queryContent').textContent = 'Loading...';
+
+    // Load all queries
+    Promise.all([
+        fetch(`/api/datasets/${currentDatasetId}/query/`, { headers: { 'X-CSRFToken': csrftoken } }).then(r => r.json()),
+        fetch(`/api/datasets/${currentDatasetId}/query/split/`, { headers: { 'X-CSRFToken': csrftoken } }).then(r => r.json())
+    ])
+    .then(([fullData, splitData]) => {
+        currentQueries = {
+            full: fullData.status === 'success' ? fullData.query : 'Error loading query',
+            train: splitData.status === 'success' ? splitData.queries.train.query : 'Error loading query',
+            eval: splitData.status === 'success' ? splitData.queries.eval.query : 'Error loading query'
+        };
+
+        showQuery('full');
+
+        if (fullData.validation) {
+            const validation = fullData.validation;
+            document.getElementById('queryValidation').innerHTML = `
+                <div class="flex items-center gap-4">
+                    <span class="text-gray-600"><i class="fas fa-database mr-1"></i>${formatBytes(validation.total_bytes_processed || 0)} processed</span>
+                    <span class="text-gray-600"><i class="fas fa-dollar-sign mr-1"></i>Est. $${(validation.estimated_cost_usd || 0).toFixed(4)}</span>
+                    ${validation.is_valid ? '<span class="text-green-600"><i class="fas fa-check-circle mr-1"></i>Valid</span>' : '<span class="text-red-600"><i class="fas fa-times-circle mr-1"></i>Invalid</span>'}
+                </div>
+            `;
+        }
+    })
+    .catch(error => {
+        console.error('Error loading queries:', error);
+        document.getElementById('queryContent').textContent = 'Error loading query';
+    });
+}
+
+function showQuery(type) {
+    document.getElementById('queryContent').textContent = currentQueries[type] || 'No query available';
+
+    // Update tab styling
+    document.querySelectorAll('.query-tab').forEach(tab => {
+        tab.classList.toggle('active', tab.dataset.tab === type);
+        tab.classList.toggle('btn-primary', tab.dataset.tab === type);
+        tab.classList.toggle('btn-secondary', tab.dataset.tab !== type);
+    });
+}
+
+function copyQuery() {
+    const query = document.getElementById('queryContent').textContent;
+    navigator.clipboard.writeText(query).then(() => {
+        showNotification('Query copied to clipboard', 'success');
+    }).catch(() => {
+        showNotification('Failed to copy query', 'error');
+    });
+}
+
+function closeQueryModal() {
+    document.getElementById('queryModal').classList.add('hidden');
+}
+
+function closeDetailModal() {
+    document.getElementById('detailModal').classList.add('hidden');
+}
+
+// ============================================================================
+// UTILITY FUNCTIONS
+// ============================================================================
+function showNotification(message, type = 'info') {
+    // Create notification element
+    const notification = document.createElement('div');
+    notification.className = `fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg transform transition-all duration-300 translate-x-full`;
+
+    const colors = {
+        success: 'bg-green-500 text-white',
+        error: 'bg-red-500 text-white',
+        warning: 'bg-yellow-500 text-white',
+        info: 'bg-blue-500 text-white'
+    };
+
+    notification.classList.add(...colors[type].split(' '));
+    notification.innerHTML = `
+        <div class="flex items-center">
+            <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : type === 'warning' ? 'exclamation-triangle' : 'info-circle'} mr-2"></i>
+            <span>${escapeHtml(message)}</span>
+        </div>
+    `;
+
+    document.body.appendChild(notification);
+
+    // Animate in
+    setTimeout(() => notification.classList.remove('translate-x-full'), 10);
+
+    // Remove after delay
+    setTimeout(() => {
+        notification.classList.add('translate-x-full');
+        setTimeout(() => notification.remove(), 300);
+    }, 3000);
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function formatNumber(num) {
+    if (!num) return '0';
+    if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+    if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+    return num.toLocaleString();
+}
+
+function formatBytes(bytes) {
+    if (!bytes) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+}
+</script>
 {% endblock %}

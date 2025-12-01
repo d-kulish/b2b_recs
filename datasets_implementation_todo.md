@@ -7,9 +7,9 @@
 
 ---
 
-## Current Status: Phases 1-5 Complete ✅
+## Current Status: Phases 1-6 Complete ✅
 
-Backend implementation is complete. Ready for Phase 6 (User Interface).
+All core functionality is implemented. Ready for Phase 8 (Testing).
 
 | Phase | Status | Description |
 |-------|--------|-------------|
@@ -18,8 +18,8 @@ Backend implementation is complete. Ready for Phase 6 (User Interface).
 | Phase 3 | ✅ Complete | BigQuery Integration |
 | Phase 4 | ✅ Complete | Dataset Analysis |
 | Phase 5 | ✅ Complete | Query Generation |
-| Phase 6 | 🔲 Next | User Interface |
-| Phase 7 | 🔲 Pending | Navigation Integration (mostly done) |
+| Phase 6 | ✅ Complete | User Interface |
+| Phase 7 | ✅ Complete | Navigation Integration |
 | Phase 8 | 🔲 Pending | Testing |
 
 ---
@@ -158,6 +158,48 @@ Based on clarification with stakeholder (2025-12-01):
 - Multi-table JOINs with configurable join types
 - Column aliasing for ML concept names
 
+### Phase 6: User Interface ✅
+
+**Implemented (2025-12-01):**
+
+Updated `templates/ml_platform/model_dataset.html` with full UI:
+
+1. **Dataset List Section**
+   - Cards showing existing datasets (name, status, table count, row estimate)
+   - Status badges (Draft/Active) with colored indicators
+   - Action buttons (View, Edit, Analyze, Activate, Delete)
+   - "New Dataset" button to open wizard
+   - Status filter dropdown and search functionality
+   - Pagination support
+
+2. **4-Step Wizard Modal**
+   - **Step 1: Basic Info** - Name with real-time availability check, description
+   - **Step 2: Source Tables** - Primary/secondary table selection from BigQuery, join configuration with auto-detect
+   - **Step 3: Column Selection & Mapping** - Column checkboxes per table, ML role mapping (user_id, product_id, timestamp, revenue) with auto-suggestions
+   - **Step 4: Filters & Split** - Date range (rolling/fixed), advanced filters (top N% products, min transactions), train/eval split (time-based/random)
+
+3. **Additional Modals**
+   - Delete confirmation modal
+   - Dataset detail modal (view summary, cached analysis results)
+   - Query preview modal (full/train/eval queries with validation info and copy button)
+
+4. **JavaScript Features (Inline)**
+   - Full API integration with all 23 backend endpoints
+   - Real-time name validation
+   - Table schema caching
+   - Auto-detect joins and ML column suggestions
+   - Toast notifications
+   - Edit mode support (load existing dataset into wizard)
+
+**Bug Fixes Applied:**
+- Fixed table names showing as "undefined" (changed `table.name` to `table.table_id`)
+- Fixed ML column suggestions format parsing (nested object structure)
+- Added `onchange` handlers to ML mapping dropdowns for validation
+
+### Phase 7: Navigation Integration ✅
+
+Already complete - `model_dataset.html` page exists in sidebar navigation.
+
 ---
 
 ## API Endpoints Summary (All Implemented)
@@ -190,75 +232,6 @@ Based on clarification with stakeholder (2025-12-01):
 
 ---
 
-## Next Steps: Phase 6 (User Interface)
-
-### 6.1 Update `model_dataset.html` Template
-
-The template should include:
-
-1. **Dataset List Section**
-   - Cards showing existing datasets (name, status, table count, row estimate)
-   - Status badges (Draft/Active)
-   - Action buttons (View, Edit, Clone, Delete)
-   - "New Dataset" button to open wizard
-
-2. **4-Step Wizard Modal**
-   - **Step 1: Basic Info**
-     - Name input with real-time availability check
-     - Description textarea
-   - **Step 2: Source Tables**
-     - List of `raw_data.*` tables from BigQuery
-     - Primary table selection (required)
-     - Secondary tables (optional, checkboxes)
-     - Auto-detected joins with override option
-   - **Step 3: Column Selection & Mapping**
-     - Columns from all selected tables
-     - Checkbox selection for each column
-     - ML role mapping (user_id, product_id, timestamp, revenue)
-     - Column statistics display (type, cardinality, nulls)
-   - **Step 4: Filters & Split**
-     - Date range: Rolling (months) or Fixed (start/end dates)
-     - Product filter: Top N% by revenue (optional)
-     - Customer filter: Minimum transactions (optional)
-     - Split strategy: Time-based (eval_days) or Random (train_percent)
-
-3. **Dataset Detail Panel**
-   - Configuration summary
-   - Cached analysis results
-   - Generated SQL preview
-   - Edit/Clone/Activate/Delete actions
-
-### 6.2 JavaScript Requirements
-
-Create `static/js/datasets.js` with:
-
-```javascript
-// Key functions needed:
-- loadDatasets()           // Fetch and render dataset list
-- openWizard(mode, datasetId)  // Open create/edit wizard
-- loadBqTables()           // Fetch tables for Step 2
-- loadTableSchema(table)   // Fetch schema for Step 3
-- detectJoins(tables)      // Auto-detect joins
-- suggestColumns(tables)   // Get ML suggestions
-- validateStep(step)       // Validate current step
-- saveDataset()            // Create/update dataset
-- analyzeDataset(id)       // Run analysis
-- previewQuery(id)         // Show generated SQL
-```
-
-### 6.3 CSS (Reuse Existing)
-
-- `static/css/cards.css` - Dataset cards styling
-- `static/css/modals.css` - Wizard modal styling
-
-### 6.4 Reference Implementation
-
-Follow the patterns from:
-- `templates/ml_platform/model_etl.html` - ETL wizard structure
-- `static/js/etl-wizard.js` - ETL wizard JavaScript
-
----
-
 ## Files Summary
 
 ### Created Files ✅
@@ -272,10 +245,7 @@ Follow the patterns from:
 - `ml_platform/models.py` - Added Dataset, DatasetVersion models
 - `ml_platform/urls.py` - Included datasets sub-app URLs
 - `ml_platform/views.py` - Removed placeholder model_dataset view
-
-### Pending Files (Phase 6)
-- `templates/ml_platform/model_dataset.html` - Replace placeholder with full UI
-- `static/js/datasets.js` - Create wizard JavaScript (optional, can be inline)
+- `templates/ml_platform/model_dataset.html` - Full UI implementation with wizard
 
 ---
 
@@ -291,6 +261,25 @@ All tests passing:
   - Top products CTE structure
   - Active users CTE structure
   - TFX query format
+
+---
+
+## Next Steps: Phase 8 (Testing)
+
+Remaining work for full completion:
+
+1. **End-to-End Testing**
+   - Create dataset via wizard flow
+   - Configure tables, columns, filters
+   - Analyze and preview
+   - Generate queries for TFX
+
+2. **Unit Tests** (optional)
+   - API endpoint tests
+   - Service method tests
+
+3. **Integration Tests** (optional)
+   - BigQuery service mock tests
 
 ---
 

@@ -2,7 +2,7 @@
 ML Platform URL Configuration
 
 This is the main URL router for the ml_platform app.
-Sub-apps (ETL, Connections) have their own URL files that are included here.
+Sub-apps (ETL, Connections, Datasets) have their own URL files that are included here.
 """
 from django.urls import path, include
 from . import views
@@ -13,6 +13,7 @@ urlpatterns = [
     # =========================================================================
     path('', include('ml_platform.etl.urls')),
     path('', include('ml_platform.connections.urls')),
+    path('', include('ml_platform.datasets.urls')),
 
     # =========================================================================
     # SYSTEM DASHBOARD (Landing Page)
@@ -26,7 +27,7 @@ urlpatterns = [
 
     # Individual Model/Endpoint Pages
     path('models/<int:model_id>/', views.model_dashboard, name='model_dashboard'),
-    path('models/<int:model_id>/dataset/', views.model_dataset, name='model_dataset'),
+    # Note: model_dataset is now handled by datasets sub-app
     path('models/<int:model_id>/pipeline-config/', views.model_pipeline_config, name='model_pipeline_config'),
     path('models/<int:model_id>/feature-engineering/', views.model_feature_engineering, name='model_feature_engineering'),
     path('models/<int:model_id>/training/', views.model_training, name='model_training'),

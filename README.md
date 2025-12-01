@@ -41,6 +41,21 @@ This platform enables businesses to:
 - ⏰ Automated scheduling with Cloud Scheduler
 - 🔐 Secret Manager integration for credentials
 
+### **Dataset Management** (NEW)
+- 🗃️ **Table Selection:** Browse and select from `raw_data.*` BigQuery tables
+- 🔗 **Multi-Table Joins:** Auto-detect join keys with confidence scoring + manual override
+- 📋 **Column Mapping:** Flexible column selection with ML role suggestions (user_id, product_id, timestamp, revenue)
+- 🔍 **Column Statistics:** Full table scan for accurate cardinality, min/max, nulls, uniqueness
+- 🎯 **Data Filters:**
+  - Date range (rolling window or fixed dates)
+  - Top N% products by revenue (CTE-based)
+  - Minimum transactions per customer
+- ✂️ **Train/Eval Split:**
+  - Time-based: Last N days for evaluation
+  - Random: Hash-based (FARM_FINGERPRINT) for reproducibility
+- 📊 **Data Quality Metrics:** Automated scoring with issue detection (sparsity, cold start, engagement)
+- 🔄 **TFX Integration:** Query generation ready for TFX ExampleGen component
+
 ### **Platform Features**
 - 🎨 ETL Wizard UI (5-step data source configuration)
 - 📅 Advanced scheduling (cron with timezone support)
@@ -159,6 +174,8 @@ gcloud run jobs execute django-migrate-and-createsuperuser --region europe-centr
 |----------|-------------|
 | [`next_steps.md`](next_steps.md) | Current status, priorities, and roadmap |
 | [`etl_runner.md`](etl_runner.md) | ETL Runner technical documentation |
+| [`datasets_implementation_todo.md`](datasets_implementation_todo.md) | Dataset domain implementation status |
+| [`docs/phase_datasets.md`](docs/phase_datasets.md) | Dataset domain specification |
 | This file | Project overview and quick start |
 
 ---
@@ -209,11 +226,16 @@ gcloud run jobs execute django-migrate-and-createsuperuser --region europe-centr
 - File validation and processing
 - Incremental and snapshot loading
 - Dataflow for large datasets (> 1M rows)
+- **Dataset Management Backend** - Full API for dataset configuration (23 endpoints)
+
+### **🚧 In Progress**
+- Dataset Management UI (4-step wizard for dataset configuration)
 
 ### **🔮 Next Up**
-1. ML model training pipeline integration
-2. Real-time streaming ETL (Pub/Sub)
-3. Data quality validation rules
+1. Dataset Management UI completion
+2. ML model training pipeline integration (TFX)
+3. Real-time streaming ETL (Pub/Sub)
+4. Data quality validation rules
 
 See [`next_steps.md`](next_steps.md) for detailed roadmap.
 
@@ -290,6 +312,17 @@ WHERE source_type='gcs';
 
 ## 📝 Recent Updates
 
+**December 1, 2025 - Dataset Management Backend Complete**
+- ✅ Dataset domain sub-app architecture (following ETL pattern)
+- ✅ 23 REST API endpoints for dataset CRUD, BigQuery integration, analysis, and query generation
+- ✅ Auto-detect join keys between tables with confidence scoring
+- ✅ ML column role suggestions (user_id, product_id, timestamp, revenue)
+- ✅ Full table scan statistics with cardinality, uniqueness, date ranges
+- ✅ Data quality metrics with automated issue detection
+- ✅ Train/eval split support (time-based and random with FARM_FINGERPRINT)
+- ✅ CTE-based complex filters (top N% products, min transactions)
+- ✅ TFX ExampleGen query generation
+
 **November 25, 2025 - Firestore ETL Fix**
 - ✅ Fixed Firestore timestamp conversion (DatetimeWithNanoseconds → strftime)
 - ✅ Schema-aware BigQuery loader with column filtering
@@ -324,6 +357,6 @@ Private/Proprietary
 
 ---
 
-**Project Stats:** 14 models • 45+ files • 74 URL patterns • ~3,850 LOC • 100% auth coverage
+**Project Stats:** 16 models • 50+ files • 97 URL patterns • ~5,000 LOC • 100% auth coverage
 
 **Deployed:** November 2025 | **Region:** EU (Warsaw) | **Status:** Production Ready ✅

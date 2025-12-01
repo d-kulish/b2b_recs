@@ -908,3 +908,260 @@ class SystemMetrics(models.Model):
 
     def __str__(self):
         return f"System Metrics: {self.date}"
+
+
+# =============================================================================
+# DATASET DOMAIN MODELS
+# =============================================================================
+
+class Dataset(models.Model):
+    """
+    Defines WHAT data goes into model training.
+    Does NOT define how to transform features - that's handled by Feature Engineering.
+
+    A Dataset specifies:
+    - Which BigQuery tables to use (from raw_data.*)
+    - Which columns to include
+    - How tables are joined
+    - Data filters (date range, product/customer filters)
+    - Train/eval split strategy
+    """
+
+    STATUS_CHOICES = [
+        ('draft', 'Draft'),
+        ('active', 'Active'),
+    ]
+
+    # Basic info
+    name = models.CharField(max_length=255, help_text="Dataset name (e.g., 'Q4 2024 Training Data')")
+    description = models.TextField(blank=True, help_text="Optional description of this dataset")
+    model_endpoint = models.ForeignKey(
+        ModelEndpoint,
+        on_delete=models.CASCADE,
+        related_name='datasets',
+        help_text="The model this dataset belongs to"
+    )
+
+    # Status
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
+
+    # Source tables configuration
+    # Primary table (required) - typically transactions
+    primary_table = models.CharField(
+        max_length=255,
+        help_text="Primary BigQuery table (e.g., 'raw_data.transactions')"
+    )
+
+    # Secondary tables (optional) - for enrichment (products, customers)
+    secondary_tables = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="List of secondary tables for joins (e.g., ['raw_data.products', 'raw_data.customers'])"
+    )
+
+    # Join configuration
+    # Stores how tables are joined together
+    # Example: {
+    #   "raw_data.products": {"join_key": "product_id", "join_type": "left"},
+    #   "raw_data.customers": {"join_key": "customer_id", "join_type": "left"}
+    # }
+    join_config = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Join configuration for secondary tables"
+    )
+
+    # Column selection
+    # Stores which columns are selected from each table
+    # Example: {
+    #   "raw_data.transactions": ["customer_id", "product_id", "transaction_date", "amount"],
+    #   "raw_data.products": ["product_id", "product_name", "category"]
+    # }
+    selected_columns = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Selected columns per table"
+    )
+
+    # Column role mapping (which columns serve which ML purpose)
+    # Example: {
+    #   "user_id": "customer_id",
+    #   "product_id": "product_id",
+    #   "timestamp": "transaction_date",
+    #   "revenue": "amount"
+    # }
+    column_mapping = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Maps ML concepts to actual column names"
+    )
+
+    # Data filters
+    # Example: {
+    #   "date_range": {"type": "rolling", "months": 6},
+    #   "product_filter": {"type": "top_revenue_percent", "value": 80},
+    #   "customer_filter": {"type": "min_transactions", "value": 2}
+    # }
+    filters = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Data filtering configuration"
+    )
+
+    # Train/eval split configuration
+    # Example: {"strategy": "time_based", "eval_days": 14}
+    # Or: {"strategy": "random", "train_percent": 80}
+    split_config = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Train/eval split configuration"
+    )
+
+    # Metadata (populated after analysis)
+    row_count_estimate = models.BigIntegerField(
+        null=True,
+        blank=True,
+        help_text="Estimated row count after filters"
+    )
+    unique_users_estimate = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="Estimated unique users after filters"
+    )
+    unique_products_estimate = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="Estimated unique products after filters"
+    )
+    date_range_start = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Actual start date of data"
+    )
+    date_range_end = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Actual end date of data"
+    )
+
+    # Column statistics (populated by analysis)
+    # Example: {
+    #   "customer_id": {"cardinality": 125234, "null_percent": 0.1},
+    #   "amount": {"min": 0.5, "max": 12450, "mean": 45.67}
+    # }
+    column_stats = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Column statistics from BigQuery analysis"
+    )
+
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    last_used_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Last time this dataset was used in training"
+    )
+
+    # Created by
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_datasets'
+    )
+
+    class Meta:
+        ordering = ['-updated_at']
+        unique_together = ['model_endpoint', 'name']
+        verbose_name = 'Dataset'
+        verbose_name_plural = 'Datasets'
+
+    def __str__(self):
+        return f"{self.name} ({self.status})"
+
+    def get_all_tables(self):
+        """Returns list of all tables (primary + secondary)"""
+        tables = [self.primary_table]
+        if self.secondary_tables:
+            tables.extend(self.secondary_tables)
+        return tables
+
+    def get_all_selected_columns(self):
+        """Returns flat list of all selected columns with table prefixes"""
+        all_columns = []
+        for table, columns in self.selected_columns.items():
+            for col in columns:
+                all_columns.append(f"{table}.{col}")
+        return all_columns
+
+
+class DatasetVersion(models.Model):
+    """
+    Tracks versions of a dataset for reproducibility.
+    A new version is created when a dataset is used in training,
+    capturing the exact configuration at that point in time.
+    """
+
+    dataset = models.ForeignKey(
+        Dataset,
+        on_delete=models.CASCADE,
+        related_name='versions',
+        help_text="The dataset this version belongs to"
+    )
+    version_number = models.IntegerField(help_text="Auto-incrementing version number")
+
+    # Snapshot of configuration at time of use
+    config_snapshot = models.JSONField(
+        help_text="Full copy of dataset configuration at time of versioning"
+    )
+
+    # Stats at time of snapshot
+    actual_row_count = models.BigIntegerField(
+        null=True,
+        blank=True,
+        help_text="Actual row count when this version was created"
+    )
+    actual_unique_users = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="Actual unique users when this version was created"
+    )
+    actual_unique_products = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="Actual unique products when this version was created"
+    )
+
+    # Generated BigQuery SQL
+    generated_query = models.TextField(
+        blank=True,
+        help_text="The BigQuery SQL generated from this dataset version"
+    )
+
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    # Link to training run (optional, set when used in training)
+    # Note: This will be linked when Training domain is implemented
+    # training_run = models.ForeignKey('TrainingRun', ...)
+
+    class Meta:
+        ordering = ['-version_number']
+        unique_together = ['dataset', 'version_number']
+        verbose_name = 'Dataset Version'
+        verbose_name_plural = 'Dataset Versions'
+
+    def __str__(self):
+        return f"{self.dataset.name} v{self.version_number}"
+
+    def save(self, *args, **kwargs):
+        """Auto-increment version number on create"""
+        if not self.pk:  # New instance
+            last_version = DatasetVersion.objects.filter(
+                dataset=self.dataset
+            ).order_by('-version_number').first()
+            self.version_number = (last_version.version_number + 1) if last_version else 1
+        super().save(*args, **kwargs)

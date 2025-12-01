@@ -140,21 +140,7 @@ def model_dashboard(request, model_id):
     return render(request, 'ml_platform/model_dashboard.html', context)
 
 
-@login_required
-def model_dataset(request, model_id):
-    """
-    Dataset Manager - Browse BigQuery tables/datasets, preview data, view data freshness.
-    """
-    model = get_object_or_404(ModelEndpoint, id=model_id)
-
-    # TODO: Integrate with BigQuery to list datasets and tables
-    # For now, we'll show placeholder data
-
-    context = {
-        'model': model,
-    }
-
-    return render(request, 'ml_platform/model_dataset.html', context)
+# Note: model_dataset view has been moved to ml_platform/datasets/views.py
 
 
 @login_required

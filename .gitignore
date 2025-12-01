@@ -1,7 +1,4 @@
 
-# Reference folder
-past/
-
 # Python
 __pycache__/
 *.py[cod]

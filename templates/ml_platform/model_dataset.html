@@ -16,10 +16,10 @@
         <div class="flex items-center justify-between mb-6">
             <h2 class="text-2xl font-bold text-gray-900">Dataset Manager</h2>
             <div class="btn-group">
-                <button onclick="refreshDatasets()" class="btn btn-secondary btn-sm" style="width: 120px;">
+                <button onclick="refreshDatasets()" class="btn btn-secondary btn-sm" style="width: 140px;">
                     <i class="fas fa-sync-alt"></i>Refresh
                 </button>
-                <button onclick="openWizard()" class="btn btn-primary btn-sm" style="width: 150px;">
+                <button onclick="openWizard()" class="btn btn-primary btn-sm" style="width: 140px;">
                     <i class="fas fa-plus"></i>New Dataset
                 </button>
             </div>
@@ -197,12 +197,6 @@
                         <div>
                             <label class="text-xs font-medium text-gray-600 mb-1 block">Product ID Column</label>
                             <select id="productIdColumn" class="form-select w-full text-sm" onchange="validateCurrentStep()">
-                                <option value="">Select column...</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="text-xs font-medium text-gray-600 mb-1 block">Timestamp Column</label>
-                            <select id="timestampColumn" class="form-select w-full text-sm" onchange="validateCurrentStep()">
                                 <option value="">Select column...</option>
                             </select>
                         </div>
@@ -812,12 +806,17 @@ function collectStepData(step) {
             // Primary and secondary tables already tracked via selection
             break;
         case 3:
-            // Column mapping
+            // Column mapping - extract just the column name from table.column format
+            const extractColumnName = (value) => {
+                if (!value) return null;
+                // Value is in format "table.column", extract just the column part
+                const parts = value.split('.');
+                return parts.length > 1 ? parts[parts.length - 1] : value;
+            };
             wizardData.columnMapping = {
-                user_id: document.getElementById('userIdColumn')?.value || null,
-                product_id: document.getElementById('productIdColumn')?.value || null,
-                timestamp: document.getElementById('timestampColumn')?.value || null,
-                revenue: document.getElementById('revenueColumn')?.value || null
+                user_id: extractColumnName(document.getElementById('userIdColumn')?.value),
+                product_id: extractColumnName(document.getElementById('productIdColumn')?.value),
+                revenue: extractColumnName(document.getElementById('revenueColumn')?.value)
             };
             // Remove null values
             Object.keys(wizardData.columnMapping).forEach(key => {
@@ -1270,7 +1269,7 @@ function populateMLMappingDropdowns() {
         });
     });
 
-    ['userIdColumn', 'productIdColumn', 'timestampColumn', 'revenueColumn'].forEach(selectId => {
+    ['userIdColumn', 'productIdColumn', 'revenueColumn'].forEach(selectId => {
         const select = document.getElementById(selectId);
         if (!select) return;
 
@@ -1321,13 +1320,6 @@ function suggestMLColumns() {
                 if (value) {
                     suggestionsList.push(`Product ID: ${value}`);
                     document.getElementById('productIdColumn').value = value;
-                }
-            }
-            if (data.suggestions.timestamp) {
-                const value = buildColumnValue(data.suggestions.timestamp);
-                if (value) {
-                    suggestionsList.push(`Timestamp: ${value}`);
-                    document.getElementById('timestampColumn').value = value;
                 }
             }
             if (data.suggestions.revenue) {

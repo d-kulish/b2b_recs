@@ -1421,6 +1421,49 @@ Onboard additional clients, iterate on product.
 - Matches existing infrastructure location
 - Ensures data residency compliance for Ukraine
 
+**⚠️ CRITICAL: GCP Region Selection Policy**
+
+When rolling out the system to new clients, ALL GCP resources MUST be created in the same region. Mixed regions cause:
+- Query failures (BigQuery cannot find datasets in wrong location)
+- Increased latency and cross-region data transfer costs
+- Potential GDPR/data residency compliance violations
+
+**Pre-Deployment Checklist:**
+1. **Determine client's required region** based on:
+   - Data residency requirements (GDPR → EU regions)
+   - Latency requirements (closest to client's users)
+   - Cost considerations (some regions are cheaper)
+
+2. **Create ALL resources in the same region:**
+   - BigQuery datasets (location is set at dataset creation, cannot be changed)
+   - Cloud Storage buckets
+   - Cloud Run services
+   - Cloud SQL instances
+   - Vertex AI resources
+
+3. **Configure application settings:**
+   - Set `GCP_LOCATION` environment variable to match the chosen region
+   - Verify BigQuery client uses correct location
+
+4. **Validate before going live:**
+   - Run test queries to verify BigQuery location matches
+   - Check Cloud Run service region
+   - Verify all GCS buckets are in correct region
+
+**Supported Regions:**
+| Region | Location | Use Case |
+|--------|----------|----------|
+| `europe-central2` | Warsaw, Poland | Default for EU clients, Ukraine |
+| `europe-west1` | Belgium | EU clients, lower cost |
+| `us-central1` | Iowa, USA | US clients, lowest cost |
+| `us-east1` | South Carolina, USA | US East Coast clients |
+
+**Common Mistake to Avoid:**
+BigQuery defaults to `US` multi-region when no location is specified. Always explicitly set location when creating datasets:
+```bash
+bq mk --location=europe-central2 --dataset project_id:dataset_name
+```
+
 **Required GCP APIs** (must be enabled):
 ```bash
 # Core ETL Platform APIs

@@ -32,11 +32,6 @@ ML_COLUMN_PATTERNS = {
         r'^product_id$', r'^productid$', r'^item_id$', r'^itemid$',
         r'^sku$', r'^sku_id$', r'^article_id$', r'^goods_id$',
     ],
-    'timestamp': [
-        r'^timestamp$', r'^created_at$', r'^transaction_date$', r'^order_date$',
-        r'^purchase_date$', r'^date$', r'^datetime$', r'^event_time$',
-        r'^transaction_time$', r'^order_time$',
-    ],
     'revenue': [
         r'^amount$', r'^revenue$', r'^price$', r'^total$', r'^value$',
         r'^sales$', r'^order_total$', r'^transaction_amount$', r'^spend$',
@@ -79,6 +74,9 @@ class BigQueryService:
         self.project_id = model_endpoint.gcp_project_id or getattr(
             settings, 'GCP_PROJECT_ID', os.getenv('GCP_PROJECT_ID')
         )
+        self.location = getattr(
+            settings, 'GCP_LOCATION', os.getenv('GCP_LOCATION', 'europe-central2')
+        )
         self.dataset_name = 'raw_data'  # Only allow raw_data.* tables
         self._client = None
 
@@ -90,11 +88,14 @@ class BigQueryService:
 
     @property
     def client(self):
-        """Lazy-load BigQuery client."""
+        """Lazy-load BigQuery client with configured location."""
         if self._client is None:
             try:
                 from google.cloud import bigquery
-                self._client = bigquery.Client(project=self.project_id)
+                self._client = bigquery.Client(
+                    project=self.project_id,
+                    location=self.location
+                )
             except ImportError:
                 raise BigQueryServiceError(
                     "google-cloud-bigquery package not installed. "
@@ -271,8 +272,6 @@ class BigQueryService:
             for pattern in patterns:
                 if re.match(pattern, col_lower):
                     # Verify type compatibility
-                    if role == 'timestamp' and column_type not in ('DATE', 'DATETIME', 'TIMESTAMP'):
-                        continue
                     if role == 'revenue' and column_type not in ('INT64', 'FLOAT64', 'NUMERIC', 'BIGNUMERIC'):
                         continue
                     return role
@@ -663,24 +662,45 @@ class BigQueryService:
 
     def analyze_dataset(self, dataset):
         """
-        Analyze a dataset configuration to get statistics.
+        Analyze a dataset configuration to get statistics for TFRS.
 
         Args:
             dataset: Dataset model instance
 
         Returns:
-            Dict with analysis results
+            Dict with analysis results (row_count, unique_users, unique_products)
         """
         try:
             column_mapping = dataset.column_mapping or {}
 
-            # Get mapped column names or fall back to defaults
-            user_col = column_mapping.get('user_id', 'user_id')
-            product_col = column_mapping.get('product_id', 'product_id')
-            timestamp_col = column_mapping.get('timestamp', 'timestamp')
+            # Helper to extract column name from potential "table.column" format
+            def extract_col_name(value):
+                if not value:
+                    return None
+                # Handle "table.column" format - extract just the column part
+                if '.' in value:
+                    return value.split('.')[-1]
+                return value
+
+            # Get actual column names from mapping
+            user_col = extract_col_name(column_mapping.get('user_id'))
+            product_col = extract_col_name(column_mapping.get('product_id'))
 
             # Generate the base query
             query = self.generate_query(dataset)
+
+            # Build SELECT clause based on available mappings
+            select_parts = ['COUNT(*) as row_count']
+
+            if user_col:
+                select_parts.append(f'COUNT(DISTINCT `{user_col}`) as unique_users')
+            else:
+                select_parts.append('NULL as unique_users')
+
+            if product_col:
+                select_parts.append(f'COUNT(DISTINCT `{product_col}`) as unique_products')
+            else:
+                select_parts.append('NULL as unique_products')
 
             # Wrap in analysis query
             analysis_query = f"""
@@ -688,11 +708,7 @@ class BigQueryService:
                 {query}
             )
             SELECT
-                COUNT(*) as row_count,
-                COUNT(DISTINCT `{user_col}`) as unique_users,
-                COUNT(DISTINCT `{product_col}`) as unique_products,
-                MIN(`{timestamp_col}`) as date_range_start,
-                MAX(`{timestamp_col}`) as date_range_end
+                {',\n                '.join(select_parts)}
             FROM dataset
             """
 
@@ -700,21 +716,10 @@ class BigQueryService:
             result = self.client.query(analysis_query).result()
             row = list(result)[0]
 
-            # Handle different date types
-            date_start = row.date_range_start
-            date_end = row.date_range_end
-
-            if date_start and hasattr(date_start, 'date'):
-                date_start = date_start.date()
-            if date_end and hasattr(date_end, 'date'):
-                date_end = date_end.date()
-
             return {
                 'row_count': row.row_count,
                 'unique_users': row.unique_users,
                 'unique_products': row.unique_products,
-                'date_range_start': date_start,
-                'date_range_end': date_end,
                 'avg_items_per_user': round(row.row_count / row.unique_users, 2) if row.unique_users else 0,
                 'avg_users_per_product': round(row.row_count / row.unique_products, 2) if row.unique_products else 0,
             }
@@ -800,12 +805,19 @@ class BigQueryService:
                     dataset.primary_table: [col['name'] for col in schema]
                 }
 
-            # Get column references
+            # Helper to extract column name from potential "table.column" format
+            def extract_col(value):
+                if not value:
+                    return None
+                if '.' in value:
+                    return value.split('.')[-1]
+                return value
+
+            # Get column references (handle table.column format from legacy data)
             primary_alias = dataset.primary_table.split('.')[-1]
-            timestamp_col = column_mapping.get('timestamp', 'timestamp')
-            user_col = column_mapping.get('user_id', 'user_id')
-            product_col = column_mapping.get('product_id', 'product_id')
-            revenue_col = column_mapping.get('revenue', 'revenue')
+            user_col = extract_col(column_mapping.get('user_id'))
+            product_col = extract_col(column_mapping.get('product_id'))
+            revenue_col = extract_col(column_mapping.get('revenue'))
 
             # Build SELECT clause
             select_cols = []
@@ -843,51 +855,27 @@ class BigQueryService:
             # Build WHERE clauses
             where_clauses = []
 
-            # Date range filter
-            date_filter = filters.get('date_range', {})
-            if date_filter.get('type') == 'rolling':
-                months = date_filter.get('months', 6)
-                where_clauses.append(
-                    f"`{primary_alias}`.`{timestamp_col}` >= DATE_SUB(CURRENT_DATE(), INTERVAL {months} MONTH)"
-                )
-            elif date_filter.get('type') == 'fixed':
-                start = date_filter.get('start')
-                end = date_filter.get('end')
-                if start:
-                    where_clauses.append(f"`{primary_alias}`.`{timestamp_col}` >= '{start}'")
-                if end:
-                    where_clauses.append(f"`{primary_alias}`.`{timestamp_col}` <= '{end}'")
-
-            # Train/eval split filter
-            split_config = dataset.split_config or {}
-            if split and split_config.get('strategy'):
-                split_clause = self._generate_split_clause(
-                    split, split_config, primary_alias, timestamp_col, user_col
-                )
-                if split_clause:
-                    where_clauses.append(split_clause)
-
             # Check if we need CTEs for complex filters
             ctes = []
             product_filter = filters.get('product_filter', {})
             customer_filter = filters.get('customer_filter', {})
 
-            # Product filter (top N% by revenue)
-            if product_filter.get('type') == 'top_revenue_percent':
+            # Product filter (top N% by revenue) - requires product and revenue columns
+            if product_filter.get('type') == 'top_revenue_percent' and product_col and revenue_col:
                 percent = product_filter.get('value', 80)
                 cte = self._generate_top_products_cte(
-                    primary_alias, product_col, revenue_col, percent, timestamp_col, date_filter
+                    primary_alias, product_col, revenue_col, percent
                 )
                 ctes.append(('top_products', cte))
                 where_clauses.append(
                     f"`{primary_alias}`.`{product_col}` IN (SELECT {product_col} FROM top_products)"
                 )
 
-            # Customer filter (min transactions)
-            if customer_filter.get('type') == 'min_transactions':
+            # Customer filter (min transactions) - requires user column
+            if customer_filter.get('type') == 'min_transactions' and user_col:
                 min_count = customer_filter.get('value', 2)
                 cte = self._generate_active_users_cte(
-                    primary_alias, user_col, min_count, timestamp_col, date_filter
+                    primary_alias, user_col, min_count
                 )
                 ctes.append(('active_users', cte))
                 where_clauses.append(
@@ -918,60 +906,13 @@ class BigQueryService:
             logger.error(f"Error generating query: {e}")
             raise BigQueryServiceError(f"Failed to generate query: {e}")
 
-    def _generate_split_clause(self, split, split_config, primary_alias, timestamp_col, user_col):
-        """
-        Generate WHERE clause for train/eval split.
-
-        Args:
-            split: 'train' or 'eval'
-            split_config: Split configuration dict
-            primary_alias: Table alias
-            timestamp_col: Timestamp column name
-            user_col: User column name
-
-        Returns:
-            SQL WHERE clause string
-        """
-        strategy = split_config.get('strategy')
-
-        if strategy == 'time_based':
-            eval_days = split_config.get('eval_days', 14)
-            if split == 'train':
-                return f"`{primary_alias}`.`{timestamp_col}` < DATE_SUB(CURRENT_DATE(), INTERVAL {eval_days} DAY)"
-            elif split == 'eval':
-                return f"`{primary_alias}`.`{timestamp_col}` >= DATE_SUB(CURRENT_DATE(), INTERVAL {eval_days} DAY)"
-
-        elif strategy == 'random':
-            train_percent = split_config.get('train_percent', 80)
-            # Use hash-based split for reproducibility
-            if split == 'train':
-                return f"MOD(ABS(FARM_FINGERPRINT(CAST(`{primary_alias}`.`{user_col}` AS STRING))), 100) < {train_percent}"
-            elif split == 'eval':
-                return f"MOD(ABS(FARM_FINGERPRINT(CAST(`{primary_alias}`.`{user_col}` AS STRING))), 100) >= {train_percent}"
-
-        return None
-
-    def _generate_top_products_cte(self, primary_alias, product_col, revenue_col, percent, timestamp_col, date_filter):
+    def _generate_top_products_cte(self, primary_alias, product_col, revenue_col, percent):
         """
         Generate CTE for top N% products by revenue.
 
         Returns:
             SQL CTE query string
         """
-        # Build date filter for the CTE
-        date_clause = ""
-        if date_filter.get('type') == 'rolling':
-            months = date_filter.get('months', 6)
-            date_clause = f"WHERE `{timestamp_col}` >= DATE_SUB(CURRENT_DATE(), INTERVAL {months} MONTH)"
-        elif date_filter.get('type') == 'fixed':
-            clauses = []
-            if date_filter.get('start'):
-                clauses.append(f"`{timestamp_col}` >= '{date_filter['start']}'")
-            if date_filter.get('end'):
-                clauses.append(f"`{timestamp_col}` <= '{date_filter['end']}'")
-            if clauses:
-                date_clause = f"WHERE {' AND '.join(clauses)}"
-
         return f"""
     SELECT {product_col}
     FROM (
@@ -981,37 +922,21 @@ class BigQueryService:
             SUM(SUM(`{revenue_col}`)) OVER () as grand_total,
             SUM(SUM(`{revenue_col}`)) OVER (ORDER BY SUM(`{revenue_col}`) DESC) as running_total
         FROM `{self.project_id}.{self.dataset_name}.{primary_alias}`
-        {date_clause}
         GROUP BY `{product_col}`
     )
     WHERE running_total <= grand_total * {percent / 100}
        OR running_total - total_revenue < grand_total * {percent / 100}"""
 
-    def _generate_active_users_cte(self, primary_alias, user_col, min_count, timestamp_col, date_filter):
+    def _generate_active_users_cte(self, primary_alias, user_col, min_count):
         """
         Generate CTE for users with minimum transaction count.
 
         Returns:
             SQL CTE query string
         """
-        # Build date filter for the CTE
-        date_clause = ""
-        if date_filter.get('type') == 'rolling':
-            months = date_filter.get('months', 6)
-            date_clause = f"WHERE `{timestamp_col}` >= DATE_SUB(CURRENT_DATE(), INTERVAL {months} MONTH)"
-        elif date_filter.get('type') == 'fixed':
-            clauses = []
-            if date_filter.get('start'):
-                clauses.append(f"`{timestamp_col}` >= '{date_filter['start']}'")
-            if date_filter.get('end'):
-                clauses.append(f"`{timestamp_col}` <= '{date_filter['end']}'")
-            if clauses:
-                date_clause = f"WHERE {' AND '.join(clauses)}"
-
         return f"""
     SELECT `{user_col}`
     FROM `{self.project_id}.{self.dataset_name}.{primary_alias}`
-    {date_clause}
     GROUP BY `{user_col}`
     HAVING COUNT(*) >= {min_count}"""
 

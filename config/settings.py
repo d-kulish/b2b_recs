@@ -167,6 +167,7 @@ LOGOUT_REDIRECT_URL = 'login'
 
 # GCP Configuration
 GCP_PROJECT_ID = os.environ.get('GCP_PROJECT_ID', '')
+GCP_LOCATION = os.environ.get('GCP_LOCATION', 'US')  # Must match your BigQuery dataset location
 
 # Cloud Run / Production Security Settings
 if not DEBUG:

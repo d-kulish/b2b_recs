@@ -3,7 +3,7 @@
 **Created**: 2025-12-01
 **Phase**: Datasets (Phase 2 of ML Platform)
 **Reference**: `docs/phase_datasets.md`
-**Last Updated**: 2025-12-01
+**Last Updated**: 2025-12-02
 
 ---
 
@@ -28,11 +28,13 @@ All core functionality is implemented. Ready for Phase 8 (Testing).
 
 The Datasets domain defines **WHAT data** goes into model training:
 - Select source tables from BigQuery (populated by ETL)
-- Map columns to ML concepts (user_id, product_id, timestamp, etc.)
-- Define data filters (date range, revenue threshold, customer filters)
+- Map columns to ML concepts (user_id, product_id, revenue)
+- Define data filters (revenue threshold, customer filters)
 - Configure train/eval split strategy
 
 **Key Output**: A Dataset definition (JSON stored in Django) used by TFX ExampleGen.
+
+**Note**: Timestamp column mapping was removed (2025-12-02) as it's not required for TFRS models. Date-based filtering and time-based splits have been removed from the implementation.
 
 ---
 
@@ -44,6 +46,7 @@ Based on clarification with stakeholder (2025-12-01):
 |----------|--------|-------|
 | **Table Source** | `raw_data.*` only | Limit to ETL output dataset |
 | **Column Mapping** | Flexible/Custom | Users can select ANY columns they need |
+| **ML Concepts** | user_id, product_id, revenue | Timestamp removed - not needed for TFRS |
 | **Multi-Table Joins** | Auto + Manual | Auto-detect FK joins + manual override option |
 | **Status Workflow** | Draft → Active | Simple 2-state workflow for now |
 | **Statistics Cost** | Full table scan | Accurate stats, higher BQ cost acceptable |
@@ -96,7 +99,7 @@ Based on clarification with stakeholder (2025-12-01):
 - `validate_query()` - Dry-run query validation with cost estimate
 
 **Constants Added:**
-- `ML_COLUMN_PATTERNS` - Regex patterns for user_id, product_id, timestamp, revenue detection
+- `ML_COLUMN_PATTERNS` - Regex patterns for user_id, product_id, revenue detection
 - `JOIN_KEY_PATTERNS` - Patterns for identifying potential join keys
 - `HIGH_VALUE_JOIN_COLS` - Common join column names
 
@@ -111,7 +114,7 @@ Based on clarification with stakeholder (2025-12-01):
 ### Phase 4: Dataset Analysis ✅
 
 **Service Methods:**
-- `analyze_dataset()` - Full dataset analysis with row/user/product counts, date range
+- `analyze_dataset()` - Full dataset analysis with row/user/product counts (date range removed)
 - `preview_dataset()` - Sample data preview with ML role annotations
 
 **API Helper Functions:**
@@ -134,15 +137,14 @@ Based on clarification with stakeholder (2025-12-01):
 ### Phase 5: Query Generation ✅
 
 **Service Methods:**
-- `generate_query()` - Main query generation with optional split parameter
-- `_generate_split_clause()` - Train/eval split WHERE clause
-  - Time-based: `DATE_SUB(CURRENT_DATE(), INTERVAL N DAY)`
-  - Random: `FARM_FINGERPRINT` for reproducible hash-based splitting
+- `generate_query()` - Main query generation
 - `_generate_top_products_cte()` - CTE for top N% products by revenue using window functions
 - `_generate_active_users_cte()` - CTE for users with minimum transactions
 - `generate_train_query()` - Convenience method for training data
 - `generate_eval_query()` - Convenience method for evaluation data
 - `generate_tfx_queries()` - TFX ExampleGen-ready query configuration
+
+**Note (2025-12-02):** Time-based split and date range filtering removed as timestamp column is not required for TFRS.
 
 **APIs:**
 - `GET /api/datasets/{dataset_id}/query/` - Get generated SQL with optional split parameter
@@ -151,10 +153,8 @@ Based on clarification with stakeholder (2025-12-01):
 - `POST /api/datasets/{dataset_id}/validate-query/` - Validate query (dry run)
 
 **Query Features:**
-- Rolling or fixed date range filters
 - Top N% products by revenue (CTE with running total)
 - Minimum transactions per customer (CTE with HAVING clause)
-- Time-based or random train/eval split
 - Multi-table JOINs with configurable join types
 - Column aliasing for ML concept names
 
@@ -175,8 +175,8 @@ Updated `templates/ml_platform/model_dataset.html` with full UI:
 2. **4-Step Wizard Modal**
    - **Step 1: Basic Info** - Name with real-time availability check, description
    - **Step 2: Source Tables** - Primary/secondary table selection from BigQuery, join configuration with auto-detect
-   - **Step 3: Column Selection & Mapping** - Column checkboxes per table, ML role mapping (user_id, product_id, timestamp, revenue) with auto-suggestions
-   - **Step 4: Filters & Split** - Date range (rolling/fixed), advanced filters (top N% products, min transactions), train/eval split (time-based/random)
+   - **Step 3: Column Selection & Mapping** - Column checkboxes per table, ML role mapping (user_id, product_id, revenue) with auto-suggestions
+   - **Step 4: Filters & Split** - Advanced filters (top N% products, min transactions)
 
 3. **Additional Modals**
    - Delete confirmation modal

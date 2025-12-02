@@ -1341,3 +1341,275 @@ def compare_datasets(request, model_id):
             'status': 'error',
             'message': str(e),
         }, status=500)
+
+
+# =============================================================================
+# VISUAL SCHEMA BUILDER APIs (Preview Service)
+# =============================================================================
+
+@login_required
+@require_http_methods(["POST"])
+def load_samples(request, model_id):
+    """
+    Load random samples from BigQuery tables for the Visual Schema Builder.
+
+    This creates a session with cached sample data that can be used for
+    fast preview generation without repeated BigQuery queries.
+
+    Request body:
+        {
+            "tables": ["raw_data.transactions", "raw_data.products", ...]
+        }
+
+    Returns:
+        {
+            "status": "success",
+            "session_id": "abc12345",
+            "tables": {
+                "raw_data.transactions": {
+                    "columns": [...],
+                    "row_count": 100,
+                    "sample_preview": [...]
+                },
+                ...
+            }
+        }
+    """
+    try:
+        from .preview_service import DatasetPreviewService
+
+        model = get_object_or_404(ModelEndpoint, id=model_id)
+        data = json.loads(request.body)
+
+        tables = data.get('tables', [])
+        if not tables:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'At least one table is required',
+            }, status=400)
+
+        # Validate tables are from raw_data
+        for table in tables:
+            if not table.startswith('raw_data.'):
+                return JsonResponse({
+                    'status': 'error',
+                    'message': f'Table {table} must be from raw_data dataset',
+                }, status=400)
+
+        preview_service = DatasetPreviewService(model)
+        result = preview_service.load_samples(tables)
+
+        return JsonResponse({
+            'status': 'success',
+            **result,
+        })
+
+    except Exception as e:
+        logger.error(f"Error loading samples: {e}")
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e),
+        }, status=500)
+
+
+@login_required
+@require_http_methods(["POST"])
+def generate_preview(request, model_id):
+    """
+    Generate a preview of the dataset based on current join/column configuration.
+
+    Uses cached sample data from load_samples() to perform pandas joins
+    and return a preview of the resulting dataset.
+
+    Request body:
+        {
+            "session_id": "abc12345",
+            "primary_table": "raw_data.transactions",
+            "joins": [
+                {
+                    "table": "raw_data.products",
+                    "left_col": "product_id",
+                    "right_col": "product_id",
+                    "type": "left"
+                }
+            ],
+            "selected_columns": {
+                "raw_data.transactions": ["id", "amount", "product_id"],
+                "raw_data.products": ["name", "category"]
+            }
+        }
+
+    Returns:
+        {
+            "status": "success",
+            "preview_rows": [...10 rows...],
+            "column_order": ["transactions_id", "transactions_amount", ...],
+            "stats": {
+                "total_rows": 87,
+                "null_counts": {"products_name": 3},
+                "warnings": []
+            }
+        }
+    """
+    try:
+        from .preview_service import DatasetPreviewService
+
+        model = get_object_or_404(ModelEndpoint, id=model_id)
+        data = json.loads(request.body)
+
+        session_id = data.get('session_id')
+        if not session_id:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'session_id is required',
+            }, status=400)
+
+        primary_table = data.get('primary_table')
+        if not primary_table:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'primary_table is required',
+            }, status=400)
+
+        joins = data.get('joins', [])
+        selected_columns = data.get('selected_columns', {})
+
+        preview_service = DatasetPreviewService(model)
+
+        try:
+            result = preview_service.generate_preview(
+                session_id=session_id,
+                primary_table=primary_table,
+                joins=joins,
+                selected_columns=selected_columns
+            )
+        except ValueError as e:
+            return JsonResponse({
+                'status': 'error',
+                'message': str(e),
+            }, status=400)
+
+        return JsonResponse({
+            'status': 'success',
+            **result,
+        })
+
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'status': 'error',
+            'message': 'Invalid JSON in request body',
+        }, status=400)
+    except Exception as e:
+        logger.error(f"Error generating preview: {e}")
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e),
+        }, status=500)
+
+
+@login_required
+@require_http_methods(["POST"])
+def detect_joins_preview(request, model_id):
+    """
+    Auto-detect potential joins between tables using cached session data.
+
+    Request body:
+        {
+            "session_id": "abc12345"
+        }
+
+    Returns:
+        {
+            "status": "success",
+            "suggested_joins": [
+                {
+                    "left_table": "raw_data.transactions",
+                    "left_col": "product_id",
+                    "right_table": "raw_data.products",
+                    "right_col": "product_id",
+                    "confidence": "high",
+                    "reason": "Exact column name match"
+                }
+            ]
+        }
+    """
+    try:
+        from .preview_service import DatasetPreviewService
+
+        model = get_object_or_404(ModelEndpoint, id=model_id)
+        data = json.loads(request.body)
+
+        session_id = data.get('session_id')
+        if not session_id:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'session_id is required',
+            }, status=400)
+
+        preview_service = DatasetPreviewService(model)
+
+        try:
+            suggestions = preview_service.detect_joins(session_id)
+        except ValueError as e:
+            return JsonResponse({
+                'status': 'error',
+                'message': str(e),
+            }, status=400)
+
+        return JsonResponse({
+            'status': 'success',
+            'suggested_joins': suggestions,
+        })
+
+    except Exception as e:
+        logger.error(f"Error detecting joins: {e}")
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e),
+        }, status=500)
+
+
+@login_required
+@require_http_methods(["POST"])
+def cleanup_preview_session(request, model_id):
+    """
+    Clean up a preview session and release cached data.
+
+    Request body:
+        {
+            "session_id": "abc12345"
+        }
+
+    Returns:
+        {
+            "status": "success",
+            "message": "Session cleaned up"
+        }
+    """
+    try:
+        from .preview_service import DatasetPreviewService
+
+        model = get_object_or_404(ModelEndpoint, id=model_id)
+        data = json.loads(request.body)
+
+        session_id = data.get('session_id')
+        if not session_id:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'session_id is required',
+            }, status=400)
+
+        preview_service = DatasetPreviewService(model)
+        found = preview_service.cleanup_session(session_id)
+
+        return JsonResponse({
+            'status': 'success',
+            'message': 'Session cleaned up' if found else 'Session not found (may have expired)',
+        })
+
+    except Exception as e:
+        logger.error(f"Error cleaning up session: {e}")
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e),
+        }, status=500)

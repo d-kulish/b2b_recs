@@ -45,4 +45,10 @@ urlpatterns = [
 
     # === DATASET COMPARISON ===
     path('api/models/<int:model_id>/datasets/compare/', api.compare_datasets, name='api_datasets_compare'),
+
+    # === VISUAL SCHEMA BUILDER (Preview Service) ===
+    path('api/models/<int:model_id>/datasets/load-samples/', api.load_samples, name='api_datasets_load_samples'),
+    path('api/models/<int:model_id>/datasets/preview/', api.generate_preview, name='api_datasets_generate_preview'),
+    path('api/models/<int:model_id>/datasets/detect-joins-preview/', api.detect_joins_preview, name='api_datasets_detect_joins_preview'),
+    path('api/models/<int:model_id>/datasets/cleanup-session/', api.cleanup_preview_session, name='api_datasets_cleanup_session'),
 ]

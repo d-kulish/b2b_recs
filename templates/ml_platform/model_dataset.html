@@ -62,7 +62,7 @@
 
 <!-- Dataset Wizard Modal -->
 <div id="datasetWizardModal" class="modal-overlay hidden">
-    <div class="modal-container modal-container-wizard">
+    <div class="modal-container modal-container-wizard modal-dataset-wizard">
         <!-- Modal Header -->
         <div class="modal-header-wizard">
             <div class="modal-header-content">
@@ -71,7 +71,7 @@
                 </div>
                 <div class="modal-header-info">
                     <h3 class="modal-header-title" id="wizardTitle">Create Dataset</h3>
-                    <p class="modal-step-counter">Step <span id="currentStep">1</span> of 4</p>
+                    <p class="modal-step-counter">Step <span id="currentStep">1</span> of 5</p>
                 </div>
             </div>
 
@@ -81,6 +81,7 @@
                 <div id="progress2" class="modal-progress-segment"></div>
                 <div id="progress3" class="modal-progress-segment"></div>
                 <div id="progress4" class="modal-progress-segment"></div>
+                <div id="progress5" class="modal-progress-segment"></div>
             </div>
         </div>
 
@@ -148,28 +149,92 @@
                     </div>
                     <p class="wizard-field-hint">
                         <i class="fas fa-link mr-1"></i>
-                        Additional tables to join (e.g., products, customers).
+                        Additional tables to join (e.g., products, customers). You'll configure joins in the next step.
                     </p>
                 </div>
+            </div>
 
-                <!-- Join Configuration (shown when secondary tables selected) -->
-                <div id="joinConfigSection" class="hidden">
-                    <div class="wizard-field-group">
-                        <label class="wizard-field-label">Join Configuration</label>
-                        <div id="joinConfigList" class="space-y-2">
-                            <!-- Join configs will be added dynamically -->
+            <!-- Step 3: Visual Schema Builder -->
+            <div id="step3" class="wizard-step">
+                <div class="schema-builder-container">
+                    <!-- Header with title and auto-detect button -->
+                    <div class="schema-builder-header">
+                        <div>
+                            <h4 class="wizard-section-title" style="margin-bottom: 2px;">Schema Builder</h4>
+                            <p class="wizard-section-subtitle" style="margin-bottom: 0;">Connect tables and select columns for your dataset.</p>
                         </div>
-                        <button onclick="detectJoins()" class="btn btn-secondary btn-sm mt-2">
-                            <i class="fas fa-magic mr-1"></i>Auto-Detect Joins
+                        <button onclick="autoDetectJoins()" class="schema-auto-detect-btn" id="autoDetectBtn">
+                            <i class="fas fa-magic"></i> Auto-detect
                         </button>
+                    </div>
+
+                    <!-- Table Cards Area -->
+                    <div class="schema-cards-area" id="schemaCardsArea">
+                        <!-- SVG for connection lines -->
+                        <svg class="schema-connections-svg" id="connectionsSvg"></svg>
+
+                        <!-- Table cards container -->
+                        <div class="schema-cards-container" id="schemaCardsContainer">
+                            <!-- Loading state -->
+                            <div class="schema-loading" id="schemaLoading">
+                                <i class="fas fa-spinner fa-spin"></i>
+                                Loading table samples...
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Preview Section -->
+                    <div class="schema-preview-section">
+                        <!-- Stats bar -->
+                        <div class="schema-preview-stats" id="previewStats">
+                            <div class="stat-item">
+                                <span>Preview:</span>
+                                <span class="stat-value" id="previewRowCount">-</span>
+                                <span>rows</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-value" id="previewColCount">-</span>
+                                <span>columns</span>
+                            </div>
+                            <div class="stat-item" id="previewWarnings" style="display: none;">
+                                <i class="fas fa-exclamation-triangle stat-warning"></i>
+                                <span class="stat-warning" id="previewWarningText"></span>
+                            </div>
+                        </div>
+
+                        <!-- Preview table -->
+                        <div class="schema-preview-table-container" id="previewTableContainer">
+                            <div class="schema-preview-empty" id="previewEmpty">
+                                <i class="fas fa-table"></i>
+                                Select columns to see a preview of your dataset
+                            </div>
+                            <table class="schema-preview-table" id="previewTable" style="display: none;">
+                                <thead id="previewTableHead"></thead>
+                                <tbody id="previewTableBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Join Popover (hidden by default) -->
+                <div class="join-popover hidden" id="joinPopover">
+                    <div class="join-popover-header">Join Type</div>
+                    <div class="join-popover-option" data-type="left" onclick="setJoinType('left')">
+                        <i class="fas fa-check"></i> LEFT JOIN
+                    </div>
+                    <div class="join-popover-option" data-type="inner" onclick="setJoinType('inner')">
+                        <i class="fas fa-check"></i> INNER JOIN
+                    </div>
+                    <div class="join-popover-option danger" onclick="removeSelectedJoin()">
+                        <i class="fas fa-trash"></i> Remove
                     </div>
                 </div>
             </div>
 
-            <!-- Step 3: Column Selection & Mapping -->
-            <div id="step3" class="wizard-step">
-                <h4 class="wizard-section-title">Column Selection & Mapping</h4>
-                <p class="wizard-section-subtitle">Select columns and map them to ML concepts.</p>
+            <!-- Step 4: ML Column Mapping -->
+            <div id="step4" class="wizard-step">
+                <h4 class="wizard-section-title">ML Column Mapping</h4>
+                <p class="wizard-section-subtitle">Map your columns to ML concepts for the recommendation model.</p>
 
                 <!-- ML Column Suggestions -->
                 <div id="mlSuggestions" class="wizard-info-box success hidden">
@@ -179,39 +244,52 @@
                     </div>
                 </div>
 
-                <!-- Column Selection per Table -->
-                <div id="columnSelectionContainer" style="max-height: 320px; overflow-y: auto;">
-                    <p class="text-center text-gray-500 py-4">Select tables in Step 2 first</p>
-                </div>
-
                 <!-- ML Role Mapping -->
-                <div class="wizard-field-group mt-4">
-                    <label class="wizard-field-label">ML Column Mapping <span class="required">*</span></label>
-                    <div class="grid grid-cols-2 gap-3">
+                <div class="wizard-field-group">
+                    <label class="wizard-field-label">Required Columns</label>
+                    <div class="space-y-3">
                         <div>
-                            <label class="text-xs font-medium text-gray-600 mb-1 block">User ID Column</label>
+                            <label class="text-xs font-medium text-gray-600 mb-1 block">User ID Column <span class="required">*</span></label>
                             <select id="userIdColumn" class="form-select w-full text-sm" onchange="validateCurrentStep()">
                                 <option value="">Select column...</option>
                             </select>
+                            <p class="wizard-field-hint mt-1">
+                                <i class="fas fa-user mr-1"></i>
+                                Column that uniquely identifies each customer/user.
+                            </p>
                         </div>
                         <div>
-                            <label class="text-xs font-medium text-gray-600 mb-1 block">Product ID Column</label>
+                            <label class="text-xs font-medium text-gray-600 mb-1 block">Product ID Column <span class="required">*</span></label>
                             <select id="productIdColumn" class="form-select w-full text-sm" onchange="validateCurrentStep()">
                                 <option value="">Select column...</option>
                             </select>
+                            <p class="wizard-field-hint mt-1">
+                                <i class="fas fa-box mr-1"></i>
+                                Column that uniquely identifies each product/item.
+                            </p>
                         </div>
+                    </div>
+                </div>
+
+                <div class="wizard-field-group">
+                    <label class="wizard-field-label">Optional Columns</label>
+                    <div class="space-y-3">
                         <div>
-                            <label class="text-xs font-medium text-gray-600 mb-1 block">Revenue Column <span class="text-gray-400">(optional)</span></label>
+                            <label class="text-xs font-medium text-gray-600 mb-1 block">Revenue Column <span class="optional">(optional)</span></label>
                             <select id="revenueColumn" class="form-select w-full text-sm" onchange="validateCurrentStep()">
                                 <option value="">Select column...</option>
                             </select>
+                            <p class="wizard-field-hint mt-1">
+                                <i class="fas fa-dollar-sign mr-1"></i>
+                                Column containing transaction value/amount. Used for weighted recommendations.
+                            </p>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Step 4: Filters & Split -->
-            <div id="step4" class="wizard-step">
+            <!-- Step 5: Filters & Split -->
+            <div id="step5" class="wizard-step">
                 <h4 class="wizard-section-title">Filters & Train/Eval Split</h4>
                 <p class="wizard-section-subtitle">Configure data filters and how to split data for training.</p>
 
@@ -333,12 +411,16 @@
         <!-- Modal Footer -->
         <div class="modal-footer-wizard">
             <div class="footer-left">
-                <button onclick="closeWizard()" class="btn btn-secondary">Cancel</button>
+                <button onclick="prevStep()" class="btn btn-secondary hidden" id="prevButton">
+                    <i class="fas fa-chevron-left mr-1"></i> Previous
+                </button>
+                <button onclick="nextStep()" class="btn btn-primary" id="nextButton" disabled>
+                    Next <i class="fas fa-chevron-right ml-1"></i>
+                </button>
+                <button onclick="saveDataset()" class="btn btn-primary hidden" id="saveButton">Create Dataset</button>
             </div>
             <div class="footer-right">
-                <button onclick="prevStep()" class="btn btn-secondary hidden" id="prevButton">Previous</button>
-                <button onclick="nextStep()" class="btn btn-primary" id="nextButton" disabled>Next</button>
-                <button onclick="saveDataset()" class="btn btn-primary hidden" id="saveButton">Create Dataset</button>
+                <button onclick="closeWizard()" class="btn btn-secondary">Cancel</button>
             </div>
         </div>
     </div>
@@ -458,6 +540,21 @@ let availableTables = [];
 let tableSchemas = {};
 let currentDatasetId = null;
 let currentQueries = {};
+
+// Schema Builder State
+let schemaBuilderState = {
+    sessionId: null,
+    tables: {},           // table metadata from load-samples
+    selectedColumns: {},  // table -> [columns]
+    joins: [],            // [{leftTable, leftCol, rightTable, rightCol, type}]
+    connectMode: null,    // {table, column} when awaiting second click
+    previewData: null,    // cached preview response
+    selectedJoinIndex: null // for join popover
+};
+
+// Debounce timer for preview updates
+let previewDebounceTimer = null;
+const PREVIEW_DEBOUNCE_MS = 300;
 
 // ============================================================================
 // PAGE INITIALIZATION
@@ -689,6 +786,20 @@ function resetWizard() {
         filters: {},
         splitConfig: {}
     };
+
+    // Reset schema builder state
+    schemaBuilderState = {
+        sessionId: null,
+        tables: {},
+        selectedColumns: {},
+        joins: [],
+        connectMode: null,
+        previewData: null,
+        selectedJoinIndex: null
+    };
+
+    // Reset card positions
+    cardPositions = {};
 }
 
 function showStep(step) {
@@ -702,7 +813,7 @@ function showStep(step) {
     document.getElementById('currentStep').textContent = step;
 
     // Update progress bar
-    for (let i = 1; i <= 4; i++) {
+    for (let i = 1; i <= 5; i++) {
         const segment = document.getElementById(`progress${i}`);
         segment.classList.remove('active', 'completed');
         if (i < step) {
@@ -731,7 +842,7 @@ function updateNavigationButtons(step) {
     }
 
     // Next/Save buttons
-    if (step === 4) {
+    if (step === 5) {
         nextBtn.classList.add('hidden');
         saveBtn.classList.remove('hidden');
     } else {
@@ -757,12 +868,18 @@ function validateCurrentStep() {
             isValid = wizardData.primaryTable !== null;
             break;
         case 3:
+            // At least one column must be selected (schema builder)
+            const hasSelectedColumns = Object.values(schemaBuilderState.selectedColumns)
+                .some(cols => cols && cols.length > 0);
+            isValid = hasSelectedColumns;
+            break;
+        case 4:
             // At least user_id and product_id should be mapped
             const userId = document.getElementById('userIdColumn')?.value;
             const productId = document.getElementById('productIdColumn')?.value;
             isValid = userId && productId;
             break;
-        case 4:
+        case 5:
             isValid = true; // Filters are optional
             break;
     }
@@ -772,7 +889,7 @@ function validateCurrentStep() {
 }
 
 function nextStep() {
-    if (currentWizardStep >= 4) return;
+    if (currentWizardStep >= 5) return;
 
     // Collect data from current step
     collectStepData(currentWizardStep);
@@ -781,10 +898,14 @@ function nextStep() {
     if (currentWizardStep === 1) {
         // Moving to step 2 - tables should already be loaded
     } else if (currentWizardStep === 2) {
-        // Moving to step 3 - load column selection
-        loadColumnSelection();
+        // Moving to step 3 - load schema builder with samples
+        loadSchemaBuilder();
     } else if (currentWizardStep === 3) {
-        // Moving to step 4 - nothing special needed
+        // Moving to step 4 - collect columns and joins, populate ML column dropdowns
+        collectSchemaBuilderData();
+        populateMlColumnDropdowns();
+    } else if (currentWizardStep === 4) {
+        // Moving to step 5 - nothing special needed
     }
 
     showStep(currentWizardStep + 1);
@@ -806,6 +927,9 @@ function collectStepData(step) {
             // Primary and secondary tables already tracked via selection
             break;
         case 3:
+            // Schema builder data is collected via collectSchemaBuilderData()
+            break;
+        case 4:
             // Column mapping - extract just the column name from table.column format
             const extractColumnName = (value) => {
                 if (!value) return null;
@@ -823,7 +947,7 @@ function collectStepData(step) {
                 if (!wizardData.columnMapping[key]) delete wizardData.columnMapping[key];
             });
             break;
-        case 4:
+        case 5:
             // Date range filter
             const dateRangeType = document.querySelector('input[name="dateRangeType"]:checked')?.value;
             if (dateRangeType === 'rolling') {
@@ -1151,120 +1275,810 @@ function loadTableSchema(tableName) {
 }
 
 // ============================================================================
-// STEP 3: COLUMN SELECTION
+// STEP 3: VISUAL SCHEMA BUILDER
 // ============================================================================
-function loadColumnSelection() {
-    const container = document.getElementById('columnSelectionContainer');
+
+function loadSchemaBuilder() {
     const allTables = [wizardData.primaryTable, ...wizardData.secondaryTables].filter(Boolean);
 
     if (allTables.length === 0) {
-        container.innerHTML = '<p class="text-center text-gray-500 py-4">Select tables in Step 2 first</p>';
+        document.getElementById('schemaLoading').innerHTML = 'No tables selected. Go back to Step 2.';
         return;
     }
 
-    // Load schemas for all tables that aren't loaded yet
-    const loadPromises = allTables.map(table => {
-        if (tableSchemas[table]) {
-            return Promise.resolve();
-        }
-        return fetch(`/api/models/${modelId}/bq-tables/${encodeURIComponent(table.replace('raw_data.', ''))}/schema/`, {
-            headers: { 'X-CSRFToken': csrftoken }
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.status === 'success') {
-                tableSchemas[table] = data.schema;
-            }
-        });
-    });
+    // Show loading state
+    document.getElementById('schemaLoading').style.display = 'flex';
+    document.getElementById('schemaCardsContainer').innerHTML = `
+        <div class="schema-loading" id="schemaLoading">
+            <i class="fas fa-spinner fa-spin"></i>
+            Loading table samples...
+        </div>
+    `;
 
-    Promise.all(loadPromises).then(() => {
-        renderColumnSelection();
-        suggestMLColumns();
+    // Reset schema builder state
+    schemaBuilderState = {
+        sessionId: null,
+        tables: {},
+        selectedColumns: {},
+        joins: [],
+        connectMode: null,
+        previewData: null,
+        selectedJoinIndex: null
+    };
+
+    // Load samples from backend
+    fetch(`/api/models/${modelId}/datasets/load-samples/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrftoken
+        },
+        body: JSON.stringify({ tables: allTables })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            schemaBuilderState.sessionId = data.session_id;
+            schemaBuilderState.tables = data.tables;
+
+            // Initialize selected columns (all by default)
+            Object.keys(data.tables).forEach(table => {
+                const columns = data.tables[table].columns || [];
+                schemaBuilderState.selectedColumns[table] = columns.map(c => c.name);
+            });
+
+            // Render table cards
+            renderTableCards();
+
+            // Auto-detect joins if multiple tables
+            if (allTables.length > 1) {
+                autoDetectJoins();
+            } else {
+                // Single table - just refresh preview
+                refreshPreview();
+            }
+        } else {
+            document.getElementById('schemaCardsContainer').innerHTML = `
+                <div class="schema-preview-empty">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    Error loading samples: ${data.message}
+                </div>
+            `;
+        }
+    })
+    .catch(error => {
+        console.error('Error loading schema builder:', error);
+        document.getElementById('schemaCardsContainer').innerHTML = `
+            <div class="schema-preview-empty">
+                <i class="fas fa-exclamation-triangle"></i>
+                Failed to load table samples
+            </div>
+        `;
     });
 }
 
-function renderColumnSelection() {
-    const container = document.getElementById('columnSelectionContainer');
+// Store card positions
+let cardPositions = {};
+
+function renderTableCards() {
+    const container = document.getElementById('schemaCardsContainer');
     const allTables = [wizardData.primaryTable, ...wizardData.secondaryTables].filter(Boolean);
 
     let html = '';
 
-    allTables.forEach(table => {
+    allTables.forEach((table, index) => {
+        const tableData = schemaBuilderState.tables[table] || {};
+        const columns = tableData.columns || [];
+        const isPrimary = index === 0;
         const shortName = table.replace('raw_data.', '');
-        const schema = tableSchemas[table] || [];
-        const selectedCols = wizardData.selectedColumns[table] || schema.map(c => c.name);
-
-        // Initialize selected columns if not set
-        if (!wizardData.selectedColumns[table]) {
-            wizardData.selectedColumns[table] = selectedCols;
-        }
+        const selectedCols = schemaBuilderState.selectedColumns[table] || [];
+        const showLimit = 10;
+        const hasMore = columns.length > showLimit;
 
         html += `
-            <div class="mb-4">
-                <div class="flex items-center justify-between mb-2">
-                    <h5 class="text-sm font-semibold text-gray-700">${shortName}</h5>
-                    <div class="text-xs">
-                        <button onclick="selectAllColumns('${table}')" class="text-blue-600 hover:underline mr-2">Select All</button>
-                        <button onclick="deselectAllColumns('${table}')" class="text-blue-600 hover:underline">Deselect All</button>
+            <div class="schema-table-card ${isPrimary ? 'primary' : ''}" data-table="${table}" id="card_${shortName}">
+                <div class="schema-card-header" onmousedown="startDrag(event, '${table}')">
+                    <div class="schema-card-title">
+                        <i class="fas fa-table"></i>
+                        ${shortName}
                     </div>
+                    <span class="schema-card-badge ${isPrimary ? 'primary' : 'secondary'}">
+                        ${isPrimary ? 'Primary' : 'Secondary'}
+                    </span>
                 </div>
-                <div class="border border-gray-200 rounded-lg p-2 max-h-40 overflow-y-auto">
-                    <div class="grid grid-cols-2 gap-1">
-                        ${schema.map(col => `
-                            <label class="flex items-center text-xs p-1 hover:bg-gray-50 rounded cursor-pointer">
-                                <input type="checkbox" class="mr-2"
-                                       ${selectedCols.includes(col.name) ? 'checked' : ''}
-                                       onchange="toggleColumn('${table}', '${col.name}', this.checked)">
-                                <span class="truncate" title="${col.name} (${col.type})">${col.name}</span>
-                                <span class="ml-1 text-gray-400">${getTypeAbbrev(col.type)}</span>
-                                ${col.suggested_role ? `<span class="ml-1 px-1 bg-blue-100 text-blue-700 rounded text-xs">${col.suggested_role}</span>` : ''}
-                            </label>
-                        `).join('')}
+                <div class="schema-column-list ${hasMore ? 'collapsed' : ''}" id="columnList_${shortName}">
+                    ${columns.slice(0, showLimit).map(col => renderColumnItem(table, col, selectedCols, isPrimary)).join('')}
+                </div>
+                ${hasMore ? `
+                    <div class="schema-column-expander" id="expander_${shortName}" onclick="toggleColumnExpander('${table}', '${shortName}')">
+                        Show ${columns.length - showLimit} more...
                     </div>
-                </div>
+                ` : ''}
             </div>
         `;
     });
 
     container.innerHTML = html;
 
-    // Populate ML mapping dropdowns
-    populateMLMappingDropdowns();
+    // Position cards: primary in center, secondary around it
+    positionCardsInitially(allTables);
+
+    // Setup drag handlers
+    setupDragHandlers();
+
+    // Update connection lines after a short delay to ensure cards are positioned
+    setTimeout(updateConnectionLines, 50);
 }
 
-function toggleColumn(table, column, isSelected) {
-    if (!wizardData.selectedColumns[table]) {
-        wizardData.selectedColumns[table] = [];
+function positionCardsInitially(allTables) {
+    const container = document.getElementById('schemaCardsContainer');
+    const containerRect = container.getBoundingClientRect();
+
+    // Use fixed dimensions based on CSS if container not yet sized
+    const containerWidth = Math.max(containerRect.width, 900);
+    const containerHeight = Math.max(containerRect.height, 300);
+
+    const cardWidth = 220;
+    const cardHeight = 220; // Approximate card height
+
+    // Calculate positions for all tables first
+    const numTables = allTables.length;
+
+    allTables.forEach((table, index) => {
+        const shortName = table.replace('raw_data.', '');
+        const card = document.getElementById(`card_${shortName}`);
+        if (!card) return;
+
+        let x, y;
+
+        // Check if we have saved positions
+        if (cardPositions[table]) {
+            x = cardPositions[table].x;
+            y = cardPositions[table].y;
+        } else if (index === 0) {
+            // Primary table: center of container
+            x = (containerWidth - cardWidth) / 2;
+            y = (containerHeight - cardHeight) / 2;
+        } else {
+            // Secondary tables: position to the left and right of primary
+            const numSecondary = numTables - 1;
+
+            if (numSecondary === 1) {
+                // Single secondary: place to the right
+                x = (containerWidth / 2) + cardWidth / 2 + 80;
+                y = (containerHeight - cardHeight) / 2;
+            } else if (numSecondary === 2) {
+                // Two secondaries: one left, one right
+                if (index === 1) {
+                    x = (containerWidth / 2) - cardWidth - 80;
+                    y = (containerHeight - cardHeight) / 2;
+                } else {
+                    x = (containerWidth / 2) + cardWidth / 2 + 80;
+                    y = (containerHeight - cardHeight) / 2;
+                }
+            } else {
+                // Multiple secondaries: distribute around the primary
+                const angle = ((index - 1) / numSecondary) * Math.PI * 2 - Math.PI / 2;
+                const radiusX = containerWidth * 0.35;
+                const radiusY = containerHeight * 0.30;
+
+                const centerX = containerWidth / 2;
+                const centerY = containerHeight / 2;
+
+                x = centerX + Math.cos(angle) * radiusX - cardWidth / 2;
+                y = centerY + Math.sin(angle) * radiusY - cardHeight / 2;
+            }
+
+            // Keep within bounds
+            x = Math.max(10, Math.min(x, containerWidth - cardWidth - 10));
+            y = Math.max(10, Math.min(y, containerHeight - cardHeight - 10));
+        }
+
+        card.style.left = x + 'px';
+        card.style.top = y + 'px';
+
+        // Save position
+        cardPositions[table] = { x, y };
+    });
+}
+
+// Drag state
+let dragState = {
+    isDragging: false,
+    table: null,
+    startX: 0,
+    startY: 0,
+    cardStartX: 0,
+    cardStartY: 0
+};
+
+function setupDragHandlers() {
+    document.addEventListener('mousemove', onDragMove);
+    document.addEventListener('mouseup', onDragEnd);
+}
+
+function startDrag(event, table) {
+    // Don't start drag if clicking on checkbox or other interactive elements
+    if (event.target.tagName === 'INPUT' || event.target.closest('.schema-connection-dot')) {
+        return;
     }
 
-    if (isSelected) {
-        if (!wizardData.selectedColumns[table].includes(column)) {
-            wizardData.selectedColumns[table].push(column);
+    event.preventDefault();
+
+    const shortName = table.replace('raw_data.', '');
+    const card = document.getElementById(`card_${shortName}`);
+    if (!card) return;
+
+    dragState = {
+        isDragging: true,
+        table: table,
+        startX: event.clientX,
+        startY: event.clientY,
+        cardStartX: parseInt(card.style.left) || 0,
+        cardStartY: parseInt(card.style.top) || 0
+    };
+
+    card.classList.add('dragging');
+}
+
+function onDragMove(event) {
+    if (!dragState.isDragging) return;
+
+    const shortName = dragState.table.replace('raw_data.', '');
+    const card = document.getElementById(`card_${shortName}`);
+    if (!card) return;
+
+    const container = document.getElementById('schemaCardsContainer');
+    const containerRect = container.getBoundingClientRect();
+
+    const deltaX = event.clientX - dragState.startX;
+    const deltaY = event.clientY - dragState.startY;
+
+    let newX = dragState.cardStartX + deltaX;
+    let newY = dragState.cardStartY + deltaY;
+
+    // Keep within container bounds
+    const cardRect = card.getBoundingClientRect();
+    const maxX = containerRect.width - cardRect.width;
+    const maxY = containerRect.height - cardRect.height;
+
+    newX = Math.max(0, Math.min(newX, maxX));
+    newY = Math.max(0, Math.min(newY, maxY));
+
+    card.style.left = newX + 'px';
+    card.style.top = newY + 'px';
+
+    // Save position
+    cardPositions[dragState.table] = { x: newX, y: newY };
+
+    // Update connection lines while dragging
+    updateConnectionLines();
+}
+
+function onDragEnd(event) {
+    if (!dragState.isDragging) return;
+
+    const shortName = dragState.table.replace('raw_data.', '');
+    const card = document.getElementById(`card_${shortName}`);
+    if (card) {
+        card.classList.remove('dragging');
+    }
+
+    dragState.isDragging = false;
+    dragState.table = null;
+
+    // Final update of connection lines
+    updateConnectionLines();
+}
+
+function renderColumnItem(table, col, selectedCols, isPrimary) {
+    const shortTable = table.replace('raw_data.', '');
+    const isSelected = selectedCols.includes(col.name);
+
+    // Determine if column could be a join key based on schema flag OR naming patterns
+    const colLower = col.name.toLowerCase();
+    const keyPatterns = ['_id', 'id_', '_key', 'key_', '_code', 'code_'];
+    const isJoinKey = col.is_potential_join_key ||
+                      keyPatterns.some(p => colLower.includes(p)) ||
+                      colLower === 'id';
+
+    const isConnected = schemaBuilderState.joins.some(j =>
+        (j.leftCol === col.name && wizardData.primaryTable === table) ||
+        (j.rightCol === col.name && j.rightTable === table)
+    );
+
+    return `
+        <div class="schema-column-item ${isConnected ? 'connected' : ''}" data-table="${table}" data-column="${col.name}">
+            <input type="checkbox" ${isSelected ? 'checked' : ''}
+                   onchange="onColumnCheckChange('${table}', '${col.name}', this.checked)">
+            <span class="schema-column-name">${col.name}</span>
+            <span class="schema-column-type">${col.type?.substring(0, 3)?.toLowerCase() || ''}</span>
+            ${isJoinKey ? `
+                <div class="schema-connection-dot ${isConnected ? 'connected' : ''}"
+                     data-table="${table}" data-column="${col.name}"
+                     onclick="onConnectionDotClick('${table}', '${col.name}')"></div>
+            ` : ''}
+        </div>
+    `;
+}
+
+function toggleColumnExpander(table, shortName) {
+    const columnList = document.getElementById(`columnList_${shortName}`);
+    const expander = document.getElementById(`expander_${shortName}`);
+    const tableData = schemaBuilderState.tables[table] || {};
+    const columns = tableData.columns || [];
+    const selectedCols = schemaBuilderState.selectedColumns[table] || [];
+    const isPrimary = table === wizardData.primaryTable;
+
+    if (columnList.classList.contains('collapsed')) {
+        // Expand - show all columns
+        columnList.classList.remove('collapsed');
+        columnList.innerHTML = columns.map(col => renderColumnItem(table, col, selectedCols, isPrimary)).join('');
+        expander.textContent = 'Show less';
+    } else {
+        // Collapse - show first 10
+        columnList.classList.add('collapsed');
+        columnList.innerHTML = columns.slice(0, 10).map(col => renderColumnItem(table, col, selectedCols, isPrimary)).join('');
+        expander.textContent = `Show ${columns.length - 10} more...`;
+    }
+
+    updateConnectionLines();
+}
+
+function onColumnCheckChange(table, column, isChecked) {
+    if (!schemaBuilderState.selectedColumns[table]) {
+        schemaBuilderState.selectedColumns[table] = [];
+    }
+
+    if (isChecked) {
+        if (!schemaBuilderState.selectedColumns[table].includes(column)) {
+            schemaBuilderState.selectedColumns[table].push(column);
         }
     } else {
-        wizardData.selectedColumns[table] = wizardData.selectedColumns[table].filter(c => c !== column);
+        schemaBuilderState.selectedColumns[table] = schemaBuilderState.selectedColumns[table].filter(c => c !== column);
     }
 
-    populateMLMappingDropdowns();
+    validateCurrentStep();
+    debouncedRefreshPreview();
 }
 
-function selectAllColumns(table) {
-    const schema = tableSchemas[table] || [];
-    wizardData.selectedColumns[table] = schema.map(c => c.name);
-    renderColumnSelection();
+// Connection dot click handling
+function onConnectionDotClick(table, column) {
+    const connectMode = schemaBuilderState.connectMode;
+
+    if (!connectMode) {
+        // Start connect mode
+        schemaBuilderState.connectMode = { table, column };
+
+        // Highlight source dot
+        document.querySelectorAll('.schema-connection-dot').forEach(dot => {
+            if (dot.dataset.table === table && dot.dataset.column === column) {
+                dot.classList.add('connect-mode');
+            } else if (dot.dataset.table !== table) {
+                // Highlight valid targets (different table)
+                dot.classList.add('connect-mode-target');
+            }
+        });
+    } else {
+        // Complete or cancel connection
+        if (connectMode.table === table && connectMode.column === column) {
+            // Clicked same dot - cancel
+            exitConnectMode();
+        } else if (connectMode.table !== table) {
+            // Valid target - create join
+            createJoin(connectMode.table, connectMode.column, table, column);
+            exitConnectMode();
+        }
+        // If same table but different column - ignore
+    }
 }
 
-function deselectAllColumns(table) {
-    wizardData.selectedColumns[table] = [];
-    renderColumnSelection();
+function exitConnectMode() {
+    schemaBuilderState.connectMode = null;
+    document.querySelectorAll('.schema-connection-dot').forEach(dot => {
+        dot.classList.remove('connect-mode', 'connect-mode-target');
+    });
 }
 
-function populateMLMappingDropdowns() {
+function createJoin(leftTable, leftCol, rightTable, rightCol) {
+    // Ensure primary table is always on the left
+    if (leftTable !== wizardData.primaryTable && rightTable === wizardData.primaryTable) {
+        [leftTable, leftCol, rightTable, rightCol] = [rightTable, rightCol, leftTable, leftCol];
+    }
+
+    // Check if join already exists
+    const existingIndex = schemaBuilderState.joins.findIndex(j =>
+        j.rightTable === rightTable
+    );
+
+    if (existingIndex >= 0) {
+        // Update existing join
+        schemaBuilderState.joins[existingIndex] = {
+            leftTable,
+            leftCol,
+            rightTable,
+            rightCol,
+            type: 'left'
+        };
+    } else {
+        // Add new join
+        schemaBuilderState.joins.push({
+            leftTable,
+            leftCol,
+            rightTable,
+            rightCol,
+            type: 'left'
+        });
+    }
+
+    renderTableCards();
+    refreshPreview();
+}
+
+function removeJoin(index) {
+    schemaBuilderState.joins.splice(index, 1);
+    renderTableCards();
+    refreshPreview();
+    hideJoinPopover();
+}
+
+function setJoinType(type) {
+    if (schemaBuilderState.selectedJoinIndex !== null) {
+        schemaBuilderState.joins[schemaBuilderState.selectedJoinIndex].type = type;
+        refreshPreview();
+        hideJoinPopover();
+    }
+}
+
+function removeSelectedJoin() {
+    if (schemaBuilderState.selectedJoinIndex !== null) {
+        removeJoin(schemaBuilderState.selectedJoinIndex);
+    }
+}
+
+function showJoinPopover(index, x, y) {
+    schemaBuilderState.selectedJoinIndex = index;
+    const popover = document.getElementById('joinPopover');
+    const join = schemaBuilderState.joins[index];
+
+    // Update active state for join type options
+    popover.querySelectorAll('.join-popover-option[data-type]').forEach(opt => {
+        opt.classList.toggle('active', opt.dataset.type === join.type);
+    });
+
+    popover.style.left = x + 'px';
+    popover.style.top = y + 'px';
+    popover.classList.remove('hidden');
+}
+
+function hideJoinPopover() {
+    schemaBuilderState.selectedJoinIndex = null;
+    document.getElementById('joinPopover').classList.add('hidden');
+}
+
+// Color palette for connection lines
+const JOIN_COLORS = [
+    '#2563eb', // Blue
+    '#16a34a', // Green
+    '#dc2626', // Red
+    '#9333ea', // Purple
+    '#ea580c', // Orange
+    '#0891b2', // Cyan
+    '#c026d3', // Fuchsia
+    '#ca8a04', // Yellow
+];
+
+function updateConnectionLines() {
+    const svg = document.getElementById('connectionsSvg');
+    const cardsArea = document.getElementById('schemaCardsArea');
+
+    // Clear existing lines
+    svg.innerHTML = '';
+
+    // Draw lines for each join
+    schemaBuilderState.joins.forEach((join, index) => {
+        // Get the card elements (not just the dots)
+        const leftCard = document.querySelector(`.schema-table-card[data-table="${join.leftTable}"]`);
+        const rightCard = document.querySelector(`.schema-table-card[data-table="${join.rightTable}"]`);
+
+        if (leftCard && rightCard) {
+            const areaRect = cardsArea.getBoundingClientRect();
+            const leftCardRect = leftCard.getBoundingClientRect();
+            const rightCardRect = rightCard.getBoundingClientRect();
+
+            // Calculate the best connection points between the two cards
+            const connection = calculateBestConnectionPoints(leftCardRect, rightCardRect, areaRect, cardsArea);
+
+            // Get color for this join
+            const color = JOIN_COLORS[index % JOIN_COLORS.length];
+
+            // Create a curved path for better visibility
+            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            const d = createCurvedPath(connection.x1, connection.y1, connection.x2, connection.y2);
+            path.setAttribute('d', d);
+            path.setAttribute('class', 'join-line');
+            path.setAttribute('stroke', color);
+            path.setAttribute('fill', 'none');
+            path.style.pointerEvents = 'stroke';
+            path.onclick = (e) => {
+                e.stopPropagation();
+                showJoinPopover(index, e.clientX - areaRect.left, e.clientY - areaRect.top);
+            };
+
+            svg.appendChild(path);
+
+            // Add small circles at connection points for visual clarity
+            const circle1 = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            circle1.setAttribute('cx', connection.x1);
+            circle1.setAttribute('cy', connection.y1);
+            circle1.setAttribute('r', 4);
+            circle1.setAttribute('fill', color);
+            svg.appendChild(circle1);
+
+            const circle2 = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            circle2.setAttribute('cx', connection.x2);
+            circle2.setAttribute('cy', connection.y2);
+            circle2.setAttribute('r', 4);
+            circle2.setAttribute('fill', color);
+            svg.appendChild(circle2);
+        }
+    });
+}
+
+function calculateBestConnectionPoints(rect1, rect2, areaRect, cardsArea) {
+    // Calculate centers of each card
+    const center1 = {
+        x: rect1.left + rect1.width / 2,
+        y: rect1.top + rect1.height / 2
+    };
+    const center2 = {
+        x: rect2.left + rect2.width / 2,
+        y: rect2.top + rect2.height / 2
+    };
+
+    // Determine which edges to connect based on relative positions
+    let x1, y1, x2, y2;
+
+    // Horizontal distance vs vertical distance
+    const dx = center2.x - center1.x;
+    const dy = center2.y - center1.y;
+
+    if (Math.abs(dx) > Math.abs(dy)) {
+        // Cards are more horizontal - connect left/right edges
+        if (dx > 0) {
+            // Card 2 is to the right of Card 1
+            x1 = rect1.right;
+            y1 = center1.y;
+            x2 = rect2.left;
+            y2 = center2.y;
+        } else {
+            // Card 2 is to the left of Card 1
+            x1 = rect1.left;
+            y1 = center1.y;
+            x2 = rect2.right;
+            y2 = center2.y;
+        }
+    } else {
+        // Cards are more vertical - connect top/bottom edges
+        if (dy > 0) {
+            // Card 2 is below Card 1
+            x1 = center1.x;
+            y1 = rect1.bottom;
+            x2 = center2.x;
+            y2 = rect2.top;
+        } else {
+            // Card 2 is above Card 1
+            x1 = center1.x;
+            y1 = rect1.top;
+            x2 = center2.x;
+            y2 = rect2.bottom;
+        }
+    }
+
+    // Convert to SVG coordinates (relative to cards area)
+    return {
+        x1: x1 - areaRect.left + cardsArea.scrollLeft,
+        y1: y1 - areaRect.top + cardsArea.scrollTop,
+        x2: x2 - areaRect.left + cardsArea.scrollLeft,
+        y2: y2 - areaRect.top + cardsArea.scrollTop
+    };
+}
+
+function createCurvedPath(x1, y1, x2, y2) {
+    // Create a smooth bezier curve between the two points
+    const midX = (x1 + x2) / 2;
+    const midY = (y1 + y2) / 2;
+
+    // Calculate control points for a smooth curve
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+
+    // Curve amount based on distance
+    const curveAmount = Math.min(Math.abs(dx), Math.abs(dy)) * 0.3;
+
+    let cx1, cy1, cx2, cy2;
+
+    if (Math.abs(dx) > Math.abs(dy)) {
+        // Horizontal connection - curve vertically
+        cx1 = x1 + dx * 0.3;
+        cy1 = y1;
+        cx2 = x2 - dx * 0.3;
+        cy2 = y2;
+    } else {
+        // Vertical connection - curve horizontally
+        cx1 = x1;
+        cy1 = y1 + dy * 0.3;
+        cx2 = x2;
+        cy2 = y2 - dy * 0.3;
+    }
+
+    return `M ${x1} ${y1} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${x2} ${y2}`;
+}
+
+function autoDetectJoins() {
+    if (!schemaBuilderState.sessionId) return;
+
+    fetch(`/api/models/${modelId}/datasets/detect-joins-preview/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrftoken
+        },
+        body: JSON.stringify({ session_id: schemaBuilderState.sessionId })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success' && data.suggested_joins) {
+            // Clear existing joins and apply suggestions
+            schemaBuilderState.joins = data.suggested_joins.map(j => ({
+                leftTable: j.left_table,
+                leftCol: j.left_col,
+                rightTable: j.right_table,
+                rightCol: j.right_col,
+                type: 'left'
+            }));
+
+            renderTableCards();
+            refreshPreview();
+        }
+    })
+    .catch(error => {
+        console.error('Error auto-detecting joins:', error);
+    });
+}
+
+function debouncedRefreshPreview() {
+    if (previewDebounceTimer) {
+        clearTimeout(previewDebounceTimer);
+    }
+    previewDebounceTimer = setTimeout(refreshPreview, PREVIEW_DEBOUNCE_MS);
+}
+
+function refreshPreview() {
+    if (!schemaBuilderState.sessionId) return;
+
+    const joins = schemaBuilderState.joins.map(j => ({
+        table: j.rightTable,
+        left_col: j.leftCol,
+        right_col: j.rightCol,
+        type: j.type
+    }));
+
+    fetch(`/api/models/${modelId}/datasets/preview/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrftoken
+        },
+        body: JSON.stringify({
+            session_id: schemaBuilderState.sessionId,
+            primary_table: wizardData.primaryTable,
+            joins: joins,
+            selected_columns: schemaBuilderState.selectedColumns
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            schemaBuilderState.previewData = data;
+            renderPreview(data);
+        } else {
+            renderPreviewError(data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error generating preview:', error);
+        renderPreviewError('Failed to generate preview');
+    });
+}
+
+function renderPreview(data) {
+    // Update stats
+    document.getElementById('previewRowCount').textContent = data.stats?.total_rows || 0;
+    document.getElementById('previewColCount').textContent = data.column_order?.length || 0;
+
+    // Show warnings if any
+    const warningsEl = document.getElementById('previewWarnings');
+    const warningTextEl = document.getElementById('previewWarningText');
+    if (data.stats?.warnings?.length > 0) {
+        warningsEl.style.display = 'flex';
+        warningTextEl.textContent = data.stats.warnings[0];
+    } else if (Object.keys(data.stats?.null_counts || {}).length > 0) {
+        const nullCounts = data.stats.null_counts;
+        const firstNull = Object.entries(nullCounts)[0];
+        warningsEl.style.display = 'flex';
+        warningTextEl.textContent = `${firstNull[1]} nulls in ${firstNull[0]}`;
+    } else {
+        warningsEl.style.display = 'none';
+    }
+
+    // Render table
+    const table = document.getElementById('previewTable');
+    const thead = document.getElementById('previewTableHead');
+    const tbody = document.getElementById('previewTableBody');
+    const empty = document.getElementById('previewEmpty');
+
+    if (!data.preview_rows || data.preview_rows.length === 0) {
+        table.style.display = 'none';
+        empty.style.display = 'block';
+        return;
+    }
+
+    table.style.display = 'table';
+    empty.style.display = 'none';
+
+    // Headers
+    thead.innerHTML = '<tr>' + (data.column_order || []).map(col =>
+        `<th>${col}</th>`
+    ).join('') + '</tr>';
+
+    // Rows
+    tbody.innerHTML = data.preview_rows.map(row => {
+        return '<tr>' + (data.column_order || []).map(col => {
+            const val = row[col];
+            if (val === null || val === undefined) {
+                return `<td class="null-value">NULL</td>`;
+            }
+            return `<td title="${val}">${val}</td>`;
+        }).join('') + '</tr>';
+    }).join('');
+
+    validateCurrentStep();
+}
+
+function renderPreviewError(message) {
+    document.getElementById('previewRowCount').textContent = '-';
+    document.getElementById('previewColCount').textContent = '-';
+    document.getElementById('previewWarnings').style.display = 'none';
+    document.getElementById('previewTable').style.display = 'none';
+    document.getElementById('previewEmpty').style.display = 'block';
+    document.getElementById('previewEmpty').innerHTML = `
+        <i class="fas fa-exclamation-triangle"></i>
+        ${message || 'Failed to generate preview'}
+    `;
+}
+
+function collectSchemaBuilderData() {
+    // Transfer schema builder state to wizard data
+    wizardData.selectedColumns = { ...schemaBuilderState.selectedColumns };
+
+    // Convert joins to the format expected by the backend
+    wizardData.joinConfig = {};
+    schemaBuilderState.joins.forEach(join => {
+        wizardData.joinConfig[join.rightTable] = {
+            join_key: join.leftCol,
+            secondary_column: join.rightCol,
+            join_type: join.type
+        };
+    });
+}
+
+function populateMlColumnDropdowns() {
     const allColumns = [];
-    Object.entries(wizardData.selectedColumns).forEach(([table, cols]) => {
+
+    Object.entries(schemaBuilderState.selectedColumns).forEach(([table, cols]) => {
+        const shortTable = table.replace('raw_data.', '');
         cols.forEach(col => {
-            const shortTable = table.replace('raw_data.', '');
             allColumns.push({ table: shortTable, column: col, fullName: `${shortTable}.${col}` });
         });
     });
@@ -1278,7 +2092,8 @@ function populateMLMappingDropdowns() {
             allColumns.map(c => `<option value="${c.fullName}" ${currentValue === c.fullName ? 'selected' : ''}>${c.fullName}</option>`).join('');
     });
 
-    validateCurrentStep();
+    // Auto-suggest ML columns
+    suggestMLColumns();
 }
 
 function suggestMLColumns() {
@@ -1300,7 +2115,6 @@ function suggestMLColumns() {
 
             let suggestionsList = [];
 
-            // Helper to build table.column format from API response
             const buildColumnValue = (suggestion) => {
                 if (!suggestion) return null;
                 const table = suggestion.table?.replace('raw_data.', '') || '';
@@ -1312,21 +2126,24 @@ function suggestMLColumns() {
                 const value = buildColumnValue(data.suggestions.user_id);
                 if (value) {
                     suggestionsList.push(`User ID: ${value}`);
-                    document.getElementById('userIdColumn').value = value;
+                    const select = document.getElementById('userIdColumn');
+                    if (select && !select.value) select.value = value;
                 }
             }
             if (data.suggestions.product_id) {
                 const value = buildColumnValue(data.suggestions.product_id);
                 if (value) {
                     suggestionsList.push(`Product ID: ${value}`);
-                    document.getElementById('productIdColumn').value = value;
+                    const select = document.getElementById('productIdColumn');
+                    if (select && !select.value) select.value = value;
                 }
             }
             if (data.suggestions.revenue) {
                 const value = buildColumnValue(data.suggestions.revenue);
                 if (value) {
                     suggestionsList.push(`Revenue: ${value}`);
-                    document.getElementById('revenueColumn').value = value;
+                    const select = document.getElementById('revenueColumn');
+                    if (select && !select.value) select.value = value;
                 }
             }
 
@@ -1355,11 +2172,19 @@ function getTypeAbbrev(type) {
         'DATE': 'date',
         'DATETIME': 'dt'
     };
-    return abbrevs[type.toUpperCase()] || type.substring(0, 3).toLowerCase();
+    return abbrevs[type?.toUpperCase()] || type?.substring(0, 3)?.toLowerCase() || '';
 }
 
+// Close join popover when clicking outside
+document.addEventListener('click', function(e) {
+    const popover = document.getElementById('joinPopover');
+    if (popover && !popover.contains(e.target) && !e.target.classList.contains('join-line')) {
+        hideJoinPopover();
+    }
+});
+
 // ============================================================================
-// STEP 4: FILTERS & SPLIT
+// STEP 5: FILTERS & SPLIT
 // ============================================================================
 function onDateRangeTypeChange() {
     const type = document.querySelector('input[name="dateRangeType"]:checked')?.value;

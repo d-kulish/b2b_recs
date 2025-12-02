@@ -169,6 +169,50 @@ LOGOUT_REDIRECT_URL = 'login'
 GCP_PROJECT_ID = os.environ.get('GCP_PROJECT_ID', '')
 GCP_LOCATION = os.environ.get('GCP_LOCATION', 'US')  # Must match your BigQuery dataset location
 
+# Logging Configuration
+# Ensures exceptions are logged to stdout/stderr for Cloud Run visibility
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {message}',
+            'style': '{',
+        },
+        'simple': {
+            'format': '{levelname} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': 'INFO',
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console'],
+            'level': os.getenv('DJANGO_LOG_LEVEL', 'INFO'),
+            'propagate': False,
+        },
+        'django.request': {
+            'handlers': ['console'],
+            'level': 'ERROR',  # Log all request errors
+            'propagate': False,
+        },
+        'ml_platform': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+    },
+}
+
 # Cloud Run / Production Security Settings
 if not DEBUG:
     # Trust the X-Forwarded-Proto header from Cloud Run's load balancer

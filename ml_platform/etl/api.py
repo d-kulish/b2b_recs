@@ -2122,22 +2122,37 @@ def run_update(request, run_id):
                 data_source = DataSource.objects.get(id=data['data_source_id'])
                 data_source.last_run_at = timezone.now()
                 data_source.last_run_status = data['status']
+
+                # Only include fields that are actually being modified
+                update_fields = ['last_run_at', 'last_run_status']
+
                 if 'error_message' in data:
                     data_source.last_run_message = data['error_message']
-
-                update_fields = ['last_run_at', 'last_run_status', 'last_run_message']
+                    update_fields.append('last_run_message')
+                else:
+                    # Clear any previous error message on success
+                    data_source.last_run_message = ''
+                    update_fields.append('last_run_message')
 
                 # Update last_sync_value for successful transactional loads
                 if data['status'] == 'completed' and 'max_extracted_timestamp' in data:
                     max_ts = data['max_extracted_timestamp']
                     if max_ts:
+                        # Ensure max_ts is a string (handle various timestamp formats)
+                        if hasattr(max_ts, 'isoformat'):
+                            max_ts = max_ts.isoformat()
+                        else:
+                            max_ts = str(max_ts)
                         data_source.last_sync_value = max_ts
                         update_fields.append('last_sync_value')
                         logger.info(f"Updated last_sync_value to {max_ts} for DataSource {data_source.id}")
 
                 data_source.save(update_fields=update_fields)
+                logger.info(f"DataSource {data_source.id} updated successfully with fields: {update_fields}")
             except DataSource.DoesNotExist:
-                pass  # Don't fail if data source not found
+                logger.warning(f"DataSource {data['data_source_id']} not found, skipping update")
+            except Exception as ds_error:
+                logger.exception(f"Error updating DataSource {data.get('data_source_id')}: {str(ds_error)}")
 
         return JsonResponse({
             'status': 'success',

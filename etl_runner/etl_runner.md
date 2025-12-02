@@ -1,6 +1,6 @@
 # ETL Runner
 
-**Last Updated:** November 30, 2025
+**Last Updated:** December 2, 2025
 **Status:** Production Ready ✅ | Cloud Scheduler Working ✅ | SQL/NoSQL/File Sources Supported ✅ | Dataflow Working ✅ | **NEW: ETL Duration Analysis Chart** 🔥
 
 Cloud Run-based ETL execution engine that extracts data from databases and cloud storage files, transforms it, and loads into BigQuery for the B2B Recommendations Platform.
@@ -2424,6 +2424,41 @@ gcloud iam service-accounts add-iam-policy-binding etl-runner@b2b-recs.iam.gserv
 
 **Expected Fix:** Will add explicit show/hide logic for test button containers in edit mode.
 
+### **Transactional Load Extracts All Records Instead of Daily Delta (Fixed Dec 2, 2025)**
+
+**Symptoms:**
+- Scheduled ETL job runs successfully (rows extracted and loaded to BigQuery)
+- But every run loads ALL records from the source instead of only new/changed records
+- `last_sync_value` in DataSource remains empty despite successful runs
+- Cloud Run logs show: `Failed to update ETL run status: 500 Server Error`
+
+**Root Cause:**
+Bug in Django API's `run_update` function (`ml_platform/etl/api.py`). When updating DataSource after a successful ETL run:
+
+```python
+# BUGGY CODE:
+if 'error_message' in data:
+    data_source.last_run_message = data['error_message']
+
+update_fields = ['last_run_at', 'last_run_status', 'last_run_message']
+```
+
+For successful runs, `error_message` is not in the payload, so `last_run_message` was never explicitly set. However, it was still included in `update_fields`. Django's `save(update_fields=[...])` saves whatever value is currently on that field - which could be stale data or cause constraint violations.
+
+The exception handler only caught `DataSource.DoesNotExist`, so any other exception bubbled up and crashed the entire API request with a 500 error. This prevented `last_sync_value` from being saved.
+
+**The Fix:**
+1. Always explicitly set `last_run_message` (empty string for successful runs)
+2. Catch all exceptions in the DataSource update block, not just `DoesNotExist`
+3. Added Django logging configuration so future errors are visible in Cloud Run logs
+
+**Lesson Learned:**
+When using Django's `save(update_fields=[...])`, only include fields you've explicitly modified in the current operation. Including unmodified fields can cause unexpected behavior.
+
+**Files Changed:**
+- `ml_platform/etl/api.py` - Fixed exception handling in `run_update`
+- `config/settings.py` - Added LOGGING configuration
+
 ---
 
 ## File Structure
@@ -2538,3 +2573,7 @@ gcloud run jobs update etl-runner \
 - ✅ **API Enhancement** - `api_etl_run_status` now returns full run details including job name, connection, load type, timing breakdown
 - ✅ **Fixed Header Alignment** - Model metadata header now properly aligned with content containers (scrollbar compensation)
 - ✅ **ETL Duration Analysis Chart** - New ridge-line visualization showing job durations over last 30 days (see Issue 17 below)
+
+**Recent Fixes (Dec 2, 2025):**
+- ✅ **Transactional Load Full Reload Bug** - Fixed Django API `run_update` not saving `last_sync_value` due to `update_fields` including unmodified field. Caused incremental loads to reload all data every run.
+- ✅ **Django Logging Configuration** - Added LOGGING config to `settings.py` for Cloud Run exception visibility

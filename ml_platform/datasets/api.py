@@ -14,7 +14,7 @@ import json
 import logging
 
 from ml_platform.models import ModelEndpoint, Dataset, DatasetVersion
-from .services import BigQueryService, ProductRevenueAnalysisService
+from .services import BigQueryService, ProductRevenueAnalysisService, DatasetStatsService
 
 logger = logging.getLogger(__name__)
 
@@ -1714,6 +1714,113 @@ def analyze_product_revenue(request, model_id):
         }, status=400)
     except Exception as e:
         logger.error(f"Error analyzing product revenue: {e}")
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e),
+        }, status=500)
+
+
+@login_required
+@require_http_methods(["POST"])
+def get_dataset_stats(request, model_id):
+    """
+    Get comprehensive statistics for a dataset configuration.
+
+    Used by the Dataset Summary panel in Step 4 to show users how filter
+    parameters impact the dataset size and provide column-level statistics.
+
+    Two main use cases:
+    1. Initial load (no filters) - shows raw dataset stats when Step 4 opens
+    2. With filters applied - shows filtered dataset stats after "Refresh Dataset"
+
+    Request body:
+        {
+            "primary_table": "raw_data.transactions",
+            "selected_columns": {
+                "raw_data.transactions": ["customer_id", "product_id", "amount", "trans_date"],
+                "raw_data.products": ["product_id", "category"]
+            },
+            "secondary_tables": ["raw_data.products"],  // optional
+            "join_config": {  // optional, required if secondary_tables provided
+                "raw_data.products": {
+                    "join_key": "product_id",
+                    "secondary_column": "product_id",
+                    "join_type": "LEFT"
+                }
+            },
+            "filters": {  // optional - omit for initial/unfiltered stats
+                "timestamp_column": "transactions.trans_date",
+                "date_filter": {"type": "rolling", "days": 30},
+                "customer_filter": {"type": "min_transactions", "column": "customer_id", "value": 2},
+                "product_filter": {"type": "top_revenue", "product_column": "product_id", "revenue_column": "amount", "percent": 80}
+            }
+        }
+
+    Returns:
+        {
+            "status": "success",
+            "filters_applied": {
+                "dates": {"type": "none"} | {"type": "rolling", "days": 30},
+                "customers": {"type": "none"} | {"type": "min_transactions", "value": 2},
+                "products": {"type": "none"} | {"type": "top_revenue", "percent": 80}
+            },
+            "summary": {
+                "total_rows": 2450000,
+                "unique_customers": 98000,
+                "unique_products": 36000,
+                "date_range": {"min": "2024-06-01", "max": "2024-12-03"}
+            },
+            "column_stats": {
+                "transactions.amount": {"type": "FLOAT64", "min": 0.5, "max": 12450, "avg": 45.67},
+                "transactions.customer_id": {"type": "STRING", "unique_count": 98000},
+                ...
+            }
+        }
+    """
+    try:
+        model = get_object_or_404(ModelEndpoint, id=model_id)
+        data = json.loads(request.body)
+
+        # Validate required fields
+        primary_table = data.get('primary_table')
+        selected_columns = data.get('selected_columns', {})
+
+        if not primary_table:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'primary_table is required',
+            }, status=400)
+
+        if not selected_columns:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'selected_columns is required',
+            }, status=400)
+
+        # Optional fields
+        secondary_tables = data.get('secondary_tables', [])
+        join_config = data.get('join_config', {})
+        filters = data.get('filters')  # None means no filters (initial load)
+
+        # Run the stats calculation
+        stats_service = DatasetStatsService(model)
+        result = stats_service.get_dataset_stats(
+            primary_table=primary_table,
+            selected_columns=selected_columns,
+            secondary_tables=secondary_tables,
+            join_config=join_config,
+            filters=filters
+        )
+
+        return JsonResponse(result)
+
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'status': 'error',
+            'message': 'Invalid JSON in request body',
+        }, status=400)
+    except Exception as e:
+        logger.error(f"Error getting dataset stats: {e}")
         return JsonResponse({
             'status': 'error',
             'message': str(e),

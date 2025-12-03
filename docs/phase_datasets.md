@@ -220,63 +220,107 @@ The Schema Builder provides a visual, drag-and-drop interface for connecting tab
 └─────────────────────────────┘
 ```
 
-#### Step 4: Data Filters
+#### Step 4: Filtering
 
-Step 4 contains three collapsible sub-chapters for filtering data:
+Step 4 contains three collapsible sub-chapters for filtering data (all collapsed by default).
+Each sub-chapter has a tablet-style header with black border that expands/collapses content.
 
-**Sub-chapter 1: Define History**
-- Select timestamp column from available columns
-- Set rolling window in days (default: 30 days)
-- Preview shows actual date range based on latest data
+**Sub-chapter 1: Dates**
 
-**Sub-chapter 2: Select Products**
-- Select Product ID column from available columns
-- Select Revenue column from available columns
-- Click "Analyze Revenue Distribution" to query BigQuery
-- **D3.js v7 chart** shows cumulative revenue distribution curve (Pareto chart)
+Filter dataset by date range using one of two methods:
+
+- **Timestamp Column** (required): Select the date/timestamp column to use for filtering
+- **Rolling Window**: Set number of days from the latest available date (default: 30 days)
+- **Start Date**: Select a fixed start date via calendar picker
+- **Refresh Dataset**: Apply the selected date filter and update Dataset Summary
+
+UI Components:
+- Four equal-width buttons in a row: Timestamp Column, Rolling Window, Start Date, Refresh Dataset
+- Rolling Window and Start Date buttons are disabled until Timestamp Column is selected
+- Each button opens a popup dropdown for selection
+- Popups auto-close when value is selected (Apply button for Rolling Window)
+- After clicking "Refresh Dataset", a green status badge appears in the sub-chapter header showing the applied filter (e.g., "30 days rolling window" or "Start date: 2025-01-01")
+- Changing any filter value clears the status badge until "Refresh Dataset" is clicked again
+
+**Sub-chapter 2: Customers**
+
+Filter customers based on transaction history:
+
+- **Minimum transactions per customer** (optional checkbox): Exclude customers with fewer than N transactions
+- Helps filter out customers who don't provide enough signal for recommendations
+
+**Sub-chapter 3: Products**
+
+Filter products based on revenue contribution:
+
+- **Product ID Column**: Select the column containing product identifiers
+- **Revenue Column**: Select the column containing revenue/amount values
+- **Analyze Revenue Distribution**: Query BigQuery to analyze product revenue distribution
+- **D3.js v7 Pareto Chart**: Shows cumulative revenue distribution curve
   - X-axis: % of products (ordered by revenue descending)
   - Y-axis: % of cumulative revenue
   - Threshold line shows selected cutoff point
   - Shaded area indicates selected products
-- Set threshold (default: 80%) to filter products generating top X% of revenue
-- Shows analysis results: total products, selected products count & percentage, revenue coverage
+- **Revenue Threshold**: Set percentage of cumulative revenue to include (default: 80%)
+- **Analysis Results**: Shows total products, selected products count & percentage, revenue coverage
 - Product list computed dynamically at training time (rules stored, not product lists)
 
-**Sub-chapter 3: Advanced Filters**
-- Minimum transactions per customer (optional)
+**Dataset Summary Panel**
+
+Always-visible panel at the bottom of Step 4 showing dataset statistics:
+
+- **Header**: "Dataset Summary" with total rows count badge (e.g., "100,000 rows")
+- **Filter Badges**: Three badges showing applied filters status
+  - Dates: "All dates" or "Last 30 days" or "From 2025-01-01"
+  - Customers: "All customers" or "Min 2 transactions"
+  - Products: "All products" or "Top 80% revenue"
+  - Active filters shown with blue highlight
+- **Column Statistics Table**: Two-column table showing stats for each selected column
+  - Column name
+  - Data Type (STRING, INTEGER, FLOAT, TIMESTAMP, etc.)
+  - Statistics based on type:
+    - STRING: Unique count
+    - INTEGER/FLOAT: Min · Max · Avg
+    - DATE/TIMESTAMP: Min · Max · Unique count
+    - BOOL: True count · False count
+  - Null counts shown if any nulls present
+
+**DatasetStatsService** (Backend):
+- New service in `ml_platform/datasets/services.py`
+- API endpoint: `POST /api/models/{model_id}/datasets/stats/`
+- Calculates statistics with optional filters (dates, customers, products)
+- Returns: total_rows, filters_applied, column_stats
+- Stats are recalculated when "Refresh Dataset" is clicked with current filter settings
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│ Create Dataset - Step 4 of 5: Data Filters                                   │
+│ Create Dataset - Step 4 of 5: Filtering                                      │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                              │
-│ ▼ Define History                                              [Last 30 days] │
-│ ├──────────────────────────────────────────────────────────────────────────┤ │
-│ │ Timestamp Column: [transactions.transaction_date ▼]                      │ │
-│ │ Rolling Window: [30] days from the latest available date                 │ │
-│ │ Preview: Data from 2024-11-03 to 2024-12-03                              │ │
-│ └──────────────────────────────────────────────────────────────────────────┘ │
+│ ┌─────────────────────────────────────────────────────────────────────────┐ │
+│ │ Dates                                         [30 days rolling window]  │ │
+│ └─────────────────────────────────────────────────────────────────────────┘ │
+│   [Timestamp Column] [Rolling Window] [Start Date] [Refresh Dataset]        │
 │                                                                              │
-│ ▶ Select Products                             [4,521 products at 80%]        │
-│ ├──────────────────────────────────────────────────────────────────────────┤ │
-│ │ Product ID Column: [transactions.product_id ▼]                           │ │
-│ │ Revenue Column: [transactions.amount ▼]                                  │ │
-│ │                    [🔄 Analyze Revenue Distribution]                     │ │
-│ │ ┌────────────────────────────────────────────────────────────────────┐   │ │
-│ │ │ Cumulative Revenue Distribution Chart (D3.js)                      │   │ │
-│ │ │ [Chart with threshold line at 80%]                                 │   │ │
-│ │ └────────────────────────────────────────────────────────────────────┘   │ │
-│ │ Revenue Threshold: Include products up to [80] % of cumulative revenue   │ │
-│ │ Analysis Results:                                                        │ │
-│ │   Total products: 48,234                                                 │ │
-│ │   Selected products: 4,521 (9.4%)                                        │ │
-│ │   Revenue coverage: 80% ($12.4M of $15.5M)                               │ │
-│ └──────────────────────────────────────────────────────────────────────────┘ │
+│ ┌─────────────────────────────────────────────────────────────────────────┐ │
+│ │ Customers                                                           ▶   │ │
+│ └─────────────────────────────────────────────────────────────────────────┘ │
 │                                                                              │
-│ ▶ Advanced Filters                                            [No filters]   │
-│ ├──────────────────────────────────────────────────────────────────────────┤ │
-│ │ ☐ Minimum [2] transactions per customer                                  │ │
-│ └──────────────────────────────────────────────────────────────────────────┘ │
+│ ┌─────────────────────────────────────────────────────────────────────────┐ │
+│ │ Products                                                            ▶   │ │
+│ └─────────────────────────────────────────────────────────────────────────┘ │
+│                                                                              │
+│ ┌─────────────────────────────────────────────────────────────────────────┐ │
+│ │ Dataset Summary                                           [85,000 rows] │ │
+│ ├─────────────────────────────────────────────────────────────────────────┤ │
+│ │ [Last 30 days] [All customers] [All products]                           │ │
+│ ├─────────────────────────────────────────────────────────────────────────┤ │
+│ │ Column                    │ Data Type │ Statistics                      │ │
+│ │ transactions.amount       │ FLOAT     │ Min: 8.27 · Max: 896 · Avg: 248 │ │
+│ │ transactions.quantity     │ INTEGER   │ Min: 1 · Max: 9 · Avg: 5.01     │ │
+│ │ transactions.trans_date   │ TIMESTAMP │ Min: 2024-03-04 · Max: 2024-04  │ │
+│ │ transactions.category     │ STRING    │ Unique: 4                       │ │
+│ └─────────────────────────────────────────────────────────────────────────┘ │
 │                                                                              │
 │                                              [← Back]  [Cancel]  [Next →]   │
 └─────────────────────────────────────────────────────────────────────────────┘

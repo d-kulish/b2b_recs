@@ -252,63 +252,122 @@
                 </div>
             </div>
 
-            <!-- Step 4: Filters -->
+            <!-- Step 4: Filtering -->
             <div id="step4" class="wizard-step">
-                <h4 class="wizard-section-title">Data Filters</h4>
+                <h4 class="wizard-section-title">Filtering</h4>
                 <p class="wizard-section-subtitle">Configure filters to select the data for your dataset.</p>
 
-                <!-- Sub-chapter 1: Define History -->
+                <!-- Sub-chapter 1: Dates -->
                 <div class="filter-subchapter" id="historySubchapter">
-                    <div class="subchapter-header" onclick="toggleSubchapter('history')">
-                        <div class="subchapter-header-left">
-                            <i id="historyChevron" class="fas fa-chevron-down subchapter-chevron"></i>
-                            <span class="subchapter-title">Define History</span>
-                        </div>
-                        <span id="historySummary" class="subchapter-summary">Last 30 days</span>
+                    <div class="subchapter-header-tablet" onclick="toggleSubchapter('history')">
+                        <span class="subchapter-title">Dates</span>
+                        <span class="subchapter-filter-status" id="datesFilterStatus"></span>
+                        <i id="historyChevron" class="fas fa-chevron-right subchapter-chevron"></i>
                     </div>
-                    <div id="historyContent" class="subchapter-content">
-                        <div class="subchapter-body">
-                            <!-- Timestamp Column -->
-                            <div class="wizard-field-group">
-                                <label class="text-xs font-medium text-gray-600 mb-1 block">Timestamp Column</label>
-                                <select id="timestampColumn" class="form-select w-full text-sm" onchange="onTimestampColumnChange()">
-                                    <option value="">Select column...</option>
-                                </select>
-                                <p class="wizard-field-hint mt-1">
-                                    <i class="fas fa-info-circle mr-1"></i>
-                                    Column used to filter data by date
-                                </p>
-                            </div>
-
-                            <!-- Rolling Window -->
-                            <div class="wizard-field-group">
-                                <label class="text-xs font-medium text-gray-600 mb-1 block">Rolling Window</label>
-                                <div class="flex items-center gap-2">
-                                    <input type="number" id="rollingDays" value="30" min="1" max="365"
-                                           class="form-input w-24 text-sm" onchange="onRollingDaysChange()">
-                                    <span class="text-sm text-gray-600">days from the latest available date</span>
+                    <div id="historyContent" class="subchapter-content-outside hidden">
+                        <!-- Filter Buttons Row -->
+                        <div class="filter-buttons-row">
+                            <!-- Timestamp Column Button -->
+                            <div class="filter-button-wrapper">
+                                <span class="filter-button-label">Select timestamp column</span>
+                                <button type="button" class="filter-button" id="timestampColumnBtn" onclick="toggleFilterPopup('timestampColumn')">
+                                    <i class="fas fa-clock"></i>
+                                    <span>Timestamp Column</span>
+                                </button>
+                                <div class="filter-popup" id="timestampColumnPopup">
+                                    <div class="filter-popup-header">Select Timestamp Column</div>
+                                    <select id="timestampColumn" class="form-select w-full text-sm" onchange="onTimestampColumnChange(); closeFilterPopup('timestampColumn');">
+                                        <option value="">Select column...</option>
+                                    </select>
+                                    <p class="filter-popup-hint">
+                                        <i class="fas fa-info-circle mr-1"></i>
+                                        Column used to filter data by date
+                                    </p>
                                 </div>
                             </div>
 
-                            <!-- Date Range Preview -->
-                            <div id="dateRangePreview" class="text-xs text-gray-500 mt-2 hidden">
-                                <i class="fas fa-calendar-alt mr-1"></i>
-                                <span id="dateRangePreviewText">Data range will be shown after analysis</span>
+                            <!-- Rolling Window Button -->
+                            <div class="filter-button-wrapper">
+                                <span class="filter-button-label">Set number of days</span>
+                                <button type="button" class="filter-button" id="rollingWindowBtn" onclick="toggleFilterPopup('rollingWindow')">
+                                    <i class="fas fa-history"></i>
+                                    <span>Rolling Window</span>
+                                </button>
+                                <div class="filter-popup" id="rollingWindowPopup">
+                                    <div class="filter-popup-header">Set Rolling Window</div>
+                                    <div class="flex items-center gap-2">
+                                        <input type="number" id="rollingDays" value="30" min="1" max="365"
+                                               class="form-input w-20 text-sm" onchange="onRollingDaysChange()">
+                                        <span class="text-sm text-gray-600">days</span>
+                                        <button type="button" class="btn btn-sm btn-primary" onclick="applyRollingWindow()">Apply</button>
+                                    </div>
+                                    <p class="filter-popup-hint">
+                                        <i class="fas fa-info-circle mr-1"></i>
+                                        Days from the latest available date
+                                    </p>
+                                </div>
+                            </div>
+
+                            <!-- Start Date Button -->
+                            <div class="filter-button-wrapper">
+                                <span class="filter-button-label">Select start date</span>
+                                <button type="button" class="filter-button" id="startDateBtn" onclick="toggleFilterPopup('startDate')">
+                                    <i class="fas fa-calendar-alt"></i>
+                                    <span>Start Date</span>
+                                </button>
+                                <div class="filter-popup" id="startDatePopup">
+                                    <div class="filter-popup-header">Select Start Date</div>
+                                    <input type="date" id="startDateInput" class="form-input w-full text-sm" onchange="onStartDateChange(); closeFilterPopup('startDate');">
+                                    <p class="filter-popup-hint">
+                                        <i class="fas fa-info-circle mr-1"></i>
+                                        Fixed start date for the dataset
+                                    </p>
+                                </div>
+                            </div>
+
+                            <!-- Refresh Dataset Button -->
+                            <div class="filter-button-wrapper">
+                                <span class="filter-button-label">&nbsp;</span>
+                                <button type="button" class="filter-button filter-button-action" id="refreshDatasetBtn" onclick="refreshDatasetHistory()">
+                                    <i class="fas fa-sync-alt"></i>
+                                    <span>Refresh Dataset</span>
+                                </button>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Sub-chapter 2: Select Products -->
-                <div class="filter-subchapter" id="productsSubchapter">
-                    <div class="subchapter-header" onclick="toggleSubchapter('products')">
-                        <div class="subchapter-header-left">
-                            <i id="productsChevron" class="fas fa-chevron-right subchapter-chevron"></i>
-                            <span class="subchapter-title">Select Products</span>
-                        </div>
-                        <span id="productsSummary" class="subchapter-summary">All products included</span>
+                <!-- Sub-chapter 2: Customers -->
+                <div class="filter-subchapter" id="customersSubchapter">
+                    <div class="subchapter-header-tablet" onclick="toggleSubchapter('customers')">
+                        <span class="subchapter-title">Customers</span>
+                        <i id="customersChevron" class="fas fa-chevron-right subchapter-chevron"></i>
                     </div>
-                    <div id="productsContent" class="subchapter-content hidden">
+                    <div id="customersContent" class="subchapter-content-outside hidden">
+                        <div class="subchapter-body-outside">
+                            <!-- Min Transactions Filter -->
+                            <div class="flex items-center gap-3 mb-3">
+                                <input type="checkbox" id="enableMinTransactions" onchange="toggleMinTransactionsInput()">
+                                <label class="text-sm text-gray-700">Minimum</label>
+                                <input type="number" id="minTransactions" value="2" min="1"
+                                       class="form-input w-20 text-sm" disabled>
+                                <span class="text-sm text-gray-700">transactions per customer</span>
+                            </div>
+                            <p class="wizard-field-hint">
+                                <i class="fas fa-info-circle mr-1"></i>
+                                Customers with very few transactions don't provide enough signal for recommendations
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sub-chapter 3: Products -->
+                <div class="filter-subchapter" id="productsSubchapter">
+                    <div class="subchapter-header-tablet" onclick="toggleSubchapter('products')">
+                        <span class="subchapter-title">Products</span>
+                        <i id="productsChevron" class="fas fa-chevron-right subchapter-chevron"></i>
+                    </div>
+                    <div id="productsContent" class="subchapter-content-outside hidden">
                         <div class="subchapter-body">
                             <!-- Product ID Column -->
                             <div class="wizard-field-group">
@@ -396,29 +455,53 @@
                     </div>
                 </div>
 
-                <!-- Sub-chapter 3: Advanced Filters (existing functionality) -->
-                <div class="filter-subchapter" id="advancedSubchapter">
-                    <div class="subchapter-header" onclick="toggleSubchapter('advanced')">
-                        <div class="subchapter-header-left">
-                            <i id="advancedChevron" class="fas fa-chevron-right subchapter-chevron"></i>
-                            <span class="subchapter-title">Advanced Filters</span>
-                        </div>
-                        <span id="advancedSummary" class="subchapter-summary">No filters</span>
+                <!-- Dataset Summary Panel (always expanded) -->
+                <div class="dataset-summary-panel" id="datasetSummaryPanel">
+                    <div class="dataset-summary-header">
+                        <i class="fas fa-chart-bar"></i>
+                        <span>Dataset Summary</span>
+                        <span class="dataset-summary-total-rows" id="summaryTotalRowsBadge"></span>
                     </div>
-                    <div id="advancedContent" class="subchapter-content hidden">
-                        <div class="subchapter-body">
-                            <!-- Min Transactions Filter -->
-                            <div class="flex items-center gap-3 mb-3">
-                                <input type="checkbox" id="enableMinTransactions" onchange="toggleMinTransactionsInput()">
-                                <label class="text-sm text-gray-700">Minimum</label>
-                                <input type="number" id="minTransactions" value="2" min="1"
-                                       class="form-input w-20 text-sm" disabled>
-                                <span class="text-sm text-gray-700">transactions per customer</span>
+                    <div class="dataset-summary-content">
+                        <!-- Empty state before refresh -->
+                        <div id="datasetSummaryEmpty" class="dataset-summary-empty">
+                            <i class="fas fa-info-circle"></i>
+                            <span>Loading dataset statistics...</span>
+                        </div>
+
+                        <!-- Populated state after refresh -->
+                        <div id="datasetSummaryData" class="dataset-summary-data hidden">
+                            <!-- Filters Applied Row -->
+                            <div class="dataset-filters-applied" id="filtersAppliedSection">
+                                <div class="filter-badge" id="filterBadgeDates">
+                                    <i class="fas fa-calendar-alt"></i>
+                                    <span id="filterBadgeDatesText">All dates</span>
+                                </div>
+                                <div class="filter-badge" id="filterBadgeCustomers">
+                                    <i class="fas fa-users"></i>
+                                    <span id="filterBadgeCustomersText">All customers</span>
+                                </div>
+                                <div class="filter-badge" id="filterBadgeProducts">
+                                    <i class="fas fa-box"></i>
+                                    <span id="filterBadgeProductsText">All products</span>
+                                </div>
                             </div>
-                            <p class="wizard-field-hint">
-                                <i class="fas fa-info-circle mr-1"></i>
-                                Customers with very few transactions don't provide enough signal for recommendations
-                            </p>
+
+                            <!-- Column Stats Table -->
+                            <div class="column-stats-table-wrapper">
+                                <table class="column-stats-table" id="columnStatsTable">
+                                    <thead>
+                                        <tr>
+                                            <th>Column</th>
+                                            <th>Data Type</th>
+                                            <th>Statistics</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="columnStatsTableBody">
+                                        <!-- Populated by JavaScript -->
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1010,6 +1093,8 @@ function nextStep() {
         collectSchemaBuilderData();
         // Populate filter dropdowns with selected columns
         populateFilterColumnDropdowns();
+        // Fetch initial dataset stats (unfiltered) for the Dataset Summary panel
+        fetchDatasetStats(false);
     }
 
     showStep(currentWizardStep + 1);
@@ -2613,6 +2698,12 @@ function populateFilterColumnDropdowns() {
 
     // Reset analysis state when columns change
     resetProductAnalysis();
+
+    // Note: Don't reset dataset summary here - fetchDatasetStats() is called
+    // from nextStep() when entering Step 4 to load initial unfiltered stats
+
+    // Update button states (disable buttons until timestamp selected)
+    updateHistoryButtonStates();
 }
 
 function populateProductFilterDropdowns(allColumns = null) {
@@ -2668,29 +2759,485 @@ function populateProductFilterDropdowns(allColumns = null) {
 }
 
 // --- History Sub-chapter ---
+
+// Track active filter mode: 'rolling' or 'startDate'
+let historyFilterMode = 'rolling';
+let activeFilterPopup = null;
+
+function toggleFilterPopup(popupName) {
+    const popup = document.getElementById(`${popupName}Popup`);
+    const button = document.getElementById(`${popupName}Btn`);
+
+    // Don't open popup if button is disabled
+    if (button && button.disabled) {
+        return;
+    }
+
+    // Close any other open popups
+    document.querySelectorAll('.filter-popup.show').forEach(p => {
+        if (p.id !== `${popupName}Popup`) {
+            p.classList.remove('show');
+        }
+    });
+    document.querySelectorAll('.filter-button.active').forEach(b => {
+        if (b.id !== `${popupName}Btn`) {
+            b.classList.remove('active');
+        }
+    });
+
+    // Toggle current popup
+    if (popup.classList.contains('show')) {
+        popup.classList.remove('show');
+        button.classList.remove('active');
+        activeFilterPopup = null;
+    } else {
+        // Position popup below the button using fixed positioning
+        const buttonRect = button.getBoundingClientRect();
+        popup.style.top = (buttonRect.bottom + 8) + 'px';
+        popup.style.left = buttonRect.left + 'px';
+
+        popup.classList.add('show');
+        button.classList.add('active');
+        activeFilterPopup = popupName;
+
+        // If opening start date popup, set default to today
+        if (popupName === 'startDate') {
+            const startDateInput = document.getElementById('startDateInput');
+            if (!startDateInput.value) {
+                startDateInput.value = new Date().toISOString().split('T')[0];
+            }
+        }
+    }
+}
+
+// Close popups when clicking outside
+document.addEventListener('click', function(e) {
+    if (activeFilterPopup && !e.target.closest('.filter-button-wrapper')) {
+        const popup = document.getElementById(`${activeFilterPopup}Popup`);
+        const button = document.getElementById(`${activeFilterPopup}Btn`);
+        if (popup) popup.classList.remove('show');
+        if (button) button.classList.remove('active');
+        activeFilterPopup = null;
+    }
+});
+
+// Close a specific filter popup
+function closeFilterPopup(popupName) {
+    const popup = document.getElementById(`${popupName}Popup`);
+    const button = document.getElementById(`${popupName}Btn`);
+    if (popup) popup.classList.remove('show');
+    if (button) button.classList.remove('active');
+    if (activeFilterPopup === popupName) {
+        activeFilterPopup = null;
+    }
+}
+
+// Apply rolling window and close popup
+function applyRollingWindow() {
+    onRollingDaysChange();
+    closeFilterPopup('rollingWindow');
+}
+
+// Track if date filters have been applied (via Refresh Dataset click)
+let dateFiltersApplied = false;
+
+// Update the Dates sub-chapter header with current filter status
+// Only shows status after Refresh Dataset is clicked
+function updateDatesFilterStatus() {
+    const statusEl = document.getElementById('datesFilterStatus');
+
+    // Only show status if filters have been applied via Refresh Dataset
+    if (!dateFiltersApplied) {
+        statusEl.textContent = '';
+        return;
+    }
+
+    const timestampCol = document.getElementById('timestampColumn')?.value;
+    const rollingDays = document.getElementById('rollingDays')?.value || 30;
+    const startDate = document.getElementById('startDateInput')?.value;
+
+    if (!timestampCol) {
+        statusEl.textContent = '';
+        return;
+    }
+
+    if (historyFilterMode === 'startDate' && startDate) {
+        statusEl.textContent = `Start date: ${startDate}`;
+    } else {
+        statusEl.textContent = `${rollingDays} days rolling window`;
+    }
+}
+
+// Reset the applied status when filters are changed (user needs to click Refresh again)
+function resetDateFiltersApplied() {
+    dateFiltersApplied = false;
+    document.getElementById('datesFilterStatus').textContent = '';
+}
+
 function onTimestampColumnChange() {
     updateHistorySummary();
+    resetDateFiltersApplied();
     // Re-populate product dropdowns to exclude the timestamp column
     populateProductFilterDropdowns();
+    // Update dependent button states
+    updateHistoryButtonStates();
     validateCurrentStep();
 }
 
+function updateHistoryButtonStates() {
+    const timestampCol = document.getElementById('timestampColumn')?.value;
+    const hasTimestamp = !!timestampCol;
+
+    // Enable/disable dependent buttons
+    const rollingWindowBtn = document.getElementById('rollingWindowBtn');
+    const startDateBtn = document.getElementById('startDateBtn');
+    const refreshDatasetBtn = document.getElementById('refreshDatasetBtn');
+
+    if (rollingWindowBtn) {
+        rollingWindowBtn.disabled = !hasTimestamp;
+        rollingWindowBtn.classList.toggle('filter-button-disabled', !hasTimestamp);
+    }
+    if (startDateBtn) {
+        startDateBtn.disabled = !hasTimestamp;
+        startDateBtn.classList.toggle('filter-button-disabled', !hasTimestamp);
+    }
+    if (refreshDatasetBtn) {
+        refreshDatasetBtn.disabled = !hasTimestamp;
+        refreshDatasetBtn.classList.toggle('filter-button-disabled', !hasTimestamp);
+    }
+}
+
 function onRollingDaysChange() {
+    historyFilterMode = 'rolling';
     updateHistorySummary();
+    resetDateFiltersApplied();
     // Reset product analysis when date range changes
     resetProductAnalysis();
     validateCurrentStep();
 }
 
-function updateHistorySummary() {
+function onStartDateChange() {
+    historyFilterMode = 'startDate';
+    updateHistorySummary();
+    resetDateFiltersApplied();
+    // Reset product analysis when date range changes
+    resetProductAnalysis();
+    validateCurrentStep();
+}
+
+function refreshDatasetHistory() {
     const timestampCol = document.getElementById('timestampColumn')?.value;
     const rollingDays = document.getElementById('rollingDays')?.value || 30;
+    const startDate = document.getElementById('startDateInput')?.value;
 
-    let summary = 'Not configured';
-    if (timestampCol) {
-        summary = `Last ${rollingDays} days`;
+    if (!timestampCol) {
+        alert('Please select a timestamp column first');
+        return;
     }
-    document.getElementById('historySummary').textContent = summary;
+
+    // Mark filters as applied and update header status
+    dateFiltersApplied = true;
+    updateDatesFilterStatus();
+
+    // Update Dataset Summary panel
+    updateDatasetSummary();
+
+    console.log('Refresh Dataset clicked:', {
+        mode: historyFilterMode,
+        timestampColumn: timestampCol,
+        rollingDays: rollingDays,
+        startDate: startDate
+    });
+}
+
+// Store the latest dataset stats
+let datasetStatsData = null;
+
+async function fetchDatasetStats(withFilters = false) {
+    /**
+     * Fetch dataset statistics from the API.
+     *
+     * @param {boolean} withFilters - If true, include current filter settings.
+     *                                If false, get unfiltered stats.
+     */
+    showDatasetStatsLoading();
+
+    try {
+        // Build the request payload
+        const payload = {
+            primary_table: wizardData.primaryTable,
+            selected_columns: wizardData.selectedColumns || {},
+            secondary_tables: wizardData.secondaryTables || [],
+            join_config: wizardData.joinConfig || {}
+        };
+
+        // Add filters if requested
+        if (withFilters) {
+            const timestampCol = document.getElementById('timestampColumn')?.value;
+            const rollingDays = parseInt(document.getElementById('rollingDays')?.value) || 30;
+            const startDate = document.getElementById('startDateInput')?.value;
+            const minTxEnabled = document.getElementById('enableMinTransactions')?.checked;
+            const minTx = parseInt(document.getElementById('minTransactions')?.value) || 2;
+            const productCol = document.getElementById('productIdColumn')?.value;
+            const revenueCol = document.getElementById('revenueColumn')?.value;
+            const revenueThreshold = parseInt(document.getElementById('revenueThreshold')?.value) || 80;
+
+            const filters = {};
+
+            // Date filter
+            if (timestampCol) {
+                filters.timestamp_column = timestampCol;
+
+                if (historyFilterMode === 'rolling') {
+                    filters.date_filter = { type: 'rolling', days: rollingDays };
+                } else if (historyFilterMode === 'startDate' && startDate) {
+                    filters.date_filter = { type: 'fixed', start_date: startDate };
+                }
+            }
+
+            // Customer filter (min transactions)
+            if (minTxEnabled && timestampCol) {
+                // Try to detect customer column from selected columns
+                let customerCol = null;
+                for (const [table, columns] of Object.entries(wizardData.selectedColumns || {})) {
+                    for (const col of columns) {
+                        const colLower = col.toLowerCase();
+                        if (['customer_id', 'user_id', 'client_id', 'buyer_id'].includes(colLower)) {
+                            customerCol = col;
+                            break;
+                        }
+                    }
+                    if (customerCol) break;
+                }
+                if (customerCol) {
+                    filters.customer_filter = {
+                        type: 'min_transactions',
+                        column: customerCol,
+                        value: minTx
+                    };
+                }
+            }
+
+            // Product filter (top N% revenue)
+            if (productCol && revenueCol && productAnalysisData) {
+                filters.product_filter = {
+                    type: 'top_revenue',
+                    product_column: productCol,
+                    revenue_column: revenueCol,
+                    percent: revenueThreshold
+                };
+            }
+
+            if (Object.keys(filters).length > 0) {
+                payload.filters = filters;
+            }
+        }
+
+        const response = await fetch(`/api/models/${modelId}/datasets/stats/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrftoken
+            },
+            body: JSON.stringify(payload)
+        });
+
+        const data = await response.json();
+
+        if (data.status === 'success') {
+            datasetStatsData = data;
+            populateDatasetSummary(data);
+        } else {
+            showDatasetStatsError(data.message || 'Failed to fetch dataset stats');
+        }
+
+    } catch (error) {
+        console.error('Error fetching dataset stats:', error);
+        showDatasetStatsError(error.message);
+    }
+}
+
+function showDatasetStatsLoading() {
+    document.getElementById('datasetSummaryEmpty').classList.remove('hidden');
+    document.getElementById('datasetSummaryData').classList.add('hidden');
+
+    // Show loading state
+    const emptyEl = document.getElementById('datasetSummaryEmpty');
+    emptyEl.innerHTML = `
+        <i class="fas fa-spinner fa-spin"></i>
+        <span>Loading dataset statistics...</span>
+    `;
+
+    // Clear total rows badge
+    document.getElementById('summaryTotalRowsBadge').textContent = '';
+}
+
+function showDatasetStatsError(message) {
+    document.getElementById('datasetSummaryEmpty').classList.remove('hidden');
+    document.getElementById('datasetSummaryData').classList.add('hidden');
+
+    const emptyEl = document.getElementById('datasetSummaryEmpty');
+    emptyEl.innerHTML = `
+        <i class="fas fa-exclamation-triangle" style="color: #dc2626;"></i>
+        <span style="color: #dc2626;">Error: ${message}</span>
+    `;
+
+    // Clear total rows badge
+    document.getElementById('summaryTotalRowsBadge').textContent = '';
+}
+
+function populateDatasetSummary(data) {
+    document.getElementById('datasetSummaryEmpty').classList.add('hidden');
+    document.getElementById('datasetSummaryData').classList.remove('hidden');
+
+    const filters = data.filters_applied || {};
+    const summary = data.summary || {};
+    const columnStats = data.column_stats || {};
+
+    // --- Total Rows Badge in Header ---
+    const totalRowsBadge = document.getElementById('summaryTotalRowsBadge');
+    if (summary.total_rows) {
+        totalRowsBadge.textContent = `${summary.total_rows.toLocaleString()} rows`;
+    } else {
+        totalRowsBadge.textContent = '';
+    }
+
+    // --- Filter Badges ---
+    const datesBadge = document.getElementById('filterBadgeDates');
+    const customersBadge = document.getElementById('filterBadgeCustomers');
+    const productsBadge = document.getElementById('filterBadgeProducts');
+
+    // Dates filter
+    if (filters.dates?.type === 'rolling') {
+        document.getElementById('filterBadgeDatesText').textContent = `Last ${filters.dates.days} days`;
+        datesBadge.classList.add('filter-active');
+    } else if (filters.dates?.type === 'fixed') {
+        document.getElementById('filterBadgeDatesText').textContent = `From ${filters.dates.start_date}`;
+        datesBadge.classList.add('filter-active');
+    } else {
+        document.getElementById('filterBadgeDatesText').textContent = 'All dates';
+        datesBadge.classList.remove('filter-active');
+    }
+
+    // Customers filter
+    if (filters.customers?.type === 'min_transactions') {
+        document.getElementById('filterBadgeCustomersText').textContent = `Min ${filters.customers.value} transactions`;
+        customersBadge.classList.add('filter-active');
+    } else {
+        document.getElementById('filterBadgeCustomersText').textContent = 'All customers';
+        customersBadge.classList.remove('filter-active');
+    }
+
+    // Products filter
+    if (filters.products?.type === 'top_revenue') {
+        document.getElementById('filterBadgeProductsText').textContent = `Top ${filters.products.percent}% revenue`;
+        productsBadge.classList.add('filter-active');
+    } else {
+        document.getElementById('filterBadgeProductsText').textContent = 'All products';
+        productsBadge.classList.remove('filter-active');
+    }
+
+    // --- Column Stats Table ---
+    const tableBody = document.getElementById('columnStatsTableBody');
+    tableBody.innerHTML = '';
+
+    for (const [columnName, stats] of Object.entries(columnStats)) {
+        const row = document.createElement('tr');
+
+        // Column name cell
+        const nameCell = document.createElement('td');
+        nameCell.innerHTML = `<span class="column-name">${columnName}</span>`;
+        row.appendChild(nameCell);
+
+        // Data type cell
+        const typeCell = document.createElement('td');
+        typeCell.innerHTML = `<span class="column-type">${stats.type}</span>`;
+        row.appendChild(typeCell);
+
+        // Stats cell
+        const statsCell = document.createElement('td');
+        statsCell.innerHTML = formatColumnStats(stats);
+        row.appendChild(statsCell);
+
+        tableBody.appendChild(row);
+    }
+}
+
+function formatColumnStats(stats) {
+    const items = [];
+
+    // Handle different column types
+    if (stats.type === 'STRING' || stats.type === 'BYTES') {
+        if (stats.unique_count !== undefined) {
+            items.push(`<span class="stat-item"><span class="stat-label">Unique:</span> <span class="stat-value">${stats.unique_count.toLocaleString()}</span></span>`);
+        }
+    } else if (['INT64', 'FLOAT64', 'NUMERIC', 'BIGNUMERIC', 'INTEGER', 'FLOAT'].includes(stats.type)) {
+        if (stats.min !== undefined && stats.min !== null) {
+            items.push(`<span class="stat-item"><span class="stat-label">Min:</span> <span class="stat-value">${formatNumber(stats.min)}</span></span>`);
+        }
+        if (stats.max !== undefined && stats.max !== null) {
+            items.push(`<span class="stat-item"><span class="stat-label">Max:</span> <span class="stat-value">${formatNumber(stats.max)}</span></span>`);
+        }
+        if (stats.avg !== undefined && stats.avg !== null) {
+            items.push(`<span class="stat-item"><span class="stat-label">Avg:</span> <span class="stat-value">${formatNumber(stats.avg)}</span></span>`);
+        }
+    } else if (['DATE', 'DATETIME', 'TIMESTAMP'].includes(stats.type)) {
+        if (stats.min) {
+            items.push(`<span class="stat-item"><span class="stat-label">Min:</span> <span class="stat-value">${stats.min}</span></span>`);
+        }
+        if (stats.max) {
+            items.push(`<span class="stat-item"><span class="stat-label">Max:</span> <span class="stat-value">${stats.max}</span></span>`);
+        }
+        if (stats.unique_count !== undefined) {
+            items.push(`<span class="stat-item"><span class="stat-label">Unique:</span> <span class="stat-value">${stats.unique_count.toLocaleString()}</span></span>`);
+        }
+    } else if (stats.type === 'BOOL') {
+        if (stats.true_count !== undefined) {
+            items.push(`<span class="stat-item"><span class="stat-label">True:</span> <span class="stat-value">${stats.true_count.toLocaleString()}</span></span>`);
+        }
+        if (stats.false_count !== undefined) {
+            items.push(`<span class="stat-item"><span class="stat-label">False:</span> <span class="stat-value">${stats.false_count.toLocaleString()}</span></span>`);
+        }
+    }
+
+    // Add null count if present
+    if (stats.null_count !== undefined && stats.null_count > 0) {
+        items.push(`<span class="stat-item"><span class="stat-label">Nulls:</span> <span class="stat-value">${stats.null_count.toLocaleString()} (${stats.null_percent}%)</span></span>`);
+    }
+
+    return `<div class="column-stats-details">${items.join('')}</div>`;
+}
+
+function formatNumber(num) {
+    if (num === null || num === undefined) return '-';
+    if (Number.isInteger(num)) {
+        return num.toLocaleString();
+    }
+    // For floats, show up to 2 decimal places
+    return num.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+}
+
+function updateDatasetSummary() {
+    // Wrapper function for backward compatibility
+    // Now calls fetchDatasetStats with filters
+    fetchDatasetStats(true);
+}
+
+function resetDatasetSummary() {
+    // Reset to empty state with proper message
+    datasetStatsData = null;
+    const emptyEl = document.getElementById('datasetSummaryEmpty');
+    emptyEl.innerHTML = `
+        <i class="fas fa-info-circle"></i>
+        <span>Click "Refresh Dataset" to see summary statistics</span>
+    `;
+    emptyEl.classList.remove('hidden');
+    document.getElementById('datasetSummaryData').classList.add('hidden');
+}
+
+function updateHistorySummary() {
+    // Summary removed from header tablet design - this function kept for compatibility
+    // Could be used in the future to update a status indicator if needed
 }
 
 // --- Products Sub-chapter ---
@@ -2720,7 +3267,10 @@ function resetProductAnalysis() {
     productAnalysisData = null;
     document.getElementById('productAnalysisResults').classList.add('hidden');
     document.getElementById('productAnalysisError').classList.add('hidden');
-    document.getElementById('productsSummary').textContent = 'All products included';
+
+    // Summary element removed from tablet header design
+    const productsSummary = document.getElementById('productsSummary');
+    if (productsSummary) productsSummary.textContent = 'All products included';
 
     // Clear chart
     const svg = document.getElementById('revenueDistributionChart');
@@ -2843,8 +3393,11 @@ function updateProductsSummary() {
         const thresholdData = productAnalysisData.thresholds[String(selectedThreshold)];
 
         if (thresholdData) {
-            document.getElementById('productsSummary').textContent =
-                `${thresholdData.products.toLocaleString()} products at ${threshold}%`;
+            // Summary element removed from tablet header design
+            const productsSummary = document.getElementById('productsSummary');
+            if (productsSummary) {
+                productsSummary.textContent = `${thresholdData.products.toLocaleString()} products at ${threshold}%`;
+            }
         }
     }
 }
@@ -2853,7 +3406,10 @@ function showProductAnalysisError(message) {
     document.getElementById('productAnalysisResults').classList.add('hidden');
     document.getElementById('productAnalysisError').classList.remove('hidden');
     document.getElementById('productAnalysisErrorText').textContent = message;
-    document.getElementById('productsSummary').textContent = 'Analysis failed';
+
+    // Summary element removed from tablet header design
+    const productsSummary = document.getElementById('productsSummary');
+    if (productsSummary) productsSummary.textContent = 'Analysis failed';
 }
 
 // --- D3.js Revenue Distribution Chart ---
@@ -3032,6 +3588,10 @@ function toggleMinTransactionsInput() {
 }
 
 function updateAdvancedSummary() {
+    // Summary element removed from tablet header design
+    const advancedSummary = document.getElementById('advancedSummary');
+    if (!advancedSummary) return;
+
     const minTxEnabled = document.getElementById('enableMinTransactions')?.checked;
     const minTx = document.getElementById('minTransactions')?.value || 2;
 
@@ -3039,7 +3599,7 @@ function updateAdvancedSummary() {
     if (minTxEnabled) {
         summary = `Min ${minTx} transactions`;
     }
-    document.getElementById('advancedSummary').textContent = summary;
+    advancedSummary.textContent = summary;
 }
 
 // ============================================================================

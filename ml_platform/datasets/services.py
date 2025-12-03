@@ -1470,3 +1470,444 @@ class ProductRevenueAnalysisService:
         if '.' in column_ref:
             return column_ref.split('.')[-1]
         return column_ref
+
+
+# =============================================================================
+# DATASET STATS SERVICE
+# =============================================================================
+
+class DatasetStatsService:
+    """
+    Service for calculating dataset statistics with optional filters.
+
+    Used to show users how filter parameters impact the dataset size and
+    provide high-level statistics about columns (min/max for numeric,
+    unique counts for strings/dates).
+
+    Two main use cases:
+    1. Initial load (no filters) - shows raw dataset stats
+    2. With filters applied - shows filtered dataset stats
+    """
+
+    def __init__(self, model_endpoint):
+        """
+        Initialize the service with a model endpoint.
+
+        Args:
+            model_endpoint: ModelEndpoint instance for BigQuery connection
+        """
+        self.bq_service = BigQueryService(model_endpoint)
+
+    def get_dataset_stats(
+        self,
+        primary_table: str,
+        selected_columns: dict,
+        secondary_tables: list = None,
+        join_config: dict = None,
+        filters: dict = None
+    ) -> dict:
+        """
+        Get comprehensive statistics for a dataset configuration.
+
+        Args:
+            primary_table: Primary table name (e.g., "raw_data.transactions")
+            selected_columns: Dict of table -> list of column names selected in Schema Builder
+            secondary_tables: Optional list of secondary tables
+            join_config: Optional join configuration for secondary tables
+            filters: Optional filters dict:
+                {
+                    "timestamp_column": "transactions.trans_date",
+                    "date_filter": {"type": "rolling", "days": 30} | {"type": "fixed", "start_date": "2024-01-01"},
+                    "customer_filter": {"type": "min_transactions", "column": "customer_id", "value": 2},
+                    "product_filter": {"type": "top_revenue", "product_column": "product_id", "revenue_column": "amount", "percent": 80}
+                }
+
+        Returns:
+            Dict with dataset statistics:
+            {
+                "status": "success",
+                "filters_applied": {...},
+                "summary": {
+                    "total_rows": 2450000,
+                    "unique_customers": 98000,
+                    "unique_products": 36000,
+                    "date_range": {"min": "2024-06-01", "max": "2024-12-03"}
+                },
+                "column_stats": {
+                    "transactions.amount": {"type": "FLOAT64", "min": 0.5, "max": 12450, "avg": 45.67},
+                    ...
+                }
+            }
+        """
+        try:
+            filters = filters or {}
+            primary_alias = primary_table.split('.')[-1]
+
+            # Build the filtered dataset query
+            base_query, applied_filters = self._build_filtered_query(
+                primary_table,
+                selected_columns,
+                secondary_tables,
+                join_config,
+                filters
+            )
+
+            # Get summary statistics
+            summary = self._get_summary_stats(base_query, selected_columns, filters)
+
+            # Get column-level statistics
+            column_stats = self._get_column_stats(base_query, selected_columns)
+
+            return {
+                'status': 'success',
+                'filters_applied': applied_filters,
+                'summary': summary,
+                'column_stats': column_stats
+            }
+
+        except Exception as e:
+            import traceback
+            logger.error(f"Error getting dataset stats: {e}")
+            logger.error(f"Full traceback:\n{traceback.format_exc()}")
+            return {
+                'status': 'error',
+                'message': str(e),
+                'filters_applied': self._format_applied_filters(filters or {}),
+                'summary': {},
+                'column_stats': {}
+            }
+
+    def _build_filtered_query(
+        self,
+        primary_table: str,
+        selected_columns: dict,
+        secondary_tables: list,
+        join_config: dict,
+        filters: dict
+    ) -> tuple:
+        """
+        Build the base filtered query for stats calculation.
+
+        Returns:
+            Tuple of (query_string, applied_filters_dict)
+        """
+        primary_alias = primary_table.split('.')[-1]
+        full_table_ref = self.bq_service._get_full_table_ref(primary_table)
+
+        # Track what filters are actually applied
+        applied_filters = {
+            'dates': {'type': 'none'},
+            'customers': {'type': 'none'},
+            'products': {'type': 'none'}
+        }
+
+        # Build SELECT clause with all selected columns
+        select_parts = []
+        for table, columns in selected_columns.items():
+            table_alias = table.replace('raw_data.', '')
+            for col in columns:
+                select_parts.append(f"`{table_alias}`.`{col}` AS `{table_alias}_{col}`")
+
+        if not select_parts:
+            select_parts = [f"`{primary_alias}`.*"]
+
+        # Build FROM clause
+        from_clause = f"`{full_table_ref}` AS `{primary_alias}`"
+
+        # Build JOIN clauses
+        join_clauses = []
+        if secondary_tables and join_config:
+            for sec_table in secondary_tables:
+                sec_alias = sec_table.replace('raw_data.', '')
+                sec_full_ref = self.bq_service._get_full_table_ref(sec_table)
+                sec_config = join_config.get(sec_table, {})
+
+                join_key = sec_config.get('join_key', 'id')
+                secondary_column = sec_config.get('secondary_column', join_key)
+                join_type = sec_config.get('join_type', 'LEFT').upper()
+
+                join_clauses.append(
+                    f"{join_type} JOIN `{sec_full_ref}` AS `{sec_alias}` "
+                    f"ON `{primary_alias}`.`{join_key}` = `{sec_alias}`.`{secondary_column}`"
+                )
+
+        # Build WHERE clauses
+        where_clauses = []
+        ctes = []
+
+        # Date filter
+        timestamp_col = filters.get('timestamp_column')
+        date_filter = filters.get('date_filter', {})
+
+        if timestamp_col and date_filter.get('type'):
+            ts_col_name = self._extract_column_name(timestamp_col)
+
+            if date_filter['type'] == 'rolling':
+                days = date_filter.get('days', 30)
+                where_clauses.append(f"""
+                    `{primary_alias}`.`{ts_col_name}` >= DATE_SUB(
+                        (SELECT MAX(`{ts_col_name}`) FROM `{full_table_ref}`),
+                        INTERVAL {days} DAY
+                    )
+                """)
+                applied_filters['dates'] = {'type': 'rolling', 'days': days}
+
+            elif date_filter['type'] == 'fixed':
+                start_date = date_filter.get('start_date')
+                if start_date:
+                    where_clauses.append(f"`{primary_alias}`.`{ts_col_name}` >= '{start_date}'")
+                    applied_filters['dates'] = {'type': 'fixed', 'start_date': start_date}
+
+        # Customer filter (min transactions)
+        customer_filter = filters.get('customer_filter', {})
+        if customer_filter.get('type') == 'min_transactions':
+            customer_col = self._extract_column_name(customer_filter.get('column'))
+            min_value = customer_filter.get('value', 2)
+
+            if customer_col:
+                cte = f"""
+                    SELECT `{customer_col}`
+                    FROM `{full_table_ref}`
+                    GROUP BY `{customer_col}`
+                    HAVING COUNT(*) >= {min_value}
+                """
+                ctes.append(('active_customers', cte))
+                where_clauses.append(
+                    f"`{primary_alias}`.`{customer_col}` IN (SELECT `{customer_col}` FROM active_customers)"
+                )
+                applied_filters['customers'] = {'type': 'min_transactions', 'value': min_value}
+
+        # Product filter (top N% revenue)
+        product_filter = filters.get('product_filter', {})
+        if product_filter.get('type') == 'top_revenue':
+            product_col = self._extract_column_name(product_filter.get('product_column'))
+            revenue_col = self._extract_column_name(product_filter.get('revenue_column'))
+            percent = product_filter.get('percent', 80)
+
+            if product_col and revenue_col:
+                cte = f"""
+                    SELECT `{product_col}`
+                    FROM (
+                        SELECT
+                            `{product_col}`,
+                            SUM(`{revenue_col}`) as total_revenue,
+                            SUM(SUM(`{revenue_col}`)) OVER () as grand_total,
+                            SUM(SUM(`{revenue_col}`)) OVER (ORDER BY SUM(`{revenue_col}`) DESC) as running_total
+                        FROM `{full_table_ref}`
+                        GROUP BY `{product_col}`
+                    )
+                    WHERE running_total <= grand_total * {percent / 100}
+                       OR running_total - total_revenue < grand_total * {percent / 100}
+                """
+                ctes.append(('top_products', cte))
+                where_clauses.append(
+                    f"`{primary_alias}`.`{product_col}` IN (SELECT `{product_col}` FROM top_products)"
+                )
+                applied_filters['products'] = {'type': 'top_revenue', 'percent': percent}
+
+        # Build final query
+        query_parts = []
+
+        if ctes:
+            cte_strings = [f"{name} AS ({query})" for name, query in ctes]
+            query_parts.append(f"WITH {', '.join(cte_strings)}")
+
+        query_parts.append(f"SELECT {', '.join(select_parts)}")
+        query_parts.append(f"FROM {from_clause}")
+
+        if join_clauses:
+            query_parts.append('\n'.join(join_clauses))
+
+        if where_clauses:
+            query_parts.append(f"WHERE {' AND '.join(where_clauses)}")
+
+        query = '\n'.join(query_parts)
+        return query, applied_filters
+
+    def _get_summary_stats(self, base_query: str, selected_columns: dict, filters: dict) -> dict:
+        """
+        Get high-level summary statistics for the filtered dataset.
+        Only returns total_rows - column-specific stats are in column_stats.
+        """
+        try:
+            summary_query = f"""
+            WITH filtered_data AS (
+                {base_query}
+            )
+            SELECT COUNT(*) as total_rows
+            FROM filtered_data
+            """
+
+            logger.debug(f"Running summary stats query...")
+            result = self.bq_service.client.query(summary_query).result()
+            row = list(result)[0]
+
+            return {
+                'total_rows': row.total_rows or 0,
+            }
+
+        except Exception as e:
+            logger.error(f"Error getting summary stats: {e}")
+            return {
+                'total_rows': 0,
+                'error': str(e)
+            }
+
+    def _get_column_stats(self, base_query: str, selected_columns: dict) -> dict:
+        """
+        Get statistics for each column in the selected columns.
+        """
+        try:
+            # Flatten column list with aliases
+            columns_with_types = []
+            for table, columns in selected_columns.items():
+                table_alias = table.replace('raw_data.', '')
+                # Get schema to know column types
+                try:
+                    schema = self.bq_service.get_table_schema(table)
+                    schema_dict = {col['name']: col['type'] for col in schema}
+                except Exception:
+                    schema_dict = {}
+
+                for col in columns:
+                    col_alias = f"{table_alias}_{col}"
+                    col_type = schema_dict.get(col, 'STRING')
+                    columns_with_types.append({
+                        'alias': col_alias,
+                        'original': col,
+                        'table': table_alias,
+                        'type': col_type
+                    })
+
+            if not columns_with_types:
+                return {}
+
+            # Build stats query for each column based on type
+            stats_parts = []
+
+            for col_info in columns_with_types:
+                alias = col_info['alias']
+                col_type = col_info['type']
+
+                # Null count for all
+                stats_parts.append(f"COUNTIF(`{alias}` IS NULL) AS `{alias}__null_count`")
+
+                if col_type in ('STRING', 'BYTES'):
+                    stats_parts.append(f"COUNT(DISTINCT `{alias}`) AS `{alias}__unique_count`")
+                elif col_type in ('INT64', 'FLOAT64', 'NUMERIC', 'BIGNUMERIC', 'INTEGER', 'FLOAT'):
+                    stats_parts.append(f"MIN(`{alias}`) AS `{alias}__min`")
+                    stats_parts.append(f"MAX(`{alias}`) AS `{alias}__max`")
+                    stats_parts.append(f"AVG(CAST(`{alias}` AS FLOAT64)) AS `{alias}__avg`")
+                elif col_type in ('DATE', 'DATETIME', 'TIMESTAMP'):
+                    stats_parts.append(f"MIN(`{alias}`) AS `{alias}__min`")
+                    stats_parts.append(f"MAX(`{alias}`) AS `{alias}__max`")
+                    stats_parts.append(f"COUNT(DISTINCT `{alias}`) AS `{alias}__unique_count`")
+                elif col_type == 'BOOL':
+                    stats_parts.append(f"COUNTIF(`{alias}` = TRUE) AS `{alias}__true_count`")
+                    stats_parts.append(f"COUNTIF(`{alias}` = FALSE) AS `{alias}__false_count`")
+
+            stats_query = f"""
+            WITH filtered_data AS (
+                {base_query}
+            )
+            SELECT
+                COUNT(*) as __total_rows__,
+                {', '.join(stats_parts)}
+            FROM filtered_data
+            """
+
+            logger.debug(f"Running column stats query...")
+            result = self.bq_service.client.query(stats_query).result()
+            row = list(result)[0]
+            total_rows = row.__total_rows__ or 0
+
+            # Parse results into column stats
+            column_stats = {}
+
+            for col_info in columns_with_types:
+                alias = col_info['alias']
+                col_type = col_info['type']
+                display_name = f"{col_info['table']}.{col_info['original']}"
+
+                null_count = getattr(row, f'{alias}__null_count', 0) or 0
+
+                stats = {
+                    'type': col_type,
+                    'null_count': null_count,
+                    'null_percent': round(null_count / total_rows * 100, 2) if total_rows > 0 else 0
+                }
+
+                if col_type in ('STRING', 'BYTES'):
+                    stats['unique_count'] = getattr(row, f'{alias}__unique_count', 0) or 0
+
+                elif col_type in ('INT64', 'FLOAT64', 'NUMERIC', 'BIGNUMERIC', 'INTEGER', 'FLOAT'):
+                    min_val = getattr(row, f'{alias}__min', None)
+                    max_val = getattr(row, f'{alias}__max', None)
+                    avg_val = getattr(row, f'{alias}__avg', None)
+
+                    stats['min'] = float(min_val) if min_val is not None else None
+                    stats['max'] = float(max_val) if max_val is not None else None
+                    stats['avg'] = round(float(avg_val), 2) if avg_val is not None else None
+
+                elif col_type in ('DATE', 'DATETIME', 'TIMESTAMP'):
+                    min_val = getattr(row, f'{alias}__min', None)
+                    max_val = getattr(row, f'{alias}__max', None)
+                    unique_count = getattr(row, f'{alias}__unique_count', 0)
+
+                    if min_val:
+                        min_str = min_val.isoformat() if hasattr(min_val, 'isoformat') else str(min_val)
+                        stats['min'] = min_str.split('T')[0] if 'T' in min_str else min_str
+                    else:
+                        stats['min'] = None
+
+                    if max_val:
+                        max_str = max_val.isoformat() if hasattr(max_val, 'isoformat') else str(max_val)
+                        stats['max'] = max_str.split('T')[0] if 'T' in max_str else max_str
+                    else:
+                        stats['max'] = None
+
+                    stats['unique_count'] = unique_count or 0
+
+                elif col_type == 'BOOL':
+                    stats['true_count'] = getattr(row, f'{alias}__true_count', 0) or 0
+                    stats['false_count'] = getattr(row, f'{alias}__false_count', 0) or 0
+
+                column_stats[display_name] = stats
+
+            return column_stats
+
+        except Exception as e:
+            logger.error(f"Error getting column stats: {e}")
+            return {'error': str(e)}
+
+    def _format_applied_filters(self, filters: dict) -> dict:
+        """Format filters into the applied_filters response structure."""
+        applied = {
+            'dates': {'type': 'none'},
+            'customers': {'type': 'none'},
+            'products': {'type': 'none'}
+        }
+
+        date_filter = filters.get('date_filter', {})
+        if date_filter.get('type') == 'rolling':
+            applied['dates'] = {'type': 'rolling', 'days': date_filter.get('days', 30)}
+        elif date_filter.get('type') == 'fixed':
+            applied['dates'] = {'type': 'fixed', 'start_date': date_filter.get('start_date')}
+
+        customer_filter = filters.get('customer_filter', {})
+        if customer_filter.get('type') == 'min_transactions':
+            applied['customers'] = {'type': 'min_transactions', 'value': customer_filter.get('value', 2)}
+
+        product_filter = filters.get('product_filter', {})
+        if product_filter.get('type') == 'top_revenue':
+            applied['products'] = {'type': 'top_revenue', 'percent': product_filter.get('percent', 80)}
+
+        return applied
+
+    def _extract_column_name(self, column_ref: str) -> str:
+        """Extract just the column name from a 'table.column' reference."""
+        if not column_ref:
+            return None
+        if '.' in column_ref:
+            return column_ref.split('.')[-1]
+        return column_ref

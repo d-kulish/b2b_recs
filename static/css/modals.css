@@ -431,65 +431,408 @@
 }
 
 /* ============================================================================
-   FILTER SUB-CHAPTERS (Step 4)
+   FILTER SUB-CHAPTERS (Step 4 - Filtering)
+   Tablet header with content outside, matching example design
    ============================================================================ */
 
 .filter-subchapter {
-    border: 1px solid #e5e7eb;
-    border-radius: 8px;
-    margin-bottom: 12px;
-    overflow: hidden;
-    background: #fff;
+    margin-bottom: 20px;
 }
 
-.subchapter-header {
+/* Header tablet - bordered pill/tablet style */
+.subchapter-header-tablet {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 12px 16px;
-    background: #f9fafb;
+    padding: 14px 20px;
+    background: #fff;
+    border: 1px solid #000;
+    border-radius: 8px;
     cursor: pointer;
     user-select: none;
     transition: background-color 0.15s ease;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
-.subchapter-header:hover {
-    background: #f3f4f6;
-}
-
-.subchapter-header-left {
-    display: flex;
-    align-items: center;
-    gap: 10px;
+.subchapter-header-tablet:hover {
+    background: #fafafa;
 }
 
 .subchapter-chevron {
-    font-size: 12px;
-    color: #6b7280;
+    font-size: 14px;
+    color: #000;
     transition: transform 0.2s ease;
-    width: 12px;
+    width: 16px;
+    text-align: center;
 }
 
 .subchapter-title {
-    font-size: 14px;
+    font-size: 15px;
     font-weight: 600;
+    color: #111;
+}
+
+.subchapter-filter-status {
+    margin-left: auto;
+    margin-right: 12px;
+    font-size: 12px;
+    font-weight: 500;
+    color: #059669;
+    background: #d1fae5;
+    padding: 4px 10px;
+    border-radius: 12px;
+}
+
+.subchapter-filter-status:empty {
+    display: none;
+}
+
+/* Content outside the tablet - no border */
+.subchapter-content-outside {
+    padding: 16px 4px 0 4px;
+}
+
+.subchapter-body-outside {
+    padding: 0 16px;
+}
+
+/* ============================================================================
+   FILTER BUTTONS ROW (Define History section)
+   Equal width buttons spanning full width with popup dropdowns
+   ============================================================================ */
+
+.filter-buttons-row {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+}
+
+.filter-button-wrapper {
+    position: relative;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Helper label above button */
+.filter-button-label {
+    display: block;
+    font-size: 12px;
+    color: #6b7280;
+    margin-bottom: 6px;
+    min-height: 16px;
+}
+
+.filter-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 16px;
+    width: 100%;
+    background: #fff;
+    border: 1px solid #000;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    color: #111;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    white-space: nowrap;
+}
+
+.filter-button:hover {
+    background: #f9fafb;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+}
+
+.filter-button:active {
+    transform: translateY(1px);
+}
+
+.filter-button.active {
+    background: #f3f4f6;
+    border-color: #2563eb;
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+}
+
+.filter-button i {
+    font-size: 14px;
     color: #374151;
 }
 
-.subchapter-summary {
+.filter-button-action {
+    background: #f9fafb;
+    border-color: #000;
+}
+
+.filter-button-action:hover {
+    background: #f3f4f6;
+}
+
+/* Disabled state for filter buttons */
+.filter-button:disabled,
+.filter-button.filter-button-disabled {
+    background: #f3f4f6;
+    border-color: #d1d5db;
+    color: #9ca3af;
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+.filter-button:disabled:hover,
+.filter-button.filter-button-disabled:hover {
+    background: #f3f4f6;
+    box-shadow: none;
+}
+
+.filter-button:disabled i,
+.filter-button.filter-button-disabled i {
+    color: #9ca3af;
+}
+
+/* Filter Popup - positioned to not be clipped */
+.filter-popup {
+    display: none;
+    position: fixed;
+    min-width: 250px;
+    padding: 14px;
+    background: #fff;
+    border: 1px solid #000;
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+    z-index: 9999;
+}
+
+.filter-popup.show {
+    display: block;
+}
+
+.filter-popup-header {
     font-size: 12px;
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.filter-popup-hint {
+    font-size: 11px;
+    color: #6b7280;
+    margin-top: 10px;
+    line-height: 1.4;
+}
+
+/* Filter Status Bar */
+.filter-status-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 16px;
+    padding: 10px 14px;
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    border-radius: 6px;
+    font-size: 12px;
+    color: #166534;
+}
+
+.filter-status-bar i {
+    color: #16a34a;
+}
+
+/* ============================================================================
+   DATASET SUMMARY PANEL (Step 4 - always expanded)
+   ============================================================================ */
+
+.dataset-summary-panel {
+    margin-top: 20px;
+    border: 1px solid #000;
+    border-radius: 8px;
+    background: #fff;
+    overflow: hidden;
+}
+
+.dataset-summary-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 20px;
+    background: #f9fafb;
+    border-bottom: 1px solid #e5e7eb;
+    font-size: 15px;
+    font-weight: 600;
+    color: #111;
+}
+
+.dataset-summary-header i {
+    color: #374151;
+}
+
+.dataset-summary-total-rows {
+    margin-left: auto;
+    font-size: 13px;
+    font-weight: 500;
+    color: #059669;
+    background: #d1fae5;
+    padding: 4px 10px;
+    border-radius: 12px;
+}
+
+.dataset-summary-total-rows:empty {
+    display: none;
+}
+
+.dataset-summary-content {
+    padding: 16px 20px;
+}
+
+.dataset-summary-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 24px;
+    color: #6b7280;
+    font-size: 13px;
+}
+
+.dataset-summary-empty i {
+    color: #9ca3af;
+}
+
+/* Filters Applied Row */
+.dataset-filters-applied {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 16px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.filter-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: #f3f4f6;
+    border: 1px solid #e5e7eb;
+    border-radius: 16px;
+    font-size: 12px;
+    color: #374151;
+}
+
+.filter-badge i {
+    font-size: 11px;
+    color: #6b7280;
+}
+
+.filter-badge.filter-active {
+    background: #dbeafe;
+    border-color: #93c5fd;
+    color: #1e40af;
+}
+
+.filter-badge.filter-active i {
+    color: #3b82f6;
+}
+
+/* Column Stats Table */
+.column-stats-table-wrapper {
+    max-height: 300px;
+    overflow-y: auto;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+}
+
+.column-stats-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.column-stats-table thead {
+    position: sticky;
+    top: 0;
+    background: #f9fafb;
+    z-index: 1;
+}
+
+.column-stats-table th {
+    text-align: left;
+    padding: 10px 12px;
+    font-weight: 600;
+    color: #374151;
+    border-bottom: 1px solid #e5e7eb;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.column-stats-table th:first-child {
+    width: 35%;
+}
+
+.column-stats-table th:nth-child(2) {
+    width: 100px;
+}
+
+.column-stats-table td {
+    padding: 8px 12px;
+    border-bottom: 1px solid #f3f4f6;
+    vertical-align: middle;
+}
+
+.column-stats-table tbody tr:hover {
+    background: #f9fafb;
+}
+
+.column-stats-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.column-name {
+    font-weight: 500;
+    color: #111;
+}
+
+.column-type {
+    font-size: 11px;
     color: #6b7280;
     background: #e5e7eb;
-    padding: 2px 8px;
+    padding: 3px 8px;
     border-radius: 4px;
+    display: inline-block;
+    text-transform: uppercase;
+    font-weight: 500;
+    letter-spacing: 0.3px;
 }
 
-.subchapter-content {
-    border-top: 1px solid #e5e7eb;
+.column-stats-details {
+    display: inline;
 }
 
-.subchapter-body {
-    padding: 16px;
+.stat-item {
+    display: inline;
+    white-space: nowrap;
+}
+
+.stat-item:not(:last-child)::after {
+    content: " · ";
+    color: #9ca3af;
+}
+
+.stat-label {
+    color: #6b7280;
+    font-size: 12px;
+}
+
+.stat-value {
+    font-weight: 600;
+    color: #111;
 }
 
 /* Revenue Distribution Chart */

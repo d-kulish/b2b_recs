@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides detailed specifications for implementing the **Datasets** domain in the ML Platform. The Datasets domain defines WHAT data goes into model training.
 
-**Last Updated**: 2025-12-01
+**Last Updated**: 2025-12-03
 
 ---
 
@@ -108,43 +108,116 @@ A Dataset definition (JSON stored in Django) that is used by:
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-#### Step 3: Column Mapping
+#### Step 3: Visual Schema Builder
+
+The Schema Builder provides a visual, drag-and-drop interface for connecting tables and selecting columns. It uses a dotted background pattern (similar to Vertex AI Pipelines) to create a canvas-like experience.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│ Create Dataset - Step 3 of 4: Column Mapping                                │
+│ Create Dataset - Step 3 of 5: Schema Builder                                │
+│ Connect tables and select columns for your dataset.                         │
 ├─────────────────────────────────────────────────────────────────────────────┤
+│ ┌·····································································────┐ │
+│ │                                                                          │ │
+│ │  ┌─────────────────┐         ┌─────────────────┐    ┌─────────────────┐  │ │
+│ │  │ customers  SEC  │         │ transactions PRI│    │ products   SEC  │  │ │
+│ │  ├─────────────────┤         ├─────────────────┤    ├─────────────────┤  │ │
+│ │  │☑ customer_id ●──┼────────►│☑ customer_id  ●│    │☑ product_id  ○  │  │ │
+│ │  │☑ first_name     │         │☑ product_id  ●─┼───►│☑ product_code ● │  │ │
+│ │  │☑ last_name      │         │☑ timestamp      │    │☑ category       │  │ │
+│ │  │☐ email       [+]│         │☑ amount         │    │☐ price       [+]│  │ │
+│ │  │☐ created_at  [+]│         │☐ category       │    │☑ description    │  │ │
+│ │  └─────────────────┘         └─────────────────┘    └─────────────────┘  │ │
+│ │                                                                          │ │
+│ └──────────────────────────────────────────────────────────────────────────┘ │
 │                                                                              │
-│ Map your table columns to ML concepts. Required fields marked with *        │
-│                                                                              │
-│ ═══════════════════════════════════════════════════════════════════════════ │
-│ REQUIRED MAPPINGS                                                            │
-│ ═══════════════════════════════════════════════════════════════════════════ │
-│                                                                              │
-│ User/Customer ID *         │ Product ID *               │ Timestamp *        │
-│ ┌───────────────────────┐  │ ┌───────────────────────┐  │ ┌────────────────┐│
-│ │ customer_code     [▼] │  │ │ article_id        [▼] │  │ │ trans_date [▼] ││
-│ └───────────────────────┘  │ └───────────────────────┘  │ └────────────────┘│
-│ Cardinality: 125,234       │ Cardinality: 45,123        │ Range: 180 days   │
-│                                                                              │
-│ ═══════════════════════════════════════════════════════════════════════════ │
-│ OPTIONAL MAPPINGS (enhance model quality)                                    │
-│ ═══════════════════════════════════════════════════════════════════════════ │
-│                                                                              │
-│ Revenue/Amount             │ Location/City              │                    │
-│ ┌───────────────────────┐  │ ┌───────────────────────┐  │                    │
-│ │ net_amount        [▼] │  │ │ city              [▼] │  │                    │
-│ └───────────────────────┘  │ └───────────────────────┘  │                    │
-│ Range: $0.50 - $12,450     │ Cardinality: 28            │                    │
-│                                                                              │
-│ Product Name               │ Category                   │ Subcategory        │
-│ ┌───────────────────────┐  │ ┌───────────────────────┐  │ ┌────────────────┐│
-│ │ article_name      [▼] │  │ │ category          [▼] │  │ │ subcategory[▼] ││
-│ └───────────────────────┘  │ └───────────────────────┘  │ └────────────────┘│
-│ Cardinality: 42,891        │ Cardinality: 12            │ Cardinality: 156   │
+│ Preview (5 rows):                                                            │
+│ ┌────────────────────────────────────────────────────────────────────────┐  │
+│ │ customer_id │ product_id │ timestamp  │ amount │ product_code │ ...   │  │
+│ ├────────────────────────────────────────────────────────────────────────┤  │
+│ │ C001        │ P123       │ 2024-11-01 │ 45.00  │ SKU-123      │ ...   │  │
+│ │ C002        │ P456       │ 2024-11-02 │ 89.50  │ SKU-456      │ ...   │  │
+│ └────────────────────────────────────────────────────────────────────────┘  │
 │                                                                              │
 │                                         [← Back]  [Cancel]  [Next →]        │
 └─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Key Features:**
+
+1. **Draggable Table Cards**: Each table is represented as a draggable card with:
+   - Table name and role badge (PRIMARY/SECONDARY)
+   - Scrollable column list with checkboxes for selection
+   - Column data types displayed (int, str, flo, tim, etc.)
+
+2. **Column Connection System**:
+   - **Recommended columns** (pattern-matched like `*_id`, `*_key`, `*_code`): Show empty dots (○) as visual hints
+   - **Connected columns**: Show colored dots (●) matching the connection line color
+   - **Any column**: Show "+" on hover to enable connection
+
+3. **Connection Creation**:
+   - Click a dot or "+" to enter connect mode
+   - A floating popover appears showing:
+     - Column name
+     - Data type (INTEGER, STRING, FLOAT, etc.)
+     - Sample values (3-5 examples from loaded data)
+   - Hover over target column to see its info + compatibility status
+   - Click target to create connection
+   - Press Escape or click outside to cancel
+
+4. **Type Compatibility**:
+   - Compatible types show green "✓ Compatible" indicator
+   - Mismatched types show warning "⚠ Type mismatch: INTEGER ↔ STRING"
+   - Connections are allowed regardless (warning only, not blocking)
+
+5. **Connection Lines**:
+   - Curved SVG paths connecting column rows (not table borders)
+   - Different colors for different connections (blue, green, red, purple, etc.)
+   - Lines update in real-time when dragging cards or scrolling columns
+   - Arrow indicators (▲/▼) when connected column is scrolled out of view
+
+6. **Live Preview**:
+   - Sample data preview updates when columns are selected/deselected
+   - Shows joined result based on current connections
+   - Stats display (row count, columns)
+
+**Column Info Popover:**
+
+```
+┌─────────────────────────────┐
+│ customer_id                 │
+│ Type: INTEGER               │
+│ Samples: 1001, 1002, 1543,  │
+│          2089, 3421         │
+│                             │
+│ Click a column in another   │
+│ table to connect            │
+└─────────────────────────────┘
+```
+
+**Target Column Popover (compatible):**
+
+```
+┌─────────────────────────────┐
+│ user_id                     │
+│ Type: INTEGER               │
+│ Samples: 1001, 1002, 1543   │
+│                             │
+│ ✓ Compatible                │
+└─────────────────────────────┘
+```
+
+**Target Column Popover (incompatible):**
+
+```
+┌─────────────────────────────┐
+│ user_name                   │
+│ Type: STRING                │
+│ Samples: "john", "mary"     │
+│                             │
+│ ⚠ Type mismatch             │
+│   INTEGER ↔ STRING          │
+└─────────────────────────────┘
 ```
 
 #### Step 4: Filters & Split

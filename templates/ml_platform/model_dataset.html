@@ -157,15 +157,12 @@
             <!-- Step 3: Visual Schema Builder -->
             <div id="step3" class="wizard-step">
                 <div class="schema-builder-container">
-                    <!-- Header with title and auto-detect button -->
+                    <!-- Header with title -->
                     <div class="schema-builder-header">
                         <div>
                             <h4 class="wizard-section-title" style="margin-bottom: 2px;">Schema Builder</h4>
                             <p class="wizard-section-subtitle" style="margin-bottom: 0;">Connect tables and select columns for your dataset.</p>
                         </div>
-                        <button onclick="autoDetectJoins()" class="schema-auto-detect-btn" id="autoDetectBtn">
-                            <i class="fas fa-magic"></i> Auto-detect
-                        </button>
                     </div>
 
                     <!-- Table Cards Area -->
@@ -227,6 +224,30 @@
                     </div>
                     <div class="join-popover-option danger" onclick="removeSelectedJoin()">
                         <i class="fas fa-trash"></i> Remove
+                    </div>
+                </div>
+
+                <!-- Column Info Popover for connect mode (hidden by default) -->
+                <div class="column-info-popover hidden" id="columnInfoPopover">
+                    <div class="column-info-name" id="columnInfoName">column_name</div>
+                    <div class="column-info-type" id="columnInfoType">
+                        <span class="column-info-label">Type:</span>
+                        <span class="column-info-value" id="columnInfoTypeValue">STRING</span>
+                    </div>
+                    <div class="column-info-samples" id="columnInfoSamples">
+                        <span class="column-info-label">Samples:</span>
+                        <span class="column-info-value" id="columnInfoSamplesValue"></span>
+                    </div>
+                    <div class="column-info-hint" id="columnInfoHint">
+                        Click a column in another table to connect
+                    </div>
+                    <div class="column-info-warning hidden" id="columnInfoWarning">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <span id="columnInfoWarningText">Type mismatch</span>
+                    </div>
+                    <div class="column-info-compatible hidden" id="columnInfoCompatible">
+                        <i class="fas fa-check-circle"></i>
+                        <span>Compatible</span>
                     </div>
                 </div>
             </div>
@@ -1330,13 +1351,8 @@ function loadSchemaBuilder() {
             // Render table cards
             renderTableCards();
 
-            // Auto-detect joins if multiple tables
-            if (allTables.length > 1) {
-                autoDetectJoins();
-            } else {
-                // Single table - just refresh preview
-                refreshPreview();
-            }
+            // Refresh preview
+            refreshPreview();
         } else {
             document.getElementById('schemaCardsContainer').innerHTML = `
                 <div class="schema-preview-empty">
@@ -1406,8 +1422,20 @@ function renderTableCards() {
     // Setup drag handlers
     setupDragHandlers();
 
+    // Setup scroll handlers for column lists to update connection lines
+    setupColumnScrollHandlers();
+
     // Update connection lines after a short delay to ensure cards are positioned
     setTimeout(updateConnectionLines, 50);
+}
+
+// Setup scroll event listeners on column lists to update connection lines when scrolling
+function setupColumnScrollHandlers() {
+    document.querySelectorAll('.schema-column-list').forEach(list => {
+        list.addEventListener('scroll', () => {
+            updateConnectionLines();
+        });
+    });
 }
 
 function positionCardsInitially(allTables) {
@@ -1575,10 +1603,10 @@ function renderColumnItem(table, col, selectedCols, isPrimary) {
     const shortTable = table.replace('raw_data.', '');
     const isSelected = selectedCols.includes(col.name);
 
-    // Determine if column could be a join key based on schema flag OR naming patterns
+    // Determine if column is a recommended join key based on schema flag OR naming patterns
     const colLower = col.name.toLowerCase();
     const keyPatterns = ['_id', 'id_', '_key', 'key_', '_code', 'code_'];
-    const isJoinKey = col.is_potential_join_key ||
+    const isRecommendedJoinKey = col.is_potential_join_key ||
                       keyPatterns.some(p => colLower.includes(p)) ||
                       colLower === 'id';
 
@@ -1587,17 +1615,42 @@ function renderColumnItem(table, col, selectedCols, isPrimary) {
         (j.rightCol === col.name && j.rightTable === table)
     );
 
+    // Determine what to show in the connection area:
+    // - Connected: colored dot (always visible)
+    // - Recommended but not connected: empty dot (always visible)
+    // - Not recommended and not connected: "+" on hover
+    let connectionElement;
+    if (isConnected) {
+        // Connected column - show colored dot
+        connectionElement = `
+            <div class="schema-connection-dot connected"
+                 data-table="${table}" data-column="${col.name}"
+                 onclick="onConnectionDotClick('${table}', '${col.name}', event)"></div>
+        `;
+    } else if (isRecommendedJoinKey) {
+        // Recommended join key - show empty dot
+        connectionElement = `
+            <div class="schema-connection-dot recommended"
+                 data-table="${table}" data-column="${col.name}"
+                 onclick="onConnectionDotClick('${table}', '${col.name}', event)"></div>
+        `;
+    } else {
+        // Regular column - show "+" on hover
+        connectionElement = `
+            <div class="schema-connection-plus"
+                 data-table="${table}" data-column="${col.name}"
+                 onclick="onConnectionDotClick('${table}', '${col.name}', event)">+</div>
+        `;
+    }
+
     return `
-        <div class="schema-column-item ${isConnected ? 'connected' : ''}" data-table="${table}" data-column="${col.name}">
+        <div class="schema-column-item ${isConnected ? 'connected' : ''}" data-table="${table}" data-column="${col.name}"
+             data-type="${col.type || 'unknown'}">
             <input type="checkbox" ${isSelected ? 'checked' : ''}
                    onchange="onColumnCheckChange('${table}', '${col.name}', this.checked)">
             <span class="schema-column-name">${col.name}</span>
             <span class="schema-column-type">${col.type?.substring(0, 3)?.toLowerCase() || ''}</span>
-            ${isJoinKey ? `
-                <div class="schema-connection-dot ${isConnected ? 'connected' : ''}"
-                     data-table="${table}" data-column="${col.name}"
-                     onclick="onConnectionDotClick('${table}', '${col.name}')"></div>
-            ` : ''}
+            ${connectionElement}
         </div>
     `;
 }
@@ -1642,27 +1695,32 @@ function onColumnCheckChange(table, column, isChecked) {
     debouncedRefreshPreview();
 }
 
-// Connection dot click handling
-function onConnectionDotClick(table, column) {
+// Connection dot/plus click handling
+function onConnectionDotClick(table, column, event) {
+    // Get click position for popover
+    const clickX = event ? event.clientX : 0;
+    const clickY = event ? event.clientY : 0;
+
     const connectMode = schemaBuilderState.connectMode;
 
     if (!connectMode) {
         // Start connect mode
         schemaBuilderState.connectMode = { table, column };
 
-        // Highlight source dot
-        document.querySelectorAll('.schema-connection-dot').forEach(dot => {
-            if (dot.dataset.table === table && dot.dataset.column === column) {
-                dot.classList.add('connect-mode');
-            } else if (dot.dataset.table !== table) {
-                // Highlight valid targets (different table)
-                dot.classList.add('connect-mode-target');
-            }
-        });
+        // Show source column info popover
+        showColumnInfoPopover(table, column, clickX, clickY, true);
+
+        // Highlight source element and valid targets
+        highlightConnectModeElements(table, column);
+
+        // Add event listeners for cancel actions
+        document.addEventListener('keydown', handleConnectModeKeydown);
+        document.addEventListener('click', handleConnectModeOutsideClick, true);
+
     } else {
         // Complete or cancel connection
         if (connectMode.table === table && connectMode.column === column) {
-            // Clicked same dot - cancel
+            // Clicked same element - cancel
             exitConnectMode();
         } else if (connectMode.table !== table) {
             // Valid target - create join
@@ -1673,11 +1731,222 @@ function onConnectionDotClick(table, column) {
     }
 }
 
+// Highlight elements during connect mode
+function highlightConnectModeElements(sourceTable, sourceColumn) {
+    // Highlight source dot/plus
+    document.querySelectorAll('.schema-connection-dot, .schema-connection-plus').forEach(el => {
+        if (el.dataset.table === sourceTable && el.dataset.column === sourceColumn) {
+            el.classList.add('connect-mode');
+        } else if (el.dataset.table !== sourceTable) {
+            // Highlight valid targets (different table)
+            el.classList.add('connect-mode-target');
+        }
+    });
+
+    // Add hover listeners for target columns
+    document.querySelectorAll('.schema-column-item').forEach(item => {
+        if (item.dataset.table !== sourceTable) {
+            item.addEventListener('mouseenter', handleTargetColumnHover);
+            item.addEventListener('mouseleave', handleTargetColumnLeave);
+        }
+    });
+}
+
+// Handle hover on target column during connect mode
+function handleTargetColumnHover(event) {
+    const item = event.currentTarget;
+    const table = item.dataset.table;
+    const column = item.dataset.column;
+
+    if (!schemaBuilderState.connectMode || table === schemaBuilderState.connectMode.table) {
+        return;
+    }
+
+    // Get column type for compatibility check
+    const sourceType = getColumnType(schemaBuilderState.connectMode.table, schemaBuilderState.connectMode.column);
+    const targetType = getColumnType(table, column);
+    const isCompatible = checkTypeCompatibility(sourceType, targetType);
+
+    // Show target popover near cursor
+    showColumnInfoPopover(table, column, event.clientX + 15, event.clientY + 15, false, sourceType, isCompatible);
+}
+
+// Handle mouse leave on target column
+function handleTargetColumnLeave(event) {
+    // Hide target info but keep source info
+    if (schemaBuilderState.connectMode) {
+        const popover = document.getElementById('columnInfoPopover');
+        // Reset to source info
+        showColumnInfoPopover(
+            schemaBuilderState.connectMode.table,
+            schemaBuilderState.connectMode.column,
+            parseInt(popover.style.left),
+            parseInt(popover.style.top),
+            true
+        );
+    }
+}
+
+// Get column type from state
+function getColumnType(table, column) {
+    const tableData = schemaBuilderState.tables[table];
+    if (!tableData || !tableData.columns) return 'unknown';
+
+    const col = tableData.columns.find(c => c.name === column);
+    return col ? col.type : 'unknown';
+}
+
+// Get sample values for a column
+function getColumnSamples(table, column) {
+    const tableData = schemaBuilderState.tables[table];
+    if (!tableData || !tableData.sample_preview) return [];
+
+    return tableData.sample_preview
+        .map(row => row[column])
+        .filter(v => v !== null && v !== undefined)
+        .slice(0, 5);
+}
+
+// Format sample values for display
+function formatSampleValues(samples) {
+    if (!samples || samples.length === 0) return 'No samples';
+
+    return samples.map(v => {
+        if (typeof v === 'string') {
+            // Truncate long strings
+            return v.length > 15 ? `"${v.substring(0, 15)}..."` : `"${v}"`;
+        }
+        return String(v);
+    }).join(', ');
+}
+
+// Check if two types are compatible for joining
+function checkTypeCompatibility(type1, type2) {
+    if (!type1 || !type2 || type1 === 'unknown' || type2 === 'unknown') {
+        return true; // Allow if unknown
+    }
+
+    // Normalize types
+    const normalize = (t) => {
+        t = t.toUpperCase();
+        if (t.includes('INT')) return 'INTEGER';
+        if (t.includes('FLOAT') || t.includes('NUMERIC') || t.includes('DECIMAL')) return 'NUMERIC';
+        if (t.includes('STRING') || t.includes('VARCHAR') || t.includes('CHAR')) return 'STRING';
+        if (t.includes('DATE') || t.includes('TIME')) return 'DATETIME';
+        if (t.includes('BOOL')) return 'BOOLEAN';
+        return t;
+    };
+
+    const n1 = normalize(type1);
+    const n2 = normalize(type2);
+
+    // Same normalized type
+    if (n1 === n2) return true;
+
+    // Numeric types can join together
+    if ((n1 === 'INTEGER' || n1 === 'NUMERIC') && (n2 === 'INTEGER' || n2 === 'NUMERIC')) {
+        return true;
+    }
+
+    return false;
+}
+
+// Show column info popover
+function showColumnInfoPopover(table, column, x, y, isSource, sourceType = null, isCompatible = true) {
+    const popover = document.getElementById('columnInfoPopover');
+    const type = getColumnType(table, column);
+    const samples = getColumnSamples(table, column);
+
+    // Update popover content
+    document.getElementById('columnInfoName').textContent = column;
+    document.getElementById('columnInfoTypeValue').textContent = type || 'unknown';
+    document.getElementById('columnInfoSamplesValue').textContent = formatSampleValues(samples);
+
+    // Show/hide hint, warning, compatible messages
+    const hintEl = document.getElementById('columnInfoHint');
+    const warningEl = document.getElementById('columnInfoWarning');
+    const compatibleEl = document.getElementById('columnInfoCompatible');
+
+    if (isSource) {
+        hintEl.classList.remove('hidden');
+        warningEl.classList.add('hidden');
+        compatibleEl.classList.add('hidden');
+    } else {
+        hintEl.classList.add('hidden');
+
+        if (!isCompatible) {
+            warningEl.classList.remove('hidden');
+            compatibleEl.classList.add('hidden');
+            document.getElementById('columnInfoWarningText').textContent =
+                `Type mismatch: ${sourceType} ↔ ${type}`;
+        } else {
+            warningEl.classList.add('hidden');
+            compatibleEl.classList.remove('hidden');
+        }
+    }
+
+    // Position popover
+    popover.style.left = `${x + 10}px`;
+    popover.style.top = `${y + 10}px`;
+
+    // Ensure popover stays within viewport
+    const rect = popover.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+
+    if (rect.right > viewportWidth) {
+        popover.style.left = `${x - rect.width - 10}px`;
+    }
+    if (rect.bottom > viewportHeight) {
+        popover.style.top = `${y - rect.height - 10}px`;
+    }
+
+    popover.classList.remove('hidden');
+}
+
+// Hide column info popover
+function hideColumnInfoPopover() {
+    document.getElementById('columnInfoPopover').classList.add('hidden');
+}
+
+// Handle Escape key to cancel connect mode
+function handleConnectModeKeydown(event) {
+    if (event.key === 'Escape') {
+        exitConnectMode();
+    }
+}
+
+// Handle click outside to cancel connect mode
+function handleConnectModeOutsideClick(event) {
+    // Check if click is on a connection element
+    const isConnectionElement = event.target.closest('.schema-connection-dot, .schema-connection-plus');
+    const isColumnItem = event.target.closest('.schema-column-item');
+
+    if (!isConnectionElement && !isColumnItem) {
+        exitConnectMode();
+    }
+}
+
 function exitConnectMode() {
     schemaBuilderState.connectMode = null;
-    document.querySelectorAll('.schema-connection-dot').forEach(dot => {
-        dot.classList.remove('connect-mode', 'connect-mode-target');
+
+    // Remove highlight classes
+    document.querySelectorAll('.schema-connection-dot, .schema-connection-plus').forEach(el => {
+        el.classList.remove('connect-mode', 'connect-mode-target');
     });
+
+    // Remove hover listeners
+    document.querySelectorAll('.schema-column-item').forEach(item => {
+        item.removeEventListener('mouseenter', handleTargetColumnHover);
+        item.removeEventListener('mouseleave', handleTargetColumnLeave);
+    });
+
+    // Remove event listeners
+    document.removeEventListener('keydown', handleConnectModeKeydown);
+    document.removeEventListener('click', handleConnectModeOutsideClick, true);
+
+    // Hide popover
+    hideColumnInfoPopover();
 }
 
 function createJoin(leftTable, leftCol, rightTable, rightCol) {
@@ -1768,6 +2037,84 @@ const JOIN_COLORS = [
     '#ca8a04', // Yellow
 ];
 
+// Get anchor point for a column, handling scrolled/clipped columns
+function getColumnAnchorPoint(table, column, side, areaRect, cardsArea) {
+    const shortName = table.replace('raw_data.', '');
+    const card = document.getElementById(`card_${shortName}`);
+    const columnEl = document.querySelector(`.schema-column-item[data-table="${table}"][data-column="${column}"]`);
+
+    if (!card || !columnEl) {
+        return null;
+    }
+
+    const cardRect = card.getBoundingClientRect();
+    const columnRect = columnEl.getBoundingClientRect();
+
+    // Find the scrollable column list container
+    const columnList = card.querySelector('.schema-column-list');
+    const listRect = columnList ? columnList.getBoundingClientRect() : cardRect;
+
+    // Determine X coordinate based on which side to connect
+    const x = side === 'right' ? cardRect.right : cardRect.left;
+
+    // Calculate column's vertical center
+    const columnCenterY = columnRect.top + columnRect.height / 2;
+
+    // Check if column is visible within the scrollable area
+    let y = columnCenterY;
+    let isClipped = false;
+    let clipDirection = null;
+
+    if (columnList) {
+        if (columnRect.bottom < listRect.top) {
+            // Column is scrolled above visible area
+            y = listRect.top + 10;
+            isClipped = true;
+            clipDirection = 'up';
+        } else if (columnRect.top > listRect.bottom) {
+            // Column is scrolled below visible area
+            y = listRect.bottom - 10;
+            isClipped = true;
+            clipDirection = 'down';
+        } else if (columnRect.top < listRect.top) {
+            // Column is partially clipped at top
+            y = listRect.top + 5;
+            isClipped = true;
+            clipDirection = 'up';
+        } else if (columnRect.bottom > listRect.bottom) {
+            // Column is partially clipped at bottom
+            y = listRect.bottom - 5;
+            isClipped = true;
+            clipDirection = 'down';
+        }
+    }
+
+    // Convert to SVG coordinates (relative to cards area)
+    return {
+        x: x - areaRect.left + cardsArea.scrollLeft,
+        y: y - areaRect.top + cardsArea.scrollTop,
+        isClipped,
+        clipDirection
+    };
+}
+
+// Determine which side each card should connect from based on relative positions
+function getConnectionSides(leftCard, rightCard) {
+    const leftRect = leftCard.getBoundingClientRect();
+    const rightRect = rightCard.getBoundingClientRect();
+
+    const leftCenterX = leftRect.left + leftRect.width / 2;
+    const rightCenterX = rightRect.left + rightRect.width / 2;
+
+    if (leftCenterX < rightCenterX) {
+        // Left card is actually on the left
+        return { leftSide: 'right', rightSide: 'left' };
+    } else {
+        // Left card is actually on the right
+        return { leftSide: 'left', rightSide: 'right' };
+    }
+}
+
 function updateConnectionLines() {
     const svg = document.getElementById('connectionsSvg');
     const cardsArea = document.getElementById('schemaCardsArea');
@@ -1775,54 +2122,122 @@ function updateConnectionLines() {
     // Clear existing lines
     svg.innerHTML = '';
 
+    // Reset all connection dot colors first
+    document.querySelectorAll('.schema-connection-dot.connected').forEach(dot => {
+        dot.style.borderColor = '';
+        dot.style.backgroundColor = '';
+    });
+
     // Draw lines for each join
     schemaBuilderState.joins.forEach((join, index) => {
-        // Get the card elements (not just the dots)
+        // Get the card elements
         const leftCard = document.querySelector(`.schema-table-card[data-table="${join.leftTable}"]`);
         const rightCard = document.querySelector(`.schema-table-card[data-table="${join.rightTable}"]`);
 
         if (leftCard && rightCard) {
             const areaRect = cardsArea.getBoundingClientRect();
-            const leftCardRect = leftCard.getBoundingClientRect();
-            const rightCardRect = rightCard.getBoundingClientRect();
 
-            // Calculate the best connection points between the two cards
-            const connection = calculateBestConnectionPoints(leftCardRect, rightCardRect, areaRect, cardsArea);
+            // Determine which side each card should connect from
+            const sides = getConnectionSides(leftCard, rightCard);
+
+            // Get column-level anchor points
+            const leftAnchor = getColumnAnchorPoint(join.leftTable, join.leftCol, sides.leftSide, areaRect, cardsArea);
+            const rightAnchor = getColumnAnchorPoint(join.rightTable, join.rightCol, sides.rightSide, areaRect, cardsArea);
+
+            // If we couldn't find the columns, fall back to card-level connection
+            if (!leftAnchor || !rightAnchor) {
+                const leftCardRect = leftCard.getBoundingClientRect();
+                const rightCardRect = rightCard.getBoundingClientRect();
+                const connection = calculateBestConnectionPoints(leftCardRect, rightCardRect, areaRect, cardsArea);
+                drawConnectionLine(svg, connection.x1, connection.y1, connection.x2, connection.y2, index, areaRect, false, false, null, null);
+                return;
+            }
 
             // Get color for this join
             const color = JOIN_COLORS[index % JOIN_COLORS.length];
 
-            // Create a curved path for better visibility
-            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-            const d = createCurvedPath(connection.x1, connection.y1, connection.x2, connection.y2);
-            path.setAttribute('d', d);
-            path.setAttribute('class', 'join-line');
-            path.setAttribute('stroke', color);
-            path.setAttribute('fill', 'none');
-            path.style.pointerEvents = 'stroke';
-            path.onclick = (e) => {
-                e.stopPropagation();
-                showJoinPopover(index, e.clientX - areaRect.left, e.clientY - areaRect.top);
-            };
+            // Draw the connection line
+            drawConnectionLine(svg, leftAnchor.x, leftAnchor.y, rightAnchor.x, rightAnchor.y, index, areaRect,
+                leftAnchor.isClipped, rightAnchor.isClipped, leftAnchor.clipDirection, rightAnchor.clipDirection);
 
-            svg.appendChild(path);
+            // Color the connection dots
+            const leftDot = document.querySelector(`.schema-connection-dot[data-table="${join.leftTable}"][data-column="${join.leftCol}"]`);
+            const rightDot = document.querySelector(`.schema-connection-dot[data-table="${join.rightTable}"][data-column="${join.rightCol}"]`);
 
-            // Add small circles at connection points for visual clarity
-            const circle1 = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-            circle1.setAttribute('cx', connection.x1);
-            circle1.setAttribute('cy', connection.y1);
-            circle1.setAttribute('r', 4);
-            circle1.setAttribute('fill', color);
-            svg.appendChild(circle1);
-
-            const circle2 = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-            circle2.setAttribute('cx', connection.x2);
-            circle2.setAttribute('cy', connection.y2);
-            circle2.setAttribute('r', 4);
-            circle2.setAttribute('fill', color);
-            svg.appendChild(circle2);
+            if (leftDot) {
+                leftDot.style.borderColor = color;
+                leftDot.style.backgroundColor = color;
+            }
+            if (rightDot) {
+                rightDot.style.borderColor = color;
+                rightDot.style.backgroundColor = color;
+            }
         }
     });
+}
+
+// Draw a connection line with optional arrow indicators for clipped columns
+function drawConnectionLine(svg, x1, y1, x2, y2, index, areaRect, leftClipped, rightClipped, leftClipDir, rightClipDir) {
+    const color = JOIN_COLORS[index % JOIN_COLORS.length];
+    const cardsArea = document.getElementById('schemaCardsArea');
+
+    // Create a curved path for better visibility
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    const d = createCurvedPath(x1, y1, x2, y2);
+    path.setAttribute('d', d);
+    path.setAttribute('class', 'join-line');
+    path.setAttribute('stroke', color);
+    path.setAttribute('fill', 'none');
+    path.style.pointerEvents = 'stroke';
+    path.onclick = (e) => {
+        e.stopPropagation();
+        showJoinPopover(index, e.clientX - areaRect.left, e.clientY - areaRect.top);
+    };
+
+    svg.appendChild(path);
+
+    // Add circles or arrows at connection points
+    if (leftClipped && leftClipDir) {
+        drawClipArrow(svg, x1, y1, leftClipDir, color);
+    } else {
+        const circle1 = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        circle1.setAttribute('cx', x1);
+        circle1.setAttribute('cy', y1);
+        circle1.setAttribute('r', 4);
+        circle1.setAttribute('fill', color);
+        svg.appendChild(circle1);
+    }
+
+    if (rightClipped && rightClipDir) {
+        drawClipArrow(svg, x2, y2, rightClipDir, color);
+    } else {
+        const circle2 = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        circle2.setAttribute('cx', x2);
+        circle2.setAttribute('cy', y2);
+        circle2.setAttribute('r', 4);
+        circle2.setAttribute('fill', color);
+        svg.appendChild(circle2);
+    }
+}
+
+// Draw an arrow indicator for clipped columns
+function drawClipArrow(svg, x, y, direction, color) {
+    const arrow = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    const size = 6;
+
+    let d;
+    if (direction === 'up') {
+        // Upward arrow (▲)
+        d = `M ${x} ${y - size} L ${x - size} ${y + size} L ${x + size} ${y + size} Z`;
+    } else {
+        // Downward arrow (▼)
+        d = `M ${x} ${y + size} L ${x - size} ${y - size} L ${x + size} ${y - size} Z`;
+    }
+
+    arrow.setAttribute('d', d);
+    arrow.setAttribute('fill', color);
+    arrow.setAttribute('class', 'clip-arrow');
+    svg.appendChild(arrow);
 }
 
 function calculateBestConnectionPoints(rect1, rect2, areaRect, cardsArea) {
@@ -1913,38 +2328,6 @@ function createCurvedPath(x1, y1, x2, y2) {
     }
 
     return `M ${x1} ${y1} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${x2} ${y2}`;
-}
-
-function autoDetectJoins() {
-    if (!schemaBuilderState.sessionId) return;
-
-    fetch(`/api/models/${modelId}/datasets/detect-joins-preview/`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': csrftoken
-        },
-        body: JSON.stringify({ session_id: schemaBuilderState.sessionId })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.status === 'success' && data.suggested_joins) {
-            // Clear existing joins and apply suggestions
-            schemaBuilderState.joins = data.suggested_joins.map(j => ({
-                leftTable: j.left_table,
-                leftCol: j.left_col,
-                rightTable: j.right_table,
-                rightCol: j.right_col,
-                type: 'left'
-            }));
-
-            renderTableCards();
-            refreshPreview();
-        }
-    })
-    .catch(error => {
-        console.error('Error auto-detecting joins:', error);
-    });
 }
 
 function debouncedRefreshPreview() {

@@ -555,7 +555,9 @@
     overflow: auto;
     border: 1px solid #e5e7eb;
     border-radius: 8px;
-    background-color: #fafafa;
+    background-color: #ffffff;
+    background-image: radial-gradient(circle, #d1d5db 1px, transparent 1px);
+    background-size: 20px 20px;
     padding: 16px;
 }
 
@@ -584,6 +586,10 @@
 }
 
 .schema-connections-svg circle {
+    pointer-events: none;
+}
+
+.schema-connections-svg .clip-arrow {
     pointer-events: none;
 }
 
@@ -739,7 +745,19 @@
     background-color: #dbeafe;
 }
 
+.schema-connection-dot.recommended {
+    /* Recommended join key - empty dot, always visible */
+    border-color: #9ca3af;
+    background-color: #ffffff;
+}
+
+.schema-connection-dot.recommended:hover {
+    border-color: #2563eb;
+    background-color: #dbeafe;
+}
+
 .schema-connection-dot.connected {
+    /* Color is set dynamically via inline styles to match connection line color */
     border-color: #2563eb;
     background-color: #2563eb;
 }
@@ -748,9 +766,58 @@
     animation: pulse-dot 1s ease-in-out infinite;
 }
 
-.schema-connection-dot.connect-mode-target {
+.schema-connection-dot.connect-mode-target,
+.schema-connection-plus.connect-mode-target {
     border-color: #10b981;
     background-color: #d1fae5;
+}
+
+/* Plus button for non-recommended columns - visible on hover */
+.schema-connection-plus {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 1px dashed #d1d5db;
+    background-color: transparent;
+    margin-left: 6px;
+    cursor: pointer;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 500;
+    color: #9ca3af;
+    opacity: 0;
+    transition: all 0.15s ease;
+}
+
+.schema-column-item:hover .schema-connection-plus {
+    opacity: 1;
+}
+
+.schema-connection-plus:hover {
+    border-color: #2563eb;
+    border-style: solid;
+    background-color: #dbeafe;
+    color: #2563eb;
+}
+
+.schema-connection-plus.connect-mode {
+    opacity: 1;
+    border-color: #2563eb;
+    border-style: solid;
+    background-color: #2563eb;
+    color: #ffffff;
+    animation: pulse-dot 1s ease-in-out infinite;
+}
+
+.schema-connection-plus.connect-mode-target {
+    opacity: 1;
+    border-color: #10b981;
+    border-style: solid;
+    background-color: #d1fae5;
+    color: #10b981;
 }
 
 @keyframes pulse-dot {
@@ -939,7 +1006,93 @@
     text-align: center;
 }
 
-/* Auto-detect button in header */
+/* Column info popover (for connect mode) */
+.column-info-popover {
+    position: fixed;
+    background-color: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    padding: 10px 12px;
+    z-index: 200;
+    min-width: 180px;
+    max-width: 260px;
+    pointer-events: none;
+}
+
+.column-info-popover.hidden {
+    display: none;
+}
+
+.column-info-name {
+    font-size: 12px;
+    font-weight: 600;
+    color: #111827;
+    margin-bottom: 8px;
+    word-break: break-all;
+}
+
+.column-info-type,
+.column-info-samples {
+    display: flex;
+    font-size: 11px;
+    margin-bottom: 4px;
+    line-height: 1.4;
+}
+
+.column-info-label {
+    color: #6b7280;
+    margin-right: 6px;
+    flex-shrink: 0;
+}
+
+.column-info-value {
+    color: #374151;
+    word-break: break-all;
+}
+
+.column-info-hint {
+    font-size: 10px;
+    color: #9ca3af;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid #e5e7eb;
+    font-style: italic;
+}
+
+.column-info-warning {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: #dc2626;
+    margin-top: 8px;
+    padding: 6px 8px;
+    background-color: #fef2f2;
+    border-radius: 4px;
+}
+
+.column-info-warning.hidden {
+    display: none;
+}
+
+.column-info-compatible {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: #059669;
+    margin-top: 8px;
+    padding: 6px 8px;
+    background-color: #ecfdf5;
+    border-radius: 4px;
+}
+
+.column-info-compatible.hidden {
+    display: none;
+}
+
+/* Schema builder header */
 .schema-builder-header {
     display: flex;
     align-items: center;
@@ -949,27 +1102,4 @@
 
 .schema-builder-header h4 {
     margin: 0;
-}
-
-.schema-auto-detect-btn {
-    font-size: 11px;
-    padding: 4px 10px;
-    border: 1px solid #d1d5db;
-    border-radius: 6px;
-    background-color: #ffffff;
-    color: #374151;
-    cursor: pointer;
-    transition: all 0.15s ease;
-    display: flex;
-    align-items: center;
-    gap: 4px;
-}
-
-.schema-auto-detect-btn:hover {
-    background-color: #f9fafb;
-    border-color: #9ca3af;
-}
-
-.schema-auto-detect-btn i {
-    color: #6b7280;
 }

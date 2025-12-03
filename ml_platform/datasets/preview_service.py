@@ -545,13 +545,6 @@ class DatasetPreviewService:
             except Exception as e:
                 warnings.append(f"Join failed for {join_table}: {str(e)}")
 
-        # Check for row explosion (indicates bad join)
-        if len(result_df) > original_row_count * 2:
-            warnings.append(
-                f"Row count increased from {original_row_count} to {len(result_df)}. "
-                "This may indicate a many-to-many join."
-            )
-
         # Select columns based on configuration
         final_columns = []
         for table_name, columns in selected_columns.items():

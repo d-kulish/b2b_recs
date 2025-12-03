@@ -14,7 +14,7 @@ import json
 import logging
 
 from ml_platform.models import ModelEndpoint, Dataset, DatasetVersion
-from .services import BigQueryService
+from .services import BigQueryService, ProductRevenueAnalysisService
 
 logger = logging.getLogger(__name__)
 
@@ -1609,6 +1609,111 @@ def cleanup_preview_session(request, model_id):
 
     except Exception as e:
         logger.error(f"Error cleaning up session: {e}")
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e),
+        }, status=500)
+
+
+# =============================================================================
+# PRODUCT REVENUE ANALYSIS APIs
+# =============================================================================
+
+@login_required
+@require_http_methods(["POST"])
+def analyze_product_revenue(request, model_id):
+    """
+    Analyze product revenue distribution for filtering.
+
+    This endpoint calculates the cumulative revenue distribution across products,
+    enabling users to filter their dataset to include only top-performing products
+    (e.g., products generating 80% of total revenue).
+
+    Request body:
+        {
+            "primary_table": "raw_data.transactions",
+            "product_column": "transactions.product_id",
+            "revenue_column": "transactions.amount",
+            "timestamp_column": "transactions.transaction_date",  // optional
+            "rolling_days": 30  // optional, requires timestamp_column
+        }
+
+    Returns:
+        {
+            "status": "success",
+            "total_products": 48234,
+            "total_revenue": 15500000.0,
+            "date_range": {"start": "2024-11-03", "end": "2024-12-03"},
+            "distribution": [
+                {"percent_products": 1, "cumulative_revenue_percent": 15.2},
+                {"percent_products": 5, "cumulative_revenue_percent": 42.1},
+                ...
+            ],
+            "thresholds": {
+                "70": {"products": 2891, "percent": 6.0},
+                "80": {"products": 4521, "percent": 9.4},
+                "90": {"products": 8234, "percent": 17.1},
+                "95": {"products": 15234, "percent": 31.6}
+            }
+        }
+    """
+    try:
+        model = get_object_or_404(ModelEndpoint, id=model_id)
+        data = json.loads(request.body)
+
+        # Validate required fields
+        primary_table = data.get('primary_table')
+        product_column = data.get('product_column')
+        revenue_column = data.get('revenue_column')
+
+        if not primary_table:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'primary_table is required',
+            }, status=400)
+
+        if not product_column:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'product_column is required',
+            }, status=400)
+
+        if not revenue_column:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'revenue_column is required',
+            }, status=400)
+
+        # Optional fields
+        timestamp_column = data.get('timestamp_column')
+        rolling_days = data.get('rolling_days')
+
+        # Validate rolling_days requires timestamp_column
+        if rolling_days and not timestamp_column:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'timestamp_column is required when rolling_days is specified',
+            }, status=400)
+
+        # Run the analysis
+        analysis_service = ProductRevenueAnalysisService(model)
+        result = analysis_service.analyze_distribution(
+            primary_table=primary_table,
+            product_column=product_column,
+            revenue_column=revenue_column,
+            timestamp_column=timestamp_column,
+            rolling_days=rolling_days
+        )
+
+        return JsonResponse(result)
+
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'status': 'error',
+            'message': 'Invalid JSON in request body',
+        }, status=400)
+    except Exception as e:
+        logger.error(f"Error analyzing product revenue: {e}")
         return JsonResponse({
             'status': 'error',
             'message': str(e),

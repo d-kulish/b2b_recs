@@ -1022,3 +1022,451 @@ class BigQueryService:
                 'valid': False,
                 'error': str(e),
             }
+
+
+# =============================================================================
+# PRODUCT REVENUE ANALYSIS SERVICE
+# =============================================================================
+
+class ProductRevenueAnalysisService:
+    """
+    Service for analyzing product revenue distribution.
+
+    Used to filter datasets to include only top-performing products
+    based on cumulative revenue threshold (e.g., top 80% of revenue).
+    """
+
+    def __init__(self, model_endpoint):
+        """
+        Initialize the service with a model endpoint.
+
+        Args:
+            model_endpoint: ModelEndpoint instance for BigQuery connection
+        """
+        self.bq_service = BigQueryService(model_endpoint)
+
+    def analyze_distribution(
+        self,
+        primary_table: str,
+        product_column: str,
+        revenue_column: str,
+        timestamp_column: str = None,
+        rolling_days: int = None,
+        selected_columns: dict = None,
+        join_config: dict = None,
+        secondary_tables: list = None
+    ) -> dict:
+        """
+        Analyze product revenue distribution.
+
+        Args:
+            primary_table: Primary table name (e.g., "raw_data.transactions")
+            product_column: Column name for product ID (e.g., "transactions.product_id")
+            revenue_column: Column name for revenue (e.g., "transactions.amount")
+            timestamp_column: Column name for timestamp filtering (optional)
+            rolling_days: Number of days for rolling window (optional)
+            selected_columns: Dict of table -> columns selected in schema builder
+            join_config: Join configuration for secondary tables
+            secondary_tables: List of secondary tables
+
+        Returns:
+            Dict with distribution analysis:
+            {
+                "total_products": 48234,
+                "total_revenue": 15500000.0,
+                "date_range": {"start": "2024-11-03", "end": "2024-12-03"},
+                "distribution": [
+                    {"percent_products": 1, "cumulative_revenue_percent": 15.2},
+                    {"percent_products": 5, "cumulative_revenue_percent": 42.1},
+                    ...
+                ],
+                "thresholds": {
+                    "70": {"products": 2891, "percent": 6.0},
+                    "80": {"products": 4521, "percent": 9.4},
+                    "90": {"products": 8234, "percent": 17.1},
+                    "95": {"products": 15234, "percent": 31.6}
+                }
+            }
+        """
+        try:
+            # Extract just the column name from "table.column" format
+            product_col = self._extract_column_name(product_column)
+            revenue_col = self._extract_column_name(revenue_column)
+            timestamp_col = self._extract_column_name(timestamp_column) if timestamp_column else None
+
+            # Get the table alias for the primary table
+            primary_alias = primary_table.split('.')[-1]
+
+            # Build the base query with optional date filter
+            date_filter_clause = ""
+            date_range_query = ""
+
+            if timestamp_col and rolling_days:
+                date_filter_clause = f"""
+                WHERE `{primary_alias}`.`{timestamp_col}` >= DATE_SUB(
+                    (SELECT MAX(`{timestamp_col}`) FROM `{self.bq_service._get_full_table_ref(primary_table)}`),
+                    INTERVAL {rolling_days} DAY
+                )
+                """
+                date_range_query = f"""
+                SELECT
+                    MIN(`{timestamp_col}`) as min_date,
+                    MAX(`{timestamp_col}`) as max_date
+                FROM `{self.bq_service._get_full_table_ref(primary_table)}`
+                WHERE `{timestamp_col}` >= DATE_SUB(
+                    (SELECT MAX(`{timestamp_col}`) FROM `{self.bq_service._get_full_table_ref(primary_table)}`),
+                    INTERVAL {rolling_days} DAY
+                )
+                """
+
+            # Main analysis query
+            analysis_query = f"""
+            WITH filtered_data AS (
+                SELECT
+                    `{primary_alias}`.`{product_col}` as product_id,
+                    `{primary_alias}`.`{revenue_col}` as revenue
+                FROM `{self.bq_service._get_full_table_ref(primary_table)}` AS `{primary_alias}`
+                {date_filter_clause}
+            ),
+            product_revenues AS (
+                SELECT
+                    product_id,
+                    SUM(revenue) as total_revenue
+                FROM filtered_data
+                WHERE product_id IS NOT NULL AND revenue IS NOT NULL
+                GROUP BY product_id
+            ),
+            ranked_products AS (
+                SELECT
+                    product_id,
+                    total_revenue,
+                    ROW_NUMBER() OVER (ORDER BY total_revenue DESC) as rank,
+                    COUNT(*) OVER () as total_products,
+                    SUM(total_revenue) OVER () as grand_total,
+                    SUM(total_revenue) OVER (ORDER BY total_revenue DESC) as cumulative_revenue
+                FROM product_revenues
+            ),
+            distribution_points AS (
+                SELECT
+                    rank,
+                    total_products,
+                    grand_total,
+                    cumulative_revenue,
+                    ROUND(rank * 100.0 / total_products, 2) as percent_products,
+                    ROUND(cumulative_revenue * 100.0 / grand_total, 2) as cumulative_revenue_percent
+                FROM ranked_products
+            ),
+            -- Pre-compute LAG values in a separate CTE (can't nest window functions in aggregates)
+            distribution_with_prev AS (
+                SELECT
+                    rank,
+                    total_products,
+                    grand_total,
+                    cumulative_revenue_percent,
+                    LAG(cumulative_revenue_percent, 1, 0) OVER (ORDER BY rank) as prev_cumulative_percent
+                FROM distribution_points
+            ),
+            -- Find first rank that crosses each threshold
+            threshold_crossings AS (
+                SELECT
+                    MIN(CASE WHEN cumulative_revenue_percent >= 70 AND prev_cumulative_percent < 70 THEN rank END) as threshold_70_count,
+                    MIN(CASE WHEN cumulative_revenue_percent >= 80 AND prev_cumulative_percent < 80 THEN rank END) as threshold_80_count,
+                    MIN(CASE WHEN cumulative_revenue_percent >= 90 AND prev_cumulative_percent < 90 THEN rank END) as threshold_90_count,
+                    MIN(CASE WHEN cumulative_revenue_percent >= 95 AND prev_cumulative_percent < 95 THEN rank END) as threshold_95_count
+                FROM distribution_with_prev
+            )
+            SELECT
+                -- Summary stats
+                (SELECT MAX(total_products) FROM distribution_points) as total_products,
+                (SELECT MAX(grand_total) FROM distribution_points) as total_revenue,
+                -- Threshold calculations (products needed to reach X% revenue)
+                threshold_70_count,
+                threshold_80_count,
+                threshold_90_count,
+                threshold_95_count
+            FROM threshold_crossings
+            """
+
+            logger.debug(f"Running product revenue analysis query...")
+            logger.debug(f"Analysis query:\n{analysis_query}")
+            result = self.bq_service.client.query(analysis_query).result()
+            rows = list(result)
+
+            if not rows:
+                return {
+                    'status': 'error',
+                    'message': 'Query returned no results',
+                    'total_products': 0,
+                    'total_revenue': 0,
+                }
+
+            row = rows[0]
+            logger.debug(f"Query result row: total_products={row.total_products}, total_revenue={row.total_revenue}")
+
+            total_products = row.total_products or 0
+            total_revenue = float(row.total_revenue or 0)
+
+            if total_products == 0:
+                return {
+                    'status': 'error',
+                    'message': 'No products found with valid revenue data',
+                    'total_products': 0,
+                    'total_revenue': 0,
+                }
+
+            # Calculate thresholds
+            thresholds = {}
+            for threshold in [70, 80, 90, 95]:
+                count = getattr(row, f'threshold_{threshold}_count', None)
+                if count:
+                    thresholds[str(threshold)] = {
+                        'products': int(count),
+                        'percent': round(count * 100.0 / total_products, 2)
+                    }
+
+            # Get distribution curve points (sampled for chart)
+            distribution = self._get_distribution_curve(
+                primary_table, primary_alias, product_col, revenue_col,
+                timestamp_col, rolling_days
+            )
+
+            # Get date range if timestamp filter was applied
+            date_range = None
+            if date_range_query:
+                try:
+                    date_result = self.bq_service.client.query(date_range_query).result()
+                    date_row = list(date_result)[0]
+                    if date_row.min_date and date_row.max_date:
+                        date_range = {
+                            'start': date_row.min_date.isoformat() if hasattr(date_row.min_date, 'isoformat') else str(date_row.min_date),
+                            'end': date_row.max_date.isoformat() if hasattr(date_row.max_date, 'isoformat') else str(date_row.max_date),
+                        }
+                except Exception as e:
+                    logger.warning(f"Could not get date range: {e}")
+
+            return {
+                'status': 'success',
+                'total_products': total_products,
+                'total_revenue': total_revenue,
+                'date_range': date_range,
+                'distribution': distribution,
+                'thresholds': thresholds,
+            }
+
+        except Exception as e:
+            import traceback
+            logger.error(f"Error analyzing product revenue distribution: {e}")
+            logger.error(f"Full traceback:\n{traceback.format_exc()}")
+            raise BigQueryServiceError(f"Failed to analyze product revenue: {e}")
+
+    def _get_distribution_curve(
+        self,
+        primary_table: str,
+        primary_alias: str,
+        product_col: str,
+        revenue_col: str,
+        timestamp_col: str = None,
+        rolling_days: int = None,
+        num_points: int = 50
+    ) -> list:
+        """
+        Get sampled distribution curve points for charting.
+
+        Returns list of {percent_products, cumulative_revenue_percent} points.
+        """
+        try:
+            date_filter_clause = ""
+            if timestamp_col and rolling_days:
+                date_filter_clause = f"""
+                WHERE `{primary_alias}`.`{timestamp_col}` >= DATE_SUB(
+                    (SELECT MAX(`{timestamp_col}`) FROM `{self.bq_service._get_full_table_ref(primary_table)}`),
+                    INTERVAL {rolling_days} DAY
+                )
+                """
+
+            # Query to get distribution curve with sampling
+            curve_query = f"""
+            WITH filtered_data AS (
+                SELECT
+                    `{primary_alias}`.`{product_col}` as product_id,
+                    `{primary_alias}`.`{revenue_col}` as revenue
+                FROM `{self.bq_service._get_full_table_ref(primary_table)}` AS `{primary_alias}`
+                {date_filter_clause}
+            ),
+            product_revenues AS (
+                SELECT
+                    product_id,
+                    SUM(revenue) as total_revenue
+                FROM filtered_data
+                WHERE product_id IS NOT NULL AND revenue IS NOT NULL
+                GROUP BY product_id
+            ),
+            ranked_products AS (
+                SELECT
+                    product_id,
+                    total_revenue,
+                    ROW_NUMBER() OVER (ORDER BY total_revenue DESC) as rank,
+                    COUNT(*) OVER () as total_products,
+                    SUM(total_revenue) OVER () as grand_total,
+                    SUM(total_revenue) OVER (ORDER BY total_revenue DESC) as cumulative_revenue
+                FROM product_revenues
+            ),
+            distribution_points AS (
+                SELECT
+                    rank,
+                    total_products,
+                    ROUND(rank * 100.0 / total_products, 2) as percent_products,
+                    ROUND(cumulative_revenue * 100.0 / grand_total, 2) as cumulative_revenue_percent
+                FROM ranked_products
+            ),
+            -- Sample points: get every Nth row plus key thresholds
+            sampled AS (
+                SELECT *
+                FROM distribution_points
+                WHERE
+                    rank = 1  -- First point
+                    OR rank = total_products  -- Last point
+                    OR MOD(rank, GREATEST(1, CAST(total_products / {num_points} AS INT64))) = 0  -- Evenly sampled
+                    OR cumulative_revenue_percent BETWEEN 79 AND 81  -- Around 80% threshold
+                    OR cumulative_revenue_percent BETWEEN 89 AND 91  -- Around 90% threshold
+                    OR cumulative_revenue_percent BETWEEN 69 AND 71  -- Around 70% threshold
+            )
+            SELECT percent_products, cumulative_revenue_percent
+            FROM sampled
+            ORDER BY rank
+            LIMIT 100
+            """
+
+            result = self.bq_service.client.query(curve_query).result()
+
+            distribution = []
+            for row in result:
+                distribution.append({
+                    'percent_products': float(row.percent_products),
+                    'cumulative_revenue_percent': float(row.cumulative_revenue_percent)
+                })
+
+            return distribution
+
+        except Exception as e:
+            logger.warning(f"Error getting distribution curve: {e}")
+            # Return minimal distribution if query fails
+            return [
+                {'percent_products': 0, 'cumulative_revenue_percent': 0},
+                {'percent_products': 100, 'cumulative_revenue_percent': 100}
+            ]
+
+    def get_products_for_threshold(
+        self,
+        primary_table: str,
+        product_column: str,
+        revenue_column: str,
+        threshold_percent: int,
+        timestamp_column: str = None,
+        rolling_days: int = None,
+        limit: int = None
+    ) -> dict:
+        """
+        Get the list of products that meet the cumulative revenue threshold.
+
+        Args:
+            primary_table: Primary table name
+            product_column: Product ID column
+            revenue_column: Revenue column
+            threshold_percent: Cumulative revenue threshold (e.g., 80 for 80%)
+            timestamp_column: Optional timestamp column for date filtering
+            rolling_days: Optional rolling window in days
+            limit: Optional limit on number of products returned
+
+        Returns:
+            Dict with product count and optionally the product list
+        """
+        try:
+            product_col = self._extract_column_name(product_column)
+            revenue_col = self._extract_column_name(revenue_column)
+            timestamp_col = self._extract_column_name(timestamp_column) if timestamp_column else None
+            primary_alias = primary_table.split('.')[-1]
+
+            date_filter_clause = ""
+            if timestamp_col and rolling_days:
+                date_filter_clause = f"""
+                WHERE `{primary_alias}`.`{timestamp_col}` >= DATE_SUB(
+                    (SELECT MAX(`{timestamp_col}`) FROM `{self.bq_service._get_full_table_ref(primary_table)}`),
+                    INTERVAL {rolling_days} DAY
+                )
+                """
+
+            threshold_decimal = threshold_percent / 100.0
+            limit_clause = f"LIMIT {limit}" if limit else ""
+
+            query = f"""
+            WITH filtered_data AS (
+                SELECT
+                    `{primary_alias}`.`{product_col}` as product_id,
+                    `{primary_alias}`.`{revenue_col}` as revenue
+                FROM `{self.bq_service._get_full_table_ref(primary_table)}` AS `{primary_alias}`
+                {date_filter_clause}
+            ),
+            product_revenues AS (
+                SELECT
+                    product_id,
+                    SUM(revenue) as total_revenue
+                FROM filtered_data
+                WHERE product_id IS NOT NULL AND revenue IS NOT NULL
+                GROUP BY product_id
+            ),
+            ranked_products AS (
+                SELECT
+                    product_id,
+                    total_revenue,
+                    SUM(total_revenue) OVER () as grand_total,
+                    SUM(total_revenue) OVER (ORDER BY total_revenue DESC) as cumulative_revenue
+                FROM product_revenues
+            )
+            SELECT
+                product_id,
+                total_revenue,
+                ROUND(cumulative_revenue * 100.0 / grand_total, 2) as cumulative_percent
+            FROM ranked_products
+            WHERE cumulative_revenue <= grand_total * {threshold_decimal}
+               OR cumulative_revenue - total_revenue < grand_total * {threshold_decimal}
+            ORDER BY total_revenue DESC
+            {limit_clause}
+            """
+
+            result = self.bq_service.client.query(query).result()
+
+            products = []
+            for row in result:
+                products.append({
+                    'product_id': str(row.product_id),
+                    'total_revenue': float(row.total_revenue),
+                    'cumulative_percent': float(row.cumulative_percent)
+                })
+
+            return {
+                'status': 'success',
+                'threshold_percent': threshold_percent,
+                'product_count': len(products),
+                'products': products if limit else None,  # Only return list if limited
+            }
+
+        except Exception as e:
+            logger.error(f"Error getting products for threshold: {e}")
+            raise BigQueryServiceError(f"Failed to get products: {e}")
+
+    def _extract_column_name(self, column_ref: str) -> str:
+        """
+        Extract just the column name from a 'table.column' reference.
+
+        Args:
+            column_ref: Column reference like "transactions.product_id"
+
+        Returns:
+            Just the column name like "product_id"
+        """
+        if not column_ref:
+            return None
+        if '.' in column_ref:
+            return column_ref.split('.')[-1]
+        return column_ref

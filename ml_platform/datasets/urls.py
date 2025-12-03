@@ -51,4 +51,7 @@ urlpatterns = [
     path('api/models/<int:model_id>/datasets/preview/', api.generate_preview, name='api_datasets_generate_preview'),
     path('api/models/<int:model_id>/datasets/detect-joins-preview/', api.detect_joins_preview, name='api_datasets_detect_joins_preview'),
     path('api/models/<int:model_id>/datasets/cleanup-session/', api.cleanup_preview_session, name='api_datasets_cleanup_session'),
+
+    # === PRODUCT REVENUE ANALYSIS ===
+    path('api/models/<int:model_id>/datasets/analyze-product-revenue/', api.analyze_product_revenue, name='api_datasets_analyze_product_revenue'),
 ]

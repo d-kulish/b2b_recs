@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides detailed specifications for implementing the **Datasets** domain in the ML Platform. The Datasets domain defines WHAT data goes into model training.
 
-**Last Updated**: 2025-12-03
+**Last Updated**: 2025-12-03 (v2 - D3.js integration)
 
 ---
 
@@ -12,7 +12,7 @@ This document provides detailed specifications for implementing the **Datasets**
 ### Purpose
 The Datasets domain allows users to:
 1. Select source tables from BigQuery (populated by ETL)
-2. Map columns to ML concepts (user_id, product_id, timestamp, etc.)
+2. Connect tables and select columns using the visual Schema Builder
 3. Define data filters (date range, revenue threshold, customer filters)
 4. Configure train/eval split strategy
 
@@ -58,7 +58,7 @@ A Dataset definition (JSON stored in Django) that is used by:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│ Create Dataset - Step 1 of 4: Basic Info                                    │
+│ Create Dataset - Step 1 of 5: Basic Info                                    │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                              │
 │ Dataset Name *                                                               │
@@ -79,7 +79,7 @@ A Dataset definition (JSON stored in Django) that is used by:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│ Create Dataset - Step 2 of 4: Source Tables                                 │
+│ Create Dataset - Step 2 of 5: Source Tables                                 │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                              │
 │ Transactions Table * (required)                                              │
@@ -220,43 +220,85 @@ The Schema Builder provides a visual, drag-and-drop interface for connecting tab
 └─────────────────────────────┘
 ```
 
-#### Step 4: Filters & Split
+#### Step 4: Data Filters
+
+Step 4 contains three collapsible sub-chapters for filtering data:
+
+**Sub-chapter 1: Define History**
+- Select timestamp column from available columns
+- Set rolling window in days (default: 30 days)
+- Preview shows actual date range based on latest data
+
+**Sub-chapter 2: Select Products**
+- Select Product ID column from available columns
+- Select Revenue column from available columns
+- Click "Analyze Revenue Distribution" to query BigQuery
+- **D3.js v7 chart** shows cumulative revenue distribution curve (Pareto chart)
+  - X-axis: % of products (ordered by revenue descending)
+  - Y-axis: % of cumulative revenue
+  - Threshold line shows selected cutoff point
+  - Shaded area indicates selected products
+- Set threshold (default: 80%) to filter products generating top X% of revenue
+- Shows analysis results: total products, selected products count & percentage, revenue coverage
+- Product list computed dynamically at training time (rules stored, not product lists)
+
+**Sub-chapter 3: Advanced Filters**
+- Minimum transactions per customer (optional)
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│ Create Dataset - Step 4 of 4: Filters & Split                               │
+│ Create Dataset - Step 4 of 5: Data Filters                                   │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│ ▼ Define History                                              [Last 30 days] │
+│ ├──────────────────────────────────────────────────────────────────────────┤ │
+│ │ Timestamp Column: [transactions.transaction_date ▼]                      │ │
+│ │ Rolling Window: [30] days from the latest available date                 │ │
+│ │ Preview: Data from 2024-11-03 to 2024-12-03                              │ │
+│ └──────────────────────────────────────────────────────────────────────────┘ │
+│                                                                              │
+│ ▶ Select Products                             [4,521 products at 80%]        │
+│ ├──────────────────────────────────────────────────────────────────────────┤ │
+│ │ Product ID Column: [transactions.product_id ▼]                           │ │
+│ │ Revenue Column: [transactions.amount ▼]                                  │ │
+│ │                    [🔄 Analyze Revenue Distribution]                     │ │
+│ │ ┌────────────────────────────────────────────────────────────────────┐   │ │
+│ │ │ Cumulative Revenue Distribution Chart (D3.js)                      │   │ │
+│ │ │ [Chart with threshold line at 80%]                                 │   │ │
+│ │ └────────────────────────────────────────────────────────────────────┘   │ │
+│ │ Revenue Threshold: Include products up to [80] % of cumulative revenue   │ │
+│ │ Analysis Results:                                                        │ │
+│ │   Total products: 48,234                                                 │ │
+│ │   Selected products: 4,521 (9.4%)                                        │ │
+│ │   Revenue coverage: 80% ($12.4M of $15.5M)                               │ │
+│ └──────────────────────────────────────────────────────────────────────────┘ │
+│                                                                              │
+│ ▶ Advanced Filters                                            [No filters]   │
+│ ├──────────────────────────────────────────────────────────────────────────┤ │
+│ │ ☐ Minimum [2] transactions per customer                                  │ │
+│ └──────────────────────────────────────────────────────────────────────────┘ │
+│                                                                              │
+│                                              [← Back]  [Cancel]  [Next →]   │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Validation Requirements for Step 4:**
+- Timestamp column must be selected
+- Product ID column must be selected
+- Revenue column must be selected
+- Product analysis must be run successfully (click "Analyze Revenue Distribution" button)
+- If analysis fails or returns 0 products, user cannot proceed to next step
+- Save button only appears on final step (Step 5)
+
+#### Step 5: Train/Eval Split
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Create Dataset - Step 5 of 5: Train/Eval Split                               │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                              │
 │ ═══════════════════════════════════════════════════════════════════════════ │
-│ DATE RANGE                                                                   │
-│ ═══════════════════════════════════════════════════════════════════════════ │
-│                                                                              │
-│ ● Rolling window (auto-updates with ETL)                                    │
-│   Last [6 ▼] months                                                         │
-│                                                                              │
-│ ○ Fixed date range                                                          │
-│   From: [2024-07-01] To: [2024-12-31]                                       │
-│                                                                              │
-│ ═══════════════════════════════════════════════════════════════════════════ │
-│ PRODUCT FILTERS                                                              │
-│ ═══════════════════════════════════════════════════════════════════════════ │
-│                                                                              │
-│ ☑ Include only top products by revenue                                      │
-│   Top [80 ▼] % by cumulative revenue                                        │
-│   ℹ️ This filters out long-tail products with minimal sales                 │
-│                                                                              │
-│ ☐ Filter by specific categories                                             │
-│                                                                              │
-│ ═══════════════════════════════════════════════════════════════════════════ │
-│ CUSTOMER FILTERS                                                             │
-│ ═══════════════════════════════════════════════════════════════════════════ │
-│                                                                              │
-│ ☑ Minimum transactions per customer                                         │
-│   At least [2 ▼] transactions                                               │
-│   ℹ️ Customers with 1 transaction don't provide enough signal               │
-│                                                                              │
-│ ═══════════════════════════════════════════════════════════════════════════ │
-│ TRAIN/EVAL SPLIT                                                             │
+│ SPLIT STRATEGY                                                               │
 │ ═══════════════════════════════════════════════════════════════════════════ │
 │                                                                              │
 │ ● Time-based split (recommended for temporal data)                          │
@@ -280,6 +322,64 @@ The Schema Builder provides a visual, drag-and-drop interface for connecting tab
 │                                     [← Back]  [Cancel]  [Create Dataset]    │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
+
+---
+
+## Technical Implementation Details
+
+### Product Revenue Analysis (Step 4)
+
+The "Analyze Revenue Distribution" button triggers a BigQuery analysis via the `ProductRevenueAnalysisService`:
+
+**API Endpoint:** `POST /api/models/{model_id}/datasets/analyze-product-revenue/`
+
+**Request:**
+```json
+{
+  "primary_table": "raw_data.transactions",
+  "product_column": "transactions.product_id",
+  "revenue_column": "transactions.total_amount",
+  "timestamp_column": "transactions.transaction_date",
+  "rolling_days": 30
+}
+```
+
+**Response:**
+```json
+{
+  "status": "success",
+  "total_products": 48234,
+  "total_revenue": 15500000.0,
+  "date_range": {"start": "2024-11-03", "end": "2024-12-03"},
+  "distribution": [
+    {"percent_products": 1.0, "cumulative_revenue_percent": 15.2},
+    {"percent_products": 5.0, "cumulative_revenue_percent": 42.1},
+    {"percent_products": 10.0, "cumulative_revenue_percent": 58.7},
+    ...
+  ],
+  "thresholds": {
+    "70": {"products": 2891, "percent": 6.0},
+    "80": {"products": 4521, "percent": 9.4},
+    "90": {"products": 8234, "percent": 17.1},
+    "95": {"products": 15234, "percent": 31.6}
+  }
+}
+```
+
+**Key Implementation Notes:**
+1. The service uses CTEs to compute cumulative revenue distribution
+2. Window functions (`LAG`) must be computed in separate CTEs before aggregation (BigQuery limitation)
+3. Distribution curve is sampled to ~50 points for efficient charting
+4. Pre-computed thresholds for 70%, 80%, 90%, 95% are returned for quick UI updates
+5. Date filtering applies before revenue analysis if timestamp_column and rolling_days are provided
+
+### D3.js Chart Integration
+
+The cumulative revenue chart uses D3.js v7 loaded from CDN:
+- `<script src="https://d3js.org/d3.v7.min.js"></script>`
+- Chart renders in SVG with responsive width
+- Includes threshold line, shaded area, and axis labels
+- Updates dynamically when threshold slider changes
 
 ---
 
@@ -312,20 +412,6 @@ class Dataset(models.Model):
     transactions_table = models.CharField(max_length=255)  # e.g., "raw_data.transactions"
     products_table = models.CharField(max_length=255, blank=True)
     customers_table = models.CharField(max_length=255, blank=True)
-
-    # Column mappings (JSON)
-    column_mapping = models.JSONField(default=dict)
-    # Example:
-    # {
-    #   "user_id": "customer_code",
-    #   "product_id": "article_id",
-    #   "timestamp": "transaction_date",
-    #   "revenue": "net_amount",
-    #   "city": "city",
-    #   "product_name": "article_name",
-    #   "category": "category",
-    #   "subcategory": "subcategory"
-    # }
 
     # Filters (JSON)
     filters = models.JSONField(default=dict)
@@ -410,50 +496,6 @@ class DatasetVersion(models.Model):
     class Meta:
         unique_together = ['dataset', 'version_number']
         ordering = ['-version_number']
-```
-
-### JSON Schema: column_mapping
-
-```json
-{
-  "$schema": "http://json-schema.org/draft-07/schema#",
-  "type": "object",
-  "required": ["user_id", "product_id", "timestamp"],
-  "properties": {
-    "user_id": {
-      "type": "string",
-      "description": "Column name for user/customer identifier"
-    },
-    "product_id": {
-      "type": "string",
-      "description": "Column name for product identifier"
-    },
-    "timestamp": {
-      "type": "string",
-      "description": "Column name for transaction timestamp"
-    },
-    "revenue": {
-      "type": "string",
-      "description": "Column name for transaction amount/revenue"
-    },
-    "city": {
-      "type": "string",
-      "description": "Column name for location/city"
-    },
-    "product_name": {
-      "type": "string",
-      "description": "Column name for product name/title"
-    },
-    "category": {
-      "type": "string",
-      "description": "Column name for product category"
-    },
-    "subcategory": {
-      "type": "string",
-      "description": "Column name for product subcategory"
-    }
-  }
-}
 ```
 
 ### JSON Schema: filters
@@ -674,17 +716,6 @@ class SmartDefaultsService:
     based on data analysis.
     """
 
-    def suggest_column_mappings(self, table_schema: Dict) -> Dict:
-        """
-        Suggest column mappings based on column names and types.
-        Uses heuristics like:
-        - 'customer', 'user', 'client' -> user_id
-        - 'product', 'item', 'article' -> product_id
-        - 'date', 'time', 'timestamp' -> timestamp
-        - 'amount', 'price', 'revenue' -> revenue
-        """
-        pass
-
     def suggest_filters(self, column_stats: Dict) -> Dict:
         """
         Suggest filter settings based on data distribution.
@@ -829,10 +860,6 @@ SELECT * FROM enriched_transactions
 class TestDatasetModel:
     def test_create_dataset(self):
         """Test basic dataset creation."""
-        pass
-
-    def test_column_mapping_validation(self):
-        """Test that required columns are validated."""
         pass
 
     def test_filters_json_schema(self):

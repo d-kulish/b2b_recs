@@ -252,143 +252,186 @@
                 </div>
             </div>
 
-            <!-- Step 4: ML Column Mapping -->
+            <!-- Step 4: Filters -->
             <div id="step4" class="wizard-step">
-                <h4 class="wizard-section-title">ML Column Mapping</h4>
-                <p class="wizard-section-subtitle">Map your columns to ML concepts for the recommendation model.</p>
+                <h4 class="wizard-section-title">Data Filters</h4>
+                <p class="wizard-section-subtitle">Configure filters to select the data for your dataset.</p>
 
-                <!-- ML Column Suggestions -->
-                <div id="mlSuggestions" class="wizard-info-box success hidden">
-                    <i class="fas fa-lightbulb"></i>
-                    <div id="mlSuggestionsText">
-                        <!-- Will be populated with suggestions -->
+                <!-- Sub-chapter 1: Define History -->
+                <div class="filter-subchapter" id="historySubchapter">
+                    <div class="subchapter-header" onclick="toggleSubchapter('history')">
+                        <div class="subchapter-header-left">
+                            <i id="historyChevron" class="fas fa-chevron-down subchapter-chevron"></i>
+                            <span class="subchapter-title">Define History</span>
+                        </div>
+                        <span id="historySummary" class="subchapter-summary">Last 30 days</span>
+                    </div>
+                    <div id="historyContent" class="subchapter-content">
+                        <div class="subchapter-body">
+                            <!-- Timestamp Column -->
+                            <div class="wizard-field-group">
+                                <label class="text-xs font-medium text-gray-600 mb-1 block">Timestamp Column</label>
+                                <select id="timestampColumn" class="form-select w-full text-sm" onchange="onTimestampColumnChange()">
+                                    <option value="">Select column...</option>
+                                </select>
+                                <p class="wizard-field-hint mt-1">
+                                    <i class="fas fa-info-circle mr-1"></i>
+                                    Column used to filter data by date
+                                </p>
+                            </div>
+
+                            <!-- Rolling Window -->
+                            <div class="wizard-field-group">
+                                <label class="text-xs font-medium text-gray-600 mb-1 block">Rolling Window</label>
+                                <div class="flex items-center gap-2">
+                                    <input type="number" id="rollingDays" value="30" min="1" max="365"
+                                           class="form-input w-24 text-sm" onchange="onRollingDaysChange()">
+                                    <span class="text-sm text-gray-600">days from the latest available date</span>
+                                </div>
+                            </div>
+
+                            <!-- Date Range Preview -->
+                            <div id="dateRangePreview" class="text-xs text-gray-500 mt-2 hidden">
+                                <i class="fas fa-calendar-alt mr-1"></i>
+                                <span id="dateRangePreviewText">Data range will be shown after analysis</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
-                <!-- ML Role Mapping -->
-                <div class="wizard-field-group">
-                    <label class="wizard-field-label">Required Columns</label>
-                    <div class="space-y-3">
-                        <div>
-                            <label class="text-xs font-medium text-gray-600 mb-1 block">User ID Column <span class="required">*</span></label>
-                            <select id="userIdColumn" class="form-select w-full text-sm" onchange="validateCurrentStep()">
-                                <option value="">Select column...</option>
-                            </select>
-                            <p class="wizard-field-hint mt-1">
-                                <i class="fas fa-user mr-1"></i>
-                                Column that uniquely identifies each customer/user.
-                            </p>
+                <!-- Sub-chapter 2: Select Products -->
+                <div class="filter-subchapter" id="productsSubchapter">
+                    <div class="subchapter-header" onclick="toggleSubchapter('products')">
+                        <div class="subchapter-header-left">
+                            <i id="productsChevron" class="fas fa-chevron-right subchapter-chevron"></i>
+                            <span class="subchapter-title">Select Products</span>
                         </div>
-                        <div>
-                            <label class="text-xs font-medium text-gray-600 mb-1 block">Product ID Column <span class="required">*</span></label>
-                            <select id="productIdColumn" class="form-select w-full text-sm" onchange="validateCurrentStep()">
-                                <option value="">Select column...</option>
-                            </select>
-                            <p class="wizard-field-hint mt-1">
-                                <i class="fas fa-box mr-1"></i>
-                                Column that uniquely identifies each product/item.
-                            </p>
+                        <span id="productsSummary" class="subchapter-summary">All products included</span>
+                    </div>
+                    <div id="productsContent" class="subchapter-content hidden">
+                        <div class="subchapter-body">
+                            <!-- Product ID Column -->
+                            <div class="wizard-field-group">
+                                <label class="text-xs font-medium text-gray-600 mb-1 block">Product ID Column</label>
+                                <select id="productIdColumn" class="form-select w-full text-sm" onchange="onProductColumnChange()">
+                                    <option value="">Select column...</option>
+                                </select>
+                            </div>
+
+                            <!-- Revenue Column -->
+                            <div class="wizard-field-group">
+                                <label class="text-xs font-medium text-gray-600 mb-1 block">Revenue Column</label>
+                                <select id="revenueColumn" class="form-select w-full text-sm" onchange="onRevenueColumnChange()">
+                                    <option value="">Select column...</option>
+                                </select>
+                            </div>
+
+                            <!-- Analyze Button -->
+                            <div class="wizard-field-group">
+                                <button type="button" id="analyzeProductsBtn" onclick="analyzeProductRevenue()"
+                                        class="btn btn-secondary w-full" disabled>
+                                    <i class="fas fa-sync-alt mr-2"></i>
+                                    Analyze Revenue Distribution
+                                </button>
+                            </div>
+
+                            <!-- Analysis Results (hidden until analyzed) -->
+                            <div id="productAnalysisResults" class="hidden">
+                                <!-- Revenue Distribution Chart -->
+                                <div class="wizard-field-group">
+                                    <label class="text-xs font-medium text-gray-600 mb-2 block">Cumulative Revenue Distribution</label>
+                                    <div id="revenueChartContainer" class="revenue-chart-container">
+                                        <svg id="revenueDistributionChart"></svg>
+                                    </div>
+                                </div>
+
+                                <!-- Threshold Input -->
+                                <div class="wizard-field-group">
+                                    <label class="text-xs font-medium text-gray-600 mb-1 block">Revenue Threshold</label>
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-sm text-gray-600">Include products up to</span>
+                                        <input type="number" id="revenueThreshold" value="80" min="1" max="100"
+                                               class="form-input w-20 text-sm" onchange="onThresholdChange()">
+                                        <span class="text-sm text-gray-600">% of cumulative revenue</span>
+                                    </div>
+                                </div>
+
+                                <!-- Analysis Summary -->
+                                <div id="productAnalysisSummary" class="analysis-summary-box">
+                                    <div class="analysis-summary-header">
+                                        <i class="fas fa-chart-pie mr-2"></i>
+                                        Analysis Results
+                                    </div>
+                                    <div class="analysis-summary-content">
+                                        <div class="analysis-stat">
+                                            <span class="stat-label">Total products:</span>
+                                            <span id="totalProductsCount" class="stat-value">-</span>
+                                        </div>
+                                        <div class="analysis-stat">
+                                            <span class="stat-label">Selected products:</span>
+                                            <span id="selectedProductsCount" class="stat-value">-</span>
+                                            <span id="selectedProductsPercent" class="stat-percent"></span>
+                                        </div>
+                                        <div class="analysis-stat">
+                                            <span class="stat-label">Revenue coverage:</span>
+                                            <span id="revenueCoverage" class="stat-value">-</span>
+                                            <span id="revenueCoverageAmount" class="stat-amount"></span>
+                                        </div>
+                                    </div>
+                                    <div class="analysis-summary-footer">
+                                        <i class="fas fa-info-circle mr-1"></i>
+                                        Product list computed dynamically at training time
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Analysis Error -->
+                            <div id="productAnalysisError" class="hidden">
+                                <div class="wizard-info-box error">
+                                    <i class="fas fa-exclamation-circle"></i>
+                                    <span id="productAnalysisErrorText">Analysis failed</span>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <div class="wizard-field-group">
-                    <label class="wizard-field-label">Optional Columns</label>
-                    <div class="space-y-3">
-                        <div>
-                            <label class="text-xs font-medium text-gray-600 mb-1 block">Revenue Column <span class="optional">(optional)</span></label>
-                            <select id="revenueColumn" class="form-select w-full text-sm" onchange="validateCurrentStep()">
-                                <option value="">Select column...</option>
-                            </select>
-                            <p class="wizard-field-hint mt-1">
-                                <i class="fas fa-dollar-sign mr-1"></i>
-                                Column containing transaction value/amount. Used for weighted recommendations.
+                <!-- Sub-chapter 3: Advanced Filters (existing functionality) -->
+                <div class="filter-subchapter" id="advancedSubchapter">
+                    <div class="subchapter-header" onclick="toggleSubchapter('advanced')">
+                        <div class="subchapter-header-left">
+                            <i id="advancedChevron" class="fas fa-chevron-right subchapter-chevron"></i>
+                            <span class="subchapter-title">Advanced Filters</span>
+                        </div>
+                        <span id="advancedSummary" class="subchapter-summary">No filters</span>
+                    </div>
+                    <div id="advancedContent" class="subchapter-content hidden">
+                        <div class="subchapter-body">
+                            <!-- Min Transactions Filter -->
+                            <div class="flex items-center gap-3 mb-3">
+                                <input type="checkbox" id="enableMinTransactions" onchange="toggleMinTransactionsInput()">
+                                <label class="text-sm text-gray-700">Minimum</label>
+                                <input type="number" id="minTransactions" value="2" min="1"
+                                       class="form-input w-20 text-sm" disabled>
+                                <span class="text-sm text-gray-700">transactions per customer</span>
+                            </div>
+                            <p class="wizard-field-hint">
+                                <i class="fas fa-info-circle mr-1"></i>
+                                Customers with very few transactions don't provide enough signal for recommendations
                             </p>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Step 5: Filters & Split -->
+            <!-- Step 5: Train/Eval Split -->
             <div id="step5" class="wizard-step">
-                <h4 class="wizard-section-title">Filters & Train/Eval Split</h4>
-                <p class="wizard-section-subtitle">Configure data filters and how to split data for training.</p>
-
-                <!-- Date Range Filter -->
-                <div class="wizard-field-group">
-                    <label class="wizard-field-label">Date Range Filter</label>
-                    <div class="space-y-2">
-                        <label class="wizard-selection-card">
-                            <input type="radio" name="dateRangeType" value="rolling" checked onchange="onDateRangeTypeChange()">
-                            <div class="card-content">
-                                <div class="card-title">Rolling Window</div>
-                                <div class="card-description">Last N months of data</div>
-                            </div>
-                        </label>
-                        <label class="wizard-selection-card">
-                            <input type="radio" name="dateRangeType" value="fixed" onchange="onDateRangeTypeChange()">
-                            <div class="card-content">
-                                <div class="card-title">Fixed Date Range</div>
-                                <div class="card-description">Specific start and end dates</div>
-                            </div>
-                        </label>
-                    </div>
-                </div>
-
-                <!-- Rolling Window Config -->
-                <div id="rollingConfig" class="wizard-field-group">
-                    <label class="text-xs font-medium text-gray-600 mb-1 block">Number of Months</label>
-                    <select id="rollingMonths" class="form-select w-full text-sm">
-                        <option value="3">Last 3 months</option>
-                        <option value="6" selected>Last 6 months</option>
-                        <option value="12">Last 12 months</option>
-                        <option value="24">Last 24 months</option>
-                    </select>
-                </div>
-
-                <!-- Fixed Date Config -->
-                <div id="fixedDateConfig" class="wizard-field-group hidden">
-                    <div class="grid grid-cols-2 gap-3">
-                        <div>
-                            <label class="text-xs font-medium text-gray-600 mb-1 block">Start Date</label>
-                            <input type="date" id="startDate" class="form-input w-full text-sm">
-                        </div>
-                        <div>
-                            <label class="text-xs font-medium text-gray-600 mb-1 block">End Date</label>
-                            <input type="date" id="endDate" class="form-input w-full text-sm">
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Advanced Filters (collapsed by default) -->
-                <div class="wizard-field-group">
-                    <button type="button" onclick="toggleAdvancedFilters()" class="text-sm text-blue-600 hover:text-blue-800 flex items-center">
-                        <i id="advancedFiltersIcon" class="fas fa-chevron-right mr-2 transition-transform"></i>
-                        Advanced Filters
-                    </button>
-                    <div id="advancedFilters" class="hidden mt-3 space-y-3">
-                        <!-- Top Products Filter -->
-                        <div class="flex items-center gap-3">
-                            <input type="checkbox" id="enableTopProducts" onchange="toggleTopProductsInput()">
-                            <label class="text-sm text-gray-700">Only include top</label>
-                            <input type="number" id="topProductsPercent" value="80" min="1" max="100"
-                                   class="form-input w-20 text-sm" disabled>
-                            <span class="text-sm text-gray-700">% products by revenue</span>
-                        </div>
-                        <!-- Min Transactions Filter -->
-                        <div class="flex items-center gap-3">
-                            <input type="checkbox" id="enableMinTransactions" onchange="toggleMinTransactionsInput()">
-                            <label class="text-sm text-gray-700">Minimum</label>
-                            <input type="number" id="minTransactions" value="2" min="1"
-                                   class="form-input w-20 text-sm" disabled>
-                            <span class="text-sm text-gray-700">transactions per customer</span>
-                        </div>
-                    </div>
-                </div>
+                <h4 class="wizard-section-title">Train/Eval Split</h4>
+                <p class="wizard-section-subtitle">Configure how to split data for model training and evaluation.</p>
 
                 <!-- Train/Eval Split -->
                 <div class="wizard-field-group">
-                    <label class="wizard-field-label">Train/Eval Split Strategy</label>
+                    <label class="wizard-field-label">Split Strategy</label>
                     <div class="space-y-2">
                         <label class="wizard-selection-card">
                             <input type="radio" name="splitStrategy" value="time_based" checked onchange="onSplitStrategyChange()">
@@ -432,16 +475,12 @@
         <!-- Modal Footer -->
         <div class="modal-footer-wizard">
             <div class="footer-left">
-                <button onclick="prevStep()" class="btn btn-secondary hidden" id="prevButton">
-                    <i class="fas fa-chevron-left mr-1"></i> Previous
-                </button>
-                <button onclick="nextStep()" class="btn btn-primary" id="nextButton" disabled>
-                    Next <i class="fas fa-chevron-right ml-1"></i>
-                </button>
-                <button onclick="saveDataset()" class="btn btn-primary hidden" id="saveButton">Create Dataset</button>
+                <button onclick="prevStep()" class="btn btn-secondary btn-wizard hidden" id="prevButton">Previous</button>
+                <button onclick="nextStep()" class="btn btn-primary btn-wizard" id="nextButton" disabled>Next</button>
             </div>
             <div class="footer-right">
-                <button onclick="closeWizard()" class="btn btn-secondary">Cancel</button>
+                <button onclick="saveDataset()" class="btn btn-primary btn-wizard hidden" id="saveButton">Save</button>
+                <button onclick="closeWizard()" class="btn btn-secondary btn-wizard">Cancel</button>
             </div>
         </div>
     </div>
@@ -531,6 +570,8 @@
 {% endblock %}
 
 {% block extra_js %}
+<!-- D3.js for charts -->
+<script src="https://d3js.org/d3.v7.min.js"></script>
 <script>
 // ============================================================================
 // GLOBAL STATE
@@ -551,7 +592,6 @@ let wizardData = {
     secondaryTables: [],
     joinConfig: {},
     selectedColumns: {},
-    columnMapping: {},
     filters: {},
     splitConfig: {}
 };
@@ -758,14 +798,13 @@ function openWizard(datasetId = null) {
         secondaryTables: [],
         joinConfig: {},
         selectedColumns: {},
-        columnMapping: {},
         filters: {},
         splitConfig: {}
     };
 
     // Update UI
     document.getElementById('wizardTitle').textContent = wizardEditMode ? 'Edit Dataset' : 'Create Dataset';
-    document.getElementById('saveButton').textContent = wizardEditMode ? 'Save Changes' : 'Create Dataset';
+    document.getElementById('saveButton').textContent = 'Save';
 
     // Reset form fields
     document.getElementById('datasetName').value = '';
@@ -803,7 +842,6 @@ function resetWizard() {
         secondaryTables: [],
         joinConfig: {},
         selectedColumns: {},
-        columnMapping: {},
         filters: {},
         splitConfig: {}
     };
@@ -821,6 +859,46 @@ function resetWizard() {
 
     // Reset card positions
     cardPositions = {};
+
+    // Reset product analysis state
+    productAnalysisData = null;
+
+    // Reset filter UI elements
+    const timestampSelect = document.getElementById('timestampColumn');
+    if (timestampSelect) timestampSelect.selectedIndex = 0;
+
+    const productSelect = document.getElementById('productIdColumn');
+    if (productSelect) productSelect.selectedIndex = 0;
+
+    const revenueSelect = document.getElementById('revenueColumn');
+    if (revenueSelect) revenueSelect.selectedIndex = 0;
+
+    const rollingDaysInput = document.getElementById('rollingDays');
+    if (rollingDaysInput) rollingDaysInput.value = 30;
+
+    const thresholdInput = document.getElementById('revenueThreshold');
+    if (thresholdInput) thresholdInput.value = 80;
+
+    // Reset sub-chapter summaries
+    const historySummary = document.getElementById('historySummary');
+    if (historySummary) historySummary.textContent = 'Last 30 days';
+
+    const productsSummary = document.getElementById('productsSummary');
+    if (productsSummary) productsSummary.textContent = 'All products included';
+
+    const advancedSummary = document.getElementById('advancedSummary');
+    if (advancedSummary) advancedSummary.textContent = 'No filters';
+
+    // Hide analysis results
+    const analysisResults = document.getElementById('productAnalysisResults');
+    if (analysisResults) analysisResults.classList.add('hidden');
+
+    const analysisError = document.getElementById('productAnalysisError');
+    if (analysisError) analysisError.classList.add('hidden');
+
+    // Clear chart
+    const svg = document.getElementById('revenueDistributionChart');
+    if (svg) svg.innerHTML = '';
 }
 
 function showStep(step) {
@@ -895,13 +973,19 @@ function validateCurrentStep() {
             isValid = hasSelectedColumns;
             break;
         case 4:
-            // At least user_id and product_id should be mapped
-            const userId = document.getElementById('userIdColumn')?.value;
-            const productId = document.getElementById('productIdColumn')?.value;
-            isValid = userId && productId;
+            // Step 4 validation:
+            // - Timestamp column must be selected (Define History)
+            // - Product ID and Revenue columns must be selected (Select Products)
+            // - Product analysis must have been run successfully
+            const timestampCol = document.getElementById('timestampColumn')?.value;
+            const productCol = document.getElementById('productIdColumn')?.value;
+            const revenueCol = document.getElementById('revenueColumn')?.value;
+
+            // All required columns must be selected and analysis must be successful
+            isValid = timestampCol && productCol && revenueCol && productAnalysisData && productAnalysisData.status === 'success';
             break;
         case 5:
-            isValid = true; // Filters are optional
+            isValid = true; // Split config has defaults
             break;
     }
 
@@ -922,11 +1006,10 @@ function nextStep() {
         // Moving to step 3 - load schema builder with samples
         loadSchemaBuilder();
     } else if (currentWizardStep === 3) {
-        // Moving to step 4 - collect columns and joins, populate ML column dropdowns
+        // Moving to step 4 - collect columns and joins from schema builder
         collectSchemaBuilderData();
-        populateMlColumnDropdowns();
-    } else if (currentWizardStep === 4) {
-        // Moving to step 5 - nothing special needed
+        // Populate filter dropdowns with selected columns
+        populateFilterColumnDropdowns();
     }
 
     showStep(currentWizardStep + 1);
@@ -951,56 +1034,51 @@ function collectStepData(step) {
             // Schema builder data is collected via collectSchemaBuilderData()
             break;
         case 4:
-            // Column mapping - extract just the column name from table.column format
-            const extractColumnName = (value) => {
-                if (!value) return null;
-                // Value is in format "table.column", extract just the column part
-                const parts = value.split('.');
-                return parts.length > 1 ? parts[parts.length - 1] : value;
-            };
-            wizardData.columnMapping = {
-                user_id: extractColumnName(document.getElementById('userIdColumn')?.value),
-                product_id: extractColumnName(document.getElementById('productIdColumn')?.value),
-                revenue: extractColumnName(document.getElementById('revenueColumn')?.value)
-            };
-            // Remove null values
-            Object.keys(wizardData.columnMapping).forEach(key => {
-                if (!wizardData.columnMapping[key]) delete wizardData.columnMapping[key];
-            });
-            break;
-        case 5:
-            // Date range filter
-            const dateRangeType = document.querySelector('input[name="dateRangeType"]:checked')?.value;
-            if (dateRangeType === 'rolling') {
-                wizardData.filters.date_range = {
-                    type: 'rolling',
-                    months: parseInt(document.getElementById('rollingMonths').value)
-                };
-            } else if (dateRangeType === 'fixed') {
-                wizardData.filters.date_range = {
-                    type: 'fixed',
-                    start: document.getElementById('startDate').value,
-                    end: document.getElementById('endDate').value
+            // Data Filters - New structure with sub-chapters
+
+            // History filter (rolling window)
+            const timestampCol = document.getElementById('timestampColumn')?.value;
+            const rollingDays = parseInt(document.getElementById('rollingDays')?.value) || 30;
+
+            if (timestampCol) {
+                wizardData.filters.history = {
+                    timestamp_column: timestampCol,
+                    rolling_days: rollingDays
                 };
             }
 
-            // Product filter
-            if (document.getElementById('enableTopProducts')?.checked) {
-                wizardData.filters.product_filter = {
-                    type: 'top_revenue_percent',
-                    value: parseInt(document.getElementById('topProductsPercent').value)
+            // Products filter
+            const productCol = document.getElementById('productIdColumn')?.value;
+            const revenueCol = document.getElementById('revenueColumn')?.value;
+            const threshold = parseInt(document.getElementById('revenueThreshold')?.value) || 80;
+
+            if (productCol && revenueCol && productAnalysisData) {
+                wizardData.filters.products = {
+                    product_column: productCol,
+                    revenue_column: revenueCol,
+                    threshold_type: 'cumulative_revenue',
+                    threshold_percent: threshold,
+                    cached_analysis: {
+                        analyzed_at: new Date().toISOString(),
+                        total_products: productAnalysisData.total_products,
+                        selected_products: productAnalysisData.thresholds?.[String(threshold)]?.products ||
+                            productAnalysisData.thresholds?.['80']?.products,
+                        total_revenue: productAnalysisData.total_revenue,
+                        selected_revenue: productAnalysisData.total_revenue * threshold / 100
+                    }
                 };
             }
 
-            // Customer filter
+            // Customer filter (advanced)
             if (document.getElementById('enableMinTransactions')?.checked) {
                 wizardData.filters.customer_filter = {
                     type: 'min_transactions',
                     value: parseInt(document.getElementById('minTransactions').value)
                 };
             }
-
-            // Split config
+            break;
+        case 5:
+            // Train/Eval Split config
             const splitStrategy = document.querySelector('input[name="splitStrategy"]:checked')?.value;
             if (splitStrategy === 'time_based') {
                 wizardData.splitConfig = {
@@ -2456,93 +2534,6 @@ function collectSchemaBuilderData() {
     });
 }
 
-function populateMlColumnDropdowns() {
-    const allColumns = [];
-
-    Object.entries(schemaBuilderState.selectedColumns).forEach(([table, cols]) => {
-        const shortTable = table.replace('raw_data.', '');
-        cols.forEach(col => {
-            allColumns.push({ table: shortTable, column: col, fullName: `${shortTable}.${col}` });
-        });
-    });
-
-    ['userIdColumn', 'productIdColumn', 'revenueColumn'].forEach(selectId => {
-        const select = document.getElementById(selectId);
-        if (!select) return;
-
-        const currentValue = select.value;
-        select.innerHTML = '<option value="">Select column...</option>' +
-            allColumns.map(c => `<option value="${c.fullName}" ${currentValue === c.fullName ? 'selected' : ''}>${c.fullName}</option>`).join('');
-    });
-
-    // Auto-suggest ML columns
-    suggestMLColumns();
-}
-
-function suggestMLColumns() {
-    const tables = [wizardData.primaryTable, ...wizardData.secondaryTables].filter(Boolean);
-
-    fetch(`/api/models/${modelId}/suggest-columns/`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': csrftoken
-        },
-        body: JSON.stringify({ tables: tables })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.status === 'success' && data.suggestions) {
-            const suggestionsBox = document.getElementById('mlSuggestions');
-            const suggestionsText = document.getElementById('mlSuggestionsText');
-
-            let suggestionsList = [];
-
-            const buildColumnValue = (suggestion) => {
-                if (!suggestion) return null;
-                const table = suggestion.table?.replace('raw_data.', '') || '';
-                const column = suggestion.suggested_column || '';
-                return table && column ? `${table}.${column}` : null;
-            };
-
-            if (data.suggestions.user_id) {
-                const value = buildColumnValue(data.suggestions.user_id);
-                if (value) {
-                    suggestionsList.push(`User ID: ${value}`);
-                    const select = document.getElementById('userIdColumn');
-                    if (select && !select.value) select.value = value;
-                }
-            }
-            if (data.suggestions.product_id) {
-                const value = buildColumnValue(data.suggestions.product_id);
-                if (value) {
-                    suggestionsList.push(`Product ID: ${value}`);
-                    const select = document.getElementById('productIdColumn');
-                    if (select && !select.value) select.value = value;
-                }
-            }
-            if (data.suggestions.revenue) {
-                const value = buildColumnValue(data.suggestions.revenue);
-                if (value) {
-                    suggestionsList.push(`Revenue: ${value}`);
-                    const select = document.getElementById('revenueColumn');
-                    if (select && !select.value) select.value = value;
-                }
-            }
-
-            if (suggestionsList.length > 0) {
-                suggestionsText.innerHTML = `<strong>Auto-detected columns:</strong> ${suggestionsList.join(' | ')}`;
-                suggestionsBox.classList.remove('hidden');
-            }
-
-            validateCurrentStep();
-        }
-    })
-    .catch(error => {
-        console.error('Error suggesting columns:', error);
-    });
-}
-
 function getTypeAbbrev(type) {
     const abbrevs = {
         'STRING': 'str',
@@ -2567,14 +2558,493 @@ document.addEventListener('click', function(e) {
 });
 
 // ============================================================================
-// STEP 5: FILTERS & SPLIT
+// STEP 4: FILTERS
 // ============================================================================
-function onDateRangeTypeChange() {
-    const type = document.querySelector('input[name="dateRangeType"]:checked')?.value;
-    document.getElementById('rollingConfig').classList.toggle('hidden', type !== 'rolling');
-    document.getElementById('fixedDateConfig').classList.toggle('hidden', type !== 'fixed');
+
+// State for product revenue analysis
+let productAnalysisData = null;
+let usedFilterColumns = new Set(); // Track columns used in filters to prevent reuse
+
+// --- Sub-chapter Toggle ---
+function toggleSubchapter(name) {
+    const content = document.getElementById(`${name}Content`);
+    const chevron = document.getElementById(`${name}Chevron`);
+
+    if (content.classList.contains('hidden')) {
+        content.classList.remove('hidden');
+        chevron.classList.remove('fa-chevron-right');
+        chevron.classList.add('fa-chevron-down');
+    } else {
+        content.classList.add('hidden');
+        chevron.classList.remove('fa-chevron-down');
+        chevron.classList.add('fa-chevron-right');
+    }
 }
 
+// --- Column Dropdown Population ---
+function populateFilterColumnDropdowns() {
+    // Get all selected columns from schema builder
+    const allColumns = [];
+    Object.entries(schemaBuilderState.selectedColumns).forEach(([table, cols]) => {
+        const shortTable = table.replace('raw_data.', '');
+        cols.forEach(col => {
+            allColumns.push({
+                table: shortTable,
+                column: col,
+                fullName: `${shortTable}.${col}`
+            });
+        });
+    });
+
+    // Populate timestamp column dropdown (only date/timestamp types)
+    const timestampSelect = document.getElementById('timestampColumn');
+    timestampSelect.innerHTML = '<option value="">Select column...</option>';
+    allColumns.forEach(c => {
+        // Note: In production, filter by column type (DATE, TIMESTAMP, DATETIME)
+        // For now, include all columns
+        const option = document.createElement('option');
+        option.value = c.fullName;
+        option.textContent = c.fullName;
+        timestampSelect.appendChild(option);
+    });
+
+    // Populate product ID and revenue column dropdowns
+    populateProductFilterDropdowns(allColumns);
+
+    // Reset analysis state when columns change
+    resetProductAnalysis();
+}
+
+function populateProductFilterDropdowns(allColumns = null) {
+    if (!allColumns) {
+        allColumns = [];
+        Object.entries(schemaBuilderState.selectedColumns).forEach(([table, cols]) => {
+            const shortTable = table.replace('raw_data.', '');
+            cols.forEach(col => {
+                allColumns.push({
+                    table: shortTable,
+                    column: col,
+                    fullName: `${shortTable}.${col}`
+                });
+            });
+        });
+    }
+
+    // Get the timestamp column that's already selected
+    const timestampCol = document.getElementById('timestampColumn')?.value;
+
+    // Filter out columns already used
+    const availableColumns = allColumns.filter(c => {
+        if (timestampCol && c.fullName === timestampCol) return false;
+        return true;
+    });
+
+    // Populate product ID dropdown
+    const productSelect = document.getElementById('productIdColumn');
+    const currentProduct = productSelect?.value;
+    productSelect.innerHTML = '<option value="">Select column...</option>';
+    availableColumns.forEach(c => {
+        const option = document.createElement('option');
+        option.value = c.fullName;
+        option.textContent = c.fullName;
+        if (c.fullName === currentProduct) option.selected = true;
+        productSelect.appendChild(option);
+    });
+
+    // Populate revenue column dropdown (exclude product column)
+    const revenueSelect = document.getElementById('revenueColumn');
+    const currentRevenue = revenueSelect?.value;
+    const productCol = productSelect?.value;
+
+    revenueSelect.innerHTML = '<option value="">Select column...</option>';
+    availableColumns.forEach(c => {
+        if (productCol && c.fullName === productCol) return;
+        const option = document.createElement('option');
+        option.value = c.fullName;
+        option.textContent = c.fullName;
+        if (c.fullName === currentRevenue) option.selected = true;
+        revenueSelect.appendChild(option);
+    });
+}
+
+// --- History Sub-chapter ---
+function onTimestampColumnChange() {
+    updateHistorySummary();
+    // Re-populate product dropdowns to exclude the timestamp column
+    populateProductFilterDropdowns();
+    validateCurrentStep();
+}
+
+function onRollingDaysChange() {
+    updateHistorySummary();
+    // Reset product analysis when date range changes
+    resetProductAnalysis();
+    validateCurrentStep();
+}
+
+function updateHistorySummary() {
+    const timestampCol = document.getElementById('timestampColumn')?.value;
+    const rollingDays = document.getElementById('rollingDays')?.value || 30;
+
+    let summary = 'Not configured';
+    if (timestampCol) {
+        summary = `Last ${rollingDays} days`;
+    }
+    document.getElementById('historySummary').textContent = summary;
+}
+
+// --- Products Sub-chapter ---
+function onProductColumnChange() {
+    // Update revenue dropdown to exclude selected product column
+    populateProductFilterDropdowns();
+    updateAnalyzeButtonState();
+    resetProductAnalysis();
+    validateCurrentStep();
+}
+
+function onRevenueColumnChange() {
+    updateAnalyzeButtonState();
+    resetProductAnalysis();
+    validateCurrentStep();
+}
+
+function updateAnalyzeButtonState() {
+    const productCol = document.getElementById('productIdColumn')?.value;
+    const revenueCol = document.getElementById('revenueColumn')?.value;
+    const analyzeBtn = document.getElementById('analyzeProductsBtn');
+
+    analyzeBtn.disabled = !productCol || !revenueCol;
+}
+
+function resetProductAnalysis() {
+    productAnalysisData = null;
+    document.getElementById('productAnalysisResults').classList.add('hidden');
+    document.getElementById('productAnalysisError').classList.add('hidden');
+    document.getElementById('productsSummary').textContent = 'All products included';
+
+    // Clear chart
+    const svg = document.getElementById('revenueDistributionChart');
+    if (svg) svg.innerHTML = '';
+
+    validateCurrentStep();
+}
+
+async function analyzeProductRevenue() {
+    const productCol = document.getElementById('productIdColumn')?.value;
+    const revenueCol = document.getElementById('revenueColumn')?.value;
+    const timestampCol = document.getElementById('timestampColumn')?.value;
+    const rollingDays = parseInt(document.getElementById('rollingDays')?.value) || 30;
+
+    if (!productCol || !revenueCol) {
+        showProductAnalysisError('Please select both Product ID and Revenue columns');
+        return;
+    }
+
+    const analyzeBtn = document.getElementById('analyzeProductsBtn');
+    analyzeBtn.disabled = true;
+    analyzeBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Analyzing...';
+
+    try {
+        const response = await fetch(`/api/models/${modelId}/datasets/analyze-product-revenue/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrftoken
+            },
+            body: JSON.stringify({
+                primary_table: wizardData.primaryTable,
+                product_column: productCol,
+                revenue_column: revenueCol,
+                timestamp_column: timestampCol || null,
+                rolling_days: timestampCol ? rollingDays : null
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.status === 'success') {
+            productAnalysisData = data;
+            displayProductAnalysisResults(data);
+            document.getElementById('productAnalysisResults').classList.remove('hidden');
+            document.getElementById('productAnalysisError').classList.add('hidden');
+
+            // Update date range preview if available
+            if (data.date_range) {
+                document.getElementById('dateRangePreview').classList.remove('hidden');
+                document.getElementById('dateRangePreviewText').textContent =
+                    `Data from ${data.date_range.start} to ${data.date_range.end}`;
+            }
+        } else {
+            showProductAnalysisError(data.message || 'Analysis failed');
+        }
+    } catch (error) {
+        console.error('Error analyzing product revenue:', error);
+        showProductAnalysisError('Failed to analyze product revenue');
+    } finally {
+        analyzeBtn.disabled = false;
+        analyzeBtn.innerHTML = '<i class="fas fa-sync-alt mr-2"></i>Analyze Revenue Distribution';
+        validateCurrentStep();
+    }
+}
+
+function displayProductAnalysisResults(data) {
+    // Update summary stats
+    document.getElementById('totalProductsCount').textContent = data.total_products.toLocaleString();
+
+    const threshold = parseInt(document.getElementById('revenueThreshold')?.value) || 80;
+    updateProductSelectionForThreshold(threshold, data);
+
+    // Draw the chart
+    drawRevenueDistributionChart(data.distribution, threshold);
+
+    // Update products summary
+    updateProductsSummary();
+}
+
+function updateProductSelectionForThreshold(threshold, data = null) {
+    if (!data) data = productAnalysisData;
+    if (!data || !data.thresholds) return;
+
+    // Find the closest threshold
+    const thresholdKeys = Object.keys(data.thresholds).map(Number).sort((a, b) => a - b);
+    let selectedThreshold = thresholdKeys.find(t => t >= threshold) || thresholdKeys[thresholdKeys.length - 1];
+
+    const thresholdData = data.thresholds[String(selectedThreshold)];
+    if (thresholdData) {
+        document.getElementById('selectedProductsCount').textContent = thresholdData.products.toLocaleString();
+        document.getElementById('selectedProductsPercent').textContent = `(${thresholdData.percent}%)`;
+    }
+
+    document.getElementById('revenueCoverage').textContent = `${threshold}%`;
+    document.getElementById('revenueCoverageAmount').textContent =
+        `($${(data.total_revenue * threshold / 100 / 1000000).toFixed(1)}M of $${(data.total_revenue / 1000000).toFixed(1)}M)`;
+
+    updateProductsSummary();
+}
+
+function onThresholdChange() {
+    const threshold = parseInt(document.getElementById('revenueThreshold')?.value) || 80;
+
+    if (productAnalysisData) {
+        updateProductSelectionForThreshold(threshold);
+        // Redraw chart with new threshold line
+        drawRevenueDistributionChart(productAnalysisData.distribution, threshold);
+    }
+
+    validateCurrentStep();
+}
+
+function updateProductsSummary() {
+    const threshold = parseInt(document.getElementById('revenueThreshold')?.value) || 80;
+
+    if (productAnalysisData && productAnalysisData.thresholds) {
+        const thresholdKeys = Object.keys(productAnalysisData.thresholds).map(Number).sort((a, b) => a - b);
+        let selectedThreshold = thresholdKeys.find(t => t >= threshold) || thresholdKeys[thresholdKeys.length - 1];
+        const thresholdData = productAnalysisData.thresholds[String(selectedThreshold)];
+
+        if (thresholdData) {
+            document.getElementById('productsSummary').textContent =
+                `${thresholdData.products.toLocaleString()} products at ${threshold}%`;
+        }
+    }
+}
+
+function showProductAnalysisError(message) {
+    document.getElementById('productAnalysisResults').classList.add('hidden');
+    document.getElementById('productAnalysisError').classList.remove('hidden');
+    document.getElementById('productAnalysisErrorText').textContent = message;
+    document.getElementById('productsSummary').textContent = 'Analysis failed';
+}
+
+// --- D3.js Revenue Distribution Chart ---
+function drawRevenueDistributionChart(distribution, threshold = 80) {
+    const container = document.getElementById('revenueChartContainer');
+    const svg = d3.select('#revenueDistributionChart');
+
+    // Clear previous chart
+    svg.selectAll('*').remove();
+
+    if (!distribution || distribution.length === 0) return;
+
+    // Dimensions
+    const margin = { top: 20, right: 30, bottom: 40, left: 50 };
+    const width = container.clientWidth - margin.left - margin.right;
+    const height = 200 - margin.top - margin.bottom;
+
+    svg.attr('width', width + margin.left + margin.right)
+       .attr('height', height + margin.top + margin.bottom);
+
+    const g = svg.append('g')
+        .attr('transform', `translate(${margin.left},${margin.top})`);
+
+    // Scales
+    const x = d3.scaleLinear()
+        .domain([0, 100])
+        .range([0, width]);
+
+    const y = d3.scaleLinear()
+        .domain([0, 100])
+        .range([height, 0]);
+
+    // Add grid lines
+    g.append('g')
+        .attr('class', 'grid')
+        .attr('transform', `translate(0,${height})`)
+        .call(d3.axisBottom(x).tickSize(-height).tickFormat('').ticks(10))
+        .style('stroke-dasharray', '3,3')
+        .style('stroke-opacity', 0.2);
+
+    g.append('g')
+        .attr('class', 'grid')
+        .call(d3.axisLeft(y).tickSize(-width).tickFormat('').ticks(5))
+        .style('stroke-dasharray', '3,3')
+        .style('stroke-opacity', 0.2);
+
+    // Line generator
+    const line = d3.line()
+        .x(d => x(d.percent_products))
+        .y(d => y(d.cumulative_revenue_percent))
+        .curve(d3.curveMonotoneX);
+
+    // Draw the distribution line
+    g.append('path')
+        .datum(distribution)
+        .attr('fill', 'none')
+        .attr('stroke', '#3b82f6')
+        .attr('stroke-width', 2)
+        .attr('d', line);
+
+    // Add area under the curve up to threshold
+    const thresholdX = findThresholdX(distribution, threshold);
+
+    const area = d3.area()
+        .x(d => x(d.percent_products))
+        .y0(height)
+        .y1(d => y(d.cumulative_revenue_percent))
+        .curve(d3.curveMonotoneX);
+
+    // Filter data up to threshold
+    const areaData = distribution.filter(d => d.cumulative_revenue_percent <= threshold);
+    if (areaData.length > 0) {
+        // Add the threshold point
+        areaData.push({ percent_products: thresholdX, cumulative_revenue_percent: threshold });
+
+        g.append('path')
+            .datum(areaData)
+            .attr('fill', '#3b82f6')
+            .attr('fill-opacity', 0.1)
+            .attr('d', area);
+    }
+
+    // Draw threshold line
+    g.append('line')
+        .attr('x1', 0)
+        .attr('x2', width)
+        .attr('y1', y(threshold))
+        .attr('y2', y(threshold))
+        .attr('stroke', '#ef4444')
+        .attr('stroke-width', 1.5)
+        .attr('stroke-dasharray', '5,5');
+
+    // Threshold label
+    g.append('text')
+        .attr('x', width - 5)
+        .attr('y', y(threshold) - 5)
+        .attr('text-anchor', 'end')
+        .attr('fill', '#ef4444')
+        .attr('font-size', '11px')
+        .text(`${threshold}% revenue`);
+
+    // Vertical line at threshold intersection
+    if (thresholdX > 0) {
+        g.append('line')
+            .attr('x1', x(thresholdX))
+            .attr('x2', x(thresholdX))
+            .attr('y1', y(threshold))
+            .attr('y2', height)
+            .attr('stroke', '#ef4444')
+            .attr('stroke-width', 1)
+            .attr('stroke-dasharray', '3,3');
+
+        // Products label
+        g.append('text')
+            .attr('x', x(thresholdX))
+            .attr('y', height + 30)
+            .attr('text-anchor', 'middle')
+            .attr('fill', '#ef4444')
+            .attr('font-size', '10px')
+            .text(`${thresholdX.toFixed(1)}% products`);
+    }
+
+    // X axis
+    g.append('g')
+        .attr('transform', `translate(0,${height})`)
+        .call(d3.axisBottom(x).tickFormat(d => `${d}%`))
+        .selectAll('text')
+        .style('font-size', '10px');
+
+    // Y axis
+    g.append('g')
+        .call(d3.axisLeft(y).tickFormat(d => `${d}%`))
+        .selectAll('text')
+        .style('font-size', '10px');
+
+    // Axis labels
+    g.append('text')
+        .attr('x', width / 2)
+        .attr('y', height + 35)
+        .attr('text-anchor', 'middle')
+        .attr('fill', '#666')
+        .attr('font-size', '11px')
+        .text('Products (ranked by revenue)');
+
+    g.append('text')
+        .attr('transform', 'rotate(-90)')
+        .attr('x', -height / 2)
+        .attr('y', -40)
+        .attr('text-anchor', 'middle')
+        .attr('fill', '#666')
+        .attr('font-size', '11px')
+        .text('Cumulative Revenue');
+}
+
+function findThresholdX(distribution, threshold) {
+    // Find the x value (percent_products) where cumulative_revenue reaches the threshold
+    for (let i = 0; i < distribution.length - 1; i++) {
+        if (distribution[i].cumulative_revenue_percent <= threshold &&
+            distribution[i + 1].cumulative_revenue_percent >= threshold) {
+            // Linear interpolation
+            const ratio = (threshold - distribution[i].cumulative_revenue_percent) /
+                (distribution[i + 1].cumulative_revenue_percent - distribution[i].cumulative_revenue_percent);
+            return distribution[i].percent_products +
+                ratio * (distribution[i + 1].percent_products - distribution[i].percent_products);
+        }
+    }
+    return distribution[distribution.length - 1]?.percent_products || 100;
+}
+
+// --- Advanced Filters Sub-chapter ---
+function toggleMinTransactionsInput() {
+    const checkbox = document.getElementById('enableMinTransactions');
+    document.getElementById('minTransactions').disabled = !checkbox.checked;
+    updateAdvancedSummary();
+    validateCurrentStep();
+}
+
+function updateAdvancedSummary() {
+    const minTxEnabled = document.getElementById('enableMinTransactions')?.checked;
+    const minTx = document.getElementById('minTransactions')?.value || 2;
+
+    let summary = 'No filters';
+    if (minTxEnabled) {
+        summary = `Min ${minTx} transactions`;
+    }
+    document.getElementById('advancedSummary').textContent = summary;
+}
+
+// ============================================================================
+// STEP 5: TRAIN/EVAL SPLIT
+// ============================================================================
 function onSplitStrategyChange() {
     const strategy = document.querySelector('input[name="splitStrategy"]:checked')?.value;
     document.getElementById('timeBasedConfig').classList.toggle('hidden', strategy !== 'time_based');
@@ -2584,23 +3054,6 @@ function onSplitStrategyChange() {
 function updateTrainPercentLabel() {
     const value = document.getElementById('trainPercent').value;
     document.getElementById('trainPercentLabel').textContent = `${value}% train`;
-}
-
-function toggleAdvancedFilters() {
-    const section = document.getElementById('advancedFilters');
-    const icon = document.getElementById('advancedFiltersIcon');
-    section.classList.toggle('hidden');
-    icon.style.transform = section.classList.contains('hidden') ? '' : 'rotate(90deg)';
-}
-
-function toggleTopProductsInput() {
-    const checkbox = document.getElementById('enableTopProducts');
-    document.getElementById('topProductsPercent').disabled = !checkbox.checked;
-}
-
-function toggleMinTransactionsInput() {
-    const checkbox = document.getElementById('enableMinTransactions');
-    document.getElementById('minTransactions').disabled = !checkbox.checked;
 }
 
 // ============================================================================
@@ -2618,7 +3071,6 @@ function saveDataset() {
         secondary_tables: wizardData.secondaryTables,
         join_config: wizardData.joinConfig,
         selected_columns: wizardData.selectedColumns,
-        column_mapping: wizardData.columnMapping,
         filters: wizardData.filters,
         split_config: wizardData.splitConfig
     };
@@ -2657,7 +3109,7 @@ function saveDataset() {
     })
     .finally(() => {
         document.getElementById('saveButton').disabled = false;
-        document.getElementById('saveButton').textContent = wizardEditMode ? 'Save Changes' : 'Create Dataset';
+        document.getElementById('saveButton').textContent = 'Save';
     });
 }
 
@@ -2817,7 +3269,6 @@ function loadDatasetForEdit(datasetId) {
             wizardData.secondaryTables = ds.secondary_tables || [];
             wizardData.joinConfig = ds.join_config || {};
             wizardData.selectedColumns = ds.selected_columns || {};
-            wizardData.columnMapping = ds.column_mapping || {};
             wizardData.filters = ds.filters || {};
             wizardData.splitConfig = ds.split_config || {};
 

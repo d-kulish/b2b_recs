@@ -14,7 +14,7 @@ import json
 import logging
 
 from ml_platform.models import ModelEndpoint, Dataset, DatasetVersion
-from .services import BigQueryService, ProductRevenueAnalysisService, DatasetStatsService
+from .services import BigQueryService, ProductRevenueAnalysisService, DatasetStatsService, ColumnAnalysisService
 
 logger = logging.getLogger(__name__)
 
@@ -1821,6 +1821,201 @@ def get_dataset_stats(request, model_id):
         }, status=400)
     except Exception as e:
         logger.error(f"Error getting dataset stats: {e}")
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e),
+        }, status=500)
+
+
+# =============================================================================
+# COLUMN ANALYSIS (for Product Filters)
+# =============================================================================
+
+@login_required
+@require_http_methods(["POST"])
+def analyze_columns_for_filters(request, model_id):
+    """
+    Analyze selected columns to provide metadata for product filtering.
+
+    Uses cached sample data from Step 3 (Schema Builder) to analyze columns
+    and return information needed to build filter UIs:
+    - STRING columns: unique values, counts, display mode (list vs autocomplete)
+    - NUMERIC columns: min, max, mean, null stats
+
+    Request body:
+        {
+            "session_id": "abc12345",  // From load_samples()
+            "selected_columns": {
+                "raw_data.transactions": ["category", "price", "amount"],
+                "raw_data.products": ["brand", "subcategory"]
+            }
+        }
+
+    Returns:
+        {
+            "status": "success",
+            "columns": {
+                "transactions.category": {
+                    "type": "STRING",
+                    "unique_count": 12,
+                    "display_mode": "list",
+                    "values": [
+                        {"value": "Electronics", "count": 45},
+                        {"value": "Clothing", "count": 32}
+                    ],
+                    "null_count": 5,
+                    "null_percent": 5.0,
+                    "total_rows": 100,
+                    "filterable": true,
+                    "filter_type": "category"
+                },
+                "transactions.price": {
+                    "type": "FLOAT",
+                    "min": 0.50,
+                    "max": 12450.00,
+                    "mean": 245.67,
+                    "null_count": 2,
+                    "null_percent": 2.0,
+                    "total_rows": 100,
+                    "filterable": true,
+                    "filter_type": "numeric"
+                }
+            }
+        }
+    """
+    try:
+        from .preview_service import DatasetPreviewService
+        from django.core.cache import cache
+
+        model = get_object_or_404(ModelEndpoint, id=model_id)
+        data = json.loads(request.body)
+
+        session_id = data.get('session_id')
+        selected_columns = data.get('selected_columns', {})
+
+        if not session_id:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'session_id is required',
+            }, status=400)
+
+        if not selected_columns:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'selected_columns is required',
+            }, status=400)
+
+        # Get cached session data
+        preview_service = DatasetPreviewService(model)
+        session_data = preview_service._get_from_cache(session_id)
+
+        if not session_data:
+            return JsonResponse({
+                'status': 'error',
+                'message': f'Session {session_id} not found or expired. Please reload samples.',
+            }, status=404)
+
+        # Analyze columns using the service
+        analysis_service = ColumnAnalysisService(session_data)
+        result = analysis_service.analyze_columns(selected_columns)
+
+        return JsonResponse(result)
+
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'status': 'error',
+            'message': 'Invalid JSON in request body',
+        }, status=400)
+    except Exception as e:
+        logger.error(f"Error analyzing columns for filters: {e}")
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e),
+        }, status=500)
+
+
+@login_required
+@require_http_methods(["POST"])
+def search_category_values(request, model_id):
+    """
+    Search for category values in a STRING column (for autocomplete mode).
+
+    When a column has >100 unique values, the UI switches to autocomplete mode.
+    This endpoint allows searching for values matching a search term.
+
+    Request body:
+        {
+            "session_id": "abc12345",
+            "table_name": "raw_data.products",
+            "column_name": "brand",
+            "search_term": "Nik",
+            "limit": 20  // optional, default 20
+        }
+
+    Returns:
+        {
+            "status": "success",
+            "values": [
+                {"value": "Nike", "count": 45},
+                {"value": "Nikita", "count": 12}
+            ]
+        }
+    """
+    try:
+        from .preview_service import DatasetPreviewService
+
+        model = get_object_or_404(ModelEndpoint, id=model_id)
+        data = json.loads(request.body)
+
+        session_id = data.get('session_id')
+        table_name = data.get('table_name')
+        column_name = data.get('column_name')
+        search_term = data.get('search_term', '')
+        limit = data.get('limit', 20)
+
+        if not session_id:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'session_id is required',
+            }, status=400)
+
+        if not table_name or not column_name:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'table_name and column_name are required',
+            }, status=400)
+
+        # Get cached session data
+        preview_service = DatasetPreviewService(model)
+        session_data = preview_service._get_from_cache(session_id)
+
+        if not session_data:
+            return JsonResponse({
+                'status': 'error',
+                'message': f'Session {session_id} not found or expired. Please reload samples.',
+            }, status=404)
+
+        # Search using the analysis service
+        analysis_service = ColumnAnalysisService(session_data)
+        values = analysis_service.search_category_values(
+            table_name=table_name,
+            column_name=column_name,
+            search_term=search_term,
+            limit=limit
+        )
+
+        return JsonResponse({
+            'status': 'success',
+            'values': values,
+        })
+
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'status': 'error',
+            'message': 'Invalid JSON in request body',
+        }, status=400)
+    except Exception as e:
+        logger.error(f"Error searching category values: {e}")
         return JsonResponse({
             'status': 'error',
             'message': str(e),

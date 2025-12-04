@@ -365,92 +365,210 @@
                 <div class="filter-subchapter" id="productsSubchapter">
                     <div class="subchapter-header-tablet" onclick="toggleSubchapter('products')">
                         <span class="subchapter-title">Products</span>
+                        <span class="subchapter-filter-status" id="productsFilterStatus"></span>
                         <i id="productsChevron" class="fas fa-chevron-right subchapter-chevron"></i>
                     </div>
                     <div id="productsContent" class="subchapter-content-outside hidden">
                         <div class="subchapter-body">
-                            <!-- Product ID Column -->
-                            <div class="wizard-field-group">
-                                <label class="text-xs font-medium text-gray-600 mb-1 block">Product ID Column</label>
-                                <select id="productIdColumn" class="form-select w-full text-sm" onchange="onProductColumnChange()">
-                                    <option value="">Select column...</option>
+
+                            <!-- Section 1: Top Products (Revenue-based) -->
+                            <div class="product-filter-section" id="topProductsSection">
+                                <div class="product-filter-header" onclick="toggleProductFilterSection('topProducts')">
+                                    <div class="product-filter-title">
+                                        <i class="fas fa-chart-line product-filter-title-icon"></i>
+                                        <span class="product-filter-title-text">Top Products (Revenue)</span>
+                                        <span class="product-filter-badge inactive" id="topProductsBadge">Disabled</span>
+                                    </div>
+                                    <i class="fas fa-chevron-right product-filter-chevron"></i>
+                                </div>
+                                <div class="product-filter-content hidden" id="topProductsContent">
+                                    <!-- Enable Toggle -->
+                                    <div class="product-filter-enable-row">
+                                        <input type="checkbox" id="enableTopProducts" onchange="toggleTopProductsFilter()">
+                                        <label class="product-filter-enable-label" for="enableTopProducts">
+                                            Enable top products by revenue filter
+                                        </label>
+                                    </div>
+
+                                    <!-- Top Products Configuration (shown when enabled) -->
+                                    <div id="topProductsConfig" class="hidden">
+                                        <!-- Product ID Column -->
+                                        <div class="wizard-field-group">
+                                            <label class="text-xs font-medium text-gray-600 mb-1 block">Product ID Column</label>
+                                            <select id="productIdColumn" class="form-select w-full text-sm" onchange="onProductColumnChange()">
+                                                <option value="">Select column...</option>
+                                            </select>
+                                        </div>
+
+                                        <!-- Revenue Column -->
+                                        <div class="wizard-field-group">
+                                            <label class="text-xs font-medium text-gray-600 mb-1 block">Revenue Column</label>
+                                            <select id="revenueColumn" class="form-select w-full text-sm" onchange="onRevenueColumnChange()">
+                                                <option value="">Select column...</option>
+                                            </select>
+                                        </div>
+
+                                        <!-- Analyze Button -->
+                                        <div class="wizard-field-group">
+                                            <button type="button" id="analyzeProductsBtn" onclick="analyzeProductRevenue()"
+                                                    class="btn btn-secondary w-full" disabled>
+                                                <i class="fas fa-sync-alt mr-2"></i>
+                                                Analyze Revenue Distribution
+                                            </button>
+                                        </div>
+
+                                        <!-- Analysis Results (hidden until analyzed) -->
+                                        <div id="productAnalysisResults" class="hidden">
+                                            <!-- Revenue Distribution Chart -->
+                                            <div class="wizard-field-group">
+                                                <label class="text-xs font-medium text-gray-600 mb-2 block">Cumulative Revenue Distribution</label>
+                                                <div id="revenueChartContainer" class="revenue-chart-container">
+                                                    <svg id="revenueDistributionChart"></svg>
+                                                </div>
+                                            </div>
+
+                                            <!-- Threshold Input -->
+                                            <div class="wizard-field-group">
+                                                <label class="text-xs font-medium text-gray-600 mb-1 block">Revenue Threshold</label>
+                                                <div class="flex items-center gap-2">
+                                                    <span class="text-sm text-gray-600">Include products up to</span>
+                                                    <input type="number" id="revenueThreshold" value="80" min="1" max="100"
+                                                           class="form-input w-20 text-sm" onchange="onThresholdChange()">
+                                                    <span class="text-sm text-gray-600">% of cumulative revenue</span>
+                                                </div>
+                                            </div>
+
+                                            <!-- Analysis Summary -->
+                                            <div id="productAnalysisSummary" class="analysis-summary-box">
+                                                <div class="analysis-summary-header">
+                                                    <i class="fas fa-chart-pie mr-2"></i>
+                                                    Analysis Results
+                                                </div>
+                                                <div class="analysis-summary-content">
+                                                    <div class="analysis-stat">
+                                                        <span class="stat-label">Total products:</span>
+                                                        <span id="totalProductsCount" class="stat-value">-</span>
+                                                    </div>
+                                                    <div class="analysis-stat">
+                                                        <span class="stat-label">Selected products:</span>
+                                                        <span id="selectedProductsCount" class="stat-value">-</span>
+                                                        <span id="selectedProductsPercent" class="stat-percent"></span>
+                                                    </div>
+                                                    <div class="analysis-stat">
+                                                        <span class="stat-label">Revenue coverage:</span>
+                                                        <span id="revenueCoverage" class="stat-value">-</span>
+                                                        <span id="revenueCoverageAmount" class="stat-amount"></span>
+                                                    </div>
+                                                </div>
+                                                <div class="analysis-summary-footer">
+                                                    <i class="fas fa-info-circle mr-1"></i>
+                                                    Product list computed dynamically at training time
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Analysis Error -->
+                                        <div id="productAnalysisError" class="hidden">
+                                            <div class="wizard-info-box error">
+                                                <i class="fas fa-exclamation-circle"></i>
+                                                <span id="productAnalysisErrorText">Analysis failed</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Section 2: Category Filters -->
+                            <div class="product-filter-section" id="categoryFiltersSection">
+                                <div class="product-filter-header collapsed" onclick="toggleProductFilterSection('categoryFilters')">
+                                    <div class="product-filter-title">
+                                        <i class="fas fa-tags product-filter-title-icon"></i>
+                                        <span class="product-filter-title-text">Category Filters</span>
+                                        <span class="product-filter-badge inactive" id="categoryFiltersBadge">0 filters</span>
+                                    </div>
+                                    <i class="fas fa-chevron-right product-filter-chevron"></i>
+                                </div>
+                                <div class="product-filter-content hidden" id="categoryFiltersContent">
+                                    <div class="filter-cards-container" id="categoryFilterCards">
+                                        <!-- Category filter cards will be inserted here dynamically -->
+                                    </div>
+                                    <div class="filter-empty-state" id="categoryFiltersEmpty">
+                                        <div class="filter-empty-state-icon"><i class="fas fa-filter"></i></div>
+                                        <div class="filter-empty-state-text">No category filters added. Click "Add Filter" to create one.</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Section 3: Numeric Filters -->
+                            <div class="product-filter-section" id="numericFiltersSection">
+                                <div class="product-filter-header collapsed" onclick="toggleProductFilterSection('numericFilters')">
+                                    <div class="product-filter-title">
+                                        <i class="fas fa-sliders-h product-filter-title-icon"></i>
+                                        <span class="product-filter-title-text">Numeric Filters</span>
+                                        <span class="product-filter-badge inactive" id="numericFiltersBadge">0 filters</span>
+                                    </div>
+                                    <i class="fas fa-chevron-right product-filter-chevron"></i>
+                                </div>
+                                <div class="product-filter-content hidden" id="numericFiltersContent">
+                                    <div class="filter-cards-container" id="numericFilterCards">
+                                        <!-- Numeric filter cards will be inserted here dynamically -->
+                                    </div>
+                                    <div class="filter-empty-state" id="numericFiltersEmpty">
+                                        <div class="filter-empty-state-icon"><i class="fas fa-calculator"></i></div>
+                                        <div class="filter-empty-state-text">No numeric filters added. Click "Add Filter" to create one.</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Products Footer: Add Filter / Reset / Refresh -->
+                            <div class="products-filter-footer">
+                                <div class="products-filter-actions-left">
+                                    <button type="button" class="btn-add-filter" onclick="openAddFilterModal()">
+                                        <i class="fas fa-plus"></i>
+                                        Add Filter
+                                    </button>
+                                </div>
+                                <div class="products-filter-actions-right">
+                                    <button type="button" class="btn-reset-filters" onclick="resetProductFilters()" id="resetProductFiltersBtn">
+                                        <i class="fas fa-undo"></i>
+                                        Reset
+                                    </button>
+                                    <button type="button" class="btn-refresh-products" onclick="refreshProductFilters()" id="refreshProductFiltersBtn">
+                                        <i class="fas fa-sync-alt"></i>
+                                        Refresh Dataset
+                                    </button>
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Add Filter Modal -->
+                <div class="add-filter-modal-overlay hidden" id="addFilterModal">
+                    <div class="add-filter-modal">
+                        <div class="add-filter-modal-header">
+                            <span class="add-filter-modal-title">Add Product Filter</span>
+                            <button class="add-filter-modal-close" onclick="closeAddFilterModal()">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                        <div class="add-filter-modal-body">
+                            <div class="add-filter-form-group">
+                                <label class="add-filter-form-label">Select Column</label>
+                                <select id="addFilterColumnSelect" class="add-filter-form-select" onchange="onAddFilterColumnChange()">
+                                    <option value="">Choose a column...</option>
                                 </select>
-                            </div>
-
-                            <!-- Revenue Column -->
-                            <div class="wizard-field-group">
-                                <label class="text-xs font-medium text-gray-600 mb-1 block">Revenue Column</label>
-                                <select id="revenueColumn" class="form-select w-full text-sm" onchange="onRevenueColumnChange()">
-                                    <option value="">Select column...</option>
-                                </select>
-                            </div>
-
-                            <!-- Analyze Button -->
-                            <div class="wizard-field-group">
-                                <button type="button" id="analyzeProductsBtn" onclick="analyzeProductRevenue()"
-                                        class="btn btn-secondary w-full" disabled>
-                                    <i class="fas fa-sync-alt mr-2"></i>
-                                    Analyze Revenue Distribution
-                                </button>
-                            </div>
-
-                            <!-- Analysis Results (hidden until analyzed) -->
-                            <div id="productAnalysisResults" class="hidden">
-                                <!-- Revenue Distribution Chart -->
-                                <div class="wizard-field-group">
-                                    <label class="text-xs font-medium text-gray-600 mb-2 block">Cumulative Revenue Distribution</label>
-                                    <div id="revenueChartContainer" class="revenue-chart-container">
-                                        <svg id="revenueDistributionChart"></svg>
-                                    </div>
-                                </div>
-
-                                <!-- Threshold Input -->
-                                <div class="wizard-field-group">
-                                    <label class="text-xs font-medium text-gray-600 mb-1 block">Revenue Threshold</label>
-                                    <div class="flex items-center gap-2">
-                                        <span class="text-sm text-gray-600">Include products up to</span>
-                                        <input type="number" id="revenueThreshold" value="80" min="1" max="100"
-                                               class="form-input w-20 text-sm" onchange="onThresholdChange()">
-                                        <span class="text-sm text-gray-600">% of cumulative revenue</span>
-                                    </div>
-                                </div>
-
-                                <!-- Analysis Summary -->
-                                <div id="productAnalysisSummary" class="analysis-summary-box">
-                                    <div class="analysis-summary-header">
-                                        <i class="fas fa-chart-pie mr-2"></i>
-                                        Analysis Results
-                                    </div>
-                                    <div class="analysis-summary-content">
-                                        <div class="analysis-stat">
-                                            <span class="stat-label">Total products:</span>
-                                            <span id="totalProductsCount" class="stat-value">-</span>
-                                        </div>
-                                        <div class="analysis-stat">
-                                            <span class="stat-label">Selected products:</span>
-                                            <span id="selectedProductsCount" class="stat-value">-</span>
-                                            <span id="selectedProductsPercent" class="stat-percent"></span>
-                                        </div>
-                                        <div class="analysis-stat">
-                                            <span class="stat-label">Revenue coverage:</span>
-                                            <span id="revenueCoverage" class="stat-value">-</span>
-                                            <span id="revenueCoverageAmount" class="stat-amount"></span>
-                                        </div>
-                                    </div>
-                                    <div class="analysis-summary-footer">
-                                        <i class="fas fa-info-circle mr-1"></i>
-                                        Product list computed dynamically at training time
-                                    </div>
+                                <div class="add-filter-column-info hidden" id="addFilterColumnInfo">
+                                    <!-- Column type and stats will be shown here -->
                                 </div>
                             </div>
-
-                            <!-- Analysis Error -->
-                            <div id="productAnalysisError" class="hidden">
-                                <div class="wizard-info-box error">
-                                    <i class="fas fa-exclamation-circle"></i>
-                                    <span id="productAnalysisErrorText">Analysis failed</span>
-                                </div>
-                            </div>
+                        </div>
+                        <div class="add-filter-modal-footer">
+                            <button class="add-filter-modal-btn cancel" onclick="closeAddFilterModal()">Cancel</button>
+                            <button class="add-filter-modal-btn confirm" id="addFilterConfirmBtn" onclick="confirmAddFilter()" disabled>
+                                Add Filter
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -2677,6 +2795,31 @@ document.addEventListener('click', function(e) {
 let productAnalysisData = null;
 let usedFilterColumns = new Set(); // Track columns used in filters to prevent reuse
 
+// Product Filters State Management
+let productFiltersState = {
+    pending: {
+        topRevenue: {
+            enabled: false,
+            productColumn: null,
+            revenueColumn: null,
+            thresholdPercent: 80
+        },
+        categoryFilters: [],  // [{column, mode, values}]
+        numericFilters: []    // [{column, type, min, max, value, includeNulls}]
+    },
+    committed: {
+        topRevenue: {
+            enabled: false,
+            productColumn: null,
+            revenueColumn: null,
+            thresholdPercent: 80
+        },
+        categoryFilters: [],
+        numericFilters: []
+    },
+    columnAnalysis: {}  // Cached column analysis data
+};
+
 // --- Sub-chapter Toggle ---
 function toggleSubchapter(name) {
     const content = document.getElementById(`${name}Content`);
@@ -2691,6 +2834,687 @@ function toggleSubchapter(name) {
         chevron.classList.remove('fa-chevron-down');
         chevron.classList.add('fa-chevron-right');
     }
+}
+
+// --- Product Filter Section Toggles ---
+function toggleProductFilterSection(sectionName) {
+    const content = document.getElementById(`${sectionName}Content`);
+    const header = content.previousElementSibling;
+    const chevron = header.querySelector('.product-filter-chevron');
+
+    if (content.classList.contains('hidden')) {
+        content.classList.remove('hidden');
+        header.classList.remove('collapsed');
+    } else {
+        content.classList.add('hidden');
+        header.classList.add('collapsed');
+    }
+}
+
+function toggleTopProductsFilter() {
+    const enabled = document.getElementById('enableTopProducts').checked;
+    const config = document.getElementById('topProductsConfig');
+    const badge = document.getElementById('topProductsBadge');
+
+    productFiltersState.pending.topRevenue.enabled = enabled;
+
+    if (enabled) {
+        config.classList.remove('hidden');
+        badge.textContent = 'Enabled';
+        badge.classList.remove('inactive');
+    } else {
+        config.classList.add('hidden');
+        badge.textContent = 'Disabled';
+        badge.classList.add('inactive');
+    }
+}
+
+// --- Add Filter Modal ---
+function openAddFilterModal() {
+    const modal = document.getElementById('addFilterModal');
+    const select = document.getElementById('addFilterColumnSelect');
+
+    // Populate column dropdown with filterable columns
+    select.innerHTML = '<option value="">Choose a column...</option>';
+
+    // Get selected columns from schema builder
+    const allColumns = [];
+    Object.entries(schemaBuilderState.selectedColumns).forEach(([table, cols]) => {
+        const shortTable = table.replace('raw_data.', '');
+        cols.forEach(col => {
+            const fullName = `${shortTable}.${col}`;
+            // Exclude columns already used in filters
+            if (!isColumnUsedInFilters(fullName)) {
+                allColumns.push({ table: shortTable, column: col, fullName });
+            }
+        });
+    });
+
+    allColumns.forEach(c => {
+        const option = document.createElement('option');
+        option.value = c.fullName;
+        option.textContent = c.fullName;
+        select.appendChild(option);
+    });
+
+    // Reset modal state
+    document.getElementById('addFilterColumnInfo').classList.add('hidden');
+    document.getElementById('addFilterConfirmBtn').disabled = true;
+
+    modal.classList.remove('hidden');
+}
+
+function closeAddFilterModal() {
+    document.getElementById('addFilterModal').classList.add('hidden');
+}
+
+function isColumnUsedInFilters(columnName) {
+    const pending = productFiltersState.pending;
+
+    // Check top revenue columns
+    if (pending.topRevenue.enabled) {
+        if (pending.topRevenue.productColumn === columnName) return true;
+        if (pending.topRevenue.revenueColumn === columnName) return true;
+    }
+
+    // Check category filters
+    if (pending.categoryFilters.some(f => f.column === columnName)) return true;
+
+    // Check numeric filters
+    if (pending.numericFilters.some(f => f.column === columnName)) return true;
+
+    return false;
+}
+
+async function onAddFilterColumnChange() {
+    const select = document.getElementById('addFilterColumnSelect');
+    const columnName = select.value;
+    const infoDiv = document.getElementById('addFilterColumnInfo');
+    const confirmBtn = document.getElementById('addFilterConfirmBtn');
+
+    if (!columnName) {
+        infoDiv.classList.add('hidden');
+        confirmBtn.disabled = true;
+        return;
+    }
+
+    // Fetch column analysis if not cached
+    if (!productFiltersState.columnAnalysis[columnName]) {
+        await fetchColumnAnalysis();
+    }
+
+    const colInfo = productFiltersState.columnAnalysis[columnName];
+    if (colInfo) {
+        // Show column type and info
+        let infoHtml = `<strong>Type:</strong> ${colInfo.type}<br>`;
+        if (colInfo.filter_type === 'category') {
+            infoHtml += `<strong>Unique values:</strong> ${colInfo.unique_count}`;
+            if (colInfo.display_mode === 'autocomplete') {
+                infoHtml += ' (autocomplete mode)';
+            }
+        } else if (colInfo.filter_type === 'numeric') {
+            infoHtml += `<strong>Range:</strong> ${colInfo.min} - ${colInfo.max}`;
+            if (colInfo.null_percent > 0) {
+                infoHtml += `<br><strong>Nulls:</strong> ${colInfo.null_percent}%`;
+            }
+        }
+        infoDiv.innerHTML = infoHtml;
+        infoDiv.classList.remove('hidden');
+        confirmBtn.disabled = !colInfo.filterable;
+    } else {
+        infoDiv.innerHTML = 'Column analysis not available';
+        infoDiv.classList.remove('hidden');
+        confirmBtn.disabled = true;
+    }
+}
+
+async function fetchColumnAnalysis() {
+    if (!schemaBuilderState.sessionId) return;
+
+    try {
+        const response = await fetch(`/api/models/${modelId}/datasets/analyze-columns/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrftoken
+            },
+            body: JSON.stringify({
+                session_id: schemaBuilderState.sessionId,
+                selected_columns: schemaBuilderState.selectedColumns
+            })
+        });
+
+        const data = await response.json();
+        if (data.status === 'success') {
+            productFiltersState.columnAnalysis = data.columns;
+        }
+    } catch (error) {
+        console.error('Error fetching column analysis:', error);
+    }
+}
+
+function confirmAddFilter() {
+    const columnName = document.getElementById('addFilterColumnSelect').value;
+    const colInfo = productFiltersState.columnAnalysis[columnName];
+
+    if (!columnName || !colInfo || !colInfo.filterable) return;
+
+    if (colInfo.filter_type === 'category') {
+        addCategoryFilter(columnName, colInfo);
+    } else if (colInfo.filter_type === 'numeric') {
+        addNumericFilter(columnName, colInfo);
+    }
+
+    closeAddFilterModal();
+}
+
+// --- Category Filter Functions ---
+function addCategoryFilter(columnName, colInfo) {
+    const filterData = {
+        column: columnName,
+        mode: 'include',
+        values: [],
+        colInfo: colInfo
+    };
+
+    productFiltersState.pending.categoryFilters.push(filterData);
+    renderCategoryFilters();
+    updateProductFilterBadges();
+
+    // Open the category filters section
+    const content = document.getElementById('categoryFiltersContent');
+    const header = content.previousElementSibling;
+    content.classList.remove('hidden');
+    header.classList.remove('collapsed');
+}
+
+function renderCategoryFilters() {
+    const container = document.getElementById('categoryFilterCards');
+    const emptyState = document.getElementById('categoryFiltersEmpty');
+    const filters = productFiltersState.pending.categoryFilters;
+
+    if (filters.length === 0) {
+        container.innerHTML = '';
+        emptyState.classList.remove('hidden');
+        return;
+    }
+
+    emptyState.classList.add('hidden');
+    container.innerHTML = filters.map((filter, index) => renderCategoryFilterCard(filter, index)).join('');
+}
+
+function renderCategoryFilterCard(filter, index) {
+    const colInfo = filter.colInfo;
+    const isAutocomplete = colInfo.display_mode === 'autocomplete';
+
+    let valuesHtml = '';
+    if (isAutocomplete) {
+        // Autocomplete mode
+        valuesHtml = `
+            <div class="category-autocomplete-container">
+                <input type="text" class="category-autocomplete-input"
+                       placeholder="Search values..."
+                       oninput="searchCategoryValues(${index}, this.value)"
+                       onfocus="showAutocompleteDropdown(${index})">
+                <div class="category-autocomplete-dropdown hidden" id="categoryAutocomplete_${index}">
+                    <!-- Dropdown items inserted dynamically -->
+                </div>
+            </div>
+            <div class="category-selected-tags" id="categoryTags_${index}">
+                ${filter.values.map(v => `
+                    <span class="category-selected-tag">
+                        ${escapeHtml(v)}
+                        <span class="category-selected-tag-remove" onclick="removeCategoryValue(${index}, '${escapeHtml(v)}')">&times;</span>
+                    </span>
+                `).join('')}
+            </div>
+        `;
+    } else {
+        // List mode with checkboxes
+        const values = colInfo.values || [];
+        valuesHtml = `
+            <div class="category-filter-search">
+                <input type="text" placeholder="Search..." oninput="filterCategoryList(${index}, this.value)">
+            </div>
+            <div class="category-filter-list" id="categoryList_${index}">
+                ${values.map(v => `
+                    <div class="category-filter-item ${filter.values.includes(v.value) ? 'selected' : ''}"
+                         onclick="toggleCategoryValue(${index}, '${escapeHtml(v.value)}')">
+                        <span class="category-filter-item-label">
+                            <input type="checkbox" ${filter.values.includes(v.value) ? 'checked' : ''} readonly>
+                            ${escapeHtml(v.value)}
+                        </span>
+                        <span class="category-filter-item-count">${v.count.toLocaleString()}</span>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    }
+
+    return `
+        <div class="filter-card" id="categoryFilter_${index}">
+            <div class="filter-card-header">
+                <div class="filter-card-title">
+                    <span class="filter-card-column-name">${filter.column}</span>
+                    <span class="filter-card-type-badge">STRING</span>
+                </div>
+                <button class="filter-card-remove" onclick="removeCategoryFilter(${index})">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="filter-card-body">
+                <div class="category-filter-mode">
+                    <label>
+                        <input type="radio" name="categoryMode_${index}" value="include"
+                               ${filter.mode === 'include' ? 'checked' : ''}
+                               onchange="setCategoryFilterMode(${index}, 'include')">
+                        Include selected
+                    </label>
+                    <label>
+                        <input type="radio" name="categoryMode_${index}" value="exclude"
+                               ${filter.mode === 'exclude' ? 'checked' : ''}
+                               onchange="setCategoryFilterMode(${index}, 'exclude')">
+                        Exclude selected
+                    </label>
+                </div>
+                ${valuesHtml}
+                <div class="category-filter-selected-count">
+                    Selected: ${filter.values.length} of ${colInfo.unique_count} values
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function setCategoryFilterMode(index, mode) {
+    productFiltersState.pending.categoryFilters[index].mode = mode;
+}
+
+function toggleCategoryValue(index, value) {
+    const filter = productFiltersState.pending.categoryFilters[index];
+    const valueIndex = filter.values.indexOf(value);
+
+    if (valueIndex === -1) {
+        filter.values.push(value);
+    } else {
+        filter.values.splice(valueIndex, 1);
+    }
+
+    renderCategoryFilters();
+}
+
+function removeCategoryValue(index, value) {
+    const filter = productFiltersState.pending.categoryFilters[index];
+    const valueIndex = filter.values.indexOf(value);
+    if (valueIndex !== -1) {
+        filter.values.splice(valueIndex, 1);
+        renderCategoryFilters();
+    }
+}
+
+function removeCategoryFilter(index) {
+    productFiltersState.pending.categoryFilters.splice(index, 1);
+    renderCategoryFilters();
+    updateProductFilterBadges();
+}
+
+function filterCategoryList(index, searchTerm) {
+    const list = document.getElementById(`categoryList_${index}`);
+    const items = list.querySelectorAll('.category-filter-item');
+    const searchLower = searchTerm.toLowerCase();
+
+    items.forEach(item => {
+        const label = item.querySelector('.category-filter-item-label').textContent.toLowerCase();
+        item.style.display = label.includes(searchLower) ? '' : 'none';
+    });
+}
+
+async function searchCategoryValues(index, searchTerm) {
+    const dropdown = document.getElementById(`categoryAutocomplete_${index}`);
+    const filter = productFiltersState.pending.categoryFilters[index];
+
+    if (searchTerm.length < 2) {
+        dropdown.classList.add('hidden');
+        return;
+    }
+
+    // Get table and column from column name
+    const [tableName, colName] = filter.column.split('.');
+    const fullTableName = `raw_data.${tableName}`;
+
+    try {
+        const response = await fetch(`/api/models/${modelId}/datasets/search-category-values/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrftoken
+            },
+            body: JSON.stringify({
+                session_id: schemaBuilderState.sessionId,
+                table_name: fullTableName,
+                column_name: colName,
+                search_term: searchTerm,
+                limit: 20
+            })
+        });
+
+        const data = await response.json();
+        if (data.status === 'success' && data.values.length > 0) {
+            dropdown.innerHTML = data.values
+                .filter(v => !filter.values.includes(v.value))
+                .map(v => `
+                    <div class="category-autocomplete-item" onclick="addAutocompleteValue(${index}, '${escapeHtml(v.value)}')">
+                        <span>${escapeHtml(v.value)}</span>
+                        <span class="category-filter-item-count">${v.count.toLocaleString()}</span>
+                    </div>
+                `).join('');
+            dropdown.classList.remove('hidden');
+        } else {
+            dropdown.classList.add('hidden');
+        }
+    } catch (error) {
+        console.error('Error searching category values:', error);
+        dropdown.classList.add('hidden');
+    }
+}
+
+function addAutocompleteValue(index, value) {
+    const filter = productFiltersState.pending.categoryFilters[index];
+    if (!filter.values.includes(value)) {
+        filter.values.push(value);
+        renderCategoryFilters();
+    }
+}
+
+function showAutocompleteDropdown(index) {
+    // Could show recent/top values here
+}
+
+// --- Numeric Filter Functions ---
+function addNumericFilter(columnName, colInfo) {
+    const filterData = {
+        column: columnName,
+        type: 'range',
+        min: null,
+        max: null,
+        value: null,
+        includeNulls: true,
+        colInfo: colInfo
+    };
+
+    productFiltersState.pending.numericFilters.push(filterData);
+    renderNumericFilters();
+    updateProductFilterBadges();
+
+    // Open the numeric filters section
+    const content = document.getElementById('numericFiltersContent');
+    const header = content.previousElementSibling;
+    content.classList.remove('hidden');
+    header.classList.remove('collapsed');
+}
+
+function renderNumericFilters() {
+    const container = document.getElementById('numericFilterCards');
+    const emptyState = document.getElementById('numericFiltersEmpty');
+    const filters = productFiltersState.pending.numericFilters;
+
+    if (filters.length === 0) {
+        container.innerHTML = '';
+        emptyState.classList.remove('hidden');
+        return;
+    }
+
+    emptyState.classList.add('hidden');
+    container.innerHTML = filters.map((filter, index) => renderNumericFilterCard(filter, index)).join('');
+}
+
+function renderNumericFilterCard(filter, index) {
+    const colInfo = filter.colInfo;
+    const isRange = filter.type === 'range';
+
+    return `
+        <div class="filter-card" id="numericFilter_${index}">
+            <div class="filter-card-header">
+                <div class="filter-card-title">
+                    <span class="filter-card-column-name">${filter.column}</span>
+                    <span class="filter-card-type-badge">${colInfo.type}</span>
+                </div>
+                <button class="filter-card-remove" onclick="removeNumericFilter(${index})">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="filter-card-body">
+                <div class="numeric-filter-stats">
+                    <span class="numeric-filter-stat">
+                        <span class="numeric-filter-stat-label">Range:</span>
+                        ${colInfo.min} - ${colInfo.max}
+                    </span>
+                    ${colInfo.null_percent > 0 ? `
+                    <span class="numeric-filter-stat">
+                        <span class="numeric-filter-stat-label">Nulls:</span>
+                        ${colInfo.null_percent}%
+                    </span>
+                    ` : ''}
+                </div>
+
+                <div class="numeric-filter-type">
+                    <label>
+                        <input type="radio" name="numericType_${index}" value="range"
+                               ${filter.type === 'range' ? 'checked' : ''}
+                               onchange="setNumericFilterType(${index}, 'range')">
+                        Range
+                    </label>
+                    <label>
+                        <input type="radio" name="numericType_${index}" value="equals"
+                               ${filter.type === 'equals' ? 'checked' : ''}
+                               onchange="setNumericFilterType(${index}, 'equals')">
+                        Equals
+                    </label>
+                    <label>
+                        <input type="radio" name="numericType_${index}" value="not_equals"
+                               ${filter.type === 'not_equals' ? 'checked' : ''}
+                               onchange="setNumericFilterType(${index}, 'not_equals')">
+                        Not equals
+                    </label>
+                </div>
+
+                <div class="numeric-filter-inputs">
+                    ${isRange ? `
+                        <div class="numeric-filter-input-group">
+                            <label class="numeric-filter-input-label">Min</label>
+                            <input type="number" class="numeric-filter-input"
+                                   value="${filter.min !== null ? filter.min : ''}"
+                                   placeholder="${colInfo.min}"
+                                   onchange="setNumericFilterValue(${index}, 'min', this.value)">
+                        </div>
+                        <div class="numeric-filter-input-group">
+                            <label class="numeric-filter-input-label">Max</label>
+                            <input type="number" class="numeric-filter-input"
+                                   value="${filter.max !== null ? filter.max : ''}"
+                                   placeholder="${colInfo.max}"
+                                   onchange="setNumericFilterValue(${index}, 'max', this.value)">
+                        </div>
+                    ` : `
+                        <div class="numeric-filter-input-group">
+                            <label class="numeric-filter-input-label">Value</label>
+                            <input type="number" class="numeric-filter-input"
+                                   value="${filter.value !== null ? filter.value : ''}"
+                                   onchange="setNumericFilterValue(${index}, 'value', this.value)">
+                        </div>
+                    `}
+                </div>
+
+                ${colInfo.null_count > 0 ? `
+                <div class="numeric-filter-null-handling">
+                    <label>
+                        <input type="radio" name="numericNulls_${index}" value="include"
+                               ${filter.includeNulls ? 'checked' : ''}
+                               onchange="setNumericNullHandling(${index}, true)">
+                        Include NULLs
+                    </label>
+                    <label>
+                        <input type="radio" name="numericNulls_${index}" value="exclude"
+                               ${!filter.includeNulls ? 'checked' : ''}
+                               onchange="setNumericNullHandling(${index}, false)">
+                        Exclude NULLs
+                    </label>
+                </div>
+                ` : ''}
+            </div>
+        </div>
+    `;
+}
+
+function setNumericFilterType(index, type) {
+    productFiltersState.pending.numericFilters[index].type = type;
+    renderNumericFilters();
+}
+
+function setNumericFilterValue(index, field, value) {
+    const filter = productFiltersState.pending.numericFilters[index];
+    filter[field] = value === '' ? null : parseFloat(value);
+}
+
+function setNumericNullHandling(index, includeNulls) {
+    productFiltersState.pending.numericFilters[index].includeNulls = includeNulls;
+}
+
+function removeNumericFilter(index) {
+    productFiltersState.pending.numericFilters.splice(index, 1);
+    renderNumericFilters();
+    updateProductFilterBadges();
+}
+
+// --- Product Filter Badges ---
+function updateProductFilterBadges() {
+    const pending = productFiltersState.pending;
+
+    // Top Products badge
+    const topBadge = document.getElementById('topProductsBadge');
+    if (pending.topRevenue.enabled) {
+        topBadge.textContent = `${pending.topRevenue.thresholdPercent}%`;
+        topBadge.classList.remove('inactive');
+    } else {
+        topBadge.textContent = 'Disabled';
+        topBadge.classList.add('inactive');
+    }
+
+    // Category Filters badge
+    const catBadge = document.getElementById('categoryFiltersBadge');
+    const catCount = pending.categoryFilters.length;
+    catBadge.textContent = `${catCount} filter${catCount !== 1 ? 's' : ''}`;
+    if (catCount > 0) {
+        catBadge.classList.remove('inactive');
+    } else {
+        catBadge.classList.add('inactive');
+    }
+
+    // Numeric Filters badge
+    const numBadge = document.getElementById('numericFiltersBadge');
+    const numCount = pending.numericFilters.length;
+    numBadge.textContent = `${numCount} filter${numCount !== 1 ? 's' : ''}`;
+    if (numCount > 0) {
+        numBadge.classList.remove('inactive');
+    } else {
+        numBadge.classList.add('inactive');
+    }
+
+    // Products sub-chapter status
+    updateProductsFilterStatus();
+}
+
+function updateProductsFilterStatus() {
+    const status = document.getElementById('productsFilterStatus');
+    const pending = productFiltersState.pending;
+    const parts = [];
+
+    if (pending.topRevenue.enabled) {
+        parts.push(`Top ${pending.topRevenue.thresholdPercent}%`);
+    }
+    if (pending.categoryFilters.length > 0) {
+        parts.push(`${pending.categoryFilters.length} category`);
+    }
+    if (pending.numericFilters.length > 0) {
+        parts.push(`${pending.numericFilters.length} numeric`);
+    }
+
+    status.textContent = parts.length > 0 ? parts.join(' + ') : '';
+}
+
+// --- Reset and Refresh ---
+function resetProductFilters() {
+    // Copy committed state back to pending
+    productFiltersState.pending = JSON.parse(JSON.stringify(productFiltersState.committed));
+
+    // Re-render UI
+    const enableCheckbox = document.getElementById('enableTopProducts');
+    enableCheckbox.checked = productFiltersState.pending.topRevenue.enabled;
+    toggleTopProductsFilter();
+
+    renderCategoryFilters();
+    renderNumericFilters();
+    updateProductFilterBadges();
+
+    showNotification('Product filters reset to last saved state', 'info');
+}
+
+async function refreshProductFilters() {
+    // Commit pending state
+    productFiltersState.committed = JSON.parse(JSON.stringify(productFiltersState.pending));
+
+    // Build the product_filter object for the API
+    const productFilter = buildProductFilterForApi();
+
+    // Update wizardData.filters
+    wizardData.filters = wizardData.filters || {};
+    wizardData.filters.product_filter = productFilter;
+
+    // Call the dataset stats API
+    await updateDatasetSummary();
+
+    showNotification('Dataset refreshed with product filters', 'success');
+}
+
+function buildProductFilterForApi() {
+    const pending = productFiltersState.pending;
+    const result = {};
+
+    // Top revenue filter
+    if (pending.topRevenue.enabled) {
+        result.top_revenue = {
+            enabled: true,
+            product_column: pending.topRevenue.productColumn,
+            revenue_column: pending.topRevenue.revenueColumn,
+            threshold_percent: pending.topRevenue.thresholdPercent
+        };
+    }
+
+    // Category filters
+    if (pending.categoryFilters.length > 0) {
+        result.category_filters = pending.categoryFilters
+            .filter(f => f.values.length > 0)
+            .map(f => ({
+                column: f.column,
+                mode: f.mode,
+                values: f.values
+            }));
+    }
+
+    // Numeric filters
+    if (pending.numericFilters.length > 0) {
+        result.numeric_filters = pending.numericFilters
+            .filter(f => f.min !== null || f.max !== null || f.value !== null)
+            .map(f => ({
+                column: f.column,
+                type: f.type,
+                min: f.min,
+                max: f.max,
+                value: f.value,
+                include_nulls: f.includeNulls
+            }));
+    }
+
+    return result;
 }
 
 // --- Column Dropdown Population ---

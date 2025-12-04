@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides detailed specifications for implementing the **Datasets** domain in the ML Platform. The Datasets domain defines WHAT data goes into model training.
 
-**Last Updated**: 2025-12-03 (v2 - D3.js integration)
+**Last Updated**: 2025-12-04 (v3 - Enhanced Product Filters)
 
 ---
 
@@ -251,8 +251,86 @@ Filter customers based on transaction history:
 
 **Sub-chapter 3: Products**
 
-Filter products based on revenue contribution:
+Filter products using multiple filter types. All filters are combined with **AND logic** (products must pass ALL enabled filters).
 
+The Products sub-chapter uses a **pending/committed state** model:
+- Filter changes are "pending" until committed
+- **Reset**: Reverts all pending changes to last committed state
+- **Refresh Dataset**: Commits pending changes and updates Dataset Summary
+
+Products sub-chapter contains three collapsible nested sections plus action buttons in the footer.
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Products                                          [Top 80% | category=X]  ▼ │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│ ┌─────────────────────────────────────────────────────────────────────────┐ │
+│ │ ☑ Top Products (Revenue)                                            ▼ │ │
+│ ├─────────────────────────────────────────────────────────────────────────┤ │
+│ │ [Product ID Column ▼] [Revenue Column ▼] [Analyze Revenue Distribution] │ │
+│ │                                                                         │ │
+│ │ ┌─────────────────────────────────────────────────────────────────────┐ │ │
+│ │ │         Cumulative Revenue Distribution                             │ │ │
+│ │ │  100% ┤ ························○                                   │ │ │
+│ │ │       │                    ○····                                    │ │ │
+│ │ │   80% ├──────────────○·········  ← Threshold                        │ │ │
+│ │ │       │          ○···                                               │ │ │
+│ │ │   60% ┤      ○···                                                   │ │ │
+│ │ │       │   ○··                                                       │ │ │
+│ │ │   40% ┤ ○··                                                         │ │ │
+│ │ │       │○·                                                           │ │ │
+│ │ │   20% ┤·                                                            │ │ │
+│ │ │       │                                                             │ │ │
+│ │ │    0% ├─────┬─────┬─────┬─────┬─────┬─────┬─────┬─────┬─────┬─────  │ │ │
+│ │ │       0%   10%   20%   30%   40%   50%   60%   70%   80%   90% 100% │ │ │
+│ │ │                        % of Products                                │ │ │
+│ │ └─────────────────────────────────────────────────────────────────────┘ │ │
+│ │                                                                         │ │
+│ │ Revenue Threshold: [80%] ──●──────────────                              │ │
+│ │ Selected: 4,521 products (9.4%) covering 80% of revenue                 │ │
+│ └─────────────────────────────────────────────────────────────────────────┘ │
+│                                                                              │
+│ ┌─────────────────────────────────────────────────────────────────────────┐ │
+│ │ Category Filters (2)                                                ▼ │ │
+│ ├─────────────────────────────────────────────────────────────────────────┤ │
+│ │ ┌─────────────────────────────────┐ ┌─────────────────────────────────┐ │ │
+│ │ │ category                    [×] │ │ brand                       [×] │ │ │
+│ │ │ ○ Include  ● Exclude            │ │ ● Include  ○ Exclude            │ │ │
+│ │ │ ┌─────────────────────────────┐ │ │ ┌─────────────────────────────┐ │ │ │
+│ │ │ │ [Search values...]         │ │ │ │ [Search values...]         │ │ │ │
+│ │ │ │ ☑ Electronics     (1,234)  │ │ │ │ ☑ Nike            (2,456)  │ │ │ │
+│ │ │ │ ☑ Clothing        (892)    │ │ │ │ ☑ Adidas          (1,890)  │ │ │ │
+│ │ │ │ ☐ Home & Garden   (456)    │ │ │ │ ☐ Puma            (1,234)  │ │ │ │
+│ │ │ │ ☐ Sports          (234)    │ │ │ │ ...                        │ │ │ │
+│ │ │ └─────────────────────────────┘ │ │ └─────────────────────────────┘ │ │ │
+│ │ └─────────────────────────────────┘ └─────────────────────────────────┘ │ │
+│ └─────────────────────────────────────────────────────────────────────────┘ │
+│                                                                              │
+│ ┌─────────────────────────────────────────────────────────────────────────┐ │
+│ │ Numeric Filters (1)                                                 ▼ │ │
+│ ├─────────────────────────────────────────────────────────────────────────┤ │
+│ │ ┌─────────────────────────────────┐                                     │ │
+│ │ │ price                       [×] │                                     │ │
+│ │ │ Range: 0.50 - 12,450           │                                     │ │
+│ │ │ Nulls: 0.5%                     │                                     │ │
+│ │ │                                 │                                     │ │
+│ │ │ Filter Type: [Range ▼]          │                                     │ │
+│ │ │ Min: [10    ] Max: [500   ]     │                                     │ │
+│ │ │ ☑ Include NULL values           │                                     │ │
+│ │ └─────────────────────────────────┘                                     │ │
+│ └─────────────────────────────────────────────────────────────────────────┘ │
+│                                                                              │
+│ ┌─────────────────────────────────────────────────────────────────────────┐ │
+│ │                    [+ Add Filter]     [Reset]     [Refresh Dataset]     │ │
+│ └─────────────────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Section 1: Top Products (Revenue)**
+Optional filter for top-performing products by revenue contribution:
+
+- **Enable Toggle**: Checkbox in section header to enable/disable this filter (off by default)
 - **Product ID Column**: Select the column containing product identifiers
 - **Revenue Column**: Select the column containing revenue/amount values
 - **Analyze Revenue Distribution**: Query BigQuery to analyze product revenue distribution
@@ -265,6 +343,85 @@ Filter products based on revenue contribution:
 - **Analysis Results**: Shows total products, selected products count & percentage, revenue coverage
 - Product list computed dynamically at training time (rules stored, not product lists)
 
+**Section 2: Category Filters**
+Filter by categorical column values (STRING columns from Step 3 Schema Builder):
+
+- **Filter Cards**: Each added filter shows as a card with column name and remove button (×)
+- **Mode Toggle**: Include selected values OR Exclude selected values (radio buttons)
+- **Value Selection** (two display modes based on unique value count):
+  - **List mode** (≤100 unique values):
+    - Scrollable checkbox list showing all values
+    - Search box filters the displayed values
+    - Each value shows its frequency count
+  - **Autocomplete mode** (>100 unique values):
+    - Search input with dropdown suggestions
+    - Selected values shown as removable tags
+    - API call to search matching values: `POST /api/models/{id}/datasets/search-category-values/`
+- Filters are combined with AND logic (product must match ALL category filters)
+
+**Section 3: Numeric Filters**
+Filter by numeric column bounds (INTEGER/FLOAT columns from Step 3 Schema Builder):
+
+- **Filter Cards**: Each added filter shows as a card with column name and remove button (×)
+- **Column Stats Header**: Shows min, max, and null percentage from sample data
+- **Filter Types** (dropdown selection):
+  - **Range**: Set min and/or max bounds (either or both)
+  - **Equals**: Exact value match
+  - **Not Equals**: Exclude exact value
+- **NULL Handling**: Checkbox to include or exclude NULL values
+- Filters are combined with AND logic
+
+**Add Filter Modal**
+Modal dialog for creating new category or numeric filters:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Add Product Filter                                                      [×] │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│ Select Column:                                                               │
+│ ┌─────────────────────────────────────────────────────────────────────────┐ │
+│ │ category (STRING)                                                    ▼ │ │
+│ └─────────────────────────────────────────────────────────────────────────┘ │
+│                                                                              │
+│ ┌─────────────────────────────────────────────────────────────────────────┐ │
+│ │ ℹ️ This column has 4 unique values. You can filter by selecting        │ │
+│ │    specific values to include or exclude.                              │ │
+│ └─────────────────────────────────────────────────────────────────────────┘ │
+│                                                                              │
+│                                              [Cancel]     [Add Filter]       │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+- **Column Dropdown**: Shows only columns from Step 3 Schema Builder selection
+- **Column Info**: Displays column type and analysis preview
+- **Add Filter Button**: Creates the filter card in appropriate section
+
+**Footer Actions**
+Located at bottom of Products sub-chapter:
+
+- **Add Filter Button**: Opens modal to select column and create a new category or numeric filter
+- **Reset Button**: Reverts all pending filter changes to last committed (refreshed) state
+- **Refresh Dataset Button**: Commits all pending changes and updates Dataset Summary with new stats
+
+**Column Analysis Service**
+`ColumnAnalysisService` class in `ml_platform/datasets/services.py` analyzes columns from Step 3 pandas sample data:
+
+- **API endpoint**: `POST /api/models/{model_id}/datasets/analyze-columns/`
+- **Input**: Selected columns from Step 3 Schema Builder (stored in session)
+- **Output**: Column metadata including:
+  - `type`: STRING, INTEGER, FLOAT, TIMESTAMP, etc.
+  - For STRING: `unique_values`, `value_counts`, `display_mode` (list or autocomplete)
+  - For numeric: `min`, `max`, `mean`, `null_count`, `null_percent`
+- **Autocomplete threshold**: 100 unique values (configurable via `AUTOCOMPLETE_THRESHOLD`)
+
+**Category Value Search API**
+For autocomplete mode when columns have >100 unique values:
+
+- **API endpoint**: `POST /api/models/{model_id}/datasets/search-category-values/`
+- **Input**: `column_name`, `search_term`, `limit` (default: 20)
+- **Output**: Matching values with counts, sorted by count descending
+
 **Dataset Summary Panel**
 
 Always-visible panel at the bottom of Step 4 showing dataset statistics:
@@ -273,7 +430,10 @@ Always-visible panel at the bottom of Step 4 showing dataset statistics:
 - **Filter Badges**: Three badges showing applied filters status
   - Dates: "All dates" or "Last 30 days" or "From 2025-01-01"
   - Customers: "All customers" or "Min 2 transactions"
-  - Products: "All products" or "Top 80% revenue"
+  - Products: Shows count and types of active filters:
+    - "All products" (no filters)
+    - "Top 80% revenue" (only revenue filter)
+    - "3 filters" (multiple filters - hover shows details)
   - Active filters shown with blue highlight
 - **Column Statistics Table**: Two-column table showing stats for each selected column
   - Column name
@@ -555,9 +715,9 @@ class DatasetVersion(models.Model):
         {
           "properties": {
             "type": {"const": "rolling"},
-            "months": {"type": "integer", "minimum": 1, "maximum": 24}
+            "days": {"type": "integer", "minimum": 1, "maximum": 730}
           },
-          "required": ["type", "months"]
+          "required": ["type", "days"]
         },
         {
           "properties": {
@@ -571,9 +731,47 @@ class DatasetVersion(models.Model):
     },
     "product_filter": {
       "type": "object",
+      "description": "Combined product filters (AND logic)",
       "properties": {
-        "type": {"enum": ["top_revenue_percent", "categories", "none"]},
-        "value": {"type": ["integer", "array"]}
+        "top_revenue": {
+          "type": "object",
+          "description": "Optional revenue-based filter",
+          "properties": {
+            "enabled": {"type": "boolean"},
+            "product_column": {"type": "string"},
+            "revenue_column": {"type": "string"},
+            "threshold": {"type": "integer", "minimum": 1, "maximum": 100}
+          }
+        },
+        "category_filters": {
+          "type": "array",
+          "description": "Optional category-based filters",
+          "items": {
+            "type": "object",
+            "properties": {
+              "column": {"type": "string"},
+              "mode": {"enum": ["include", "exclude"]},
+              "values": {"type": "array", "items": {"type": "string"}}
+            },
+            "required": ["column", "mode", "values"]
+          }
+        },
+        "numeric_filters": {
+          "type": "array",
+          "description": "Optional numeric-based filters",
+          "items": {
+            "type": "object",
+            "properties": {
+              "column": {"type": "string"},
+              "filter_type": {"enum": ["range", "equals", "not_equals"]},
+              "min": {"type": ["number", "null"]},
+              "max": {"type": ["number", "null"]},
+              "value": {"type": ["number", "null"]},
+              "include_nulls": {"type": "boolean"}
+            },
+            "required": ["column", "filter_type", "include_nulls"]
+          }
+        }
       }
     },
     "customer_filter": {
@@ -583,6 +781,41 @@ class DatasetVersion(models.Model):
         "value": {"type": "integer", "minimum": 1}
       }
     }
+  }
+}
+```
+
+**Example product_filter with multiple filters:**
+```json
+{
+  "product_filter": {
+    "top_revenue": {
+      "enabled": true,
+      "product_column": "transactions.product_id",
+      "revenue_column": "transactions.amount",
+      "threshold": 80
+    },
+    "category_filters": [
+      {
+        "column": "products.category",
+        "mode": "exclude",
+        "values": ["Electronics", "Clothing"]
+      },
+      {
+        "column": "products.brand",
+        "mode": "include",
+        "values": ["Nike", "Adidas"]
+      }
+    ],
+    "numeric_filters": [
+      {
+        "column": "products.price",
+        "filter_type": "range",
+        "min": 10,
+        "max": 500,
+        "include_nulls": false
+      }
+    ]
   }
 }
 ```
@@ -612,6 +845,14 @@ class DatasetVersion(models.Model):
 | GET | `/api/tables/{table_name}/stats/` | Get column statistics |
 | POST | `/api/datasets/{dataset_id}/analyze/` | Analyze dataset (compute stats) |
 | GET | `/api/datasets/{dataset_id}/preview/` | Preview sample data |
+
+### Product Filtering
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/models/{model_id}/datasets/analyze-product-revenue/` | Analyze product revenue distribution |
+| POST | `/api/models/{model_id}/datasets/analyze-columns/` | Analyze columns for filter options |
+| POST | `/api/models/{model_id}/datasets/search-category-values/` | Search category values (autocomplete) |
 
 ### API Response Examples
 

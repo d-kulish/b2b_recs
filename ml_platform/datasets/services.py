@@ -1677,8 +1677,11 @@ class DatasetStatsService:
                 )
                 applied_filters['customers'] = {'type': 'min_transactions', 'value': min_value}
 
-        # Product filter (top N% revenue)
+        # Product filters (new structure with top_revenue, category_filters, numeric_filters)
         product_filter = filters.get('product_filter', {})
+        product_filter_summary = []  # Track all applied product filters for badge display
+
+        # Legacy support: handle old 'type': 'top_revenue' format
         if product_filter.get('type') == 'top_revenue':
             product_col = self._extract_column_name(product_filter.get('product_column'))
             revenue_col = self._extract_column_name(product_filter.get('revenue_column'))
@@ -1703,7 +1706,154 @@ class DatasetStatsService:
                 where_clauses.append(
                     f"`{primary_alias}`.`{product_col}` IN (SELECT `{product_col}` FROM top_products)"
                 )
-                applied_filters['products'] = {'type': 'top_revenue', 'percent': percent}
+                product_filter_summary.append({'type': 'top_revenue', 'percent': percent})
+
+        # New structure: top_revenue as nested object
+        top_revenue = product_filter.get('top_revenue', {})
+        if top_revenue.get('enabled'):
+            product_col = self._extract_column_name(top_revenue.get('product_column'))
+            revenue_col = self._extract_column_name(top_revenue.get('revenue_column'))
+            percent = top_revenue.get('threshold_percent', 80)
+
+            if product_col and revenue_col:
+                cte = f"""
+                    SELECT `{product_col}`
+                    FROM (
+                        SELECT
+                            `{product_col}`,
+                            SUM(`{revenue_col}`) as total_revenue,
+                            SUM(SUM(`{revenue_col}`)) OVER () as grand_total,
+                            SUM(SUM(`{revenue_col}`)) OVER (ORDER BY SUM(`{revenue_col}`) DESC) as running_total
+                        FROM `{full_table_ref}`
+                        GROUP BY `{product_col}`
+                    )
+                    WHERE running_total <= grand_total * {percent / 100}
+                       OR running_total - total_revenue < grand_total * {percent / 100}
+                """
+                ctes.append(('top_products', cte))
+                where_clauses.append(
+                    f"`{primary_alias}`.`{product_col}` IN (SELECT `{product_col}` FROM top_products)"
+                )
+                product_filter_summary.append({'type': 'top_revenue', 'percent': percent})
+
+        # Category filters (IN / NOT IN for STRING columns)
+        category_filters = product_filter.get('category_filters', [])
+        for i, cat_filter in enumerate(category_filters):
+            column = cat_filter.get('column')  # Format: "table.column"
+            mode = cat_filter.get('mode', 'include')  # 'include' or 'exclude'
+            values = cat_filter.get('values', [])
+
+            if column and values:
+                # Parse column reference
+                col_name = self._extract_column_name(column)
+                # Determine table alias from column format
+                if '.' in column:
+                    table_alias = column.split('.')[0]
+                else:
+                    table_alias = primary_alias
+
+                # Build SQL values list with proper escaping
+                escaped_values = [v.replace("'", "''") for v in values]
+                values_sql = ", ".join(f"'{v}'" for v in escaped_values)
+
+                if mode == 'include':
+                    where_clauses.append(f"`{table_alias}`.`{col_name}` IN ({values_sql})")
+                else:  # exclude
+                    where_clauses.append(f"`{table_alias}`.`{col_name}` NOT IN ({values_sql})")
+
+                product_filter_summary.append({
+                    'type': 'category',
+                    'column': column,
+                    'mode': mode,
+                    'count': len(values)
+                })
+
+        # Numeric filters (range, equals, not_equals for INTEGER/FLOAT columns)
+        numeric_filters = product_filter.get('numeric_filters', [])
+        for i, num_filter in enumerate(numeric_filters):
+            column = num_filter.get('column')  # Format: "table.column"
+            filter_type = num_filter.get('type', 'range')  # 'range', 'equals', 'not_equals'
+            include_nulls = num_filter.get('include_nulls', True)
+
+            if not column:
+                continue
+
+            # Parse column reference
+            col_name = self._extract_column_name(column)
+            if '.' in column:
+                table_alias = column.split('.')[0]
+            else:
+                table_alias = primary_alias
+
+            col_ref = f"`{table_alias}`.`{col_name}`"
+            conditions = []
+
+            if filter_type == 'range':
+                min_val = num_filter.get('min')
+                max_val = num_filter.get('max')
+
+                range_conditions = []
+                if min_val is not None:
+                    range_conditions.append(f"{col_ref} >= {min_val}")
+                if max_val is not None:
+                    range_conditions.append(f"{col_ref} <= {max_val}")
+
+                if range_conditions:
+                    if include_nulls:
+                        # Include NULLs: (condition OR column IS NULL)
+                        conditions.append(f"(({' AND '.join(range_conditions)}) OR {col_ref} IS NULL)")
+                    else:
+                        # Exclude NULLs: condition AND column IS NOT NULL
+                        conditions.append(f"({' AND '.join(range_conditions)} AND {col_ref} IS NOT NULL)")
+
+                product_filter_summary.append({
+                    'type': 'numeric_range',
+                    'column': column,
+                    'min': min_val,
+                    'max': max_val
+                })
+
+            elif filter_type == 'equals':
+                value = num_filter.get('value')
+                if value is not None:
+                    if include_nulls:
+                        conditions.append(f"({col_ref} = {value} OR {col_ref} IS NULL)")
+                    else:
+                        conditions.append(f"({col_ref} = {value} AND {col_ref} IS NOT NULL)")
+
+                    product_filter_summary.append({
+                        'type': 'numeric_equals',
+                        'column': column,
+                        'value': value
+                    })
+
+            elif filter_type == 'not_equals':
+                value = num_filter.get('value')
+                if value is not None:
+                    if include_nulls:
+                        conditions.append(f"({col_ref} != {value} OR {col_ref} IS NULL)")
+                    else:
+                        conditions.append(f"({col_ref} != {value} AND {col_ref} IS NOT NULL)")
+
+                    product_filter_summary.append({
+                        'type': 'numeric_not_equals',
+                        'column': column,
+                        'value': value
+                    })
+
+            # Add all conditions for this numeric filter
+            for cond in conditions:
+                where_clauses.append(cond)
+
+        # Set applied_filters['products'] based on what was applied
+        if product_filter_summary:
+            applied_filters['products'] = {
+                'type': 'multiple',
+                'filters': product_filter_summary,
+                'count': len(product_filter_summary)
+            }
+        else:
+            applied_filters['products'] = {'type': 'none'}
 
         # Build final query
         query_parts = []
@@ -1898,9 +2048,53 @@ class DatasetStatsService:
         if customer_filter.get('type') == 'min_transactions':
             applied['customers'] = {'type': 'min_transactions', 'value': customer_filter.get('value', 2)}
 
+        # Handle product filters (legacy and new format)
         product_filter = filters.get('product_filter', {})
+        product_filter_summary = []
+
+        # Legacy format: 'type': 'top_revenue'
         if product_filter.get('type') == 'top_revenue':
             applied['products'] = {'type': 'top_revenue', 'percent': product_filter.get('percent', 80)}
+        else:
+            # New format with top_revenue, category_filters, numeric_filters
+            top_revenue = product_filter.get('top_revenue', {})
+            if top_revenue.get('enabled'):
+                product_filter_summary.append({
+                    'type': 'top_revenue',
+                    'percent': top_revenue.get('threshold_percent', 80)
+                })
+
+            category_filters = product_filter.get('category_filters', [])
+            for cat_filter in category_filters:
+                if cat_filter.get('column') and cat_filter.get('values'):
+                    product_filter_summary.append({
+                        'type': 'category',
+                        'column': cat_filter['column'],
+                        'mode': cat_filter.get('mode', 'include'),
+                        'count': len(cat_filter['values'])
+                    })
+
+            numeric_filters = product_filter.get('numeric_filters', [])
+            for num_filter in numeric_filters:
+                if num_filter.get('column'):
+                    filter_type = num_filter.get('type', 'range')
+                    summary = {
+                        'type': f'numeric_{filter_type}',
+                        'column': num_filter['column']
+                    }
+                    if filter_type == 'range':
+                        summary['min'] = num_filter.get('min')
+                        summary['max'] = num_filter.get('max')
+                    else:
+                        summary['value'] = num_filter.get('value')
+                    product_filter_summary.append(summary)
+
+            if product_filter_summary:
+                applied['products'] = {
+                    'type': 'multiple',
+                    'filters': product_filter_summary,
+                    'count': len(product_filter_summary)
+                }
 
         return applied
 
@@ -1911,3 +2105,343 @@ class DatasetStatsService:
         if '.' in column_ref:
             return column_ref.split('.')[-1]
         return column_ref
+
+
+# =============================================================================
+# COLUMN ANALYSIS SERVICE
+# =============================================================================
+
+class ColumnAnalysisService:
+    """
+    Service for analyzing columns from cached pandas sample data.
+
+    Used to provide column metadata for product filters:
+    - Detect column types (STRING, INTEGER, FLOAT)
+    - Get unique values for STRING columns (for category filters)
+    - Get min/max/null stats for numeric columns (for numeric filters)
+
+    Uses the cached sample data from Step 3 (Schema Builder) to avoid
+    additional BigQuery queries.
+    """
+
+    # Threshold for switching from list mode to autocomplete mode
+    AUTOCOMPLETE_THRESHOLD = 100
+
+    def __init__(self, session_data: dict):
+        """
+        Initialize the service with cached session data.
+
+        Args:
+            session_data: Dict from DatasetPreviewService cache containing:
+                - dataframes: Dict of table_name -> list of row dicts
+                - tables: Dict of table_name -> metadata
+        """
+        self.session_data = session_data
+        self._dataframes = {}
+
+        # Reconstruct pandas DataFrames from cached data
+        import pandas as pd
+        for table_name, records in session_data.get('dataframes', {}).items():
+            self._dataframes[table_name] = pd.DataFrame(records)
+
+    def analyze_columns(self, selected_columns: dict) -> dict:
+        """
+        Analyze all selected columns and return metadata for filtering.
+
+        Args:
+            selected_columns: Dict of table_name -> list of column names
+                e.g., {"raw_data.transactions": ["category", "price", "amount"]}
+
+        Returns:
+            Dict with column analysis:
+            {
+                "status": "success",
+                "columns": {
+                    "transactions.category": {
+                        "type": "STRING",
+                        "unique_count": 12,
+                        "display_mode": "list",
+                        "values": [
+                            {"value": "Electronics", "count": 45},
+                            {"value": "Clothing", "count": 32},
+                            ...
+                        ],
+                        "null_count": 5,
+                        "null_percent": 5.0,
+                        "total_rows": 100
+                    },
+                    "transactions.price": {
+                        "type": "FLOAT",
+                        "min": 0.50,
+                        "max": 12450.00,
+                        "mean": 245.67,
+                        "null_count": 2,
+                        "null_percent": 2.0,
+                        "total_rows": 100
+                    },
+                    ...
+                }
+            }
+        """
+        import pandas as pd
+
+        result = {
+            'status': 'success',
+            'columns': {}
+        }
+
+        for table_name, columns in selected_columns.items():
+            if table_name not in self._dataframes:
+                logger.warning(f"Table {table_name} not found in session data")
+                continue
+
+            df = self._dataframes[table_name]
+            table_short = table_name.split('.')[-1]
+
+            for col_name in columns:
+                if col_name not in df.columns:
+                    logger.warning(f"Column {col_name} not found in {table_name}")
+                    continue
+
+                # Use "table.column" format for column key
+                col_key = f"{table_short}.{col_name}"
+                col_data = df[col_name]
+                total_rows = len(df)
+
+                # Detect column type and analyze accordingly
+                col_type = self._detect_column_type(col_data)
+                null_count = int(col_data.isna().sum())
+                null_percent = round(null_count * 100.0 / total_rows, 2) if total_rows > 0 else 0
+
+                if col_type == 'STRING':
+                    result['columns'][col_key] = self._analyze_string_column(
+                        col_data, col_type, null_count, null_percent, total_rows
+                    )
+                elif col_type in ('INTEGER', 'FLOAT'):
+                    result['columns'][col_key] = self._analyze_numeric_column(
+                        col_data, col_type, null_count, null_percent, total_rows
+                    )
+                else:
+                    # For other types (DATE, TIMESTAMP, BOOL), provide basic info
+                    result['columns'][col_key] = {
+                        'type': col_type,
+                        'null_count': null_count,
+                        'null_percent': null_percent,
+                        'total_rows': total_rows,
+                        'filterable': False,
+                        'reason': f'{col_type} columns not supported for product filters'
+                    }
+
+        return result
+
+    def _detect_column_type(self, col_data) -> str:
+        """
+        Detect the BigQuery-compatible type from pandas Series.
+
+        Args:
+            col_data: pandas Series
+
+        Returns:
+            String type: 'STRING', 'INTEGER', 'FLOAT', 'BOOL', 'TIMESTAMP', 'DATE'
+        """
+        import pandas as pd
+        import numpy as np
+
+        dtype = col_data.dtype
+
+        # Check for boolean first
+        if dtype == bool or dtype == 'bool':
+            return 'BOOL'
+
+        # Check for integer types
+        if pd.api.types.is_integer_dtype(dtype):
+            return 'INTEGER'
+
+        # Check for float types
+        if pd.api.types.is_float_dtype(dtype):
+            # Check if it's actually integer data stored as float (common with NaN)
+            non_null = col_data.dropna()
+            if len(non_null) > 0:
+                if all(float(x).is_integer() for x in non_null):
+                    return 'INTEGER'
+            return 'FLOAT'
+
+        # Check for datetime types
+        if pd.api.types.is_datetime64_any_dtype(dtype):
+            return 'TIMESTAMP'
+
+        # Check for date in object columns (strings that look like dates)
+        if dtype == object:
+            # Sample non-null values to check type
+            non_null = col_data.dropna().head(10)
+            if len(non_null) > 0:
+                sample = non_null.iloc[0]
+                if isinstance(sample, (pd.Timestamp, np.datetime64)):
+                    return 'TIMESTAMP'
+
+        # Default to STRING for object dtype
+        return 'STRING'
+
+    def _analyze_string_column(
+        self,
+        col_data,
+        col_type: str,
+        null_count: int,
+        null_percent: float,
+        total_rows: int
+    ) -> dict:
+        """
+        Analyze a STRING column for category filtering.
+
+        Args:
+            col_data: pandas Series
+            col_type: Column type string
+            null_count: Count of null values
+            null_percent: Percentage of null values
+            total_rows: Total row count
+
+        Returns:
+            Dict with column analysis including unique values
+        """
+        # Get value counts (excludes NaN by default)
+        value_counts = col_data.value_counts()
+        unique_count = len(value_counts)
+
+        result = {
+            'type': col_type,
+            'unique_count': unique_count,
+            'null_count': null_count,
+            'null_percent': null_percent,
+            'total_rows': total_rows,
+            'filterable': True,
+            'filter_type': 'category'
+        }
+
+        # Determine display mode based on unique count
+        if unique_count > self.AUTOCOMPLETE_THRESHOLD:
+            result['display_mode'] = 'autocomplete'
+            # Provide top 20 values as sample for autocomplete
+            top_values = value_counts.head(20)
+            result['sample_values'] = [
+                {'value': str(val), 'count': int(count)}
+                for val, count in top_values.items()
+            ]
+        else:
+            result['display_mode'] = 'list'
+            # Provide all values with counts, sorted by frequency
+            result['values'] = [
+                {'value': str(val), 'count': int(count)}
+                for val, count in value_counts.items()
+            ]
+
+        return result
+
+    def _analyze_numeric_column(
+        self,
+        col_data,
+        col_type: str,
+        null_count: int,
+        null_percent: float,
+        total_rows: int
+    ) -> dict:
+        """
+        Analyze a numeric column (INTEGER or FLOAT) for range filtering.
+
+        Args:
+            col_data: pandas Series
+            col_type: Column type string ('INTEGER' or 'FLOAT')
+            null_count: Count of null values
+            null_percent: Percentage of null values
+            total_rows: Total row count
+
+        Returns:
+            Dict with column analysis including min/max/mean
+        """
+        import numpy as np
+
+        # Get numeric statistics (excludes NaN)
+        non_null = col_data.dropna()
+
+        result = {
+            'type': col_type,
+            'null_count': null_count,
+            'null_percent': null_percent,
+            'total_rows': total_rows,
+            'filterable': True,
+            'filter_type': 'numeric'
+        }
+
+        if len(non_null) > 0:
+            min_val = non_null.min()
+            max_val = non_null.max()
+            mean_val = non_null.mean()
+
+            # Convert numpy types to Python types for JSON serialization
+            if col_type == 'INTEGER':
+                result['min'] = int(min_val)
+                result['max'] = int(max_val)
+                result['mean'] = round(float(mean_val), 2)
+            else:
+                result['min'] = round(float(min_val), 2)
+                result['max'] = round(float(max_val), 2)
+                result['mean'] = round(float(mean_val), 2)
+
+            # Add unique count for numeric columns (useful for sparse data)
+            result['unique_count'] = int(non_null.nunique())
+        else:
+            result['min'] = None
+            result['max'] = None
+            result['mean'] = None
+            result['unique_count'] = 0
+
+        return result
+
+    def search_category_values(
+        self,
+        table_name: str,
+        column_name: str,
+        search_term: str,
+        limit: int = 20
+    ) -> list:
+        """
+        Search for category values matching a search term.
+
+        Used for autocomplete mode when there are >100 unique values.
+
+        Args:
+            table_name: Table name (e.g., "raw_data.products")
+            column_name: Column name (e.g., "category")
+            search_term: Search string to match
+            limit: Maximum number of results to return
+
+        Returns:
+            List of matching values with counts:
+            [
+                {"value": "Electronics", "count": 45},
+                {"value": "Electrical", "count": 12},
+                ...
+            ]
+        """
+        if table_name not in self._dataframes:
+            return []
+
+        df = self._dataframes[table_name]
+        if column_name not in df.columns:
+            return []
+
+        col_data = df[column_name]
+
+        # Get value counts
+        value_counts = col_data.value_counts()
+
+        # Filter by search term (case-insensitive)
+        search_lower = search_term.lower()
+        matching = [
+            {'value': str(val), 'count': int(count)}
+            for val, count in value_counts.items()
+            if search_lower in str(val).lower()
+        ]
+
+        # Sort by count descending and limit
+        matching.sort(key=lambda x: x['count'], reverse=True)
+        return matching[:limit]

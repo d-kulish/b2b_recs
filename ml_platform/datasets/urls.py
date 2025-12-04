@@ -57,4 +57,8 @@ urlpatterns = [
 
     # === DATASET STATS (for Dataset Summary panel) ===
     path('api/models/<int:model_id>/datasets/stats/', api.get_dataset_stats, name='api_datasets_stats'),
+
+    # === COLUMN ANALYSIS (for Product Filters) ===
+    path('api/models/<int:model_id>/datasets/analyze-columns/', api.analyze_columns_for_filters, name='api_datasets_analyze_columns'),
+    path('api/models/<int:model_id>/datasets/search-category-values/', api.search_category_values, name='api_datasets_search_category_values'),
 ]

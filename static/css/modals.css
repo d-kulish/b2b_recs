@@ -277,8 +277,8 @@
 }
 
 .progress-step-pill.completed {
-    background-color: #dcfce7;
-    color: #374151;
+    background-color: #ffffff;
+    color: #16a34a;
     margin-right: -24px;
     padding-right: 40px;
     border-top: 1px solid #16a34a;
@@ -329,6 +329,191 @@
 .modal-footer-wizard .btn-wizard {
     min-width: 100px;
     justify-content: center;
+}
+
+/* ============================================================================
+   NEUMORPHIC WIZARD NAVIGATION BUTTONS (New Style)
+   ============================================================================
+   Soft UI style navigation with rounded square nav buttons and wider action buttons
+   ============================================================================ */
+
+/* Container for neumorphic footer */
+.modal-footer-wizard-neu {
+    padding: 12px 20px;
+    border-top: 1px solid #e5e7eb;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: #ffffff;
+    border-radius: 0 0 12px 12px;
+}
+
+.modal-footer-wizard-neu .footer-left {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.modal-footer-wizard-neu .footer-right {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+/* Base neumorphic button style - outer frame */
+.btn-neu {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: 18px;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    font-weight: 600;
+    font-size: 14px;
+    /* White outer frame with visible shadow */
+    background: linear-gradient(145deg, #ffffff, #dcdcdc);
+    box-shadow:
+        6px 6px 14px rgba(0, 0, 0, 0.2),
+        -4px -4px 10px rgba(255, 255, 255, 1),
+        inset 1px 1px 2px rgba(255, 255, 255, 0.8);
+    padding: 6px;
+}
+
+.btn-neu:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.btn-neu:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow:
+        6px 6px 15px rgba(0, 0, 0, 0.18),
+        -3px -3px 10px rgba(255, 255, 255, 0.9);
+}
+
+.btn-neu:active:not(:disabled) {
+    transform: translateY(0);
+    box-shadow:
+        2px 2px 6px rgba(0, 0, 0, 0.12),
+        -1px -1px 4px rgba(255, 255, 255, 0.7);
+}
+
+/* Inner gradient element for buttons */
+.btn-neu-inner {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    border-radius: 12px;
+    color: #ffffff;
+    transition: all 0.25s ease;
+}
+
+/* Navigation buttons (< and >) - Square style with gradient */
+.btn-neu-nav {
+    width: 48px;
+    height: 48px;
+    border-radius: 16px;
+    padding: 6px;
+}
+
+.btn-neu-nav .btn-neu-inner {
+    font-size: 16px;
+    background: linear-gradient(145deg, #60a5fa, #3b82f6);
+    border-radius: 10px;
+}
+
+.btn-neu-nav:hover:not(:disabled) .btn-neu-inner {
+    background: linear-gradient(145deg, #3b82f6, #2563eb);
+}
+
+.btn-neu-nav:active:not(:disabled) .btn-neu-inner {
+    background: linear-gradient(145deg, #2563eb, #1d4ed8);
+}
+
+/* Action buttons (Save/Cancel) - Wider style with gradient */
+.btn-neu-action {
+    min-width: 120px;
+    height: 48px;
+    padding: 6px;
+    border-radius: 16px;
+}
+
+.btn-neu-action .btn-neu-inner {
+    padding: 0 20px;
+    border-radius: 10px;
+}
+
+/* Cancel button - Red/Pink gradient */
+.btn-neu-cancel .btn-neu-inner {
+    background: linear-gradient(145deg, #f87171, #ef4444);
+}
+
+.btn-neu-cancel:hover:not(:disabled) .btn-neu-inner {
+    background: linear-gradient(145deg, #ef4444, #dc2626);
+}
+
+.btn-neu-cancel:active:not(:disabled) .btn-neu-inner {
+    background: linear-gradient(145deg, #dc2626, #b91c1c);
+}
+
+/* Save button - Dark green gradient (matches progress bar pill) */
+.btn-neu-save .btn-neu-inner {
+    background: linear-gradient(145deg, #22c55e, #16a34a);
+}
+
+.btn-neu-save:hover:not(:disabled) .btn-neu-inner {
+    background: linear-gradient(145deg, #16a34a, #15803d);
+}
+
+.btn-neu-save:active:not(:disabled) .btn-neu-inner {
+    background: linear-gradient(145deg, #15803d, #166534);
+}
+
+/* Secondary button - Gray/neutral gradient */
+.btn-neu-secondary .btn-neu-inner {
+    background: linear-gradient(145deg, #9ca3af, #6b7280);
+}
+
+.btn-neu-secondary:hover:not(:disabled) .btn-neu-inner {
+    background: linear-gradient(145deg, #6b7280, #4b5563);
+}
+
+.btn-neu-secondary:active:not(:disabled) .btn-neu-inner {
+    background: linear-gradient(145deg, #4b5563, #374151);
+}
+
+/* Blue action button - for primary actions like View SQL */
+.btn-neu-nav-wide .btn-neu-inner {
+    background: linear-gradient(145deg, #60a5fa, #3b82f6);
+}
+
+.btn-neu-nav-wide:hover:not(:disabled) .btn-neu-inner {
+    background: linear-gradient(145deg, #3b82f6, #2563eb);
+}
+
+.btn-neu-nav-wide:active:not(:disabled) .btn-neu-inner {
+    background: linear-gradient(145deg, #2563eb, #1d4ed8);
+}
+
+/* Warning button - Orange/Yellow gradient */
+.btn-neu-warning .btn-neu-inner {
+    background: linear-gradient(145deg, #fbbf24, #f59e0b);
+}
+
+.btn-neu-warning:hover:not(:disabled) .btn-neu-inner {
+    background: linear-gradient(145deg, #f59e0b, #d97706);
+}
+
+.btn-neu-warning:active:not(:disabled) .btn-neu-inner {
+    background: linear-gradient(145deg, #d97706, #b45309);
+}
+
+/* Hidden utility for neumorphic buttons */
+.btn-neu.hidden {
+    display: none;
 }
 
 /* Wizard Step Content */

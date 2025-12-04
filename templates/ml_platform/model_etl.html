@@ -391,10 +391,13 @@
         </div>
 
         <!-- Footer -->
-        <div class="px-5 py-4 border-t border-gray-200 flex justify-end">
-            <button onclick="closeNotification()" class="btn btn-secondary btn-nav-uniform">
-                OK
-            </button>
+        <div class="modal-footer-wizard-neu">
+            <div class="footer-left"></div>
+            <div class="footer-right">
+                <button onclick="closeNotification()" class="btn-neu btn-neu-action btn-neu-secondary">
+                    <span class="btn-neu-inner">OK</span>
+                </button>
+            </div>
         </div>
     </div>
 </div>
@@ -514,16 +517,19 @@
         </div>
 
         <!-- Footer -->
-        <div class="px-5 py-4 border-t border-gray-200 flex justify-between items-center flex-shrink-0">
-            <div id="runDetailsLogsLink" class="hidden">
-                <a id="runDetailsLogsUrl" href="#" target="_blank" class="text-sm text-blue-600 hover:text-blue-800 font-medium">
-                    <i class="fas fa-external-link-alt mr-1"></i>View Cloud Run Logs
-                </a>
+        <div class="modal-footer-wizard-neu">
+            <div class="footer-left">
+                <div id="runDetailsLogsLink" class="hidden">
+                    <a id="runDetailsLogsUrl" href="#" target="_blank" class="text-sm text-blue-600 hover:text-blue-800 font-medium">
+                        <i class="fas fa-external-link-alt mr-1"></i>View Cloud Run Logs
+                    </a>
+                </div>
             </div>
-            <div class="flex-1"></div>
-            <button onclick="closeRunDetailsModal()" class="btn btn-secondary btn-nav-uniform">
-                Close
-            </button>
+            <div class="footer-right">
+                <button onclick="closeRunDetailsModal()" class="btn-neu btn-neu-action btn-neu-cancel">
+                    <span class="btn-neu-inner">Cancel</span>
+                </button>
+            </div>
         </div>
     </div>
 </div>
@@ -545,13 +551,16 @@
         </div>
 
         <!-- Footer -->
-        <div class="px-5 py-4 border-t border-gray-200 flex justify-end gap-3">
-            <button id="confirmationConfirmBtn" onclick="closeConfirmation(true)" class="btn btn-primary btn-nav-uniform">
-                Confirm
-            </button>
-            <button onclick="closeConfirmation(false)" class="btn btn-secondary btn-nav-uniform">
-                Cancel
-            </button>
+        <div class="modal-footer-wizard-neu">
+            <div class="footer-left"></div>
+            <div class="footer-right">
+                <button id="confirmationConfirmBtn" onclick="closeConfirmation(true)" class="btn-neu btn-neu-action btn-neu-save">
+                    <span class="btn-neu-inner">Confirm</span>
+                </button>
+                <button onclick="closeConfirmation(false)" class="btn-neu btn-neu-action btn-neu-cancel">
+                    <span class="btn-neu-inner">Cancel</span>
+                </button>
+            </div>
         </div>
     </div>
 </div>
@@ -1326,25 +1335,25 @@
             </div>
         </div>
 
-        <!-- Modal Footer -->
-        <div class="modal-footer-wizard" style="background-color: #ffffff;">
-            <!-- Left: Navigation Buttons -->
+        <!-- Modal Footer (Neumorphic Style) -->
+        <div class="modal-footer-wizard-neu">
+            <!-- Left: Navigation Buttons (< >) -->
             <div class="footer-left">
-                <button id="backButton" onclick="previousStep()" class="btn btn-secondary btn-nav-uniform hidden" disabled>
-                    <i class="fas fa-chevron-left mr-1"></i> Back
+                <button id="backButton" onclick="previousStep()" class="btn-neu btn-neu-nav hidden" disabled>
+                    <span class="btn-neu-inner"><i class="fas fa-chevron-left"></i></span>
                 </button>
-                <button id="nextButton" onclick="nextStep()" class="btn btn-primary btn-nav-uniform" disabled>
-                    Next <i class="fas fa-chevron-right ml-1"></i>
+                <button id="nextButton" onclick="nextStep()" class="btn-neu btn-neu-nav" disabled>
+                    <span class="btn-neu-inner"><i class="fas fa-chevron-right"></i></span>
                 </button>
             </div>
 
-            <!-- Right: Create and Cancel buttons -->
+            <!-- Right: Save and Cancel buttons -->
             <div class="footer-right">
-                <button id="createButton" onclick="createDataSource()" class="btn btn-secondary btn-nav-uniform hidden">
-                    Save
+                <button id="createButton" onclick="createDataSource()" class="btn-neu btn-neu-action btn-neu-save hidden">
+                    <span class="btn-neu-inner">Save</span>
                 </button>
-                <button onclick="hideAddSourceModal()" class="btn btn-secondary btn-nav-uniform">
-                    Cancel
+                <button onclick="hideAddSourceModal()" class="btn-neu btn-neu-action btn-neu-cancel">
+                    <span class="btn-neu-inner">Cancel</span>
                 </button>
             </div>
         </div>
@@ -1858,25 +1867,25 @@
             </div>
         </div>
 
-        <!-- Modal Footer -->
-        <div class="modal-footer-wizard" style="background-color: #ffffff;">
-            <!-- Left: Navigation Buttons -->
+        <!-- Modal Footer (Neumorphic Style) -->
+        <div class="modal-footer-wizard-neu">
+            <!-- Left: Navigation Buttons (< >) -->
             <div class="footer-left">
-                <button id="connBackBtn" onclick="connPreviousStep()" class="btn btn-secondary btn-nav-uniform">
-                    <i class="fas fa-chevron-left mr-1"></i> Back
+                <button id="connBackBtn" onclick="connPreviousStep()" class="btn-neu btn-neu-nav hidden">
+                    <span class="btn-neu-inner"><i class="fas fa-chevron-left"></i></span>
                 </button>
-                <button id="connNextBtn" onclick="connNextStep()" class="btn btn-primary btn-nav-uniform">
-                    Next <i class="fas fa-chevron-right ml-1"></i>
+                <button id="connNextBtn" onclick="connNextStep()" class="btn-neu btn-neu-nav">
+                    <span class="btn-neu-inner"><i class="fas fa-chevron-right"></i></span>
                 </button>
             </div>
 
             <!-- Right: Save and Cancel Buttons -->
             <div class="footer-right">
-                <button id="connSaveBtn" onclick="saveConnectionStandalone()" class="btn btn-secondary btn-nav-uniform hidden">
-                    Save
+                <button id="connSaveBtn" onclick="saveConnectionStandalone()" class="btn-neu btn-neu-action btn-neu-save hidden">
+                    <span class="btn-neu-inner">Save</span>
                 </button>
-                <button id="connCancelBtn" onclick="closeCreateConnectionModal()" class="btn btn-secondary btn-nav-uniform">
-                    Cancel
+                <button id="connCancelBtn" onclick="closeCreateConnectionModal()" class="btn-neu btn-neu-action btn-neu-cancel">
+                    <span class="btn-neu-inner">Cancel</span>
                 </button>
             </div>
         </div>
@@ -2075,14 +2084,17 @@
             <p id="confirmModalMessage">Are you sure you want to proceed?</p>
         </div>
 
-        <!-- Modal Footer -->
-        <div class="modal-footer">
-            <button id="confirmModalCancelBtn" class="btn btn-secondary btn-nav-uniform">
-                Cancel
-            </button>
-            <button id="confirmModalConfirmBtn" class="btn btn-danger btn-nav-uniform">
-                Confirm
-            </button>
+        <!-- Modal Footer (Neumorphic Style) -->
+        <div class="modal-footer-wizard-neu">
+            <div class="footer-left"></div>
+            <div class="footer-right">
+                <button id="confirmModalConfirmBtn" class="btn-neu btn-neu-action btn-neu-cancel">
+                    <span class="btn-neu-inner">Confirm</span>
+                </button>
+                <button id="confirmModalCancelBtn" class="btn-neu btn-neu-action btn-neu-secondary">
+                    <span class="btn-neu-inner">Cancel</span>
+                </button>
+            </div>
         </div>
     </div>
 </div>
@@ -2266,15 +2278,15 @@
             </div>
         </div>
 
-        <!-- Modal Footer -->
-        <div class="modal-footer-wizard" style="background-color: #ffffff;">
+        <!-- Modal Footer (Neumorphic Style) -->
+        <div class="modal-footer-wizard-neu">
             <div class="footer-left"></div>
             <div class="footer-right">
-                <button onclick="closeEditJobModal()" class="btn btn-secondary btn-nav-uniform">
-                    Cancel
+                <button onclick="saveJobChanges()" id="editJobSaveBtn" class="btn-neu btn-neu-action btn-neu-save">
+                    <span class="btn-neu-inner">Save</span>
                 </button>
-                <button onclick="saveJobChanges()" id="editJobSaveBtn" class="btn btn-secondary btn-nav-uniform">
-                    Save
+                <button onclick="closeEditJobModal()" class="btn-neu btn-neu-action btn-neu-cancel">
+                    <span class="btn-neu-inner">Cancel</span>
                 </button>
             </div>
         </div>
@@ -2749,8 +2761,12 @@ function showConfirmModal(options) {
     // Set content
     title.textContent = options.title || 'Confirm Action';
     message.innerHTML = options.message || 'Are you sure you want to proceed?';
-    confirmBtn.textContent = options.confirmText || 'Confirm';
-    cancelBtn.textContent = options.cancelText || 'Cancel';
+
+    // Update inner span text for neumorphic buttons
+    const confirmInner = confirmBtn.querySelector('.btn-neu-inner');
+    const cancelInner = cancelBtn.querySelector('.btn-neu-inner');
+    if (confirmInner) confirmInner.textContent = options.confirmText || 'Confirm';
+    if (cancelInner) cancelInner.textContent = options.cancelText || 'Cancel';
 
     // Hide cancel button if confirmText is 'OK' (info/error messages)
     if (options.confirmText === 'OK') {
@@ -2765,21 +2781,24 @@ function showConfirmModal(options) {
 
     // Update icon based on type
     const iconElement = icon.querySelector('i');
+    // Base classes for neumorphic button
+    const baseClasses = 'btn-neu btn-neu-action';
+
     if (type === 'danger') {
         iconElement.className = 'fas fa-exclamation-triangle text-xl';
-        confirmBtn.className = 'btn btn-danger';
+        confirmBtn.className = `${baseClasses} btn-neu-cancel`;
     } else if (type === 'warning') {
         iconElement.className = 'fas fa-exclamation-circle text-xl';
-        confirmBtn.className = 'btn btn-warning';
+        confirmBtn.className = `${baseClasses} btn-neu-warning`;
     } else if (type === 'info') {
         iconElement.className = 'fas fa-info-circle text-xl';
-        confirmBtn.className = 'btn btn-primary';
+        confirmBtn.className = `${baseClasses} btn-neu-nav-wide`;
     } else if (type === 'success') {
         iconElement.className = 'fas fa-check-circle text-xl';
-        confirmBtn.className = 'btn btn-success';
+        confirmBtn.className = `${baseClasses} btn-neu-save`;
     }
 
-    confirmBtn.style.minWidth = '100px';
+    confirmBtn.style.minWidth = '';
 
     // Remove old event listeners by cloning
     const newConfirmBtn = confirmBtn.cloneNode(true);
@@ -5183,7 +5202,6 @@ function showStep(step) {
         updateStep1NextButton();
         if (nextButton) {
             nextButton.classList.remove('hidden');
-            nextButton.innerHTML = 'Next <i class="fas fa-chevron-right ml-1"></i>';
         }
         if (createButton) createButton.classList.add('hidden');
     }
@@ -5197,7 +5215,6 @@ function showStep(step) {
         }
         if (nextButton) {
             nextButton.classList.remove('hidden');
-            nextButton.innerHTML = 'Next <i class="fas fa-chevron-right ml-1"></i>';
             // Update button state based on whether it's a cloud storage source
             updateStep2NextButton();
         }
@@ -5213,7 +5230,6 @@ function showStep(step) {
         if (nextButton) {
             nextButton.classList.remove('hidden');
             nextButton.disabled = false;
-            nextButton.innerHTML = 'Next <i class="fas fa-chevron-right ml-1"></i>';
         }
         if (createButton) createButton.classList.add('hidden');
     }
@@ -5227,7 +5243,6 @@ function showStep(step) {
         if (nextButton) {
             nextButton.classList.remove('hidden');
             nextButton.disabled = false;
-            nextButton.innerHTML = 'Next <i class="fas fa-chevron-right ml-1"></i>';
         }
         if (createButton) createButton.classList.add('hidden');
     }
@@ -5238,17 +5253,15 @@ function showStep(step) {
             backButton.classList.remove('hidden');
             backButton.disabled = false;
         }
+        // Hide next button on last step
         if (nextButton) {
             nextButton.classList.add('hidden');
         }
+        // Show Save button on last step
         if (createButton) {
             createButton.classList.remove('hidden');
             createButton.onclick = createETLJob;
-            if (wizardEditMode) {
-                createButton.innerHTML = 'Save';
-            } else {
-                createButton.innerHTML = 'Save';
-            }
+            createButton.querySelector('.btn-neu-inner').textContent = 'Save';
         }
     }
 }
@@ -8730,57 +8743,48 @@ function showConfirmation(message, type = 'info', title = null, confirmText = 'C
         const titleEl = document.getElementById('confirmationTitle');
         const messageEl = document.getElementById('confirmationMessage');
         const confirmBtn = document.getElementById('confirmationConfirmBtn');
+        const confirmInner = confirmBtn.querySelector('.btn-neu-inner');
 
         // Set message
         messageEl.textContent = message;
 
         // Set confirm button text
-        confirmBtn.textContent = confirmText;
+        if (confirmInner) {
+            confirmInner.textContent = confirmText;
+        }
+
+        // Base classes for neumorphic button
+        const baseClasses = 'btn-neu btn-neu-action';
+
+        // Clear inline styles (no longer needed with neumorphic buttons)
+        confirmBtn.style.backgroundColor = '';
+        confirmBtn.onmouseenter = null;
+        confirmBtn.onmouseleave = null;
 
         // Set icon, colors, and button style based on type
         if (type === 'danger') {
             // Red for Delete action
             icon.className = 'fas fa-exclamation-triangle text-red-600 text-xl';
             titleEl.textContent = title || 'Confirm Delete';
-            confirmBtn.className = 'btn btn-nav-uniform text-white';
-            confirmBtn.style.backgroundColor = '#dc2626';
-            confirmBtn.onmouseenter = function() { this.style.backgroundColor = '#b91c1c'; };
-            confirmBtn.onmouseleave = function() { this.style.backgroundColor = '#dc2626'; };
+            confirmBtn.className = `${baseClasses} btn-neu-cancel`;
         } else if (type === 'warning') {
             // Orange/amber for Pause action
             icon.className = 'fas fa-exclamation-circle text-yellow-600 text-xl';
             titleEl.textContent = title || 'Warning';
-            confirmBtn.className = 'btn btn-nav-uniform text-white';
-            confirmBtn.style.backgroundColor = '#f59e0b';
-            confirmBtn.onmouseenter = function() { this.style.backgroundColor = '#d97706'; };
-            confirmBtn.onmouseleave = function() { this.style.backgroundColor = '#f59e0b'; };
+            confirmBtn.className = `${baseClasses} btn-neu-warning`;
         } else if (type === 'run') {
             // Green for Run Now action
             icon.className = 'fas fa-play-circle text-green-600 text-xl';
             titleEl.textContent = title || 'Run ETL Job';
-            confirmBtn.className = 'btn btn-nav-uniform text-white';
-            confirmBtn.style.backgroundColor = '#10b981';
-            confirmBtn.onmouseenter = function() { this.style.backgroundColor = '#059669'; };
-            confirmBtn.onmouseleave = function() { this.style.backgroundColor = '#10b981'; };
+            confirmBtn.className = `${baseClasses} btn-neu-save`;
         } else if (type === 'success') {
             icon.className = 'fas fa-check-circle text-green-600 text-xl';
             titleEl.textContent = title || 'Confirm';
-            confirmBtn.className = 'btn btn-primary btn-nav-uniform';
-            confirmBtn.style.backgroundColor = '';
-            confirmBtn.onmouseenter = null;
-            confirmBtn.onmouseleave = null;
+            confirmBtn.className = `${baseClasses} btn-neu-save`;
         } else {
             icon.className = 'fas fa-question-circle text-blue-600 text-xl';
             titleEl.textContent = title || 'Confirm Action';
-            confirmBtn.className = 'btn btn-primary btn-nav-uniform';
-            confirmBtn.style.backgroundColor = '';
-            confirmBtn.onmouseenter = null;
-            confirmBtn.onmouseleave = null;
-        }
-
-        // Override button class if provided
-        if (confirmBtnClass) {
-            confirmBtn.className = confirmBtnClass;
+            confirmBtn.className = `${baseClasses} btn-neu-nav-wide`;
         }
 
         // Show modal

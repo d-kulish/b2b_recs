@@ -572,12 +572,12 @@
             </div>
 
             <!-- Progress Bar -->
-            <div class="modal-progress-bar">
-                <div id="progress1" class="modal-progress-segment active"></div>
-                <div id="progress2" class="modal-progress-segment"></div>
-                <div id="progress3" class="modal-progress-segment"></div>
-                <div id="progress4" class="modal-progress-segment"></div>
-                <div id="progress5" class="modal-progress-segment"></div>
+            <div class="progress-bar-pills">
+                <div id="progress1" class="progress-step-pill current">Connection</div>
+                <div id="progress2" class="progress-step-pill future">Tables</div>
+                <div id="progress3" class="progress-step-pill future">Strategy</div>
+                <div id="progress4" class="progress-step-pill future">Preview</div>
+                <div id="progress5" class="progress-step-pill future">Schedule</div>
             </div>
         </div>
 
@@ -1367,9 +1367,9 @@
             </div>
 
             <!-- Progress Bar -->
-            <div class="modal-progress-bar">
-                <div id="connProgress1" class="modal-progress-segment active"></div>
-                <div id="connProgress2" class="modal-progress-segment"></div>
+            <div class="progress-bar-pills">
+                <div id="connProgress1" class="progress-step-pill current">Type</div>
+                <div id="connProgress2" class="progress-step-pill future">Configure</div>
             </div>
         </div>
 
@@ -4164,15 +4164,17 @@ function connShowStep(step) {
     const indicator = document.getElementById('connModalStep');
     if (indicator) indicator.textContent = step;
 
-    // Update progress bar - use new CSS classes
+    // Update progress bar - pill style classes
     for (let i = 1; i <= 2; i++) {
-        const bar = document.getElementById('connProgress' + i);
-        if (bar) {
-            bar.classList.remove('active', 'completed');
+        const pill = document.getElementById('connProgress' + i);
+        if (pill) {
+            pill.classList.remove('current', 'completed', 'future');
             if (i < step) {
-                bar.classList.add('completed');
+                pill.classList.add('completed');
             } else if (i === step) {
-                bar.classList.add('active');
+                pill.classList.add('current');
+            } else {
+                pill.classList.add('future');
             }
         }
     }
@@ -5252,14 +5254,16 @@ function showStep(step) {
 }
 
 function updateProgress(step) {
-    for (let i = 1; i <= 5; i++) {  // Changed from 4 to 5
-        const progressBar = document.getElementById(`progress${i}`);
-        if (progressBar) {
-            progressBar.classList.remove('active', 'completed');
+    for (let i = 1; i <= 5; i++) {
+        const pill = document.getElementById(`progress${i}`);
+        if (pill) {
+            pill.classList.remove('current', 'completed', 'future');
             if (i < step) {
-                progressBar.classList.add('completed');
+                pill.classList.add('completed');
             } else if (i === step) {
-                progressBar.classList.add('active');
+                pill.classList.add('current');
+            } else {
+                pill.classList.add('future');
             }
         }
     }

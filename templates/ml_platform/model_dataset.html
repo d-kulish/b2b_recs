@@ -76,12 +76,12 @@
             </div>
 
             <!-- Progress Bar -->
-            <div class="modal-progress-bar">
-                <div id="progress1" class="modal-progress-segment active"></div>
-                <div id="progress2" class="modal-progress-segment"></div>
-                <div id="progress3" class="modal-progress-segment"></div>
-                <div id="progress4" class="modal-progress-segment"></div>
-                <div id="progress5" class="modal-progress-segment"></div>
+            <div class="progress-bar-pills">
+                <div id="progress1" class="progress-step-pill current">Info</div>
+                <div id="progress2" class="progress-step-pill future">Tables</div>
+                <div id="progress3" class="progress-step-pill future">Schema</div>
+                <div id="progress4" class="progress-step-pill future">Filters</div>
+                <div id="progress5" class="progress-step-pill future">Split</div>
             </div>
         </div>
 
@@ -994,14 +994,16 @@ function showStep(step) {
     // Update step counter
     document.getElementById('currentStep').textContent = step;
 
-    // Update progress bar
+    // Update progress bar - pill style classes
     for (let i = 1; i <= 5; i++) {
-        const segment = document.getElementById(`progress${i}`);
-        segment.classList.remove('active', 'completed');
+        const pill = document.getElementById(`progress${i}`);
+        pill.classList.remove('current', 'completed', 'future');
         if (i < step) {
-            segment.classList.add('completed');
+            pill.classList.add('completed');
         } else if (i === step) {
-            segment.classList.add('active');
+            pill.classList.add('current');
+        } else {
+            pill.classList.add('future');
         }
     }
 

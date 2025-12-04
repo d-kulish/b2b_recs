@@ -235,6 +235,68 @@
     100% { left: 100%; }
 }
 
+/* Progress Bar - Step Names with Current Pill */
+.progress-bar-pills {
+    display: flex;
+    gap: 0;
+    margin-top: 12px;
+    align-items: center;
+    border: 1px solid #e5e7eb;
+    border-radius: 24px;
+    overflow: visible;
+}
+
+.progress-step-pill {
+    flex: 1;
+    padding: 5px 16px;
+    font-size: 12px;
+    font-weight: 500;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: all 0.3s ease;
+    min-width: 0;
+}
+
+.progress-step-pill.future {
+    background-color: #ffffff;
+    color: #374151;
+}
+
+.progress-step-pill.current {
+    background-color: #16a34a;
+    color: #ffffff;
+    border-radius: 24px;
+    position: relative;
+    z-index: 1;
+    margin-top: -2px;
+    margin-bottom: -2px;
+    padding-top: 7px;
+    padding-bottom: 7px;
+}
+
+.progress-step-pill.completed {
+    background-color: #dcfce7;
+    color: #374151;
+    margin-right: -24px;
+    padding-right: 40px;
+    border-top: 1px solid #16a34a;
+    border-bottom: 1px solid #16a34a;
+    margin-top: -1px;
+    margin-bottom: -1px;
+    padding-top: 6px;
+    padding-bottom: 6px;
+}
+
+.progress-step-pill.completed:first-child {
+    border-left: 1px solid #16a34a;
+    border-top-left-radius: 24px;
+    border-bottom-left-radius: 24px;
+    margin-left: -1px;
+    padding-left: 17px;
+}
+
 /* Wizard Body - scrollable content area */
 .modal-body-wizard {
     padding: 16px 20px;

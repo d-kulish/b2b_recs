@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides detailed specifications for implementing the **Datasets** domain in the ML Platform. The Datasets domain defines WHAT data goes into model training.
 
-**Last Updated**: 2025-12-04 (v3 - Enhanced Product Filters)
+**Last Updated**: 2025-12-05 (v4 - Unified Filtering UI)
 
 ---
 
@@ -225,6 +225,26 @@ The Schema Builder provides a visual, drag-and-drop interface for connecting tab
 Step 4 contains three collapsible sub-chapters for filtering data (all collapsed by default).
 Each sub-chapter has a tablet-style header with black border that expands/collapses content.
 
+**Unified Notification System (All Sub-chapters)**
+
+All filtering sub-chapters use a consistent notification system:
+
+1. **Summary Line** (below filter buttons):
+   - Shows details of pending/selected filters in a yellow/amber background
+   - Displays filter configuration (e.g., "Column: transaction_date • 30 days rolling window")
+   - Updates immediately when filter values change
+   - Shows "No filters selected" when empty
+
+2. **Tablet Badge** (in sub-chapter header):
+   - Shows "X filters applied" only AFTER clicking "Refresh Dataset"
+   - Badge is cleared when filter values are changed (requires re-clicking Refresh)
+   - Provides visual confirmation that filters have been committed
+
+3. **Refresh Dataset Button**:
+   - Disabled (grey) until filters are configured
+   - Enabled (black with white text) when filters are ready to apply
+   - Commits pending changes and updates Dataset Summary when clicked
+
 **Sub-chapter 1: Dates**
 
 Filter dataset by date range using one of two methods:
@@ -235,12 +255,14 @@ Filter dataset by date range using one of two methods:
 - **Refresh Dataset**: Apply the selected date filter and update Dataset Summary
 
 UI Components:
-- Four equal-width buttons in a row: Timestamp Column, Rolling Window, Start Date, Refresh Dataset
+- Four equal-width buttons in a row with helper labels above each button
+- Helper labels: "Select timestamp column", "Set number of days", "Select start date"
+- Refresh Dataset button has no label (uses &nbsp; for alignment)
 - Rolling Window and Start Date buttons are disabled until Timestamp Column is selected
 - Each button opens a popup dropdown for selection
 - Popups auto-close when value is selected (Apply button for Rolling Window)
-- After clicking "Refresh Dataset", a green status badge appears in the sub-chapter header showing the applied filter (e.g., "30 days rolling window" or "Start date: 2025-01-01")
-- Changing any filter value clears the status badge until "Refresh Dataset" is clicked again
+- Summary line below buttons shows pending filter details
+- Tablet header shows "1 filter applied" badge after clicking Refresh Dataset
 
 **Sub-chapter 2: Customers**
 
@@ -255,154 +277,199 @@ Filter products using multiple filter types. All filters are combined with **AND
 
 The Products sub-chapter uses a **pending/committed state** model:
 - Filter changes are "pending" until committed
-- **Reset**: Reverts all pending changes to last committed state
 - **Refresh Dataset**: Commits pending changes and updates Dataset Summary
 
-Products sub-chapter contains three collapsible nested sections plus action buttons in the footer.
+Products sub-chapter uses a **minimalist 3-button navigation** design with modal-based configuration:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│ Products                                          [Top 80% | category=X]  ▼ │
+│ Products                                            [2 filters applied]  ▼  │
 ├─────────────────────────────────────────────────────────────────────────────┤
+│  Filter by revenue        Filter by columns                                  │
+│  [ Top Products ]         [ Filter Columns ]        [ Refresh Dataset ]      │
 │                                                                              │
-│ ┌─────────────────────────────────────────────────────────────────────────┐ │
-│ │ ☑ Top Products (Revenue)                                            ▼ │ │
-│ ├─────────────────────────────────────────────────────────────────────────┤ │
-│ │ [Product ID Column ▼] [Revenue Column ▼] [Analyze Revenue Distribution] │ │
-│ │                                                                         │ │
-│ │ ┌─────────────────────────────────────────────────────────────────────┐ │ │
-│ │ │         Cumulative Revenue Distribution                             │ │ │
-│ │ │  100% ┤ ························○                                   │ │ │
-│ │ │       │                    ○····                                    │ │ │
-│ │ │   80% ├──────────────○·········  ← Threshold                        │ │ │
-│ │ │       │          ○···                                               │ │ │
-│ │ │   60% ┤      ○···                                                   │ │ │
-│ │ │       │   ○··                                                       │ │ │
-│ │ │   40% ┤ ○··                                                         │ │ │
-│ │ │       │○·                                                           │ │ │
-│ │ │   20% ┤·                                                            │ │ │
-│ │ │       │                                                             │ │ │
-│ │ │    0% ├─────┬─────┬─────┬─────┬─────┬─────┬─────┬─────┬─────┬─────  │ │ │
-│ │ │       0%   10%   20%   30%   40%   50%   60%   70%   80%   90% 100% │ │ │
-│ │ │                        % of Products                                │ │ │
-│ │ └─────────────────────────────────────────────────────────────────────┘ │ │
-│ │                                                                         │ │
-│ │ Revenue Threshold: [80%] ──●──────────────                              │ │
-│ │ Selected: 4,521 products (9.4%) covering 80% of revenue                 │ │
-│ └─────────────────────────────────────────────────────────────────────────┘ │
-│                                                                              │
-│ ┌─────────────────────────────────────────────────────────────────────────┐ │
-│ │ Category Filters (2)                                                ▼ │ │
-│ ├─────────────────────────────────────────────────────────────────────────┤ │
-│ │ ┌─────────────────────────────────┐ ┌─────────────────────────────────┐ │ │
-│ │ │ category                    [×] │ │ brand                       [×] │ │ │
-│ │ │ ○ Include  ● Exclude            │ │ ● Include  ○ Exclude            │ │ │
-│ │ │ ┌─────────────────────────────┐ │ │ ┌─────────────────────────────┐ │ │ │
-│ │ │ │ [Search values...]         │ │ │ │ [Search values...]         │ │ │ │
-│ │ │ │ ☑ Electronics     (1,234)  │ │ │ │ ☑ Nike            (2,456)  │ │ │ │
-│ │ │ │ ☑ Clothing        (892)    │ │ │ │ ☑ Adidas          (1,890)  │ │ │ │
-│ │ │ │ ☐ Home & Garden   (456)    │ │ │ │ ☐ Puma            (1,234)  │ │ │ │
-│ │ │ │ ☐ Sports          (234)    │ │ │ │ ...                        │ │ │ │
-│ │ │ └─────────────────────────────┘ │ │ └─────────────────────────────┘ │ │ │
-│ │ └─────────────────────────────────┘ └─────────────────────────────────┘ │ │
-│ └─────────────────────────────────────────────────────────────────────────┘ │
-│                                                                              │
-│ ┌─────────────────────────────────────────────────────────────────────────┐ │
-│ │ Numeric Filters (1)                                                 ▼ │ │
-│ ├─────────────────────────────────────────────────────────────────────────┤ │
-│ │ ┌─────────────────────────────────┐                                     │ │
-│ │ │ price                       [×] │                                     │ │
-│ │ │ Range: 0.50 - 12,450           │                                     │ │
-│ │ │ Nulls: 0.5%                     │                                     │ │
-│ │ │                                 │                                     │ │
-│ │ │ Filter Type: [Range ▼]          │                                     │ │
-│ │ │ Min: [10    ] Max: [500   ]     │                                     │ │
-│ │ │ ☑ Include NULL values           │                                     │ │
-│ │ └─────────────────────────────────┘                                     │ │
-│ └─────────────────────────────────────────────────────────────────────────┘ │
-│                                                                              │
-│ ┌─────────────────────────────────────────────────────────────────────────┐ │
-│ │                    [+ Add Filter]     [Reset]     [Refresh Dataset]     │ │
-│ └─────────────────────────────────────────────────────────────────────────┘ │
+│  ┌───────────────────────────────────────────────────────────────────────┐  │
+│  │ Top 80% products • category                              (summary)   │  │
+│  └───────────────────────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Section 1: Top Products (Revenue)**
-Optional filter for top-performing products by revenue contribution:
+**Navigation Buttons:**
 
-- **Enable Toggle**: Checkbox in section header to enable/disable this filter (off by default)
-- **Product ID Column**: Select the column containing product identifiers
-- **Revenue Column**: Select the column containing revenue/amount values
-- **Analyze Revenue Distribution**: Query BigQuery to analyze product revenue distribution
-- **D3.js v7 Pareto Chart**: Shows cumulative revenue distribution curve
-  - X-axis: % of products (ordered by revenue descending)
-  - Y-axis: % of cumulative revenue
-  - Threshold line shows selected cutoff point
-  - Shaded area indicates selected products
-- **Revenue Threshold**: Set percentage of cumulative revenue to include (default: 80%)
-- **Analysis Results**: Shows total products, selected products count & percentage, revenue coverage
+1. **Top Products** - Opens modal for revenue-based product filtering
+   - Helper label above: "Filter by revenue"
+2. **Filter Columns** - Opens modal to manage column filters (STRING, INTEGER, FLOAT, DATE types)
+   - Helper label above: "Filter by columns"
+3. **Refresh Dataset** - Commits all pending changes and updates Dataset Summary
+   - Black background with white text when enabled
+   - Grey/disabled until at least one filter is configured
+   - No helper label (empty space for alignment)
+
+**Summary Line:**
+- Shows pending filter details: "Top 80% products • category • price"
+- Yellow/amber background when filters are pending
+- Updates dynamically when filters are added/removed
+- Shows "No filters selected" when empty
+
+**Tablet Badge:**
+- Shows "X filters applied" only after clicking Refresh Dataset
+- Cleared when filter configuration changes
+
+---
+
+**Top Products Modal**
+
+Modal dialog for filtering top-performing products by revenue contribution:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Top Products by Revenue                                                 [×] │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  Product ID Column      Revenue Column           [Analyze]                   │
+│  [product_id      ▼]    [amount         ▼]                                  │
+│                                                                              │
+│ ┌─────────────────────────────────────────────────────────────────────────┐ │
+│ │         Cumulative Revenue Distribution (D3.js Pareto Chart)            │ │
+│ │  100% ┤ ························○                                       │ │
+│ │       │                    ○····                                        │ │
+│ │   80% ├──────────────○·········  ← Threshold                            │ │
+│ │       │          ○···                                                   │ │
+│ │   60% ┤      ○···                                                       │ │
+│ │       │   ○··                                                           │ │
+│ │   40% ┤ ○··                                                             │ │
+│ │       │○·                                                               │ │
+│ │   20% ┤·                                                                │ │
+│ │    0% ├─────┬─────┬─────┬─────┬─────┬─────┬─────┬─────┬─────┬─────      │ │
+│ │       0%   10%   20%   30%   40%   50%   60%   70%   80%   90% 100%     │ │
+│ │                        % of Products                                    │ │
+│ └─────────────────────────────────────────────────────────────────────────┘ │
+│                                                                              │
+│ Revenue Threshold: [80%] ──●──────────────                                  │
+│ Selected: 4,521 products (9.4%) covering 80% of revenue                     │
+│                                                                              │
+│                                                    [Cancel]     [Apply]      │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+- **Single Row Layout**: Product ID Column, Revenue Column, and Analyze button in one row
+- **Product ID Column**: Dropdown for product identifier column
+- **Revenue Column**: Dropdown for revenue/amount column
+- **Analyze Button**: Triggers BigQuery analysis for revenue distribution
+- **D3.js Pareto Chart**: Visual cumulative revenue distribution (appears after analysis)
+- **Threshold Input**: Set percentage of cumulative revenue (default: 80%)
+- **Analysis Results**: Shows total/selected products and revenue coverage
+- Opening the modal auto-enables the filter (no separate checkbox needed)
 - Product list computed dynamically at training time (rules stored, not product lists)
 
-**Section 2: Category Filters**
-Filter by categorical column values (STRING columns from Step 3 Schema Builder):
+---
 
-- **Filter Cards**: Each added filter shows as a card with column name and remove button (×)
-- **Mode Toggle**: Include selected values OR Exclude selected values (radio buttons)
-- **Value Selection** (two display modes based on unique value count):
-  - **List mode** (≤100 unique values):
-    - Scrollable checkbox list showing all values
-    - Search box filters the displayed values
-    - Each value shows its frequency count
-  - **Autocomplete mode** (>100 unique values):
-    - Search input with dropdown suggestions
-    - Selected values shown as removable tags
-    - API call to search matching values: `POST /api/models/{id}/datasets/search-category-values/`
-- Filters are combined with AND logic (product must match ALL category filters)
+**Filter Columns Modal**
 
-**Section 3: Numeric Filters**
-Filter by numeric column bounds (INTEGER/FLOAT columns from Step 3 Schema Builder):
-
-- **Filter Cards**: Each added filter shows as a card with column name and remove button (×)
-- **Column Stats Header**: Shows min, max, and null percentage from sample data
-- **Filter Types** (dropdown selection):
-  - **Range**: Set min and/or max bounds (either or both)
-  - **Equals**: Exact value match
-  - **Not Equals**: Exclude exact value
-- **NULL Handling**: Checkbox to include or exclude NULL values
-- Filters are combined with AND logic
-
-**Add Filter Modal**
-Modal dialog for creating new category or numeric filters:
+Modal dialog with **smart behavior**:
+- If no filters exist → Shows "Add Filter" section directly
+- If filters exist → Shows list of existing filters with "Add Filter" button
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│ Add Product Filter                                                      [×] │
+│ Filter Columns                                                          [×] │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                              │
-│ Select Column:                                                               │
+│ Existing Filters:                                                           │
 │ ┌─────────────────────────────────────────────────────────────────────────┐ │
-│ │ category (STRING)                                                    ▼ │ │
+│ │ category (STRING)           Include: Electronics, Clothing    [Edit][×] │ │
+│ │ price (FLOAT)               Range: 10 - 500                   [Edit][×] │ │
+│ │ active_since (DATE)         Last 90 days                      [Edit][×] │ │
+│ └─────────────────────────────────────────────────────────────────────────┘ │
+│                                                                              │
+│                              [+ Add Filter]                                  │
+│                                                                              │
+│ ─────────────────────────────────────────────────────────────────────────── │
+│                                                                              │
+│ Add New Filter:                                                              │
+│ ┌─────────────────────────────────────────────────────────────────────────┐ │
+│ │ Select column...                                                     ▼ │ │
 │ └─────────────────────────────────────────────────────────────────────────┘ │
 │                                                                              │
 │ ┌─────────────────────────────────────────────────────────────────────────┐ │
-│ │ ℹ️ This column has 4 unique values. You can filter by selecting        │ │
-│ │    specific values to include or exclude.                              │ │
+│ │ [Inline filter configuration appears here based on column type]        │ │
 │ └─────────────────────────────────────────────────────────────────────────┘ │
 │                                                                              │
-│                                              [Cancel]     [Add Filter]       │
+│                                                    [Cancel]     [Done]       │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-- **Column Dropdown**: Shows only columns from Step 3 Schema Builder selection
-- **Column Info**: Displays column type and analysis preview
-- **Add Filter Button**: Creates the filter card in appropriate section
+**Column Dropdown Rules:**
+- Shows only columns from Step 3 Schema Builder selection
+- **Excludes** columns already used in Dates sub-chapter (timestamp column)
+- **Excludes** columns already used in Customers sub-chapter
+- **Excludes** columns already added as filters
+- Shows column type badge next to each option
 
-**Footer Actions**
-Located at bottom of Products sub-chapter:
+**Inline Filter Configuration by Data Type:**
 
-- **Add Filter Button**: Opens modal to select column and create a new category or numeric filter
-- **Reset Button**: Reverts all pending filter changes to last committed (refreshed) state
-- **Refresh Dataset Button**: Commits all pending changes and updates Dataset Summary with new stats
+After selecting a column, the appropriate filter UI appears inline:
+
+1. **STRING Columns** - Category Filter:
+   ```
+   ┌─────────────────────────────────────────────────────────────────────┐
+   │ category (STRING) - 4 unique values                                 │
+   │ ○ Include selected   ● Exclude selected                             │
+   │ ┌─────────────────────────────────────────────────────────────────┐ │
+   │ │ [Search values...]                                              │ │
+   │ │ ☑ Electronics     (1,234)                                       │ │
+   │ │ ☑ Clothing        (892)                                         │ │
+   │ │ ☐ Home & Garden   (456)                                         │ │
+   │ │ ☐ Sports          (234)                                         │ │
+   │ └─────────────────────────────────────────────────────────────────┘ │
+   │                                              [Add Filter]           │
+   └─────────────────────────────────────────────────────────────────────┘
+   ```
+   - Mode toggle: Include OR Exclude selected values
+   - List mode (≤100 unique values): Checkbox list with search
+   - Autocomplete mode (>100 unique values): Search input with dropdown
+   - API call to search matching values: `POST /api/models/{id}/datasets/search-category-values/`
+
+2. **INTEGER/FLOAT Columns** - Numeric Filter:
+   ```
+   ┌─────────────────────────────────────────────────────────────────────┐
+   │ price (FLOAT) - Range: 0.50 - 12,450 | Nulls: 0.5%                  │
+   │ Filter Type: ○ Range  ○ Equals  ○ Not Equals                        │
+   │                                                                     │
+   │ Min: [10        ]    Max: [500       ]                              │
+   │ ☑ Include NULL values                                               │
+   │                                              [Add Filter]           │
+   └─────────────────────────────────────────────────────────────────────┘
+   ```
+   - Shows column statistics (min, max, null percentage)
+   - Filter types: Range, Equals, Not Equals
+   - Min/Max inputs for range, single value for equals
+   - NULL handling checkbox
+
+3. **DATE/TIMESTAMP Columns** - Date Filter:
+   ```
+   ┌─────────────────────────────────────────────────────────────────────┐
+   │ active_since (DATE) - Range: 2020-01-01 - 2024-12-01                │
+   │ Filter Type: ● Relative  ○ Date Range                               │
+   │                                                                     │
+   │ ┌─────────────────────────────────────────────────────────────────┐ │
+   │ │ Last 90 days                                                  ▼ │ │
+   │ └─────────────────────────────────────────────────────────────────┘ │
+   │   Options: Last 7 days, Last 30 days, Last 90 days,                │
+   │            This month, This quarter, This year, Custom              │
+   │                                                                     │
+   │ — OR (when Date Range selected) —                                   │
+   │                                                                     │
+   │ Start: [2024-01-01  📅]    End: [2024-12-01  📅]                    │
+   │ ☑ Include NULL values                                               │
+   │                                              [Add Filter]           │
+   └─────────────────────────────────────────────────────────────────────┘
+   ```
+   - Shows column date range from sample data
+   - **Relative options**: Last 7/30/90 days, This month/quarter/year
+   - **Date range**: Calendar pickers for start and end dates
+   - Toggle between relative and absolute date range
+   - NULL handling checkbox
 
 **Column Analysis Service**
 `ColumnAnalysisService` class in `ml_platform/datasets/services.py` analyzes columns from Step 3 pandas sample data:
@@ -410,9 +477,14 @@ Located at bottom of Products sub-chapter:
 - **API endpoint**: `POST /api/models/{model_id}/datasets/analyze-columns/`
 - **Input**: Selected columns from Step 3 Schema Builder (stored in session)
 - **Output**: Column metadata including:
-  - `type`: STRING, INTEGER, FLOAT, TIMESTAMP, etc.
+  - `type`: STRING, INTEGER, FLOAT, DATE, TIMESTAMP, etc.
+  - `filter_type`: Determines which filter UI to show:
+    - `'category'` for STRING columns
+    - `'numeric'` for INTEGER/FLOAT columns
+    - `'date'` for DATE/TIMESTAMP columns
   - For STRING: `unique_values`, `value_counts`, `display_mode` (list or autocomplete)
   - For numeric: `min`, `max`, `mean`, `null_count`, `null_percent`
+  - For DATE/TIMESTAMP: `min_date`, `max_date`, `null_count`, `null_percent`
 - **Autocomplete threshold**: 100 unique values (configurable via `AUTOCOMPLETE_THRESHOLD`)
 
 **Category Value Search API**

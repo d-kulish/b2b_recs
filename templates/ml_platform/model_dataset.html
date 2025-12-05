@@ -328,11 +328,16 @@
                             <!-- Refresh Dataset Button -->
                             <div class="filter-button-wrapper">
                                 <span class="filter-button-label">&nbsp;</span>
-                                <button type="button" class="filter-button filter-button-action" id="refreshDatasetBtn" onclick="refreshDatasetHistory()">
+                                <button type="button" class="filter-button filter-button-refresh filter-button-disabled" id="refreshDatasetBtn" onclick="refreshDatasetHistory()" disabled>
                                     <i class="fas fa-sync-alt"></i>
                                     <span>Refresh Dataset</span>
                                 </button>
                             </div>
+                        </div>
+
+                        <!-- Summary Line -->
+                        <div class="filter-summary-line" id="datesFilterSummary">
+                            <span class="filter-summary-text" id="datesFilterSummaryText">No filters selected</span>
                         </div>
                     </div>
                 </div>
@@ -370,205 +375,325 @@
                     </div>
                     <div id="productsContent" class="subchapter-content-outside hidden">
                         <div class="subchapter-body">
-
-                            <!-- Section 1: Top Products (Revenue-based) -->
-                            <div class="product-filter-section" id="topProductsSection">
-                                <div class="product-filter-header" onclick="toggleProductFilterSection('topProducts')">
-                                    <div class="product-filter-title">
-                                        <i class="fas fa-chart-line product-filter-title-icon"></i>
-                                        <span class="product-filter-title-text">Top Products (Revenue)</span>
-                                        <span class="product-filter-badge inactive" id="topProductsBadge">Disabled</span>
-                                    </div>
-                                    <i class="fas fa-chevron-right product-filter-chevron"></i>
-                                </div>
-                                <div class="product-filter-content hidden" id="topProductsContent">
-                                    <!-- Enable Toggle -->
-                                    <div class="product-filter-enable-row">
-                                        <input type="checkbox" id="enableTopProducts" onchange="toggleTopProductsFilter()">
-                                        <label class="product-filter-enable-label" for="enableTopProducts">
-                                            Enable top products by revenue filter
-                                        </label>
-                                    </div>
-
-                                    <!-- Top Products Configuration (shown when enabled) -->
-                                    <div id="topProductsConfig" class="hidden">
-                                        <!-- Product ID Column -->
-                                        <div class="wizard-field-group">
-                                            <label class="text-xs font-medium text-gray-600 mb-1 block">Product ID Column</label>
-                                            <select id="productIdColumn" class="form-select w-full text-sm" onchange="onProductColumnChange()">
-                                                <option value="">Select column...</option>
-                                            </select>
-                                        </div>
-
-                                        <!-- Revenue Column -->
-                                        <div class="wizard-field-group">
-                                            <label class="text-xs font-medium text-gray-600 mb-1 block">Revenue Column</label>
-                                            <select id="revenueColumn" class="form-select w-full text-sm" onchange="onRevenueColumnChange()">
-                                                <option value="">Select column...</option>
-                                            </select>
-                                        </div>
-
-                                        <!-- Analyze Button -->
-                                        <div class="wizard-field-group">
-                                            <button type="button" id="analyzeProductsBtn" onclick="analyzeProductRevenue()"
-                                                    class="btn btn-secondary w-full" disabled>
-                                                <i class="fas fa-sync-alt mr-2"></i>
-                                                Analyze Revenue Distribution
-                                            </button>
-                                        </div>
-
-                                        <!-- Analysis Results (hidden until analyzed) -->
-                                        <div id="productAnalysisResults" class="hidden">
-                                            <!-- Revenue Distribution Chart -->
-                                            <div class="wizard-field-group">
-                                                <label class="text-xs font-medium text-gray-600 mb-2 block">Cumulative Revenue Distribution</label>
-                                                <div id="revenueChartContainer" class="revenue-chart-container">
-                                                    <svg id="revenueDistributionChart"></svg>
-                                                </div>
-                                            </div>
-
-                                            <!-- Threshold Input -->
-                                            <div class="wizard-field-group">
-                                                <label class="text-xs font-medium text-gray-600 mb-1 block">Revenue Threshold</label>
-                                                <div class="flex items-center gap-2">
-                                                    <span class="text-sm text-gray-600">Include products up to</span>
-                                                    <input type="number" id="revenueThreshold" value="80" min="1" max="100"
-                                                           class="form-input w-20 text-sm" onchange="onThresholdChange()">
-                                                    <span class="text-sm text-gray-600">% of cumulative revenue</span>
-                                                </div>
-                                            </div>
-
-                                            <!-- Analysis Summary -->
-                                            <div id="productAnalysisSummary" class="analysis-summary-box">
-                                                <div class="analysis-summary-header">
-                                                    <i class="fas fa-chart-pie mr-2"></i>
-                                                    Analysis Results
-                                                </div>
-                                                <div class="analysis-summary-content">
-                                                    <div class="analysis-stat">
-                                                        <span class="stat-label">Total products:</span>
-                                                        <span id="totalProductsCount" class="stat-value">-</span>
-                                                    </div>
-                                                    <div class="analysis-stat">
-                                                        <span class="stat-label">Selected products:</span>
-                                                        <span id="selectedProductsCount" class="stat-value">-</span>
-                                                        <span id="selectedProductsPercent" class="stat-percent"></span>
-                                                    </div>
-                                                    <div class="analysis-stat">
-                                                        <span class="stat-label">Revenue coverage:</span>
-                                                        <span id="revenueCoverage" class="stat-value">-</span>
-                                                        <span id="revenueCoverageAmount" class="stat-amount"></span>
-                                                    </div>
-                                                </div>
-                                                <div class="analysis-summary-footer">
-                                                    <i class="fas fa-info-circle mr-1"></i>
-                                                    Product list computed dynamically at training time
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <!-- Analysis Error -->
-                                        <div id="productAnalysisError" class="hidden">
-                                            <div class="wizard-info-box error">
-                                                <i class="fas fa-exclamation-circle"></i>
-                                                <span id="productAnalysisErrorText">Analysis failed</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Section 2: Category Filters -->
-                            <div class="product-filter-section" id="categoryFiltersSection">
-                                <div class="product-filter-header collapsed" onclick="toggleProductFilterSection('categoryFilters')">
-                                    <div class="product-filter-title">
-                                        <i class="fas fa-tags product-filter-title-icon"></i>
-                                        <span class="product-filter-title-text">Category Filters</span>
-                                        <span class="product-filter-badge inactive" id="categoryFiltersBadge">0 filters</span>
-                                    </div>
-                                    <i class="fas fa-chevron-right product-filter-chevron"></i>
-                                </div>
-                                <div class="product-filter-content hidden" id="categoryFiltersContent">
-                                    <div class="filter-cards-container" id="categoryFilterCards">
-                                        <!-- Category filter cards will be inserted here dynamically -->
-                                    </div>
-                                    <div class="filter-empty-state" id="categoryFiltersEmpty">
-                                        <div class="filter-empty-state-icon"><i class="fas fa-filter"></i></div>
-                                        <div class="filter-empty-state-text">No category filters added. Click "Add Filter" to create one.</div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Section 3: Numeric Filters -->
-                            <div class="product-filter-section" id="numericFiltersSection">
-                                <div class="product-filter-header collapsed" onclick="toggleProductFilterSection('numericFilters')">
-                                    <div class="product-filter-title">
-                                        <i class="fas fa-sliders-h product-filter-title-icon"></i>
-                                        <span class="product-filter-title-text">Numeric Filters</span>
-                                        <span class="product-filter-badge inactive" id="numericFiltersBadge">0 filters</span>
-                                    </div>
-                                    <i class="fas fa-chevron-right product-filter-chevron"></i>
-                                </div>
-                                <div class="product-filter-content hidden" id="numericFiltersContent">
-                                    <div class="filter-cards-container" id="numericFilterCards">
-                                        <!-- Numeric filter cards will be inserted here dynamically -->
-                                    </div>
-                                    <div class="filter-empty-state" id="numericFiltersEmpty">
-                                        <div class="filter-empty-state-icon"><i class="fas fa-calculator"></i></div>
-                                        <div class="filter-empty-state-text">No numeric filters added. Click "Add Filter" to create one.</div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Products Footer: Add Filter / Reset / Refresh -->
-                            <div class="products-filter-footer">
-                                <div class="products-filter-actions-left">
-                                    <button type="button" class="btn-add-filter" onclick="openAddFilterModal()">
-                                        <i class="fas fa-plus"></i>
-                                        Add Filter
+                            <!-- 3-Button Navigation Row (matching Dates sub-chapter style) -->
+                            <div class="filter-buttons-row">
+                                <div class="filter-button-wrapper">
+                                    <span class="filter-button-label">Filter by revenue</span>
+                                    <button type="button" class="filter-button" onclick="openTopProductsModal()">
+                                        <i class="fas fa-chart-line"></i>
+                                        Top Products
                                     </button>
                                 </div>
-                                <div class="products-filter-actions-right">
-                                    <button type="button" class="btn-reset-filters" onclick="resetProductFilters()" id="resetProductFiltersBtn">
-                                        <i class="fas fa-undo"></i>
-                                        Reset
+                                <div class="filter-button-wrapper">
+                                    <span class="filter-button-label">Filter by columns</span>
+                                    <button type="button" class="filter-button" onclick="openFilterColumnsModal()">
+                                        <i class="fas fa-filter"></i>
+                                        Filter Columns
                                     </button>
-                                    <button type="button" class="btn-refresh-products" onclick="refreshProductFilters()" id="refreshProductFiltersBtn">
+                                </div>
+                                <div class="filter-button-wrapper">
+                                    <span class="filter-button-label">&nbsp;</span>
+                                    <button type="button" class="filter-button filter-button-refresh filter-button-disabled" onclick="refreshProductFilters()" id="refreshProductFiltersBtn" disabled>
                                         <i class="fas fa-sync-alt"></i>
                                         Refresh Dataset
                                     </button>
                                 </div>
                             </div>
 
+                            <!-- Summary Line -->
+                            <div class="filter-summary-line" id="productsFilterSummary">
+                                <span class="filter-summary-text" id="productsFilterSummaryText">No filters selected</span>
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Add Filter Modal -->
-                <div class="add-filter-modal-overlay hidden" id="addFilterModal">
-                    <div class="add-filter-modal">
-                        <div class="add-filter-modal-header">
-                            <span class="add-filter-modal-title">Add Product Filter</span>
-                            <button class="add-filter-modal-close" onclick="closeAddFilterModal()">
-                                <i class="fas fa-times"></i>
-                            </button>
+                <!-- Top Products Modal -->
+                <div class="modal-overlay hidden" id="topProductsModal">
+                    <div class="modal-container modal-container-lg">
+                        <div class="modal-header">
+                            <div class="modal-header-icon info">
+                                <i class="fas fa-chart-line"></i>
+                            </div>
+                            <h3 class="modal-header-title">Top Products by Revenue</h3>
                         </div>
-                        <div class="add-filter-modal-body">
-                            <div class="add-filter-form-group">
-                                <label class="add-filter-form-label">Select Column</label>
-                                <select id="addFilterColumnSelect" class="add-filter-form-select" onchange="onAddFilterColumnChange()">
-                                    <option value="">Choose a column...</option>
-                                </select>
-                                <div class="add-filter-column-info hidden" id="addFilterColumnInfo">
-                                    <!-- Column type and stats will be shown here -->
+                        <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
+                            <!-- Hidden checkbox to maintain state compatibility -->
+                            <input type="checkbox" id="enableTopProducts" style="display: none;">
+
+                            <!-- Top Products Configuration (always visible) -->
+                            <div id="topProductsConfig">
+                                <!-- Row: Product ID, Revenue Column, Analyze Button -->
+                                <div class="top-products-config-row">
+                                    <div class="top-products-field">
+                                        <label class="text-xs font-medium text-gray-600 mb-1 block">Product ID Column</label>
+                                        <select id="productIdColumn" class="form-select text-sm" onchange="onProductColumnChange()">
+                                            <option value="">Select column...</option>
+                                        </select>
+                                    </div>
+                                    <div class="top-products-field">
+                                        <label class="text-xs font-medium text-gray-600 mb-1 block">Revenue Column</label>
+                                        <select id="revenueColumn" class="form-select text-sm" onchange="onRevenueColumnChange()">
+                                            <option value="">Select column...</option>
+                                        </select>
+                                    </div>
+                                    <div class="top-products-field top-products-field-btn">
+                                        <label class="text-xs font-medium text-gray-600 mb-1 block">&nbsp;</label>
+                                        <button type="button" id="analyzeProductsBtn" onclick="analyzeProductRevenue()"
+                                                class="btn btn-secondary" disabled>
+                                            <i class="fas fa-sync-alt mr-2"></i>
+                                            Analyze
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Analysis Results (hidden until analyzed) -->
+                                <div id="productAnalysisResults" class="hidden">
+                                    <!-- Revenue Distribution Chart -->
+                                    <div class="wizard-field-group">
+                                        <label class="text-xs font-medium text-gray-600 mb-2 block">Cumulative Revenue Distribution</label>
+                                        <div id="revenueChartContainer" class="revenue-chart-container">
+                                            <svg id="revenueDistributionChart"></svg>
+                                        </div>
+                                    </div>
+
+                                    <!-- Threshold Input -->
+                                    <div class="wizard-field-group">
+                                        <label class="text-xs font-medium text-gray-600 mb-1 block">Revenue Threshold</label>
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-sm text-gray-600">Include products up to</span>
+                                            <input type="number" id="revenueThreshold" value="80" min="1" max="100"
+                                                   class="form-input w-20 text-sm" onchange="onThresholdChange()">
+                                            <span class="text-sm text-gray-600">% of cumulative revenue</span>
+                                        </div>
+                                    </div>
+
+                                    <!-- Analysis Summary -->
+                                    <div id="productAnalysisSummary" class="analysis-summary-box">
+                                        <div class="analysis-summary-header">
+                                            <i class="fas fa-chart-pie mr-2"></i>
+                                            Analysis Results
+                                        </div>
+                                        <div class="analysis-summary-content">
+                                            <div class="analysis-stat">
+                                                <span class="stat-label">Total products:</span>
+                                                <span id="totalProductsCount" class="stat-value">-</span>
+                                            </div>
+                                            <div class="analysis-stat">
+                                                <span class="stat-label">Selected products:</span>
+                                                <span id="selectedProductsCount" class="stat-value">-</span>
+                                                <span id="selectedProductsPercent" class="stat-percent"></span>
+                                            </div>
+                                            <div class="analysis-stat">
+                                                <span class="stat-label">Revenue coverage:</span>
+                                                <span id="revenueCoverage" class="stat-value">-</span>
+                                                <span id="revenueCoverageAmount" class="stat-amount"></span>
+                                            </div>
+                                        </div>
+                                        <div class="analysis-summary-footer">
+                                            <i class="fas fa-info-circle mr-1"></i>
+                                            Product list computed dynamically at training time
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Analysis Error -->
+                                <div id="productAnalysisError" class="hidden">
+                                    <div class="wizard-info-box error">
+                                        <i class="fas fa-exclamation-circle"></i>
+                                        <span id="productAnalysisErrorText">Analysis failed</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                        <div class="add-filter-modal-footer">
-                            <button class="add-filter-modal-btn cancel" onclick="closeAddFilterModal()">Cancel</button>
-                            <button class="add-filter-modal-btn confirm" id="addFilterConfirmBtn" onclick="confirmAddFilter()" disabled>
-                                Add Filter
-                            </button>
+                        <div class="modal-footer-wizard-neu">
+                            <div class="footer-left"></div>
+                            <div class="footer-right">
+                                <button onclick="applyTopProductsFilter()" class="btn-neu btn-neu-action btn-neu-save">
+                                    <span class="btn-neu-inner">Apply</span>
+                                </button>
+                                <button onclick="closeTopProductsModal()" class="btn-neu btn-neu-action btn-neu-cancel">
+                                    <span class="btn-neu-inner">Cancel</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Filter Columns Modal -->
+                <div class="modal-overlay hidden" id="filterColumnsModal">
+                    <div class="modal-container modal-container-lg">
+                        <div class="modal-header">
+                            <div class="modal-header-icon info">
+                                <i class="fas fa-filter"></i>
+                            </div>
+                            <h3 class="modal-header-title">Filter Columns</h3>
+                        </div>
+                        <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
+                            <!-- Existing Filters List -->
+                            <div id="existingFiltersSection" class="hidden">
+                                <label class="text-xs font-medium text-gray-600 mb-2 block">Existing Filters</label>
+                                <div class="existing-filters-list" id="existingFiltersList">
+                                    <!-- Filter items will be inserted here dynamically -->
+                                </div>
+                                <div class="existing-filters-divider"></div>
+                            </div>
+
+                            <!-- Add New Filter Section -->
+                            <div id="addFilterSection">
+                                <label class="text-xs font-medium text-gray-600 mb-2 block">Add New Filter</label>
+                                <div class="add-filter-form-group">
+                                    <select id="filterColumnSelect" class="form-select w-full text-sm" onchange="onFilterColumnSelect()">
+                                        <option value="">Select column...</option>
+                                    </select>
+                                </div>
+
+                                <!-- Inline Filter Configuration (appears based on column type) -->
+                                <div id="filterConfigContainer" class="hidden">
+                                    <!-- Category Filter Config -->
+                                    <div id="categoryFilterConfig" class="filter-config-panel hidden">
+                                        <div class="filter-config-header">
+                                            <span id="categoryFilterColumnName" class="filter-config-column-name"></span>
+                                            <span class="filter-config-type-badge">STRING</span>
+                                        </div>
+                                        <div class="filter-config-body">
+                                            <div class="category-filter-mode" style="margin-bottom: 12px;">
+                                                <label>
+                                                    <input type="radio" name="newCategoryMode" value="include" checked>
+                                                    Include selected
+                                                </label>
+                                                <label>
+                                                    <input type="radio" name="newCategoryMode" value="exclude">
+                                                    Exclude selected
+                                                </label>
+                                            </div>
+                                            <div class="category-filter-values-container" id="newCategoryValuesContainer">
+                                                <!-- List mode or autocomplete will be rendered here -->
+                                            </div>
+                                        </div>
+                                        <div class="filter-config-footer">
+                                            <button type="button" class="btn btn-primary btn-sm" onclick="addCategoryFilterFromModal()">
+                                                Add Filter
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <!-- Numeric Filter Config -->
+                                    <div id="numericFilterConfig" class="filter-config-panel hidden">
+                                        <div class="filter-config-header">
+                                            <span id="numericFilterColumnName" class="filter-config-column-name"></span>
+                                            <span id="numericFilterTypeBadge" class="filter-config-type-badge">INTEGER</span>
+                                        </div>
+                                        <div class="filter-config-stats" id="numericFilterStats">
+                                            <!-- Range: X - Y | Nulls: Z% -->
+                                        </div>
+                                        <div class="filter-config-body">
+                                            <div class="numeric-filter-type" style="margin-bottom: 12px;">
+                                                <label>
+                                                    <input type="radio" name="newNumericType" value="range" checked onchange="updateNumericFilterInputs()">
+                                                    Range
+                                                </label>
+                                                <label>
+                                                    <input type="radio" name="newNumericType" value="equals" onchange="updateNumericFilterInputs()">
+                                                    Equals
+                                                </label>
+                                                <label>
+                                                    <input type="radio" name="newNumericType" value="not_equals" onchange="updateNumericFilterInputs()">
+                                                    Not Equals
+                                                </label>
+                                            </div>
+                                            <div class="numeric-filter-inputs" id="newNumericInputs">
+                                                <div class="numeric-filter-input-group">
+                                                    <label class="numeric-filter-input-label">Min</label>
+                                                    <input type="number" class="numeric-filter-input" id="newNumericMin" placeholder="">
+                                                </div>
+                                                <div class="numeric-filter-input-group">
+                                                    <label class="numeric-filter-input-label">Max</label>
+                                                    <input type="number" class="numeric-filter-input" id="newNumericMax" placeholder="">
+                                                </div>
+                                            </div>
+                                            <div class="numeric-filter-null-handling" id="newNumericNullHandling">
+                                                <label>
+                                                    <input type="checkbox" id="newNumericIncludeNulls" checked>
+                                                    Include NULL values
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="filter-config-footer">
+                                            <button type="button" class="btn btn-primary btn-sm" onclick="addNumericFilterFromModal()">
+                                                Add Filter
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <!-- Date Filter Config -->
+                                    <div id="dateFilterConfig" class="filter-config-panel hidden">
+                                        <div class="filter-config-header">
+                                            <span id="dateFilterColumnName" class="filter-config-column-name"></span>
+                                            <span class="filter-config-type-badge">DATE</span>
+                                        </div>
+                                        <div class="filter-config-stats" id="dateFilterStats">
+                                            <!-- Range: YYYY-MM-DD - YYYY-MM-DD -->
+                                        </div>
+                                        <div class="filter-config-body">
+                                            <div class="date-filter-type" style="margin-bottom: 12px;">
+                                                <label>
+                                                    <input type="radio" name="newDateType" value="relative" checked onchange="updateDateFilterInputs()">
+                                                    Relative
+                                                </label>
+                                                <label>
+                                                    <input type="radio" name="newDateType" value="range" onchange="updateDateFilterInputs()">
+                                                    Date Range
+                                                </label>
+                                            </div>
+                                            <!-- Relative Date Options -->
+                                            <div class="date-filter-relative" id="newDateRelativeInputs">
+                                                <select id="newDateRelativeOption" class="form-select w-full text-sm">
+                                                    <option value="last_7_days">Last 7 days</option>
+                                                    <option value="last_30_days" selected>Last 30 days</option>
+                                                    <option value="last_90_days">Last 90 days</option>
+                                                    <option value="this_month">This month</option>
+                                                    <option value="this_quarter">This quarter</option>
+                                                    <option value="this_year">This year</option>
+                                                </select>
+                                            </div>
+                                            <!-- Date Range Inputs -->
+                                            <div class="date-filter-range hidden" id="newDateRangeInputs">
+                                                <div class="date-filter-input-group">
+                                                    <label class="date-filter-input-label">Start Date</label>
+                                                    <input type="date" class="form-input text-sm" id="newDateStart">
+                                                </div>
+                                                <div class="date-filter-input-group">
+                                                    <label class="date-filter-input-label">End Date</label>
+                                                    <input type="date" class="form-input text-sm" id="newDateEnd">
+                                                </div>
+                                            </div>
+                                            <div class="date-filter-null-handling" id="newDateNullHandling" style="margin-top: 12px;">
+                                                <label>
+                                                    <input type="checkbox" id="newDateIncludeNulls" checked>
+                                                    Include NULL values
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="filter-config-footer">
+                                            <button type="button" class="btn btn-primary btn-sm" onclick="addDateFilterFromModal()">
+                                                Add Filter
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-footer-wizard-neu">
+                            <div class="footer-left"></div>
+                            <div class="footer-right">
+                                <button onclick="closeFilterColumnsModal()" class="btn-neu btn-neu-action btn-neu-save">
+                                    <span class="btn-neu-inner">Done</span>
+                                </button>
+                                <button onclick="closeFilterColumnsModal()" class="btn-neu btn-neu-action btn-neu-secondary">
+                                    <span class="btn-neu-inner">Cancel</span>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -2804,8 +2929,9 @@ let productFiltersState = {
             revenueColumn: null,
             thresholdPercent: 80
         },
-        categoryFilters: [],  // [{column, mode, values}]
-        numericFilters: []    // [{column, type, min, max, value, includeNulls}]
+        categoryFilters: [],  // [{column, mode, values, colInfo}]
+        numericFilters: [],   // [{column, type, min, max, value, includeNulls, colInfo}]
+        dateFilters: []       // [{column, filterType, relativeOption, startDate, endDate, includeNulls, colInfo}]
     },
     committed: {
         topRevenue: {
@@ -2815,9 +2941,11 @@ let productFiltersState = {
             thresholdPercent: 80
         },
         categoryFilters: [],
-        numericFilters: []
+        numericFilters: [],
+        dateFilters: []
     },
-    columnAnalysis: {}  // Cached column analysis data
+    columnAnalysis: {},  // Cached column analysis data
+    selectedFilterColumn: null  // Currently selected column in Filter Columns modal
 };
 
 // --- Sub-chapter Toggle ---
@@ -2829,6 +2957,11 @@ function toggleSubchapter(name) {
         content.classList.remove('hidden');
         chevron.classList.remove('fa-chevron-right');
         chevron.classList.add('fa-chevron-down');
+
+        // Update button states when opening sub-chapter
+        if (name === 'products') {
+            updateProductsRefreshButtonState();
+        }
     } else {
         content.classList.add('hidden');
         chevron.classList.remove('fa-chevron-down');
@@ -2852,24 +2985,644 @@ function toggleProductFilterSection(sectionName) {
 }
 
 function toggleTopProductsFilter() {
+    // Legacy function - kept for compatibility
+    // Top products filter is now auto-enabled when modal opens
     const enabled = document.getElementById('enableTopProducts').checked;
-    const config = document.getElementById('topProductsConfig');
-    const badge = document.getElementById('topProductsBadge');
-
     productFiltersState.pending.topRevenue.enabled = enabled;
+    updateProductsFilterSummary();
+    updateProductsNavBadges();
+    updateProductsRefreshButtonState();
+}
 
-    if (enabled) {
-        config.classList.remove('hidden');
-        badge.textContent = 'Enabled';
-        badge.classList.remove('inactive');
-    } else {
-        config.classList.add('hidden');
-        badge.textContent = 'Disabled';
-        badge.classList.add('inactive');
+// ============================================================================
+// TOP PRODUCTS MODAL
+// ============================================================================
+
+function openTopProductsModal() {
+    const modal = document.getElementById('topProductsModal');
+    modal.classList.remove('hidden');
+
+    // Auto-enable top products filter when modal opens
+    document.getElementById('enableTopProducts').checked = true;
+    productFiltersState.pending.topRevenue.enabled = true;
+}
+
+function closeTopProductsModal() {
+    const modal = document.getElementById('topProductsModal');
+    modal.classList.add('hidden');
+}
+
+function applyTopProductsFilter() {
+    // State is already updated by toggleTopProductsFilter() and other handlers
+    updateProductsFilterSummary();
+    updateProductsNavBadges();
+    updateProductsRefreshButtonState();
+    closeTopProductsModal();
+}
+
+// ============================================================================
+// FILTER COLUMNS MODAL
+// ============================================================================
+
+function openFilterColumnsModal() {
+    const modal = document.getElementById('filterColumnsModal');
+
+    // Populate existing filters list
+    renderExistingFiltersList();
+
+    // Populate column dropdown
+    populateFilterColumnDropdown();
+
+    // Reset filter config area
+    resetFilterConfigArea();
+
+    modal.classList.remove('hidden');
+}
+
+function closeFilterColumnsModal() {
+    const modal = document.getElementById('filterColumnsModal');
+    modal.classList.add('hidden');
+    resetFilterConfigArea();
+}
+
+function renderExistingFiltersList() {
+    const section = document.getElementById('existingFiltersSection');
+    const list = document.getElementById('existingFiltersList');
+    const pending = productFiltersState.pending;
+
+    const allFilters = [
+        ...pending.categoryFilters.map(f => ({ ...f, filterType: 'category' })),
+        ...pending.numericFilters.map(f => ({ ...f, filterType: 'numeric' })),
+        ...pending.dateFilters.map(f => ({ ...f, filterType: 'date' }))
+    ];
+
+    if (allFilters.length === 0) {
+        section.classList.add('hidden');
+        return;
+    }
+
+    section.classList.remove('hidden');
+    list.innerHTML = allFilters.map((filter, index) => {
+        let valueDisplay = '';
+        let typeBadge = filter.colInfo?.type || 'STRING';
+
+        if (filter.filterType === 'category') {
+            const mode = filter.mode === 'include' ? 'Include' : 'Exclude';
+            const valueCount = filter.values?.length || 0;
+            valueDisplay = `${mode}: ${valueCount} value${valueCount !== 1 ? 's' : ''} selected`;
+        } else if (filter.filterType === 'numeric') {
+            if (filter.type === 'range') {
+                const min = filter.min !== null && filter.min !== '' ? filter.min : '...';
+                const max = filter.max !== null && filter.max !== '' ? filter.max : '...';
+                valueDisplay = `Range: ${min} - ${max}`;
+            } else if (filter.type === 'equals') {
+                valueDisplay = `Equals: ${filter.value}`;
+            } else {
+                valueDisplay = `Not Equals: ${filter.value}`;
+            }
+        } else if (filter.filterType === 'date') {
+            typeBadge = 'DATE';
+            if (filter.dateFilterType === 'relative') {
+                const relativeLabels = {
+                    'last_7_days': 'Last 7 days',
+                    'last_30_days': 'Last 30 days',
+                    'last_90_days': 'Last 90 days',
+                    'this_month': 'This month',
+                    'this_quarter': 'This quarter',
+                    'this_year': 'This year'
+                };
+                valueDisplay = relativeLabels[filter.relativeOption] || filter.relativeOption;
+            } else {
+                valueDisplay = `${filter.startDate || '...'} to ${filter.endDate || '...'}`;
+            }
+        }
+
+        return `
+            <div class="existing-filter-item" data-filter-type="${filter.filterType}" data-filter-index="${index}">
+                <div class="existing-filter-info">
+                    <div class="existing-filter-column">
+                        <span class="existing-filter-column-name">${filter.column}</span>
+                        <span class="existing-filter-type-badge">${typeBadge}</span>
+                    </div>
+                    <div class="existing-filter-value">${valueDisplay}</div>
+                </div>
+                <div class="existing-filter-actions">
+                    <button class="existing-filter-btn delete" onclick="removeExistingFilter('${filter.filterType}', '${filter.column}')" title="Remove filter">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function removeExistingFilter(filterType, columnName) {
+    const pending = productFiltersState.pending;
+
+    if (filterType === 'category') {
+        pending.categoryFilters = pending.categoryFilters.filter(f => f.column !== columnName);
+    } else if (filterType === 'numeric') {
+        pending.numericFilters = pending.numericFilters.filter(f => f.column !== columnName);
+    } else if (filterType === 'date') {
+        pending.dateFilters = pending.dateFilters.filter(f => f.column !== columnName);
+    }
+
+    renderExistingFiltersList();
+    populateFilterColumnDropdown();
+    updateProductsFilterSummary();
+    updateProductsNavBadges();
+    updateProductsRefreshButtonState();
+}
+
+function populateFilterColumnDropdown() {
+    const select = document.getElementById('filterColumnSelect');
+    select.innerHTML = '<option value="">Select column...</option>';
+
+    // Get available columns (excluding already used ones)
+    const availableColumns = getAvailableFilterColumns();
+
+    availableColumns.forEach(col => {
+        const option = document.createElement('option');
+        option.value = col.fullName;
+        option.textContent = `${col.fullName} (${col.type || 'unknown'})`;
+        select.appendChild(option);
+    });
+}
+
+function getAvailableFilterColumns() {
+    const allColumns = [];
+
+    // Get columns from schema builder
+    Object.entries(schemaBuilderState.selectedColumns).forEach(([table, cols]) => {
+        const shortTable = table.replace('raw_data.', '');
+        cols.forEach(col => {
+            const fullName = `${shortTable}.${col}`;
+            // Get column type from metadata if available
+            const colInfo = productFiltersState.columnAnalysis[fullName];
+            allColumns.push({
+                table: shortTable,
+                column: col,
+                fullName,
+                type: colInfo?.type || 'unknown'
+            });
+        });
+    });
+
+    // Filter out columns already used in filters
+    return allColumns.filter(col => !isColumnUsedInFilters(col.fullName));
+}
+
+async function onFilterColumnSelect() {
+    const select = document.getElementById('filterColumnSelect');
+    const columnName = select.value;
+
+    productFiltersState.selectedFilterColumn = columnName;
+
+    if (!columnName) {
+        resetFilterConfigArea();
+        return;
+    }
+
+    // Fetch column analysis if not cached
+    if (!productFiltersState.columnAnalysis[columnName]) {
+        await fetchColumnAnalysis();
+    }
+
+    const colInfo = productFiltersState.columnAnalysis[columnName];
+    if (!colInfo) {
+        resetFilterConfigArea();
+        return;
+    }
+
+    showFilterConfigForType(columnName, colInfo);
+}
+
+function showFilterConfigForType(columnName, colInfo) {
+    const container = document.getElementById('filterConfigContainer');
+    const categoryConfig = document.getElementById('categoryFilterConfig');
+    const numericConfig = document.getElementById('numericFilterConfig');
+    const dateConfig = document.getElementById('dateFilterConfig');
+
+    // Hide all configs first
+    categoryConfig.classList.add('hidden');
+    numericConfig.classList.add('hidden');
+    dateConfig.classList.add('hidden');
+    container.classList.remove('hidden');
+
+    if (colInfo.filter_type === 'category') {
+        showCategoryFilterConfig(columnName, colInfo);
+    } else if (colInfo.filter_type === 'numeric') {
+        showNumericFilterConfig(columnName, colInfo);
+    } else if (colInfo.filter_type === 'date') {
+        showDateFilterConfig(columnName, colInfo);
     }
 }
 
-// --- Add Filter Modal ---
+function showCategoryFilterConfig(columnName, colInfo) {
+    const config = document.getElementById('categoryFilterConfig');
+    document.getElementById('categoryFilterColumnName').textContent = `${columnName} - ${colInfo.unique_count} unique values`;
+
+    // Render values list
+    const valuesContainer = document.getElementById('newCategoryValuesContainer');
+    // Backend returns 'values' as array of {value, count} objects in list mode
+    if (colInfo.display_mode === 'list' && colInfo.values) {
+        valuesContainer.innerHTML = `
+            <div class="category-filter-search">
+                <input type="text" placeholder="Search values..." oninput="filterCategoryValues(this.value)">
+            </div>
+            <div class="category-filter-list" id="newCategoryValuesList">
+                ${colInfo.values.map(item => `
+                    <div class="category-filter-item" onclick="toggleCategoryValue(this, '${item.value.replace(/'/g, "\\'")}')">
+                        <label class="category-filter-item-label">
+                            <input type="checkbox" value="${item.value}">
+                            ${item.value}
+                        </label>
+                        <span class="category-filter-item-count">(${item.count})</span>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    } else {
+        // Autocomplete mode for >100 values
+        valuesContainer.innerHTML = `
+            <div class="category-autocomplete-container">
+                <input type="text" class="category-autocomplete-input" placeholder="Type to search values..."
+                       oninput="searchCategoryValues(this.value, '${columnName}')" id="categoryAutocompleteInput">
+                <div class="category-autocomplete-dropdown hidden" id="categoryAutocompleteDropdown"></div>
+            </div>
+            <div class="category-selected-tags" id="categorySelectedTags"></div>
+        `;
+    }
+
+    // Reset mode selection
+    document.querySelector('input[name="newCategoryMode"][value="include"]').checked = true;
+
+    config.classList.remove('hidden');
+}
+
+function showNumericFilterConfig(columnName, colInfo) {
+    const config = document.getElementById('numericFilterConfig');
+    document.getElementById('numericFilterColumnName').textContent = columnName;
+    document.getElementById('numericFilterTypeBadge').textContent = colInfo.type;
+    document.getElementById('numericFilterStats').textContent =
+        `Range: ${colInfo.min} - ${colInfo.max} | Nulls: ${colInfo.null_percent || 0}%`;
+
+    // Reset inputs
+    document.querySelector('input[name="newNumericType"][value="range"]').checked = true;
+    document.getElementById('newNumericMin').value = '';
+    document.getElementById('newNumericMax').value = '';
+    document.getElementById('newNumericMin').placeholder = colInfo.min;
+    document.getElementById('newNumericMax').placeholder = colInfo.max;
+    document.getElementById('newNumericIncludeNulls').checked = true;
+
+    updateNumericFilterInputs();
+    config.classList.remove('hidden');
+}
+
+function showDateFilterConfig(columnName, colInfo) {
+    const config = document.getElementById('dateFilterConfig');
+    document.getElementById('dateFilterColumnName').textContent = columnName;
+    document.getElementById('dateFilterStats').textContent =
+        `Range: ${colInfo.min_date || 'N/A'} - ${colInfo.max_date || 'N/A'}`;
+
+    // Reset inputs
+    document.querySelector('input[name="newDateType"][value="relative"]').checked = true;
+    document.getElementById('newDateRelativeOption').value = 'last_30_days';
+    document.getElementById('newDateStart').value = '';
+    document.getElementById('newDateEnd').value = '';
+    document.getElementById('newDateIncludeNulls').checked = true;
+
+    updateDateFilterInputs();
+    config.classList.remove('hidden');
+}
+
+function resetFilterConfigArea() {
+    document.getElementById('filterConfigContainer').classList.add('hidden');
+    document.getElementById('categoryFilterConfig').classList.add('hidden');
+    document.getElementById('numericFilterConfig').classList.add('hidden');
+    document.getElementById('dateFilterConfig').classList.add('hidden');
+    document.getElementById('filterColumnSelect').value = '';
+    productFiltersState.selectedFilterColumn = null;
+}
+
+function updateNumericFilterInputs() {
+    const filterType = document.querySelector('input[name="newNumericType"]:checked').value;
+    const inputsDiv = document.getElementById('newNumericInputs');
+
+    if (filterType === 'range') {
+        inputsDiv.innerHTML = `
+            <div class="numeric-filter-input-group">
+                <label class="numeric-filter-input-label">Min</label>
+                <input type="number" class="numeric-filter-input" id="newNumericMin" placeholder="">
+            </div>
+            <div class="numeric-filter-input-group">
+                <label class="numeric-filter-input-label">Max</label>
+                <input type="number" class="numeric-filter-input" id="newNumericMax" placeholder="">
+            </div>
+        `;
+    } else {
+        inputsDiv.innerHTML = `
+            <div class="numeric-filter-input-group" style="flex: 1;">
+                <label class="numeric-filter-input-label">Value</label>
+                <input type="number" class="numeric-filter-input" id="newNumericValue" placeholder="">
+            </div>
+        `;
+    }
+}
+
+function updateDateFilterInputs() {
+    const filterType = document.querySelector('input[name="newDateType"]:checked').value;
+    const relativeInputs = document.getElementById('newDateRelativeInputs');
+    const rangeInputs = document.getElementById('newDateRangeInputs');
+
+    if (filterType === 'relative') {
+        relativeInputs.classList.remove('hidden');
+        rangeInputs.classList.add('hidden');
+    } else {
+        relativeInputs.classList.add('hidden');
+        rangeInputs.classList.remove('hidden');
+    }
+}
+
+// --- Add filters from modal ---
+function addCategoryFilterFromModal() {
+    const columnName = productFiltersState.selectedFilterColumn;
+    const colInfo = productFiltersState.columnAnalysis[columnName];
+    const mode = document.querySelector('input[name="newCategoryMode"]:checked').value;
+
+    // Get selected values
+    let selectedValues = [];
+    if (colInfo.display_mode === 'list') {
+        const checkboxes = document.querySelectorAll('#newCategoryValuesList input[type="checkbox"]:checked');
+        selectedValues = Array.from(checkboxes).map(cb => cb.value);
+    } else {
+        // Get from tags for autocomplete mode
+        const tags = document.querySelectorAll('#categorySelectedTags .category-selected-tag');
+        selectedValues = Array.from(tags).map(tag => tag.dataset.value);
+    }
+
+    if (selectedValues.length === 0) {
+        alert('Please select at least one value');
+        return;
+    }
+
+    const filterData = {
+        column: columnName,
+        mode: mode,
+        values: selectedValues,
+        colInfo: colInfo
+    };
+
+    productFiltersState.pending.categoryFilters.push(filterData);
+
+    renderExistingFiltersList();
+    populateFilterColumnDropdown();
+    resetFilterConfigArea();
+    updateProductsFilterSummary();
+    updateProductsNavBadges();
+    updateProductsRefreshButtonState();
+}
+
+function addNumericFilterFromModal() {
+    const columnName = productFiltersState.selectedFilterColumn;
+    const colInfo = productFiltersState.columnAnalysis[columnName];
+    const filterType = document.querySelector('input[name="newNumericType"]:checked').value;
+    const includeNulls = document.getElementById('newNumericIncludeNulls').checked;
+
+    const filterData = {
+        column: columnName,
+        type: filterType,
+        includeNulls: includeNulls,
+        colInfo: colInfo
+    };
+
+    if (filterType === 'range') {
+        filterData.min = document.getElementById('newNumericMin').value || null;
+        filterData.max = document.getElementById('newNumericMax').value || null;
+        if (!filterData.min && !filterData.max) {
+            alert('Please specify at least a min or max value');
+            return;
+        }
+    } else {
+        filterData.value = document.getElementById('newNumericValue')?.value;
+        if (!filterData.value) {
+            alert('Please specify a value');
+            return;
+        }
+    }
+
+    productFiltersState.pending.numericFilters.push(filterData);
+
+    renderExistingFiltersList();
+    populateFilterColumnDropdown();
+    resetFilterConfigArea();
+    updateProductsFilterSummary();
+    updateProductsNavBadges();
+    updateProductsRefreshButtonState();
+}
+
+function addDateFilterFromModal() {
+    const columnName = productFiltersState.selectedFilterColumn;
+    const colInfo = productFiltersState.columnAnalysis[columnName];
+    const dateFilterType = document.querySelector('input[name="newDateType"]:checked').value;
+    const includeNulls = document.getElementById('newDateIncludeNulls').checked;
+
+    const filterData = {
+        column: columnName,
+        dateFilterType: dateFilterType,
+        includeNulls: includeNulls,
+        colInfo: colInfo
+    };
+
+    if (dateFilterType === 'relative') {
+        filterData.relativeOption = document.getElementById('newDateRelativeOption').value;
+    } else {
+        filterData.startDate = document.getElementById('newDateStart').value || null;
+        filterData.endDate = document.getElementById('newDateEnd').value || null;
+        if (!filterData.startDate && !filterData.endDate) {
+            alert('Please specify at least a start or end date');
+            return;
+        }
+    }
+
+    productFiltersState.pending.dateFilters.push(filterData);
+
+    renderExistingFiltersList();
+    populateFilterColumnDropdown();
+    resetFilterConfigArea();
+    updateProductsFilterSummary();
+    updateProductsNavBadges();
+    updateProductsRefreshButtonState();
+}
+
+// --- Category filter helpers ---
+function toggleCategoryValue(element, value) {
+    const checkbox = element.querySelector('input[type="checkbox"]');
+    checkbox.checked = !checkbox.checked;
+    element.classList.toggle('selected', checkbox.checked);
+}
+
+function filterCategoryValues(searchTerm) {
+    const items = document.querySelectorAll('#newCategoryValuesList .category-filter-item');
+    const search = searchTerm.toLowerCase();
+
+    items.forEach(item => {
+        const label = item.querySelector('.category-filter-item-label').textContent.toLowerCase();
+        item.style.display = label.includes(search) ? '' : 'none';
+    });
+}
+
+async function searchCategoryValues(searchTerm, columnName) {
+    const dropdown = document.getElementById('categoryAutocompleteDropdown');
+
+    if (searchTerm.length < 2) {
+        dropdown.classList.add('hidden');
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/models/${modelId}/datasets/search-category-values/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrftoken
+            },
+            body: JSON.stringify({
+                session_id: schemaBuilderState.sessionId,
+                column_name: columnName,
+                search_term: searchTerm,
+                limit: 20
+            })
+        });
+
+        const data = await response.json();
+        if (data.status === 'success' && data.values) {
+            dropdown.innerHTML = data.values.map(v => `
+                <div class="category-autocomplete-item" onclick="selectAutocompleteValue('${v.value.replace(/'/g, "\\'")}', ${v.count})">
+                    <span>${v.value}</span>
+                    <span style="color: #9ca3af; font-size: 11px;">(${v.count})</span>
+                </div>
+            `).join('');
+            dropdown.classList.remove('hidden');
+        }
+    } catch (error) {
+        console.error('Error searching category values:', error);
+    }
+}
+
+function selectAutocompleteValue(value, count) {
+    const tagsContainer = document.getElementById('categorySelectedTags');
+    const dropdown = document.getElementById('categoryAutocompleteDropdown');
+    const input = document.getElementById('categoryAutocompleteInput');
+
+    // Check if already selected
+    const existing = tagsContainer.querySelector(`[data-value="${value}"]`);
+    if (existing) return;
+
+    // Add tag
+    const tag = document.createElement('span');
+    tag.className = 'category-selected-tag';
+    tag.dataset.value = value;
+    tag.innerHTML = `${value} <span class="category-selected-tag-remove" onclick="this.parentElement.remove()">&times;</span>`;
+    tagsContainer.appendChild(tag);
+
+    // Clear input and hide dropdown
+    input.value = '';
+    dropdown.classList.add('hidden');
+}
+
+// --- Summary and Badge Updates ---
+// Track if product filters have been applied (via Refresh Dataset click)
+let productFiltersApplied = false;
+
+// Update the Products summary line (shows pending filter details)
+function updateProductsFilterSummary() {
+    const summaryDiv = document.getElementById('productsFilterSummary');
+    const summaryText = document.getElementById('productsFilterSummaryText');
+    const pending = productFiltersState.pending;
+
+    const filterDetails = [];
+
+    // Top products
+    if (pending.topRevenue.enabled) {
+        filterDetails.push(`Top ${pending.topRevenue.thresholdPercent}% products`);
+    }
+
+    // Category filters
+    pending.categoryFilters.forEach(f => {
+        const shortName = f.column.split('.').pop();
+        filterDetails.push(shortName);
+    });
+
+    // Numeric filters
+    pending.numericFilters.forEach(f => {
+        const shortName = f.column.split('.').pop();
+        filterDetails.push(shortName);
+    });
+
+    // Date filters
+    pending.dateFilters.forEach(f => {
+        const shortName = f.column.split('.').pop();
+        filterDetails.push(shortName);
+    });
+
+    if (filterDetails.length === 0) {
+        summaryText.textContent = 'No filters selected';
+        summaryDiv.classList.remove('has-pending');
+    } else {
+        summaryText.textContent = filterDetails.join(' • ');
+        summaryDiv.classList.add('has-pending');
+    }
+}
+
+// Update the Products sub-chapter header badge (shows "X filters applied" after Refresh)
+function updateProductsFilterStatus() {
+    const statusEl = document.getElementById('productsFilterStatus');
+
+    // Only show badge if filters have been applied via Refresh Dataset
+    if (!productFiltersApplied) {
+        statusEl.textContent = '';
+        return;
+    }
+
+    const committed = productFiltersState.committed;
+    let filterCount = 0;
+
+    if (committed.topRevenue.enabled) filterCount++;
+    filterCount += committed.categoryFilters.length;
+    filterCount += committed.numericFilters.length;
+    filterCount += committed.dateFilters.length;
+
+    if (filterCount === 0) {
+        statusEl.textContent = '';
+    } else {
+        statusEl.textContent = `${filterCount} filter${filterCount !== 1 ? 's' : ''} applied`;
+    }
+}
+
+// Legacy function - kept for compatibility, now does nothing
+function updateProductsNavBadges() {
+    // Badges removed - now using summary line instead
+}
+
+// Update Products Refresh Dataset button state
+function updateProductsRefreshButtonState() {
+    const refreshBtn = document.getElementById('refreshProductFiltersBtn');
+    if (!refreshBtn) return;
+
+    const pending = productFiltersState.pending;
+
+    // Check if there are any pending filters to apply
+    const hasFilters = pending.topRevenue.enabled ||
+                       pending.categoryFilters.length > 0 ||
+                       pending.numericFilters.length > 0 ||
+                       pending.dateFilters.length > 0;
+
+    refreshBtn.disabled = !hasFilters;
+    refreshBtn.classList.toggle('filter-button-disabled', !hasFilters);
+}
+
+// --- Legacy Add Filter Modal (keeping for backwards compatibility) ---
 function openAddFilterModal() {
     const modal = document.getElementById('addFilterModal');
     const select = document.getElementById('addFilterColumnSelect');
@@ -2922,6 +3675,9 @@ function isColumnUsedInFilters(columnName) {
 
     // Check numeric filters
     if (pending.numericFilters.some(f => f.column === columnName)) return true;
+
+    // Check date filters
+    if (pending.dateFilters.some(f => f.column === columnName)) return true;
 
     return false;
 }
@@ -3423,24 +4179,6 @@ function updateProductFilterBadges() {
     updateProductsFilterStatus();
 }
 
-function updateProductsFilterStatus() {
-    const status = document.getElementById('productsFilterStatus');
-    const pending = productFiltersState.pending;
-    const parts = [];
-
-    if (pending.topRevenue.enabled) {
-        parts.push(`Top ${pending.topRevenue.thresholdPercent}%`);
-    }
-    if (pending.categoryFilters.length > 0) {
-        parts.push(`${pending.categoryFilters.length} category`);
-    }
-    if (pending.numericFilters.length > 0) {
-        parts.push(`${pending.numericFilters.length} numeric`);
-    }
-
-    status.textContent = parts.length > 0 ? parts.join(' + ') : '';
-}
-
 // --- Reset and Refresh ---
 function resetProductFilters() {
     // Copy committed state back to pending
@@ -3461,6 +4199,10 @@ function resetProductFilters() {
 async function refreshProductFilters() {
     // Commit pending state
     productFiltersState.committed = JSON.parse(JSON.stringify(productFiltersState.pending));
+
+    // Mark filters as applied and update header status
+    productFiltersApplied = true;
+    updateProductsFilterStatus();
 
     // Build the product_filter object for the API
     const productFilter = buildProductFilterForApi();
@@ -3692,31 +4434,52 @@ function applyRollingWindow() {
 // Track if date filters have been applied (via Refresh Dataset click)
 let dateFiltersApplied = false;
 
-// Update the Dates sub-chapter header with current filter status
-// Only shows status after Refresh Dataset is clicked
+// Update the Dates sub-chapter header badge (shows "1 filter applied" after Refresh)
 function updateDatesFilterStatus() {
     const statusEl = document.getElementById('datesFilterStatus');
 
-    // Only show status if filters have been applied via Refresh Dataset
+    // Only show badge if filters have been applied via Refresh Dataset
     if (!dateFiltersApplied) {
         statusEl.textContent = '';
         return;
     }
 
     const timestampCol = document.getElementById('timestampColumn')?.value;
-    const rollingDays = document.getElementById('rollingDays')?.value || 30;
-    const startDate = document.getElementById('startDateInput')?.value;
-
     if (!timestampCol) {
         statusEl.textContent = '';
         return;
     }
 
-    if (historyFilterMode === 'startDate' && startDate) {
-        statusEl.textContent = `Start date: ${startDate}`;
-    } else {
-        statusEl.textContent = `${rollingDays} days rolling window`;
+    statusEl.textContent = '1 filter applied';
+}
+
+// Update the Dates summary line (shows pending filter details)
+function updateDatesFilterSummary() {
+    const summaryDiv = document.getElementById('datesFilterSummary');
+    const summaryText = document.getElementById('datesFilterSummaryText');
+
+    const timestampCol = document.getElementById('timestampColumn')?.value;
+    const rollingDays = document.getElementById('rollingDays')?.value || 30;
+    const startDate = document.getElementById('startDateInput')?.value;
+
+    if (!timestampCol) {
+        summaryText.textContent = 'No filters selected';
+        summaryDiv.classList.remove('has-pending');
+        return;
     }
+
+    // Build summary text
+    const colName = timestampCol.split('.').pop();
+    let details = `Column: ${colName}`;
+
+    if (historyFilterMode === 'startDate' && startDate) {
+        details += ` • Start date: ${startDate}`;
+    } else {
+        details += ` • ${rollingDays} days rolling window`;
+    }
+
+    summaryText.textContent = details;
+    summaryDiv.classList.add('has-pending');
 }
 
 // Reset the applied status when filters are changed (user needs to click Refresh again)
@@ -3726,7 +4489,7 @@ function resetDateFiltersApplied() {
 }
 
 function onTimestampColumnChange() {
-    updateHistorySummary();
+    updateDatesFilterSummary();
     resetDateFiltersApplied();
     // Re-populate product dropdowns to exclude the timestamp column
     populateProductFilterDropdowns();
@@ -3760,7 +4523,7 @@ function updateHistoryButtonStates() {
 
 function onRollingDaysChange() {
     historyFilterMode = 'rolling';
-    updateHistorySummary();
+    updateDatesFilterSummary();
     resetDateFiltersApplied();
     // Reset product analysis when date range changes
     resetProductAnalysis();
@@ -3769,7 +4532,7 @@ function onRollingDaysChange() {
 
 function onStartDateChange() {
     historyFilterMode = 'startDate';
-    updateHistorySummary();
+    updateDatesFilterSummary();
     resetDateFiltersApplied();
     // Reset product analysis when date range changes
     resetProductAnalysis();
@@ -4116,8 +4879,11 @@ function updateAnalyzeButtonState() {
 
 function resetProductAnalysis() {
     productAnalysisData = null;
-    document.getElementById('productAnalysisResults').classList.add('hidden');
-    document.getElementById('productAnalysisError').classList.add('hidden');
+
+    const resultsEl = document.getElementById('productAnalysisResults');
+    const errorEl = document.getElementById('productAnalysisError');
+    if (resultsEl) resultsEl.classList.add('hidden');
+    if (errorEl) errorEl.classList.add('hidden');
 
     // Summary element removed from tablet header design
     const productsSummary = document.getElementById('productsSummary');
@@ -4143,7 +4909,7 @@ async function analyzeProductRevenue() {
 
     const analyzeBtn = document.getElementById('analyzeProductsBtn');
     analyzeBtn.disabled = true;
-    analyzeBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Analyzing...';
+    analyzeBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Analyzing';
 
     try {
         const response = await fetch(`/api/models/${modelId}/datasets/analyze-product-revenue/`, {
@@ -4166,14 +4932,20 @@ async function analyzeProductRevenue() {
         if (data.status === 'success') {
             productAnalysisData = data;
             displayProductAnalysisResults(data);
-            document.getElementById('productAnalysisResults').classList.remove('hidden');
-            document.getElementById('productAnalysisError').classList.add('hidden');
+
+            const resultsEl = document.getElementById('productAnalysisResults');
+            const errorEl = document.getElementById('productAnalysisError');
+            if (resultsEl) resultsEl.classList.remove('hidden');
+            if (errorEl) errorEl.classList.add('hidden');
 
             // Update date range preview if available
             if (data.date_range) {
-                document.getElementById('dateRangePreview').classList.remove('hidden');
-                document.getElementById('dateRangePreviewText').textContent =
-                    `Data from ${data.date_range.start} to ${data.date_range.end}`;
+                const dateRangeEl = document.getElementById('dateRangePreview');
+                const dateRangeTextEl = document.getElementById('dateRangePreviewText');
+                if (dateRangeEl) dateRangeEl.classList.remove('hidden');
+                if (dateRangeTextEl) {
+                    dateRangeTextEl.textContent = `Data from ${data.date_range.start} to ${data.date_range.end}`;
+                }
             }
         } else {
             showProductAnalysisError(data.message || 'Analysis failed');
@@ -4183,7 +4955,7 @@ async function analyzeProductRevenue() {
         showProductAnalysisError('Failed to analyze product revenue');
     } finally {
         analyzeBtn.disabled = false;
-        analyzeBtn.innerHTML = '<i class="fas fa-sync-alt mr-2"></i>Analyze Revenue Distribution';
+        analyzeBtn.innerHTML = '<i class="fas fa-sync-alt mr-2"></i>Analyze';
         validateCurrentStep();
     }
 }
@@ -4195,8 +4967,10 @@ function displayProductAnalysisResults(data) {
     const threshold = parseInt(document.getElementById('revenueThreshold')?.value) || 80;
     updateProductSelectionForThreshold(threshold, data);
 
-    // Draw the chart
-    drawRevenueDistributionChart(data.distribution, threshold);
+    // Draw the chart after a small delay to ensure container is visible and has dimensions
+    setTimeout(() => {
+        drawRevenueDistributionChart(data.distribution, threshold);
+    }, 50);
 
     // Update products summary
     updateProductsSummary();
@@ -4254,9 +5028,13 @@ function updateProductsSummary() {
 }
 
 function showProductAnalysisError(message) {
-    document.getElementById('productAnalysisResults').classList.add('hidden');
-    document.getElementById('productAnalysisError').classList.remove('hidden');
-    document.getElementById('productAnalysisErrorText').textContent = message;
+    const resultsEl = document.getElementById('productAnalysisResults');
+    const errorEl = document.getElementById('productAnalysisError');
+    const errorTextEl = document.getElementById('productAnalysisErrorText');
+
+    if (resultsEl) resultsEl.classList.add('hidden');
+    if (errorEl) errorEl.classList.remove('hidden');
+    if (errorTextEl) errorTextEl.textContent = message;
 
     // Summary element removed from tablet header design
     const productsSummary = document.getElementById('productsSummary');
@@ -4273,9 +5051,10 @@ function drawRevenueDistributionChart(distribution, threshold = 80) {
 
     if (!distribution || distribution.length === 0) return;
 
-    // Dimensions
-    const margin = { top: 20, right: 30, bottom: 40, left: 50 };
-    const width = container.clientWidth - margin.left - margin.right;
+    // Dimensions - use container width or fallback to reasonable default
+    const margin = { top: 20, right: 30, bottom: 40, left: 60 };
+    const containerWidth = container.clientWidth || container.offsetWidth || 600;
+    const width = Math.max(containerWidth - margin.left - margin.right, 200);
     const height = 200 - margin.top - margin.bottom;
 
     svg.attr('width', width + margin.left + margin.right)

@@ -756,7 +756,8 @@
 
 .filter-button-wrapper {
     position: relative;
-    flex: 1;
+    flex: 1 1 0;
+    min-width: 0;
     display: flex;
     flex-direction: column;
 }
@@ -775,7 +776,7 @@
     align-items: center;
     justify-content: center;
     gap: 8px;
-    padding: 12px 16px;
+    padding: 8px 16px;
     width: 100%;
     background: #fff;
     border: 1px solid #000;
@@ -787,6 +788,7 @@
     transition: all 0.15s ease;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
     white-space: nowrap;
+    position: relative;
 }
 
 .filter-button:hover {
@@ -816,6 +818,34 @@
 
 .filter-button-action:hover {
     background: #f3f4f6;
+}
+
+/* Refresh Dataset button - black background */
+.filter-button-refresh {
+    background: #000;
+    color: #fff;
+    border-color: #000;
+}
+
+.filter-button-refresh:hover {
+    background: #1f2937;
+}
+
+.filter-button-refresh i {
+    color: #fff;
+}
+
+/* Disabled state for refresh button - overrides black background */
+.filter-button-refresh:disabled,
+.filter-button-refresh.filter-button-disabled {
+    background: #f3f4f6;
+    border-color: #d1d5db;
+    color: #9ca3af;
+}
+
+.filter-button-refresh:disabled i,
+.filter-button-refresh.filter-button-disabled i {
+    color: #9ca3af;
 }
 
 /* Disabled state for filter buttons */
@@ -2503,4 +2533,376 @@
     background: #93c5fd;
     border-color: #93c5fd;
     cursor: not-allowed;
+}
+
+/* ============================================================================
+   PRODUCTS NAVIGATION BUTTONS (New 3-button design)
+   ============================================================================ */
+
+.products-nav-buttons {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.products-nav-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 14px 16px;
+    background: #fff;
+    border: 1px solid #000;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    color: #111;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    position: relative;
+}
+
+.products-nav-btn:hover {
+    background: #f9fafb;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+}
+
+.products-nav-btn:active {
+    transform: translateY(1px);
+}
+
+.products-nav-btn i {
+    font-size: 14px;
+    color: #374151;
+}
+
+.products-nav-btn-action {
+    background: #000;
+    color: #fff;
+}
+
+.products-nav-btn-action:hover {
+    background: #1f2937;
+}
+
+.products-nav-btn-action i {
+    color: #fff;
+}
+
+/* Filter Summary Line (unified for all sub-chapters) */
+.filter-summary-line {
+    padding: 10px 16px;
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    margin-top: 12px;
+}
+
+.filter-summary-text {
+    font-size: 13px;
+    color: #6b7280;
+}
+
+.filter-summary-line.has-pending .filter-summary-text {
+    color: #374151;
+}
+
+.filter-summary-line.has-pending {
+    background: #fef3c7;
+    border-color: #fcd34d;
+}
+
+/* ============================================================================
+   FILTER COLUMNS MODAL
+   ============================================================================ */
+
+/* Existing Filters List */
+.existing-filters-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.existing-filter-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 14px;
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    transition: all 0.15s ease;
+}
+
+.existing-filter-item:hover {
+    background: #f3f4f6;
+}
+
+.existing-filter-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.existing-filter-column {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+
+.existing-filter-column-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: #111827;
+}
+
+.existing-filter-type-badge {
+    font-size: 10px;
+    font-weight: 500;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: #e5e7eb;
+    color: #6b7280;
+    text-transform: uppercase;
+}
+
+.existing-filter-value {
+    font-size: 12px;
+    color: #6b7280;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.existing-filter-actions {
+    display: flex;
+    gap: 6px;
+    margin-left: 12px;
+}
+
+.existing-filter-btn {
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: transparent;
+    color: #9ca3af;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: all 0.15s ease;
+}
+
+.existing-filter-btn:hover {
+    background: #e5e7eb;
+    color: #374151;
+}
+
+.existing-filter-btn.delete:hover {
+    background: #fee2e2;
+    color: #dc2626;
+}
+
+.existing-filters-divider {
+    height: 1px;
+    background: #e5e7eb;
+    margin: 16px 0;
+}
+
+/* Filter Configuration Panel */
+.filter-config-panel {
+    margin-top: 16px;
+    padding: 16px;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    background: #fafafa;
+}
+
+.filter-config-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.filter-config-column-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: #111827;
+}
+
+.filter-config-type-badge {
+    font-size: 10px;
+    font-weight: 500;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: #dbeafe;
+    color: #1d4ed8;
+    text-transform: uppercase;
+}
+
+.filter-config-stats {
+    font-size: 12px;
+    color: #6b7280;
+    margin-bottom: 12px;
+    padding: 8px 12px;
+    background: #fff;
+    border-radius: 6px;
+    border: 1px solid #e5e7eb;
+}
+
+.filter-config-body {
+    margin-bottom: 12px;
+}
+
+.filter-config-footer {
+    display: flex;
+    justify-content: flex-end;
+    padding-top: 12px;
+    border-top: 1px solid #e5e7eb;
+}
+
+/* Date Filter Specific Styles */
+.date-filter-type {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 12px;
+}
+
+.date-filter-type label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: #374151;
+    cursor: pointer;
+}
+
+.date-filter-relative {
+    margin-bottom: 12px;
+}
+
+.date-filter-range {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    margin-bottom: 12px;
+}
+
+.date-filter-range.hidden {
+    display: none;
+}
+
+.date-filter-input-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 1;
+}
+
+.date-filter-input-label {
+    font-size: 11px;
+    font-weight: 500;
+    color: #6b7280;
+}
+
+.date-filter-null-handling label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: #374151;
+    cursor: pointer;
+}
+
+/* Category Filter Values Container */
+.category-filter-values-container {
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    background: #fff;
+}
+
+/* ============================================================================
+   TOP PRODUCTS MODAL - Config Row Layout
+   ============================================================================ */
+
+.top-products-config-row {
+    display: flex;
+    gap: 12px;
+    align-items: flex-end;
+    margin-bottom: 16px;
+}
+
+.top-products-field {
+    flex: 1 1 0;
+    min-width: 0;
+    width: 0; /* Forces equal width distribution */
+}
+
+.top-products-field select {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.top-products-field-btn {
+    flex: 1 1 0;
+    min-width: 0;
+    width: 0;
+}
+
+.top-products-field-btn .btn {
+    width: 100%;
+    white-space: nowrap;
+}
+
+/* ============================================================================
+   FORM SELECT - White Background Override
+   ============================================================================ */
+
+/* Ensure all select dropdowns have white background - including options */
+.form-select,
+.modal-body select,
+.modal-container select {
+    background-color: #ffffff !important;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+    background-position: right 8px center;
+    background-repeat: no-repeat;
+    background-size: 16px 16px;
+    padding-right: 32px;
+}
+
+/* Fix for select option elements - force white background */
+.form-select option,
+.modal-body select option,
+.modal-container select option,
+select option {
+    background-color: #ffffff !important;
+    color: #111827;
+}
+
+/* Force light color scheme for selects to get white dropdown on macOS */
+.form-select,
+.modal-body select,
+.modal-container select,
+.top-products-field select {
+    color-scheme: light;
+}
+
+/* Override system preferences for dropdown */
+@supports (color-scheme: light) {
+    select,
+    select option {
+        color-scheme: light only;
+    }
 }

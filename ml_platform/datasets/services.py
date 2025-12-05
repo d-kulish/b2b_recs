@@ -2221,8 +2221,12 @@ class ColumnAnalysisService:
                     result['columns'][col_key] = self._analyze_numeric_column(
                         col_data, col_type, null_count, null_percent, total_rows
                     )
+                elif col_type in ('DATE', 'TIMESTAMP'):
+                    result['columns'][col_key] = self._analyze_date_column(
+                        col_data, col_type, null_count, null_percent, total_rows
+                    )
                 else:
-                    # For other types (DATE, TIMESTAMP, BOOL), provide basic info
+                    # For other types (BOOL, etc.), provide basic info
                     result['columns'][col_key] = {
                         'type': col_type,
                         'null_count': null_count,
@@ -2268,6 +2272,13 @@ class ColumnAnalysisService:
 
         # Check for datetime types
         if pd.api.types.is_datetime64_any_dtype(dtype):
+            # Check if it's a date-only or full timestamp
+            non_null = col_data.dropna().head(10)
+            if len(non_null) > 0:
+                sample = non_null.iloc[0]
+                if hasattr(sample, 'hour') and sample.hour == 0 and sample.minute == 0 and sample.second == 0:
+                    # All samples have time 00:00:00, likely a date-only column
+                    return 'DATE'
             return 'TIMESTAMP'
 
         # Check for date in object columns (strings that look like dates)
@@ -2278,6 +2289,13 @@ class ColumnAnalysisService:
                 sample = non_null.iloc[0]
                 if isinstance(sample, (pd.Timestamp, np.datetime64)):
                     return 'TIMESTAMP'
+                # Check for date strings like "2024-01-15"
+                if isinstance(sample, str):
+                    import re
+                    if re.match(r'^\d{4}-\d{2}-\d{2}$', sample.strip()):
+                        return 'DATE'
+                    if re.match(r'^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}', sample.strip()):
+                        return 'TIMESTAMP'
 
         # Default to STRING for object dtype
         return 'STRING'
@@ -2392,6 +2410,66 @@ class ColumnAnalysisService:
             result['min'] = None
             result['max'] = None
             result['mean'] = None
+            result['unique_count'] = 0
+
+        return result
+
+    def _analyze_date_column(
+        self,
+        col_data,
+        col_type: str,
+        null_count: int,
+        null_percent: float,
+        total_rows: int
+    ) -> dict:
+        """
+        Analyze a DATE or TIMESTAMP column for date range filtering.
+
+        Args:
+            col_data: pandas Series
+            col_type: Column type string ('DATE' or 'TIMESTAMP')
+            null_count: Count of null values
+            null_percent: Percentage of null values
+            total_rows: Total row count
+
+        Returns:
+            Dict with column analysis including min_date/max_date
+        """
+        import pandas as pd
+
+        # Get date statistics (excludes NaN)
+        non_null = col_data.dropna()
+
+        result = {
+            'type': col_type,
+            'null_count': null_count,
+            'null_percent': null_percent,
+            'total_rows': total_rows,
+            'filterable': True,
+            'filter_type': 'date'
+        }
+
+        if len(non_null) > 0:
+            try:
+                # Convert to datetime if needed
+                if not pd.api.types.is_datetime64_any_dtype(non_null.dtype):
+                    non_null = pd.to_datetime(non_null)
+
+                min_date = non_null.min()
+                max_date = non_null.max()
+
+                # Format dates as strings for JSON
+                result['min_date'] = min_date.strftime('%Y-%m-%d')
+                result['max_date'] = max_date.strftime('%Y-%m-%d')
+                result['unique_count'] = int(non_null.nunique())
+            except Exception as e:
+                logger.warning(f"Error analyzing date column: {e}")
+                result['min_date'] = None
+                result['max_date'] = None
+                result['unique_count'] = 0
+        else:
+            result['min_date'] = None
+            result['max_date'] = None
             result['unique_count'] = 0
 
         return result

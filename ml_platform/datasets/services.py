@@ -1225,7 +1225,7 @@ class ProductRevenueAnalysisService:
                     }
 
             # Get distribution curve points (sampled for chart)
-            distribution = self._get_distribution_curve(
+            distribution, _, _ = self._get_distribution_curve(
                 primary_table, primary_alias, product_col, revenue_col,
                 timestamp_col, rolling_days
             )
@@ -1315,6 +1315,8 @@ class ProductRevenueAnalysisService:
                 SELECT
                     rank,
                     total_products,
+                    cumulative_revenue,
+                    grand_total,
                     ROUND(rank * 100.0 / total_products, 2) as percent_products,
                     ROUND(cumulative_revenue * 100.0 / grand_total, 2) as cumulative_revenue_percent
                 FROM ranked_products
@@ -1331,7 +1333,7 @@ class ProductRevenueAnalysisService:
                     OR cumulative_revenue_percent BETWEEN 89 AND 91  -- Around 90% threshold
                     OR cumulative_revenue_percent BETWEEN 69 AND 71  -- Around 70% threshold
             )
-            SELECT percent_products, cumulative_revenue_percent
+            SELECT rank as product_count, cumulative_revenue, total_products, grand_total as total_revenue, percent_products, cumulative_revenue_percent
             FROM sampled
             ORDER BY rank
             LIMIT 100
@@ -1340,21 +1342,27 @@ class ProductRevenueAnalysisService:
             result = self.bq_service.client.query(curve_query).result()
 
             distribution = []
+            total_products = 0
+            total_revenue = 0
             for row in result:
+                total_products = int(row.total_products)
+                total_revenue = float(row.total_revenue)
                 distribution.append({
+                    'product_count': int(row.product_count),
+                    'cumulative_revenue': float(row.cumulative_revenue),
                     'percent_products': float(row.percent_products),
                     'cumulative_revenue_percent': float(row.cumulative_revenue_percent)
                 })
 
-            return distribution
+            return distribution, total_products, total_revenue
 
         except Exception as e:
             logger.warning(f"Error getting distribution curve: {e}")
             # Return minimal distribution if query fails
             return [
-                {'percent_products': 0, 'cumulative_revenue_percent': 0},
-                {'percent_products': 100, 'cumulative_revenue_percent': 100}
-            ]
+                {'product_count': 0, 'cumulative_revenue': 0, 'percent_products': 0, 'cumulative_revenue_percent': 0},
+                {'product_count': 1, 'cumulative_revenue': 0, 'percent_products': 100, 'cumulative_revenue_percent': 100}
+            ], 0, 0
 
     def get_products_for_threshold(
         self,
@@ -1768,7 +1776,7 @@ class DatasetStatsService:
                     'count': len(values)
                 })
 
-        # Numeric filters (range, equals, not_equals for INTEGER/FLOAT columns)
+        # Numeric filters (range, greater_than, less_than, equals, not_equals for INTEGER/FLOAT columns)
         numeric_filters = product_filter.get('numeric_filters', [])
         for i, num_filter in enumerate(numeric_filters):
             column = num_filter.get('column')  # Format: "table.column"
@@ -1837,6 +1845,34 @@ class DatasetStatsService:
 
                     product_filter_summary.append({
                         'type': 'numeric_not_equals',
+                        'column': column,
+                        'value': value
+                    })
+
+            elif filter_type == 'greater_than':
+                value = num_filter.get('value')
+                if value is not None:
+                    if include_nulls:
+                        conditions.append(f"({col_ref} > {value} OR {col_ref} IS NULL)")
+                    else:
+                        conditions.append(f"({col_ref} > {value} AND {col_ref} IS NOT NULL)")
+
+                    product_filter_summary.append({
+                        'type': 'numeric_greater_than',
+                        'column': column,
+                        'value': value
+                    })
+
+            elif filter_type == 'less_than':
+                value = num_filter.get('value')
+                if value is not None:
+                    if include_nulls:
+                        conditions.append(f"({col_ref} < {value} OR {col_ref} IS NULL)")
+                    else:
+                        conditions.append(f"({col_ref} < {value} AND {col_ref} IS NOT NULL)")
+
+                    product_filter_summary.append({
+                        'type': 'numeric_less_than',
                         'column': column,
                         'value': value
                     })

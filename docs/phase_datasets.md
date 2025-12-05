@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides detailed specifications for implementing the **Datasets** domain in the ML Platform. The Datasets domain defines WHAT data goes into model training.
 
-**Last Updated**: 2025-12-05 (v4 - Unified Filtering UI)
+**Last Updated**: 2025-12-05 (v5 - Enhanced Filtering with Cross-Sub-chapter Column Exclusion)
 
 ---
 
@@ -261,8 +261,13 @@ UI Components:
 - Rolling Window and Start Date buttons are disabled until Timestamp Column is selected
 - Each button opens a popup dropdown for selection
 - Popups auto-close when value is selected (Apply button for Rolling Window)
-- Summary line below buttons shows pending filter details
+- **Summary line** below buttons uses the same structure as Products sub-chapter:
+  - Shows "Filter #1: {column_name}: {details}" format
+  - Includes delete button (trash icon) to clear the filter
+  - Yellow/amber background when filter is configured
+  - Shows "No filters selected" when empty
 - Tablet header shows "1 filter applied" badge after clicking Refresh Dataset
+- **Cross-sub-chapter exclusion**: After Refresh Dataset, the timestamp column is excluded from selection in Products sub-chapter dropdowns
 
 **Sub-chapter 2: Customers**
 
@@ -306,14 +311,42 @@ Products sub-chapter uses a **minimalist 3-button navigation** design with modal
    - No helper label (empty space for alignment)
 
 **Summary Line:**
-- Shows pending filter details: "Top 80% products • category • price"
+- Shows numbered filters with delete buttons: "Filter #1: Top 80% revenue (X products)", "Filter #2: unit_price: < 20"
+- Each filter shows as a separate item with trash icon for deletion
+- Top Products filter displays both threshold percentage AND product count from analysis
 - Yellow/amber background when filters are pending
 - Updates dynamically when filters are added/removed
 - Shows "No filters selected" when empty
+- **Cross-sub-chapter exclusion**: After Refresh Dataset, all committed columns are excluded from Dates sub-chapter dropdowns
 
 **Tablet Badge:**
 - Shows "X filters applied" only after clicking Refresh Dataset
 - Cleared when filter configuration changes
+
+---
+
+**Cross-Sub-chapter Column Exclusion**
+
+To prevent the same column from being used in multiple filters across different sub-chapters, the system implements centralized column tracking:
+
+1. **Committed State Tracking**: Each sub-chapter tracks which columns have been "committed" (applied via Refresh Dataset)
+   - Dates: `committedDatesFilter.timestampColumn`
+   - Products: `productFiltersState.committed` (topRevenue columns, category/numeric/date filter columns)
+
+2. **Column Availability Rules**:
+   - Columns committed in Dates sub-chapter are excluded from Products dropdowns
+   - Columns committed in Products sub-chapter are excluded from Dates timestamp dropdown
+   - Within Products, columns used in pending filters are excluded from the Filter Columns dropdown
+
+3. **State Lifecycle**:
+   - Column becomes "committed" when user clicks Refresh Dataset
+   - Committed state is cleared when user changes the selection (before re-committing)
+   - All committed states reset when wizard is closed or reset
+
+4. **Implementation Functions**:
+   - `isColumnCommittedInAnyFilter(columnName)`: Checks all committed states across sub-chapters
+   - `isColumnUsedInFilters(columnName)`: Checks pending state within Products sub-chapter
+   - `getAvailableFilterColumns()`: Filters out both committed and pending columns
 
 ---
 
@@ -434,17 +467,18 @@ After selecting a column, the appropriate filter UI appears inline:
    ```
    ┌─────────────────────────────────────────────────────────────────────┐
    │ price (FLOAT) - Range: 0.50 - 12,450 | Nulls: 0.5%                  │
-   │ Filter Type: ○ Range  ○ Equals  ○ Not Equals                        │
+   │ Filter Type: ○ Range  ○ Greater than  ○ Less than  ○ Equals  ○ Not Equals │
    │                                                                     │
    │ Min: [10        ]    Max: [500       ]                              │
    │ ☑ Include NULL values                                               │
-   │                                              [Add Filter]           │
+   │                                              [Apply]  [Cancel]      │
    └─────────────────────────────────────────────────────────────────────┘
    ```
    - Shows column statistics (min, max, null percentage)
-   - Filter types: Range, Equals, Not Equals
-   - Min/Max inputs for range, single value for equals
+   - Filter types: Range, Greater than, Less than, Equals, Not Equals
+   - Min/Max inputs for range, single value for greater_than/less_than/equals
    - NULL handling checkbox
+   - Apply button adds the filter and closes modal
 
 3. **DATE/TIMESTAMP Columns** - Date Filter:
    ```
@@ -835,7 +869,7 @@ class DatasetVersion(models.Model):
             "type": "object",
             "properties": {
               "column": {"type": "string"},
-              "filter_type": {"enum": ["range", "equals", "not_equals"]},
+              "filter_type": {"enum": ["range", "greater_than", "less_than", "equals", "not_equals"]},
               "min": {"type": ["number", "null"]},
               "max": {"type": ["number", "null"]},
               "value": {"type": ["number", "null"]},

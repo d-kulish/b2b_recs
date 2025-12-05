@@ -47,9 +47,12 @@ This platform enables businesses to:
 - 🔗 **Multi-Table Joins:** Auto-detect join keys with confidence scoring + manual override
 - 📋 **Column Mapping:** Flexible column selection with ML role suggestions (user_id, product_id, revenue)
 - 🔍 **Column Statistics:** Full table scan for accurate cardinality, min/max, nulls, uniqueness
-- 🎯 **Data Filters:**
-  - Top N% products by revenue (CTE-based)
-  - Minimum transactions per customer
+- 🎯 **Advanced Data Filters:**
+  - **Date Filtering:** Rolling window or fixed start date with timestamp column selection
+  - **Product Filtering:** Top N% products by revenue with D3.js Pareto chart visualization
+  - **Column Filters:** Category (include/exclude), Numeric (range, greater than, less than, equals), Date filters
+  - **Cross-sub-chapter column exclusion:** Prevents same column from being used in multiple filters
+  - **Unified filter summary:** Numbered filters with delete buttons across all sub-chapters
 - ✂️ **Train/Eval Split:** Random hash-based (FARM_FINGERPRINT) for reproducibility
 - 📊 **Data Quality Metrics:** Automated scoring with issue detection (sparsity, cold start, engagement)
 - 🔄 **TFX Integration:** Query generation ready for TFX ExampleGen component
@@ -306,6 +309,14 @@ WHERE source_type='gcs';
 ---
 
 ## 📝 Recent Updates
+
+**December 5, 2025 - Enhanced Filtering System**
+- ✅ Cross-sub-chapter column exclusion - columns used in one filter are unavailable in others
+- ✅ Unified filter summary UI - consistent "Filter #N" format with delete buttons across all sub-chapters
+- ✅ Greater than / Less than numeric filter options added
+- ✅ Top Products filter now shows product count from analysis (e.g., "Top 80% revenue (4 products)")
+- ✅ Delete buttons (trash icon) for all filter types including Dates sub-chapter
+- ✅ Committed/pending state management for filter lifecycle
 
 **December 2, 2025 - Dataset Management UI Complete**
 - ✅ Visual Schema Builder - Power BI-style drag-and-drop interface

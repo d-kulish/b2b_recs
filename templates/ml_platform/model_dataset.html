@@ -337,7 +337,9 @@
 
                         <!-- Summary Line -->
                         <div class="filter-summary-line" id="datesFilterSummary">
-                            <span class="filter-summary-text" id="datesFilterSummaryText">No filters selected</span>
+                            <div class="filter-summary-items" id="datesFilterSummaryItems">
+                                <span class="filter-summary-empty">No filters selected</span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -402,7 +404,9 @@
 
                             <!-- Summary Line -->
                             <div class="filter-summary-line" id="productsFilterSummary">
-                                <span class="filter-summary-text" id="productsFilterSummaryText">No filters selected</span>
+                                <div class="filter-summary-items" id="productsFilterSummaryItems">
+                                    <span class="filter-summary-empty">No filters selected</span>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -440,9 +444,9 @@
                                     <div class="top-products-field top-products-field-btn">
                                         <label class="text-xs font-medium text-gray-600 mb-1 block">&nbsp;</label>
                                         <button type="button" id="analyzeProductsBtn" onclick="analyzeProductRevenue()"
-                                                class="btn btn-secondary" disabled>
-                                            <i class="fas fa-sync-alt mr-2"></i>
-                                            Analyze
+                                                class="filter-button filter-button-refresh filter-button-disabled" disabled>
+                                            <i class="fas fa-sync-alt"></i>
+                                            <span>Analyze</span>
                                         </button>
                                     </div>
                                 </div>
@@ -459,11 +463,10 @@
 
                                     <!-- Threshold Input -->
                                     <div class="wizard-field-group">
-                                        <label class="text-xs font-medium text-gray-600 mb-1 block">Revenue Threshold</label>
                                         <div class="flex items-center gap-2">
-                                            <span class="text-sm text-gray-600">Include products up to</span>
+                                            <span class="text-sm text-gray-600">Include products covering up to</span>
                                             <input type="number" id="revenueThreshold" value="80" min="1" max="100"
-                                                   class="form-input w-20 text-sm" onchange="onThresholdChange()">
+                                                   class="form-input w-20 text-sm text-center" onchange="onThresholdChange()">
                                             <span class="text-sm text-gray-600">% of cumulative revenue</span>
                                         </div>
                                     </div>
@@ -571,11 +574,6 @@
                                                 <!-- List mode or autocomplete will be rendered here -->
                                             </div>
                                         </div>
-                                        <div class="filter-config-footer">
-                                            <button type="button" class="btn btn-primary btn-sm" onclick="addCategoryFilterFromModal()">
-                                                Add Filter
-                                            </button>
-                                        </div>
                                     </div>
 
                                     <!-- Numeric Filter Config -->
@@ -592,6 +590,14 @@
                                                 <label>
                                                     <input type="radio" name="newNumericType" value="range" checked onchange="updateNumericFilterInputs()">
                                                     Range
+                                                </label>
+                                                <label>
+                                                    <input type="radio" name="newNumericType" value="greater_than" onchange="updateNumericFilterInputs()">
+                                                    Greater than
+                                                </label>
+                                                <label>
+                                                    <input type="radio" name="newNumericType" value="less_than" onchange="updateNumericFilterInputs()">
+                                                    Less than
                                                 </label>
                                                 <label>
                                                     <input type="radio" name="newNumericType" value="equals" onchange="updateNumericFilterInputs()">
@@ -618,11 +624,6 @@
                                                     Include NULL values
                                                 </label>
                                             </div>
-                                        </div>
-                                        <div class="filter-config-footer">
-                                            <button type="button" class="btn btn-primary btn-sm" onclick="addNumericFilterFromModal()">
-                                                Add Filter
-                                            </button>
                                         </div>
                                     </div>
 
@@ -675,11 +676,6 @@
                                                 </label>
                                             </div>
                                         </div>
-                                        <div class="filter-config-footer">
-                                            <button type="button" class="btn btn-primary btn-sm" onclick="addDateFilterFromModal()">
-                                                Add Filter
-                                            </button>
-                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -687,10 +683,10 @@
                         <div class="modal-footer-wizard-neu">
                             <div class="footer-left"></div>
                             <div class="footer-right">
-                                <button onclick="closeFilterColumnsModal()" class="btn-neu btn-neu-action btn-neu-save">
-                                    <span class="btn-neu-inner">Done</span>
+                                <button onclick="applyFilterColumnsModal()" class="btn-neu btn-neu-action btn-neu-save">
+                                    <span class="btn-neu-inner">Apply</span>
                                 </button>
-                                <button onclick="closeFilterColumnsModal()" class="btn-neu btn-neu-action btn-neu-secondary">
+                                <button onclick="closeFilterColumnsModal()" class="btn-neu btn-neu-action btn-neu-cancel">
                                     <span class="btn-neu-inner">Cancel</span>
                                 </button>
                             </div>
@@ -1213,6 +1209,23 @@ function resetWizard() {
 
     // Reset product analysis state
     productAnalysisData = null;
+
+    // Reset committed filter states (cross-sub-chapter tracking)
+    committedDatesFilter.timestampColumn = null;
+    productFiltersState.pending = {
+        topRevenue: { enabled: false, productColumn: null, revenueColumn: null, thresholdPercent: 80 },
+        categoryFilters: [],
+        numericFilters: [],
+        dateFilters: []
+    };
+    productFiltersState.committed = {
+        topRevenue: { enabled: false, productColumn: null, revenueColumn: null, thresholdPercent: 80 },
+        categoryFilters: [],
+        numericFilters: [],
+        dateFilters: []
+    };
+    productFiltersState.columnAnalysis = {};
+    productFiltersState.selectedFilterColumn = null;
 
     // Reset filter UI elements
     const timestampSelect = document.getElementById('timestampColumn');
@@ -2920,6 +2933,11 @@ document.addEventListener('click', function(e) {
 let productAnalysisData = null;
 let usedFilterColumns = new Set(); // Track columns used in filters to prevent reuse
 
+// Committed Dates Filter State (tracks timestamp column after Refresh Dataset in Dates sub-chapter)
+let committedDatesFilter = {
+    timestampColumn: null
+};
+
 // Product Filters State Management
 let productFiltersState = {
     pending: {
@@ -3013,7 +3031,21 @@ function closeTopProductsModal() {
 }
 
 function applyTopProductsFilter() {
-    // State is already updated by toggleTopProductsFilter() and other handlers
+    // Update state with current modal values
+    const productCol = document.getElementById('productIdColumn')?.value;
+    const revenueCol = document.getElementById('revenueColumn')?.value;
+    const threshold = parseInt(document.getElementById('revenueThreshold')?.value) || 80;
+
+    // Only enable if we have valid column selections
+    const isEnabled = productCol && revenueCol;
+
+    productFiltersState.pending.topRevenue = {
+        enabled: isEnabled,
+        productColumn: productCol || null,
+        revenueColumn: revenueCol || null,
+        thresholdPercent: threshold
+    };
+
     updateProductsFilterSummary();
     updateProductsNavBadges();
     updateProductsRefreshButtonState();
@@ -3024,13 +3056,18 @@ function applyTopProductsFilter() {
 // FILTER COLUMNS MODAL
 // ============================================================================
 
-function openFilterColumnsModal() {
+async function openFilterColumnsModal() {
     const modal = document.getElementById('filterColumnsModal');
 
     // Populate existing filters list
     renderExistingFiltersList();
 
-    // Populate column dropdown
+    // Pre-fetch column analysis if not already cached
+    if (Object.keys(productFiltersState.columnAnalysis).length === 0) {
+        await fetchColumnAnalysis();
+    }
+
+    // Populate column dropdown (after analysis is fetched so types are shown)
     populateFilterColumnDropdown();
 
     // Reset filter config area
@@ -3043,6 +3080,24 @@ function closeFilterColumnsModal() {
     const modal = document.getElementById('filterColumnsModal');
     modal.classList.add('hidden');
     resetFilterConfigArea();
+}
+
+function applyFilterColumnsModal() {
+    // Check if a filter is configured and add it
+    const columnName = productFiltersState.selectedFilterColumn;
+    if (columnName) {
+        const colInfo = productFiltersState.columnAnalysis[columnName];
+        if (colInfo) {
+            if (colInfo.filter_type === 'category') {
+                addCategoryFilterFromModal();
+            } else if (colInfo.filter_type === 'numeric') {
+                addNumericFilterFromModal();
+            } else if (colInfo.filter_type === 'date') {
+                addDateFilterFromModal();
+            }
+        }
+    }
+    closeFilterColumnsModal();
 }
 
 function renderExistingFiltersList() {
@@ -3075,9 +3130,13 @@ function renderExistingFiltersList() {
                 const min = filter.min !== null && filter.min !== '' ? filter.min : '...';
                 const max = filter.max !== null && filter.max !== '' ? filter.max : '...';
                 valueDisplay = `Range: ${min} - ${max}`;
+            } else if (filter.type === 'greater_than') {
+                valueDisplay = `Greater than: ${filter.value}`;
+            } else if (filter.type === 'less_than') {
+                valueDisplay = `Less than: ${filter.value}`;
             } else if (filter.type === 'equals') {
                 valueDisplay = `Equals: ${filter.value}`;
-            } else {
+            } else if (filter.type === 'not_equals') {
                 valueDisplay = `Not Equals: ${filter.value}`;
             }
         } else if (filter.filterType === 'date') {
@@ -3168,8 +3227,12 @@ function getAvailableFilterColumns() {
         });
     });
 
-    // Filter out columns already used in filters
-    return allColumns.filter(col => !isColumnUsedInFilters(col.fullName));
+    // Filter out columns already used in PENDING filters (within Products sub-chapter)
+    // AND columns committed in ANY sub-chapter (across Dates, Customers, Products)
+    return allColumns.filter(col =>
+        !isColumnUsedInFilters(col.fullName) &&
+        !isColumnCommittedInAnyFilter(col.fullName)
+    );
 }
 
 async function onFilterColumnSelect() {
@@ -3183,13 +3246,15 @@ async function onFilterColumnSelect() {
         return;
     }
 
-    // Fetch column analysis if not cached
-    if (!productFiltersState.columnAnalysis[columnName]) {
+    // Fetch column analysis if not cached or if cache is empty
+    if (!productFiltersState.columnAnalysis[columnName] || Object.keys(productFiltersState.columnAnalysis).length === 0) {
         await fetchColumnAnalysis();
     }
 
     const colInfo = productFiltersState.columnAnalysis[columnName];
     if (!colInfo) {
+        console.error('Column analysis not found for:', columnName);
+        console.log('Available columns:', Object.keys(productFiltersState.columnAnalysis));
         resetFilterConfigArea();
         return;
     }
@@ -3267,15 +3332,26 @@ function showNumericFilterConfig(columnName, colInfo) {
     document.getElementById('numericFilterStats').textContent =
         `Range: ${colInfo.min} - ${colInfo.max} | Nulls: ${colInfo.null_percent || 0}%`;
 
-    // Reset inputs
+    // Reset filter type to range
     document.querySelector('input[name="newNumericType"][value="range"]').checked = true;
-    document.getElementById('newNumericMin').value = '';
-    document.getElementById('newNumericMax').value = '';
-    document.getElementById('newNumericMin').placeholder = colInfo.min;
-    document.getElementById('newNumericMax').placeholder = colInfo.max;
+
+    // Rebuild the inputs first (this creates fresh input elements)
+    updateNumericFilterInputs();
+
+    // Now set values on the newly created inputs
+    const minInput = document.getElementById('newNumericMin');
+    const maxInput = document.getElementById('newNumericMax');
+    if (minInput) {
+        minInput.value = '';
+        minInput.placeholder = colInfo.min || '';
+    }
+    if (maxInput) {
+        maxInput.value = '';
+        maxInput.placeholder = colInfo.max || '';
+    }
+
     document.getElementById('newNumericIncludeNulls').checked = true;
 
-    updateNumericFilterInputs();
     config.classList.remove('hidden');
 }
 
@@ -3535,44 +3611,143 @@ function selectAutocompleteValue(value, count) {
 // Track if product filters have been applied (via Refresh Dataset click)
 let productFiltersApplied = false;
 
-// Update the Products summary line (shows pending filter details)
+// Update the Products summary line (shows pending filter details with delete buttons)
 function updateProductsFilterSummary() {
     const summaryDiv = document.getElementById('productsFilterSummary');
-    const summaryText = document.getElementById('productsFilterSummaryText');
+    const summaryItems = document.getElementById('productsFilterSummaryItems');
     const pending = productFiltersState.pending;
 
-    const filterDetails = [];
+    const filters = [];
+    let filterNumber = 1;
 
     // Top products
     if (pending.topRevenue.enabled) {
-        filterDetails.push(`Top ${pending.topRevenue.thresholdPercent}% products`);
+        // Get the number of products from analysis data if available
+        let productCount = null;
+        if (productAnalysisData && productAnalysisData.thresholds) {
+            const threshold = pending.topRevenue.thresholdPercent;
+            const thresholdKeys = Object.keys(productAnalysisData.thresholds).map(Number).sort((a, b) => a - b);
+            const selectedThreshold = thresholdKeys.find(t => t >= threshold) || thresholdKeys[thresholdKeys.length - 1];
+            const thresholdData = productAnalysisData.thresholds[String(selectedThreshold)];
+            if (thresholdData) {
+                productCount = thresholdData.products;
+            }
+        }
+
+        const description = productCount !== null
+            ? `Top ${pending.topRevenue.thresholdPercent}% revenue (${productCount} product${productCount !== 1 ? 's' : ''})`
+            : `Top ${pending.topRevenue.thresholdPercent}% products`;
+
+        filters.push({
+            number: filterNumber++,
+            type: 'topRevenue',
+            description: description,
+            deleteAction: 'deleteFilterFromSummary("topRevenue", 0)'
+        });
     }
 
     // Category filters
-    pending.categoryFilters.forEach(f => {
+    pending.categoryFilters.forEach((f, idx) => {
         const shortName = f.column.split('.').pop();
-        filterDetails.push(shortName);
+        const mode = f.mode === 'include' ? 'Include' : 'Exclude';
+        const valueCount = f.values?.length || 0;
+        filters.push({
+            number: filterNumber++,
+            type: 'category',
+            index: idx,
+            description: `${shortName}: ${mode} ${valueCount} value${valueCount !== 1 ? 's' : ''}`,
+            deleteAction: `deleteFilterFromSummary("category", ${idx})`
+        });
     });
 
     // Numeric filters
-    pending.numericFilters.forEach(f => {
+    pending.numericFilters.forEach((f, idx) => {
         const shortName = f.column.split('.').pop();
-        filterDetails.push(shortName);
+        let valueDesc = '';
+        if (f.type === 'range') {
+            const min = f.min !== null && f.min !== '' ? f.min : '...';
+            const max = f.max !== null && f.max !== '' ? f.max : '...';
+            valueDesc = `${min} - ${max}`;
+        } else if (f.type === 'greater_than') {
+            valueDesc = `> ${f.value}`;
+        } else if (f.type === 'less_than') {
+            valueDesc = `< ${f.value}`;
+        } else if (f.type === 'equals') {
+            valueDesc = `= ${f.value}`;
+        } else if (f.type === 'not_equals') {
+            valueDesc = `≠ ${f.value}`;
+        }
+        filters.push({
+            number: filterNumber++,
+            type: 'numeric',
+            index: idx,
+            description: `${shortName}: ${valueDesc}`,
+            deleteAction: `deleteFilterFromSummary("numeric", ${idx})`
+        });
     });
 
     // Date filters
-    pending.dateFilters.forEach(f => {
+    pending.dateFilters.forEach((f, idx) => {
         const shortName = f.column.split('.').pop();
-        filterDetails.push(shortName);
+        let valueDesc = '';
+        if (f.dateFilterType === 'relative') {
+            const relativeLabels = {
+                'last_7_days': 'Last 7 days',
+                'last_30_days': 'Last 30 days',
+                'last_90_days': 'Last 90 days',
+                'this_month': 'This month',
+                'this_quarter': 'This quarter',
+                'this_year': 'This year'
+            };
+            valueDesc = relativeLabels[f.relativeOption] || f.relativeOption;
+        } else {
+            valueDesc = `${f.startDate || '...'} to ${f.endDate || '...'}`;
+        }
+        filters.push({
+            number: filterNumber++,
+            type: 'date',
+            index: idx,
+            description: `${shortName}: ${valueDesc}`,
+            deleteAction: `deleteFilterFromSummary("date", ${idx})`
+        });
     });
 
-    if (filterDetails.length === 0) {
-        summaryText.textContent = 'No filters selected';
+    if (filters.length === 0) {
+        summaryItems.innerHTML = '<span class="filter-summary-empty">No filters selected</span>';
         summaryDiv.classList.remove('has-pending');
     } else {
-        summaryText.textContent = filterDetails.join(' • ');
+        summaryItems.innerHTML = filters.map(f => `
+            <div class="filter-summary-item">
+                <span class="filter-summary-item-number">Filter #${f.number}:</span>
+                <span class="filter-summary-item-desc">${f.description}</span>
+                <button type="button" class="filter-summary-item-delete" onclick="deleteFilterFromSummary('${f.type}', ${f.index !== undefined ? f.index : 0})" title="Remove filter">
+                    <i class="fas fa-trash-alt"></i>
+                </button>
+            </div>
+        `).join('');
         summaryDiv.classList.add('has-pending');
     }
+}
+
+// Delete a filter from the summary
+function deleteFilterFromSummary(filterType, index) {
+    const pending = productFiltersState.pending;
+
+    if (filterType === 'topRevenue') {
+        pending.topRevenue.enabled = false;
+        pending.topRevenue.productColumn = null;
+        pending.topRevenue.revenueColumn = null;
+    } else if (filterType === 'category') {
+        pending.categoryFilters.splice(index, 1);
+    } else if (filterType === 'numeric') {
+        pending.numericFilters.splice(index, 1);
+    } else if (filterType === 'date') {
+        pending.dateFilters.splice(index, 1);
+    }
+
+    updateProductsFilterSummary();
+    updateProductsNavBadges();
+    updateProductsRefreshButtonState();
 }
 
 // Update the Products sub-chapter header badge (shows "X filters applied" after Refresh)
@@ -3662,6 +3837,7 @@ function closeAddFilterModal() {
 }
 
 function isColumnUsedInFilters(columnName) {
+    // Check PENDING state for Products sub-chapter (within modal, before Apply)
     const pending = productFiltersState.pending;
 
     // Check top revenue columns
@@ -3678,6 +3854,33 @@ function isColumnUsedInFilters(columnName) {
 
     // Check date filters
     if (pending.dateFilters.some(f => f.column === columnName)) return true;
+
+    return false;
+}
+
+// Check if a column is used in COMMITTED filters across ALL sub-chapters
+// This ensures columns used in one sub-chapter (after Refresh Dataset) are excluded from others
+function isColumnCommittedInAnyFilter(columnName) {
+    // Check committed timestamp column from Dates sub-chapter
+    if (committedDatesFilter.timestampColumn === columnName) return true;
+
+    // Check committed Products filters
+    const committed = productFiltersState.committed;
+
+    // Check top revenue columns
+    if (committed.topRevenue.enabled) {
+        if (committed.topRevenue.productColumn === columnName) return true;
+        if (committed.topRevenue.revenueColumn === columnName) return true;
+    }
+
+    // Check category filters
+    if (committed.categoryFilters.some(f => f.column === columnName)) return true;
+
+    // Check numeric filters
+    if (committed.numericFilters.some(f => f.column === columnName)) return true;
+
+    // Check date filters
+    if (committed.dateFilters.some(f => f.column === columnName)) return true;
 
     return false;
 }
@@ -4204,6 +4407,9 @@ async function refreshProductFilters() {
     productFiltersApplied = true;
     updateProductsFilterStatus();
 
+    // Update all dropdowns to exclude committed columns (cross-sub-chapter exclusion)
+    populateFilterColumnDropdowns();
+
     // Build the product_filter object for the API
     const productFilter = buildProductFilterForApi();
 
@@ -4213,8 +4419,6 @@ async function refreshProductFilters() {
 
     // Call the dataset stats API
     await updateDatasetSummary();
-
-    showNotification('Dataset refreshed with product filters', 'success');
 }
 
 function buildProductFilterForApi() {
@@ -4276,13 +4480,20 @@ function populateFilterColumnDropdowns() {
 
     // Populate timestamp column dropdown (only date/timestamp types)
     const timestampSelect = document.getElementById('timestampColumn');
+    const currentTimestamp = timestampSelect?.value;  // Preserve current selection
     timestampSelect.innerHTML = '<option value="">Select column...</option>';
     allColumns.forEach(c => {
+        // Exclude columns committed in other sub-chapters (Products)
+        // But allow the currently committed timestamp column (so it shows as selected)
+        if (isColumnCommittedInAnyFilter(c.fullName) && c.fullName !== committedDatesFilter.timestampColumn) {
+            return;
+        }
         // Note: In production, filter by column type (DATE, TIMESTAMP, DATETIME)
-        // For now, include all columns
         const option = document.createElement('option');
         option.value = c.fullName;
         option.textContent = c.fullName;
+        // Restore previous selection if it exists
+        if (c.fullName === currentTimestamp) option.selected = true;
         timestampSelect.appendChild(option);
     });
 
@@ -4314,12 +4525,17 @@ function populateProductFilterDropdowns(allColumns = null) {
         });
     }
 
-    // Get the timestamp column that's already selected
+    // Get the timestamp column that's currently selected in the dropdown
     const timestampCol = document.getElementById('timestampColumn')?.value;
 
-    // Filter out columns already used
+    // Filter out columns that are:
+    // 1. Currently selected as timestamp column
+    // 2. Committed in any filter across all sub-chapters
     const availableColumns = allColumns.filter(c => {
+        // Exclude currently selected timestamp column
         if (timestampCol && c.fullName === timestampCol) return false;
+        // Exclude columns committed in any filter (cross-sub-chapter exclusion)
+        if (isColumnCommittedInAnyFilter(c.fullName)) return false;
         return true;
     });
 
@@ -4453,45 +4669,77 @@ function updateDatesFilterStatus() {
     statusEl.textContent = '1 filter applied';
 }
 
-// Update the Dates summary line (shows pending filter details)
+// Update the Dates summary line (shows pending filter details with delete button)
 function updateDatesFilterSummary() {
     const summaryDiv = document.getElementById('datesFilterSummary');
-    const summaryText = document.getElementById('datesFilterSummaryText');
+    const summaryItems = document.getElementById('datesFilterSummaryItems');
 
     const timestampCol = document.getElementById('timestampColumn')?.value;
     const rollingDays = document.getElementById('rollingDays')?.value || 30;
     const startDate = document.getElementById('startDateInput')?.value;
 
     if (!timestampCol) {
-        summaryText.textContent = 'No filters selected';
+        summaryItems.innerHTML = '<span class="filter-summary-empty">No filters selected</span>';
         summaryDiv.classList.remove('has-pending');
         return;
     }
 
-    // Build summary text
+    // Build filter description
     const colName = timestampCol.split('.').pop();
-    let details = `Column: ${colName}`;
+    let details = colName;
 
     if (historyFilterMode === 'startDate' && startDate) {
-        details += ` • Start date: ${startDate}`;
+        details += `: from ${startDate}`;
     } else {
-        details += ` • ${rollingDays} days rolling window`;
+        details += `: ${rollingDays} days rolling window`;
     }
 
-    summaryText.textContent = details;
+    // Render with same structure as Products
+    summaryItems.innerHTML = `
+        <div class="filter-summary-item">
+            <span class="filter-summary-item-number">Filter #1:</span>
+            <span class="filter-summary-item-desc">${details}</span>
+            <button type="button" class="filter-summary-item-delete" onclick="deleteDatesFilter()" title="Remove filter">
+                <i class="fas fa-trash-alt"></i>
+            </button>
+        </div>
+    `;
     summaryDiv.classList.add('has-pending');
+}
+
+// Delete the Dates filter
+function deleteDatesFilter() {
+    // Clear the timestamp column selection
+    const timestampSelect = document.getElementById('timestampColumn');
+    if (timestampSelect) {
+        timestampSelect.value = '';
+    }
+
+    // Reset dates filter state
+    resetDateFiltersApplied();
+
+    // Update UI
+    updateDatesFilterSummary();
+    updateHistoryButtonStates();
+
+    // Re-populate product dropdowns (timestamp column is now available)
+    populateProductFilterDropdowns();
+
+    validateCurrentStep();
 }
 
 // Reset the applied status when filters are changed (user needs to click Refresh again)
 function resetDateFiltersApplied() {
     dateFiltersApplied = false;
+    // Clear the committed timestamp column (user changed selection, needs to Refresh again)
+    committedDatesFilter.timestampColumn = null;
     document.getElementById('datesFilterStatus').textContent = '';
 }
 
 function onTimestampColumnChange() {
     updateDatesFilterSummary();
     resetDateFiltersApplied();
-    // Re-populate product dropdowns to exclude the timestamp column
+    // Re-populate all dropdowns (committed state was cleared, columns may be available again)
     populateProductFilterDropdowns();
     // Update dependent button states
     updateHistoryButtonStates();
@@ -4549,9 +4797,15 @@ function refreshDatasetHistory() {
         return;
     }
 
+    // Commit the timestamp column to centralized state
+    committedDatesFilter.timestampColumn = timestampCol;
+
     // Mark filters as applied and update header status
     dateFiltersApplied = true;
     updateDatesFilterStatus();
+
+    // Update all dropdowns to exclude the committed timestamp column
+    populateProductFilterDropdowns();
 
     // Update Dataset Summary panel
     updateDatasetSummary();
@@ -4874,7 +5128,14 @@ function updateAnalyzeButtonState() {
     const revenueCol = document.getElementById('revenueColumn')?.value;
     const analyzeBtn = document.getElementById('analyzeProductsBtn');
 
-    analyzeBtn.disabled = !productCol || !revenueCol;
+    const isEnabled = productCol && revenueCol;
+    analyzeBtn.disabled = !isEnabled;
+
+    if (isEnabled) {
+        analyzeBtn.classList.remove('filter-button-disabled');
+    } else {
+        analyzeBtn.classList.add('filter-button-disabled');
+    }
 }
 
 function resetProductAnalysis() {
@@ -4909,7 +5170,8 @@ async function analyzeProductRevenue() {
 
     const analyzeBtn = document.getElementById('analyzeProductsBtn');
     analyzeBtn.disabled = true;
-    analyzeBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Analyzing';
+    analyzeBtn.classList.add('filter-button-disabled');
+    analyzeBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>Analyzing...</span>';
 
     try {
         const response = await fetch(`/api/models/${modelId}/datasets/analyze-product-revenue/`, {
@@ -4955,7 +5217,8 @@ async function analyzeProductRevenue() {
         showProductAnalysisError('Failed to analyze product revenue');
     } finally {
         analyzeBtn.disabled = false;
-        analyzeBtn.innerHTML = '<i class="fas fa-sync-alt mr-2"></i>Analyze';
+        analyzeBtn.classList.remove('filter-button-disabled');
+        analyzeBtn.innerHTML = '<i class="fas fa-sync-alt"></i><span>Analyze</span>';
         validateCurrentStep();
     }
 }
@@ -5051,8 +5314,12 @@ function drawRevenueDistributionChart(distribution, threshold = 80) {
 
     if (!distribution || distribution.length === 0) return;
 
+    // Get totals from productAnalysisData
+    const totalProducts = productAnalysisData?.total_products || distribution[distribution.length - 1]?.product_count || 100;
+    const totalRevenue = productAnalysisData?.total_revenue || distribution[distribution.length - 1]?.cumulative_revenue || 0;
+
     // Dimensions - use container width or fallback to reasonable default
-    const margin = { top: 20, right: 30, bottom: 40, left: 60 };
+    const margin = { top: 20, right: 30, bottom: 50, left: 70 };
     const containerWidth = container.clientWidth || container.offsetWidth || 600;
     const width = Math.max(containerWidth - margin.left - margin.right, 200);
     const height = 200 - margin.top - margin.bottom;
@@ -5063,20 +5330,27 @@ function drawRevenueDistributionChart(distribution, threshold = 80) {
     const g = svg.append('g')
         .attr('transform', `translate(${margin.left},${margin.top})`);
 
-    // Scales
+    // Scales - X: product count, Y: cumulative revenue
     const x = d3.scaleLinear()
-        .domain([0, 100])
+        .domain([0, totalProducts])
         .range([0, width]);
 
     const y = d3.scaleLinear()
-        .domain([0, 100])
+        .domain([0, totalRevenue])
         .range([height, 0]);
+
+    // Format helpers
+    const formatRevenue = (val) => {
+        if (val >= 1000000) return `$${(val / 1000000).toFixed(1)}M`;
+        if (val >= 1000) return `$${(val / 1000).toFixed(0)}K`;
+        return `$${val.toFixed(0)}`;
+    };
 
     // Add grid lines
     g.append('g')
         .attr('class', 'grid')
         .attr('transform', `translate(0,${height})`)
-        .call(d3.axisBottom(x).tickSize(-height).tickFormat('').ticks(10))
+        .call(d3.axisBottom(x).tickSize(-height).tickFormat('').ticks(Math.min(totalProducts, 10)))
         .style('stroke-dasharray', '3,3')
         .style('stroke-opacity', 0.2);
 
@@ -5086,10 +5360,10 @@ function drawRevenueDistributionChart(distribution, threshold = 80) {
         .style('stroke-dasharray', '3,3')
         .style('stroke-opacity', 0.2);
 
-    // Line generator
+    // Line generator - use product_count for X and cumulative_revenue for Y
     const line = d3.line()
-        .x(d => x(d.percent_products))
-        .y(d => y(d.cumulative_revenue_percent))
+        .x(d => x(d.product_count))
+        .y(d => y(d.cumulative_revenue))
         .curve(d3.curveMonotoneX);
 
     // Draw the distribution line
@@ -5100,20 +5374,21 @@ function drawRevenueDistributionChart(distribution, threshold = 80) {
         .attr('stroke-width', 2)
         .attr('d', line);
 
-    // Add area under the curve up to threshold
-    const thresholdX = findThresholdX(distribution, threshold);
+    // Calculate threshold revenue value and find intersection point
+    const thresholdRevenue = totalRevenue * threshold / 100;
+    const thresholdPoint = findThresholdPoint(distribution, threshold);
 
     const area = d3.area()
-        .x(d => x(d.percent_products))
+        .x(d => x(d.product_count))
         .y0(height)
-        .y1(d => y(d.cumulative_revenue_percent))
+        .y1(d => y(d.cumulative_revenue))
         .curve(d3.curveMonotoneX);
 
     // Filter data up to threshold
     const areaData = distribution.filter(d => d.cumulative_revenue_percent <= threshold);
-    if (areaData.length > 0) {
+    if (areaData.length > 0 && thresholdPoint) {
         // Add the threshold point
-        areaData.push({ percent_products: thresholdX, cumulative_revenue_percent: threshold });
+        areaData.push({ product_count: thresholdPoint.productCount, cumulative_revenue: thresholdRevenue });
 
         g.append('path')
             .datum(areaData)
@@ -5122,12 +5397,12 @@ function drawRevenueDistributionChart(distribution, threshold = 80) {
             .attr('d', area);
     }
 
-    // Draw threshold line
+    // Draw threshold line (horizontal at threshold revenue)
     g.append('line')
         .attr('x1', 0)
         .attr('x2', width)
-        .attr('y1', y(threshold))
-        .attr('y2', y(threshold))
+        .attr('y1', y(thresholdRevenue))
+        .attr('y2', y(thresholdRevenue))
         .attr('stroke', '#ef4444')
         .attr('stroke-width', 1.5)
         .attr('stroke-dasharray', '5,5');
@@ -5135,50 +5410,50 @@ function drawRevenueDistributionChart(distribution, threshold = 80) {
     // Threshold label
     g.append('text')
         .attr('x', width - 5)
-        .attr('y', y(threshold) - 5)
+        .attr('y', y(thresholdRevenue) - 5)
         .attr('text-anchor', 'end')
         .attr('fill', '#ef4444')
         .attr('font-size', '11px')
-        .text(`${threshold}% revenue`);
+        .text(`${threshold}% revenue (${formatRevenue(thresholdRevenue)})`);
 
     // Vertical line at threshold intersection
-    if (thresholdX > 0) {
+    if (thresholdPoint && thresholdPoint.productCount > 0) {
         g.append('line')
-            .attr('x1', x(thresholdX))
-            .attr('x2', x(thresholdX))
-            .attr('y1', y(threshold))
+            .attr('x1', x(thresholdPoint.productCount))
+            .attr('x2', x(thresholdPoint.productCount))
+            .attr('y1', y(thresholdRevenue))
             .attr('y2', height)
             .attr('stroke', '#ef4444')
             .attr('stroke-width', 1)
             .attr('stroke-dasharray', '3,3');
 
-        // Products label
+        // Products count label
         g.append('text')
-            .attr('x', x(thresholdX))
-            .attr('y', height + 30)
+            .attr('x', x(thresholdPoint.productCount))
+            .attr('y', height + 35)
             .attr('text-anchor', 'middle')
             .attr('fill', '#ef4444')
             .attr('font-size', '10px')
-            .text(`${thresholdX.toFixed(1)}% products`);
+            .text(`${Math.ceil(thresholdPoint.productCount)} products`);
     }
 
-    // X axis
+    // X axis - product counts
     g.append('g')
         .attr('transform', `translate(0,${height})`)
-        .call(d3.axisBottom(x).tickFormat(d => `${d}%`))
+        .call(d3.axisBottom(x).ticks(Math.min(totalProducts, 10)).tickFormat(d => d.toLocaleString()))
         .selectAll('text')
         .style('font-size', '10px');
 
-    // Y axis
+    // Y axis - revenue amounts
     g.append('g')
-        .call(d3.axisLeft(y).tickFormat(d => `${d}%`))
+        .call(d3.axisLeft(y).ticks(5).tickFormat(formatRevenue))
         .selectAll('text')
         .style('font-size', '10px');
 
     // Axis labels
     g.append('text')
         .attr('x', width / 2)
-        .attr('y', height + 35)
+        .attr('y', height + 45)
         .attr('text-anchor', 'middle')
         .attr('fill', '#666')
         .attr('font-size', '11px')
@@ -5187,7 +5462,7 @@ function drawRevenueDistributionChart(distribution, threshold = 80) {
     g.append('text')
         .attr('transform', 'rotate(-90)')
         .attr('x', -height / 2)
-        .attr('y', -40)
+        .attr('y', -55)
         .attr('text-anchor', 'middle')
         .attr('fill', '#666')
         .attr('font-size', '11px')
@@ -5207,6 +5482,25 @@ function findThresholdX(distribution, threshold) {
         }
     }
     return distribution[distribution.length - 1]?.percent_products || 100;
+}
+
+function findThresholdPoint(distribution, threshold) {
+    // Find the point (product_count, revenue) where cumulative_revenue_percent reaches the threshold
+    for (let i = 0; i < distribution.length - 1; i++) {
+        if (distribution[i].cumulative_revenue_percent <= threshold &&
+            distribution[i + 1].cumulative_revenue_percent >= threshold) {
+            // Linear interpolation
+            const ratio = (threshold - distribution[i].cumulative_revenue_percent) /
+                (distribution[i + 1].cumulative_revenue_percent - distribution[i].cumulative_revenue_percent);
+            const productCount = distribution[i].product_count +
+                ratio * (distribution[i + 1].product_count - distribution[i].product_count);
+            const revenue = distribution[i].cumulative_revenue +
+                ratio * (distribution[i + 1].cumulative_revenue - distribution[i].cumulative_revenue);
+            return { productCount, revenue };
+        }
+    }
+    const last = distribution[distribution.length - 1];
+    return last ? { productCount: last.product_count, revenue: last.cumulative_revenue } : null;
 }
 
 // --- Advanced Filters Sub-chapter ---

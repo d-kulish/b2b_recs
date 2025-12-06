@@ -343,44 +343,42 @@
                         <i id="customersChevron" class="fas fa-chevron-right subchapter-chevron"></i>
                     </div>
                     <div id="customersContent" class="subchapter-content-outside hidden">
-                        <div class="subchapter-body">
-                            <!-- 4-Button Navigation Row (matching Products sub-chapter style) -->
-                            <div class="filter-buttons-row">
-                                <div class="filter-button-wrapper">
-                                    <span class="filter-button-label">Filter by revenue</span>
-                                    <button type="button" class="filter-button" onclick="openTopCustomersModal()">
-                                        <i class="fas fa-chart-line"></i>
-                                        Top Customers
-                                    </button>
-                                </div>
-                                <div class="filter-button-wrapper">
-                                    <span class="filter-button-label">Filter by metrics</span>
-                                    <button type="button" class="filter-button" onclick="openCustomerMetricsModal()">
-                                        <i class="fas fa-calculator"></i>
-                                        Customer Metrics
-                                    </button>
-                                </div>
-                                <div class="filter-button-wrapper">
-                                    <span class="filter-button-label">Filter by columns</span>
-                                    <button type="button" class="filter-button" onclick="openCustomerFilterColumnsModal()">
-                                        <i class="fas fa-filter"></i>
-                                        Filter Columns
-                                    </button>
-                                </div>
-                                <div class="filter-button-wrapper">
-                                    <span class="filter-button-label">&nbsp;</span>
-                                    <button type="button" class="filter-button filter-button-refresh filter-button-disabled" onclick="refreshCustomerFilters()" id="refreshCustomerFiltersBtn" disabled>
-                                        <i class="fas fa-sync-alt"></i>
-                                        Refresh Dataset
-                                    </button>
-                                </div>
+                        <!-- Filter Buttons Row -->
+                        <div class="filter-buttons-row">
+                            <div class="filter-button-wrapper">
+                                <span class="filter-button-label">Filter by revenue</span>
+                                <button type="button" class="filter-button" onclick="openTopCustomersModal()">
+                                    <i class="fas fa-chart-line"></i>
+                                    Top Customers
+                                </button>
                             </div>
+                            <div class="filter-button-wrapper">
+                                <span class="filter-button-label">Filter by metrics</span>
+                                <button type="button" class="filter-button" onclick="openCustomerMetricsModal()">
+                                    <i class="fas fa-calculator"></i>
+                                    Customer Metrics
+                                </button>
+                            </div>
+                            <div class="filter-button-wrapper">
+                                <span class="filter-button-label">Filter by columns</span>
+                                <button type="button" class="filter-button" onclick="openCustomerFilterColumnsModal()">
+                                    <i class="fas fa-filter"></i>
+                                    Filter Columns
+                                </button>
+                            </div>
+                            <div class="filter-button-wrapper">
+                                <span class="filter-button-label">&nbsp;</span>
+                                <button type="button" class="filter-button filter-button-refresh filter-button-disabled" onclick="refreshCustomerFilters()" id="refreshCustomerFiltersBtn" disabled>
+                                    <i class="fas fa-sync-alt"></i>
+                                    Refresh Dataset
+                                </button>
+                            </div>
+                        </div>
 
-                            <!-- Summary Line -->
-                            <div class="filter-summary-line" id="customersFilterSummary">
-                                <div class="filter-summary-items" id="customersFilterSummaryItems">
-                                    <span class="filter-summary-empty">No filters selected</span>
-                                </div>
+                        <!-- Summary Line -->
+                        <div class="filter-summary-line" id="customersFilterSummary">
+                            <div class="filter-summary-items" id="customersFilterSummaryItems">
+                                <span class="filter-summary-empty">No filters selected</span>
                             </div>
                         </div>
                     </div>
@@ -394,37 +392,35 @@
                         <i id="productsChevron" class="fas fa-chevron-right subchapter-chevron"></i>
                     </div>
                     <div id="productsContent" class="subchapter-content-outside hidden">
-                        <div class="subchapter-body">
-                            <!-- 3-Button Navigation Row (matching Dates sub-chapter style) -->
-                            <div class="filter-buttons-row">
-                                <div class="filter-button-wrapper">
-                                    <span class="filter-button-label">Filter by revenue</span>
-                                    <button type="button" class="filter-button" onclick="openTopProductsModal()">
-                                        <i class="fas fa-chart-line"></i>
-                                        Top Products
-                                    </button>
-                                </div>
-                                <div class="filter-button-wrapper">
-                                    <span class="filter-button-label">Filter by columns</span>
-                                    <button type="button" class="filter-button" onclick="openFilterColumnsModal()">
-                                        <i class="fas fa-filter"></i>
-                                        Filter Columns
-                                    </button>
-                                </div>
-                                <div class="filter-button-wrapper">
-                                    <span class="filter-button-label">&nbsp;</span>
-                                    <button type="button" class="filter-button filter-button-refresh filter-button-disabled" onclick="refreshProductFilters()" id="refreshProductFiltersBtn" disabled>
-                                        <i class="fas fa-sync-alt"></i>
-                                        Refresh Dataset
-                                    </button>
-                                </div>
+                        <!-- Filter Buttons Row -->
+                        <div class="filter-buttons-row">
+                            <div class="filter-button-wrapper">
+                                <span class="filter-button-label">Filter by revenue</span>
+                                <button type="button" class="filter-button" onclick="openTopProductsModal()">
+                                    <i class="fas fa-chart-line"></i>
+                                    Top Products
+                                </button>
                             </div>
+                            <div class="filter-button-wrapper">
+                                <span class="filter-button-label">Filter by columns</span>
+                                <button type="button" class="filter-button" onclick="openFilterColumnsModal()">
+                                    <i class="fas fa-filter"></i>
+                                    Filter Columns
+                                </button>
+                            </div>
+                            <div class="filter-button-wrapper">
+                                <span class="filter-button-label">&nbsp;</span>
+                                <button type="button" class="filter-button filter-button-refresh filter-button-disabled" onclick="refreshProductFilters()" id="refreshProductFiltersBtn" disabled>
+                                    <i class="fas fa-sync-alt"></i>
+                                    Refresh Dataset
+                                </button>
+                            </div>
+                        </div>
 
-                            <!-- Summary Line -->
-                            <div class="filter-summary-line" id="productsFilterSummary">
-                                <div class="filter-summary-items" id="productsFilterSummaryItems">
-                                    <span class="filter-summary-empty">No filters selected</span>
-                                </div>
+                        <!-- Summary Line -->
+                        <div class="filter-summary-line" id="productsFilterSummary">
+                            <div class="filter-summary-items" id="productsFilterSummaryItems">
+                                <span class="filter-summary-empty">No filters selected</span>
                             </div>
                         </div>
                     </div>
@@ -3759,7 +3755,7 @@ function renderCustomerRevenueChart(data) {
     // Clear previous chart
     svg.selectAll('*').remove();
 
-    const margin = { top: 20, right: 30, bottom: 40, left: 50 };
+    const margin = { top: 20, right: 30, bottom: 50, left: 50 };
     const containerWidth = container.clientWidth || container.offsetWidth || 600;
     const width = Math.max(containerWidth - margin.left - margin.right, 200);
     const height = 180 - margin.top - margin.bottom;
@@ -3773,12 +3769,16 @@ function renderCustomerRevenueChart(data) {
 
     // Prepare data
     const distributionData = data.distribution || [];
+    const totalCustomers = data.total_customers || 0;
 
     if (distributionData.length === 0) return;
 
-    // X scale (percentage of customers)
+    // Add (0,0) point for proper chart connection
+    const chartData = [{ customer_percent: 0, cumulative_revenue_percent: 0, customer_count: 0 }, ...distributionData];
+
+    // X scale (real customer count, not percentage)
     const x = d3.scaleLinear()
-        .domain([0, 100])
+        .domain([0, totalCustomers])
         .range([0, width]);
 
     // Y scale (cumulative revenue percentage)
@@ -3786,37 +3786,47 @@ function renderCustomerRevenueChart(data) {
         .domain([0, 100])
         .range([height, 0]);
 
-    // Line generator
+    // Helper to convert customer_percent to customer_count
+    const getCustomerCount = (d) => Math.round(totalCustomers * d.customer_percent / 100);
+
+    // Line generator - use customer count for X
     const line = d3.line()
-        .x(d => x(d.customer_percent))
+        .x(d => x(getCustomerCount(d)))
         .y(d => y(d.cumulative_revenue_percent))
         .curve(d3.curveMonotoneX);
 
     // Area under the line
     const area = d3.area()
-        .x(d => x(d.customer_percent))
+        .x(d => x(getCustomerCount(d)))
         .y0(height)
         .y1(d => y(d.cumulative_revenue_percent))
         .curve(d3.curveMonotoneX);
 
     // Draw area
     g.append('path')
-        .datum(distributionData)
+        .datum(chartData)
         .attr('fill', '#dbeafe')
         .attr('d', area);
 
     // Draw line
     g.append('path')
-        .datum(distributionData)
+        .datum(chartData)
         .attr('fill', 'none')
         .attr('stroke', '#2563eb')
         .attr('stroke-width', 2)
         .attr('d', line);
 
-    // X axis
+    // Format helper for large numbers
+    const formatCustomerCount = (val) => {
+        if (val >= 1000000) return `${(val / 1000000).toFixed(1)}M`;
+        if (val >= 1000) return `${(val / 1000).toFixed(0)}K`;
+        return val.toString();
+    };
+
+    // X axis - show real customer numbers
     g.append('g')
         .attr('transform', `translate(0,${height})`)
-        .call(d3.axisBottom(x).ticks(5).tickFormat(d => d + '%'))
+        .call(d3.axisBottom(x).ticks(5).tickFormat(d => formatCustomerCount(d)))
         .selectAll('text')
         .style('font-size', '10px');
 
@@ -3829,11 +3839,11 @@ function renderCustomerRevenueChart(data) {
     // X axis label
     g.append('text')
         .attr('x', width / 2)
-        .attr('y', height + 35)
+        .attr('y', height + 40)
         .attr('text-anchor', 'middle')
         .style('font-size', '11px')
         .style('fill', '#6b7280')
-        .text('% of Customers');
+        .text('Customers (ranked by revenue)');
 
     // Y axis label
     g.append('text')
@@ -3846,7 +3856,7 @@ function renderCustomerRevenueChart(data) {
         .text('Cumulative Revenue %');
 
     // Store reference for threshold line updates
-    svg.node().chartData = { x, y, height, g, distributionData };
+    svg.node().chartData = { x, y, height, g, distributionData: chartData, totalCustomers, getCustomerCount };
 }
 
 function updateCustomerRevenueChart(threshold) {
@@ -3856,7 +3866,7 @@ function updateCustomerRevenueChart(threshold) {
     const chartData = svg.node()?.chartData;
     if (!chartData) return;
 
-    const { x, y, height, g, distributionData } = chartData;
+    const { x, y, height, g, distributionData, totalCustomers, getCustomerCount } = chartData;
 
     // Remove previous threshold elements
     g.selectAll('.threshold-line').remove();
@@ -3871,21 +3881,25 @@ function updateCustomerRevenueChart(threshold) {
         }
     }
 
-    // Draw threshold line
+    // Calculate customer count for X position
+    const customerCount = Math.round(totalCustomers * customerPercent / 100);
+
+    // Draw threshold line (horizontal at threshold revenue %)
     g.append('line')
         .attr('class', 'threshold-line')
         .attr('x1', 0)
-        .attr('x2', x(customerPercent))
+        .attr('x2', x(customerCount))
         .attr('y1', y(threshold))
         .attr('y2', y(threshold))
         .attr('stroke', '#16a34a')
         .attr('stroke-width', 1.5)
         .attr('stroke-dasharray', '4,4');
 
+    // Draw threshold line (vertical at customer count)
     g.append('line')
         .attr('class', 'threshold-line')
-        .attr('x1', x(customerPercent))
-        .attr('x2', x(customerPercent))
+        .attr('x1', x(customerCount))
+        .attr('x2', x(customerCount))
         .attr('y1', y(threshold))
         .attr('y2', height)
         .attr('stroke', '#16a34a')
@@ -3893,12 +3907,12 @@ function updateCustomerRevenueChart(threshold) {
         .attr('stroke-dasharray', '4,4');
 
     // Update stats
-    const totalCustomers = customerAnalysisData.total_customers || 0;
-    const selectedCustomers = Math.round(totalCustomers * customerPercent / 100);
+    const totalCustomersCount = customerAnalysisData.total_customers || 0;
+    const selectedCustomers = Math.round(totalCustomersCount * customerPercent / 100);
     const totalRevenue = customerAnalysisData.total_revenue || 0;
     const selectedRevenue = totalRevenue * threshold / 100;
 
-    document.getElementById('totalCustomersCount').textContent = totalCustomers.toLocaleString();
+    document.getElementById('totalCustomersCount').textContent = totalCustomersCount.toLocaleString();
     document.getElementById('selectedCustomersCount').textContent = selectedCustomers.toLocaleString();
     document.getElementById('selectedCustomersPercent').textContent = `(${customerPercent.toFixed(1)}%)`;
     document.getElementById('customerRevenueCoverage').textContent = `${threshold}%`;
@@ -5309,8 +5323,11 @@ function updateProductsFilterSummary() {
     const filters = [];
     let filterNumber = 1;
 
-    // Top products
+    // Top products - unified format: "Top products: product_col by revenue_col, top X% (count)"
     if (pending.topRevenue.enabled) {
+        const productCol = pending.topRevenue.productColumn?.split('.').pop() || 'product';
+        const revenueCol = pending.topRevenue.revenueColumn?.split('.').pop() || 'revenue';
+
         // Get the number of products from analysis data if available
         let productCount = null;
         if (productAnalysisData && productAnalysisData.thresholds) {
@@ -5323,9 +5340,8 @@ function updateProductsFilterSummary() {
             }
         }
 
-        const description = productCount !== null
-            ? `Top ${pending.topRevenue.thresholdPercent}% revenue (${productCount} product${productCount !== 1 ? 's' : ''})`
-            : `Top ${pending.topRevenue.thresholdPercent}% products`;
+        const countInfo = productCount !== null ? ` (${productCount})` : '';
+        const description = `Top products: ${productCol} by ${revenueCol}, top ${pending.topRevenue.thresholdPercent}%${countInfo}`;
 
         filters.push({
             number: filterNumber++,
@@ -5335,68 +5351,68 @@ function updateProductsFilterSummary() {
         });
     }
 
-    // Category filters
+    // Category filters - unified format: "Category: column, include/exclude X values"
     pending.categoryFilters.forEach((f, idx) => {
         const shortName = f.column.split('.').pop();
-        const mode = f.mode === 'include' ? 'Include' : 'Exclude';
+        const modeText = f.mode === 'include' ? 'include' : 'exclude';
         const valueCount = f.values?.length || 0;
         filters.push({
             number: filterNumber++,
             type: 'category',
             index: idx,
-            description: `${shortName}: ${mode} ${valueCount} value${valueCount !== 1 ? 's' : ''}`,
+            description: `Category: ${shortName}, ${modeText} ${valueCount} value${valueCount !== 1 ? 's' : ''}`,
             deleteAction: `deleteFilterFromSummary("category", ${idx})`
         });
     });
 
-    // Numeric filters
+    // Numeric filters - unified format: "Numeric: column, condition"
     pending.numericFilters.forEach((f, idx) => {
         const shortName = f.column.split('.').pop();
-        let valueDesc = '';
+        let condition = '';
         if (f.type === 'range') {
             const min = f.min !== null && f.min !== '' ? f.min : '...';
             const max = f.max !== null && f.max !== '' ? f.max : '...';
-            valueDesc = `${min} - ${max}`;
+            condition = `${min} - ${max}`;
         } else if (f.type === 'greater_than') {
-            valueDesc = `> ${f.value}`;
+            condition = `> ${f.value}`;
         } else if (f.type === 'less_than') {
-            valueDesc = `< ${f.value}`;
+            condition = `< ${f.value}`;
         } else if (f.type === 'equals') {
-            valueDesc = `= ${f.value}`;
+            condition = `= ${f.value}`;
         } else if (f.type === 'not_equals') {
-            valueDesc = `≠ ${f.value}`;
+            condition = `≠ ${f.value}`;
         }
         filters.push({
             number: filterNumber++,
             type: 'numeric',
             index: idx,
-            description: `${shortName}: ${valueDesc}`,
+            description: `Numeric: ${shortName}, ${condition}`,
             deleteAction: `deleteFilterFromSummary("numeric", ${idx})`
         });
     });
 
-    // Date filters
+    // Date filters - unified format: "Date: column, condition"
     pending.dateFilters.forEach((f, idx) => {
         const shortName = f.column.split('.').pop();
-        let valueDesc = '';
+        let condition = '';
         if (f.dateFilterType === 'relative') {
             const relativeLabels = {
-                'last_7_days': 'Last 7 days',
-                'last_30_days': 'Last 30 days',
-                'last_90_days': 'Last 90 days',
-                'this_month': 'This month',
-                'this_quarter': 'This quarter',
-                'this_year': 'This year'
+                'last_7_days': 'last 7 days',
+                'last_30_days': 'last 30 days',
+                'last_90_days': 'last 90 days',
+                'this_month': 'this month',
+                'this_quarter': 'this quarter',
+                'this_year': 'this year'
             };
-            valueDesc = relativeLabels[f.relativeOption] || f.relativeOption;
+            condition = relativeLabels[f.relativeOption] || f.relativeOption;
         } else {
-            valueDesc = `${f.startDate || '...'} to ${f.endDate || '...'}`;
+            condition = `${f.startDate || '...'} to ${f.endDate || '...'}`;
         }
         filters.push({
             number: filterNumber++,
             type: 'date',
             index: idx,
-            description: `${shortName}: ${valueDesc}`,
+            description: `Date: ${shortName}, ${condition}`,
             deleteAction: `deleteFilterFromSummary("date", ${idx})`
         });
     });
@@ -5518,12 +5534,13 @@ function updateCustomersFilterSummary() {
     const filters = [];
     let filterNumber = 1;
 
-    // Top customers
+    // Top customers - unified format: "Top customers: customer_col by revenue_col, top X% (count)"
     if (pending.topRevenue.enabled) {
+        const customerCol = pending.topRevenue.customerColumn?.split('.').pop() || 'customer';
+        const revenueCol = pending.topRevenue.revenueColumn?.split('.').pop() || 'revenue';
         let customerCount = null;
         if (customerAnalysisData && customerAnalysisData.distribution) {
             const threshold = pending.topRevenue.thresholdPercent;
-            // Find customer percentage for the threshold
             for (const point of customerAnalysisData.distribution) {
                 if (point.cumulative_revenue_percent >= threshold) {
                     customerCount = Math.round(customerAnalysisData.total_customers * point.customer_percent / 100);
@@ -5531,9 +5548,8 @@ function updateCustomersFilterSummary() {
                 }
             }
         }
-        const desc = customerCount
-            ? `Top ${pending.topRevenue.thresholdPercent}% revenue (${customerCount.toLocaleString()} customers)`
-            : `Top ${pending.topRevenue.thresholdPercent}% revenue`;
+        const countInfo = customerCount ? ` (${customerCount.toLocaleString()})` : '';
+        const desc = `Top customers: ${customerCol} by ${revenueCol}, top ${pending.topRevenue.thresholdPercent}%${countInfo}`;
         filters.push({
             number: filterNumber++,
             type: 'topRevenue',
@@ -5542,25 +5558,31 @@ function updateCustomersFilterSummary() {
         });
     }
 
-    // Aggregation filters (transaction count, spending)
+    // Aggregation filters - unified format showing columns used
     pending.aggregationFilters.forEach((f, idx) => {
+        const customerCol = f.customerColumn?.split('.').pop() || 'customer';
         let desc = '';
         if (f.type === 'transaction_count') {
+            let condition = '';
             if (f.filterType === 'range') {
-                desc = `Transactions ${f.min} - ${f.max}`;
+                condition = `${f.min} - ${f.max} transactions`;
             } else if (f.filterType === 'greater_than') {
-                desc = `Transactions > ${f.value}`;
+                condition = `> ${f.value} transactions`;
             } else {
-                desc = `Transactions < ${f.value}`;
+                condition = `< ${f.value} transactions`;
             }
+            desc = `Transaction count: ${customerCol}, ${condition}`;
         } else if (f.type === 'spending') {
+            const amountCol = f.amountColumn?.split('.').pop() || 'amount';
+            let condition = '';
             if (f.filterType === 'range') {
-                desc = `Spending $${f.min} - $${f.max}`;
+                condition = `$${f.min} - $${f.max}`;
             } else if (f.filterType === 'greater_than') {
-                desc = `Spending > $${f.value}`;
+                condition = `> $${f.value}`;
             } else {
-                desc = `Spending < $${f.value}`;
+                condition = `< $${f.value}`;
             }
+            desc = `Spending: ${customerCol} by ${amountCol}, ${condition}`;
         }
         filters.push({
             number: filterNumber++,
@@ -5570,62 +5592,62 @@ function updateCustomersFilterSummary() {
         });
     });
 
-    // Category filters
+    // Category filters - unified format: "Category: column, include/exclude X values"
     pending.categoryFilters.forEach((f, idx) => {
         const shortName = f.column.split('.').pop();
         const valueCount = f.values?.length || 0;
-        const modeText = f.mode === 'include' ? 'Include' : 'Exclude';
+        const modeText = f.mode === 'include' ? 'include' : 'exclude';
         filters.push({
             number: filterNumber++,
             type: 'category',
             index: idx,
-            description: `${shortName}: ${modeText} ${valueCount} value${valueCount !== 1 ? 's' : ''}`
+            description: `Category: ${shortName}, ${modeText} ${valueCount} value${valueCount !== 1 ? 's' : ''}`
         });
     });
 
-    // Numeric filters
+    // Numeric filters - unified format: "Numeric: column, condition"
     pending.numericFilters.forEach((f, idx) => {
         const shortName = f.column.split('.').pop();
-        let valueDesc = '';
+        let condition = '';
         if (f.filterType === 'range') {
-            valueDesc = `${f.min || '∞'} - ${f.max || '∞'}`;
+            condition = `${f.min || '∞'} - ${f.max || '∞'}`;
         } else if (f.filterType === 'greater_than') {
-            valueDesc = `> ${f.value}`;
+            condition = `> ${f.value}`;
         } else if (f.filterType === 'less_than') {
-            valueDesc = `< ${f.value}`;
+            condition = `< ${f.value}`;
         } else {
-            valueDesc = `= ${f.value}`;
+            condition = `= ${f.value}`;
         }
         filters.push({
             number: filterNumber++,
             type: 'numeric',
             index: idx,
-            description: `${shortName}: ${valueDesc}`
+            description: `Numeric: ${shortName}, ${condition}`
         });
     });
 
-    // Date filters
+    // Date filters - unified format: "Date: column, condition"
     pending.dateFilters.forEach((f, idx) => {
         const shortName = f.column.split('.').pop();
-        let valueDesc = '';
+        let condition = '';
         if (f.dateType === 'relative') {
             const relativeLabels = {
-                'last_7_days': 'Last 7 days',
-                'last_30_days': 'Last 30 days',
-                'last_90_days': 'Last 90 days',
-                'this_month': 'This month',
-                'this_quarter': 'This quarter',
-                'this_year': 'This year'
+                'last_7_days': 'last 7 days',
+                'last_30_days': 'last 30 days',
+                'last_90_days': 'last 90 days',
+                'this_month': 'this month',
+                'this_quarter': 'this quarter',
+                'this_year': 'this year'
             };
-            valueDesc = relativeLabels[f.relativeOption] || f.relativeOption;
+            condition = relativeLabels[f.relativeOption] || f.relativeOption;
         } else {
-            valueDesc = `${f.startDate || '...'} to ${f.endDate || '...'}`;
+            condition = `${f.startDate || '...'} to ${f.endDate || '...'}`;
         }
         filters.push({
             number: filterNumber++,
             type: 'date',
             index: idx,
-            description: `${shortName}: ${valueDesc}`
+            description: `Date: ${shortName}, ${condition}`
         });
     });
 
@@ -6713,14 +6735,23 @@ function populateProductFilterDropdowns(allColumns = null) {
         productSelect.appendChild(option);
     });
 
-    // Populate revenue column dropdown (aggregation column - ALWAYS available)
+    // Populate revenue column dropdown (aggregation column - ONLY NUMERIC types)
     // INTEGER/FLOAT aggregation columns are reusable across sub-chapters
     const revenueSelect = document.getElementById('revenueColumn');
     const currentRevenue = revenueSelect?.value;
     const productCol = productSelect?.value;
 
+    // Get column type info from analysis cache
+    const colAnalysis = productFiltersState.columnAnalysis || customerFiltersState.columnAnalysis || {};
+    const numericTypes = ['INTEGER', 'INT64', 'FLOAT', 'FLOAT64', 'NUMERIC', 'BIGNUMERIC', 'DECIMAL'];
+
     revenueSelect.innerHTML = '<option value="">Select column...</option>';
     allColumns.forEach(c => {
+        // Only show numeric columns for revenue
+        const colInfo = colAnalysis[c.fullName];
+        const colType = colInfo?.type?.toUpperCase() || '';
+        if (!numericTypes.includes(colType)) return;  // Skip non-numeric columns
+
         // Exclude the selected product column (can't use same column for both)
         if (productCol && c.fullName === productCol) return;
         // Exclude timestamp column
@@ -6924,21 +6955,24 @@ function updateDatesFilterSummary() {
         return;
     }
 
-    // Build filter description
+    // Build filter description with unified format
     const colName = timestampCol.split('.').pop();
-    let details = colName;
+    let condition = '';
 
     if (historyFilterMode === 'startDate' && startDate) {
-        details += `: from ${startDate}`;
+        condition = `from ${startDate}`;
     } else {
-        details += `: ${rollingDays} days rolling window`;
+        condition = `last ${rollingDays} days`;
     }
+
+    // Unified format: "Date filter: column_name, condition"
+    const description = `Date filter: ${colName}, ${condition}`;
 
     // Render with same structure as Products
     summaryItems.innerHTML = `
         <div class="filter-summary-item">
             <span class="filter-summary-item-number">Filter #1:</span>
-            <span class="filter-summary-item-desc">${details}</span>
+            <span class="filter-summary-item-desc">${description}</span>
             <button type="button" class="filter-summary-item-delete" onclick="deleteDatesFilter()" title="Remove filter">
                 <i class="fas fa-trash-alt"></i>
             </button>
@@ -7763,9 +7797,12 @@ function drawRevenueDistributionChart(distribution, threshold = 80) {
         .y(d => y(d.cumulative_revenue))
         .curve(d3.curveMonotoneX);
 
+    // Ensure data starts at (0,0) for proper chart connection
+    const chartData = [{ product_count: 0, cumulative_revenue: 0, cumulative_revenue_percent: 0 }, ...distribution];
+
     // Draw the distribution line
     g.append('path')
-        .datum(distribution)
+        .datum(chartData)
         .attr('fill', 'none')
         .attr('stroke', '#3b82f6')
         .attr('stroke-width', 2)
@@ -7781,9 +7818,10 @@ function drawRevenueDistributionChart(distribution, threshold = 80) {
         .y1(d => y(d.cumulative_revenue))
         .curve(d3.curveMonotoneX);
 
-    // Filter data up to threshold
-    const areaData = distribution.filter(d => d.cumulative_revenue_percent <= threshold);
-    if (areaData.length > 0 && thresholdPoint) {
+    // Filter data up to threshold, starting from (0,0)
+    const areaData = [{ product_count: 0, cumulative_revenue: 0, cumulative_revenue_percent: 0 },
+                      ...distribution.filter(d => d.cumulative_revenue_percent <= threshold)];
+    if (areaData.length > 1 && thresholdPoint) {
         // Add the threshold point
         areaData.push({ product_count: thresholdPoint.productCount, cumulative_revenue: thresholdRevenue });
 

@@ -734,13 +734,9 @@
     display: none;
 }
 
-/* Content outside the tablet - no border */
+/* Content outside the tablet - unified compact spacing */
 .subchapter-content-outside {
-    padding: 16px 4px 0 4px;
-}
-
-.subchapter-body-outside {
-    padding: 0 16px;
+    padding: 12px 0 0 0;
 }
 
 /* ============================================================================
@@ -2636,11 +2632,11 @@
 
 /* Filter Summary Line (unified for all sub-chapters) */
 .filter-summary-line {
-    padding: 10px 16px;
+    padding: 8px 12px;
     background: #f9fafb;
     border: 1px solid #e5e7eb;
     border-radius: 8px;
-    margin-top: 12px;
+    margin-top: 10px;
 }
 
 .filter-summary-line.has-pending {
@@ -3069,7 +3065,4 @@ select option {
     min-width: 120px;
 }
 
-/* Content area within sub-chapter body (unified style) */
-.subchapter-body {
-    padding: 16px;
-}
+/* Note: .subchapter-body class removed - using .subchapter-content-outside directly */

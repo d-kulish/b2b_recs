@@ -271,7 +271,6 @@
                             <div class="filter-button-wrapper">
                                 <span class="filter-button-label">Select timestamp column</span>
                                 <div class="timestamp-column-select-wrapper">
-                                    <i class="fas fa-clock timestamp-select-icon"></i>
                                     <select id="timestampColumn" class="form-select timestamp-column-select" onchange="onTimestampColumnChange();">
                                         <option value="">Select column...</option>
                                     </select>
@@ -1834,8 +1833,11 @@ function nextStep() {
     } else if (currentWizardStep === 3) {
         // Moving to step 4 - collect columns and joins from schema builder
         collectSchemaBuilderData();
-        // Populate filter dropdowns with selected columns
-        populateFilterColumnDropdowns();
+        // Fetch column analysis (types, stats) then populate filter dropdowns
+        fetchColumnAnalysis().then(() => {
+            // Populate filter dropdowns with selected columns (needs column types for timestamp filter)
+            populateFilterColumnDropdowns();
+        });
         // Fetch initial dataset stats (unfiltered) for the Dataset Summary panel
         fetchDatasetStats(false);
     }
@@ -3617,24 +3619,37 @@ function populateTopCustomersDropdowns() {
     // Get column types from analysis if available
     const colAnalysis = customerFiltersState.columnAnalysis || productFiltersState.columnAnalysis;
 
-    // Filter for numeric columns for revenue (exclude columns used as aggregation in other filters)
+    // Get timestamp column to exclude DATE columns used there
+    const timestampCol = document.getElementById('timestampColumn')?.value;
+
+    // Filter for numeric columns for revenue
+    // INTEGER/FLOAT aggregation columns are REUSABLE - don't exclude based on aggregation usage
     const numericColumns = columns.filter(col => {
         const info = colAnalysis[col.fullName];
         const isNumeric = info?.type && ['INTEGER', 'FLOAT', 'INT64', 'FLOAT64', 'NUMERIC', 'BIGNUMERIC'].includes(info.type.toUpperCase());
-        const isExcluded = isColumnCommittedInAnyFilter(col.fullName);
-        return isNumeric && !isExcluded;
+        // Only exclude DATE columns (they can only be used once)
+        const isDateExcluded = isColumnCommittedInAnyFilter(col.fullName, 'date');
+        // Also exclude the timestamp column
+        const isTimestamp = timestampCol && col.fullName === timestampCol;
+        return isNumeric && !isDateExcluded && !isTimestamp;
     });
 
-    // Populate Customer ID dropdown (all columns - grouping columns not excluded)
+    // Populate Customer ID dropdown (grouping column - only exclude date columns)
+    // STRING grouping columns are reusable
     customerIdSelect.innerHTML = '<option value="">Select column...</option>';
     columns.forEach(col => {
+        // Exclude timestamp column and date-filtered columns
+        if (timestampCol && col.fullName === timestampCol) return;
+        if (isColumnCommittedInAnyFilter(col.fullName, 'date')) return;
+
         const option = document.createElement('option');
         option.value = col.fullName;
         option.textContent = col.fullName;
         customerIdSelect.appendChild(option);
     });
 
-    // Populate Revenue dropdown (only numeric columns)
+    // Populate Revenue dropdown (aggregation column - REUSABLE)
+    // INTEGER/FLOAT aggregation columns can be used in multiple places
     revenueSelect.innerHTML = '<option value="">Select column...</option>';
     numericColumns.forEach(col => {
         const option = document.createElement('option');
@@ -3995,42 +4010,59 @@ function populateCustomerMetricsDropdowns() {
     // Get column types from analysis if available
     const colAnalysis = customerFiltersState.columnAnalysis || productFiltersState.columnAnalysis;
 
-    // Numeric columns for amount (exclude committed aggregation columns)
+    // Get timestamp column to exclude
+    const timestampCol = document.getElementById('timestampColumn')?.value;
+
+    // Numeric columns for amount (aggregation columns are REUSABLE)
+    // Only exclude DATE columns
     const numericColumns = columns.filter(col => {
         const info = colAnalysis[col.fullName];
         const isNumeric = info?.type && ['INTEGER', 'FLOAT', 'INT64', 'FLOAT64', 'NUMERIC', 'BIGNUMERIC'].includes(info.type.toUpperCase());
-        const isExcluded = isColumnCommittedInAnyFilter(col.fullName);
-        return isNumeric && !isExcluded;
+        // Only exclude DATE columns (they can only be used once)
+        const isDateExcluded = isColumnCommittedInAnyFilter(col.fullName, 'date');
+        const isTimestamp = timestampCol && col.fullName === timestampCol;
+        return isNumeric && !isDateExcluded && !isTimestamp;
     });
 
-    // Transaction Count - Customer ID (all columns - grouping not excluded)
+    // Transaction Count - Customer ID (grouping column - only exclude date columns)
     const txnCountCustomerSelect = document.getElementById('txnCountCustomerColumn');
     txnCountCustomerSelect.innerHTML = '<option value="">Select column...</option>';
     columns.forEach(col => {
+        // Exclude timestamp column and date-filtered columns
+        if (timestampCol && col.fullName === timestampCol) return;
+        if (isColumnCommittedInAnyFilter(col.fullName, 'date')) return;
+
         const option = document.createElement('option');
         option.value = col.fullName;
         option.textContent = col.fullName;
         txnCountCustomerSelect.appendChild(option);
     });
 
-    // Spending - Customer ID (all columns)
+    // Spending - Customer ID (grouping column - only exclude date columns)
     const spendingCustomerSelect = document.getElementById('spendingCustomerColumn');
     spendingCustomerSelect.innerHTML = '<option value="">Select column...</option>';
     columns.forEach(col => {
+        // Exclude timestamp column and date-filtered columns
+        if (timestampCol && col.fullName === timestampCol) return;
+        if (isColumnCommittedInAnyFilter(col.fullName, 'date')) return;
+
         const option = document.createElement('option');
         option.value = col.fullName;
         option.textContent = col.fullName;
         spendingCustomerSelect.appendChild(option);
     });
 
-    // Spending - Amount Column (numeric columns, excluding used ones)
+    // Spending - Amount Column (aggregation column - REUSABLE across sub-chapters)
+    // But within Customer Metrics, we exclude columns already used in PENDING aggregations
+    // to avoid duplicate filters within the same modal
     const spendingAmountSelect = document.getElementById('spendingAmountColumn');
     spendingAmountSelect.innerHTML = '<option value="">Select column...</option>';
     numericColumns.forEach(col => {
-        // Also check if this column is already used in pending customer aggregations
+        // Check if this column is already used in pending customer aggregations (within same modal)
         const isUsedInPending = customerFiltersState.pending.aggregationFilters.some(f => f.amountColumn === col.fullName);
-        // Also check if used as revenue column in top customers
+        // Check if used as revenue column in top customers (within same modal)
         const isUsedAsRevenue = customerFiltersState.pending.topRevenue.revenueColumn === col.fullName;
+        // Note: We do NOT exclude based on committed state - aggregation columns are reusable!
         if (!isUsedInPending && !isUsedAsRevenue) {
             const option = document.createElement('option');
             option.value = col.fullName;
@@ -4842,6 +4874,7 @@ function populateFilterColumnDropdown() {
 
 function getAvailableFilterColumns() {
     const allColumns = [];
+    const timestampCol = document.getElementById('timestampColumn')?.value;
 
     // Get columns from schema builder
     Object.entries(schemaBuilderState.selectedColumns).forEach(([table, cols]) => {
@@ -4859,12 +4892,36 @@ function getAvailableFilterColumns() {
         });
     });
 
-    // Filter out columns already used in PENDING filters (within Products sub-chapter)
-    // AND columns committed in ANY sub-chapter (across Dates, Customers, Products)
-    return allColumns.filter(col =>
-        !isColumnUsedInFilters(col.fullName) &&
-        !isColumnCommittedInAnyFilter(col.fullName)
-    );
+    // Filter out columns based on TYPE-AWARE exclusion rules:
+    // - DATE/TIMESTAMP: Can only be used ONCE anywhere (check date filters)
+    // - STRING: Can be used for grouping, but only ONCE for category filtering
+    // - INTEGER/FLOAT: Can be used for aggregation, but only ONCE for numeric range filtering
+    return allColumns.filter(col => {
+        // Always exclude timestamp column from Dates sub-chapter
+        if (timestampCol && col.fullName === timestampCol) return false;
+
+        const colType = col.type?.toUpperCase() || 'unknown';
+
+        // DATE/TIMESTAMP columns - can only be used once anywhere
+        if (['DATE', 'DATETIME', 'TIMESTAMP'].includes(colType)) {
+            if (isColumnCommittedInAnyFilter(col.fullName, 'date')) return false;
+            if (isColumnUsedInFilters(col.fullName, 'date')) return false;
+        }
+
+        // STRING columns - check category filter exclusion
+        if (colType === 'STRING') {
+            if (isColumnCommittedInAnyFilter(col.fullName, 'category')) return false;
+            if (isColumnUsedInFilters(col.fullName, 'category')) return false;
+        }
+
+        // INTEGER/FLOAT columns - check numeric filter exclusion
+        if (['INTEGER', 'INT64', 'FLOAT', 'FLOAT64', 'NUMERIC', 'BIGNUMERIC'].includes(colType)) {
+            if (isColumnCommittedInAnyFilter(col.fullName, 'numeric')) return false;
+            if (isColumnUsedInFilters(col.fullName, 'numeric')) return false;
+        }
+
+        return true;
+    });
 }
 
 async function onFilterColumnSelect() {
@@ -5684,14 +5741,26 @@ async function refreshCustomerFilters() {
         // Deep copy pending to committed
         customerFiltersState.committed = JSON.parse(JSON.stringify(customerFiltersState.pending));
 
-        // Mark filters as applied
-        customerFiltersApplied = true;
+        // Check if there are any filters after commit
+        const committed = customerFiltersState.committed;
+        const hasAnyFilters = committed.topRevenue.enabled ||
+                              committed.aggregationFilters.length > 0 ||
+                              committed.categoryFilters.length > 0 ||
+                              committed.numericFilters.length > 0 ||
+                              committed.dateFilters.length > 0;
+
+        // Mark filters as applied only if there are actual filters
+        // If all filters were deleted, reset the applied flag
+        customerFiltersApplied = hasAnyFilters;
 
         // Update the header badge
         updateCustomersFilterStatus();
 
         // Update Dataset Summary panel
         await updateDatasetSummary();
+
+        // Repopulate Products dropdowns to reflect changes in column availability
+        populateProductFilterDropdowns();
 
     } catch (error) {
         console.error('Error refreshing customer filters:', error);
@@ -5741,110 +5810,171 @@ function closeAddFilterModal() {
     document.getElementById('addFilterModal').classList.add('hidden');
 }
 
-function isColumnUsedInFilters(columnName) {
-    // Check PENDING state for Products sub-chapter (within modal, before Apply)
+// Check if a column is used in PENDING filters within the Products sub-chapter
+// Type-aware: only excludes columns used for category, numeric, or date filtering
+// Grouping columns (productColumn) and aggregation columns (revenueColumn) are NOT excluded
+function isColumnUsedInFilters(columnName, usageType = 'any') {
     const pending = productFiltersState.pending;
 
-    // Check top revenue columns
-    if (pending.topRevenue.enabled) {
-        if (pending.topRevenue.productColumn === columnName) return true;
-        if (pending.topRevenue.revenueColumn === columnName) return true;
+    // Note: topRevenue.productColumn is GROUPING and topRevenue.revenueColumn is AGGREGATION
+    // They should NOT cause exclusion since they can be reused
+
+    switch (usageType) {
+        case 'category':
+            return pending.categoryFilters.some(f => f.column === columnName);
+
+        case 'numeric':
+            return pending.numericFilters.some(f => f.column === columnName);
+
+        case 'date':
+            return pending.dateFilters.some(f => f.column === columnName);
+
+        case 'grouping':
+        case 'aggregation':
+            // Grouping and aggregation columns are always available
+            return false;
+
+        case 'any':
+        default:
+            // Check category, numeric, and date filters only
+            // NOT grouping or aggregation columns (they're reusable)
+            return pending.categoryFilters.some(f => f.column === columnName) ||
+                   pending.numericFilters.some(f => f.column === columnName) ||
+                   pending.dateFilters.some(f => f.column === columnName);
     }
+}
 
-    // Check category filters
-    if (pending.categoryFilters.some(f => f.column === columnName)) return true;
+// ============================================================================
+// TYPE-AWARE COLUMN EXCLUSION LOGIC
+// ============================================================================
+//
+// Column exclusion rules by type:
+// - STRING columns: Can be used for GROUPING in multiple places (customer_id, product_id, etc.)
+//                   Can only be used ONCE for CATEGORY filtering (IN/NOT IN)
+// - INTEGER/FLOAT:  Can be used for AGGREGATION in multiple places (SUM, COUNT on total_amount, etc.)
+//                   Can only be used ONCE for NUMERIC RANGE filtering (>, <, BETWEEN)
+// - DATE/TIMESTAMP: Can only be used ONCE anywhere (Dates sub-chapter OR Filter Columns date filter)
+//
+// ============================================================================
 
-    // Check numeric filters
-    if (pending.numericFilters.some(f => f.column === columnName)) return true;
+// Check if a column is used as a DATE/TIMESTAMP filter anywhere (committed)
+// DATE columns can only be used ONCE across all sub-chapters
+function isColumnUsedAsDateFilter(columnName) {
+    // Check Dates sub-chapter timestamp column
+    if (committedDatesFilter.timestampColumn === columnName) return true;
 
-    // Check date filters
-    if (pending.dateFilters.some(f => f.column === columnName)) return true;
+    // Check Products date filters in Filter Columns
+    if (productFiltersState.committed.dateFilters.some(f => f.column === columnName)) return true;
+
+    // Check Customers date filters in Filter Columns
+    if (customerFiltersState.committed.dateFilters.some(f => f.column === columnName)) return true;
 
     return false;
 }
 
-// Check if a column is used in COMMITTED filters across ALL sub-chapters
-// This ensures columns used in one sub-chapter (after Refresh Dataset) are excluded from others
-// NOTE: Grouping columns (customerColumn, productColumn) are NOT excluded - only aggregation columns
-function isColumnCommittedInAnyFilter(columnName) {
-    // Check committed timestamp column from Dates sub-chapter
-    if (committedDatesFilter.timestampColumn === columnName) return true;
+// Check if a column is used as a CATEGORY filter (STRING IN/NOT IN) anywhere (committed)
+// STRING columns used for category filtering can only be used ONCE
+function isColumnUsedAsCategoryFilter(columnName) {
+    // Check Products category filters
+    if (productFiltersState.committed.categoryFilters.some(f => f.column === columnName)) return true;
 
-    // Check committed Products filters (excluding grouping columns)
-    const productCommitted = productFiltersState.committed;
-
-    // For top revenue: only exclude the revenue column, NOT the product column (grouping)
-    if (productCommitted.topRevenue.enabled) {
-        // productColumn is a grouping column - NOT excluded
-        if (productCommitted.topRevenue.revenueColumn === columnName) return true;
-    }
-
-    // Check category filters
-    if (productCommitted.categoryFilters.some(f => f.column === columnName)) return true;
-
-    // Check numeric filters
-    if (productCommitted.numericFilters.some(f => f.column === columnName)) return true;
-
-    // Check date filters
-    if (productCommitted.dateFilters.some(f => f.column === columnName)) return true;
-
-    // Check committed Customers filters (excluding grouping columns)
-    const customerCommitted = customerFiltersState.committed;
-
-    // For top revenue: only exclude the revenue column, NOT the customer column (grouping)
-    if (customerCommitted.topRevenue.enabled) {
-        // customerColumn is a grouping column - NOT excluded
-        if (customerCommitted.topRevenue.revenueColumn === columnName) return true;
-    }
-
-    // Check aggregation filters - exclude amount columns, NOT customer columns (grouping)
-    for (const aggFilter of customerCommitted.aggregationFilters) {
-        // customerColumn is a grouping column - NOT excluded
-        // amountColumn (for spending filter) IS excluded
-        if (aggFilter.amountColumn === columnName) return true;
-    }
-
-    // Check category filters
-    if (customerCommitted.categoryFilters.some(f => f.column === columnName)) return true;
-
-    // Check numeric filters
-    if (customerCommitted.numericFilters.some(f => f.column === columnName)) return true;
-
-    // Check date filters
-    if (customerCommitted.dateFilters.some(f => f.column === columnName)) return true;
+    // Check Customers category filters
+    if (customerFiltersState.committed.categoryFilters.some(f => f.column === columnName)) return true;
 
     return false;
+}
+
+// Check if a column is used as a NUMERIC RANGE filter anywhere (committed)
+// INTEGER/FLOAT columns used for numeric range filtering can only be used ONCE
+function isColumnUsedAsNumericRangeFilter(columnName) {
+    // Check Products numeric filters
+    if (productFiltersState.committed.numericFilters.some(f => f.column === columnName)) return true;
+
+    // Check Customers numeric filters
+    if (customerFiltersState.committed.numericFilters.some(f => f.column === columnName)) return true;
+
+    return false;
+}
+
+// Main exclusion function - type-aware
+// usageType determines what kind of usage we're checking for:
+// - 'date': Check if used as any date filter (for Dates timestamp dropdown and Filter Columns date)
+// - 'category': Check if used as category filter (for Filter Columns category)
+// - 'numeric': Check if used as numeric range filter (for Filter Columns numeric)
+// - 'grouping': NEVER exclude - STRING grouping columns are reusable
+// - 'aggregation': NEVER exclude - INTEGER/FLOAT aggregation columns are reusable
+// - 'any': Legacy behavior - check all filter types (for general exclusion)
+function isColumnCommittedInAnyFilter(columnName, usageType = 'any') {
+    switch (usageType) {
+        case 'date':
+            // DATE/TIMESTAMP columns - can only be used ONCE anywhere
+            return isColumnUsedAsDateFilter(columnName);
+
+        case 'category':
+            // STRING columns for category filtering - can only be used ONCE
+            return isColumnUsedAsCategoryFilter(columnName);
+
+        case 'numeric':
+            // INTEGER/FLOAT columns for numeric range filtering - can only be used ONCE
+            return isColumnUsedAsNumericRangeFilter(columnName);
+
+        case 'grouping':
+            // STRING grouping columns (customer_id, product_id) - ALWAYS available
+            return false;
+
+        case 'aggregation':
+            // INTEGER/FLOAT aggregation columns (total_amount in SUM) - ALWAYS available
+            return false;
+
+        case 'any':
+        default:
+            // Legacy behavior: check DATE filters and category/numeric filters
+            // But NOT aggregation columns (they're reusable)
+            return isColumnUsedAsDateFilter(columnName) ||
+                   isColumnUsedAsCategoryFilter(columnName) ||
+                   isColumnUsedAsNumericRangeFilter(columnName);
+    }
 }
 
 // Check if a column is used in PENDING filters within the Customers sub-chapter
-function isColumnUsedInCustomerFilters(columnName) {
+// Type-aware: only excludes columns used for category, numeric, or date filtering
+// Aggregation columns (used in SUM, etc.) are NOT excluded - they can be reused
+function isColumnUsedInCustomerFilters(columnName, usageType = 'any') {
     const pending = customerFiltersState.pending;
 
-    // For top revenue: only check revenue column, NOT customer column (grouping)
-    if (pending.topRevenue.enabled) {
-        if (pending.topRevenue.revenueColumn === columnName) return true;
+    // Note: topRevenue.revenueColumn and aggregationFilters.amountColumn are AGGREGATION uses
+    // They should NOT cause exclusion since INTEGER/FLOAT aggregation columns are reusable
+
+    switch (usageType) {
+        case 'category':
+            return pending.categoryFilters.some(f => f.column === columnName);
+
+        case 'numeric':
+            return pending.numericFilters.some(f => f.column === columnName);
+
+        case 'date':
+            return pending.dateFilters.some(f => f.column === columnName);
+
+        case 'grouping':
+        case 'aggregation':
+            // Grouping and aggregation columns are always available
+            return false;
+
+        case 'any':
+        default:
+            // Check category, numeric, and date filters only
+            // NOT aggregation columns (they're reusable)
+            return pending.categoryFilters.some(f => f.column === columnName) ||
+                   pending.numericFilters.some(f => f.column === columnName) ||
+                   pending.dateFilters.some(f => f.column === columnName);
     }
-
-    // Check aggregation filters - only amount columns, NOT customer columns (grouping)
-    for (const aggFilter of pending.aggregationFilters) {
-        if (aggFilter.amountColumn === columnName) return true;
-    }
-
-    // Check category filters
-    if (pending.categoryFilters.some(f => f.column === columnName)) return true;
-
-    // Check numeric filters
-    if (pending.numericFilters.some(f => f.column === columnName)) return true;
-
-    // Check date filters
-    if (pending.dateFilters.some(f => f.column === columnName)) return true;
-
-    return false;
 }
 
-// Get columns available for Customer filters (excluding used aggregation columns)
+// Get columns available for Customer Filter Columns modal
+// Uses TYPE-AWARE exclusion rules
 function getAvailableCustomerFilterColumns() {
     const allColumns = [];
+    const timestampCol = document.getElementById('timestampColumn')?.value;
 
     // Get columns from schema builder
     Object.entries(schemaBuilderState.selectedColumns).forEach(([table, cols]) => {
@@ -5863,12 +5993,36 @@ function getAvailableCustomerFilterColumns() {
         });
     });
 
-    // Filter out columns already used in PENDING filters (within Customers sub-chapter)
-    // AND columns committed in ANY sub-chapter (across Dates, Customers, Products)
-    return allColumns.filter(col =>
-        !isColumnUsedInCustomerFilters(col.fullName) &&
-        !isColumnCommittedInAnyFilter(col.fullName)
-    );
+    // Filter out columns based on TYPE-AWARE exclusion rules:
+    // - DATE/TIMESTAMP: Can only be used ONCE anywhere (check date filters)
+    // - STRING: Can be used for grouping, but only ONCE for category filtering
+    // - INTEGER/FLOAT: Can be used for aggregation, but only ONCE for numeric range filtering
+    return allColumns.filter(col => {
+        // Always exclude timestamp column from Dates sub-chapter
+        if (timestampCol && col.fullName === timestampCol) return false;
+
+        const colType = col.type?.toUpperCase() || 'unknown';
+
+        // DATE/TIMESTAMP columns - can only be used once anywhere
+        if (['DATE', 'DATETIME', 'TIMESTAMP'].includes(colType)) {
+            if (isColumnCommittedInAnyFilter(col.fullName, 'date')) return false;
+            if (isColumnUsedInCustomerFilters(col.fullName, 'date')) return false;
+        }
+
+        // STRING columns - check category filter exclusion
+        if (colType === 'STRING') {
+            if (isColumnCommittedInAnyFilter(col.fullName, 'category')) return false;
+            if (isColumnUsedInCustomerFilters(col.fullName, 'category')) return false;
+        }
+
+        // INTEGER/FLOAT columns - check numeric filter exclusion
+        if (['INTEGER', 'INT64', 'FLOAT', 'FLOAT64', 'NUMERIC', 'BIGNUMERIC'].includes(colType)) {
+            if (isColumnCommittedInAnyFilter(col.fullName, 'numeric')) return false;
+            if (isColumnUsedInCustomerFilters(col.fullName, 'numeric')) return false;
+        }
+
+        return true;
+    });
 }
 
 async function onAddFilterColumnChange() {
@@ -6389,8 +6543,18 @@ async function refreshProductFilters() {
     // Commit pending state
     productFiltersState.committed = JSON.parse(JSON.stringify(productFiltersState.pending));
 
-    // Mark filters as applied and update header status
-    productFiltersApplied = true;
+    // Check if there are any filters after commit
+    const committed = productFiltersState.committed;
+    const hasAnyFilters = committed.topRevenue.enabled ||
+                          committed.categoryFilters.length > 0 ||
+                          committed.numericFilters.length > 0 ||
+                          committed.dateFilters.length > 0;
+
+    // Mark filters as applied only if there are actual filters
+    // If all filters were deleted, reset the applied flag
+    productFiltersApplied = hasAnyFilters;
+
+    // Update header status badge
     updateProductsFilterStatus();
 
     // Update all dropdowns to exclude committed columns (cross-sub-chapter exclusion)
@@ -6405,6 +6569,10 @@ async function refreshProductFilters() {
 
     // Call the dataset stats API
     await updateDatasetSummary();
+
+    // Update button state AFTER commit - this clears the "unapplied changes" indicator
+    // since pending now equals committed
+    updateProductsRefreshButtonState();
 }
 
 function buildProductFilterForApi() {
@@ -6464,17 +6632,30 @@ function populateFilterColumnDropdowns() {
         });
     });
 
-    // Populate timestamp column dropdown (only date/timestamp types)
+    // Populate timestamp column dropdown (only DATE/TIMESTAMP type columns)
+    // DATE columns can only be used ONCE anywhere
     const timestampSelect = document.getElementById('timestampColumn');
     const currentTimestamp = timestampSelect?.value;  // Preserve current selection
     timestampSelect.innerHTML = '<option value="">Select column...</option>';
+
+    // Get column type info from analysis cache
+    const colAnalysis = productFiltersState.columnAnalysis || customerFiltersState.columnAnalysis || {};
+    const dateTypes = ['DATE', 'DATETIME', 'TIMESTAMP', 'TIME'];
+
     allColumns.forEach(c => {
-        // Exclude columns committed in other sub-chapters (Products)
+        // Only show DATE/TIMESTAMP type columns
+        const colInfo = colAnalysis[c.fullName];
+        const colType = colInfo?.type?.toUpperCase() || '';
+        if (!dateTypes.includes(colType)) {
+            return;  // Skip non-date columns
+        }
+
+        // Exclude columns already used as DATE filters in other sub-chapters
         // But allow the currently committed timestamp column (so it shows as selected)
-        if (isColumnCommittedInAnyFilter(c.fullName) && c.fullName !== committedDatesFilter.timestampColumn) {
+        if (isColumnCommittedInAnyFilter(c.fullName, 'date') && c.fullName !== committedDatesFilter.timestampColumn) {
             return;
         }
-        // Note: In production, filter by column type (DATE, TIMESTAMP, DATETIME)
+
         const option = document.createElement('option');
         option.value = c.fullName;
         option.textContent = c.fullName;
@@ -6511,25 +6692,20 @@ function populateProductFilterDropdowns(allColumns = null) {
         });
     }
 
-    // Get the timestamp column that's currently selected in the dropdown
+    // Get the timestamp column that's currently selected/committed in Dates
     const timestampCol = document.getElementById('timestampColumn')?.value;
 
-    // Filter out columns that are:
-    // 1. Currently selected as timestamp column
-    // 2. Committed in any filter across all sub-chapters
-    const availableColumns = allColumns.filter(c => {
-        // Exclude currently selected timestamp column
-        if (timestampCol && c.fullName === timestampCol) return false;
-        // Exclude columns committed in any filter (cross-sub-chapter exclusion)
-        if (isColumnCommittedInAnyFilter(c.fullName)) return false;
-        return true;
-    });
-
-    // Populate product ID dropdown
+    // Populate product ID dropdown (grouping column - only exclude date columns)
+    // STRING grouping columns are reusable, so we only check for date exclusion
     const productSelect = document.getElementById('productIdColumn');
     const currentProduct = productSelect?.value;
     productSelect.innerHTML = '<option value="">Select column...</option>';
-    availableColumns.forEach(c => {
+    allColumns.forEach(c => {
+        // Exclude timestamp column (DATE type used in Dates sub-chapter)
+        if (timestampCol && c.fullName === timestampCol) return;
+        // Exclude columns used as date filters (DATE columns can only be used once)
+        if (isColumnCommittedInAnyFilter(c.fullName, 'date')) return;
+
         const option = document.createElement('option');
         option.value = c.fullName;
         option.textContent = c.fullName;
@@ -6537,14 +6713,22 @@ function populateProductFilterDropdowns(allColumns = null) {
         productSelect.appendChild(option);
     });
 
-    // Populate revenue column dropdown (exclude product column)
+    // Populate revenue column dropdown (aggregation column - ALWAYS available)
+    // INTEGER/FLOAT aggregation columns are reusable across sub-chapters
     const revenueSelect = document.getElementById('revenueColumn');
     const currentRevenue = revenueSelect?.value;
     const productCol = productSelect?.value;
 
     revenueSelect.innerHTML = '<option value="">Select column...</option>';
-    availableColumns.forEach(c => {
+    allColumns.forEach(c => {
+        // Exclude the selected product column (can't use same column for both)
         if (productCol && c.fullName === productCol) return;
+        // Exclude timestamp column
+        if (timestampCol && c.fullName === timestampCol) return;
+        // Exclude columns used as date filters
+        if (isColumnCommittedInAnyFilter(c.fullName, 'date')) return;
+        // Note: We do NOT exclude aggregation columns - they are reusable!
+
         const option = document.createElement('option');
         option.value = c.fullName;
         option.textContent = c.fullName;
@@ -6909,64 +7093,30 @@ async function fetchDatasetStats(withFilters = false) {
             join_config: wizardData.joinConfig || {}
         };
 
-        // Add filters if requested
+        // Add filters if requested - uses COMMITTED state from all sub-chapters
+        // Priority order: Dates -> Customers -> Products
         if (withFilters) {
-            const timestampCol = document.getElementById('timestampColumn')?.value;
-            const rollingDays = parseInt(document.getElementById('rollingDays')?.value) || 30;
-            const startDate = document.getElementById('startDateInput')?.value;
-            const minTxEnabled = document.getElementById('enableMinTransactions')?.checked;
-            const minTx = parseInt(document.getElementById('minTransactions')?.value) || 2;
-            const productCol = document.getElementById('productIdColumn')?.value;
-            const revenueCol = document.getElementById('revenueColumn')?.value;
-            const revenueThreshold = parseInt(document.getElementById('revenueThreshold')?.value) || 80;
-
             const filters = {};
 
-            // Date filter
-            if (timestampCol) {
-                filters.timestamp_column = timestampCol;
+            // ===========================================
+            // 1. DATE FILTERS (from committed state)
+            // ===========================================
+            if (dateFiltersApplied) {
+                const datesCommitted = datesFilterState.committed;
+                if (datesCommitted.timestampColumn) {
+                    filters.timestamp_column = datesCommitted.timestampColumn;
 
-                if (historyFilterMode === 'rolling') {
-                    filters.date_filter = { type: 'rolling', days: rollingDays };
-                } else if (historyFilterMode === 'startDate' && startDate) {
-                    filters.date_filter = { type: 'fixed', start_date: startDate };
-                }
-            }
-
-            // Customer filter (min transactions)
-            if (minTxEnabled && timestampCol) {
-                // Try to detect customer column from selected columns
-                let customerCol = null;
-                for (const [table, columns] of Object.entries(wizardData.selectedColumns || {})) {
-                    for (const col of columns) {
-                        const colLower = col.toLowerCase();
-                        if (['customer_id', 'user_id', 'client_id', 'buyer_id'].includes(colLower)) {
-                            customerCol = col;
-                            break;
-                        }
+                    if (datesCommitted.mode === 'rolling') {
+                        filters.date_filter = { type: 'rolling', days: datesCommitted.rollingDays };
+                    } else if (datesCommitted.mode === 'startDate' && datesCommitted.startDate) {
+                        filters.date_filter = { type: 'fixed', start_date: datesCommitted.startDate };
                     }
-                    if (customerCol) break;
-                }
-                if (customerCol) {
-                    filters.customer_filter = {
-                        type: 'min_transactions',
-                        column: customerCol,
-                        value: minTx
-                    };
                 }
             }
 
-            // Product filter (top N% revenue)
-            if (productCol && revenueCol && productAnalysisData) {
-                filters.product_filter = {
-                    type: 'top_revenue',
-                    product_column: productCol,
-                    revenue_column: revenueCol,
-                    percent: revenueThreshold
-                };
-            }
-
-            // Customer filters (from committed state)
+            // ===========================================
+            // 2. CUSTOMER FILTERS (from committed state)
+            // ===========================================
             if (customerFiltersApplied) {
                 const customerCommitted = customerFiltersState.committed;
                 const customerFilter = {};
@@ -7014,7 +7164,7 @@ async function fetchDatasetStats(withFilters = false) {
                     }));
                 }
 
-                // Date filters
+                // Date filters (within Customers sub-chapter)
                 if (customerCommitted.dateFilters.length > 0) {
                     customerFilter.date_filters = customerCommitted.dateFilters.map(f => ({
                         column: f.column,
@@ -7032,9 +7182,77 @@ async function fetchDatasetStats(withFilters = false) {
                 }
             }
 
+            // ===========================================
+            // 3. PRODUCT FILTERS (from committed state)
+            // ===========================================
+            if (productFiltersApplied) {
+                const productCommitted = productFiltersState.committed;
+                const productFilter = {};
+
+                // Top products by revenue
+                if (productCommitted.topRevenue.enabled) {
+                    productFilter.top_revenue = {
+                        enabled: true,
+                        product_column: productCommitted.topRevenue.productColumn,
+                        revenue_column: productCommitted.topRevenue.revenueColumn,
+                        threshold_percent: productCommitted.topRevenue.thresholdPercent
+                    };
+                }
+
+                // Category filters
+                if (productCommitted.categoryFilters.length > 0) {
+                    productFilter.category_filters = productCommitted.categoryFilters
+                        .filter(f => f.values && f.values.length > 0)
+                        .map(f => ({
+                            column: f.column,
+                            mode: f.mode,
+                            values: f.values
+                        }));
+                }
+
+                // Numeric filters
+                if (productCommitted.numericFilters.length > 0) {
+                    productFilter.numeric_filters = productCommitted.numericFilters
+                        .filter(f => f.min !== null || f.max !== null || f.value !== null)
+                        .map(f => ({
+                            column: f.column,
+                            type: f.type,
+                            min: f.min,
+                            max: f.max,
+                            value: f.value,
+                            include_nulls: f.includeNulls
+                        }));
+                }
+
+                // Date filters (within Products sub-chapter)
+                if (productCommitted.dateFilters && productCommitted.dateFilters.length > 0) {
+                    productFilter.date_filters = productCommitted.dateFilters.map(f => ({
+                        column: f.column,
+                        date_type: f.dateType || f.filterType,
+                        relative_option: f.relativeOption,
+                        start_date: f.startDate,
+                        end_date: f.endDate,
+                        include_nulls: f.includeNulls
+                    }));
+                }
+
+                // Only add product_filter if there's at least one filter
+                if (Object.keys(productFilter).length > 0) {
+                    filters.product_filter = productFilter;
+                }
+            }
+
             if (Object.keys(filters).length > 0) {
                 payload.filters = filters;
             }
+
+            // Debug log to verify all filters are included
+            console.log('fetchDatasetStats - Committed filters from all sub-chapters:', {
+                dateFiltersApplied,
+                customerFiltersApplied,
+                productFiltersApplied,
+                filters: filters
+            });
         }
 
         const response = await fetch(`/api/models/${modelId}/datasets/stats/`, {

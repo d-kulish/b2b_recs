@@ -616,12 +616,12 @@ The platform is organized into distinct domains that represent the end-to-end ML
 │                                                                              │
 │  ┌──────────────┐    ┌──────────────┐    ┌────────────────────┐            │
 │  │     ETL      │    │   DATASETS   │    │ ENGINEERING &      │            │
-│  │   (Done ✅)  │    │              │    │ TESTING            │            │
+│  │   (Done ✅)  │    │  (Done ✅)   │    │ TESTING            │            │
 │  │              │    │              │    │                    │            │
 │  │ Source → BQ  │    │ What data?   │    │ How to preprocess? │            │
 │  │              │    │ Which cols?  │    │ Which features?    │            │
 │  │              │    │ Filters?     │    │ Embedding dims?    │            │
-│  │              │    │ Split?       │    │ Quick experiments  │            │
+│  │              │    │ (Config only)│    │ Quick experiments  │            │
 │  └──────────────┘    └──────┬───────┘    └──────────┬─────────┘            │
 │                             │                       │                       │
 │                             └───────────┬───────────┘                       │
@@ -630,9 +630,9 @@ The platform is organized into distinct domains that represent the end-to-end ML
 │                              │     TRAINING     │                           │
 │                              │                  │                           │
 │                              │ TFX Pipeline:    │                           │
-│                              │ • ExampleGen     │                           │
-│                              │ • StatisticsGen  │                           │
-│                              │ • SchemaGen      │                           │
+│                              │ • ExampleGen     │ ← Receives SQL query     │
+│                              │ • StatisticsGen  │ ← Handles train/eval     │
+│                              │ • SchemaGen      │   split internally       │
 │                              │ • Transform      │                           │
 │                              │ • Trainer        │                           │
 │                              │ • Evaluator      │                           │
@@ -656,9 +656,9 @@ The platform is organized into distinct domains that represent the end-to-end ML
 | Domain | Purpose | Status | Documentation |
 |--------|---------|--------|---------------|
 | **ETL** | Extract data from sources → BigQuery | ✅ Done | - |
-| **Datasets** | Define WHAT data goes into training | Planned | [docs/phase_datasets.md](docs/phase_datasets.md) |
+| **Datasets** | Define WHAT data goes into training (configuration only) | ✅ Done | [docs/phase_datasets.md](docs/phase_datasets.md) |
 | **Engineering & Testing** | Define HOW to transform features + quick experiments | Planned | [docs/phase_engineering_testing.md](docs/phase_engineering_testing.md) |
-| **Training** | Execute full TFX pipeline | Planned | [docs/phase_training.md](docs/phase_training.md) |
+| **Training** | Execute full TFX pipeline (includes train/eval split) | Planned | [docs/phase_training.md](docs/phase_training.md) |
 | **Experiments** | Compare results via MLflow heatmaps | Planned | [docs/phase_experiments.md](docs/phase_experiments.md) |
 | **Deployment** | Deploy and serve models | Planned | [docs/phase_deployment.md](docs/phase_deployment.md) |
 
@@ -670,6 +670,191 @@ The platform is organized into distinct domains that represent the end-to-end ML
 | **MLflow** | Experiment comparison UI, metrics heatmaps, "which config scored best" |
 | **Vertex AI Pipelines** | Orchestrate TFX pipeline execution |
 | **Dataflow** | Execute Beam transforms at scale (ExampleGen, Transform) |
+
+---
+
+## Dataset Domain Architecture
+
+### Core Concept: Dataset as Configuration
+
+A **Dataset** in this platform is a **configuration document** (recipe), not materialized data. It defines:
+- Which BigQuery tables to use
+- Which columns to select
+- How to join tables
+- What filters to apply (dates, customers, products)
+
+**Key Design Decisions:**
+
+1. **No Data Duplication**: Dataset stores configuration only. No BigQuery views, tables, or copies are created.
+2. **Dynamic Rolling Windows**: Date filters like "last 90 days" are resolved at training execution time, always using fresh data.
+3. **No Train/Eval Split**: Split configuration is handled by the Training domain (TFX ExampleGen), not Datasets.
+4. **SQL Generation on Demand**: The BigQuery SQL query is generated when needed (preview, training), not stored.
+5. **Versioning at Training Time**: When a dataset is used for training, a `DatasetVersion` snapshot captures the exact configuration and generated SQL.
+
+### Dataset Flow
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  DATASET WIZARD (4 Steps)                                                    │
+│  User defines configuration through UI                                      │
+│                                                                              │
+│  Step 1: Info        → name, description                                    │
+│  Step 2: Tables      → primary_table, secondary_tables                      │
+│  Step 3: Schema      → selected_columns, join_config, column_mapping        │
+│  Step 4: Filters     → date_filter, customer_filter, product_filter         │
+│                                                                              │
+│  Output: JSON configuration stored in Django Database                       │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    │ User clicks "Save"
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  DJANGO DATABASE                                                             │
+│                                                                              │
+│  Dataset Model:                                                              │
+│  ├── id, name, description, status, version                                 │
+│  ├── primary_table, secondary_tables                                        │
+│  ├── selected_columns (JSON)                                                │
+│  ├── join_config (JSON)                                                     │
+│  ├── column_mapping (JSON)                                                  │
+│  ├── filters (JSON) ── date_filter, customer_filter, product_filter        │
+│  └── created_at, updated_at                                                 │
+│                                                                              │
+│  NO split_config (removed - handled by Training domain)                     │
+│  NO generated SQL stored (generated on demand)                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    │ Training Run Initiated
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  TRAINING EXECUTION                                                          │
+│                                                                              │
+│  1. Load Dataset configuration                                               │
+│  2. Resolve dynamic values:                                                  │
+│     - "rolling 90 days" → actual dates (2024-09-07 to 2024-12-06)           │
+│  3. Generate BigQuery SQL query                                              │
+│  4. Create DatasetVersion snapshot:                                          │
+│     - config_snapshot (frozen JSON)                                          │
+│     - generated_query (frozen SQL with resolved dates)                       │
+│     - execution_date                                                         │
+│  5. Pass SQL to TFX BigQueryExampleGen                                       │
+│  6. ExampleGen applies train/eval split (configured in Training domain)     │
+│                                                                              │
+│  Output: TFRecords with train/eval splits → Transform → Trainer             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Why No Split in Dataset Domain?
+
+The train/eval split is **execution-time configuration**, not data definition:
+
+| Aspect | Dataset Domain | Training Domain |
+|--------|---------------|-----------------|
+| Purpose | WHAT data to use | HOW to train the model |
+| Split | Not applicable | Time-based or random split |
+| Timing | Configuration saved once | Resolved at each training run |
+| TFX Component | Provides query to ExampleGen | ExampleGen handles split |
+
+**Reference**: TFX ExampleGen can split data automatically using configurable ratios (default 2:1 train:eval) or custom split logic.
+
+### Dataset Versioning
+
+Versions are created **only when a dataset is used in training**, not on every edit:
+
+```
+Dataset (id=123, name="Q4 Transactions")
+├── Current config (live, editable)
+│
+└── DatasetVersion records (immutable snapshots):
+    ├── v1: created 2024-11-15, used in TrainingRun #45
+    │   ├── config_snapshot: {...}
+    │   ├── generated_query: "SELECT ... WHERE date >= '2024-08-17'..."
+    │   └── actual_row_count: 2,450,000
+    │
+    ├── v2: created 2024-12-01, used in TrainingRun #52
+    │   ├── config_snapshot: {...}
+    │   ├── generated_query: "SELECT ... WHERE date >= '2024-09-02'..."
+    │   └── actual_row_count: 2,380,000
+    │
+    └── (future versions created on each training run)
+```
+
+This approach ensures:
+- **Reproducibility**: Every training run is linked to an exact dataset configuration
+- **Efficiency**: No storage wasted on unused versions
+- **Auditability**: Full history of what data was used for each model
+
+### Filter Configuration Structure
+
+The `filters` JSON field contains all filter rules:
+
+```json
+{
+  "date_filter": {
+    "column": "transactions.trans_date",
+    "type": "rolling",
+    "days": 90
+  },
+  "customer_filter": {
+    "top_revenue": {
+      "enabled": true,
+      "customer_column": "transactions.customer_id",
+      "revenue_column": "transactions.amount",
+      "threshold_percent": 80
+    },
+    "aggregation_filters": [
+      {
+        "type": "transaction_count",
+        "customer_column": "transactions.customer_id",
+        "filter_type": "greater_than",
+        "value": 2
+      }
+    ],
+    "category_filters": [...],
+    "numeric_filters": [...]
+  },
+  "product_filter": {
+    "top_revenue": {
+      "enabled": true,
+      "product_column": "transactions.product_id",
+      "revenue_column": "transactions.amount",
+      "threshold_percent": 80
+    },
+    "category_filters": [...],
+    "numeric_filters": [...]
+  }
+}
+```
+
+### SQL Generation
+
+SQL is generated **on demand** by `BigQueryService.generate_query()`:
+
+- **For Preview**: Generated when user views dataset details (not stored)
+- **For Training**: Generated and stored in `DatasetVersion.generated_query`
+- **Dynamic Resolution**: Rolling windows resolved to actual dates at generation time
+
+Example generated SQL:
+```sql
+WITH top_products AS (
+  SELECT product_id FROM (
+    SELECT product_id, SUM(amount) as revenue,
+           SUM(SUM(amount)) OVER (ORDER BY SUM(amount) DESC) as cumulative
+    FROM `project.raw_data.transactions`
+    WHERE trans_date >= DATE_SUB(CURRENT_DATE(), INTERVAL 90 DAY)
+    GROUP BY product_id
+  ) WHERE cumulative <= total_revenue * 0.80
+)
+SELECT
+  t.customer_id,
+  t.product_id,
+  t.amount,
+  p.category
+FROM `project.raw_data.transactions` t
+LEFT JOIN `project.raw_data.products` p ON t.product_id = p.product_id
+WHERE t.trans_date >= DATE_SUB(CURRENT_DATE(), INTERVAL 90 DAY)
+  AND t.product_id IN (SELECT product_id FROM top_products)
+```
 
 ### User Journey
 
@@ -2190,6 +2375,7 @@ From `past/` folder, these components are production-tested and will be reused:
 | 2025-11-17 | 1.1 | Added Network Architecture section (Cloud NAT + Static IPs), updated cost structure | Claude Code |
 | 2025-11-30 | 1.2 | Added Code Organization & Architecture Guidelines section based on views.py refactoring | Claude Code |
 | 2025-12-01 | 2.0 | Major update: TFX-based ML Pipeline architecture, ML Platform Domains section, updated ML Pipeline Components to TFX approach, added domain documentation links | Claude Code |
+| 2025-12-06 | 2.1 | Dataset Domain Architecture: Removed train/eval split from Dataset (moved to Training domain), added "Dataset as Configuration" concept, updated Dataset wizard to 4 steps, documented SQL generation and versioning approach | Claude Code |
 
 ---
 

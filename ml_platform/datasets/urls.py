@@ -39,7 +39,8 @@ urlpatterns = [
 
     # === QUERY GENERATION ===
     path('api/datasets/<int:dataset_id>/query/', api.get_generated_query, name='api_datasets_query'),
-    path('api/datasets/<int:dataset_id>/query/split/', api.get_split_queries, name='api_datasets_split_queries'),
+    # Note: Split queries endpoint renamed - split is now handled by Training domain
+    path('api/datasets/<int:dataset_id>/query/split/', api.get_dataset_query, name='api_datasets_split_queries'),
     path('api/datasets/<int:dataset_id>/query/tfx/', api.get_tfx_queries, name='api_datasets_tfx_queries'),
     path('api/datasets/<int:dataset_id>/validate-query/', api.validate_query, name='api_datasets_validate_query'),
 

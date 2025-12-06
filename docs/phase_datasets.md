@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides detailed specifications for implementing the **Datasets** domain in the ML Platform. The Datasets domain defines WHAT data goes into model training.
 
-**Last Updated**: 2025-12-06 (v6 - Bug fixes, UI improvements, BigQuery-based Customer Revenue Analysis)
+**Last Updated**: 2025-12-06 (v7 - Removed Step 5 train/eval split, Dataset is now configuration-only)
 
 ---
 
@@ -14,15 +14,53 @@ The Datasets domain allows users to:
 1. Select source tables from BigQuery (populated by ETL)
 2. Connect tables and select columns using the visual Schema Builder
 3. Define data filters (date range, revenue threshold, customer filters)
-4. Configure train/eval split strategy
 
-### Key Principle
-**Datasets define WHAT data, not HOW to transform it.** Feature engineering (embeddings, buckets, crosses) is handled in the Engineering & Testing domain.
+### Key Principles
+
+1. **Datasets define WHAT data, not HOW to transform it.** Feature engineering (embeddings, buckets, crosses) is handled in the Engineering & Testing domain.
+
+2. **Dataset is Configuration Only.** No BigQuery views, tables, or data copies are created. The dataset stores configuration (JSON) that is used to generate SQL queries at training time.
+
+3. **No Train/Eval Split in Dataset.** The train/eval split is handled by the Training domain (TFX ExampleGen), not Datasets. This aligns with TFX architecture where ExampleGen handles data splitting.
+
+4. **Dynamic Rolling Windows.** Date filters like "last 90 days" are resolved at training execution time, ensuring fresh data is always used.
+
+5. **Versioning at Training Time.** When a dataset is used for training, a `DatasetVersion` snapshot captures the exact configuration and generated SQL for reproducibility.
 
 ### Output
 A Dataset definition (JSON stored in Django) that is used by:
-- TFX ExampleGen to extract data from BigQuery
+- TFX ExampleGen to extract data from BigQuery (via generated SQL query)
 - Engineering & Testing domain to create Feature Configs
+
+### What Gets Stored
+
+```
+Dataset (Django Model)
+├── Metadata: name, description, status, version
+├── Tables: primary_table, secondary_tables
+├── Schema: selected_columns, join_config, column_mapping
+├── Filters: date_filter, customer_filter, product_filter
+└── NO split_config (handled by Training domain)
+```
+
+### SQL Generation Flow
+
+```
+┌──────────────────┐     ┌──────────────────┐     ┌──────────────────┐
+│  Dataset Config  │ --> │  SQL Generator   │ --> │  BigQuery SQL    │
+│  (JSON in Django)│     │  (on demand)     │     │  (for ExampleGen)│
+└──────────────────┘     └──────────────────┘     └──────────────────┘
+                                 │
+                                 │ At training time:
+                                 ▼
+                         ┌──────────────────┐
+                         │ DatasetVersion   │
+                         │ (frozen snapshot)│
+                         │ - config_snapshot│
+                         │ - generated_sql  │
+                         │ - execution_date │
+                         └──────────────────┘
+```
 
 ---
 
@@ -58,7 +96,7 @@ A Dataset definition (JSON stored in Django) that is used by:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│ Create Dataset - Step 1 of 5: Basic Info                                    │
+│ Create Dataset - Step 1 of 4: Basic Info                                    │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                              │
 │ Dataset Name *                                                               │
@@ -79,7 +117,7 @@ A Dataset definition (JSON stored in Django) that is used by:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│ Create Dataset - Step 2 of 5: Source Tables                                 │
+│ Create Dataset - Step 2 of 4: Source Tables                                 │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                              │
 │ Transactions Table * (required)                                              │
@@ -114,7 +152,7 @@ The Schema Builder provides a visual, drag-and-drop interface for connecting tab
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│ Create Dataset - Step 3 of 5: Schema Builder                                │
+│ Create Dataset - Step 3 of 4: Schema Builder                                │
 │ Connect tables and select columns for your dataset.                         │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │ ┌·····································································────┐ │
@@ -645,7 +683,7 @@ Always-visible panel at the bottom of Step 4 showing dataset statistics:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│ Create Dataset - Step 4 of 5: Filtering                                      │
+│ Create Dataset - Step 4 of 4: Filtering                                      │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                              │
 │ ┌─────────────────────────────────────────────────────────────────────────┐ │
@@ -673,50 +711,23 @@ Always-visible panel at the bottom of Step 4 showing dataset statistics:
 │ │ transactions.category     │ STRING    │ Unique: 4                       │ │
 │ └─────────────────────────────────────────────────────────────────────────┘ │
 │                                                                              │
-│                                              [← Back]  [Cancel]  [Next →]   │
+│                                     [← Back]  [Cancel]  [Save Dataset]      │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Validation Requirements for Step 4:**
-- Timestamp column must be selected
-- Product ID column must be selected
-- Revenue column must be selected
-- Product analysis must be run successfully (click "Analyze Revenue Distribution" button)
-- If analysis fails or returns 0 products, user cannot proceed to next step
-- Save button only appears on final step (Step 5)
+**Validation Requirements for Step 4 (Final Step):**
+- At least one filter must be configured (date, customer, or product)
+- If date filter is used, timestamp column must be selected
+- If product top revenue filter is used, product and revenue columns must be selected and analysis must run successfully
+- If customer top revenue filter is used, customer and revenue columns must be selected and analysis must run successfully
+- **Save button appears on Step 4** (this is now the final step)
 
-#### Step 5: Train/Eval Split
+**Note on Train/Eval Split:**
+Train/eval split configuration has been moved to the **Training domain**. This aligns with TFX architecture where BigQueryExampleGen handles data splitting. When launching a training run, users will configure:
+- Split strategy (time-based or random)
+- Split parameters (eval days or train percentage)
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ Create Dataset - Step 5 of 5: Train/Eval Split                               │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│ ═══════════════════════════════════════════════════════════════════════════ │
-│ SPLIT STRATEGY                                                               │
-│ ═══════════════════════════════════════════════════════════════════════════ │
-│                                                                              │
-│ ● Time-based split (recommended for temporal data)                          │
-│   Last [14 ▼] days for evaluation                                           │
-│   ℹ️ Mimics real-world: train on past, predict future                       │
-│                                                                              │
-│ ○ Random split                                                              │
-│   [80 ▼] % train / [20 ▼] % eval                                            │
-│                                                                              │
-│ ═══════════════════════════════════════════════════════════════════════════ │
-│ PREVIEW                                                                      │
-│ ═══════════════════════════════════════════════════════════════════════════ │
-│                                                                              │
-│ Estimated dataset size after filters:                                        │
-│ • Total transactions: ~2,450,000                                            │
-│ • Unique customers: ~98,000                                                 │
-│ • Unique products: ~36,000                                                  │
-│ • Train set: ~2,100,000 (86%)                                               │
-│ • Eval set: ~350,000 (14%)                                                  │
-│                                                                              │
-│                                     [← Back]  [Cancel]  [Create Dataset]    │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
+The dataset only defines WHAT data to use, not HOW to split it for training.
 
 ---
 
@@ -812,23 +823,14 @@ class Dataset(models.Model):
     filters = models.JSONField(default=dict)
     # Example:
     # {
-    #   "date_range": {"type": "rolling", "months": 6},
-    #   "product_filter": {"type": "top_revenue_percent", "value": 80},
-    #   "customer_filter": {"type": "min_transactions", "value": 2}
+    #   "date_filter": {"column": "trans_date", "type": "rolling", "days": 90},
+    #   "product_filter": {"top_revenue": {...}, "category_filters": [...], ...},
+    #   "customer_filter": {"top_revenue": {...}, "aggregation_filters": [...], ...}
     # }
 
-    # Split configuration (JSON)
-    split_config = models.JSONField(default=dict)
-    # Example:
-    # {
-    #   "strategy": "time_based",
-    #   "eval_days": 14
-    # }
-    # OR:
-    # {
-    #   "strategy": "random",
-    #   "train_percent": 80
-    # }
+    # NOTE: split_config has been REMOVED
+    # Train/eval split is now handled by the Training domain (TFX ExampleGen)
+    # This aligns with TFX architecture where data splitting is an execution-time concern
 
     # Metadata (populated after analysis)
     row_count_estimate = models.IntegerField(null=True, blank=True)
@@ -869,17 +871,25 @@ class Dataset(models.Model):
 
 class DatasetVersion(models.Model):
     """
-    Tracks versions of a dataset (for reproducibility).
-    Created when a dataset is used in training.
+    Immutable snapshot of a dataset configuration.
+    Created when a dataset is used in a training run.
+    Ensures full reproducibility of training data.
     """
     dataset = models.ForeignKey(Dataset, on_delete=models.CASCADE, related_name='versions')
-    version_number = models.IntegerField()
+    version_number = models.IntegerField()  # Auto-incremented
 
     # Snapshot of configuration at time of use
-    config_snapshot = models.JSONField()  # Full copy of dataset config
+    config_snapshot = models.JSONField()  # Full copy of dataset config (frozen)
+
+    # Generated SQL query with resolved dynamic values
+    generated_query = models.TextField()  # The actual SQL used for this training run
+    # Example: "SELECT ... WHERE trans_date >= '2024-09-07'" (dates resolved)
+
+    # Execution context
+    execution_date = models.DateTimeField()  # When this version was created
 
     # Stats at time of snapshot
-    actual_row_count = models.IntegerField(null=True)
+    actual_row_count = models.BigIntegerField(null=True)
     actual_unique_users = models.IntegerField(null=True)
     actual_unique_products = models.IntegerField(null=True)
 

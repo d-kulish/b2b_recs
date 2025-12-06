@@ -71,7 +71,7 @@
                 </div>
                 <div class="modal-header-info">
                     <h3 class="modal-header-title" id="wizardTitle">Create Dataset</h3>
-                    <p class="modal-step-counter">Step <span id="currentStep">1</span> of 5</p>
+                    <p class="modal-step-counter">Step <span id="currentStep">1</span> of 4</p>
                 </div>
             </div>
 
@@ -81,7 +81,6 @@
                 <div id="progress2" class="progress-step-pill future">Tables</div>
                 <div id="progress3" class="progress-step-pill future">Schema</div>
                 <div id="progress4" class="progress-step-pill future">Filters</div>
-                <div id="progress5" class="progress-step-pill future">Split</div>
             </div>
         </div>
 
@@ -1181,52 +1180,6 @@
                 </div>
             </div>
 
-            <!-- Step 5: Train/Eval Split -->
-            <div id="step5" class="wizard-step">
-                <h4 class="wizard-section-title">Train/Eval Split</h4>
-                <p class="wizard-section-subtitle">Configure how to split data for model training and evaluation.</p>
-
-                <!-- Train/Eval Split -->
-                <div class="wizard-field-group">
-                    <label class="wizard-field-label">Split Strategy</label>
-                    <div class="space-y-2">
-                        <label class="wizard-selection-card">
-                            <input type="radio" name="splitStrategy" value="time_based" checked onchange="onSplitStrategyChange()">
-                            <div class="card-content">
-                                <div class="card-title">Time-Based Split</div>
-                                <div class="card-description">Use last N days for evaluation</div>
-                            </div>
-                        </label>
-                        <label class="wizard-selection-card">
-                            <input type="radio" name="splitStrategy" value="random" onchange="onSplitStrategyChange()">
-                            <div class="card-content">
-                                <div class="card-title">Random Split</div>
-                                <div class="card-description">Random percentage for train/eval</div>
-                            </div>
-                        </label>
-                    </div>
-                </div>
-
-                <!-- Time-Based Split Config -->
-                <div id="timeBasedConfig" class="wizard-field-group">
-                    <label class="text-xs font-medium text-gray-600 mb-1 block">Evaluation Days</label>
-                    <select id="evalDays" class="form-select w-full text-sm">
-                        <option value="7">Last 7 days for evaluation</option>
-                        <option value="14" selected>Last 14 days for evaluation</option>
-                        <option value="30">Last 30 days for evaluation</option>
-                    </select>
-                </div>
-
-                <!-- Random Split Config -->
-                <div id="randomSplitConfig" class="wizard-field-group hidden">
-                    <label class="text-xs font-medium text-gray-600 mb-1 block">Training Percentage</label>
-                    <div class="flex items-center gap-3">
-                        <input type="range" id="trainPercent" min="50" max="95" value="80"
-                               class="flex-1" oninput="updateTrainPercentLabel()">
-                        <span id="trainPercentLabel" class="text-sm font-medium text-gray-700 w-24">80% train</span>
-                    </div>
-                </div>
-            </div>
         </div>
 
         <!-- Modal Footer (Neumorphic Style) -->
@@ -1327,11 +1280,10 @@
             <h3 class="modal-header-title">Generated SQL Query</h3>
         </div>
         <div class="modal-body">
-            <div class="mb-3 flex gap-2">
-                <button onclick="showQuery('full')" class="btn btn-sm btn-secondary query-tab active" data-tab="full">Full Query</button>
-                <button onclick="showQuery('train')" class="btn btn-sm btn-secondary query-tab" data-tab="train">Train Query</button>
-                <button onclick="showQuery('eval')" class="btn btn-sm btn-secondary query-tab" data-tab="eval">Eval Query</button>
-            </div>
+            <p class="text-sm text-gray-500 mb-3">
+                This is the base query that will be used to extract data from BigQuery.
+                Train/eval split is configured in the Training domain.
+            </p>
             <pre id="queryContent" class="bg-gray-900 text-green-400 p-4 rounded-lg text-sm overflow-x-auto" style="max-height: 400px;"></pre>
             <div id="queryValidation" class="mt-3 text-sm"></div>
         </div>
@@ -1374,8 +1326,7 @@ let wizardData = {
     secondaryTables: [],
     joinConfig: {},
     selectedColumns: {},
-    filters: {},
-    splitConfig: {}
+    filters: {}
 };
 
 // Cached data
@@ -1580,8 +1531,7 @@ function openWizard(datasetId = null) {
         secondaryTables: [],
         joinConfig: {},
         selectedColumns: {},
-        filters: {},
-        splitConfig: {}
+        filters: {}
     };
 
     // Update UI
@@ -1624,8 +1574,7 @@ function resetWizard() {
         secondaryTables: [],
         joinConfig: {},
         selectedColumns: {},
-        filters: {},
-        splitConfig: {}
+        filters: {}
     };
 
     // Reset schema builder state
@@ -1730,8 +1679,8 @@ function showStep(step) {
     // Update step counter
     document.getElementById('currentStep').textContent = step;
 
-    // Update progress bar - pill style classes
-    for (let i = 1; i <= 5; i++) {
+    // Update progress bar - pill style classes (4 steps now)
+    for (let i = 1; i <= 4; i++) {
         const pill = document.getElementById(`progress${i}`);
         pill.classList.remove('current', 'completed', 'future');
         if (i < step) {
@@ -1761,8 +1710,8 @@ function updateNavigationButtons(step) {
         prevBtn.classList.add('hidden');
     }
 
-    // Next/Save buttons
-    if (step === 5) {
+    // Next/Save buttons (Step 4 is now the final step)
+    if (step === 4) {
         nextBtn.classList.add('hidden');
         saveBtn.classList.remove('hidden');
     } else {
@@ -1805,9 +1754,6 @@ function validateCurrentStep() {
             // All required columns must be selected and analysis must be successful
             isValid = timestampCol && productCol && revenueCol && productAnalysisData && productAnalysisData.status === 'success';
             break;
-        case 5:
-            isValid = true; // Split config has defaults
-            break;
     }
 
     nextBtn.disabled = !isValid;
@@ -1815,7 +1761,7 @@ function validateCurrentStep() {
 }
 
 function nextStep() {
-    if (currentWizardStep >= 5) return;
+    if (currentWizardStep >= 4) return;  // Max step is now 4
 
     // Collect data from current step
     collectStepData(currentWizardStep);
@@ -1900,21 +1846,6 @@ function collectStepData(step) {
                 wizardData.filters.customer_filter = {
                     type: 'min_transactions',
                     value: parseInt(document.getElementById('minTransactions').value)
-                };
-            }
-            break;
-        case 5:
-            // Train/Eval Split config
-            const splitStrategy = document.querySelector('input[name="splitStrategy"]:checked')?.value;
-            if (splitStrategy === 'time_based') {
-                wizardData.splitConfig = {
-                    strategy: 'time_based',
-                    eval_days: parseInt(document.getElementById('evalDays').value)
-                };
-            } else if (splitStrategy === 'random') {
-                wizardData.splitConfig = {
-                    strategy: 'random',
-                    train_percent: parseInt(document.getElementById('trainPercent').value)
                 };
             }
             break;
@@ -7962,27 +7893,13 @@ function updateAdvancedSummary() {
 }
 
 // ============================================================================
-// STEP 5: TRAIN/EVAL SPLIT
-// ============================================================================
-function onSplitStrategyChange() {
-    const strategy = document.querySelector('input[name="splitStrategy"]:checked')?.value;
-    document.getElementById('timeBasedConfig').classList.toggle('hidden', strategy !== 'time_based');
-    document.getElementById('randomSplitConfig').classList.toggle('hidden', strategy !== 'random');
-}
-
-function updateTrainPercentLabel() {
-    const value = document.getElementById('trainPercent').value;
-    document.getElementById('trainPercentLabel').textContent = `${value}% train`;
-}
-
-// ============================================================================
 // SAVE DATASET
 // ============================================================================
 function saveDataset() {
     // Collect all data from current step
     collectStepData(currentWizardStep);
 
-    // Build payload
+    // Build payload (split_config removed - handled by Training domain)
     const payload = {
         name: wizardData.name,
         description: wizardData.description,
@@ -7990,8 +7907,7 @@ function saveDataset() {
         secondary_tables: wizardData.secondaryTables,
         join_config: wizardData.joinConfig,
         selected_columns: wizardData.selectedColumns,
-        filters: wizardData.filters,
-        split_config: wizardData.splitConfig
+        filters: wizardData.filters
     };
 
     const url = wizardEditMode
@@ -8189,7 +8105,6 @@ function loadDatasetForEdit(datasetId) {
             wizardData.joinConfig = ds.join_config || {};
             wizardData.selectedColumns = ds.selected_columns || {};
             wizardData.filters = ds.filters || {};
-            wizardData.splitConfig = ds.split_config || {};
 
             // Update form fields
             document.getElementById('datasetName').value = ds.name;
@@ -8319,45 +8234,31 @@ function viewGeneratedQuery() {
     document.getElementById('queryModal').classList.remove('hidden');
     document.getElementById('queryContent').textContent = 'Loading...';
 
-    // Load all queries
-    Promise.all([
-        fetch(`/api/datasets/${currentDatasetId}/query/`, { headers: { 'X-CSRFToken': csrftoken } }).then(r => r.json()),
-        fetch(`/api/datasets/${currentDatasetId}/query/split/`, { headers: { 'X-CSRFToken': csrftoken } }).then(r => r.json())
-    ])
-    .then(([fullData, splitData]) => {
-        currentQueries = {
-            full: fullData.status === 'success' ? fullData.query : 'Error loading query',
-            train: splitData.status === 'success' ? splitData.queries.train.query : 'Error loading query',
-            eval: splitData.status === 'success' ? splitData.queries.eval.query : 'Error loading query'
-        };
+    // Load base query (train/eval split is handled by Training domain)
+    fetch(`/api/datasets/${currentDatasetId}/query/`, { headers: { 'X-CSRFToken': csrftoken } })
+    .then(r => r.json())
+    .then(data => {
+        if (data.status === 'success') {
+            currentQueries = { full: data.query };
+            document.getElementById('queryContent').textContent = data.query;
 
-        showQuery('full');
-
-        if (fullData.validation) {
-            const validation = fullData.validation;
-            document.getElementById('queryValidation').innerHTML = `
-                <div class="flex items-center gap-4">
-                    <span class="text-gray-600"><i class="fas fa-database mr-1"></i>${formatBytes(validation.total_bytes_processed || 0)} processed</span>
-                    <span class="text-gray-600"><i class="fas fa-dollar-sign mr-1"></i>Est. $${(validation.estimated_cost_usd || 0).toFixed(4)}</span>
-                    ${validation.is_valid ? '<span class="text-green-600"><i class="fas fa-check-circle mr-1"></i>Valid</span>' : '<span class="text-red-600"><i class="fas fa-times-circle mr-1"></i>Invalid</span>'}
-                </div>
-            `;
+            if (data.validation) {
+                const validation = data.validation;
+                document.getElementById('queryValidation').innerHTML = `
+                    <div class="flex items-center gap-4">
+                        <span class="text-gray-600"><i class="fas fa-database mr-1"></i>${formatBytes(validation.total_bytes_processed || 0)} processed</span>
+                        <span class="text-gray-600"><i class="fas fa-dollar-sign mr-1"></i>Est. $${(validation.estimated_cost_usd || 0).toFixed(4)}</span>
+                        ${validation.is_valid ? '<span class="text-green-600"><i class="fas fa-check-circle mr-1"></i>Valid</span>' : '<span class="text-red-600"><i class="fas fa-times-circle mr-1"></i>Invalid</span>'}
+                    </div>
+                `;
+            }
+        } else {
+            document.getElementById('queryContent').textContent = 'Error loading query';
         }
     })
     .catch(error => {
-        console.error('Error loading queries:', error);
+        console.error('Error loading query:', error);
         document.getElementById('queryContent').textContent = 'Error loading query';
-    });
-}
-
-function showQuery(type) {
-    document.getElementById('queryContent').textContent = currentQueries[type] || 'No query available';
-
-    // Update tab styling
-    document.querySelectorAll('.query-tab').forEach(tab => {
-        tab.classList.toggle('active', tab.dataset.tab === type);
-        tab.classList.toggle('btn-primary', tab.dataset.tab === type);
-        tab.classList.toggle('btn-secondary', tab.dataset.tab !== type);
     });
 }
 

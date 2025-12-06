@@ -781,17 +781,19 @@ class BigQueryService:
     # QUERY GENERATION
     # =========================================================================
 
-    def generate_query(self, dataset, for_analysis=False, split=None):
+    def generate_query(self, dataset, for_analysis=False):
         """
         Generate BigQuery SQL from dataset configuration.
 
         Args:
             dataset: Dataset model instance
             for_analysis: If True, use mapped column names (user_id, product_id, etc.)
-            split: Optional split type ('train', 'eval', or None for full dataset)
 
         Returns:
             SQL query string
+
+        Note: Train/eval split is now handled by the Training domain (TFX ExampleGen).
+        This method generates the base query without split logic.
         """
         try:
             selected_columns = dataset.selected_columns or {}
@@ -940,60 +942,10 @@ class BigQueryService:
     GROUP BY `{user_col}`
     HAVING COUNT(*) >= {min_count}"""
 
-    def generate_train_query(self, dataset, for_analysis=False):
-        """
-        Generate query for training data only.
-
-        Args:
-            dataset: Dataset model instance
-            for_analysis: If True, use mapped column names
-
-        Returns:
-            SQL query string for training data
-        """
-        return self.generate_query(dataset, for_analysis=for_analysis, split='train')
-
-    def generate_eval_query(self, dataset, for_analysis=False):
-        """
-        Generate query for evaluation data only.
-
-        Args:
-            dataset: Dataset model instance
-            for_analysis: If True, use mapped column names
-
-        Returns:
-            SQL query string for evaluation data
-        """
-        return self.generate_query(dataset, for_analysis=for_analysis, split='eval')
-
-    def generate_tfx_queries(self, dataset):
-        """
-        Generate queries formatted for TFX ExampleGen component.
-
-        Returns:
-            Dict with train and eval queries ready for TFX
-        """
-        column_mapping = dataset.column_mapping or {}
-
-        # TFX needs specific column names
-        train_query = self.generate_query(dataset, for_analysis=True, split='train')
-        eval_query = self.generate_query(dataset, for_analysis=True, split='eval')
-
-        return {
-            'train_query': train_query,
-            'eval_query': eval_query,
-            'column_mapping': column_mapping,
-            'split_config': dataset.split_config,
-            'tfx_config': {
-                'query_based': True,
-                'input_config': {
-                    'splits': [
-                        {'name': 'train', 'pattern': 'train_query'},
-                        {'name': 'eval', 'pattern': 'eval_query'},
-                    ]
-                }
-            }
-        }
+    # NOTE: generate_train_query, generate_eval_query, and generate_tfx_queries
+    # have been removed. Train/eval split is now handled by the Training domain
+    # using TFX ExampleGen's built-in split functionality.
+    # The base generate_query() method should be used instead.
 
     def validate_query(self, query):
         """

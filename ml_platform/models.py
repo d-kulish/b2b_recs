@@ -1008,14 +1008,9 @@ class Dataset(models.Model):
         help_text="Data filtering configuration"
     )
 
-    # Train/eval split configuration
-    # Example: {"strategy": "time_based", "eval_days": 14}
-    # Or: {"strategy": "random", "train_percent": 80}
-    split_config = models.JSONField(
-        default=dict,
-        blank=True,
-        help_text="Train/eval split configuration"
-    )
+    # NOTE: split_config has been REMOVED
+    # Train/eval split is now handled by the Training domain (TFX ExampleGen)
+    # This aligns with TFX architecture where data splitting is an execution-time concern
 
     # Metadata (populated after analysis)
     row_count_estimate = models.BigIntegerField(

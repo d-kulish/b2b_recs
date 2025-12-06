@@ -50,13 +50,14 @@ This platform enables businesses to:
 - 🎯 **Advanced Data Filters:**
   - **Date Filtering:** Rolling window or fixed start date with timestamp column selection
   - **Product Filtering:** Top N% products by revenue with D3.js Pareto chart visualization
+  - **Customer Filtering:** Top N% customers by revenue, min transactions, aggregation filters
   - **Column Filters:** Category (include/exclude), Numeric (range, greater than, less than, equals), Date filters
   - **Cross-sub-chapter column exclusion:** Prevents same column from being used in multiple filters
   - **Unified filter summary:** Numbered filters with delete buttons across all sub-chapters
-- ✂️ **Train/Eval Split:** Random hash-based (FARM_FINGERPRINT) for reproducibility
 - 📊 **Data Quality Metrics:** Automated scoring with issue detection (sparsity, cold start, engagement)
-- 🔄 **TFX Integration:** Query generation ready for TFX ExampleGen component
+- 🔄 **TFX Integration:** Query generation ready for TFX ExampleGen component (split handled by Training domain)
 - 👁️ **Live Preview:** See sample data from joined tables in real-time with seeded sampling
+- 📦 **Dataset as Configuration:** Datasets store configuration only; no BigQuery copies created
 
 ### **Platform Features**
 - 🎨 ETL Wizard UI (5-step data source configuration)
@@ -228,7 +229,7 @@ gcloud run jobs execute django-migrate-and-createsuperuser --region europe-centr
 - File validation and processing
 - Incremental and snapshot loading
 - Dataflow for large datasets (> 1M rows)
-- **Dataset Management** - Full UI with 5-step wizard and Visual Schema Builder (27 endpoints)
+- **Dataset Management** - Full UI with 4-step wizard and Visual Schema Builder (27 endpoints)
 
 ### **🔮 Next Up**
 1. ML model training pipeline integration (TFX)
@@ -310,6 +311,15 @@ WHERE source_type='gcs';
 
 ## 📝 Recent Updates
 
+**December 6, 2025 - Dataset Wizard Finalized (4 Steps)**
+- ✅ Removed Step 5 (Train/Eval Split) - now handled by Training domain
+- ✅ Dataset is now "configuration only" - no BigQuery objects created
+- ✅ 4-step wizard: Info → Tables → Schema → Filters
+- ✅ Train/eval split moves to TFX ExampleGen in Training domain
+- ✅ Dataset versioning at training time for reproducibility
+- ✅ Simplified Query Preview modal (shows base query only)
+- ✅ Updated documentation (implementation.md, phase_datasets.md)
+
 **December 5, 2025 - Enhanced Filtering System**
 - ✅ Cross-sub-chapter column exclusion - columns used in one filter are unavailable in others
 - ✅ Unified filter summary UI - consistent "Filter #N" format with delete buttons across all sub-chapters
@@ -323,7 +333,7 @@ WHERE source_type='gcs';
 - ✅ Draggable table cards with column checkboxes
 - ✅ Color-coded curved connection lines for joins
 - ✅ Live preview with seeded sampling (ensures joins work in preview)
-- ✅ 5-step wizard (Basic Info → Source Tables → Visual Schema → ML Mapping → Filters)
+- ✅ 4-step wizard (Basic Info → Source Tables → Visual Schema → Filters)
 - ✅ 27 REST API endpoints (4 new for Visual Schema Builder)
 
 **December 1, 2025 - Dataset Management Backend Complete**
@@ -333,9 +343,8 @@ WHERE source_type='gcs';
 - ✅ ML column role suggestions (user_id, product_id, revenue)
 - ✅ Full table scan statistics with cardinality, uniqueness
 - ✅ Data quality metrics with automated issue detection
-- ✅ Train/eval split support (random with FARM_FINGERPRINT)
-- ✅ CTE-based complex filters (top N% products, min transactions)
-- ✅ TFX ExampleGen query generation
+- ✅ CTE-based complex filters (top N% products/customers, min transactions)
+- ✅ TFX ExampleGen query generation (split handled by Training domain)
 
 **November 25, 2025 - Firestore ETL Fix**
 - ✅ Fixed Firestore timestamp conversion (DatetimeWithNanoseconds → strftime)

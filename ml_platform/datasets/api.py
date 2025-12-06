@@ -58,7 +58,6 @@ def serialize_dataset(ds, include_details=False):
             'selected_columns': ds.selected_columns,
             'column_mapping': ds.column_mapping,
             'filters': ds.filters,
-            'split_config': ds.split_config,
             'date_range_start': ds.date_range_start.isoformat() if ds.date_range_start else None,
             'date_range_end': ds.date_range_end.isoformat() if ds.date_range_end else None,
             'column_stats': ds.column_stats,
@@ -121,19 +120,7 @@ def validate_dataset_config(data, model_endpoint, exclude_dataset_id=None):
                 errors['join_config'] = f'Missing join key for {table}'
                 break
 
-    # Validate split config
-    split_config = data.get('split_config', {})
-    if split_config:
-        strategy = split_config.get('strategy')
-        if strategy not in (None, '', 'time_based', 'random'):
-            errors['split_config'] = 'Split strategy must be "time_based" or "random"'
-        elif strategy == 'time_based':
-            if not split_config.get('eval_days'):
-                errors['split_config'] = 'eval_days required for time_based split'
-        elif strategy == 'random':
-            train_percent = split_config.get('train_percent')
-            if train_percent is None or not (0 < train_percent < 100):
-                errors['split_config'] = 'train_percent must be between 0 and 100'
+    # NOTE: split_config validation removed - handled by Training domain
 
     return len(errors) == 0, errors
 
@@ -222,7 +209,6 @@ def create_dataset(request, model_id):
         - selected_columns: Columns to include per table
         - column_mapping: ML concept to column mapping
         - filters: Data filters configuration
-        - split_config: Train/eval split configuration
     """
     try:
         model = get_object_or_404(ModelEndpoint, id=model_id)
@@ -237,7 +223,7 @@ def create_dataset(request, model_id):
                 'errors': errors,
             }, status=400)
 
-        # Create dataset
+        # Create dataset (split_config removed - handled by Training domain)
         dataset = Dataset.objects.create(
             model_endpoint=model,
             name=data.get('name', '').strip(),
@@ -249,7 +235,6 @@ def create_dataset(request, model_id):
             selected_columns=data.get('selected_columns', {}),
             column_mapping=data.get('column_mapping', {}),
             filters=data.get('filters', {}),
-            split_config=data.get('split_config', {}),
             created_by=request.user,
         )
 
@@ -329,7 +314,6 @@ def update_dataset(request, dataset_id):
             'primary_table': data.get('primary_table', dataset.primary_table),
             'secondary_tables': data.get('secondary_tables', dataset.secondary_tables),
             'join_config': data.get('join_config', dataset.join_config),
-            'split_config': data.get('split_config', dataset.split_config),
         }
 
         # Validate the merged configuration
@@ -345,7 +329,7 @@ def update_dataset(request, dataset_id):
                 'errors': errors,
             }, status=400)
 
-        # Update fields if provided
+        # Update fields if provided (split_config removed - handled by Training domain)
         if 'name' in data:
             dataset.name = data['name'].strip()
 
@@ -369,9 +353,6 @@ def update_dataset(request, dataset_id):
 
         if 'filters' in data:
             dataset.filters = data['filters']
-
-        if 'split_config' in data:
-            dataset.split_config = data['split_config']
 
         # Clear cached analysis when config changes
         config_fields = ['primary_table', 'secondary_tables', 'join_config',
@@ -540,7 +521,6 @@ def clone_dataset(request, dataset_id):
             selected_columns=original.selected_columns,
             column_mapping=original.column_mapping,
             filters=original.filters,
-            split_config=original.split_config,
             created_by=request.user,
         )
 
@@ -801,14 +781,15 @@ def validate_query(request, dataset_id):
 @require_http_methods(["POST"])
 def analyze_dataset(request, dataset_id):
     """
-    Analyze a dataset to get row counts, unique counts, split estimates, etc.
+    Analyze a dataset to get row counts, unique counts, etc.
 
     This performs a BigQuery query to calculate:
     - Total row count after filters
     - Unique users and products
     - Date range of data
-    - Train/eval split estimates based on split_config
     - Data quality metrics
+
+    Note: Train/eval split estimates removed - handled by Training domain.
     """
     try:
         dataset = get_object_or_404(Dataset, id=dataset_id)
@@ -816,10 +797,6 @@ def analyze_dataset(request, dataset_id):
 
         # Run base analysis
         analysis = bq_service.analyze_dataset(dataset)
-
-        # Calculate train/eval split estimates
-        split_info = calculate_split_estimates(dataset, analysis)
-        analysis['split_estimates'] = split_info
 
         # Calculate data quality metrics
         quality_metrics = calculate_quality_metrics(analysis)
@@ -852,70 +829,6 @@ def analyze_dataset(request, dataset_id):
             'status': 'error',
             'message': str(e),
         }, status=500)
-
-
-def calculate_split_estimates(dataset, analysis):
-    """
-    Calculate train/eval split estimates based on dataset configuration.
-
-    Args:
-        dataset: Dataset model instance
-        analysis: Analysis results dict
-
-    Returns:
-        Dict with split estimates
-    """
-    split_config = dataset.split_config or {}
-    strategy = split_config.get('strategy', 'time_based')
-    row_count = analysis.get('row_count', 0)
-
-    if strategy == 'random':
-        train_percent = split_config.get('train_percent', 80)
-        train_rows = int(row_count * train_percent / 100)
-        eval_rows = row_count - train_rows
-
-        return {
-            'strategy': 'random',
-            'train_percent': train_percent,
-            'eval_percent': 100 - train_percent,
-            'estimated_train_rows': train_rows,
-            'estimated_eval_rows': eval_rows,
-        }
-
-    elif strategy == 'time_based':
-        eval_days = split_config.get('eval_days', 14)
-        date_start = analysis.get('date_range_start')
-        date_end = analysis.get('date_range_end')
-
-        if date_start and date_end:
-            total_days = (date_end - date_start).days
-            if total_days > 0:
-                train_days = total_days - eval_days
-                train_percent = round(train_days / total_days * 100, 1)
-                eval_percent = round(eval_days / total_days * 100, 1)
-
-                # Estimate rows (assuming uniform distribution)
-                train_rows = int(row_count * train_percent / 100)
-                eval_rows = row_count - train_rows
-
-                return {
-                    'strategy': 'time_based',
-                    'eval_days': eval_days,
-                    'total_days': total_days,
-                    'train_days': train_days,
-                    'train_percent': train_percent,
-                    'eval_percent': eval_percent,
-                    'estimated_train_rows': train_rows,
-                    'estimated_eval_rows': eval_rows,
-                    'train_end_date': (date_end - timezone.timedelta(days=eval_days)).isoformat() if date_end else None,
-                    'eval_start_date': (date_end - timezone.timedelta(days=eval_days)).isoformat() if date_end else None,
-                }
-
-    return {
-        'strategy': strategy or 'not_configured',
-        'estimated_train_rows': row_count,
-        'estimated_eval_rows': 0,
-    }
 
 
 def calculate_quality_metrics(analysis):
@@ -1096,10 +1009,12 @@ def get_generated_query(request, dataset_id):
 
 @login_required
 @require_http_methods(["GET"])
-def get_split_queries(request, dataset_id):
+def get_dataset_query(request, dataset_id):
     """
-    Get both train and eval queries for a dataset.
-    Useful for reviewing the split before training.
+    Get the base query for a dataset.
+
+    Note: Train/eval split is now handled by the Training domain.
+    This endpoint returns only the base query without split.
     """
     try:
         dataset = get_object_or_404(Dataset, id=dataset_id)
@@ -1107,31 +1022,16 @@ def get_split_queries(request, dataset_id):
 
         for_analysis = request.GET.get('for_analysis', 'true').lower() == 'true'
 
-        train_query = bq_service.generate_train_query(dataset, for_analysis=for_analysis)
-        eval_query = bq_service.generate_eval_query(dataset, for_analysis=for_analysis)
-
-        # Validate both queries
-        train_validation = bq_service.validate_query(train_query)
-        eval_validation = bq_service.validate_query(eval_query)
+        # Generate base query (no split - handled by Training domain)
+        base_query = bq_service.generate_query(dataset, for_analysis=for_analysis)
+        base_validation = bq_service.validate_query(base_query)
 
         return JsonResponse({
             'status': 'success',
             'dataset_name': dataset.name,
-            'split_config': dataset.split_config,
-            'queries': {
-                'train': {
-                    'query': train_query,
-                    'validation': train_validation,
-                },
-                'eval': {
-                    'query': eval_query,
-                    'validation': eval_validation,
-                },
-            },
-            'total_estimated_cost_usd': (
-                (train_validation.get('estimated_cost_usd', 0) or 0) +
-                (eval_validation.get('estimated_cost_usd', 0) or 0)
-            ),
+            'query': base_query,
+            'validation': base_validation,
+            'estimated_cost_usd': base_validation.get('estimated_cost_usd', 0) or 0,
         })
 
     except Exception as e:
@@ -1204,13 +1104,7 @@ def get_dataset_summary(request, dataset_id):
         if customer_filter.get('type') == 'min_transactions':
             filter_summary.append(f"Min {customer_filter.get('value', 2)} transactions per customer")
 
-        # Get split summary
-        split_config = dataset.split_config or {}
-        split_summary = "Not configured"
-        if split_config.get('strategy') == 'time_based':
-            split_summary = f"Time-based: last {split_config.get('eval_days', 14)} days for eval"
-        elif split_config.get('strategy') == 'random':
-            split_summary = f"Random: {split_config.get('train_percent', 80)}% train"
+        # Note: split_config removed - handled by Training domain
 
         summary = {
             'id': dataset.id,
@@ -1229,10 +1123,6 @@ def get_dataset_summary(request, dataset_id):
             'filters': {
                 'summary': filter_summary if filter_summary else ['No filters applied'],
                 'config': filters,
-            },
-            'split': {
-                'summary': split_summary,
-                'config': split_config,
             },
             'cached_analysis': {
                 'row_count': dataset.row_count_estimate,
@@ -1318,7 +1208,6 @@ def compare_datasets(request, model_id):
                     'has_product_filter': bool(ds.filters.get('product_filter')) if ds.filters else False,
                     'has_customer_filter': bool(ds.filters.get('customer_filter')) if ds.filters else False,
                 },
-                'split': ds.split_config.get('strategy') if ds.split_config else None,
                 'analysis': {
                     'row_count': ds.row_count_estimate,
                     'unique_users': ds.unique_users_estimate,

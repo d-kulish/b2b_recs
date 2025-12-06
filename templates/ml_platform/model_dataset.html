@@ -6946,7 +6946,35 @@ function populateDatasetSummary(data) {
     }
 
     // Customers filter
-    if (filters.customers?.type === 'min_transactions') {
+    if (filters.customers?.type === 'multiple') {
+        // New format with multiple filters
+        const count = filters.customers.count || filters.customers.filters?.length || 0;
+        if (count === 1) {
+            // Show specific filter type for single filter
+            const filter = filters.customers.filters[0];
+            if (filter.type === 'top_revenue') {
+                document.getElementById('filterBadgeCustomersText').textContent = `Top ${filter.percent}% revenue`;
+            } else if (filter.type === 'transaction_count') {
+                const desc = filter.filter_type === 'greater_than' ? `> ${filter.value}` :
+                             filter.filter_type === 'less_than' ? `< ${filter.value}` :
+                             `${filter.min}-${filter.max}`;
+                document.getElementById('filterBadgeCustomersText').textContent = `${desc} transactions`;
+            } else if (filter.type === 'spending') {
+                const desc = filter.filter_type === 'greater_than' ? `> $${filter.value}` :
+                             filter.filter_type === 'less_than' ? `< $${filter.value}` :
+                             `$${filter.min}-$${filter.max}`;
+                document.getElementById('filterBadgeCustomersText').textContent = `Spending ${desc}`;
+            } else if (filter.type === 'min_transactions') {
+                document.getElementById('filterBadgeCustomersText').textContent = `Min ${filter.value} transactions`;
+            } else {
+                document.getElementById('filterBadgeCustomersText').textContent = '1 filter';
+            }
+        } else {
+            document.getElementById('filterBadgeCustomersText').textContent = `${count} filters`;
+        }
+        customersBadge.classList.add('filter-active');
+    } else if (filters.customers?.type === 'min_transactions') {
+        // Legacy format
         document.getElementById('filterBadgeCustomersText').textContent = `Min ${filters.customers.value} transactions`;
         customersBadge.classList.add('filter-active');
     } else {
@@ -6955,7 +6983,22 @@ function populateDatasetSummary(data) {
     }
 
     // Products filter
-    if (filters.products?.type === 'top_revenue') {
+    if (filters.products?.type === 'multiple') {
+        // New format with multiple filters
+        const count = filters.products.count || filters.products.filters?.length || 0;
+        if (count === 1) {
+            const filter = filters.products.filters[0];
+            if (filter.type === 'top_revenue') {
+                document.getElementById('filterBadgeProductsText').textContent = `Top ${filter.percent}% revenue`;
+            } else {
+                document.getElementById('filterBadgeProductsText').textContent = '1 filter';
+            }
+        } else {
+            document.getElementById('filterBadgeProductsText').textContent = `${count} filters`;
+        }
+        productsBadge.classList.add('filter-active');
+    } else if (filters.products?.type === 'top_revenue') {
+        // Legacy format
         document.getElementById('filterBadgeProductsText').textContent = `Top ${filters.products.percent}% revenue`;
         productsBadge.classList.add('filter-active');
     } else {

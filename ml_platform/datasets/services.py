@@ -2169,8 +2169,12 @@ class DatasetStatsService:
                     where_clauses.append(f"`{primary_alias}`.`{ts_col_name}` >= '{start_date}'")
                     applied_filters['dates'] = {'type': 'fixed', 'start_date': start_date}
 
-        # Customer filter (min transactions)
+        # Customer filters (new structure with top_revenue, aggregation_filters, category_filters, etc.)
         customer_filter = filters.get('customer_filter', {})
+        customer_filter_summary = []  # Track all applied customer filters for badge display
+        customer_cte_counter = 0  # Counter for unique CTE names
+
+        # Legacy support: handle old 'type': 'min_transactions' format
         if customer_filter.get('type') == 'min_transactions':
             customer_col = self._extract_column_name(customer_filter.get('column'))
             min_value = customer_filter.get('value', 2)
@@ -2186,7 +2190,289 @@ class DatasetStatsService:
                 where_clauses.append(
                     f"`{primary_alias}`.`{customer_col}` IN (SELECT `{customer_col}` FROM active_customers)"
                 )
-                applied_filters['customers'] = {'type': 'min_transactions', 'value': min_value}
+                customer_filter_summary.append({'type': 'min_transactions', 'value': min_value})
+
+        # New structure: top_revenue as nested object (Pareto-based customer filtering)
+        top_revenue = customer_filter.get('top_revenue', {})
+        if top_revenue.get('customer_column') and top_revenue.get('revenue_column'):
+            customer_col = self._extract_column_name(top_revenue.get('customer_column'))
+            revenue_col = self._extract_column_name(top_revenue.get('revenue_column'))
+            percent = top_revenue.get('percent', 80)
+
+            if customer_col and revenue_col:
+                cte = f"""
+                    SELECT `{customer_col}`
+                    FROM (
+                        SELECT
+                            `{customer_col}`,
+                            SUM(`{revenue_col}`) as total_revenue,
+                            SUM(SUM(`{revenue_col}`)) OVER () as grand_total,
+                            SUM(SUM(`{revenue_col}`)) OVER (ORDER BY SUM(`{revenue_col}`) DESC) as running_total
+                        FROM `{full_table_ref}`
+                        GROUP BY `{customer_col}`
+                    )
+                    WHERE running_total <= grand_total * {percent / 100}
+                       OR running_total - total_revenue < grand_total * {percent / 100}
+                """
+                ctes.append(('top_customers', cte))
+                where_clauses.append(
+                    f"`{primary_alias}`.`{customer_col}` IN (SELECT `{customer_col}` FROM top_customers)"
+                )
+                customer_filter_summary.append({'type': 'top_revenue', 'percent': percent})
+
+        # Aggregation filters (transaction count, spending)
+        aggregation_filters = customer_filter.get('aggregation_filters', [])
+        for agg_filter in aggregation_filters:
+            agg_type = agg_filter.get('type')  # 'transaction_count' or 'spending'
+            customer_col = self._extract_column_name(agg_filter.get('customer_column'))
+            filter_type = agg_filter.get('filter_type', 'greater_than')  # 'greater_than', 'less_than', 'range'
+
+            if not customer_col:
+                continue
+
+            customer_cte_counter += 1
+            cte_name = f"customer_agg_{customer_cte_counter}"
+
+            if agg_type == 'transaction_count':
+                # Build HAVING clause based on filter_type
+                having_conditions = []
+                if filter_type == 'greater_than':
+                    value = agg_filter.get('value', 0)
+                    having_conditions.append(f"COUNT(*) > {value}")
+                elif filter_type == 'less_than':
+                    value = agg_filter.get('value', 0)
+                    having_conditions.append(f"COUNT(*) < {value}")
+                elif filter_type == 'range':
+                    min_val = agg_filter.get('min')
+                    max_val = agg_filter.get('max')
+                    if min_val is not None:
+                        having_conditions.append(f"COUNT(*) >= {min_val}")
+                    if max_val is not None:
+                        having_conditions.append(f"COUNT(*) <= {max_val}")
+
+                if having_conditions:
+                    cte = f"""
+                        SELECT `{customer_col}`
+                        FROM `{full_table_ref}`
+                        GROUP BY `{customer_col}`
+                        HAVING {' AND '.join(having_conditions)}
+                    """
+                    ctes.append((cte_name, cte))
+                    where_clauses.append(
+                        f"`{primary_alias}`.`{customer_col}` IN (SELECT `{customer_col}` FROM {cte_name})"
+                    )
+                    customer_filter_summary.append({
+                        'type': 'transaction_count',
+                        'filter_type': filter_type,
+                        'value': agg_filter.get('value'),
+                        'min': agg_filter.get('min'),
+                        'max': agg_filter.get('max')
+                    })
+
+            elif agg_type == 'spending':
+                amount_col = self._extract_column_name(agg_filter.get('amount_column'))
+                if not amount_col:
+                    continue
+
+                # Build HAVING clause based on filter_type
+                having_conditions = []
+                if filter_type == 'greater_than':
+                    value = agg_filter.get('value', 0)
+                    having_conditions.append(f"SUM(`{amount_col}`) > {value}")
+                elif filter_type == 'less_than':
+                    value = agg_filter.get('value', 0)
+                    having_conditions.append(f"SUM(`{amount_col}`) < {value}")
+                elif filter_type == 'range':
+                    min_val = agg_filter.get('min')
+                    max_val = agg_filter.get('max')
+                    if min_val is not None:
+                        having_conditions.append(f"SUM(`{amount_col}`) >= {min_val}")
+                    if max_val is not None:
+                        having_conditions.append(f"SUM(`{amount_col}`) <= {max_val}")
+
+                if having_conditions:
+                    cte = f"""
+                        SELECT `{customer_col}`
+                        FROM `{full_table_ref}`
+                        GROUP BY `{customer_col}`
+                        HAVING {' AND '.join(having_conditions)}
+                    """
+                    ctes.append((cte_name, cte))
+                    where_clauses.append(
+                        f"`{primary_alias}`.`{customer_col}` IN (SELECT `{customer_col}` FROM {cte_name})"
+                    )
+                    customer_filter_summary.append({
+                        'type': 'spending',
+                        'filter_type': filter_type,
+                        'value': agg_filter.get('value'),
+                        'min': agg_filter.get('min'),
+                        'max': agg_filter.get('max')
+                    })
+
+        # Customer category filters (IN / NOT IN for STRING columns)
+        customer_category_filters = customer_filter.get('category_filters', [])
+        for cat_filter in customer_category_filters:
+            column = cat_filter.get('column')  # Format: "table.column"
+            mode = cat_filter.get('mode', 'include')  # 'include' or 'exclude'
+            values = cat_filter.get('values', [])
+
+            if column and values:
+                col_name = self._extract_column_name(column)
+                if '.' in column:
+                    table_alias = column.split('.')[0]
+                else:
+                    table_alias = primary_alias
+
+                # Build SQL values list with proper escaping
+                escaped_values = [v.replace("'", "''") for v in values]
+                values_sql = ", ".join(f"'{v}'" for v in escaped_values)
+
+                if mode == 'include':
+                    where_clauses.append(f"`{table_alias}`.`{col_name}` IN ({values_sql})")
+                else:  # exclude
+                    where_clauses.append(f"`{table_alias}`.`{col_name}` NOT IN ({values_sql})")
+
+                customer_filter_summary.append({
+                    'type': 'category',
+                    'column': column,
+                    'mode': mode,
+                    'count': len(values)
+                })
+
+        # Customer numeric filters (range, greater_than, less_than, equals, not_equals)
+        customer_numeric_filters = customer_filter.get('numeric_filters', [])
+        for num_filter in customer_numeric_filters:
+            column = num_filter.get('column')
+            filter_type = num_filter.get('filter_type', 'range')
+            include_nulls = num_filter.get('include_nulls', True)
+
+            if not column:
+                continue
+
+            col_name = self._extract_column_name(column)
+            if '.' in column:
+                table_alias = column.split('.')[0]
+            else:
+                table_alias = primary_alias
+
+            col_ref = f"`{table_alias}`.`{col_name}`"
+            conditions = []
+
+            if filter_type == 'range':
+                min_val = num_filter.get('min')
+                max_val = num_filter.get('max')
+
+                range_conditions = []
+                if min_val is not None:
+                    range_conditions.append(f"{col_ref} >= {min_val}")
+                if max_val is not None:
+                    range_conditions.append(f"{col_ref} <= {max_val}")
+
+                if range_conditions:
+                    if include_nulls:
+                        conditions.append(f"(({' AND '.join(range_conditions)}) OR {col_ref} IS NULL)")
+                    else:
+                        conditions.append(f"({' AND '.join(range_conditions)} AND {col_ref} IS NOT NULL)")
+
+                customer_filter_summary.append({
+                    'type': 'numeric_range',
+                    'column': column,
+                    'min': min_val,
+                    'max': max_val
+                })
+
+            elif filter_type in ('equals', 'not_equals', 'greater_than', 'less_than'):
+                value = num_filter.get('value')
+                if value is not None:
+                    op = {'equals': '=', 'not_equals': '!=', 'greater_than': '>', 'less_than': '<'}[filter_type]
+                    if include_nulls:
+                        conditions.append(f"({col_ref} {op} {value} OR {col_ref} IS NULL)")
+                    else:
+                        conditions.append(f"({col_ref} {op} {value} AND {col_ref} IS NOT NULL)")
+
+                    customer_filter_summary.append({
+                        'type': f'numeric_{filter_type}',
+                        'column': column,
+                        'value': value
+                    })
+
+            for cond in conditions:
+                where_clauses.append(cond)
+
+        # Customer date filters
+        customer_date_filters = customer_filter.get('date_filters', [])
+        for date_filter in customer_date_filters:
+            column = date_filter.get('column')
+            date_type = date_filter.get('date_type', 'relative')  # 'relative' or 'range'
+            include_nulls = date_filter.get('include_nulls', True)
+
+            if not column:
+                continue
+
+            col_name = self._extract_column_name(column)
+            if '.' in column:
+                table_alias = column.split('.')[0]
+            else:
+                table_alias = primary_alias
+
+            col_ref = f"`{table_alias}`.`{col_name}`"
+            conditions = []
+
+            if date_type == 'relative':
+                relative_option = date_filter.get('relative_option', 'last_30_days')
+                days_map = {
+                    'last_7_days': 7,
+                    'last_30_days': 30,
+                    'last_90_days': 90,
+                    'last_365_days': 365
+                }
+                if relative_option in days_map:
+                    days = days_map[relative_option]
+                    date_condition = f"{col_ref} >= DATE_SUB(CURRENT_DATE(), INTERVAL {days} DAY)"
+                    if include_nulls:
+                        conditions.append(f"({date_condition} OR {col_ref} IS NULL)")
+                    else:
+                        conditions.append(f"({date_condition} AND {col_ref} IS NOT NULL)")
+
+                    customer_filter_summary.append({
+                        'type': 'date_relative',
+                        'column': column,
+                        'option': relative_option
+                    })
+
+            elif date_type == 'range':
+                start_date = date_filter.get('start_date')
+                end_date = date_filter.get('end_date')
+
+                range_conditions = []
+                if start_date:
+                    range_conditions.append(f"{col_ref} >= '{start_date}'")
+                if end_date:
+                    range_conditions.append(f"{col_ref} <= '{end_date}'")
+
+                if range_conditions:
+                    if include_nulls:
+                        conditions.append(f"(({' AND '.join(range_conditions)}) OR {col_ref} IS NULL)")
+                    else:
+                        conditions.append(f"({' AND '.join(range_conditions)} AND {col_ref} IS NOT NULL)")
+
+                    customer_filter_summary.append({
+                        'type': 'date_range',
+                        'column': column,
+                        'start_date': start_date,
+                        'end_date': end_date
+                    })
+
+            for cond in conditions:
+                where_clauses.append(cond)
+
+        # Set applied_filters['customers'] based on what was applied
+        if customer_filter_summary:
+            applied_filters['customers'] = {
+                'type': 'multiple',
+                'filters': customer_filter_summary,
+                'count': len(customer_filter_summary)
+            }
 
         # Product filters (new structure with top_revenue, category_filters, numeric_filters)
         product_filter = filters.get('product_filter', {})

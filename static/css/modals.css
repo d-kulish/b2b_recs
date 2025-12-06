@@ -902,6 +902,54 @@
     line-height: 1.4;
 }
 
+/* Timestamp Column Select - styled to match filter buttons */
+.timestamp-column-select-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    width: 100%;
+}
+
+.timestamp-select-icon {
+    position: absolute;
+    left: 12px;
+    color: #6b7280;
+    font-size: 14px;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.timestamp-column-select {
+    width: 100%;
+    padding: 8px 16px 8px 36px;
+    background: #fff;
+    border: 1px solid #000;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    color: #111;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7280' d='M6 8L2 4h8z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+}
+
+.timestamp-column-select:hover {
+    background-color: #f9fafb;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+}
+
+.timestamp-column-select:focus {
+    outline: none;
+    border-color: #2563eb;
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+}
+
 /* Filter Status Bar */
 .filter-status-bar {
     display: flex;
@@ -2647,6 +2695,25 @@
 .filter-summary-item-delete:hover {
     background: #fca5a5;
     color: #dc2626;
+}
+
+/* Unapplied changes indicator */
+.unapplied-changes-indicator {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    margin-top: 8px;
+    background: #fef3c7;
+    border: 1px solid #f59e0b;
+    border-radius: 6px;
+    color: #92400e;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.unapplied-changes-indicator i {
+    color: #f59e0b;
 }
 
 /* ============================================================================

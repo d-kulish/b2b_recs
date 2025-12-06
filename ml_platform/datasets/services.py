@@ -1486,37 +1486,42 @@ class ProductRevenueAnalysisService:
 
 class CustomerRevenueAnalysisService:
     """
-    Service for analyzing customer revenue distribution.
+    Service for analyzing customer revenue distribution using BigQuery.
 
     Used to filter datasets to include only top-performing customers
     based on cumulative revenue threshold (e.g., top 80% of revenue).
 
-    This service operates on cached pandas DataFrames from a session,
-    enabling fast analysis without hitting BigQuery directly.
+    This service runs aggregation queries directly in BigQuery to handle
+    millions of rows efficiently, returning only the distribution curve
+    and threshold statistics.
     """
 
-    def __init__(self, session_data: dict):
+    def __init__(self, model_endpoint):
         """
-        Initialize the service with session data containing cached DataFrames.
+        Initialize the service with a model endpoint.
 
         Args:
-            session_data: Dict containing cached pandas DataFrames
-                         {'tables': {'raw_data.table_name': DataFrame, ...}}
+            model_endpoint: ModelEndpoint instance for BigQuery connection
         """
-        self.session_data = session_data
-        self.tables = session_data.get('tables', {})
+        self.bq_service = BigQueryService(model_endpoint)
 
     def analyze_distribution(
         self,
+        primary_table: str,
         customer_column: str,
-        revenue_column: str
+        revenue_column: str,
+        timestamp_column: str = None,
+        rolling_days: int = None
     ) -> dict:
         """
-        Analyze customer revenue distribution using cached session data.
+        Analyze customer revenue distribution using BigQuery.
 
         Args:
+            primary_table: Primary table name (e.g., "raw_data.transactions")
             customer_column: Column name for customer ID (e.g., "transactions.customer_id")
             revenue_column: Column name for revenue (e.g., "transactions.amount")
+            timestamp_column: Column name for timestamp filtering (optional)
+            rolling_days: Number of days for rolling window (optional)
 
         Returns:
             Dict with distribution analysis:
@@ -1537,78 +1542,117 @@ class CustomerRevenueAnalysisService:
                 }
             }
         """
-        import pandas as pd
-
         try:
-            # Parse column references (format: "table.column")
-            customer_table, customer_col = self._parse_column_ref(customer_column)
-            revenue_table, revenue_col = self._parse_column_ref(revenue_column)
+            # Extract just the column name from "table.column" format
+            customer_col = self._extract_column_name(customer_column)
+            revenue_col = self._extract_column_name(revenue_column)
+            timestamp_col = self._extract_column_name(timestamp_column) if timestamp_column else None
 
-            # Get the DataFrame containing the columns
-            df = self._get_dataframe_for_column(customer_table)
-            if df is None:
+            # Get the table alias for the primary table
+            primary_alias = primary_table.split('.')[-1]
+
+            # Build the base query with optional date filter
+            date_filter_clause = ""
+
+            if timestamp_col and rolling_days:
+                date_filter_clause = f"""
+                WHERE `{primary_alias}`.`{timestamp_col}` >= DATE_SUB(
+                    (SELECT MAX(`{timestamp_col}`) FROM `{self.bq_service._get_full_table_ref(primary_table)}`),
+                    INTERVAL {rolling_days} DAY
+                )
+                """
+
+            # Main analysis query - similar structure to ProductRevenueAnalysisService
+            analysis_query = f"""
+            WITH filtered_data AS (
+                SELECT
+                    `{primary_alias}`.`{customer_col}` as customer_id,
+                    `{primary_alias}`.`{revenue_col}` as revenue
+                FROM `{self.bq_service._get_full_table_ref(primary_table)}` AS `{primary_alias}`
+                {date_filter_clause}
+            ),
+            customer_revenues AS (
+                SELECT
+                    customer_id,
+                    SUM(revenue) as total_revenue
+                FROM filtered_data
+                WHERE customer_id IS NOT NULL AND revenue IS NOT NULL
+                GROUP BY customer_id
+            ),
+            ranked_customers AS (
+                SELECT
+                    customer_id,
+                    total_revenue,
+                    ROW_NUMBER() OVER (ORDER BY total_revenue DESC) as rank,
+                    COUNT(*) OVER () as total_customers,
+                    SUM(total_revenue) OVER () as grand_total,
+                    SUM(total_revenue) OVER (ORDER BY total_revenue DESC) as cumulative_revenue
+                FROM customer_revenues
+            ),
+            distribution_points AS (
+                SELECT
+                    rank,
+                    total_customers,
+                    grand_total,
+                    total_revenue,
+                    cumulative_revenue,
+                    ROUND(rank * 100.0 / total_customers, 2) as customer_percent,
+                    ROUND(cumulative_revenue * 100.0 / grand_total, 2) as cumulative_revenue_percent
+                FROM ranked_customers
+            ),
+            -- Sample ~100 points for chart (evenly distributed + key thresholds)
+            sampled_points AS (
+                SELECT * FROM distribution_points
+                WHERE
+                    -- First and last points
+                    rank = 1 OR rank = total_customers
+                    -- Every N-th point for even distribution (target ~50 points)
+                    OR MOD(rank, GREATEST(1, CAST(total_customers / 50 AS INT64))) = 0
+                    -- Key threshold crossings (around 70%, 80%, 90%, 95%)
+                    OR (cumulative_revenue_percent >= 69.5 AND cumulative_revenue_percent <= 70.5)
+                    OR (cumulative_revenue_percent >= 79.5 AND cumulative_revenue_percent <= 80.5)
+                    OR (cumulative_revenue_percent >= 89.5 AND cumulative_revenue_percent <= 90.5)
+                    OR (cumulative_revenue_percent >= 94.5 AND cumulative_revenue_percent <= 95.5)
+            )
+            SELECT
+                customer_percent,
+                cumulative_revenue_percent,
+                rank,
+                total_customers,
+                grand_total as total_revenue,
+                cumulative_revenue
+            FROM sampled_points
+            ORDER BY rank
+            """
+
+            # Execute the query
+            logger.info(f"Executing customer revenue analysis query")
+            logger.debug(f"Analysis query:\n{analysis_query}")
+            query_result = self.bq_service.client.query(analysis_query).result()
+            rows = list(query_result)
+
+            if not rows or len(rows) == 0:
                 return {
                     'status': 'error',
-                    'message': f'Table {customer_table} not found in session data'
-                }
-
-            # Ensure columns exist
-            if customer_col not in df.columns:
-                return {
-                    'status': 'error',
-                    'message': f'Column {customer_col} not found in table {customer_table}'
-                }
-            if revenue_col not in df.columns:
-                return {
-                    'status': 'error',
-                    'message': f'Column {revenue_col} not found in table {revenue_table}'
-                }
-
-            # Group by customer and sum revenue
-            customer_revenues = df.groupby(customer_col)[revenue_col].sum().reset_index()
-            customer_revenues.columns = ['customer_id', 'total_revenue']
-
-            # Remove nulls and sort by revenue descending
-            customer_revenues = customer_revenues.dropna()
-            customer_revenues = customer_revenues[customer_revenues['total_revenue'] > 0]
-            customer_revenues = customer_revenues.sort_values('total_revenue', ascending=False).reset_index(drop=True)
-
-            total_customers = len(customer_revenues)
-            total_revenue = float(customer_revenues['total_revenue'].sum())
-
-            if total_customers == 0:
-                return {
-                    'status': 'error',
-                    'message': 'No customers found with valid revenue data',
+                    'message': 'No customer data found',
                     'total_customers': 0,
                     'total_revenue': 0,
                 }
 
-            # Calculate cumulative revenue
-            customer_revenues['cumulative_revenue'] = customer_revenues['total_revenue'].cumsum()
-            customer_revenues['cumulative_revenue_percent'] = (
-                customer_revenues['cumulative_revenue'] / total_revenue * 100
-            )
-            customer_revenues['rank'] = range(1, total_customers + 1)
-            customer_revenues['customer_percent'] = customer_revenues['rank'] / total_customers * 100
+            # Extract totals from first row
+            total_customers = int(rows[0].total_customers)
+            total_revenue = float(rows[0].total_revenue)
 
-            # Generate distribution curve points (sample for chart)
-            distribution = self._generate_distribution_curve(customer_revenues, total_customers)
+            # Build distribution curve
+            distribution = []
+            for row in rows:
+                distribution.append({
+                    'customer_percent': float(row.customer_percent),
+                    'cumulative_revenue_percent': float(row.cumulative_revenue_percent)
+                })
 
             # Calculate thresholds
-            thresholds = {}
-            for threshold in [70, 80, 90, 95]:
-                # Find first customer where cumulative revenue >= threshold
-                threshold_df = customer_revenues[
-                    customer_revenues['cumulative_revenue_percent'] >= threshold
-                ]
-                if not threshold_df.empty:
-                    first_idx = threshold_df.index[0]
-                    customers_needed = int(customer_revenues.loc[first_idx, 'rank'])
-                    thresholds[str(threshold)] = {
-                        'customers': customers_needed,
-                        'percent': round(customers_needed * 100.0 / total_customers, 2)
-                    }
+            thresholds = self._calculate_thresholds(rows, total_customers)
 
             return {
                 'status': 'success',
@@ -1627,104 +1671,33 @@ class CustomerRevenueAnalysisService:
                 'message': f'Failed to analyze customer revenue: {str(e)}'
             }
 
-    def _generate_distribution_curve(self, df, total_customers: int, num_points: int = 50) -> list:
-        """
-        Generate sampled distribution curve points for charting.
-
-        Returns list of {customer_percent, cumulative_revenue_percent} points.
-        """
-        distribution = []
-
-        # Always include first point
-        if len(df) > 0:
-            distribution.append({
-                'customer_percent': float(df.iloc[0]['customer_percent']),
-                'cumulative_revenue_percent': float(df.iloc[0]['cumulative_revenue_percent'])
-            })
-
-        # Sample evenly spaced points
-        step = max(1, total_customers // num_points)
-        for i in range(step, total_customers, step):
-            if i < len(df):
-                row = df.iloc[i]
-                distribution.append({
-                    'customer_percent': float(row['customer_percent']),
-                    'cumulative_revenue_percent': float(row['cumulative_revenue_percent'])
-                })
-
-        # Ensure key thresholds are included (around 70%, 80%, 90%)
-        for threshold in [70, 80, 90]:
-            threshold_rows = df[
-                (df['cumulative_revenue_percent'] >= threshold - 1) &
-                (df['cumulative_revenue_percent'] <= threshold + 1)
-            ]
-            if not threshold_rows.empty:
-                row = threshold_rows.iloc[0]
-                point = {
-                    'customer_percent': float(row['customer_percent']),
-                    'cumulative_revenue_percent': float(row['cumulative_revenue_percent'])
-                }
-                # Add if not already close to an existing point
-                if not any(abs(p['customer_percent'] - point['customer_percent']) < 0.5 for p in distribution):
-                    distribution.append(point)
-
-        # Always include last point
-        if len(df) > 0:
-            last_row = df.iloc[-1]
-            distribution.append({
-                'customer_percent': float(last_row['customer_percent']),
-                'cumulative_revenue_percent': float(last_row['cumulative_revenue_percent'])
-            })
-
-        # Sort by customer_percent and remove duplicates
-        distribution = sorted(distribution, key=lambda x: x['customer_percent'])
-
-        # Remove near-duplicate points
-        filtered = []
-        for point in distribution:
-            if not filtered or abs(point['customer_percent'] - filtered[-1]['customer_percent']) > 0.3:
-                filtered.append(point)
-
-        return filtered
-
-    def _parse_column_ref(self, column_ref: str) -> tuple:
-        """
-        Parse a column reference like "table.column" into (table, column).
-
-        Args:
-            column_ref: Column reference string
-
-        Returns:
-            Tuple of (table_name, column_name)
-        """
+    def _extract_column_name(self, column_ref: str) -> str:
+        """Extract just the column name from 'table.column' format."""
         if '.' in column_ref:
-            parts = column_ref.rsplit('.', 1)
-            return parts[0], parts[1]
-        return None, column_ref
+            return column_ref.rsplit('.', 1)[1]
+        return column_ref
 
-    def _get_dataframe_for_column(self, table_hint: str):
+    def _calculate_thresholds(self, rows: list, total_customers: int) -> dict:
         """
-        Get the DataFrame containing a column.
+        Calculate threshold statistics from distribution results.
 
-        Args:
-            table_hint: Table name hint from column reference
-
-        Returns:
-            pandas DataFrame or None
+        For each threshold (70%, 80%, 90%, 95%), find how many customers
+        are needed to cover that percentage of revenue.
         """
-        import pandas as pd
+        thresholds = {}
 
-        # Try exact match first
-        for table_name, df in self.tables.items():
-            if table_name == table_hint or table_name.endswith(f'.{table_hint}') or table_name.split('.')[-1] == table_hint:
-                return df
+        for target in [70, 80, 90, 95]:
+            # Find the first row where cumulative_revenue_percent >= target
+            for row in rows:
+                if row.cumulative_revenue_percent >= target:
+                    customers_needed = int(row.rank)
+                    thresholds[str(target)] = {
+                        'customers': customers_needed,
+                        'percent': round(customers_needed * 100.0 / total_customers, 2)
+                    }
+                    break
 
-        # If not found, try first table with data
-        for table_name, df in self.tables.items():
-            if isinstance(df, pd.DataFrame) and not df.empty:
-                return df
-
-        return None
+        return thresholds
 
 
 # =============================================================================
@@ -1747,11 +1720,23 @@ class CustomerAggregationService:
         Initialize the service with session data containing cached DataFrames.
 
         Args:
-            session_data: Dict containing cached pandas DataFrames
-                         {'tables': {'raw_data.table_name': DataFrame, ...}}
+            session_data: Dict containing session data with:
+                         - 'tables': metadata about tables
+                         - 'dataframes': serialized DataFrames as dict records
         """
+        import pandas as pd
+
         self.session_data = session_data
-        self.tables = session_data.get('tables', {})
+        self.tables_metadata = session_data.get('tables', {})
+
+        # Reconstruct DataFrames from serialized records
+        self.tables = {}
+        dataframes = session_data.get('dataframes', {})
+        for table_name, records in dataframes.items():
+            if isinstance(records, list):
+                self.tables[table_name] = pd.DataFrame(records)
+            elif isinstance(records, pd.DataFrame):
+                self.tables[table_name] = records
 
     def analyze_transaction_counts(self, customer_column: str) -> dict:
         """

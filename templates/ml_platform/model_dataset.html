@@ -267,22 +267,14 @@
                     <div id="historyContent" class="subchapter-content-outside hidden">
                         <!-- Filter Buttons Row -->
                         <div class="filter-buttons-row">
-                            <!-- Timestamp Column Button -->
+                            <!-- Timestamp Column Dropdown -->
                             <div class="filter-button-wrapper">
                                 <span class="filter-button-label">Select timestamp column</span>
-                                <button type="button" class="filter-button" id="timestampColumnBtn" onclick="toggleFilterPopup('timestampColumn')">
-                                    <i class="fas fa-clock"></i>
-                                    <span>Timestamp Column</span>
-                                </button>
-                                <div class="filter-popup" id="timestampColumnPopup">
-                                    <div class="filter-popup-header">Select Timestamp Column</div>
-                                    <select id="timestampColumn" class="form-select w-full text-sm" onchange="onTimestampColumnChange(); closeFilterPopup('timestampColumn');">
+                                <div class="timestamp-column-select-wrapper">
+                                    <i class="fas fa-clock timestamp-select-icon"></i>
+                                    <select id="timestampColumn" class="form-select timestamp-column-select" onchange="onTimestampColumnChange();">
                                         <option value="">Select column...</option>
                                     </select>
-                                    <p class="filter-popup-hint">
-                                        <i class="fas fa-info-circle mr-1"></i>
-                                        Column used to filter data by date
-                                    </p>
                                 </div>
                             </div>
 
@@ -960,8 +952,11 @@
                         <div class="modal-footer-wizard-neu">
                             <div class="footer-left"></div>
                             <div class="footer-right">
-                                <button onclick="closeCustomerMetricsModal()" class="btn-neu btn-neu-action btn-neu-save">
-                                    <span class="btn-neu-inner">Done</span>
+                                <button onclick="applyCustomerMetricsFilters()" class="btn-neu btn-neu-action btn-neu-save">
+                                    <span class="btn-neu-inner">Apply</span>
+                                </button>
+                                <button onclick="cancelCustomerMetricsModal()" class="btn-neu btn-neu-action btn-neu-cancel">
+                                    <span class="btn-neu-inner">Cancel</span>
                                 </button>
                             </div>
                         </div>
@@ -3559,13 +3554,24 @@ function applyTopProductsFilter() {
 // TOP CUSTOMERS MODAL
 // ============================================================================
 
-function openTopCustomersModal() {
+async function openTopCustomersModal() {
     const modal = document.getElementById('topCustomersModal');
     modal.classList.remove('hidden');
 
     // Auto-enable top customers filter when modal opens
     document.getElementById('enableTopCustomers').checked = true;
     customerFiltersState.pending.topRevenue.enabled = true;
+
+    // Pre-fetch column analysis if not cached (needed to identify numeric columns)
+    if (Object.keys(customerFiltersState.columnAnalysis).length === 0 &&
+        Object.keys(productFiltersState.columnAnalysis).length === 0) {
+        await fetchColumnAnalysis();
+    }
+
+    // Copy column analysis from products if not in customers
+    if (Object.keys(customerFiltersState.columnAnalysis).length === 0) {
+        customerFiltersState.columnAnalysis = { ...productFiltersState.columnAnalysis };
+    }
 
     // Populate column dropdowns
     populateTopCustomersDropdowns();
@@ -3680,7 +3686,7 @@ async function analyzeCustomerRevenue() {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-CSRFToken': getCsrfToken()
+                'X-CSRFToken': csrftoken
             },
             body: JSON.stringify({
                 session_id: schemaBuilderState.sessionId,
@@ -3694,6 +3700,12 @@ async function analyzeCustomerRevenue() {
         }
 
         const data = await response.json();
+
+        // Check for API-level error
+        if (data.status === 'error') {
+            throw new Error(data.message || 'Analysis failed');
+        }
+
         customerAnalysisData = data;
 
         // Store column selections in pending state
@@ -3710,6 +3722,8 @@ async function analyzeCustomerRevenue() {
         // Update stats
         const threshold = parseInt(document.getElementById('customerRevenueThreshold').value) || 80;
         updateCustomerRevenueChart(threshold);
+
+        console.log('Customer analysis data:', data);  // Debug log
 
     } catch (error) {
         console.error('Customer revenue analysis failed:', error);
@@ -3731,8 +3745,13 @@ function renderCustomerRevenueChart(data) {
     svg.selectAll('*').remove();
 
     const margin = { top: 20, right: 30, bottom: 40, left: 50 };
-    const width = container.clientWidth - margin.left - margin.right;
+    const containerWidth = container.clientWidth || container.offsetWidth || 600;
+    const width = Math.max(containerWidth - margin.left - margin.right, 200);
     const height = 180 - margin.top - margin.bottom;
+
+    // Set SVG dimensions
+    svg.attr('width', width + margin.left + margin.right)
+       .attr('height', height + margin.top + margin.bottom);
 
     const g = svg.append('g')
         .attr('transform', `translate(${margin.left},${margin.top})`);
@@ -3904,9 +3923,26 @@ function applyTopCustomersFilter() {
 // CUSTOMER METRICS MODAL
 // ============================================================================
 
-function openCustomerMetricsModal() {
+// Snapshot of aggregation filters when modal opens (for Cancel functionality)
+let customerMetricsModalSnapshot = null;
+
+async function openCustomerMetricsModal() {
     const modal = document.getElementById('customerMetricsModal');
     modal.classList.remove('hidden');
+
+    // Store snapshot of current aggregation filters for Cancel functionality
+    customerMetricsModalSnapshot = JSON.parse(JSON.stringify(customerFiltersState.pending.aggregationFilters));
+
+    // Pre-fetch column analysis if not cached (needed to identify numeric columns)
+    if (Object.keys(customerFiltersState.columnAnalysis).length === 0 &&
+        Object.keys(productFiltersState.columnAnalysis).length === 0) {
+        await fetchColumnAnalysis();
+    }
+
+    // Copy column analysis from products if not in customers
+    if (Object.keys(customerFiltersState.columnAnalysis).length === 0) {
+        customerFiltersState.columnAnalysis = { ...productFiltersState.columnAnalysis };
+    }
 
     // Populate column dropdowns
     populateCustomerMetricsDropdowns();
@@ -3921,6 +3957,29 @@ function openCustomerMetricsModal() {
 function closeCustomerMetricsModal() {
     const modal = document.getElementById('customerMetricsModal');
     modal.classList.add('hidden');
+    customerMetricsModalSnapshot = null;
+}
+
+function applyCustomerMetricsFilters() {
+    // Changes are already in pending state, just close the modal
+    closeCustomerMetricsModal();
+
+    // Update the summary and button state
+    updateCustomersFilterSummary();
+    updateCustomersRefreshButtonState();
+}
+
+function cancelCustomerMetricsModal() {
+    // Restore the snapshot (revert any changes made during this modal session)
+    if (customerMetricsModalSnapshot !== null) {
+        customerFiltersState.pending.aggregationFilters = customerMetricsModalSnapshot;
+    }
+
+    closeCustomerMetricsModal();
+
+    // Update the summary and button state to reflect reverted state
+    updateCustomersFilterSummary();
+    updateCustomersRefreshButtonState();
 }
 
 function populateCustomerMetricsDropdowns() {
@@ -4323,7 +4382,7 @@ function showCustomerCategoryFilterConfig(columnName, colInfo) {
 
     // Render values
     const container = document.getElementById('customerCategoryValuesContainer');
-    const values = colInfo.top_values || [];
+    const values = colInfo.values || colInfo.top_values || [];
 
     if (colInfo.display_mode === 'autocomplete') {
         container.innerHTML = `
@@ -5358,16 +5417,35 @@ function updateProductsRefreshButtonState() {
     const refreshBtn = document.getElementById('refreshProductFiltersBtn');
     if (!refreshBtn) return;
 
-    const pending = productFiltersState.pending;
+    // Enable button if pending state differs from committed state
+    const pendingJson = JSON.stringify(productFiltersState.pending);
+    const committedJson = JSON.stringify(productFiltersState.committed);
+    const hasChanges = pendingJson !== committedJson;
 
-    // Check if there are any pending filters to apply
-    const hasFilters = pending.topRevenue.enabled ||
-                       pending.categoryFilters.length > 0 ||
-                       pending.numericFilters.length > 0 ||
-                       pending.dateFilters.length > 0;
+    refreshBtn.disabled = !hasChanges;
+    refreshBtn.classList.toggle('filter-button-disabled', !hasChanges);
 
-    refreshBtn.disabled = !hasFilters;
-    refreshBtn.classList.toggle('filter-button-disabled', !hasFilters);
+    // Update "unapplied changes" indicator
+    updateProductsUnappliedIndicator(hasChanges);
+}
+
+function updateProductsUnappliedIndicator(hasChanges) {
+    const summaryDiv = document.getElementById('productsFilterSummary');
+    if (!summaryDiv) return;
+
+    // Remove existing indicator if present
+    const existingIndicator = summaryDiv.querySelector('.unapplied-changes-indicator');
+    if (existingIndicator) {
+        existingIndicator.remove();
+    }
+
+    // Add indicator if there are unapplied changes and filters were previously applied
+    if (hasChanges && productFiltersApplied) {
+        const indicator = document.createElement('div');
+        indicator.className = 'unapplied-changes-indicator';
+        indicator.innerHTML = '<i class="fas fa-exclamation-circle"></i> Unapplied changes - click "Refresh Dataset" to apply';
+        summaryDiv.appendChild(indicator);
+    }
 }
 
 // ============================================================================
@@ -5564,17 +5642,35 @@ function updateCustomersRefreshButtonState() {
     const refreshBtn = document.getElementById('refreshCustomerFiltersBtn');
     if (!refreshBtn) return;
 
-    const pending = customerFiltersState.pending;
+    // Enable button if pending state differs from committed state
+    const pendingJson = JSON.stringify(customerFiltersState.pending);
+    const committedJson = JSON.stringify(customerFiltersState.committed);
+    const hasChanges = pendingJson !== committedJson;
 
-    // Check if there are any pending filters to apply
-    const hasFilters = pending.topRevenue.enabled ||
-                       pending.aggregationFilters.length > 0 ||
-                       pending.categoryFilters.length > 0 ||
-                       pending.numericFilters.length > 0 ||
-                       pending.dateFilters.length > 0;
+    refreshBtn.disabled = !hasChanges;
+    refreshBtn.classList.toggle('filter-button-disabled', !hasChanges);
 
-    refreshBtn.disabled = !hasFilters;
-    refreshBtn.classList.toggle('filter-button-disabled', !hasFilters);
+    // Update "unapplied changes" indicator
+    updateCustomersUnappliedIndicator(hasChanges);
+}
+
+function updateCustomersUnappliedIndicator(hasChanges) {
+    const summaryDiv = document.getElementById('customersFilterSummary');
+    if (!summaryDiv) return;
+
+    // Remove existing indicator if present
+    const existingIndicator = summaryDiv.querySelector('.unapplied-changes-indicator');
+    if (existingIndicator) {
+        existingIndicator.remove();
+    }
+
+    // Add indicator if there are unapplied changes and filters were previously applied
+    if (hasChanges && customerFiltersApplied) {
+        const indicator = document.createElement('div');
+        indicator.className = 'unapplied-changes-indicator';
+        indicator.innerHTML = '<i class="fas fa-exclamation-circle"></i> Unapplied changes - click "Refresh Dataset" to apply';
+        summaryDiv.appendChild(indicator);
+    }
 }
 
 // Refresh Customer Filters - commits pending to committed and updates Dataset Summary
@@ -5596,8 +5692,6 @@ async function refreshCustomerFilters() {
 
         // Update Dataset Summary panel
         await updateDatasetSummary();
-
-        showNotification('Customer filters applied successfully', 'success');
 
     } catch (error) {
         console.error('Error refreshing customer filters:', error);
@@ -6542,6 +6636,76 @@ function applyRollingWindow() {
 // Track if date filters have been applied (via Refresh Dataset click)
 let dateFiltersApplied = false;
 
+// Dates Filter State Management (pending/committed model like Products and Customers)
+let datesFilterState = {
+    pending: {
+        timestampColumn: null,
+        mode: 'rolling',  // 'rolling' or 'startDate'
+        rollingDays: 30,
+        startDate: null
+    },
+    committed: {
+        timestampColumn: null,
+        mode: 'rolling',
+        rollingDays: 30,
+        startDate: null
+    }
+};
+
+// Get current pending dates filter state from UI elements
+function getDatesFilterPendingState() {
+    return {
+        timestampColumn: document.getElementById('timestampColumn')?.value || null,
+        mode: historyFilterMode,
+        rollingDays: parseInt(document.getElementById('rollingDays')?.value) || 30,
+        startDate: document.getElementById('startDateInput')?.value || null
+    };
+}
+
+// Update Dates Refresh Dataset button state
+function updateDatesRefreshButtonState() {
+    const refreshBtn = document.getElementById('refreshDatasetBtn');
+    if (!refreshBtn) return;
+
+    // Get current pending state from UI
+    const pendingState = getDatesFilterPendingState();
+
+    // Enable button if pending state differs from committed state
+    const pendingJson = JSON.stringify(pendingState);
+    const committedJson = JSON.stringify(datesFilterState.committed);
+    const hasChanges = pendingJson !== committedJson;
+
+    // Also need a timestamp column selected to enable
+    const hasTimestamp = !!pendingState.timestampColumn;
+
+    const shouldEnable = hasTimestamp && hasChanges;
+
+    refreshBtn.disabled = !shouldEnable;
+    refreshBtn.classList.toggle('filter-button-disabled', !shouldEnable);
+
+    // Update "unapplied changes" indicator
+    updateDatesUnappliedIndicator(hasChanges && dateFiltersApplied);
+}
+
+function updateDatesUnappliedIndicator(hasChanges) {
+    const summaryDiv = document.getElementById('datesFilterSummary');
+    if (!summaryDiv) return;
+
+    // Remove existing indicator if present
+    const existingIndicator = summaryDiv.querySelector('.unapplied-changes-indicator');
+    if (existingIndicator) {
+        existingIndicator.remove();
+    }
+
+    // Add indicator if there are unapplied changes
+    if (hasChanges) {
+        const indicator = document.createElement('div');
+        indicator.className = 'unapplied-changes-indicator';
+        indicator.innerHTML = '<i class="fas fa-exclamation-circle"></i> Unapplied changes - click "Refresh Dataset" to apply';
+        summaryDiv.appendChild(indicator);
+    }
+}
+
 // Update the Dates sub-chapter header badge (shows "1 filter applied" after Refresh)
 function updateDatesFilterStatus() {
     const statusEl = document.getElementById('datesFilterStatus');
@@ -6607,12 +6771,20 @@ function deleteDatesFilter() {
         timestampSelect.value = '';
     }
 
-    // Reset dates filter state
-    resetDateFiltersApplied();
+    // Reset rolling days and start date to defaults
+    const rollingDaysInput = document.getElementById('rollingDays');
+    if (rollingDaysInput) {
+        rollingDaysInput.value = '30';
+    }
+    const startDateInput = document.getElementById('startDateInput');
+    if (startDateInput) {
+        startDateInput.value = '';
+    }
+    historyFilterMode = 'rolling';
 
     // Update UI
     updateDatesFilterSummary();
-    updateHistoryButtonStates();
+    updateHistoryButtonStates();  // This will call updateDatesRefreshButtonState()
 
     // Re-populate product dropdowns (timestamp column is now available)
     populateProductFilterDropdowns();
@@ -6630,10 +6802,7 @@ function resetDateFiltersApplied() {
 
 function onTimestampColumnChange() {
     updateDatesFilterSummary();
-    resetDateFiltersApplied();
-    // Re-populate all dropdowns (committed state was cleared, columns may be available again)
-    populateProductFilterDropdowns();
-    // Update dependent button states
+    // Update dependent button states (this will handle the Refresh button state)
     updateHistoryButtonStates();
     validateCurrentStep();
 }
@@ -6645,7 +6814,6 @@ function updateHistoryButtonStates() {
     // Enable/disable dependent buttons
     const rollingWindowBtn = document.getElementById('rollingWindowBtn');
     const startDateBtn = document.getElementById('startDateBtn');
-    const refreshDatasetBtn = document.getElementById('refreshDatasetBtn');
 
     if (rollingWindowBtn) {
         rollingWindowBtn.disabled = !hasTimestamp;
@@ -6655,16 +6823,15 @@ function updateHistoryButtonStates() {
         startDateBtn.disabled = !hasTimestamp;
         startDateBtn.classList.toggle('filter-button-disabled', !hasTimestamp);
     }
-    if (refreshDatasetBtn) {
-        refreshDatasetBtn.disabled = !hasTimestamp;
-        refreshDatasetBtn.classList.toggle('filter-button-disabled', !hasTimestamp);
-    }
+
+    // Update Refresh Dataset button using the new pending/committed state logic
+    updateDatesRefreshButtonState();
 }
 
 function onRollingDaysChange() {
     historyFilterMode = 'rolling';
     updateDatesFilterSummary();
-    resetDateFiltersApplied();
+    updateDatesRefreshButtonState();
     // Reset product analysis when date range changes
     resetProductAnalysis();
     validateCurrentStep();
@@ -6673,7 +6840,7 @@ function onRollingDaysChange() {
 function onStartDateChange() {
     historyFilterMode = 'startDate';
     updateDatesFilterSummary();
-    resetDateFiltersApplied();
+    updateDatesRefreshButtonState();
     // Reset product analysis when date range changes
     resetProductAnalysis();
     validateCurrentStep();
@@ -6689,7 +6856,15 @@ function refreshDatasetHistory() {
         return;
     }
 
-    // Commit the timestamp column to centralized state
+    // Commit the current pending state
+    datesFilterState.committed = {
+        timestampColumn: timestampCol,
+        mode: historyFilterMode,
+        rollingDays: parseInt(rollingDays) || 30,
+        startDate: startDate || null
+    };
+
+    // Also update the legacy committedDatesFilter for cross-sub-chapter exclusion
     committedDatesFilter.timestampColumn = timestampCol;
 
     // Mark filters as applied and update header status
@@ -6701,6 +6876,9 @@ function refreshDatasetHistory() {
 
     // Update Dataset Summary panel
     updateDatasetSummary();
+
+    // Update button state (should become disabled since pending = committed)
+    updateDatesRefreshButtonState();
 
     console.log('Refresh Dataset clicked:', {
         mode: historyFilterMode,

@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides detailed specifications for implementing the **Datasets** domain in the ML Platform. The Datasets domain defines WHAT data goes into model training.
 
-**Last Updated**: 2025-12-05 (v5 - Enhanced Filtering with Cross-Sub-chapter Column Exclusion)
+**Last Updated**: 2025-12-06 (v6 - Bug fixes, UI improvements, BigQuery-based Customer Revenue Analysis)
 
 ---
 
@@ -255,12 +255,12 @@ Filter dataset by date range using one of two methods:
 - **Refresh Dataset**: Apply the selected date filter and update Dataset Summary
 
 UI Components:
-- Four equal-width buttons in a row with helper labels above each button
-- Helper labels: "Select timestamp column", "Set number of days", "Select start date"
+- **Timestamp Column**: Direct dropdown with clock icon (no popup - simplified from v5)
+- **Rolling Window** and **Start Date**: Buttons that open popup dropdowns
 - Refresh Dataset button has no label (uses &nbsp; for alignment)
 - Rolling Window and Start Date buttons are disabled until Timestamp Column is selected
-- Each button opens a popup dropdown for selection
 - Popups auto-close when value is selected (Apply button for Rolling Window)
+- **Pending/Committed State**: Like Products/Customers, Dates now uses pending/committed model for proper "Refresh Dataset" button state management
 - **Summary line** below buttons uses the same structure as Products sub-chapter:
   - Shows "Filter #1: {column_name}: {details}" format
   - Includes delete button (trash icon) to clear the filter
@@ -298,17 +298,19 @@ Customers sub-chapter uses a **4-button navigation** design with modal-based con
 - Select Customer ID column (grouping column - NOT excluded from other filters)
 - Select Revenue column (aggregation column - excluded after use)
 - Click "Analyze" to see cumulative revenue distribution (Pareto chart)
+- **Analysis runs directly in BigQuery** (not on sampled data) for accurate results with millions of rows
 - Set revenue threshold (e.g., "Include customers covering 80% of revenue")
 - Shows analysis summary: total customers, selected customers, revenue coverage
+- Apply/Cancel buttons for consistent modal behavior
 
 **Customer Metrics Button** (opens modal):
-Two separate filter sections:
+Two separate filter sections with Apply/Cancel buttons:
 
 1. **Transaction Count Filter**:
    - Select Customer ID column (grouping column)
    - Select filter type: Greater than / Less than / Range
    - Enter value(s)
-   - Filters customers by their total number of transactions
+   - Filters customers by their total number of transactions (COUNT of rows per customer)
 
 2. **Spending Filter**:
    - Select Customer ID column (grouping column)

@@ -2093,7 +2093,7 @@ def analyze_customer_revenue(request, model_id):
                 'message': 'revenue_column is required',
             }, status=400)
 
-        # Get cached session data
+        # Get cached session data to extract table info
         preview_service = DatasetPreviewService(model)
         session_data = preview_service._get_from_cache(session_id)
 
@@ -2103,11 +2103,36 @@ def analyze_customer_revenue(request, model_id):
                 'message': f'Session {session_id} not found or expired. Please reload samples.',
             }, status=404)
 
-        # Run the analysis
-        analysis_service = CustomerRevenueAnalysisService(session_data)
+        # Get the primary table from session data
+        primary_table = session_data.get('primary_table')
+        if not primary_table:
+            # Fallback: extract from customer_column (format: "table.column")
+            if '.' in customer_column:
+                table_hint = customer_column.rsplit('.', 1)[0]
+                # Find matching table in session
+                for table_name in session_data.get('tables', {}).keys():
+                    if table_name.endswith(table_hint) or table_name.split('.')[-1] == table_hint:
+                        primary_table = table_name
+                        break
+
+        if not primary_table:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Could not determine primary table from session data',
+            }, status=400)
+
+        # Get optional date filter params
+        timestamp_column = data.get('timestamp_column')
+        rolling_days = data.get('rolling_days')
+
+        # Run the analysis using BigQuery
+        analysis_service = CustomerRevenueAnalysisService(model)
         result = analysis_service.analyze_distribution(
+            primary_table=primary_table,
             customer_column=customer_column,
-            revenue_column=revenue_column
+            revenue_column=revenue_column,
+            timestamp_column=timestamp_column,
+            rolling_days=rolling_days
         )
 
         return JsonResponse(result)

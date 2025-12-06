@@ -1,13 +1,55 @@
 # Dataset Filtering - Implementation Status & Next Steps
 
 **Date**: 2025-12-06
-**Last Updated**: 2025-12-06
+**Last Updated**: 2025-12-06 (Session 2 - Bug fixes and UI improvements)
 
 ---
 
 ## Overview
 
 This document tracks the implementation status of the Dataset filtering functionality in the ML Platform, specifically focusing on the Customer filtering integration in Step 4 of the Dataset Creation Wizard.
+
+---
+
+## Session 2 Updates (2025-12-06)
+
+### Bug Fixes
+
+| Issue | Fix | Files Modified |
+|-------|-----|----------------|
+| Revenue Column dropdown empty in Top Customers modal | Added `fetchColumnAnalysis()` call before populating dropdowns | `model_dataset.html` |
+| `getCsrfToken is not defined` error | Changed to use existing `csrftoken` variable | `model_dataset.html` |
+| Customer Revenue chart not rendering | Added SVG width/height attributes, fixed API error handling | `model_dataset.html` |
+| Customer Revenue analysis using sampled data (100 rows) | Rewrote `CustomerRevenueAnalysisService` to use BigQuery directly | `services.py`, `api.py` |
+| Category filter values not showing | Fixed property name: `colInfo.values` instead of `colInfo.top_values` | `model_dataset.html` |
+
+### UI Improvements
+
+| Change | Description | Files Modified |
+|--------|-------------|----------------|
+| Removed success notification | Removed "Customers filters applied successfully" popup | `model_dataset.html` |
+| Refresh Dataset button state | Now compares pending vs committed state (enables when deleting filters) | `model_dataset.html` |
+| "Unapplied changes" indicator | Shows warning when pending differs from committed state | `model_dataset.html`, `modals.css` |
+| Customer Metrics modal buttons | Changed "Done" to "Apply"/"Cancel" for consistency | `model_dataset.html` |
+| Timestamp Column dropdown | Simplified from button+popup to direct dropdown with icon | `model_dataset.html`, `modals.css` |
+
+### Pending/Committed State Model
+
+All three sub-chapters (Dates, Customers, Products) now use consistent state management:
+
+```javascript
+// Refresh Dataset button enabled when: pending ≠ committed
+const pendingJson = JSON.stringify(state.pending);
+const committedJson = JSON.stringify(state.committed);
+const hasChanges = pendingJson !== committedJson;
+refreshBtn.disabled = !hasChanges;
+```
+
+This enables:
+- Adding a filter → button enabled
+- Clicking Refresh → pending = committed → button disabled
+- Deleting a filter → button enabled (to apply the deletion)
+- "Unapplied changes" warning when filters were previously applied
 
 ---
 

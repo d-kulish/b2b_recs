@@ -2020,3 +2020,223 @@ def search_category_values(request, model_id):
             'status': 'error',
             'message': str(e),
         }, status=500)
+
+
+# =============================================================================
+# CUSTOMER REVENUE ANALYSIS API
+# =============================================================================
+
+@login_required
+@require_http_methods(["POST"])
+def analyze_customer_revenue(request, model_id):
+    """
+    Analyze customer revenue distribution for filtering.
+
+    This endpoint calculates the cumulative revenue distribution across customers,
+    enabling users to filter their dataset to include only top-performing customers
+    (e.g., customers generating 80% of total revenue).
+
+    Uses cached session data (pandas DataFrames) for fast analysis.
+
+    Request body:
+        {
+            "session_id": "abc12345",
+            "customer_column": "transactions.customer_id",
+            "revenue_column": "transactions.amount"
+        }
+
+    Returns:
+        {
+            "status": "success",
+            "total_customers": 98234,
+            "total_revenue": 15500000.0,
+            "distribution": [
+                {"customer_percent": 1, "cumulative_revenue_percent": 8.2},
+                {"customer_percent": 5, "cumulative_revenue_percent": 28.1},
+                ...
+            ],
+            "thresholds": {
+                "70": {"customers": 12891, "percent": 13.1},
+                "80": {"customers": 18521, "percent": 18.9},
+                "90": {"customers": 32234, "percent": 32.8},
+                "95": {"customers": 52234, "percent": 53.2}
+            }
+        }
+    """
+    try:
+        from .preview_service import DatasetPreviewService
+        from .services import CustomerRevenueAnalysisService
+
+        model = get_object_or_404(ModelEndpoint, id=model_id)
+        data = json.loads(request.body)
+
+        # Validate required fields
+        session_id = data.get('session_id')
+        customer_column = data.get('customer_column')
+        revenue_column = data.get('revenue_column')
+
+        if not session_id:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'session_id is required',
+            }, status=400)
+
+        if not customer_column:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'customer_column is required',
+            }, status=400)
+
+        if not revenue_column:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'revenue_column is required',
+            }, status=400)
+
+        # Get cached session data
+        preview_service = DatasetPreviewService(model)
+        session_data = preview_service._get_from_cache(session_id)
+
+        if not session_data:
+            return JsonResponse({
+                'status': 'error',
+                'message': f'Session {session_id} not found or expired. Please reload samples.',
+            }, status=404)
+
+        # Run the analysis
+        analysis_service = CustomerRevenueAnalysisService(session_data)
+        result = analysis_service.analyze_distribution(
+            customer_column=customer_column,
+            revenue_column=revenue_column
+        )
+
+        return JsonResponse(result)
+
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'status': 'error',
+            'message': 'Invalid JSON in request body',
+        }, status=400)
+    except Exception as e:
+        logger.error(f"Error analyzing customer revenue: {e}")
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e),
+        }, status=500)
+
+
+@login_required
+@require_http_methods(["POST"])
+def analyze_customer_aggregations(request, model_id):
+    """
+    Analyze customer aggregation metrics (transaction count, spending).
+
+    Used to provide statistics and distributions to help users set appropriate
+    filter thresholds for transaction count and spending filters.
+
+    Request body:
+        {
+            "session_id": "abc12345",
+            "analysis_type": "transaction_count" | "spending",
+            "customer_column": "transactions.customer_id",
+            "amount_column": "transactions.amount"  // required for spending
+        }
+
+    Returns for transaction_count:
+        {
+            "status": "success",
+            "total_customers": 98234,
+            "total_transactions": 1500000,
+            "stats": {
+                "min": 1, "max": 523, "mean": 15.3, "median": 8,
+                "percentiles": {"25": 3, "50": 8, "75": 18, "90": 32, "95": 52}
+            },
+            "distribution": [...]
+        }
+
+    Returns for spending:
+        {
+            "status": "success",
+            "total_customers": 98234,
+            "total_spending": 15500000.0,
+            "stats": {
+                "min": 0.50, "max": 152300.00, "mean": 157.85, "median": 82.50,
+                "percentiles": {"25": 35.00, "50": 82.50, "75": 185.00, "90": 380.00, "95": 625.00}
+            }
+        }
+    """
+    try:
+        from .preview_service import DatasetPreviewService
+        from .services import CustomerAggregationService
+
+        model = get_object_or_404(ModelEndpoint, id=model_id)
+        data = json.loads(request.body)
+
+        # Validate required fields
+        session_id = data.get('session_id')
+        analysis_type = data.get('analysis_type')
+        customer_column = data.get('customer_column')
+
+        if not session_id:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'session_id is required',
+            }, status=400)
+
+        if not analysis_type:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'analysis_type is required (transaction_count or spending)',
+            }, status=400)
+
+        if analysis_type not in ['transaction_count', 'spending']:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'analysis_type must be "transaction_count" or "spending"',
+            }, status=400)
+
+        if not customer_column:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'customer_column is required',
+            }, status=400)
+
+        # For spending analysis, amount_column is required
+        amount_column = data.get('amount_column')
+        if analysis_type == 'spending' and not amount_column:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'amount_column is required for spending analysis',
+            }, status=400)
+
+        # Get cached session data
+        preview_service = DatasetPreviewService(model)
+        session_data = preview_service._get_from_cache(session_id)
+
+        if not session_data:
+            return JsonResponse({
+                'status': 'error',
+                'message': f'Session {session_id} not found or expired. Please reload samples.',
+            }, status=404)
+
+        # Run the analysis
+        analysis_service = CustomerAggregationService(session_data)
+
+        if analysis_type == 'transaction_count':
+            result = analysis_service.analyze_transaction_counts(customer_column)
+        else:
+            result = analysis_service.analyze_customer_spending(customer_column, amount_column)
+
+        return JsonResponse(result)
+
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'status': 'error',
+            'message': 'Invalid JSON in request body',
+        }, status=400)
+    except Exception as e:
+        logger.error(f"Error analyzing customer aggregations: {e}")
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e),
+        }, status=500)

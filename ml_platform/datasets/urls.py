@@ -55,6 +55,12 @@ urlpatterns = [
     # === PRODUCT REVENUE ANALYSIS ===
     path('api/models/<int:model_id>/datasets/analyze-product-revenue/', api.analyze_product_revenue, name='api_datasets_analyze_product_revenue'),
 
+    # === CUSTOMER REVENUE ANALYSIS ===
+    path('api/models/<int:model_id>/datasets/analyze-customer-revenue/', api.analyze_customer_revenue, name='api_datasets_analyze_customer_revenue'),
+
+    # === CUSTOMER AGGREGATION ANALYSIS (transaction count, spending) ===
+    path('api/models/<int:model_id>/datasets/analyze-customer-aggregations/', api.analyze_customer_aggregations, name='api_datasets_analyze_customer_aggregations'),
+
     # === DATASET STATS (for Dataset Summary panel) ===
     path('api/models/<int:model_id>/datasets/stats/', api.get_dataset_stats, name='api_datasets_stats'),
 

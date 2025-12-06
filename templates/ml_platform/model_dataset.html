@@ -348,22 +348,49 @@
                 <div class="filter-subchapter" id="customersSubchapter">
                     <div class="subchapter-header-tablet" onclick="toggleSubchapter('customers')">
                         <span class="subchapter-title">Customers</span>
+                        <span class="subchapter-filter-status" id="customersFilterStatus"></span>
                         <i id="customersChevron" class="fas fa-chevron-right subchapter-chevron"></i>
                     </div>
                     <div id="customersContent" class="subchapter-content-outside hidden">
-                        <div class="subchapter-body-outside">
-                            <!-- Min Transactions Filter -->
-                            <div class="flex items-center gap-3 mb-3">
-                                <input type="checkbox" id="enableMinTransactions" onchange="toggleMinTransactionsInput()">
-                                <label class="text-sm text-gray-700">Minimum</label>
-                                <input type="number" id="minTransactions" value="2" min="1"
-                                       class="form-input w-20 text-sm" disabled>
-                                <span class="text-sm text-gray-700">transactions per customer</span>
+                        <div class="subchapter-body">
+                            <!-- 4-Button Navigation Row (matching Products sub-chapter style) -->
+                            <div class="filter-buttons-row">
+                                <div class="filter-button-wrapper">
+                                    <span class="filter-button-label">Filter by revenue</span>
+                                    <button type="button" class="filter-button" onclick="openTopCustomersModal()">
+                                        <i class="fas fa-chart-line"></i>
+                                        Top Customers
+                                    </button>
+                                </div>
+                                <div class="filter-button-wrapper">
+                                    <span class="filter-button-label">Filter by metrics</span>
+                                    <button type="button" class="filter-button" onclick="openCustomerMetricsModal()">
+                                        <i class="fas fa-calculator"></i>
+                                        Customer Metrics
+                                    </button>
+                                </div>
+                                <div class="filter-button-wrapper">
+                                    <span class="filter-button-label">Filter by columns</span>
+                                    <button type="button" class="filter-button" onclick="openCustomerFilterColumnsModal()">
+                                        <i class="fas fa-filter"></i>
+                                        Filter Columns
+                                    </button>
+                                </div>
+                                <div class="filter-button-wrapper">
+                                    <span class="filter-button-label">&nbsp;</span>
+                                    <button type="button" class="filter-button filter-button-refresh filter-button-disabled" onclick="refreshCustomerFilters()" id="refreshCustomerFiltersBtn" disabled>
+                                        <i class="fas fa-sync-alt"></i>
+                                        Refresh Dataset
+                                    </button>
+                                </div>
                             </div>
-                            <p class="wizard-field-hint">
-                                <i class="fas fa-info-circle mr-1"></i>
-                                Customers with very few transactions don't provide enough signal for recommendations
-                            </p>
+
+                            <!-- Summary Line -->
+                            <div class="filter-summary-line" id="customersFilterSummary">
+                                <div class="filter-summary-items" id="customersFilterSummaryItems">
+                                    <span class="filter-summary-empty">No filters selected</span>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -687,6 +714,424 @@
                                     <span class="btn-neu-inner">Apply</span>
                                 </button>
                                 <button onclick="closeFilterColumnsModal()" class="btn-neu btn-neu-action btn-neu-cancel">
+                                    <span class="btn-neu-inner">Cancel</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Top Customers Modal -->
+                <div class="modal-overlay hidden" id="topCustomersModal">
+                    <div class="modal-container modal-container-lg">
+                        <div class="modal-header">
+                            <div class="modal-header-icon info">
+                                <i class="fas fa-chart-line"></i>
+                            </div>
+                            <h3 class="modal-header-title">Top Customers by Revenue</h3>
+                        </div>
+                        <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
+                            <!-- Hidden checkbox to maintain state compatibility -->
+                            <input type="checkbox" id="enableTopCustomers" style="display: none;">
+
+                            <!-- Top Customers Configuration (always visible) -->
+                            <div id="topCustomersConfig">
+                                <!-- Row: Customer ID, Revenue Column, Analyze Button -->
+                                <div class="top-products-config-row">
+                                    <div class="top-products-field">
+                                        <label class="text-xs font-medium text-gray-600 mb-1 block">Customer ID Column</label>
+                                        <select id="customerIdColumn" class="form-select text-sm" onchange="onCustomerColumnChange()">
+                                            <option value="">Select column...</option>
+                                        </select>
+                                    </div>
+                                    <div class="top-products-field">
+                                        <label class="text-xs font-medium text-gray-600 mb-1 block">Revenue Column</label>
+                                        <select id="customerRevenueColumn" class="form-select text-sm" onchange="onCustomerRevenueColumnChange()">
+                                            <option value="">Select column...</option>
+                                        </select>
+                                    </div>
+                                    <div class="top-products-field top-products-field-btn">
+                                        <label class="text-xs font-medium text-gray-600 mb-1 block">&nbsp;</label>
+                                        <button type="button" id="analyzeCustomersBtn" onclick="analyzeCustomerRevenue()"
+                                                class="filter-button filter-button-refresh filter-button-disabled" disabled>
+                                            <i class="fas fa-sync-alt"></i>
+                                            <span>Analyze</span>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Analysis Results (hidden until analyzed) -->
+                                <div id="customerAnalysisResults" class="hidden">
+                                    <!-- Revenue Distribution Chart -->
+                                    <div class="wizard-field-group">
+                                        <label class="text-xs font-medium text-gray-600 mb-2 block">Cumulative Revenue Distribution</label>
+                                        <div id="customerRevenueChartContainer" class="revenue-chart-container">
+                                            <svg id="customerRevenueDistributionChart"></svg>
+                                        </div>
+                                    </div>
+
+                                    <!-- Threshold Input -->
+                                    <div class="wizard-field-group">
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-sm text-gray-600">Include customers covering up to</span>
+                                            <input type="number" id="customerRevenueThreshold" value="80" min="1" max="100"
+                                                   class="form-input w-20 text-sm text-center" onchange="onCustomerThresholdChange()">
+                                            <span class="text-sm text-gray-600">% of cumulative revenue</span>
+                                        </div>
+                                    </div>
+
+                                    <!-- Analysis Summary -->
+                                    <div id="customerAnalysisSummary" class="analysis-summary-box">
+                                        <div class="analysis-summary-header">
+                                            <i class="fas fa-chart-pie mr-2"></i>
+                                            Analysis Results
+                                        </div>
+                                        <div class="analysis-summary-content">
+                                            <div class="analysis-stat">
+                                                <span class="stat-label">Total customers:</span>
+                                                <span id="totalCustomersCount" class="stat-value">-</span>
+                                            </div>
+                                            <div class="analysis-stat">
+                                                <span class="stat-label">Selected customers:</span>
+                                                <span id="selectedCustomersCount" class="stat-value">-</span>
+                                                <span id="selectedCustomersPercent" class="stat-percent"></span>
+                                            </div>
+                                            <div class="analysis-stat">
+                                                <span class="stat-label">Revenue coverage:</span>
+                                                <span id="customerRevenueCoverage" class="stat-value">-</span>
+                                                <span id="customerRevenueCoverageAmount" class="stat-amount"></span>
+                                            </div>
+                                        </div>
+                                        <div class="analysis-summary-footer">
+                                            <i class="fas fa-info-circle mr-1"></i>
+                                            Customer list computed dynamically at training time
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Analysis Error -->
+                                <div id="customerAnalysisError" class="hidden">
+                                    <div class="wizard-info-box error">
+                                        <i class="fas fa-exclamation-circle"></i>
+                                        <span id="customerAnalysisErrorText">Analysis failed</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-footer-wizard-neu">
+                            <div class="footer-left"></div>
+                            <div class="footer-right">
+                                <button onclick="applyTopCustomersFilter()" class="btn-neu btn-neu-action btn-neu-save">
+                                    <span class="btn-neu-inner">Apply</span>
+                                </button>
+                                <button onclick="closeTopCustomersModal()" class="btn-neu btn-neu-action btn-neu-cancel">
+                                    <span class="btn-neu-inner">Cancel</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Customer Metrics Modal -->
+                <div class="modal-overlay hidden" id="customerMetricsModal">
+                    <div class="modal-container modal-container-lg">
+                        <div class="modal-header">
+                            <div class="modal-header-icon info">
+                                <i class="fas fa-calculator"></i>
+                            </div>
+                            <h3 class="modal-header-title">Customer Metrics Filters</h3>
+                        </div>
+                        <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
+                            <!-- Existing Aggregation Filters List -->
+                            <div id="existingAggregationFiltersSection" class="hidden">
+                                <label class="text-xs font-medium text-gray-600 mb-2 block">Existing Filters</label>
+                                <div class="existing-filters-list" id="existingAggregationFiltersList">
+                                    <!-- Filter items will be inserted here dynamically -->
+                                </div>
+                                <div class="existing-filters-divider"></div>
+                            </div>
+
+                            <!-- Transaction Count Filter Section -->
+                            <div class="customer-metrics-section">
+                                <div class="customer-metrics-section-header">
+                                    <i class="fas fa-shopping-cart"></i>
+                                    <span>Transaction Count Filter</span>
+                                </div>
+                                <div class="customer-metrics-section-body">
+                                    <p class="wizard-field-hint mb-3">
+                                        <i class="fas fa-info-circle mr-1"></i>
+                                        Filter customers based on their number of transactions
+                                    </p>
+                                    <div class="customer-metrics-form-row">
+                                        <div class="customer-metrics-field">
+                                            <label class="text-xs font-medium text-gray-600 mb-1 block">Customer ID Column</label>
+                                            <select id="txnCountCustomerColumn" class="form-select text-sm">
+                                                <option value="">Select column...</option>
+                                            </select>
+                                        </div>
+                                        <div class="customer-metrics-field">
+                                            <label class="text-xs font-medium text-gray-600 mb-1 block">Filter Type</label>
+                                            <select id="txnCountFilterType" class="form-select text-sm" onchange="updateTxnCountInputs()">
+                                                <option value="greater_than">Greater than</option>
+                                                <option value="less_than">Less than</option>
+                                                <option value="range">Range</option>
+                                            </select>
+                                        </div>
+                                        <div class="customer-metrics-field" id="txnCountValueContainer">
+                                            <label class="text-xs font-medium text-gray-600 mb-1 block">Value</label>
+                                            <input type="number" id="txnCountValue" class="form-input text-sm" min="1" placeholder="e.g., 5">
+                                        </div>
+                                        <div class="customer-metrics-field hidden" id="txnCountMinContainer">
+                                            <label class="text-xs font-medium text-gray-600 mb-1 block">Min</label>
+                                            <input type="number" id="txnCountMin" class="form-input text-sm" min="0" placeholder="Min">
+                                        </div>
+                                        <div class="customer-metrics-field hidden" id="txnCountMaxContainer">
+                                            <label class="text-xs font-medium text-gray-600 mb-1 block">Max</label>
+                                            <input type="number" id="txnCountMax" class="form-input text-sm" min="0" placeholder="Max">
+                                        </div>
+                                        <div class="customer-metrics-field customer-metrics-field-btn">
+                                            <label class="text-xs font-medium text-gray-600 mb-1 block">&nbsp;</label>
+                                            <button type="button" class="filter-button" onclick="addTransactionCountFilter()">
+                                                <i class="fas fa-plus"></i>
+                                                Add Filter
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Spending Filter Section -->
+                            <div class="customer-metrics-section">
+                                <div class="customer-metrics-section-header">
+                                    <i class="fas fa-dollar-sign"></i>
+                                    <span>Spending Filter</span>
+                                </div>
+                                <div class="customer-metrics-section-body">
+                                    <p class="wizard-field-hint mb-3">
+                                        <i class="fas fa-info-circle mr-1"></i>
+                                        Filter customers based on their total spending
+                                    </p>
+                                    <div class="customer-metrics-form-row">
+                                        <div class="customer-metrics-field">
+                                            <label class="text-xs font-medium text-gray-600 mb-1 block">Customer ID Column</label>
+                                            <select id="spendingCustomerColumn" class="form-select text-sm">
+                                                <option value="">Select column...</option>
+                                            </select>
+                                        </div>
+                                        <div class="customer-metrics-field">
+                                            <label class="text-xs font-medium text-gray-600 mb-1 block">Amount Column</label>
+                                            <select id="spendingAmountColumn" class="form-select text-sm">
+                                                <option value="">Select column...</option>
+                                            </select>
+                                        </div>
+                                        <div class="customer-metrics-field">
+                                            <label class="text-xs font-medium text-gray-600 mb-1 block">Filter Type</label>
+                                            <select id="spendingFilterType" class="form-select text-sm" onchange="updateSpendingInputs()">
+                                                <option value="greater_than">Greater than</option>
+                                                <option value="less_than">Less than</option>
+                                                <option value="range">Range</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="customer-metrics-form-row mt-3">
+                                        <div class="customer-metrics-field" id="spendingValueContainer">
+                                            <label class="text-xs font-medium text-gray-600 mb-1 block">Value</label>
+                                            <input type="number" id="spendingValue" class="form-input text-sm" min="0" step="0.01" placeholder="e.g., 1000">
+                                        </div>
+                                        <div class="customer-metrics-field hidden" id="spendingMinContainer">
+                                            <label class="text-xs font-medium text-gray-600 mb-1 block">Min</label>
+                                            <input type="number" id="spendingMin" class="form-input text-sm" min="0" step="0.01" placeholder="Min">
+                                        </div>
+                                        <div class="customer-metrics-field hidden" id="spendingMaxContainer">
+                                            <label class="text-xs font-medium text-gray-600 mb-1 block">Max</label>
+                                            <input type="number" id="spendingMax" class="form-input text-sm" min="0" step="0.01" placeholder="Max">
+                                        </div>
+                                        <div class="customer-metrics-field customer-metrics-field-btn">
+                                            <label class="text-xs font-medium text-gray-600 mb-1 block">&nbsp;</label>
+                                            <button type="button" class="filter-button" onclick="addSpendingFilter()">
+                                                <i class="fas fa-plus"></i>
+                                                Add Filter
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-footer-wizard-neu">
+                            <div class="footer-left"></div>
+                            <div class="footer-right">
+                                <button onclick="closeCustomerMetricsModal()" class="btn-neu btn-neu-action btn-neu-save">
+                                    <span class="btn-neu-inner">Done</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Customer Filter Columns Modal (reuses Products modal pattern) -->
+                <div class="modal-overlay hidden" id="customerFilterColumnsModal">
+                    <div class="modal-container modal-container-lg">
+                        <div class="modal-header">
+                            <div class="modal-header-icon info">
+                                <i class="fas fa-filter"></i>
+                            </div>
+                            <h3 class="modal-header-title">Filter Columns (Customers)</h3>
+                        </div>
+                        <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
+                            <!-- Existing Filters List -->
+                            <div id="customerExistingFiltersSection" class="hidden">
+                                <label class="text-xs font-medium text-gray-600 mb-2 block">Existing Filters</label>
+                                <div class="existing-filters-list" id="customerExistingFiltersList">
+                                    <!-- Filter items will be inserted here dynamically -->
+                                </div>
+                                <div class="existing-filters-divider"></div>
+                            </div>
+
+                            <!-- Add New Filter Section -->
+                            <div id="customerAddFilterSection">
+                                <label class="text-xs font-medium text-gray-600 mb-2 block">Add New Filter</label>
+                                <div class="add-filter-form-group">
+                                    <select id="customerFilterColumnSelect" class="form-select w-full text-sm" onchange="onCustomerFilterColumnSelect()">
+                                        <option value="">Select column...</option>
+                                    </select>
+                                </div>
+
+                                <!-- Inline Filter Configuration (appears based on column type) -->
+                                <div id="customerFilterConfigContainer" class="hidden">
+                                    <!-- Category Filter Config -->
+                                    <div id="customerCategoryFilterConfig" class="filter-config-panel hidden">
+                                        <div class="filter-config-header">
+                                            <span id="customerCategoryFilterColumnName" class="filter-config-column-name"></span>
+                                            <span class="filter-config-type-badge">STRING</span>
+                                        </div>
+                                        <div class="filter-config-body">
+                                            <div class="category-filter-mode" style="margin-bottom: 12px;">
+                                                <label>
+                                                    <input type="radio" name="customerCategoryMode" value="include" checked>
+                                                    Include selected
+                                                </label>
+                                                <label>
+                                                    <input type="radio" name="customerCategoryMode" value="exclude">
+                                                    Exclude selected
+                                                </label>
+                                            </div>
+                                            <div class="category-filter-values-container" id="customerCategoryValuesContainer">
+                                                <!-- List mode or autocomplete will be rendered here -->
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Numeric Filter Config -->
+                                    <div id="customerNumericFilterConfig" class="filter-config-panel hidden">
+                                        <div class="filter-config-header">
+                                            <span id="customerNumericFilterColumnName" class="filter-config-column-name"></span>
+                                            <span id="customerNumericFilterTypeBadge" class="filter-config-type-badge">INTEGER</span>
+                                        </div>
+                                        <div class="filter-config-stats" id="customerNumericFilterStats">
+                                            <!-- Range: X - Y | Nulls: Z% -->
+                                        </div>
+                                        <div class="filter-config-body">
+                                            <div class="numeric-filter-type" style="margin-bottom: 12px;">
+                                                <label>
+                                                    <input type="radio" name="customerNumericType" value="range" checked onchange="updateCustomerNumericFilterInputs()">
+                                                    Range
+                                                </label>
+                                                <label>
+                                                    <input type="radio" name="customerNumericType" value="greater_than" onchange="updateCustomerNumericFilterInputs()">
+                                                    Greater than
+                                                </label>
+                                                <label>
+                                                    <input type="radio" name="customerNumericType" value="less_than" onchange="updateCustomerNumericFilterInputs()">
+                                                    Less than
+                                                </label>
+                                                <label>
+                                                    <input type="radio" name="customerNumericType" value="equals" onchange="updateCustomerNumericFilterInputs()">
+                                                    Equals
+                                                </label>
+                                                <label>
+                                                    <input type="radio" name="customerNumericType" value="not_equals" onchange="updateCustomerNumericFilterInputs()">
+                                                    Not Equals
+                                                </label>
+                                            </div>
+                                            <div class="numeric-filter-inputs" id="customerNumericInputs">
+                                                <div class="numeric-filter-input-group">
+                                                    <label class="numeric-filter-input-label">Min</label>
+                                                    <input type="number" class="numeric-filter-input" id="customerNumericMin" placeholder="">
+                                                </div>
+                                                <div class="numeric-filter-input-group">
+                                                    <label class="numeric-filter-input-label">Max</label>
+                                                    <input type="number" class="numeric-filter-input" id="customerNumericMax" placeholder="">
+                                                </div>
+                                            </div>
+                                            <div class="numeric-filter-null-handling" id="customerNumericNullHandling">
+                                                <label>
+                                                    <input type="checkbox" id="customerNumericIncludeNulls" checked>
+                                                    Include NULL values
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Date Filter Config -->
+                                    <div id="customerDateFilterConfig" class="filter-config-panel hidden">
+                                        <div class="filter-config-header">
+                                            <span id="customerDateFilterColumnName" class="filter-config-column-name"></span>
+                                            <span class="filter-config-type-badge">DATE</span>
+                                        </div>
+                                        <div class="filter-config-stats" id="customerDateFilterStats">
+                                            <!-- Range: YYYY-MM-DD - YYYY-MM-DD -->
+                                        </div>
+                                        <div class="filter-config-body">
+                                            <div class="date-filter-type" style="margin-bottom: 12px;">
+                                                <label>
+                                                    <input type="radio" name="customerDateType" value="relative" checked onchange="updateCustomerDateFilterInputs()">
+                                                    Relative
+                                                </label>
+                                                <label>
+                                                    <input type="radio" name="customerDateType" value="range" onchange="updateCustomerDateFilterInputs()">
+                                                    Date Range
+                                                </label>
+                                            </div>
+                                            <!-- Relative Date Options -->
+                                            <div class="date-filter-relative" id="customerDateRelativeInputs">
+                                                <select id="customerDateRelativeOption" class="form-select w-full text-sm">
+                                                    <option value="last_7_days">Last 7 days</option>
+                                                    <option value="last_30_days" selected>Last 30 days</option>
+                                                    <option value="last_90_days">Last 90 days</option>
+                                                    <option value="this_month">This month</option>
+                                                    <option value="this_quarter">This quarter</option>
+                                                    <option value="this_year">This year</option>
+                                                </select>
+                                            </div>
+                                            <!-- Date Range Inputs -->
+                                            <div class="date-filter-range hidden" id="customerDateRangeInputs">
+                                                <div class="date-filter-input-group">
+                                                    <label class="date-filter-input-label">Start Date</label>
+                                                    <input type="date" class="form-input text-sm" id="customerDateStart">
+                                                </div>
+                                                <div class="date-filter-input-group">
+                                                    <label class="date-filter-input-label">End Date</label>
+                                                    <input type="date" class="form-input text-sm" id="customerDateEnd">
+                                                </div>
+                                            </div>
+                                            <div class="date-filter-null-handling" id="customerDateNullHandling" style="margin-top: 12px;">
+                                                <label>
+                                                    <input type="checkbox" id="customerDateIncludeNulls" checked>
+                                                    Include NULL values
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-footer-wizard-neu">
+                            <div class="footer-left"></div>
+                            <div class="footer-right">
+                                <button onclick="applyCustomerFilterColumnsModal()" class="btn-neu btn-neu-action btn-neu-save">
+                                    <span class="btn-neu-inner">Apply</span>
+                                </button>
+                                <button onclick="closeCustomerFilterColumnsModal()" class="btn-neu btn-neu-action btn-neu-cancel">
                                     <span class="btn-neu-inner">Cancel</span>
                                 </button>
                             </div>
@@ -1226,6 +1671,26 @@ function resetWizard() {
     };
     productFiltersState.columnAnalysis = {};
     productFiltersState.selectedFilterColumn = null;
+
+    // Reset customer filters state
+    customerAnalysisData = null;
+    customerFiltersApplied = false;
+    customerFiltersState.pending = {
+        topRevenue: { enabled: false, customerColumn: null, revenueColumn: null, thresholdPercent: 80 },
+        aggregationFilters: [],
+        categoryFilters: [],
+        numericFilters: [],
+        dateFilters: []
+    };
+    customerFiltersState.committed = {
+        topRevenue: { enabled: false, customerColumn: null, revenueColumn: null, thresholdPercent: 80 },
+        aggregationFilters: [],
+        categoryFilters: [],
+        numericFilters: [],
+        dateFilters: []
+    };
+    customerFiltersState.columnAnalysis = {};
+    customerFiltersState.selectedFilterColumn = null;
 
     // Reset filter UI elements
     const timestampSelect = document.getElementById('timestampColumn');
@@ -2966,6 +3431,42 @@ let productFiltersState = {
     selectedFilterColumn: null  // Currently selected column in Filter Columns modal
 };
 
+// Customer Filters State Management
+let customerFiltersState = {
+    pending: {
+        topRevenue: {
+            enabled: false,
+            customerColumn: null,    // Grouping column (NOT excluded from other filters)
+            revenueColumn: null,     // Aggregation column (excluded after use)
+            thresholdPercent: 80
+        },
+        aggregationFilters: [],  // [{type: 'transaction_count'|'spending', customerColumn, amountColumn?, filterType, value, min?, max?}]
+        categoryFilters: [],     // [{column, mode, values, colInfo}]
+        numericFilters: [],      // [{column, type, min, max, value, includeNulls, colInfo}]
+        dateFilters: []          // [{column, filterType, relativeOption, startDate, endDate, includeNulls, colInfo}]
+    },
+    committed: {
+        topRevenue: {
+            enabled: false,
+            customerColumn: null,
+            revenueColumn: null,
+            thresholdPercent: 80
+        },
+        aggregationFilters: [],
+        categoryFilters: [],
+        numericFilters: [],
+        dateFilters: []
+    },
+    columnAnalysis: {},  // Cached column analysis data (shared with products or separate)
+    selectedFilterColumn: null  // Currently selected column in Filter Columns modal
+};
+
+// Track if customer filters have been applied (committed via Refresh Dataset)
+let customerFiltersApplied = false;
+
+// Customer revenue analysis data (Pareto chart data)
+let customerAnalysisData = null;
+
 // --- Sub-chapter Toggle ---
 function toggleSubchapter(name) {
     const content = document.getElementById(`${name}Content`);
@@ -2979,6 +3480,8 @@ function toggleSubchapter(name) {
         // Update button states when opening sub-chapter
         if (name === 'products') {
             updateProductsRefreshButtonState();
+        } else if (name === 'customers') {
+            updateCustomersRefreshButtonState();
         }
     } else {
         content.classList.add('hidden');
@@ -3050,6 +3553,1076 @@ function applyTopProductsFilter() {
     updateProductsNavBadges();
     updateProductsRefreshButtonState();
     closeTopProductsModal();
+}
+
+// ============================================================================
+// TOP CUSTOMERS MODAL
+// ============================================================================
+
+function openTopCustomersModal() {
+    const modal = document.getElementById('topCustomersModal');
+    modal.classList.remove('hidden');
+
+    // Auto-enable top customers filter when modal opens
+    document.getElementById('enableTopCustomers').checked = true;
+    customerFiltersState.pending.topRevenue.enabled = true;
+
+    // Populate column dropdowns
+    populateTopCustomersDropdowns();
+
+    // Restore values from pending state if they exist
+    const pending = customerFiltersState.pending.topRevenue;
+    if (pending.customerColumn) {
+        document.getElementById('customerIdColumn').value = pending.customerColumn;
+    }
+    if (pending.revenueColumn) {
+        document.getElementById('customerRevenueColumn').value = pending.revenueColumn;
+    }
+    document.getElementById('customerRevenueThreshold').value = pending.thresholdPercent || 80;
+
+    // Update analyze button state
+    updateCustomerAnalyzeButtonState();
+
+    // Show analysis results if we have data
+    if (customerAnalysisData) {
+        document.getElementById('customerAnalysisResults').classList.remove('hidden');
+        updateCustomerRevenueChart(pending.thresholdPercent || 80);
+    }
+}
+
+function closeTopCustomersModal() {
+    const modal = document.getElementById('topCustomersModal');
+    modal.classList.add('hidden');
+}
+
+function populateTopCustomersDropdowns() {
+    const customerIdSelect = document.getElementById('customerIdColumn');
+    const revenueSelect = document.getElementById('customerRevenueColumn');
+
+    // Get selected columns from schema builder
+    const columns = [];
+    Object.entries(schemaBuilderState.selectedColumns).forEach(([table, cols]) => {
+        const shortTable = table.replace('raw_data.', '');
+        cols.forEach(col => {
+            columns.push({ table: shortTable, column: col, fullName: `${shortTable}.${col}` });
+        });
+    });
+
+    // Get column types from analysis if available
+    const colAnalysis = customerFiltersState.columnAnalysis || productFiltersState.columnAnalysis;
+
+    // Filter for numeric columns for revenue (exclude columns used as aggregation in other filters)
+    const numericColumns = columns.filter(col => {
+        const info = colAnalysis[col.fullName];
+        const isNumeric = info?.type && ['INTEGER', 'FLOAT', 'INT64', 'FLOAT64', 'NUMERIC', 'BIGNUMERIC'].includes(info.type.toUpperCase());
+        const isExcluded = isColumnCommittedInAnyFilter(col.fullName);
+        return isNumeric && !isExcluded;
+    });
+
+    // Populate Customer ID dropdown (all columns - grouping columns not excluded)
+    customerIdSelect.innerHTML = '<option value="">Select column...</option>';
+    columns.forEach(col => {
+        const option = document.createElement('option');
+        option.value = col.fullName;
+        option.textContent = col.fullName;
+        customerIdSelect.appendChild(option);
+    });
+
+    // Populate Revenue dropdown (only numeric columns)
+    revenueSelect.innerHTML = '<option value="">Select column...</option>';
+    numericColumns.forEach(col => {
+        const option = document.createElement('option');
+        option.value = col.fullName;
+        option.textContent = col.fullName;
+        revenueSelect.appendChild(option);
+    });
+}
+
+function onCustomerColumnChange() {
+    updateCustomerAnalyzeButtonState();
+}
+
+function onCustomerRevenueColumnChange() {
+    updateCustomerAnalyzeButtonState();
+}
+
+function updateCustomerAnalyzeButtonState() {
+    const customerCol = document.getElementById('customerIdColumn')?.value;
+    const revenueCol = document.getElementById('customerRevenueColumn')?.value;
+    const analyzeBtn = document.getElementById('analyzeCustomersBtn');
+
+    if (customerCol && revenueCol) {
+        analyzeBtn.disabled = false;
+        analyzeBtn.classList.remove('filter-button-disabled');
+    } else {
+        analyzeBtn.disabled = true;
+        analyzeBtn.classList.add('filter-button-disabled');
+    }
+}
+
+async function analyzeCustomerRevenue() {
+    const customerCol = document.getElementById('customerIdColumn').value;
+    const revenueCol = document.getElementById('customerRevenueColumn').value;
+
+    if (!customerCol || !revenueCol) {
+        showNotification('Please select both customer ID and revenue columns', 'error');
+        return;
+    }
+
+    const analyzeBtn = document.getElementById('analyzeCustomersBtn');
+    const originalHtml = analyzeBtn.innerHTML;
+    analyzeBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Analyzing...';
+    analyzeBtn.disabled = true;
+
+    try {
+        // Call the customer revenue analysis API
+        const response = await fetch(`/api/models/{{ model.id }}/datasets/analyze-customer-revenue/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify({
+                session_id: schemaBuilderState.sessionId,
+                customer_column: customerCol,
+                revenue_column: revenueCol
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`Analysis failed: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        customerAnalysisData = data;
+
+        // Store column selections in pending state
+        customerFiltersState.pending.topRevenue.customerColumn = customerCol;
+        customerFiltersState.pending.topRevenue.revenueColumn = revenueCol;
+
+        // Show analysis results
+        document.getElementById('customerAnalysisResults').classList.remove('hidden');
+        document.getElementById('customerAnalysisError').classList.add('hidden');
+
+        // Render the Pareto chart
+        renderCustomerRevenueChart(data);
+
+        // Update stats
+        const threshold = parseInt(document.getElementById('customerRevenueThreshold').value) || 80;
+        updateCustomerRevenueChart(threshold);
+
+    } catch (error) {
+        console.error('Customer revenue analysis failed:', error);
+        document.getElementById('customerAnalysisError').classList.remove('hidden');
+        document.getElementById('customerAnalysisErrorText').textContent = error.message;
+        document.getElementById('customerAnalysisResults').classList.add('hidden');
+    } finally {
+        analyzeBtn.innerHTML = originalHtml;
+        analyzeBtn.disabled = false;
+    }
+}
+
+function renderCustomerRevenueChart(data) {
+    // Similar to product revenue chart - render Pareto chart using D3
+    const container = document.getElementById('customerRevenueChartContainer');
+    const svg = d3.select('#customerRevenueDistributionChart');
+
+    // Clear previous chart
+    svg.selectAll('*').remove();
+
+    const margin = { top: 20, right: 30, bottom: 40, left: 50 };
+    const width = container.clientWidth - margin.left - margin.right;
+    const height = 180 - margin.top - margin.bottom;
+
+    const g = svg.append('g')
+        .attr('transform', `translate(${margin.left},${margin.top})`);
+
+    // Prepare data
+    const distributionData = data.distribution || [];
+
+    if (distributionData.length === 0) return;
+
+    // X scale (percentage of customers)
+    const x = d3.scaleLinear()
+        .domain([0, 100])
+        .range([0, width]);
+
+    // Y scale (cumulative revenue percentage)
+    const y = d3.scaleLinear()
+        .domain([0, 100])
+        .range([height, 0]);
+
+    // Line generator
+    const line = d3.line()
+        .x(d => x(d.customer_percent))
+        .y(d => y(d.cumulative_revenue_percent))
+        .curve(d3.curveMonotoneX);
+
+    // Area under the line
+    const area = d3.area()
+        .x(d => x(d.customer_percent))
+        .y0(height)
+        .y1(d => y(d.cumulative_revenue_percent))
+        .curve(d3.curveMonotoneX);
+
+    // Draw area
+    g.append('path')
+        .datum(distributionData)
+        .attr('fill', '#dbeafe')
+        .attr('d', area);
+
+    // Draw line
+    g.append('path')
+        .datum(distributionData)
+        .attr('fill', 'none')
+        .attr('stroke', '#2563eb')
+        .attr('stroke-width', 2)
+        .attr('d', line);
+
+    // X axis
+    g.append('g')
+        .attr('transform', `translate(0,${height})`)
+        .call(d3.axisBottom(x).ticks(5).tickFormat(d => d + '%'))
+        .selectAll('text')
+        .style('font-size', '10px');
+
+    // Y axis
+    g.append('g')
+        .call(d3.axisLeft(y).ticks(5).tickFormat(d => d + '%'))
+        .selectAll('text')
+        .style('font-size', '10px');
+
+    // X axis label
+    g.append('text')
+        .attr('x', width / 2)
+        .attr('y', height + 35)
+        .attr('text-anchor', 'middle')
+        .style('font-size', '11px')
+        .style('fill', '#6b7280')
+        .text('% of Customers');
+
+    // Y axis label
+    g.append('text')
+        .attr('transform', 'rotate(-90)')
+        .attr('y', -45)
+        .attr('x', -height / 2)
+        .attr('text-anchor', 'middle')
+        .style('font-size', '11px')
+        .style('fill', '#6b7280')
+        .text('Cumulative Revenue %');
+
+    // Store reference for threshold line updates
+    svg.node().chartData = { x, y, height, g, distributionData };
+}
+
+function updateCustomerRevenueChart(threshold) {
+    if (!customerAnalysisData) return;
+
+    const svg = d3.select('#customerRevenueDistributionChart');
+    const chartData = svg.node()?.chartData;
+    if (!chartData) return;
+
+    const { x, y, height, g, distributionData } = chartData;
+
+    // Remove previous threshold elements
+    g.selectAll('.threshold-line').remove();
+    g.selectAll('.threshold-area').remove();
+
+    // Find the customer percentage for the given revenue threshold
+    let customerPercent = 100;
+    for (const point of distributionData) {
+        if (point.cumulative_revenue_percent >= threshold) {
+            customerPercent = point.customer_percent;
+            break;
+        }
+    }
+
+    // Draw threshold line
+    g.append('line')
+        .attr('class', 'threshold-line')
+        .attr('x1', 0)
+        .attr('x2', x(customerPercent))
+        .attr('y1', y(threshold))
+        .attr('y2', y(threshold))
+        .attr('stroke', '#16a34a')
+        .attr('stroke-width', 1.5)
+        .attr('stroke-dasharray', '4,4');
+
+    g.append('line')
+        .attr('class', 'threshold-line')
+        .attr('x1', x(customerPercent))
+        .attr('x2', x(customerPercent))
+        .attr('y1', y(threshold))
+        .attr('y2', height)
+        .attr('stroke', '#16a34a')
+        .attr('stroke-width', 1.5)
+        .attr('stroke-dasharray', '4,4');
+
+    // Update stats
+    const totalCustomers = customerAnalysisData.total_customers || 0;
+    const selectedCustomers = Math.round(totalCustomers * customerPercent / 100);
+    const totalRevenue = customerAnalysisData.total_revenue || 0;
+    const selectedRevenue = totalRevenue * threshold / 100;
+
+    document.getElementById('totalCustomersCount').textContent = totalCustomers.toLocaleString();
+    document.getElementById('selectedCustomersCount').textContent = selectedCustomers.toLocaleString();
+    document.getElementById('selectedCustomersPercent').textContent = `(${customerPercent.toFixed(1)}%)`;
+    document.getElementById('customerRevenueCoverage').textContent = `${threshold}%`;
+    document.getElementById('customerRevenueCoverageAmount').textContent = `($${selectedRevenue.toLocaleString(undefined, { maximumFractionDigits: 0 })})`;
+
+    // Update pending state
+    customerFiltersState.pending.topRevenue.thresholdPercent = threshold;
+}
+
+function onCustomerThresholdChange() {
+    const threshold = parseInt(document.getElementById('customerRevenueThreshold').value) || 80;
+    updateCustomerRevenueChart(threshold);
+}
+
+function applyTopCustomersFilter() {
+    // Update state with current modal values
+    const customerCol = document.getElementById('customerIdColumn')?.value;
+    const revenueCol = document.getElementById('customerRevenueColumn')?.value;
+    const threshold = parseInt(document.getElementById('customerRevenueThreshold')?.value) || 80;
+
+    // Only enable if we have valid column selections
+    const isEnabled = customerCol && revenueCol;
+
+    customerFiltersState.pending.topRevenue = {
+        enabled: isEnabled,
+        customerColumn: customerCol || null,
+        revenueColumn: revenueCol || null,
+        thresholdPercent: threshold
+    };
+
+    updateCustomersFilterSummary();
+    updateCustomersRefreshButtonState();
+    closeTopCustomersModal();
+}
+
+// ============================================================================
+// CUSTOMER METRICS MODAL
+// ============================================================================
+
+function openCustomerMetricsModal() {
+    const modal = document.getElementById('customerMetricsModal');
+    modal.classList.remove('hidden');
+
+    // Populate column dropdowns
+    populateCustomerMetricsDropdowns();
+
+    // Render existing aggregation filters
+    renderExistingAggregationFilters();
+
+    // Reset form inputs
+    resetCustomerMetricsInputs();
+}
+
+function closeCustomerMetricsModal() {
+    const modal = document.getElementById('customerMetricsModal');
+    modal.classList.add('hidden');
+}
+
+function populateCustomerMetricsDropdowns() {
+    // Get columns from schema builder
+    const columns = [];
+    Object.entries(schemaBuilderState.selectedColumns).forEach(([table, cols]) => {
+        const shortTable = table.replace('raw_data.', '');
+        cols.forEach(col => {
+            columns.push({ table: shortTable, column: col, fullName: `${shortTable}.${col}` });
+        });
+    });
+
+    // Get column types from analysis if available
+    const colAnalysis = customerFiltersState.columnAnalysis || productFiltersState.columnAnalysis;
+
+    // Numeric columns for amount (exclude committed aggregation columns)
+    const numericColumns = columns.filter(col => {
+        const info = colAnalysis[col.fullName];
+        const isNumeric = info?.type && ['INTEGER', 'FLOAT', 'INT64', 'FLOAT64', 'NUMERIC', 'BIGNUMERIC'].includes(info.type.toUpperCase());
+        const isExcluded = isColumnCommittedInAnyFilter(col.fullName);
+        return isNumeric && !isExcluded;
+    });
+
+    // Transaction Count - Customer ID (all columns - grouping not excluded)
+    const txnCountCustomerSelect = document.getElementById('txnCountCustomerColumn');
+    txnCountCustomerSelect.innerHTML = '<option value="">Select column...</option>';
+    columns.forEach(col => {
+        const option = document.createElement('option');
+        option.value = col.fullName;
+        option.textContent = col.fullName;
+        txnCountCustomerSelect.appendChild(option);
+    });
+
+    // Spending - Customer ID (all columns)
+    const spendingCustomerSelect = document.getElementById('spendingCustomerColumn');
+    spendingCustomerSelect.innerHTML = '<option value="">Select column...</option>';
+    columns.forEach(col => {
+        const option = document.createElement('option');
+        option.value = col.fullName;
+        option.textContent = col.fullName;
+        spendingCustomerSelect.appendChild(option);
+    });
+
+    // Spending - Amount Column (numeric columns, excluding used ones)
+    const spendingAmountSelect = document.getElementById('spendingAmountColumn');
+    spendingAmountSelect.innerHTML = '<option value="">Select column...</option>';
+    numericColumns.forEach(col => {
+        // Also check if this column is already used in pending customer aggregations
+        const isUsedInPending = customerFiltersState.pending.aggregationFilters.some(f => f.amountColumn === col.fullName);
+        // Also check if used as revenue column in top customers
+        const isUsedAsRevenue = customerFiltersState.pending.topRevenue.revenueColumn === col.fullName;
+        if (!isUsedInPending && !isUsedAsRevenue) {
+            const option = document.createElement('option');
+            option.value = col.fullName;
+            option.textContent = col.fullName;
+            spendingAmountSelect.appendChild(option);
+        }
+    });
+}
+
+function resetCustomerMetricsInputs() {
+    // Reset transaction count inputs
+    document.getElementById('txnCountFilterType').value = 'greater_than';
+    document.getElementById('txnCountValue').value = '';
+    document.getElementById('txnCountMin').value = '';
+    document.getElementById('txnCountMax').value = '';
+    updateTxnCountInputs();
+
+    // Reset spending inputs
+    document.getElementById('spendingFilterType').value = 'greater_than';
+    document.getElementById('spendingValue').value = '';
+    document.getElementById('spendingMin').value = '';
+    document.getElementById('spendingMax').value = '';
+    updateSpendingInputs();
+}
+
+function updateTxnCountInputs() {
+    const filterType = document.getElementById('txnCountFilterType').value;
+    const valueContainer = document.getElementById('txnCountValueContainer');
+    const minContainer = document.getElementById('txnCountMinContainer');
+    const maxContainer = document.getElementById('txnCountMaxContainer');
+
+    if (filterType === 'range') {
+        valueContainer.classList.add('hidden');
+        minContainer.classList.remove('hidden');
+        maxContainer.classList.remove('hidden');
+    } else {
+        valueContainer.classList.remove('hidden');
+        minContainer.classList.add('hidden');
+        maxContainer.classList.add('hidden');
+    }
+}
+
+function updateSpendingInputs() {
+    const filterType = document.getElementById('spendingFilterType').value;
+    const valueContainer = document.getElementById('spendingValueContainer');
+    const minContainer = document.getElementById('spendingMinContainer');
+    const maxContainer = document.getElementById('spendingMaxContainer');
+
+    if (filterType === 'range') {
+        valueContainer.classList.add('hidden');
+        minContainer.classList.remove('hidden');
+        maxContainer.classList.remove('hidden');
+    } else {
+        valueContainer.classList.remove('hidden');
+        minContainer.classList.add('hidden');
+        maxContainer.classList.add('hidden');
+    }
+}
+
+function addTransactionCountFilter() {
+    const customerColumn = document.getElementById('txnCountCustomerColumn').value;
+    const filterType = document.getElementById('txnCountFilterType').value;
+
+    if (!customerColumn) {
+        showNotification('Please select a customer ID column', 'error');
+        return;
+    }
+
+    let filterData = {
+        type: 'transaction_count',
+        customerColumn: customerColumn,
+        filterType: filterType
+    };
+
+    if (filterType === 'range') {
+        const min = parseFloat(document.getElementById('txnCountMin').value);
+        const max = parseFloat(document.getElementById('txnCountMax').value);
+        if (isNaN(min) || isNaN(max)) {
+            showNotification('Please enter valid min and max values', 'error');
+            return;
+        }
+        filterData.min = min;
+        filterData.max = max;
+    } else {
+        const value = parseFloat(document.getElementById('txnCountValue').value);
+        if (isNaN(value)) {
+            showNotification('Please enter a valid value', 'error');
+            return;
+        }
+        filterData.value = value;
+    }
+
+    // Add to pending state
+    customerFiltersState.pending.aggregationFilters.push(filterData);
+
+    // Update UI
+    renderExistingAggregationFilters();
+    updateCustomersFilterSummary();
+    updateCustomersRefreshButtonState();
+
+    // Reset inputs
+    document.getElementById('txnCountCustomerColumn').value = '';
+    document.getElementById('txnCountValue').value = '';
+    document.getElementById('txnCountMin').value = '';
+    document.getElementById('txnCountMax').value = '';
+
+    showNotification('Transaction count filter added', 'success');
+}
+
+function addSpendingFilter() {
+    const customerColumn = document.getElementById('spendingCustomerColumn').value;
+    const amountColumn = document.getElementById('spendingAmountColumn').value;
+    const filterType = document.getElementById('spendingFilterType').value;
+
+    if (!customerColumn) {
+        showNotification('Please select a customer ID column', 'error');
+        return;
+    }
+    if (!amountColumn) {
+        showNotification('Please select an amount column', 'error');
+        return;
+    }
+
+    let filterData = {
+        type: 'spending',
+        customerColumn: customerColumn,
+        amountColumn: amountColumn,
+        filterType: filterType
+    };
+
+    if (filterType === 'range') {
+        const min = parseFloat(document.getElementById('spendingMin').value);
+        const max = parseFloat(document.getElementById('spendingMax').value);
+        if (isNaN(min) || isNaN(max)) {
+            showNotification('Please enter valid min and max values', 'error');
+            return;
+        }
+        filterData.min = min;
+        filterData.max = max;
+    } else {
+        const value = parseFloat(document.getElementById('spendingValue').value);
+        if (isNaN(value)) {
+            showNotification('Please enter a valid value', 'error');
+            return;
+        }
+        filterData.value = value;
+    }
+
+    // Add to pending state
+    customerFiltersState.pending.aggregationFilters.push(filterData);
+
+    // Update UI
+    renderExistingAggregationFilters();
+    updateCustomersFilterSummary();
+    updateCustomersRefreshButtonState();
+    populateCustomerMetricsDropdowns(); // Refresh to exclude used amount column
+
+    // Reset inputs
+    document.getElementById('spendingCustomerColumn').value = '';
+    document.getElementById('spendingAmountColumn').value = '';
+    document.getElementById('spendingValue').value = '';
+    document.getElementById('spendingMin').value = '';
+    document.getElementById('spendingMax').value = '';
+
+    showNotification('Spending filter added', 'success');
+}
+
+function renderExistingAggregationFilters() {
+    const container = document.getElementById('existingAggregationFiltersList');
+    const section = document.getElementById('existingAggregationFiltersSection');
+    const filters = customerFiltersState.pending.aggregationFilters;
+
+    if (filters.length === 0) {
+        section.classList.add('hidden');
+        return;
+    }
+
+    section.classList.remove('hidden');
+    container.innerHTML = filters.map((filter, index) => {
+        let description = '';
+        if (filter.type === 'transaction_count') {
+            if (filter.filterType === 'range') {
+                description = `Transactions: ${filter.min} - ${filter.max}`;
+            } else if (filter.filterType === 'greater_than') {
+                description = `Transactions > ${filter.value}`;
+            } else {
+                description = `Transactions < ${filter.value}`;
+            }
+            description += ` (grouped by ${filter.customerColumn})`;
+        } else if (filter.type === 'spending') {
+            if (filter.filterType === 'range') {
+                description = `Spending: $${filter.min} - $${filter.max}`;
+            } else if (filter.filterType === 'greater_than') {
+                description = `Spending > $${filter.value}`;
+            } else {
+                description = `Spending < $${filter.value}`;
+            }
+            description += ` (SUM of ${filter.amountColumn})`;
+        }
+
+        return `
+            <div class="existing-filter-item">
+                <div class="existing-filter-info">
+                    <div class="existing-filter-column">
+                        <span class="existing-filter-column-name">${filter.type === 'transaction_count' ? 'Transaction Count' : 'Spending'}</span>
+                        <span class="existing-filter-type-badge">${filter.filterType.replace('_', ' ')}</span>
+                    </div>
+                    <div class="existing-filter-value">${description}</div>
+                </div>
+                <div class="existing-filter-actions">
+                    <button class="existing-filter-btn delete" onclick="removeAggregationFilter(${index})" title="Remove">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function removeAggregationFilter(index) {
+    customerFiltersState.pending.aggregationFilters.splice(index, 1);
+    renderExistingAggregationFilters();
+    updateCustomersFilterSummary();
+    updateCustomersRefreshButtonState();
+    populateCustomerMetricsDropdowns(); // Refresh dropdowns
+}
+
+// ============================================================================
+// CUSTOMER FILTER COLUMNS MODAL
+// ============================================================================
+
+async function openCustomerFilterColumnsModal() {
+    const modal = document.getElementById('customerFilterColumnsModal');
+
+    // Render existing customer filters
+    renderCustomerExistingFiltersList();
+
+    // Pre-fetch column analysis if not cached
+    if (Object.keys(customerFiltersState.columnAnalysis).length === 0 &&
+        Object.keys(productFiltersState.columnAnalysis).length === 0) {
+        await fetchColumnAnalysis();
+    }
+
+    // Copy column analysis from products if not in customers
+    if (Object.keys(customerFiltersState.columnAnalysis).length === 0) {
+        customerFiltersState.columnAnalysis = { ...productFiltersState.columnAnalysis };
+    }
+
+    // Populate column dropdown
+    populateCustomerFilterColumnDropdown();
+
+    // Reset filter config
+    resetCustomerFilterConfigArea();
+
+    modal.classList.remove('hidden');
+}
+
+function closeCustomerFilterColumnsModal() {
+    const modal = document.getElementById('customerFilterColumnsModal');
+    modal.classList.add('hidden');
+    resetCustomerFilterConfigArea();
+}
+
+function populateCustomerFilterColumnDropdown() {
+    const select = document.getElementById('customerFilterColumnSelect');
+    const availableColumns = getAvailableCustomerFilterColumns();
+
+    select.innerHTML = '<option value="">Select column...</option>';
+
+    // Group by table
+    const byTable = {};
+    availableColumns.forEach(col => {
+        if (!byTable[col.table]) byTable[col.table] = [];
+        byTable[col.table].push(col);
+    });
+
+    Object.entries(byTable).forEach(([table, cols]) => {
+        const optgroup = document.createElement('optgroup');
+        optgroup.label = table;
+        cols.forEach(col => {
+            const colInfo = customerFiltersState.columnAnalysis[col.fullName] ||
+                           productFiltersState.columnAnalysis[col.fullName];
+            const option = document.createElement('option');
+            option.value = col.fullName;
+            option.textContent = `${col.column} (${colInfo?.type || 'unknown'})`;
+            optgroup.appendChild(option);
+        });
+        select.appendChild(optgroup);
+    });
+}
+
+function resetCustomerFilterConfigArea() {
+    customerFiltersState.selectedFilterColumn = null;
+    document.getElementById('customerFilterConfigContainer').classList.add('hidden');
+    document.getElementById('customerCategoryFilterConfig').classList.add('hidden');
+    document.getElementById('customerNumericFilterConfig').classList.add('hidden');
+    document.getElementById('customerDateFilterConfig').classList.add('hidden');
+    document.getElementById('customerFilterColumnSelect').value = '';
+}
+
+async function onCustomerFilterColumnSelect() {
+    const select = document.getElementById('customerFilterColumnSelect');
+    const columnName = select.value;
+
+    if (!columnName) {
+        resetCustomerFilterConfigArea();
+        return;
+    }
+
+    customerFiltersState.selectedFilterColumn = columnName;
+
+    // Get column info
+    let colInfo = customerFiltersState.columnAnalysis[columnName] ||
+                  productFiltersState.columnAnalysis[columnName];
+
+    // If not cached, fetch analysis
+    if (!colInfo) {
+        await fetchColumnAnalysis();
+        colInfo = customerFiltersState.columnAnalysis[columnName] ||
+                  productFiltersState.columnAnalysis[columnName];
+    }
+
+    if (!colInfo) {
+        console.error('Could not get column info for:', columnName);
+        return;
+    }
+
+    // Show appropriate config panel
+    document.getElementById('customerFilterConfigContainer').classList.remove('hidden');
+
+    if (colInfo.filter_type === 'category') {
+        showCustomerCategoryFilterConfig(columnName, colInfo);
+    } else if (colInfo.filter_type === 'numeric') {
+        showCustomerNumericFilterConfig(columnName, colInfo);
+    } else if (colInfo.filter_type === 'date') {
+        showCustomerDateFilterConfig(columnName, colInfo);
+    }
+}
+
+function showCustomerCategoryFilterConfig(columnName, colInfo) {
+    document.getElementById('customerCategoryFilterConfig').classList.remove('hidden');
+    document.getElementById('customerNumericFilterConfig').classList.add('hidden');
+    document.getElementById('customerDateFilterConfig').classList.add('hidden');
+
+    document.getElementById('customerCategoryFilterColumnName').textContent = columnName;
+
+    // Reset mode to include
+    document.querySelector('input[name="customerCategoryMode"][value="include"]').checked = true;
+
+    // Render values
+    const container = document.getElementById('customerCategoryValuesContainer');
+    const values = colInfo.top_values || [];
+
+    if (colInfo.display_mode === 'autocomplete') {
+        container.innerHTML = `
+            <div class="category-autocomplete-container">
+                <input type="text" class="category-autocomplete-input" placeholder="Search values..." id="customerCategorySearch" oninput="onCustomerCategorySearch(this.value)">
+                <div class="category-autocomplete-dropdown hidden" id="customerCategoryDropdown"></div>
+            </div>
+            <div class="category-selected-tags" id="customerCategorySelectedTags"></div>
+        `;
+    } else {
+        container.innerHTML = `
+            <div class="category-filter-list">
+                ${values.map(v => `
+                    <div class="category-filter-item" onclick="toggleCustomerCategoryValue(this, '${v.value.replace(/'/g, "\\'")}')">
+                        <div class="category-filter-item-label">
+                            <input type="checkbox" value="${v.value}">
+                            <span>${v.value}</span>
+                        </div>
+                        <span class="category-filter-item-count">${v.count?.toLocaleString() || ''}</span>
+                    </div>
+                `).join('')}
+            </div>
+            <div class="category-filter-selected-count" id="customerCategorySelectedCount">0 selected</div>
+        `;
+    }
+}
+
+function showCustomerNumericFilterConfig(columnName, colInfo) {
+    document.getElementById('customerNumericFilterConfig').classList.remove('hidden');
+    document.getElementById('customerCategoryFilterConfig').classList.add('hidden');
+    document.getElementById('customerDateFilterConfig').classList.add('hidden');
+
+    document.getElementById('customerNumericFilterColumnName').textContent = columnName;
+    document.getElementById('customerNumericFilterTypeBadge').textContent = colInfo.type;
+
+    // Show stats
+    const statsDiv = document.getElementById('customerNumericFilterStats');
+    statsDiv.innerHTML = `Range: ${colInfo.min} - ${colInfo.max}${colInfo.null_percent > 0 ? ` | Nulls: ${colInfo.null_percent.toFixed(1)}%` : ''}`;
+
+    // Reset inputs
+    document.querySelector('input[name="customerNumericType"][value="range"]').checked = true;
+    document.getElementById('customerNumericMin').value = '';
+    document.getElementById('customerNumericMax').value = '';
+    document.getElementById('customerNumericMin').placeholder = colInfo.min;
+    document.getElementById('customerNumericMax').placeholder = colInfo.max;
+    document.getElementById('customerNumericIncludeNulls').checked = true;
+
+    updateCustomerNumericFilterInputs();
+}
+
+function showCustomerDateFilterConfig(columnName, colInfo) {
+    document.getElementById('customerDateFilterConfig').classList.remove('hidden');
+    document.getElementById('customerCategoryFilterConfig').classList.add('hidden');
+    document.getElementById('customerNumericFilterConfig').classList.add('hidden');
+
+    document.getElementById('customerDateFilterColumnName').textContent = columnName;
+
+    // Show stats
+    const statsDiv = document.getElementById('customerDateFilterStats');
+    statsDiv.innerHTML = `Range: ${colInfo.min_date || 'N/A'} - ${colInfo.max_date || 'N/A'}`;
+
+    // Reset to relative mode
+    document.querySelector('input[name="customerDateType"][value="relative"]').checked = true;
+    document.getElementById('customerDateRelativeOption').value = 'last_30_days';
+    document.getElementById('customerDateIncludeNulls').checked = true;
+
+    updateCustomerDateFilterInputs();
+}
+
+function updateCustomerNumericFilterInputs() {
+    const filterType = document.querySelector('input[name="customerNumericType"]:checked')?.value || 'range';
+    const minGroup = document.querySelector('#customerNumericInputs .numeric-filter-input-group:first-child');
+    const maxGroup = document.querySelector('#customerNumericInputs .numeric-filter-input-group:last-child');
+
+    if (filterType === 'range') {
+        minGroup.style.display = '';
+        maxGroup.style.display = '';
+        document.querySelector('#customerNumericInputs .numeric-filter-input-group:first-child .numeric-filter-input-label').textContent = 'Min';
+    } else if (filterType === 'greater_than') {
+        minGroup.style.display = '';
+        maxGroup.style.display = 'none';
+        document.querySelector('#customerNumericInputs .numeric-filter-input-group:first-child .numeric-filter-input-label').textContent = 'Value';
+    } else if (filterType === 'less_than') {
+        minGroup.style.display = 'none';
+        maxGroup.style.display = '';
+    } else {
+        minGroup.style.display = '';
+        maxGroup.style.display = 'none';
+        document.querySelector('#customerNumericInputs .numeric-filter-input-group:first-child .numeric-filter-input-label').textContent = 'Value';
+    }
+}
+
+function updateCustomerDateFilterInputs() {
+    const filterType = document.querySelector('input[name="customerDateType"]:checked')?.value || 'relative';
+    document.getElementById('customerDateRelativeInputs').style.display = filterType === 'relative' ? '' : 'none';
+    document.getElementById('customerDateRangeInputs').classList.toggle('hidden', filterType !== 'range');
+}
+
+function toggleCustomerCategoryValue(element, value) {
+    const checkbox = element.querySelector('input[type="checkbox"]');
+    checkbox.checked = !checkbox.checked;
+    element.classList.toggle('selected', checkbox.checked);
+
+    // Update count
+    const selected = document.querySelectorAll('#customerCategoryValuesContainer .category-filter-item.selected').length;
+    document.getElementById('customerCategorySelectedCount').textContent = `${selected} selected`;
+}
+
+function renderCustomerExistingFiltersList() {
+    const container = document.getElementById('customerExistingFiltersList');
+    const section = document.getElementById('customerExistingFiltersSection');
+    const pending = customerFiltersState.pending;
+
+    const allFilters = [
+        ...pending.categoryFilters.map((f, i) => ({ ...f, type: 'category', index: i })),
+        ...pending.numericFilters.map((f, i) => ({ ...f, type: 'numeric', index: i })),
+        ...pending.dateFilters.map((f, i) => ({ ...f, type: 'date', index: i }))
+    ];
+
+    if (allFilters.length === 0) {
+        section.classList.add('hidden');
+        return;
+    }
+
+    section.classList.remove('hidden');
+    container.innerHTML = allFilters.map(filter => {
+        let description = '';
+        let typeBadge = '';
+
+        if (filter.type === 'category') {
+            typeBadge = 'STRING';
+            const mode = filter.mode === 'include' ? 'Include' : 'Exclude';
+            const count = filter.values?.length || 0;
+            description = `${mode}: ${count} value${count !== 1 ? 's' : ''}`;
+        } else if (filter.type === 'numeric') {
+            typeBadge = filter.colInfo?.type || 'NUMBER';
+            if (filter.filterType === 'range') {
+                description = `Range: ${filter.min || '∞'} - ${filter.max || '∞'}`;
+            } else if (filter.filterType === 'greater_than') {
+                description = `> ${filter.value}`;
+            } else if (filter.filterType === 'less_than') {
+                description = `< ${filter.value}`;
+            } else {
+                description = `= ${filter.value}`;
+            }
+        } else if (filter.type === 'date') {
+            typeBadge = 'DATE';
+            if (filter.dateType === 'relative') {
+                description = filter.relativeOption?.replace(/_/g, ' ') || 'Relative';
+            } else {
+                description = `${filter.startDate || 'Start'} - ${filter.endDate || 'End'}`;
+            }
+        }
+
+        return `
+            <div class="existing-filter-item">
+                <div class="existing-filter-info">
+                    <div class="existing-filter-column">
+                        <span class="existing-filter-column-name">${filter.column}</span>
+                        <span class="existing-filter-type-badge">${typeBadge}</span>
+                    </div>
+                    <div class="existing-filter-value">${description}</div>
+                </div>
+                <div class="existing-filter-actions">
+                    <button class="existing-filter-btn delete" onclick="removeCustomerColumnFilter('${filter.type}', ${filter.index})" title="Remove">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function removeCustomerColumnFilter(type, index) {
+    if (type === 'category') {
+        customerFiltersState.pending.categoryFilters.splice(index, 1);
+    } else if (type === 'numeric') {
+        customerFiltersState.pending.numericFilters.splice(index, 1);
+    } else if (type === 'date') {
+        customerFiltersState.pending.dateFilters.splice(index, 1);
+    }
+
+    renderCustomerExistingFiltersList();
+    populateCustomerFilterColumnDropdown();
+    updateCustomersFilterSummary();
+    updateCustomersRefreshButtonState();
+}
+
+function applyCustomerFilterColumnsModal() {
+    const columnName = customerFiltersState.selectedFilterColumn;
+
+    if (columnName) {
+        const colInfo = customerFiltersState.columnAnalysis[columnName] ||
+                        productFiltersState.columnAnalysis[columnName];
+
+        if (colInfo) {
+            if (colInfo.filter_type === 'category') {
+                addCustomerCategoryFilterFromModal();
+            } else if (colInfo.filter_type === 'numeric') {
+                addCustomerNumericFilterFromModal();
+            } else if (colInfo.filter_type === 'date') {
+                addCustomerDateFilterFromModal();
+            }
+        }
+    }
+
+    closeCustomerFilterColumnsModal();
+}
+
+function addCustomerCategoryFilterFromModal() {
+    const columnName = customerFiltersState.selectedFilterColumn;
+    const mode = document.querySelector('input[name="customerCategoryMode"]:checked')?.value || 'include';
+
+    // Get selected values
+    const values = [];
+    document.querySelectorAll('#customerCategoryValuesContainer .category-filter-item.selected input').forEach(cb => {
+        values.push(cb.value);
+    });
+
+    if (values.length === 0) {
+        showNotification('Please select at least one value', 'warning');
+        return;
+    }
+
+    const colInfo = customerFiltersState.columnAnalysis[columnName] ||
+                    productFiltersState.columnAnalysis[columnName];
+
+    customerFiltersState.pending.categoryFilters.push({
+        column: columnName,
+        mode: mode,
+        values: values,
+        colInfo: colInfo
+    });
+
+    updateCustomersFilterSummary();
+    updateCustomersRefreshButtonState();
+    showNotification('Category filter added', 'success');
+}
+
+function addCustomerNumericFilterFromModal() {
+    const columnName = customerFiltersState.selectedFilterColumn;
+    const filterType = document.querySelector('input[name="customerNumericType"]:checked')?.value || 'range';
+    const includeNulls = document.getElementById('customerNumericIncludeNulls').checked;
+
+    const colInfo = customerFiltersState.columnAnalysis[columnName] ||
+                    productFiltersState.columnAnalysis[columnName];
+
+    let filterData = {
+        column: columnName,
+        filterType: filterType,
+        includeNulls: includeNulls,
+        colInfo: colInfo
+    };
+
+    if (filterType === 'range') {
+        filterData.min = parseFloat(document.getElementById('customerNumericMin').value) || null;
+        filterData.max = parseFloat(document.getElementById('customerNumericMax').value) || null;
+    } else {
+        filterData.value = parseFloat(document.getElementById('customerNumericMin').value);
+        if (isNaN(filterData.value)) {
+            showNotification('Please enter a valid value', 'error');
+            return;
+        }
+    }
+
+    customerFiltersState.pending.numericFilters.push(filterData);
+
+    updateCustomersFilterSummary();
+    updateCustomersRefreshButtonState();
+    showNotification('Numeric filter added', 'success');
+}
+
+function addCustomerDateFilterFromModal() {
+    const columnName = customerFiltersState.selectedFilterColumn;
+    const dateType = document.querySelector('input[name="customerDateType"]:checked')?.value || 'relative';
+    const includeNulls = document.getElementById('customerDateIncludeNulls').checked;
+
+    const colInfo = customerFiltersState.columnAnalysis[columnName] ||
+                    productFiltersState.columnAnalysis[columnName];
+
+    let filterData = {
+        column: columnName,
+        dateType: dateType,
+        includeNulls: includeNulls,
+        colInfo: colInfo
+    };
+
+    if (dateType === 'relative') {
+        filterData.relativeOption = document.getElementById('customerDateRelativeOption').value;
+    } else {
+        filterData.startDate = document.getElementById('customerDateStart').value || null;
+        filterData.endDate = document.getElementById('customerDateEnd').value || null;
+    }
+
+    customerFiltersState.pending.dateFilters.push(filterData);
+
+    updateCustomersFilterSummary();
+    updateCustomersRefreshButtonState();
+    showNotification('Date filter added', 'success');
 }
 
 // ============================================================================
@@ -3797,6 +5370,244 @@ function updateProductsRefreshButtonState() {
     refreshBtn.classList.toggle('filter-button-disabled', !hasFilters);
 }
 
+// ============================================================================
+// CUSTOMERS SUMMARY & REFRESH FUNCTIONS
+// ============================================================================
+
+// Update the Customers summary line (shows pending filter details with delete buttons)
+function updateCustomersFilterSummary() {
+    const summaryDiv = document.getElementById('customersFilterSummary');
+    const summaryItems = document.getElementById('customersFilterSummaryItems');
+    const pending = customerFiltersState.pending;
+
+    const filters = [];
+    let filterNumber = 1;
+
+    // Top customers
+    if (pending.topRevenue.enabled) {
+        let customerCount = null;
+        if (customerAnalysisData && customerAnalysisData.distribution) {
+            const threshold = pending.topRevenue.thresholdPercent;
+            // Find customer percentage for the threshold
+            for (const point of customerAnalysisData.distribution) {
+                if (point.cumulative_revenue_percent >= threshold) {
+                    customerCount = Math.round(customerAnalysisData.total_customers * point.customer_percent / 100);
+                    break;
+                }
+            }
+        }
+        const desc = customerCount
+            ? `Top ${pending.topRevenue.thresholdPercent}% revenue (${customerCount.toLocaleString()} customers)`
+            : `Top ${pending.topRevenue.thresholdPercent}% revenue`;
+        filters.push({
+            number: filterNumber++,
+            type: 'topRevenue',
+            index: 0,
+            description: desc
+        });
+    }
+
+    // Aggregation filters (transaction count, spending)
+    pending.aggregationFilters.forEach((f, idx) => {
+        let desc = '';
+        if (f.type === 'transaction_count') {
+            if (f.filterType === 'range') {
+                desc = `Transactions ${f.min} - ${f.max}`;
+            } else if (f.filterType === 'greater_than') {
+                desc = `Transactions > ${f.value}`;
+            } else {
+                desc = `Transactions < ${f.value}`;
+            }
+        } else if (f.type === 'spending') {
+            if (f.filterType === 'range') {
+                desc = `Spending $${f.min} - $${f.max}`;
+            } else if (f.filterType === 'greater_than') {
+                desc = `Spending > $${f.value}`;
+            } else {
+                desc = `Spending < $${f.value}`;
+            }
+        }
+        filters.push({
+            number: filterNumber++,
+            type: 'aggregation',
+            index: idx,
+            description: desc
+        });
+    });
+
+    // Category filters
+    pending.categoryFilters.forEach((f, idx) => {
+        const shortName = f.column.split('.').pop();
+        const valueCount = f.values?.length || 0;
+        const modeText = f.mode === 'include' ? 'Include' : 'Exclude';
+        filters.push({
+            number: filterNumber++,
+            type: 'category',
+            index: idx,
+            description: `${shortName}: ${modeText} ${valueCount} value${valueCount !== 1 ? 's' : ''}`
+        });
+    });
+
+    // Numeric filters
+    pending.numericFilters.forEach((f, idx) => {
+        const shortName = f.column.split('.').pop();
+        let valueDesc = '';
+        if (f.filterType === 'range') {
+            valueDesc = `${f.min || '∞'} - ${f.max || '∞'}`;
+        } else if (f.filterType === 'greater_than') {
+            valueDesc = `> ${f.value}`;
+        } else if (f.filterType === 'less_than') {
+            valueDesc = `< ${f.value}`;
+        } else {
+            valueDesc = `= ${f.value}`;
+        }
+        filters.push({
+            number: filterNumber++,
+            type: 'numeric',
+            index: idx,
+            description: `${shortName}: ${valueDesc}`
+        });
+    });
+
+    // Date filters
+    pending.dateFilters.forEach((f, idx) => {
+        const shortName = f.column.split('.').pop();
+        let valueDesc = '';
+        if (f.dateType === 'relative') {
+            const relativeLabels = {
+                'last_7_days': 'Last 7 days',
+                'last_30_days': 'Last 30 days',
+                'last_90_days': 'Last 90 days',
+                'this_month': 'This month',
+                'this_quarter': 'This quarter',
+                'this_year': 'This year'
+            };
+            valueDesc = relativeLabels[f.relativeOption] || f.relativeOption;
+        } else {
+            valueDesc = `${f.startDate || '...'} to ${f.endDate || '...'}`;
+        }
+        filters.push({
+            number: filterNumber++,
+            type: 'date',
+            index: idx,
+            description: `${shortName}: ${valueDesc}`
+        });
+    });
+
+    if (filters.length === 0) {
+        summaryItems.innerHTML = '<span class="filter-summary-empty">No filters selected</span>';
+        summaryDiv.classList.remove('has-pending');
+    } else {
+        summaryItems.innerHTML = filters.map(f => `
+            <div class="filter-summary-item">
+                <span class="filter-summary-item-number">Filter #${f.number}:</span>
+                <span class="filter-summary-item-desc">${f.description}</span>
+                <button type="button" class="filter-summary-item-delete" onclick="deleteCustomerFilterFromSummary('${f.type}', ${f.index})" title="Remove filter">
+                    <i class="fas fa-trash-alt"></i>
+                </button>
+            </div>
+        `).join('');
+        summaryDiv.classList.add('has-pending');
+    }
+}
+
+// Delete a customer filter from the summary
+function deleteCustomerFilterFromSummary(filterType, index) {
+    const pending = customerFiltersState.pending;
+
+    if (filterType === 'topRevenue') {
+        pending.topRevenue.enabled = false;
+        pending.topRevenue.customerColumn = null;
+        pending.topRevenue.revenueColumn = null;
+    } else if (filterType === 'aggregation') {
+        pending.aggregationFilters.splice(index, 1);
+    } else if (filterType === 'category') {
+        pending.categoryFilters.splice(index, 1);
+    } else if (filterType === 'numeric') {
+        pending.numericFilters.splice(index, 1);
+    } else if (filterType === 'date') {
+        pending.dateFilters.splice(index, 1);
+    }
+
+    updateCustomersFilterSummary();
+    updateCustomersRefreshButtonState();
+}
+
+// Update the Customers sub-chapter header badge (shows "X filters applied" after Refresh)
+function updateCustomersFilterStatus() {
+    const statusEl = document.getElementById('customersFilterStatus');
+
+    // Only show badge if filters have been applied via Refresh Dataset
+    if (!customerFiltersApplied) {
+        statusEl.textContent = '';
+        return;
+    }
+
+    const committed = customerFiltersState.committed;
+    let filterCount = 0;
+
+    if (committed.topRevenue.enabled) filterCount++;
+    filterCount += committed.aggregationFilters.length;
+    filterCount += committed.categoryFilters.length;
+    filterCount += committed.numericFilters.length;
+    filterCount += committed.dateFilters.length;
+
+    if (filterCount === 0) {
+        statusEl.textContent = '';
+    } else {
+        statusEl.textContent = `${filterCount} filter${filterCount !== 1 ? 's' : ''} applied`;
+    }
+}
+
+// Update Customers Refresh Dataset button state
+function updateCustomersRefreshButtonState() {
+    const refreshBtn = document.getElementById('refreshCustomerFiltersBtn');
+    if (!refreshBtn) return;
+
+    const pending = customerFiltersState.pending;
+
+    // Check if there are any pending filters to apply
+    const hasFilters = pending.topRevenue.enabled ||
+                       pending.aggregationFilters.length > 0 ||
+                       pending.categoryFilters.length > 0 ||
+                       pending.numericFilters.length > 0 ||
+                       pending.dateFilters.length > 0;
+
+    refreshBtn.disabled = !hasFilters;
+    refreshBtn.classList.toggle('filter-button-disabled', !hasFilters);
+}
+
+// Refresh Customer Filters - commits pending to committed and updates Dataset Summary
+async function refreshCustomerFilters() {
+    const refreshBtn = document.getElementById('refreshCustomerFiltersBtn');
+    const originalHtml = refreshBtn.innerHTML;
+    refreshBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Refreshing...';
+    refreshBtn.disabled = true;
+
+    try {
+        // Deep copy pending to committed
+        customerFiltersState.committed = JSON.parse(JSON.stringify(customerFiltersState.pending));
+
+        // Mark filters as applied
+        customerFiltersApplied = true;
+
+        // Update the header badge
+        updateCustomersFilterStatus();
+
+        // Update Dataset Summary panel
+        await updateDatasetSummary();
+
+        showNotification('Customer filters applied successfully', 'success');
+
+    } catch (error) {
+        console.error('Error refreshing customer filters:', error);
+        showNotification('Failed to refresh customer filters', 'error');
+    } finally {
+        refreshBtn.innerHTML = originalHtml;
+        updateCustomersRefreshButtonState();
+    }
+}
+
 // --- Legacy Add Filter Modal (keeping for backwards compatibility) ---
 function openAddFilterModal() {
     const modal = document.getElementById('addFilterModal');
@@ -3860,29 +5671,110 @@ function isColumnUsedInFilters(columnName) {
 
 // Check if a column is used in COMMITTED filters across ALL sub-chapters
 // This ensures columns used in one sub-chapter (after Refresh Dataset) are excluded from others
+// NOTE: Grouping columns (customerColumn, productColumn) are NOT excluded - only aggregation columns
 function isColumnCommittedInAnyFilter(columnName) {
     // Check committed timestamp column from Dates sub-chapter
     if (committedDatesFilter.timestampColumn === columnName) return true;
 
-    // Check committed Products filters
-    const committed = productFiltersState.committed;
+    // Check committed Products filters (excluding grouping columns)
+    const productCommitted = productFiltersState.committed;
 
-    // Check top revenue columns
-    if (committed.topRevenue.enabled) {
-        if (committed.topRevenue.productColumn === columnName) return true;
-        if (committed.topRevenue.revenueColumn === columnName) return true;
+    // For top revenue: only exclude the revenue column, NOT the product column (grouping)
+    if (productCommitted.topRevenue.enabled) {
+        // productColumn is a grouping column - NOT excluded
+        if (productCommitted.topRevenue.revenueColumn === columnName) return true;
     }
 
     // Check category filters
-    if (committed.categoryFilters.some(f => f.column === columnName)) return true;
+    if (productCommitted.categoryFilters.some(f => f.column === columnName)) return true;
 
     // Check numeric filters
-    if (committed.numericFilters.some(f => f.column === columnName)) return true;
+    if (productCommitted.numericFilters.some(f => f.column === columnName)) return true;
 
     // Check date filters
-    if (committed.dateFilters.some(f => f.column === columnName)) return true;
+    if (productCommitted.dateFilters.some(f => f.column === columnName)) return true;
+
+    // Check committed Customers filters (excluding grouping columns)
+    const customerCommitted = customerFiltersState.committed;
+
+    // For top revenue: only exclude the revenue column, NOT the customer column (grouping)
+    if (customerCommitted.topRevenue.enabled) {
+        // customerColumn is a grouping column - NOT excluded
+        if (customerCommitted.topRevenue.revenueColumn === columnName) return true;
+    }
+
+    // Check aggregation filters - exclude amount columns, NOT customer columns (grouping)
+    for (const aggFilter of customerCommitted.aggregationFilters) {
+        // customerColumn is a grouping column - NOT excluded
+        // amountColumn (for spending filter) IS excluded
+        if (aggFilter.amountColumn === columnName) return true;
+    }
+
+    // Check category filters
+    if (customerCommitted.categoryFilters.some(f => f.column === columnName)) return true;
+
+    // Check numeric filters
+    if (customerCommitted.numericFilters.some(f => f.column === columnName)) return true;
+
+    // Check date filters
+    if (customerCommitted.dateFilters.some(f => f.column === columnName)) return true;
 
     return false;
+}
+
+// Check if a column is used in PENDING filters within the Customers sub-chapter
+function isColumnUsedInCustomerFilters(columnName) {
+    const pending = customerFiltersState.pending;
+
+    // For top revenue: only check revenue column, NOT customer column (grouping)
+    if (pending.topRevenue.enabled) {
+        if (pending.topRevenue.revenueColumn === columnName) return true;
+    }
+
+    // Check aggregation filters - only amount columns, NOT customer columns (grouping)
+    for (const aggFilter of pending.aggregationFilters) {
+        if (aggFilter.amountColumn === columnName) return true;
+    }
+
+    // Check category filters
+    if (pending.categoryFilters.some(f => f.column === columnName)) return true;
+
+    // Check numeric filters
+    if (pending.numericFilters.some(f => f.column === columnName)) return true;
+
+    // Check date filters
+    if (pending.dateFilters.some(f => f.column === columnName)) return true;
+
+    return false;
+}
+
+// Get columns available for Customer filters (excluding used aggregation columns)
+function getAvailableCustomerFilterColumns() {
+    const allColumns = [];
+
+    // Get columns from schema builder
+    Object.entries(schemaBuilderState.selectedColumns).forEach(([table, cols]) => {
+        const shortTable = table.replace('raw_data.', '');
+        cols.forEach(col => {
+            const fullName = `${shortTable}.${col}`;
+            // Get column type from metadata if available
+            const colInfo = customerFiltersState.columnAnalysis[fullName] ||
+                           productFiltersState.columnAnalysis[fullName];
+            allColumns.push({
+                table: shortTable,
+                column: col,
+                fullName,
+                type: colInfo?.type || 'unknown'
+            });
+        });
+    });
+
+    // Filter out columns already used in PENDING filters (within Customers sub-chapter)
+    // AND columns committed in ANY sub-chapter (across Dates, Customers, Products)
+    return allColumns.filter(col =>
+        !isColumnUsedInCustomerFilters(col.fullName) &&
+        !isColumnCommittedInAnyFilter(col.fullName)
+    );
 }
 
 async function onAddFilterColumnChange() {
@@ -4894,6 +6786,72 @@ async function fetchDatasetStats(withFilters = false) {
                     revenue_column: revenueCol,
                     percent: revenueThreshold
                 };
+            }
+
+            // Customer filters (from committed state)
+            if (customerFiltersApplied) {
+                const customerCommitted = customerFiltersState.committed;
+                const customerFilter = {};
+
+                // Top customers by revenue
+                if (customerCommitted.topRevenue.enabled) {
+                    customerFilter.top_revenue = {
+                        customer_column: customerCommitted.topRevenue.customerColumn,
+                        revenue_column: customerCommitted.topRevenue.revenueColumn,
+                        percent: customerCommitted.topRevenue.thresholdPercent
+                    };
+                }
+
+                // Aggregation filters (transaction count, spending)
+                if (customerCommitted.aggregationFilters.length > 0) {
+                    customerFilter.aggregation_filters = customerCommitted.aggregationFilters.map(f => ({
+                        type: f.type,
+                        customer_column: f.customerColumn,
+                        amount_column: f.amountColumn || null,
+                        filter_type: f.filterType,
+                        value: f.value,
+                        min: f.min,
+                        max: f.max
+                    }));
+                }
+
+                // Category filters
+                if (customerCommitted.categoryFilters.length > 0) {
+                    customerFilter.category_filters = customerCommitted.categoryFilters.map(f => ({
+                        column: f.column,
+                        mode: f.mode,
+                        values: f.values
+                    }));
+                }
+
+                // Numeric filters
+                if (customerCommitted.numericFilters.length > 0) {
+                    customerFilter.numeric_filters = customerCommitted.numericFilters.map(f => ({
+                        column: f.column,
+                        filter_type: f.filterType,
+                        min: f.min,
+                        max: f.max,
+                        value: f.value,
+                        include_nulls: f.includeNulls
+                    }));
+                }
+
+                // Date filters
+                if (customerCommitted.dateFilters.length > 0) {
+                    customerFilter.date_filters = customerCommitted.dateFilters.map(f => ({
+                        column: f.column,
+                        date_type: f.dateType,
+                        relative_option: f.relativeOption,
+                        start_date: f.startDate,
+                        end_date: f.endDate,
+                        include_nulls: f.includeNulls
+                    }));
+                }
+
+                // Only add customer_filter if there's at least one filter
+                if (Object.keys(customerFilter).length > 0) {
+                    filters.customer_filter = customerFilter;
+                }
             }
 
             if (Object.keys(filters).length > 0) {

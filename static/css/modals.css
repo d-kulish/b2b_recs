@@ -2941,3 +2941,73 @@ select option {
         color-scheme: light only;
     }
 }
+
+/* ============================================================================
+   CUSTOMER METRICS MODAL
+   ============================================================================ */
+
+.customer-metrics-section {
+    margin-bottom: 20px;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    background: #ffffff;
+    overflow: hidden;
+}
+
+.customer-metrics-section:last-child {
+    margin-bottom: 0;
+}
+
+.customer-metrics-section-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 16px;
+    background: #f9fafb;
+    border-bottom: 1px solid #e5e7eb;
+    font-size: 14px;
+    font-weight: 600;
+    color: #374151;
+}
+
+.customer-metrics-section-header i {
+    font-size: 14px;
+    color: #6b7280;
+}
+
+.customer-metrics-section-body {
+    padding: 16px;
+}
+
+.customer-metrics-form-row {
+    display: flex;
+    gap: 12px;
+    align-items: flex-end;
+    flex-wrap: wrap;
+}
+
+.customer-metrics-field {
+    flex: 1 1 140px;
+    min-width: 120px;
+}
+
+.customer-metrics-field select,
+.customer-metrics-field input {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.customer-metrics-field-btn {
+    flex: 0 0 auto;
+    min-width: auto;
+}
+
+.customer-metrics-field-btn .filter-button {
+    white-space: nowrap;
+    min-width: 120px;
+}
+
+/* Content area within sub-chapter body (unified style) */
+.subchapter-body {
+    padding: 16px;
+}

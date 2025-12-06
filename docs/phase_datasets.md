@@ -267,14 +267,90 @@ UI Components:
   - Yellow/amber background when filter is configured
   - Shows "No filters selected" when empty
 - Tablet header shows "1 filter applied" badge after clicking Refresh Dataset
-- **Cross-sub-chapter exclusion**: After Refresh Dataset, the timestamp column is excluded from selection in Products sub-chapter dropdowns
+- **Cross-sub-chapter exclusion**: After Refresh Dataset, the timestamp column is excluded from selection in Customers and Products sub-chapter dropdowns
 
 **Sub-chapter 2: Customers**
 
-Filter customers based on transaction history:
+Filter customers using multiple filter types. All filters are combined with **AND logic** (customers must pass ALL enabled filters).
 
-- **Minimum transactions per customer** (optional checkbox): Exclude customers with fewer than N transactions
-- Helps filter out customers who don't provide enough signal for recommendations
+The Customers sub-chapter uses the same **pending/committed state** model as Products:
+- Filter changes are "pending" until committed
+- **Refresh Dataset**: Commits pending changes and updates Dataset Summary
+
+Customers sub-chapter uses a **4-button navigation** design with modal-based configuration:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Customers                                           [2 filters applied]  ▼ │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  Filter by revenue      Filter by metrics      Filter by columns            │
+│  [ Top Customers ]      [ Customer Metrics ]   [ Filter Columns ]           │
+│                                                                              │
+│                                                 [ Refresh Dataset ]          │
+│                                                                              │
+│  ┌───────────────────────────────────────────────────────────────────────┐  │
+│  │ Filter #1: Top 80% customers • Filter #2: transactions > 5   [trash] │  │
+│  └───────────────────────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Top Customers Button** (opens modal):
+- Select Customer ID column (grouping column - NOT excluded from other filters)
+- Select Revenue column (aggregation column - excluded after use)
+- Click "Analyze" to see cumulative revenue distribution (Pareto chart)
+- Set revenue threshold (e.g., "Include customers covering 80% of revenue")
+- Shows analysis summary: total customers, selected customers, revenue coverage
+
+**Customer Metrics Button** (opens modal):
+Two separate filter sections:
+
+1. **Transaction Count Filter**:
+   - Select Customer ID column (grouping column)
+   - Select filter type: Greater than / Less than / Range
+   - Enter value(s)
+   - Filters customers by their total number of transactions
+
+2. **Spending Filter**:
+   - Select Customer ID column (grouping column)
+   - Select Amount column (aggregation column - excluded after use)
+   - Select filter type: Greater than / Less than / Range
+   - Enter value(s)
+   - Filters customers by their total spending (SUM of amount)
+
+**Filter Columns Button** (opens modal):
+Same functionality as Products Filter Columns:
+- Category filters (STRING columns): Include/exclude specific values
+- Numeric filters (INTEGER/FLOAT): Range, greater than, less than, equals
+- Date filters: Relative (last N days) or fixed date range
+
+**Column Exclusion Rules**:
+- **Grouping columns** (customer_id in Top Customers / Customer Metrics): NOT excluded - can be reused across multiple aggregations
+- **Aggregation columns** (revenue, amount in SUM): EXCLUDED after first use - prevents conflicting filter logic
+- **Filter columns** (category, numeric, date): EXCLUDED after first use
+
+**State Management**:
+```javascript
+let customerFiltersState = {
+    pending: {
+        topRevenue: { enabled, customerColumn, revenueColumn, thresholdPercent },
+        aggregationFilters: [{ type, customerColumn, amountColumn?, filterType, value, min?, max? }],
+        categoryFilters: [...],
+        numericFilters: [...],
+        dateFilters: [...]
+    },
+    committed: { /* same structure */ },
+    columnAnalysis: {},
+    selectedFilterColumn: null
+};
+```
+
+**API Endpoints**:
+- `POST /api/models/{id}/datasets/analyze-customer-revenue/` - Pareto analysis for Top Customers
+- `POST /api/models/{id}/datasets/analyze-customer-aggregations/` - Transaction count / spending analysis
+
+**Cross-sub-chapter Exclusion**:
+- After Refresh Dataset, all committed aggregation columns (revenue, amount) are excluded from Dates and Products sub-chapter dropdowns
+- Grouping columns (customer_id) are NOT excluded - can be reused
 
 **Sub-chapter 3: Products**
 
@@ -317,7 +393,7 @@ Products sub-chapter uses a **minimalist 3-button navigation** design with modal
 - Yellow/amber background when filters are pending
 - Updates dynamically when filters are added/removed
 - Shows "No filters selected" when empty
-- **Cross-sub-chapter exclusion**: After Refresh Dataset, all committed columns are excluded from Dates sub-chapter dropdowns
+- **Cross-sub-chapter exclusion**: After Refresh Dataset, all committed aggregation columns are excluded from Dates and Customers sub-chapter dropdowns (grouping columns like `product_id` are NOT excluded)
 
 **Tablet Badge:**
 - Shows "X filters applied" only after clicking Refresh Dataset
@@ -344,9 +420,16 @@ To prevent the same column from being used in multiple filters across different 
    - All committed states reset when wizard is closed or reset
 
 4. **Implementation Functions**:
-   - `isColumnCommittedInAnyFilter(columnName)`: Checks all committed states across sub-chapters
+   - `isColumnCommittedInAnyFilter(columnName)`: Checks all committed states across Dates, Customers, and Products sub-chapters
    - `isColumnUsedInFilters(columnName)`: Checks pending state within Products sub-chapter
-   - `getAvailableFilterColumns()`: Filters out both committed and pending columns
+   - `isColumnUsedInCustomerFilters(columnName)`: Checks pending state within Customers sub-chapter
+   - `getAvailableFilterColumns()`: Filters out both committed and pending columns (for Products)
+   - `getAvailableCustomerFilterColumns()`: Filters out both committed and pending columns (for Customers)
+
+5. **Column Type Distinction**:
+   - **Grouping columns** (e.g., `customer_id`, `product_id`): Used for GROUP BY - NOT excluded from other filters
+   - **Aggregation columns** (e.g., `amount` in SUM, `revenue` in revenue threshold): EXCLUDED after first use
+   - **Filter columns** (category equals, numeric range, date range): EXCLUDED after first use
 
 ---
 

@@ -1481,6 +1481,509 @@ class ProductRevenueAnalysisService:
 
 
 # =============================================================================
+# CUSTOMER REVENUE ANALYSIS SERVICE
+# =============================================================================
+
+class CustomerRevenueAnalysisService:
+    """
+    Service for analyzing customer revenue distribution.
+
+    Used to filter datasets to include only top-performing customers
+    based on cumulative revenue threshold (e.g., top 80% of revenue).
+
+    This service operates on cached pandas DataFrames from a session,
+    enabling fast analysis without hitting BigQuery directly.
+    """
+
+    def __init__(self, session_data: dict):
+        """
+        Initialize the service with session data containing cached DataFrames.
+
+        Args:
+            session_data: Dict containing cached pandas DataFrames
+                         {'tables': {'raw_data.table_name': DataFrame, ...}}
+        """
+        self.session_data = session_data
+        self.tables = session_data.get('tables', {})
+
+    def analyze_distribution(
+        self,
+        customer_column: str,
+        revenue_column: str
+    ) -> dict:
+        """
+        Analyze customer revenue distribution using cached session data.
+
+        Args:
+            customer_column: Column name for customer ID (e.g., "transactions.customer_id")
+            revenue_column: Column name for revenue (e.g., "transactions.amount")
+
+        Returns:
+            Dict with distribution analysis:
+            {
+                "status": "success",
+                "total_customers": 98234,
+                "total_revenue": 15500000.0,
+                "distribution": [
+                    {"customer_percent": 1, "cumulative_revenue_percent": 8.2},
+                    {"customer_percent": 5, "cumulative_revenue_percent": 28.1},
+                    ...
+                ],
+                "thresholds": {
+                    "70": {"customers": 12891, "percent": 13.1},
+                    "80": {"customers": 18521, "percent": 18.9},
+                    "90": {"customers": 32234, "percent": 32.8},
+                    "95": {"customers": 52234, "percent": 53.2}
+                }
+            }
+        """
+        import pandas as pd
+
+        try:
+            # Parse column references (format: "table.column")
+            customer_table, customer_col = self._parse_column_ref(customer_column)
+            revenue_table, revenue_col = self._parse_column_ref(revenue_column)
+
+            # Get the DataFrame containing the columns
+            df = self._get_dataframe_for_column(customer_table)
+            if df is None:
+                return {
+                    'status': 'error',
+                    'message': f'Table {customer_table} not found in session data'
+                }
+
+            # Ensure columns exist
+            if customer_col not in df.columns:
+                return {
+                    'status': 'error',
+                    'message': f'Column {customer_col} not found in table {customer_table}'
+                }
+            if revenue_col not in df.columns:
+                return {
+                    'status': 'error',
+                    'message': f'Column {revenue_col} not found in table {revenue_table}'
+                }
+
+            # Group by customer and sum revenue
+            customer_revenues = df.groupby(customer_col)[revenue_col].sum().reset_index()
+            customer_revenues.columns = ['customer_id', 'total_revenue']
+
+            # Remove nulls and sort by revenue descending
+            customer_revenues = customer_revenues.dropna()
+            customer_revenues = customer_revenues[customer_revenues['total_revenue'] > 0]
+            customer_revenues = customer_revenues.sort_values('total_revenue', ascending=False).reset_index(drop=True)
+
+            total_customers = len(customer_revenues)
+            total_revenue = float(customer_revenues['total_revenue'].sum())
+
+            if total_customers == 0:
+                return {
+                    'status': 'error',
+                    'message': 'No customers found with valid revenue data',
+                    'total_customers': 0,
+                    'total_revenue': 0,
+                }
+
+            # Calculate cumulative revenue
+            customer_revenues['cumulative_revenue'] = customer_revenues['total_revenue'].cumsum()
+            customer_revenues['cumulative_revenue_percent'] = (
+                customer_revenues['cumulative_revenue'] / total_revenue * 100
+            )
+            customer_revenues['rank'] = range(1, total_customers + 1)
+            customer_revenues['customer_percent'] = customer_revenues['rank'] / total_customers * 100
+
+            # Generate distribution curve points (sample for chart)
+            distribution = self._generate_distribution_curve(customer_revenues, total_customers)
+
+            # Calculate thresholds
+            thresholds = {}
+            for threshold in [70, 80, 90, 95]:
+                # Find first customer where cumulative revenue >= threshold
+                threshold_df = customer_revenues[
+                    customer_revenues['cumulative_revenue_percent'] >= threshold
+                ]
+                if not threshold_df.empty:
+                    first_idx = threshold_df.index[0]
+                    customers_needed = int(customer_revenues.loc[first_idx, 'rank'])
+                    thresholds[str(threshold)] = {
+                        'customers': customers_needed,
+                        'percent': round(customers_needed * 100.0 / total_customers, 2)
+                    }
+
+            return {
+                'status': 'success',
+                'total_customers': total_customers,
+                'total_revenue': total_revenue,
+                'distribution': distribution,
+                'thresholds': thresholds,
+            }
+
+        except Exception as e:
+            import traceback
+            logger.error(f"Error analyzing customer revenue distribution: {e}")
+            logger.error(f"Full traceback:\n{traceback.format_exc()}")
+            return {
+                'status': 'error',
+                'message': f'Failed to analyze customer revenue: {str(e)}'
+            }
+
+    def _generate_distribution_curve(self, df, total_customers: int, num_points: int = 50) -> list:
+        """
+        Generate sampled distribution curve points for charting.
+
+        Returns list of {customer_percent, cumulative_revenue_percent} points.
+        """
+        distribution = []
+
+        # Always include first point
+        if len(df) > 0:
+            distribution.append({
+                'customer_percent': float(df.iloc[0]['customer_percent']),
+                'cumulative_revenue_percent': float(df.iloc[0]['cumulative_revenue_percent'])
+            })
+
+        # Sample evenly spaced points
+        step = max(1, total_customers // num_points)
+        for i in range(step, total_customers, step):
+            if i < len(df):
+                row = df.iloc[i]
+                distribution.append({
+                    'customer_percent': float(row['customer_percent']),
+                    'cumulative_revenue_percent': float(row['cumulative_revenue_percent'])
+                })
+
+        # Ensure key thresholds are included (around 70%, 80%, 90%)
+        for threshold in [70, 80, 90]:
+            threshold_rows = df[
+                (df['cumulative_revenue_percent'] >= threshold - 1) &
+                (df['cumulative_revenue_percent'] <= threshold + 1)
+            ]
+            if not threshold_rows.empty:
+                row = threshold_rows.iloc[0]
+                point = {
+                    'customer_percent': float(row['customer_percent']),
+                    'cumulative_revenue_percent': float(row['cumulative_revenue_percent'])
+                }
+                # Add if not already close to an existing point
+                if not any(abs(p['customer_percent'] - point['customer_percent']) < 0.5 for p in distribution):
+                    distribution.append(point)
+
+        # Always include last point
+        if len(df) > 0:
+            last_row = df.iloc[-1]
+            distribution.append({
+                'customer_percent': float(last_row['customer_percent']),
+                'cumulative_revenue_percent': float(last_row['cumulative_revenue_percent'])
+            })
+
+        # Sort by customer_percent and remove duplicates
+        distribution = sorted(distribution, key=lambda x: x['customer_percent'])
+
+        # Remove near-duplicate points
+        filtered = []
+        for point in distribution:
+            if not filtered or abs(point['customer_percent'] - filtered[-1]['customer_percent']) > 0.3:
+                filtered.append(point)
+
+        return filtered
+
+    def _parse_column_ref(self, column_ref: str) -> tuple:
+        """
+        Parse a column reference like "table.column" into (table, column).
+
+        Args:
+            column_ref: Column reference string
+
+        Returns:
+            Tuple of (table_name, column_name)
+        """
+        if '.' in column_ref:
+            parts = column_ref.rsplit('.', 1)
+            return parts[0], parts[1]
+        return None, column_ref
+
+    def _get_dataframe_for_column(self, table_hint: str):
+        """
+        Get the DataFrame containing a column.
+
+        Args:
+            table_hint: Table name hint from column reference
+
+        Returns:
+            pandas DataFrame or None
+        """
+        import pandas as pd
+
+        # Try exact match first
+        for table_name, df in self.tables.items():
+            if table_name == table_hint or table_name.endswith(f'.{table_hint}') or table_name.split('.')[-1] == table_hint:
+                return df
+
+        # If not found, try first table with data
+        for table_name, df in self.tables.items():
+            if isinstance(df, pd.DataFrame) and not df.empty:
+                return df
+
+        return None
+
+
+# =============================================================================
+# CUSTOMER AGGREGATION SERVICE
+# =============================================================================
+
+class CustomerAggregationService:
+    """
+    Service for analyzing customer aggregations (transaction count, spending).
+
+    Used to help users understand their customer base metrics and set
+    appropriate filter thresholds for transaction count and spending filters.
+
+    This service operates on cached pandas DataFrames from a session,
+    enabling fast analysis without hitting BigQuery directly.
+    """
+
+    def __init__(self, session_data: dict):
+        """
+        Initialize the service with session data containing cached DataFrames.
+
+        Args:
+            session_data: Dict containing cached pandas DataFrames
+                         {'tables': {'raw_data.table_name': DataFrame, ...}}
+        """
+        self.session_data = session_data
+        self.tables = session_data.get('tables', {})
+
+    def analyze_transaction_counts(self, customer_column: str) -> dict:
+        """
+        Analyze transaction count distribution per customer.
+
+        Args:
+            customer_column: Column name for customer ID (e.g., "transactions.customer_id")
+
+        Returns:
+            Dict with transaction count analysis:
+            {
+                "status": "success",
+                "total_customers": 98234,
+                "total_transactions": 1500000,
+                "stats": {
+                    "min": 1,
+                    "max": 523,
+                    "mean": 15.3,
+                    "median": 8,
+                    "percentiles": {
+                        "25": 3,
+                        "50": 8,
+                        "75": 18,
+                        "90": 32,
+                        "95": 52
+                    }
+                },
+                "distribution": [
+                    {"transaction_count": 1, "customer_count": 12500, "customer_percent": 12.7},
+                    {"transaction_count": 2, "customer_count": 8300, "customer_percent": 8.5},
+                    ...
+                ]
+            }
+        """
+        import pandas as pd
+        import numpy as np
+
+        try:
+            # Parse column reference
+            customer_table, customer_col = self._parse_column_ref(customer_column)
+
+            # Get the DataFrame
+            df = self._get_dataframe_for_column(customer_table)
+            if df is None:
+                return {
+                    'status': 'error',
+                    'message': f'Table {customer_table} not found in session data'
+                }
+
+            if customer_col not in df.columns:
+                return {
+                    'status': 'error',
+                    'message': f'Column {customer_col} not found in table'
+                }
+
+            # Count transactions per customer
+            txn_counts = df.groupby(customer_col).size().reset_index(name='transaction_count')
+            txn_counts = txn_counts.dropna()
+
+            total_customers = len(txn_counts)
+            total_transactions = int(txn_counts['transaction_count'].sum())
+
+            if total_customers == 0:
+                return {
+                    'status': 'error',
+                    'message': 'No customers found',
+                    'total_customers': 0,
+                    'total_transactions': 0,
+                }
+
+            # Calculate statistics
+            counts = txn_counts['transaction_count']
+            stats = {
+                'min': int(counts.min()),
+                'max': int(counts.max()),
+                'mean': round(float(counts.mean()), 2),
+                'median': int(counts.median()),
+                'percentiles': {
+                    '25': int(np.percentile(counts, 25)),
+                    '50': int(np.percentile(counts, 50)),
+                    '75': int(np.percentile(counts, 75)),
+                    '90': int(np.percentile(counts, 90)),
+                    '95': int(np.percentile(counts, 95)),
+                }
+            }
+
+            # Generate distribution (group by transaction count)
+            distribution = txn_counts.groupby('transaction_count').size().reset_index(name='customer_count')
+            distribution['customer_percent'] = round(distribution['customer_count'] / total_customers * 100, 2)
+            distribution = distribution.sort_values('transaction_count').head(50).to_dict('records')
+
+            return {
+                'status': 'success',
+                'total_customers': total_customers,
+                'total_transactions': total_transactions,
+                'stats': stats,
+                'distribution': distribution,
+            }
+
+        except Exception as e:
+            logger.error(f"Error analyzing transaction counts: {e}")
+            return {
+                'status': 'error',
+                'message': f'Failed to analyze transaction counts: {str(e)}'
+            }
+
+    def analyze_customer_spending(self, customer_column: str, amount_column: str) -> dict:
+        """
+        Analyze spending distribution per customer.
+
+        Args:
+            customer_column: Column name for customer ID (e.g., "transactions.customer_id")
+            amount_column: Column name for amount (e.g., "transactions.amount")
+
+        Returns:
+            Dict with spending analysis:
+            {
+                "status": "success",
+                "total_customers": 98234,
+                "total_spending": 15500000.0,
+                "stats": {
+                    "min": 0.50,
+                    "max": 152300.00,
+                    "mean": 157.85,
+                    "median": 82.50,
+                    "percentiles": {
+                        "25": 35.00,
+                        "50": 82.50,
+                        "75": 185.00,
+                        "90": 380.00,
+                        "95": 625.00
+                    }
+                }
+            }
+        """
+        import pandas as pd
+        import numpy as np
+
+        try:
+            # Parse column references
+            customer_table, customer_col = self._parse_column_ref(customer_column)
+            amount_table, amount_col = self._parse_column_ref(amount_column)
+
+            # Get the DataFrame
+            df = self._get_dataframe_for_column(customer_table)
+            if df is None:
+                return {
+                    'status': 'error',
+                    'message': f'Table {customer_table} not found in session data'
+                }
+
+            if customer_col not in df.columns:
+                return {
+                    'status': 'error',
+                    'message': f'Column {customer_col} not found in table'
+                }
+            if amount_col not in df.columns:
+                return {
+                    'status': 'error',
+                    'message': f'Column {amount_col} not found in table'
+                }
+
+            # Sum spending per customer
+            spending = df.groupby(customer_col)[amount_col].sum().reset_index()
+            spending.columns = ['customer_id', 'total_spending']
+            spending = spending.dropna()
+            spending = spending[spending['total_spending'] > 0]
+
+            total_customers = len(spending)
+            total_spending = float(spending['total_spending'].sum())
+
+            if total_customers == 0:
+                return {
+                    'status': 'error',
+                    'message': 'No customers found with valid spending data',
+                    'total_customers': 0,
+                    'total_spending': 0,
+                }
+
+            # Calculate statistics
+            amounts = spending['total_spending']
+            stats = {
+                'min': round(float(amounts.min()), 2),
+                'max': round(float(amounts.max()), 2),
+                'mean': round(float(amounts.mean()), 2),
+                'median': round(float(amounts.median()), 2),
+                'percentiles': {
+                    '25': round(float(np.percentile(amounts, 25)), 2),
+                    '50': round(float(np.percentile(amounts, 50)), 2),
+                    '75': round(float(np.percentile(amounts, 75)), 2),
+                    '90': round(float(np.percentile(amounts, 90)), 2),
+                    '95': round(float(np.percentile(amounts, 95)), 2),
+                }
+            }
+
+            return {
+                'status': 'success',
+                'total_customers': total_customers,
+                'total_spending': total_spending,
+                'stats': stats,
+            }
+
+        except Exception as e:
+            logger.error(f"Error analyzing customer spending: {e}")
+            return {
+                'status': 'error',
+                'message': f'Failed to analyze customer spending: {str(e)}'
+            }
+
+    def _parse_column_ref(self, column_ref: str) -> tuple:
+        """Parse a column reference like "table.column" into (table, column)."""
+        if '.' in column_ref:
+            parts = column_ref.rsplit('.', 1)
+            return parts[0], parts[1]
+        return None, column_ref
+
+    def _get_dataframe_for_column(self, table_hint: str):
+        """Get the DataFrame containing a column."""
+        import pandas as pd
+
+        for table_name, df in self.tables.items():
+            if table_name == table_hint or table_name.endswith(f'.{table_hint}') or table_name.split('.')[-1] == table_hint:
+                return df
+
+        for table_name, df in self.tables.items():
+            if isinstance(df, pd.DataFrame) and not df.empty:
+                return df
+
+        return None
+
+
+# =============================================================================
 # DATASET STATS SERVICE
 # =============================================================================
 

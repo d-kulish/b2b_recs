@@ -1569,13 +1569,13 @@ function openWizard(datasetId = null) {
     // Show modal
     document.getElementById('datasetWizardModal').classList.remove('hidden');
 
-    // Load tables
-    loadBqTables();
-
-    // If editing, load dataset data
-    if (wizardEditMode) {
-        loadDatasetForEdit(datasetId);
-    }
+    // Load tables - wait for completion before loading edit data
+    loadBqTables().then(() => {
+        // If editing, load dataset data AFTER tables are loaded
+        if (wizardEditMode) {
+            loadDatasetForEdit(datasetId);
+        }
+    });
 
     showStep(1);
 }
@@ -1796,9 +1796,16 @@ function nextStep() {
         fetchColumnAnalysis().then(() => {
             // Populate filter dropdowns with selected columns (needs column types for timestamp filter)
             populateFilterColumnDropdowns();
+
+            // In edit mode, restore saved filter states AFTER dropdowns are populated
+            // restoreFiltersFromSavedData will also call fetchDatasetStats(true)
+            if (wizardEditMode && wizardData.filters && Object.keys(wizardData.filters).length > 0) {
+                restoreFiltersFromSavedData(wizardData.filters);
+            } else {
+                // Only fetch unfiltered stats for new datasets
+                fetchDatasetStats(false);
+            }
         });
-        // Fetch initial dataset stats (unfiltered) for the Dataset Summary panel
-        fetchDatasetStats(false);
     }
 
     showStep(currentWizardStep + 1);
@@ -1923,7 +1930,7 @@ function validateDatasetName() {
 // STEP 2: TABLE SELECTION
 // ============================================================================
 function loadBqTables() {
-    fetch(`/api/models/${modelId}/bq-tables/`, {
+    return fetch(`/api/models/${modelId}/bq-tables/`, {
         headers: { 'X-CSRFToken': csrftoken }
     })
     .then(response => response.json())
@@ -1931,8 +1938,10 @@ function loadBqTables() {
         if (data.status === 'success') {
             availableTables = data.tables;
             renderPrimaryTableList();
+            return data.tables;
         } else {
             showNotification(data.message || 'Failed to load tables', 'error');
+            return [];
         }
     })
     .catch(error => {
@@ -1942,6 +1951,7 @@ function loadBqTables() {
                 <i class="fas fa-exclamation-circle mr-2"></i>Failed to load tables
             </p>
         `;
+        return [];
     });
 }
 
@@ -2213,6 +2223,35 @@ function loadSchemaBuilder() {
 
             // Render table cards
             renderTableCards();
+
+            // In edit mode, restore joins from wizardData.joinConfig
+            if (wizardEditMode && wizardData.joinConfig && Object.keys(wizardData.joinConfig).length > 0) {
+                Object.entries(wizardData.joinConfig).forEach(([secondaryTable, config]) => {
+                    if (config.join_key && config.secondary_column) {
+                        schemaBuilderState.joins.push({
+                            leftTable: wizardData.primaryTable,
+                            leftCol: config.join_key,
+                            rightTable: secondaryTable,
+                            rightCol: config.secondary_column,
+                            type: config.join_type || 'left'
+                        });
+                    }
+                });
+                // Redraw connection lines after restoring joins
+                setTimeout(updateConnectionLines, 100);
+            }
+
+            // In edit mode, restore selected columns from wizardData
+            if (wizardEditMode && wizardData.selectedColumns && Object.keys(wizardData.selectedColumns).length > 0) {
+                Object.entries(wizardData.selectedColumns).forEach(([table, columns]) => {
+                    if (schemaBuilderState.selectedColumns[table]) {
+                        schemaBuilderState.selectedColumns[table] = [...columns];
+                    }
+                });
+                // Re-render table cards to reflect selected columns
+                renderTableCards();
+                setTimeout(updateConnectionLines, 100);
+            }
 
             // Refresh preview
             refreshPreview();
@@ -3502,6 +3541,239 @@ let customerFiltersApplied = false;
 
 // Customer revenue analysis data (Pareto chart data)
 let customerAnalysisData = null;
+
+// ============================================================================
+// RESTORE FILTERS FROM SAVED DATA (Edit Mode)
+// ============================================================================
+function restoreFiltersFromSavedData(filters) {
+    /**
+     * Restore filter states from saved dataset configuration.
+     * Called when entering Step 4 in edit mode.
+     *
+     * @param {Object} filters - The saved filters from wizardData.filters
+     */
+    console.log('Restoring filters from saved data:', filters);
+
+    // ===========================================
+    // 1. RESTORE DATES FILTER
+    // ===========================================
+    if (filters.history) {
+        const history = filters.history;
+
+        // Set UI elements
+        const timestampSelect = document.getElementById('timestampColumn');
+        if (timestampSelect && history.timestamp_column) {
+            // Try to find the option - may need to match with or without table prefix
+            let found = false;
+            for (let i = 0; i < timestampSelect.options.length; i++) {
+                const optVal = timestampSelect.options[i].value;
+                if (optVal === history.timestamp_column ||
+                    optVal.endsWith('.' + history.timestamp_column.split('.').pop())) {
+                    timestampSelect.selectedIndex = i;
+                    found = true;
+                    console.log('Found timestamp column option:', optVal);
+                    break;
+                }
+            }
+            if (!found) {
+                console.warn('Could not find timestamp column in dropdown:', history.timestamp_column);
+                console.log('Available options:', Array.from(timestampSelect.options).map(o => o.value));
+            }
+        }
+
+        const rollingDaysInput = document.getElementById('rollingDays');
+        if (rollingDaysInput && history.rolling_days) {
+            rollingDaysInput.value = history.rolling_days;
+        }
+
+        // Set committed state - use the actual dropdown value (which may differ from saved)
+        const actualTimestampValue = timestampSelect?.value || history.timestamp_column;
+        datesFilterState.committed = {
+            timestampColumn: actualTimestampValue || null,
+            mode: history.start_date ? 'startDate' : 'rolling',
+            rollingDays: history.rolling_days || 30,
+            startDate: history.start_date || null
+        };
+
+        // Also set pending to match committed (no unapplied changes)
+        datesFilterState.pending = { ...datesFilterState.committed };
+
+        // Update legacy state
+        committedDatesFilter.timestampColumn = actualTimestampValue;
+
+        // Mark as applied
+        dateFiltersApplied = true;
+
+        // Update UI state
+        if (history.start_date) {
+            historyFilterMode = 'startDate';
+            const startDateInput = document.getElementById('startDateInput');
+            if (startDateInput) startDateInput.value = history.start_date;
+        } else {
+            historyFilterMode = 'rolling';
+        }
+
+        // Update status indicators and summary
+        updateDatesFilterStatus();
+        updateDatesRefreshButtonState();
+        updateDatesFilterSummary();
+    }
+
+    // ===========================================
+    // 2. RESTORE PRODUCTS FILTER
+    // ===========================================
+    if (filters.product_filter || filters.products) {
+        const productFilter = filters.product_filter || {};
+        const legacyProducts = filters.products || {};
+
+        // Handle top_revenue filter
+        if (productFilter.top_revenue?.enabled || legacyProducts.product_column) {
+            const topRevenue = productFilter.top_revenue || {};
+
+            productFiltersState.committed.topRevenue = {
+                enabled: true,
+                productColumn: topRevenue.product_column || legacyProducts.product_column,
+                revenueColumn: topRevenue.revenue_column || legacyProducts.revenue_column,
+                thresholdPercent: topRevenue.threshold_percent || legacyProducts.threshold_percent || 80
+            };
+
+            // Set UI elements
+            const productSelect = document.getElementById('productIdColumn');
+            if (productSelect) {
+                productSelect.value = productFiltersState.committed.topRevenue.productColumn || '';
+            }
+
+            const revenueSelect = document.getElementById('revenueColumn');
+            if (revenueSelect) {
+                revenueSelect.value = productFiltersState.committed.topRevenue.revenueColumn || '';
+            }
+
+            const thresholdInput = document.getElementById('revenueThreshold');
+            if (thresholdInput) {
+                thresholdInput.value = productFiltersState.committed.topRevenue.thresholdPercent;
+            }
+        }
+
+        // Handle category filters
+        if (productFilter.category_filters?.length > 0) {
+            productFiltersState.committed.categoryFilters = productFilter.category_filters.map(f => ({
+                column: f.column,
+                mode: f.mode,
+                values: f.values
+            }));
+        }
+
+        // Handle numeric filters
+        if (productFilter.numeric_filters?.length > 0) {
+            productFiltersState.committed.numericFilters = productFilter.numeric_filters.map(f => ({
+                column: f.column,
+                type: f.type,
+                min: f.min,
+                max: f.max,
+                value: f.value,
+                includeNulls: f.include_nulls
+            }));
+        }
+
+        // Copy committed to pending (no unapplied changes)
+        productFiltersState.pending = JSON.parse(JSON.stringify(productFiltersState.committed));
+
+        // Mark as applied if there are any product filters
+        const hasProductFilters = productFiltersState.committed.topRevenue.enabled ||
+            productFiltersState.committed.categoryFilters.length > 0 ||
+            productFiltersState.committed.numericFilters.length > 0;
+
+        if (hasProductFilters) {
+            productFiltersApplied = true;
+            updateProductsFilterStatus();
+            updateProductsRefreshButtonState();
+            updateProductsFilterSummary();
+        }
+    }
+
+    // ===========================================
+    // 3. RESTORE CUSTOMERS FILTER
+    // ===========================================
+    if (filters.customer_filter) {
+        const customerFilter = filters.customer_filter;
+
+        // Handle top_revenue filter
+        if (customerFilter.top_revenue) {
+            customerFiltersState.committed.topRevenue = {
+                enabled: true,
+                customerColumn: customerFilter.top_revenue.customer_column,
+                revenueColumn: customerFilter.top_revenue.revenue_column,
+                thresholdPercent: customerFilter.top_revenue.percent || 80
+            };
+        }
+
+        // Handle aggregation filters
+        if (customerFilter.aggregation_filters?.length > 0) {
+            customerFiltersState.committed.aggregationFilters = customerFilter.aggregation_filters.map(f => ({
+                type: f.type,
+                customerColumn: f.customer_column,
+                amountColumn: f.amount_column,
+                filterType: f.filter_type,
+                value: f.value,
+                min: f.min,
+                max: f.max
+            }));
+        }
+
+        // Handle category filters
+        if (customerFilter.category_filters?.length > 0) {
+            customerFiltersState.committed.categoryFilters = customerFilter.category_filters.map(f => ({
+                column: f.column,
+                mode: f.mode,
+                values: f.values
+            }));
+        }
+
+        // Handle numeric filters
+        if (customerFilter.numeric_filters?.length > 0) {
+            customerFiltersState.committed.numericFilters = customerFilter.numeric_filters.map(f => ({
+                column: f.column,
+                type: f.type || f.filter_type,
+                min: f.min,
+                max: f.max,
+                value: f.value,
+                includeNulls: f.include_nulls
+            }));
+        }
+
+        // Copy committed to pending (no unapplied changes)
+        customerFiltersState.pending = JSON.parse(JSON.stringify(customerFiltersState.committed));
+
+        // Mark as applied if there are any customer filters
+        const hasCustomerFilters = customerFiltersState.committed.topRevenue.enabled ||
+            customerFiltersState.committed.aggregationFilters.length > 0 ||
+            customerFiltersState.committed.categoryFilters.length > 0 ||
+            customerFiltersState.committed.numericFilters.length > 0;
+
+        if (hasCustomerFilters) {
+            customerFiltersApplied = true;
+            updateCustomersFilterStatus();
+            updateCustomersRefreshButtonState();
+            updateCustomersFilterSummary();
+        }
+    }
+
+    // Update all filter column dropdowns to reflect exclusions
+    populateProductFilterDropdowns();
+
+    // Fetch dataset stats with filters applied to update the Dataset Summary panel
+    // This needs to happen after all filter states are restored
+    fetchDatasetStats(true);
+
+    console.log('Filter state restored:', {
+        datesFilterState,
+        productFiltersState,
+        customerFiltersState,
+        dateFiltersApplied,
+        productFiltersApplied,
+        customerFiltersApplied
+    });
+}
 
 // --- Sub-chapter Toggle ---
 function toggleSubchapter(name) {
@@ -5821,6 +6093,15 @@ async function refreshCustomerFilters() {
         // Update the header badge
         updateCustomersFilterStatus();
 
+        // Build the customer_filter object and save to wizardData.filters
+        const customerFilter = buildCustomerFilterForApi();
+        wizardData.filters = wizardData.filters || {};
+        if (Object.keys(customerFilter).length > 0) {
+            wizardData.filters.customer_filter = customerFilter;
+        } else {
+            delete wizardData.filters.customer_filter;
+        }
+
         // Update Dataset Summary panel
         await updateDatasetSummary();
 
@@ -6688,6 +6969,73 @@ function buildProductFilterForApi() {
     return result;
 }
 
+function buildCustomerFilterForApi() {
+    const committed = customerFiltersState.committed;
+    const result = {};
+
+    // Top revenue filter
+    if (committed.topRevenue.enabled) {
+        result.top_revenue = {
+            enabled: true,
+            customer_column: committed.topRevenue.customerColumn,
+            revenue_column: committed.topRevenue.revenueColumn,
+            percent: committed.topRevenue.thresholdPercent
+        };
+    }
+
+    // Aggregation filters
+    if (committed.aggregationFilters.length > 0) {
+        result.aggregation_filters = committed.aggregationFilters.map(f => ({
+            type: f.type,
+            customer_column: f.customerColumn,
+            amount_column: f.amountColumn,
+            filter_type: f.filterType,
+            value: f.value,
+            min: f.min,
+            max: f.max
+        }));
+    }
+
+    // Category filters
+    if (committed.categoryFilters.length > 0) {
+        result.category_filters = committed.categoryFilters
+            .filter(f => f.values && f.values.length > 0)
+            .map(f => ({
+                column: f.column,
+                mode: f.mode,
+                values: f.values
+            }));
+    }
+
+    // Numeric filters
+    if (committed.numericFilters.length > 0) {
+        result.numeric_filters = committed.numericFilters
+            .filter(f => f.min !== null || f.max !== null || f.value !== null)
+            .map(f => ({
+                column: f.column,
+                filter_type: f.type,
+                min: f.min,
+                max: f.max,
+                value: f.value,
+                include_nulls: f.includeNulls
+            }));
+    }
+
+    // Date filters
+    if (committed.dateFilters.length > 0) {
+        result.date_filters = committed.dateFilters.map(f => ({
+            column: f.column,
+            date_type: f.dateType,
+            relative_option: f.relativeOption,
+            start_date: f.startDate,
+            end_date: f.endDate,
+            include_nulls: f.includeNulls
+        }));
+    }
+
+    return result;
+}
+
 // --- Column Dropdown Population ---
 function populateFilterColumnDropdowns() {
     // Get all selected columns from schema builder
@@ -7137,6 +7485,14 @@ function refreshDatasetHistory() {
     // Mark filters as applied and update header status
     dateFiltersApplied = true;
     updateDatesFilterStatus();
+
+    // Save to wizardData.filters for persistence
+    wizardData.filters = wizardData.filters || {};
+    wizardData.filters.history = {
+        timestamp_column: timestampCol,
+        rolling_days: parseInt(rollingDays) || 30,
+        start_date: startDate || null
+    };
 
     // Update all dropdowns to exclude the committed timestamp column
     populateProductFilterDropdowns();
@@ -8360,23 +8716,9 @@ function renderDatasetDetail(summary) {
 }
 
 function editDataset(datasetId) {
-    // Load dataset and open wizard in edit mode
-    fetch(`/api/datasets/${datasetId}/`, {
-        headers: { 'X-CSRFToken': csrftoken }
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.status === 'success') {
-            openWizard(datasetId);
-            loadDatasetForEdit(datasetId);
-        } else {
-            showNotification(data.message || 'Failed to load dataset', 'error');
-        }
-    })
-    .catch(error => {
-        console.error('Error loading dataset:', error);
-        showNotification('Failed to load dataset', 'error');
-    });
+    // Open wizard in edit mode - loadDatasetForEdit is called inside openWizard
+    // after tables are loaded to avoid race condition
+    openWizard(datasetId);
 }
 
 function loadDatasetForEdit(datasetId) {

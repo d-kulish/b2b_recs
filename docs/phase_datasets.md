@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides detailed specifications for implementing the **Datasets** domain in the ML Platform. The Datasets domain defines WHAT data goes into model training.
 
-**Last Updated**: 2025-12-07 (v8 - Added Dataset View modal with summary snapshot)
+**Last Updated**: 2025-12-07 (v9 - Added Dataset Edit functionality with filter restoration)
 
 ---
 
@@ -231,6 +231,126 @@ The `summary_snapshot` JSONField stores the Dataset Summary from wizard Step 4:
 
 **API Endpoint:**
 - `GET /api/datasets/{dataset_id}/summary/` - Returns dataset configuration + summary_snapshot
+
+### Dataset Edit Functionality
+
+The Edit button on dataset cards opens the same 4-step wizard in "edit mode", pre-populated with the saved dataset configuration. Users can modify any aspect of the dataset and save changes.
+
+**Edit Flow:**
+
+1. User clicks "Edit" on a dataset card
+2. `openWizard(datasetId)` is called with the dataset ID, setting `wizardEditMode = true`
+3. Tables are loaded from BigQuery (`loadBqTables()`)
+4. After tables load, `loadDatasetForEdit(datasetId)` fetches and populates saved configuration
+5. User navigates through steps, with each step restoring saved data
+
+**Data Restoration by Step:**
+
+**Step 1 - Basic Info:**
+- Dataset name and description are populated from saved values
+- Form fields are set directly from `wizardData.name` and `wizardData.description`
+
+**Step 2 - Source Tables:**
+- Primary table selection is restored from `wizardData.primaryTable`
+- Secondary tables are restored from `wizardData.secondaryTables`
+- Table radio buttons and checkboxes are programmatically selected
+
+**Step 3 - Schema Builder:**
+- Tables are loaded with sample data via `loadSchemaBuilder()`
+- **Joins are restored** from `wizardData.joinConfig`:
+  - Each join entry is converted to `schemaBuilderState.joins` format
+  - `updateConnectionLines()` draws the restored connections
+  - Joins remain fully editable (add/modify/delete)
+- **Selected columns are restored** from `wizardData.selectedColumns`:
+  - Column checkboxes are programmatically checked
+  - Preview is refreshed to show selected columns
+
+**Step 4 - Filtering:**
+- `fetchColumnAnalysis()` loads column type information
+- `populateFilterColumnDropdowns()` builds filter dropdowns
+- `restoreFiltersFromSavedData()` restores all filter states:
+
+  **Dates Filter Restoration:**
+  - Timestamp column dropdown is set to saved value
+  - Rolling days or start date is populated
+  - `datesFilterState.committed` is initialized from saved data
+  - `dateFiltersApplied` flag is set to `true`
+  - Summary line shows restored filter details
+
+  **Products Filter Restoration:**
+  - Top revenue settings are restored (product column, revenue column, threshold)
+  - Category filters are restored with column/mode/values
+  - Numeric filters are restored with column/type/values
+  - `productFiltersState.committed` is initialized
+  - `productFiltersApplied` flag is set to `true`
+
+  **Customers Filter Restoration:**
+  - Top revenue settings are restored (customer column, revenue column, percent)
+  - Aggregation filters are restored (transaction count, spending)
+  - Category and numeric filters are restored
+  - `customerFiltersState.committed` is initialized
+  - `customerFiltersApplied` flag is set to `true`
+
+- `fetchDatasetStats(true)` fetches statistics WITH filters applied
+- Dataset Summary panel shows filtered row count and statistics
+
+**Filter Persistence:**
+
+Each sub-chapter's "Refresh Dataset" button saves filters to `wizardData.filters`:
+
+```javascript
+// Dates - saved in refreshDatasetHistory()
+wizardData.filters.history = {
+    timestamp_column: "transactions.trans_date",
+    rolling_days: 30,
+    start_date: null
+};
+
+// Products - saved in refreshProductFilters()
+wizardData.filters.product_filter = {
+    top_revenue: { enabled: true, product_column: "...", revenue_column: "...", threshold_percent: 80 },
+    category_filters: [...],
+    numeric_filters: [...]
+};
+
+// Customers - saved in refreshCustomerFilters()
+wizardData.filters.customer_filter = {
+    top_revenue: { enabled: true, customer_column: "...", revenue_column: "...", percent: 80 },
+    aggregation_filters: [...],
+    category_filters: [...],
+    numeric_filters: [...]
+};
+```
+
+**State Management in Edit Mode:**
+
+```javascript
+// Global edit mode flags
+let wizardEditMode = false;           // True when editing existing dataset
+let wizardEditDatasetId = null;       // ID of dataset being edited
+
+// Filter state model (pending/committed)
+// In edit mode:
+// 1. committed state is restored from saved filters
+// 2. pending state is set equal to committed (no unapplied changes)
+// 3. Refresh buttons are disabled until user makes changes
+// 4. When user changes a filter, pending differs from committed
+// 5. Refresh button enables, allowing user to commit changes
+```
+
+**API Endpoints for Edit:**
+- `GET /api/datasets/{dataset_id}/` - Fetch dataset configuration for editing
+- `POST /api/datasets/{dataset_id}/update/` - Save updated dataset configuration
+
+**Key Implementation Notes:**
+
+1. **Race Condition Prevention**: `loadBqTables()` returns a Promise, and `loadDatasetForEdit()` is only called after tables are fully loaded. This ensures secondary tables display correctly.
+
+2. **Column Name Matching**: Filter restoration uses flexible matching to handle column name format differences (with/without table prefix).
+
+3. **Pending = Committed**: On restore, pending state equals committed state, so Refresh buttons start disabled. This is correct behavior - buttons enable when user makes changes.
+
+4. **Statistics Refresh**: `fetchDatasetStats(true)` is called after filter restoration to show filtered statistics, not raw table statistics.
 
 ### Dataset Creation Wizard
 

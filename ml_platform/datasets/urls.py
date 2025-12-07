@@ -33,8 +33,7 @@ urlpatterns = [
     path('api/models/<int:model_id>/detect-joins/', api.detect_joins, name='api_datasets_detect_joins'),
     path('api/models/<int:model_id>/suggest-columns/', api.suggest_columns, name='api_datasets_suggest_columns'),
 
-    # === DATASET ANALYSIS ===
-    path('api/datasets/<int:dataset_id>/analyze/', api.analyze_dataset, name='api_datasets_analyze'),
+    # === DATASET PREVIEW & SUMMARY ===
     path('api/datasets/<int:dataset_id>/preview/', api.preview_dataset, name='api_datasets_preview'),
     path('api/datasets/<int:dataset_id>/summary/', api.get_dataset_summary, name='api_datasets_summary'),
 

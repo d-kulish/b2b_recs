@@ -1456,11 +1456,8 @@ function renderDatasetsList(datasets) {
                     <span class="card-schedule-info">${ds.unique_users_estimate ? formatNumber(ds.unique_users_estimate) : '—'} / ${ds.unique_products_estimate ? formatNumber(ds.unique_products_estimate) : '—'}</span>
                 </div>
 
-                <!-- Column 4: Actions - Analyze & Activate -->
+                <!-- Column 4: Actions - Activate -->
                 <div class="card-run-actions">
-                    <button onclick="analyzeDataset(${ds.id})" class="card-action-btn run" title="Analyze dataset">
-                        <i class="fas fa-chart-bar"></i>
-                    </button>
                     ${ds.status === 'draft' ? `
                     <button onclick="activateDataset(${ds.id})" class="card-action-btn resume-large" title="Activate dataset">
                         <i class="fas fa-check-circle"></i>
@@ -8802,36 +8799,6 @@ function confirmDelete() {
     .finally(() => {
         document.getElementById('confirmDeleteBtn').disabled = false;
         document.getElementById('confirmDeleteBtn').textContent = 'Delete';
-    });
-}
-
-function analyzeDataset(datasetId) {
-    showNotification('Analyzing dataset...', 'info');
-
-    fetch(`/api/datasets/${datasetId}/analyze/`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': csrftoken
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.status === 'success') {
-            showNotification('Analysis complete', 'success');
-            loadDatasets(); // Refresh to show new stats
-
-            // If detail modal is open, refresh it
-            if (!document.getElementById('detailModal').classList.contains('hidden') && currentDatasetId === datasetId) {
-                viewDataset(datasetId);
-            }
-        } else {
-            showNotification(data.message || 'Analysis failed', 'error');
-        }
-    })
-    .catch(error => {
-        console.error('Error analyzing dataset:', error);
-        showNotification('Analysis failed', 'error');
     });
 }
 

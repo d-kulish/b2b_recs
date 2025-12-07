@@ -1812,6 +1812,22 @@
     text-align: center;
 }
 
+.join-popover-warning {
+    background-color: #fef3c7;
+    border: 1px solid #f59e0b;
+    border-radius: 4px;
+    padding: 8px 10px;
+    margin-bottom: 8px;
+    font-size: 11px;
+    color: #92400e;
+    line-height: 1.4;
+}
+
+.join-popover-warning i {
+    color: #f59e0b;
+    margin-right: 6px;
+}
+
 /* Column info popover (for connect mode) */
 .column-info-popover {
     position: fixed;

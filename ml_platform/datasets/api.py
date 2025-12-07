@@ -746,6 +746,46 @@ def get_sample_values(request, model_id, table_name, column_name):
 
 
 @login_required
+@require_http_methods(["GET"])
+def check_join_key_uniqueness(request, model_id, table_name, column_name):
+    """
+    Check if a column has unique values (suitable as a join key).
+
+    Non-unique join keys cause row multiplication in JOINs.
+    This endpoint helps users identify potential issues before creating joins.
+
+    Returns:
+        {
+            "status": "success",
+            "table": "raw_data.products",
+            "column": "product_code",
+            "total_rows": 16,
+            "unique_values": 4,
+            "is_unique": false,
+            "duplication_factor": 4.0,
+            "warning": "Column 'product_code' has 4 unique values but 16 rows..."
+        }
+    """
+    try:
+        model = get_object_or_404(ModelEndpoint, id=model_id)
+        bq_service = BigQueryService(model)
+
+        result = bq_service.check_join_key_uniqueness(table_name, column_name)
+
+        return JsonResponse({
+            'status': 'success',
+            **result
+        })
+
+    except Exception as e:
+        logger.error(f"Error checking join key uniqueness: {e}")
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e),
+        }, status=500)
+
+
+@login_required
 @require_http_methods(["POST"])
 def validate_query(request, dataset_id):
     """

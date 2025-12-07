@@ -1008,9 +1008,14 @@ class Dataset(models.Model):
         help_text="Data filtering configuration"
     )
 
-    # NOTE: split_config has been REMOVED
+    # NOTE: split_config is kept for database compatibility but not actively used
     # Train/eval split is now handled by the Training domain (TFX ExampleGen)
     # This aligns with TFX architecture where data splitting is an execution-time concern
+    split_config = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Deprecated - Train/eval split is handled by Training domain"
+    )
 
     # Metadata (populated after analysis)
     row_count_estimate = models.BigIntegerField(

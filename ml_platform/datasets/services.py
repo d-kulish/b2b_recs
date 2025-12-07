@@ -481,6 +481,69 @@ class BigQueryService:
             logger.warning(f"Error getting sample values: {e}")
             return []
 
+    def check_join_key_uniqueness(self, table_name, column_name):
+        """
+        Check if a column has unique values (suitable as a join key).
+
+        A non-unique join key will cause row multiplication in JOINs.
+
+        Args:
+            table_name: Table name (e.g., "products" or "raw_data.products")
+            column_name: Column name to check
+
+        Returns:
+            Dict with uniqueness info: {
+                "table": "raw_data.products",
+                "column": "product_code",
+                "total_rows": 16,
+                "unique_values": 4,
+                "is_unique": False,
+                "duplication_factor": 4.0,
+                "warning": "Column has 4 unique values but 16 rows. Joining on this column will multiply rows by ~4x."
+            }
+        """
+        try:
+            full_ref = self._get_full_table_ref(table_name)
+
+            query = f"""
+                SELECT
+                    COUNT(*) as total_rows,
+                    COUNT(DISTINCT `{column_name}`) as unique_values,
+                    COUNT(*) - COUNT(DISTINCT `{column_name}`) as duplicate_count
+                FROM `{full_ref}`
+                WHERE `{column_name}` IS NOT NULL
+            """
+
+            result = list(self.client.query(query).result())[0]
+
+            total_rows = result.total_rows
+            unique_values = result.unique_values
+            is_unique = total_rows == unique_values
+
+            # Calculate how much row multiplication would occur
+            duplication_factor = round(total_rows / unique_values, 2) if unique_values > 0 else 0
+
+            response = {
+                "table": table_name,
+                "column": column_name,
+                "total_rows": total_rows,
+                "unique_values": unique_values,
+                "is_unique": is_unique,
+                "duplication_factor": duplication_factor
+            }
+
+            if not is_unique:
+                response["warning"] = (
+                    f"Column '{column_name}' has {unique_values:,} unique values but {total_rows:,} rows. "
+                    f"Joining on this column will multiply rows by ~{duplication_factor}x."
+                )
+
+            return response
+
+        except Exception as e:
+            logger.error(f"Error checking join key uniqueness for {table_name}.{column_name}: {e}")
+            raise BigQueryServiceError(f"Failed to check join key uniqueness: {e}")
+
     # =========================================================================
     # JOIN KEY DETECTION
     # =========================================================================

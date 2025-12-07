@@ -27,6 +27,7 @@ urlpatterns = [
     path('api/models/<int:model_id>/bq-tables/<str:table_name>/schema/', api.get_table_schema, name='api_datasets_table_schema'),
     path('api/models/<int:model_id>/bq-tables/<str:table_name>/stats/', api.get_table_stats, name='api_datasets_table_stats'),
     path('api/models/<int:model_id>/bq-tables/<str:table_name>/columns/<str:column_name>/samples/', api.get_sample_values, name='api_datasets_sample_values'),
+    path('api/models/<int:model_id>/bq-tables/<str:table_name>/columns/<str:column_name>/check-uniqueness/', api.check_join_key_uniqueness, name='api_datasets_check_join_key'),
 
     # === SMART SUGGESTIONS ===
     path('api/models/<int:model_id>/detect-joins/', api.detect_joins, name='api_datasets_detect_joins'),

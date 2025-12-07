@@ -215,6 +215,10 @@
                 <!-- Join Popover (hidden by default) -->
                 <div class="join-popover hidden" id="joinPopover">
                     <div class="join-popover-header">Join Type</div>
+                    <div class="join-popover-warning hidden" id="joinPopoverWarning">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <span id="joinPopoverWarningText">Non-unique join key</span>
+                    </div>
                     <div class="join-popover-option" data-type="left" onclick="setJoinType('left')">
                         <i class="fas fa-check"></i> LEFT JOIN
                     </div>
@@ -1204,6 +1208,24 @@
     </div>
 </div>
 
+<!-- Modern Notification Modal (auto-closes) -->
+<div id="notificationModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-[110] flex items-center justify-center p-4" onclick="closeNotification()">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-md border border-gray-300" onclick="event.stopPropagation()">
+        <!-- Header -->
+        <div id="notificationHeader" class="px-5 py-4">
+            <div class="flex items-center gap-3">
+                <i id="notificationIcon" class="fas fa-info-circle text-blue-600 text-xl"></i>
+                <h3 id="notificationTitle" class="text-base font-bold text-gray-900">Notification</h3>
+            </div>
+        </div>
+
+        <!-- Body -->
+        <div class="px-5 py-4 pt-0">
+            <div id="notificationMessage" class="text-sm text-gray-700 whitespace-pre-line"></div>
+        </div>
+    </div>
+</div>
+
 <!-- Delete Confirmation Modal -->
 <div id="deleteModal" class="modal-overlay hidden">
     <div class="modal-container modal-container-sm">
@@ -1670,6 +1692,9 @@ function resetWizard() {
 }
 
 function showStep(step) {
+    // Update currentWizardStep FIRST so validation uses correct step
+    currentWizardStep = step;
+
     // Hide all steps
     document.querySelectorAll('.wizard-step').forEach(s => s.classList.remove('active'));
 
@@ -1692,10 +1717,8 @@ function showStep(step) {
         }
     }
 
-    // Update navigation buttons
+    // Update navigation buttons (uses currentWizardStep for validation)
     updateNavigationButtons(step);
-
-    currentWizardStep = step;
 }
 
 function updateNavigationButtons(step) {
@@ -1744,15 +1767,9 @@ function validateCurrentStep() {
             break;
         case 4:
             // Step 4 validation:
-            // - Timestamp column must be selected (Define History)
-            // - Product ID and Revenue columns must be selected (Select Products)
-            // - Product analysis must have been run successfully
-            const timestampCol = document.getElementById('timestampColumn')?.value;
-            const productCol = document.getElementById('productIdColumn')?.value;
-            const revenueCol = document.getElementById('revenueColumn')?.value;
-
-            // All required columns must be selected and analysis must be successful
-            isValid = timestampCol && productCol && revenueCol && productAnalysisData && productAnalysisData.status === 'success';
+            // Dataset can be saved with or without filters - filters are optional
+            // The dataset configuration from Step 3 (tables, columns, joins) is sufficient
+            isValid = true;
             break;
     }
 
@@ -2016,18 +2033,21 @@ function onSecondaryTableToggle(tableName, isChecked) {
         card.classList.toggle('selected', isChecked);
     }
 
-    // Show/hide join config section
+    // Show/hide join config section (if it exists - joins are now done in Step 3 Schema Builder)
     const joinSection = document.getElementById('joinConfigSection');
-    if (wizardData.secondaryTables.length > 0) {
-        joinSection.classList.remove('hidden');
-        renderJoinConfig();
-    } else {
-        joinSection.classList.add('hidden');
+    if (joinSection) {
+        if (wizardData.secondaryTables.length > 0) {
+            joinSection.classList.remove('hidden');
+            renderJoinConfig();
+        } else {
+            joinSection.classList.add('hidden');
+        }
     }
 }
 
 function renderJoinConfig() {
     const container = document.getElementById('joinConfigList');
+    if (!container) return; // Join config UI removed - joins are done in Step 3 Schema Builder
 
     container.innerHTML = wizardData.secondaryTables.map(tableName => {
         const shortName = tableName.replace('raw_data.', '');
@@ -2136,16 +2156,21 @@ function loadTableSchema(tableName) {
 
 function loadSchemaBuilder() {
     const allTables = [wizardData.primaryTable, ...wizardData.secondaryTables].filter(Boolean);
+    const container = document.getElementById('schemaCardsContainer');
 
     if (allTables.length === 0) {
-        document.getElementById('schemaLoading').innerHTML = 'No tables selected. Go back to Step 2.';
-        return;
+        container.innerHTML = `
+            <div class="schema-loading" id="schemaLoading">
+                <i class="fas fa-exclamation-triangle"></i>
+                No tables selected. Go back to Step 2.
+            </div>
+        `;
+        return Promise.resolve();
     }
 
-    // Show loading state
-    document.getElementById('schemaLoading').style.display = 'flex';
-    document.getElementById('schemaCardsContainer').innerHTML = `
-        <div class="schema-loading" id="schemaLoading">
+    // Show loading state - replace container content with loading indicator
+    container.innerHTML = `
+        <div class="schema-loading" id="schemaLoading" style="display: flex;">
             <i class="fas fa-spinner fa-spin"></i>
             Loading table samples...
         </div>
@@ -2162,8 +2187,11 @@ function loadSchemaBuilder() {
         selectedJoinIndex: null
     };
 
-    // Load samples from backend
-    fetch(`/api/models/${modelId}/datasets/load-samples/`, {
+    // Reset card positions so tables are re-positioned fresh
+    cardPositions = {};
+
+    // Load samples from backend - return Promise so caller can await
+    return fetch(`/api/models/${modelId}/datasets/load-samples/`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -2188,6 +2216,9 @@ function loadSchemaBuilder() {
 
             // Refresh preview
             refreshPreview();
+
+            // Re-validate step after schema is loaded
+            validateCurrentStep();
         } else {
             document.getElementById('schemaCardsContainer').innerHTML = `
                 <div class="schema-preview-empty">
@@ -2279,10 +2310,11 @@ function positionCardsInitially(allTables) {
 
     // Use fixed dimensions based on CSS if container not yet sized
     const containerWidth = Math.max(containerRect.width, 900);
-    const containerHeight = Math.max(containerRect.height, 300);
+    const containerHeight = Math.max(containerRect.height, 350);
 
     const cardWidth = 220;
-    const cardHeight = 220; // Approximate card height
+    const cardHeight = 280; // Approximate card height including columns
+    const horizontalGap = 40; // Gap between cards
 
     // Calculate positions for all tables first
     const numTables = allTables.length;
@@ -2298,39 +2330,15 @@ function positionCardsInitially(allTables) {
         if (cardPositions[table]) {
             x = cardPositions[table].x;
             y = cardPositions[table].y;
-        } else if (index === 0) {
-            // Primary table: center of container
-            x = (containerWidth - cardWidth) / 2;
-            y = (containerHeight - cardHeight) / 2;
         } else {
-            // Secondary tables: position to the left and right of primary
-            const numSecondary = numTables - 1;
+            // Calculate horizontal layout: distribute cards evenly across container width
+            // Total width needed: numTables * cardWidth + (numTables - 1) * gap
+            const totalCardsWidth = numTables * cardWidth + (numTables - 1) * horizontalGap;
+            const startX = Math.max(20, (containerWidth - totalCardsWidth) / 2);
 
-            if (numSecondary === 1) {
-                // Single secondary: place to the right
-                x = (containerWidth / 2) + cardWidth / 2 + 80;
-                y = (containerHeight - cardHeight) / 2;
-            } else if (numSecondary === 2) {
-                // Two secondaries: one left, one right
-                if (index === 1) {
-                    x = (containerWidth / 2) - cardWidth - 80;
-                    y = (containerHeight - cardHeight) / 2;
-                } else {
-                    x = (containerWidth / 2) + cardWidth / 2 + 80;
-                    y = (containerHeight - cardHeight) / 2;
-                }
-            } else {
-                // Multiple secondaries: distribute around the primary
-                const angle = ((index - 1) / numSecondary) * Math.PI * 2 - Math.PI / 2;
-                const radiusX = containerWidth * 0.35;
-                const radiusY = containerHeight * 0.30;
-
-                const centerX = containerWidth / 2;
-                const centerY = containerHeight / 2;
-
-                x = centerX + Math.cos(angle) * radiusX - cardWidth / 2;
-                y = centerY + Math.sin(angle) * radiusY - cardHeight / 2;
-            }
+            // Position each card in a row
+            x = startX + index * (cardWidth + horizontalGap);
+            y = (containerHeight - cardHeight) / 2;
 
             // Keep within bounds
             x = Math.max(10, Math.min(x, containerWidth - cardWidth - 10));
@@ -2795,28 +2803,60 @@ function createJoin(leftTable, leftCol, rightTable, rightCol) {
         j.rightTable === rightTable
     );
 
+    const joinData = {
+        leftTable,
+        leftCol,
+        rightTable,
+        rightCol,
+        type: 'left',
+        warning: null  // Will be populated if join key is not unique
+    };
+
     if (existingIndex >= 0) {
         // Update existing join
-        schemaBuilderState.joins[existingIndex] = {
-            leftTable,
-            leftCol,
-            rightTable,
-            rightCol,
-            type: 'left'
-        };
+        schemaBuilderState.joins[existingIndex] = joinData;
     } else {
         // Add new join
-        schemaBuilderState.joins.push({
-            leftTable,
-            leftCol,
-            rightTable,
-            rightCol,
-            type: 'left'
-        });
+        schemaBuilderState.joins.push(joinData);
     }
 
     renderTableCards();
     refreshPreview();
+
+    // Check join key uniqueness on the secondary table (async)
+    checkJoinKeyUniqueness(rightTable, rightCol, existingIndex >= 0 ? existingIndex : schemaBuilderState.joins.length - 1);
+}
+
+async function checkJoinKeyUniqueness(table, column, joinIndex) {
+    try {
+        // Extract table name without schema prefix for API
+        const tableName = table.replace('raw_data.', '');
+
+        const response = await fetch(`/api/models/${modelId}/bq-tables/${tableName}/columns/${column}/check-uniqueness/`);
+        const data = await response.json();
+
+        if (data.status === 'success' && !data.is_unique) {
+            // Store warning in join data
+            if (schemaBuilderState.joins[joinIndex]) {
+                schemaBuilderState.joins[joinIndex].warning = data.warning;
+                schemaBuilderState.joins[joinIndex].duplicationFactor = data.duplication_factor;
+            }
+
+            // Show warning notification
+            const shortTable = table.replace('raw_data.', '');
+            showNotification(
+                `Warning: Joining on '${column}' in '${shortTable}' will multiply rows by ~${data.duplication_factor}x because the column is not unique.`,
+                'warning',
+                'Non-Unique Join Key'
+            );
+
+            // Re-render to show warning indicator on join line
+            renderTableCards();
+        }
+    } catch (error) {
+        console.error('Error checking join key uniqueness:', error);
+        // Don't block the user - just log the error
+    }
 }
 
 function removeJoin(index) {
@@ -2849,6 +2889,16 @@ function showJoinPopover(index, x, y) {
     popover.querySelectorAll('.join-popover-option[data-type]').forEach(opt => {
         opt.classList.toggle('active', opt.dataset.type === join.type);
     });
+
+    // Show/hide warning section
+    const warningEl = document.getElementById('joinPopoverWarning');
+    const warningTextEl = document.getElementById('joinPopoverWarningText');
+    if (join.warning) {
+        warningEl.classList.remove('hidden');
+        warningTextEl.textContent = join.warning;
+    } else {
+        warningEl.classList.add('hidden');
+    }
 
     popover.style.left = x + 'px';
     popover.style.top = y + 'px';
@@ -2991,9 +3041,10 @@ function updateConnectionLines() {
             // Get color for this join
             const color = JOIN_COLORS[index % JOIN_COLORS.length];
 
-            // Draw the connection line
+            // Draw the connection line (pass warning info)
+            const hasWarning = join.warning !== null;
             drawConnectionLine(svg, leftAnchor.x, leftAnchor.y, rightAnchor.x, rightAnchor.y, index, areaRect,
-                leftAnchor.isClipped, rightAnchor.isClipped, leftAnchor.clipDirection, rightAnchor.clipDirection);
+                leftAnchor.isClipped, rightAnchor.isClipped, leftAnchor.clipDirection, rightAnchor.clipDirection, hasWarning);
 
             // Color the connection dots
             const leftDot = document.querySelector(`.schema-connection-dot[data-table="${join.leftTable}"][data-column="${join.leftCol}"]`);
@@ -3012,17 +3063,21 @@ function updateConnectionLines() {
 }
 
 // Draw a connection line with optional arrow indicators for clipped columns
-function drawConnectionLine(svg, x1, y1, x2, y2, index, areaRect, leftClipped, rightClipped, leftClipDir, rightClipDir) {
-    const color = JOIN_COLORS[index % JOIN_COLORS.length];
+function drawConnectionLine(svg, x1, y1, x2, y2, index, areaRect, leftClipped, rightClipped, leftClipDir, rightClipDir, hasWarning = false) {
+    const color = hasWarning ? '#f59e0b' : JOIN_COLORS[index % JOIN_COLORS.length]; // Orange for warning
     const cardsArea = document.getElementById('schemaCardsArea');
 
     // Create a curved path for better visibility
     const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
     const d = createCurvedPath(x1, y1, x2, y2);
     path.setAttribute('d', d);
-    path.setAttribute('class', 'join-line');
+    path.setAttribute('class', hasWarning ? 'join-line join-line-warning' : 'join-line');
     path.setAttribute('stroke', color);
     path.setAttribute('fill', 'none');
+    if (hasWarning) {
+        path.setAttribute('stroke-dasharray', '8,4'); // Dashed line for warning
+        path.setAttribute('stroke-width', '3');
+    }
     path.style.pointerEvents = 'stroke';
     path.onclick = (e) => {
         e.stopPropagation();
@@ -3030,6 +3085,13 @@ function drawConnectionLine(svg, x1, y1, x2, y2, index, areaRect, leftClipped, r
     };
 
     svg.appendChild(path);
+
+    // Add warning icon at midpoint if there's a warning
+    if (hasWarning) {
+        const midX = (x1 + x2) / 2;
+        const midY = (y1 + y2) / 2;
+        drawWarningIcon(svg, midX, midY, index, areaRect);
+    }
 
     // Add circles or arrows at connection points
     if (leftClipped && leftClipDir) {
@@ -3053,6 +3115,41 @@ function drawConnectionLine(svg, x1, y1, x2, y2, index, areaRect, leftClipped, r
         circle2.setAttribute('fill', color);
         svg.appendChild(circle2);
     }
+}
+
+// Draw a warning icon (exclamation triangle) at the specified position
+function drawWarningIcon(svg, x, y, index, areaRect) {
+    const cardsArea = document.getElementById('schemaCardsArea');
+
+    // Create a group for the warning icon
+    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    g.setAttribute('transform', `translate(${x - 10}, ${y - 10})`);
+    g.style.cursor = 'pointer';
+    g.onclick = (e) => {
+        e.stopPropagation();
+        showJoinPopover(index, e.clientX - areaRect.left, e.clientY - areaRect.top);
+    };
+
+    // Warning triangle background
+    const triangle = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    triangle.setAttribute('d', 'M10 2 L18 18 L2 18 Z');
+    triangle.setAttribute('fill', '#f59e0b');
+    triangle.setAttribute('stroke', '#fff');
+    triangle.setAttribute('stroke-width', '1');
+    g.appendChild(triangle);
+
+    // Exclamation mark
+    const exclamation = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    exclamation.setAttribute('x', '10');
+    exclamation.setAttribute('y', '15');
+    exclamation.setAttribute('text-anchor', 'middle');
+    exclamation.setAttribute('fill', '#fff');
+    exclamation.setAttribute('font-size', '12');
+    exclamation.setAttribute('font-weight', 'bold');
+    exclamation.textContent = '!';
+    g.appendChild(exclamation);
+
+    svg.appendChild(g);
 }
 
 // Draw an arrow indicator for clipped columns
@@ -3277,9 +3374,6 @@ function renderPreviewError(message) {
 }
 
 function collectSchemaBuilderData() {
-    // Transfer schema builder state to wizard data
-    wizardData.selectedColumns = { ...schemaBuilderState.selectedColumns };
-
     // Convert joins to the format expected by the backend
     wizardData.joinConfig = {};
     schemaBuilderState.joins.forEach(join => {
@@ -3288,6 +3382,24 @@ function collectSchemaBuilderData() {
             secondary_column: join.rightCol,
             join_type: join.type
         };
+    });
+
+    // Update secondaryTables to only include tables that have joins configured
+    // This prevents the backend from trying to join tables without proper configuration
+    const joinedTables = schemaBuilderState.joins.map(j => j.rightTable);
+    wizardData.secondaryTables = wizardData.secondaryTables.filter(table =>
+        joinedTables.includes(table)
+    );
+
+    // Determine which tables are in use (primary + joined secondary tables)
+    const tablesInUse = [wizardData.primaryTable, ...wizardData.secondaryTables];
+
+    // Transfer only selected columns from tables that are in use
+    wizardData.selectedColumns = {};
+    tablesInUse.forEach(table => {
+        if (schemaBuilderState.selectedColumns[table]) {
+            wizardData.selectedColumns[table] = [...schemaBuilderState.selectedColumns[table]];
+        }
     });
 }
 
@@ -5721,6 +5833,9 @@ async function refreshCustomerFilters() {
     } finally {
         refreshBtn.innerHTML = originalHtml;
         updateCustomersRefreshButtonState();
+
+        // Re-validate step 4 to enable/disable Save button
+        validateCurrentStep();
     }
 }
 
@@ -6526,6 +6641,9 @@ async function refreshProductFilters() {
     // Update button state AFTER commit - this clears the "unapplied changes" indicator
     // since pending now equals committed
     updateProductsRefreshButtonState();
+
+    // Re-validate step 4 to enable/disable Save button
+    validateCurrentStep();
 }
 
 function buildProductFilterForApi() {
@@ -7028,6 +7146,9 @@ function refreshDatasetHistory() {
 
     // Update button state (should become disabled since pending = committed)
     updateDatesRefreshButtonState();
+
+    // Re-validate step 4 to enable/disable Save button
+    validateCurrentStep();
 
     console.log('Refresh Dataset clicked:', {
         mode: historyFilterMode,
@@ -8282,36 +8403,69 @@ function closeDetailModal() {
 // ============================================================================
 // UTILITY FUNCTIONS
 // ============================================================================
-function showNotification(message, type = 'info') {
-    // Create notification element
-    const notification = document.createElement('div');
-    notification.className = `fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg transform transition-all duration-300 translate-x-full`;
 
-    const colors = {
-        success: 'bg-green-500 text-white',
-        error: 'bg-red-500 text-white',
-        warning: 'bg-yellow-500 text-white',
-        info: 'bg-blue-500 text-white'
-    };
+// Store callback for notification close and auto-close timer
+let notificationCloseCallback = null;
+let notificationAutoCloseTimer = null;
 
-    notification.classList.add(...colors[type].split(' '));
-    notification.innerHTML = `
-        <div class="flex items-center">
-            <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : type === 'warning' ? 'exclamation-triangle' : 'info-circle'} mr-2"></i>
-            <span>${escapeHtml(message)}</span>
-        </div>
-    `;
+function showNotification(message, type = 'info', title = null, onClose = null) {
+    const modal = document.getElementById('notificationModal');
+    const icon = document.getElementById('notificationIcon');
+    const titleEl = document.getElementById('notificationTitle');
+    const messageEl = document.getElementById('notificationMessage');
 
-    document.body.appendChild(notification);
+    // Clear any existing auto-close timer
+    if (notificationAutoCloseTimer) {
+        clearTimeout(notificationAutoCloseTimer);
+        notificationAutoCloseTimer = null;
+    }
 
-    // Animate in
-    setTimeout(() => notification.classList.remove('translate-x-full'), 10);
+    // Store callback
+    notificationCloseCallback = onClose;
 
-    // Remove after delay
-    setTimeout(() => {
-        notification.classList.add('translate-x-full');
-        setTimeout(() => notification.remove(), 300);
-    }, 3000);
+    // Set message
+    messageEl.textContent = message;
+
+    // Set icon and colors based on type
+    if (type === 'error') {
+        icon.className = 'fas fa-exclamation-circle text-red-600 text-xl';
+        titleEl.textContent = title || 'Error';
+    } else if (type === 'warning') {
+        icon.className = 'fas fa-exclamation-triangle text-yellow-600 text-xl';
+        titleEl.textContent = title || 'Warning';
+    } else if (type === 'success') {
+        icon.className = 'fas fa-check-circle text-green-600 text-xl';
+        titleEl.textContent = title || 'Success';
+    } else {
+        icon.className = 'fas fa-info-circle text-blue-600 text-xl';
+        titleEl.textContent = title || 'Information';
+    }
+
+    // Show modal
+    modal.classList.remove('hidden');
+
+    // Auto-close after 2 seconds (errors stay longer at 4 seconds)
+    const autoCloseDelay = type === 'error' ? 4000 : 2000;
+    notificationAutoCloseTimer = setTimeout(() => {
+        closeNotification();
+    }, autoCloseDelay);
+}
+
+function closeNotification() {
+    const modal = document.getElementById('notificationModal');
+    modal.classList.add('hidden');
+
+    // Clear auto-close timer if manually closed
+    if (notificationAutoCloseTimer) {
+        clearTimeout(notificationAutoCloseTimer);
+        notificationAutoCloseTimer = null;
+    }
+
+    // Execute callback if provided
+    if (notificationCloseCallback) {
+        notificationCloseCallback();
+        notificationCloseCallback = null;
+    }
 }
 
 function escapeHtml(text) {

@@ -21,15 +21,11 @@ def model_dataset(request, model_id):
 
     # Calculate statistics
     total_datasets = datasets.count()
-    active_datasets = datasets.filter(status='active').count()
-    draft_datasets = datasets.filter(status='draft').count()
 
     context = {
         'model': model,
         'datasets': datasets,
         'total_datasets': total_datasets,
-        'active_datasets': active_datasets,
-        'draft_datasets': draft_datasets,
     }
 
     return render(request, 'ml_platform/model_dataset.html', context)

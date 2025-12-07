@@ -1456,16 +1456,7 @@ function renderDatasetsList(datasets) {
                     <span class="card-schedule-info">${ds.unique_users_estimate ? formatNumber(ds.unique_users_estimate) : '—'} / ${ds.unique_products_estimate ? formatNumber(ds.unique_products_estimate) : '—'}</span>
                 </div>
 
-                <!-- Column 4: Actions - Activate -->
-                <div class="card-run-actions">
-                    ${ds.status === 'draft' ? `
-                    <button onclick="activateDataset(${ds.id})" class="card-action-btn resume-large" title="Activate dataset">
-                        <i class="fas fa-check-circle"></i>
-                    </button>
-                    ` : ''}
-                </div>
-
-                <!-- Column 5: Edit & Delete -->
+                <!-- Column 4: Edit & Delete -->
                 <div class="card-actions">
                     <button onclick="viewDataset(${ds.id})" class="card-action-btn edit" title="View details">
                         <i class="fas fa-eye"></i>
@@ -8799,29 +8790,6 @@ function confirmDelete() {
     .finally(() => {
         document.getElementById('confirmDeleteBtn').disabled = false;
         document.getElementById('confirmDeleteBtn').textContent = 'Delete';
-    });
-}
-
-function activateDataset(datasetId) {
-    fetch(`/api/datasets/${datasetId}/activate/`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': csrftoken
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.status === 'success') {
-            showNotification('Dataset activated', 'success');
-            loadDatasets();
-        } else {
-            showNotification(data.message || 'Failed to activate dataset', 'error');
-        }
-    })
-    .catch(error => {
-        console.error('Error activating dataset:', error);
-        showNotification('Failed to activate dataset', 'error');
     });
 }
 

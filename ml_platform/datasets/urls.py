@@ -20,7 +20,6 @@ urlpatterns = [
 
     # === DATASET ACTIONS ===
     path('api/datasets/<int:dataset_id>/clone/', api.clone_dataset, name='api_datasets_clone'),
-    path('api/datasets/<int:dataset_id>/activate/', api.activate_dataset, name='api_datasets_activate'),
 
     # === BIGQUERY INTEGRATION APIs ===
     path('api/models/<int:model_id>/bq-tables/', api.list_bq_tables, name='api_datasets_bq_tables'),

@@ -927,11 +927,6 @@ class Dataset(models.Model):
     - Train/eval split strategy
     """
 
-    STATUS_CHOICES = [
-        ('draft', 'Draft'),
-        ('active', 'Active'),
-    ]
-
     # Basic info
     name = models.CharField(max_length=255, help_text="Dataset name (e.g., 'Q4 2024 Training Data')")
     description = models.TextField(blank=True, help_text="Optional description of this dataset")
@@ -941,9 +936,6 @@ class Dataset(models.Model):
         related_name='datasets',
         help_text="The model this dataset belongs to"
     )
-
-    # Status
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
 
     # Source tables configuration
     # Primary table (required) - typically transactions

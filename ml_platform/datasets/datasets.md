@@ -142,7 +142,6 @@ Automated analysis with issue detection:
 | POST | `/api/datasets/{id}/update/` | Update dataset |
 | POST | `/api/datasets/{id}/delete/` | Delete dataset |
 | POST | `/api/datasets/{id}/clone/` | Clone dataset |
-| POST | `/api/datasets/{id}/activate/` | Activate dataset |
 
 ### **BigQuery Integration**
 | Method | Endpoint | Description |
@@ -154,10 +153,9 @@ Automated analysis with issue detection:
 | POST | `/api/models/{id}/detect-joins/` | Auto-detect join keys |
 | POST | `/api/models/{id}/suggest-columns/` | Suggest ML columns |
 
-### **Dataset Analysis**
+### **Dataset Preview & Summary**
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/api/datasets/{id}/analyze/` | Full dataset analysis |
 | GET | `/api/datasets/{id}/preview/` | Preview sample data |
 | GET | `/api/datasets/{id}/summary/` | Get cached summary |
 | POST | `/api/models/{id}/datasets/compare/` | Compare 2-5 datasets |

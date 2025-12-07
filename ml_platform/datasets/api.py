@@ -38,7 +38,6 @@ def serialize_dataset(ds, include_details=False):
         'id': ds.id,
         'name': ds.name,
         'description': ds.description,
-        'status': ds.status,
         'primary_table': ds.primary_table,
         'secondary_tables': ds.secondary_tables,
         'table_count': 1 + len(ds.secondary_tables or []),
@@ -136,7 +135,6 @@ def list_datasets(request, model_id):
     List all datasets for a model.
 
     Query params:
-        - status: Filter by status ('draft', 'active')
         - page: Page number (default 1)
         - per_page: Items per page (default 10, max 50)
         - search: Search in name/description
@@ -144,11 +142,6 @@ def list_datasets(request, model_id):
     try:
         model = get_object_or_404(ModelEndpoint, id=model_id)
         datasets = model.datasets.all().order_by('-updated_at')
-
-        # Optional status filter
-        status = request.GET.get('status')
-        if status:
-            datasets = datasets.filter(status=status)
 
         # Optional search filter
         search = request.GET.get('search', '').strip()
@@ -228,7 +221,6 @@ def create_dataset(request, model_id):
             model_endpoint=model,
             name=data.get('name', '').strip(),
             description=data.get('description', ''),
-            status='draft',
             primary_table=data.get('primary_table', '').strip(),
             secondary_tables=data.get('secondary_tables', []),
             join_config=data.get('join_config', {}),
@@ -518,7 +510,6 @@ def clone_dataset(request, dataset_id):
             model_endpoint=original.model_endpoint,
             name=new_name,
             description=original.description,
-            status='draft',  # Always start as draft
             primary_table=original.primary_table,
             secondary_tables=original.secondary_tables,
             join_config=original.join_config,
@@ -536,37 +527,6 @@ def clone_dataset(request, dataset_id):
 
     except Exception as e:
         logger.error(f"Error cloning dataset: {e}")
-        return JsonResponse({
-            'status': 'error',
-            'message': str(e),
-        }, status=500)
-
-
-@login_required
-@require_http_methods(["POST"])
-def activate_dataset(request, dataset_id):
-    """
-    Activate a dataset (change status from draft to active).
-    """
-    try:
-        dataset = get_object_or_404(Dataset, id=dataset_id)
-
-        if dataset.status == 'active':
-            return JsonResponse({
-                'status': 'error',
-                'message': 'Dataset is already active',
-            }, status=400)
-
-        dataset.status = 'active'
-        dataset.save()
-
-        return JsonResponse({
-            'status': 'success',
-            'message': 'Dataset activated successfully',
-        })
-
-    except Exception as e:
-        logger.error(f"Error activating dataset: {e}")
         return JsonResponse({
             'status': 'error',
             'message': str(e),

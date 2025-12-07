@@ -1055,6 +1055,27 @@ class Dataset(models.Model):
         help_text="Column statistics from BigQuery analysis"
     )
 
+    # Summary snapshot from Step 4 Dataset Summary panel
+    # Saved when dataset is created/updated, displayed in View modal
+    # Example: {
+    #   "total_rows": 8233,
+    #   "filters_applied": {
+    #       "dates": {"type": "rolling", "days": 30, "column": "trans_date"},
+    #       "customers": {"type": "none"},
+    #       "products": {"type": "multiple", "count": 2, "filters": [...]}
+    #   },
+    #   "column_stats": {
+    #       "customers.customer_id": {"type": "INTEGER", "min": 59, "max": 999900},
+    #       ...
+    #   },
+    #   "snapshot_at": "2024-12-07T10:30:00Z"
+    # }
+    summary_snapshot = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Dataset Summary snapshot from wizard Step 4 for View modal"
+    )
+
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

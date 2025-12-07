@@ -7568,6 +7568,51 @@ function formatNumber(num) {
     return num.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 }
 
+// Format column stats for the View detail modal (similar to formatColumnStats but returns plain text)
+function formatDetailColumnStats(stats) {
+    const items = [];
+
+    if (stats.type === 'STRING' || stats.type === 'BYTES') {
+        if (stats.unique_count !== undefined) {
+            items.push(`Unique: ${stats.unique_count.toLocaleString()}`);
+        }
+    } else if (['INT64', 'FLOAT64', 'NUMERIC', 'BIGNUMERIC', 'INTEGER', 'FLOAT'].includes(stats.type)) {
+        if (stats.min !== undefined && stats.min !== null) {
+            items.push(`Min: ${formatNumber(stats.min)}`);
+        }
+        if (stats.max !== undefined && stats.max !== null) {
+            items.push(`Max: ${formatNumber(stats.max)}`);
+        }
+        if (stats.avg !== undefined && stats.avg !== null) {
+            items.push(`Avg: ${formatNumber(stats.avg)}`);
+        }
+    } else if (['DATE', 'DATETIME', 'TIMESTAMP'].includes(stats.type)) {
+        if (stats.min) {
+            items.push(`Min: ${stats.min}`);
+        }
+        if (stats.max) {
+            items.push(`Max: ${stats.max}`);
+        }
+        if (stats.unique_count !== undefined) {
+            items.push(`Unique: ${stats.unique_count.toLocaleString()}`);
+        }
+    } else if (stats.type === 'BOOL') {
+        if (stats.true_count !== undefined) {
+            items.push(`True: ${stats.true_count.toLocaleString()}`);
+        }
+        if (stats.false_count !== undefined) {
+            items.push(`False: ${stats.false_count.toLocaleString()}`);
+        }
+    }
+
+    // Add null info if present
+    if (stats.null_count !== undefined && stats.null_count > 0) {
+        items.push(`Nulls: ${stats.null_count.toLocaleString()} (${stats.null_percent}%)`);
+    }
+
+    return items.join(' · ') || '-';
+}
+
 function updateDatasetSummary() {
     // Wrapper function for backward compatibility
     // Now calls fetchDatasetStats with filters
@@ -8020,6 +8065,15 @@ function saveDataset() {
     // Collect all data from current step
     collectStepData(currentWizardStep);
 
+    // Build summary snapshot from current Dataset Summary panel data
+    // This captures whatever is currently displayed (filtered or unfiltered)
+    const summarySnapshot = datasetStatsData ? {
+        total_rows: datasetStatsData.summary?.total_rows || 0,
+        filters_applied: datasetStatsData.filters_applied || {},
+        column_stats: datasetStatsData.column_stats || {},
+        snapshot_at: new Date().toISOString()
+    } : {};
+
     // Build payload (split_config removed - handled by Training domain)
     const payload = {
         name: wizardData.name,
@@ -8028,7 +8082,8 @@ function saveDataset() {
         secondary_tables: wizardData.secondaryTables,
         join_config: wizardData.joinConfig,
         selected_columns: wizardData.selectedColumns,
-        filters: wizardData.filters
+        filters: wizardData.filters,
+        summary_snapshot: summarySnapshot
     };
 
     const url = wizardEditMode
@@ -8097,6 +8152,122 @@ function viewDataset(datasetId) {
 function renderDatasetDetail(summary) {
     document.getElementById('detailModalTitle').textContent = summary.name;
 
+    // Build filters applied display from summary_snapshot
+    const snapshot = summary.summary_snapshot || {};
+    const filtersApplied = snapshot.filters_applied || {};
+    const columnStats = snapshot.column_stats || {};
+    const joinConfig = summary.join_config || {};
+    const filtersConfig = summary.filters?.config || {};
+
+    // Build join configuration display
+    const joinRows = Object.entries(joinConfig).map(([table, config]) => {
+        const tableName = table.replace('raw_data.', '');
+        const primaryTable = summary.tables.primary?.replace('raw_data.', '') || 'primary';
+        return `
+            <div class="flex items-center text-sm py-1">
+                <span class="text-gray-900 font-medium">${primaryTable}.${config.join_key}</span>
+                <i class="fas fa-arrows-alt-h mx-2 text-gray-400"></i>
+                <span class="text-gray-900 font-medium">${tableName}.${config.secondary_column}</span>
+                <span class="ml-2 px-2 py-0.5 rounded text-xs bg-gray-200 text-gray-600">${config.join_type || 'LEFT'}</span>
+            </div>
+        `;
+    }).join('');
+
+    // Build detailed filters display
+    const filterDetails = [];
+
+    // Dates filter details
+    if (filtersApplied.dates?.type === 'rolling') {
+        filterDetails.push(`
+            <div class="border-l-4 border-blue-400 pl-3 py-2">
+                <div class="font-medium text-gray-900"><i class="fas fa-calendar-alt mr-2 text-blue-500"></i>Date Filter</div>
+                <div class="text-sm text-gray-600 mt-1">
+                    <span class="text-gray-500">Column:</span> <span class="font-medium">${filtersApplied.dates.column || 'N/A'}</span><br>
+                    <span class="text-gray-500">Range:</span> Last ${filtersApplied.dates.days} days (rolling window)
+                </div>
+            </div>
+        `);
+    } else if (filtersApplied.dates?.type === 'fixed') {
+        filterDetails.push(`
+            <div class="border-l-4 border-blue-400 pl-3 py-2">
+                <div class="font-medium text-gray-900"><i class="fas fa-calendar-alt mr-2 text-blue-500"></i>Date Filter</div>
+                <div class="text-sm text-gray-600 mt-1">
+                    <span class="text-gray-500">Column:</span> <span class="font-medium">${filtersApplied.dates.column || 'N/A'}</span><br>
+                    <span class="text-gray-500">Start Date:</span> ${filtersApplied.dates.start_date}
+                </div>
+            </div>
+        `);
+    }
+
+    // Customers filter details
+    if (filtersApplied.customers?.type === 'multiple' && filtersApplied.customers.filters?.length > 0) {
+        const customerFilterItems = filtersApplied.customers.filters.map(f => {
+            if (f.type === 'top_revenue') {
+                return `<li>Top <strong>${f.percent}%</strong> customers by revenue<br>
+                    <span class="text-gray-500 text-xs ml-4">Customer: ${f.customer_column || 'N/A'}, Revenue: ${f.revenue_column || 'N/A'}</span></li>`;
+            } else if (f.type === 'transaction_count') {
+                const desc = f.filter_type === 'greater_than' ? `> ${f.value}` :
+                             f.filter_type === 'less_than' ? `< ${f.value}` :
+                             `${f.min} - ${f.max}`;
+                return `<li>Transaction count ${desc}</li>`;
+            } else if (f.type === 'spending') {
+                const desc = f.filter_type === 'greater_than' ? `> $${f.value}` :
+                             f.filter_type === 'less_than' ? `< $${f.value}` :
+                             `$${f.min} - $${f.max}`;
+                return `<li>Total spending ${desc}</li>`;
+            } else if (f.type === 'category') {
+                return `<li>${f.column}: ${f.mode} ${f.values?.slice(0, 3).join(', ')}${f.values?.length > 3 ? '...' : ''}</li>`;
+            } else if (f.type === 'numeric') {
+                const desc = f.filter_type === 'range' ? `${f.min} - ${f.max}` :
+                             f.filter_type === 'greater_than' ? `> ${f.value}` :
+                             f.filter_type === 'less_than' ? `< ${f.value}` : `= ${f.value}`;
+                return `<li>${f.column}: ${desc}</li>`;
+            }
+            return `<li>${f.type}</li>`;
+        }).join('');
+        filterDetails.push(`
+            <div class="border-l-4 border-green-400 pl-3 py-2">
+                <div class="font-medium text-gray-900"><i class="fas fa-users mr-2 text-green-500"></i>Customer Filters (${filtersApplied.customers.count})</div>
+                <ul class="text-sm text-gray-600 mt-1 list-disc list-inside">${customerFilterItems}</ul>
+            </div>
+        `);
+    }
+
+    // Products filter details
+    if (filtersApplied.products?.type === 'multiple' && filtersApplied.products.filters?.length > 0) {
+        const productFilterItems = filtersApplied.products.filters.map(f => {
+            if (f.type === 'top_revenue') {
+                return `<li>Top <strong>${f.percent}%</strong> products by revenue<br>
+                    <span class="text-gray-500 text-xs ml-4">Product: ${f.product_column || 'N/A'}, Revenue: ${f.revenue_column || 'N/A'}</span></li>`;
+            } else if (f.type === 'category') {
+                return `<li>${f.column}: ${f.mode} ${f.values?.slice(0, 3).join(', ')}${f.values?.length > 3 ? '...' : ''}</li>`;
+            } else if (f.type === 'numeric') {
+                const desc = f.filter_type === 'range' ? `${f.min} - ${f.max}` :
+                             f.filter_type === 'greater_than' ? `> ${f.value}` :
+                             f.filter_type === 'less_than' ? `< ${f.value}` : `= ${f.value}`;
+                return `<li>${f.column}: ${desc}</li>`;
+            }
+            return `<li>${f.type}</li>`;
+        }).join('');
+        filterDetails.push(`
+            <div class="border-l-4 border-purple-400 pl-3 py-2">
+                <div class="font-medium text-gray-900"><i class="fas fa-box mr-2 text-purple-500"></i>Product Filters (${filtersApplied.products.count})</div>
+                <ul class="text-sm text-gray-600 mt-1 list-disc list-inside">${productFilterItems}</ul>
+            </div>
+        `);
+    }
+
+    // Build column stats table rows
+    const columnStatsRows = Object.entries(columnStats).map(([colName, stats]) => {
+        return `
+            <tr>
+                <td class="px-3 py-2 text-sm text-gray-900">${colName}</td>
+                <td class="px-3 py-2"><span class="inline-block px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700">${stats.type || 'UNKNOWN'}</span></td>
+                <td class="px-3 py-2 text-sm text-gray-600">${formatDetailColumnStats(stats)}</td>
+            </tr>
+        `;
+    }).join('');
+
     const html = `
         <div class="space-y-4">
             <!-- Status & Info -->
@@ -8105,17 +8276,18 @@ function renderDatasetDetail(summary) {
                     ${summary.status.charAt(0).toUpperCase() + summary.status.slice(1)}
                 </span>
                 <span class="text-sm text-gray-500">Created ${new Date(summary.timestamps.created_at).toLocaleDateString()}</span>
+                ${snapshot.has_snapshot ? `<span class="px-3 py-1 rounded-full text-sm font-bold bg-green-100 text-green-700">${formatNumber(snapshot.total_rows)} rows</span>` : ''}
             </div>
 
             ${summary.description ? `<p class="text-gray-600">${escapeHtml(summary.description)}</p>` : ''}
 
-            <!-- Tables -->
+            <!-- Tables & Joins -->
             <div class="bg-gray-50 rounded-lg p-4">
-                <h4 class="font-semibold text-gray-900 mb-2">Tables (${summary.tables.total_count})</h4>
-                <div class="space-y-1">
+                <h4 class="font-semibold text-gray-900 mb-2"><i class="fas fa-database mr-2 text-gray-500"></i>Tables & Joins</h4>
+                <div class="space-y-2">
                     <div class="flex items-center">
                         <span class="text-sm font-medium text-gray-700 w-24">Primary:</span>
-                        <span class="text-sm text-gray-900">${summary.tables.primary?.replace('raw_data.', '') || 'Not set'}</span>
+                        <span class="text-sm text-gray-900 font-medium">${summary.tables.primary?.replace('raw_data.', '') || 'Not set'}</span>
                     </div>
                     ${summary.tables.secondary.length > 0 ? `
                     <div class="flex items-start">
@@ -8123,66 +8295,64 @@ function renderDatasetDetail(summary) {
                         <span class="text-sm text-gray-900">${summary.tables.secondary.map(t => t.replace('raw_data.', '')).join(', ')}</span>
                     </div>
                     ` : ''}
+                    ${Object.keys(joinConfig).length > 0 ? `
+                    <div class="mt-3 pt-3 border-t border-gray-200">
+                        <div class="text-sm font-medium text-gray-700 mb-2">Join Keys:</div>
+                        ${joinRows}
+                    </div>
+                    ` : ''}
                 </div>
             </div>
 
-            <!-- Column Mapping -->
+            <!-- Filters Applied (Detailed) -->
+            ${filterDetails.length > 0 ? `
             <div class="bg-gray-50 rounded-lg p-4">
-                <h4 class="font-semibold text-gray-900 mb-2">ML Column Mapping</h4>
-                <div class="grid grid-cols-2 gap-2 text-sm">
-                    ${Object.entries(summary.columns.mapping || {}).map(([role, col]) => `
-                        <div><span class="font-medium text-gray-700">${role}:</span> <span class="text-gray-900">${col}</span></div>
-                    `).join('')}
+                <h4 class="font-semibold text-gray-900 mb-3"><i class="fas fa-filter mr-2 text-gray-500"></i>Filters Applied</h4>
+                <div class="space-y-3">
+                    ${filterDetails.join('')}
                 </div>
-                <div class="mt-2 text-sm text-gray-500">${summary.columns.total_selected} columns selected</div>
             </div>
-
-            <!-- Filters -->
+            ` : `
             <div class="bg-gray-50 rounded-lg p-4">
-                <h4 class="font-semibold text-gray-900 mb-2">Filters</h4>
-                <ul class="list-disc list-inside text-sm text-gray-700">
-                    ${summary.filters.summary.map(f => `<li>${f}</li>`).join('')}
-                </ul>
+                <h4 class="font-semibold text-gray-900 mb-2"><i class="fas fa-filter mr-2 text-gray-500"></i>Filters Applied</h4>
+                <p class="text-sm text-gray-500">No filters applied - using all data</p>
             </div>
+            `}
 
-            <!-- Split -->
+            <!-- Column Statistics -->
+            ${snapshot.has_snapshot && Object.keys(columnStats).length > 0 ? `
             <div class="bg-gray-50 rounded-lg p-4">
-                <h4 class="font-semibold text-gray-900 mb-2">Train/Eval Split</h4>
-                <p class="text-sm text-gray-700">${summary.split.summary}</p>
-            </div>
-
-            <!-- Cached Analysis -->
-            ${summary.cached_analysis.has_analysis ? `
-            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <h4 class="font-semibold text-blue-900 mb-2">Analysis Results</h4>
-                <div class="grid grid-cols-3 gap-4 text-sm">
-                    <div>
-                        <div class="text-blue-700 font-medium">Rows</div>
-                        <div class="text-blue-900 text-lg font-bold">${formatNumber(summary.cached_analysis.row_count)}</div>
-                    </div>
-                    <div>
-                        <div class="text-blue-700 font-medium">Unique Users</div>
-                        <div class="text-blue-900 text-lg font-bold">${formatNumber(summary.cached_analysis.unique_users)}</div>
-                    </div>
-                    <div>
-                        <div class="text-blue-700 font-medium">Unique Products</div>
-                        <div class="text-blue-900 text-lg font-bold">${formatNumber(summary.cached_analysis.unique_products)}</div>
-                    </div>
+                <h4 class="font-semibold text-gray-900 mb-3"><i class="fas fa-chart-bar mr-2 text-gray-500"></i>Column Statistics</h4>
+                <div class="bg-white rounded-lg border border-gray-200 overflow-hidden">
+                    <table class="w-full text-left">
+                        <thead class="bg-gray-100">
+                            <tr>
+                                <th class="px-3 py-2 text-xs font-semibold text-gray-700 uppercase">Column</th>
+                                <th class="px-3 py-2 text-xs font-semibold text-gray-700 uppercase">Type</th>
+                                <th class="px-3 py-2 text-xs font-semibold text-gray-700 uppercase">Statistics</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-100">
+                            ${columnStatsRows}
+                        </tbody>
+                    </table>
                 </div>
-                ${summary.cached_analysis.date_range_start ? `
-                <div class="mt-2 text-sm text-blue-700">
-                    Date range: ${summary.cached_analysis.date_range_start} to ${summary.cached_analysis.date_range_end}
+                ${snapshot.snapshot_at ? `
+                <div class="mt-3 text-xs text-gray-500">
+                    <i class="fas fa-clock mr-1"></i>Snapshot from ${new Date(snapshot.snapshot_at).toLocaleString()}
                 </div>
                 ` : ''}
             </div>
-            ` : `
+            ` : ''}
+
+            ${!snapshot.has_snapshot ? `
             <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
                 <p class="text-sm text-yellow-800">
                     <i class="fas fa-info-circle mr-1"></i>
-                    No analysis data yet. Click "Analyze" on the dataset card to run analysis.
+                    No summary snapshot available. Edit the dataset to generate statistics.
                 </p>
             </div>
-            `}
+            ` : ''}
         </div>
     `;
 

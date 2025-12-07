@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides detailed specifications for implementing the **Datasets** domain in the ML Platform. The Datasets domain defines WHAT data goes into model training.
 
-**Last Updated**: 2025-12-06 (v7 - Removed Step 5 train/eval split, Dataset is now configuration-only)
+**Last Updated**: 2025-12-07 (v8 - Added Dataset View modal with summary snapshot)
 
 ---
 
@@ -89,6 +89,148 @@ Dataset (Django Model)
 │                                                                              │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
+
+### Dataset View Modal
+
+The View modal displays a saved dataset's configuration and summary snapshot. This modal opens when clicking the "View" button on a dataset card.
+
+**Key Principle**: The View modal displays data saved in `summary_snapshot` field - no BigQuery queries are executed. This makes the View instant even for large datasets (15-20M rows).
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Q4 2024 Training Data                                    [View SQL] [Edit] [×]│
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│ [Draft]  Created 12/07/2024                              [8,233 rows]       │
+│                                                                              │
+│ ┌─────────────────────────────────────────────────────────────────────────┐ │
+│ │ 🗄️ Tables & Joins                                                       │ │
+│ ├─────────────────────────────────────────────────────────────────────────┤ │
+│ │ Primary:    transactions                                                │ │
+│ │ Secondary:  customers                                                   │ │
+│ │                                                                         │ │
+│ │ Join Keys:                                                              │ │
+│ │ transactions.customer_id  ↔  customers.customer_id  [LEFT]              │ │
+│ └─────────────────────────────────────────────────────────────────────────┘ │
+│                                                                              │
+│ ┌─────────────────────────────────────────────────────────────────────────┐ │
+│ │ 🔍 Filters Applied                                                       │ │
+│ ├─────────────────────────────────────────────────────────────────────────┤ │
+│ │ │ 📅 Date Filter                                                        │ │
+│ │ │   Column: transactions.trans_date                                     │ │
+│ │ │   Range: Last 30 days (rolling window)                               │ │
+│ │                                                                         │ │
+│ │ │ 👥 Customer Filters (1)                                               │ │
+│ │ │   • Top 80% customers by revenue                                      │ │
+│ │ │     Customer: customers.customer_id, Revenue: transactions.amount     │ │
+│ │                                                                         │ │
+│ │ │ 📦 Product Filters (1)                                                │ │
+│ │ │   • Top 75% products by revenue                                       │ │
+│ │ │     Product: transactions.product_id, Revenue: transactions.amount    │ │
+│ └─────────────────────────────────────────────────────────────────────────┘ │
+│                                                                              │
+│ ┌─────────────────────────────────────────────────────────────────────────┐ │
+│ │ 📊 Column Statistics                                                     │ │
+│ ├─────────────────────────────────────────────────────────────────────────┤ │
+│ │ Column                    │ Type      │ Statistics                      │ │
+│ │ customers.customer_id     │ INTEGER   │ Min: 59 · Max: 999.9K · Avg: 503K│ │
+│ │ transactions.category     │ STRING    │ Unique: 4                       │ │
+│ │ transactions.quantity     │ INTEGER   │ Min: 1 · Max: 9 · Avg: 6.35     │ │
+│ │ transactions.product_id   │ STRING    │ Unique: 3                       │ │
+│ │ transactions.unit_price   │ FLOAT     │ Min: 10.07 · Max: 99.99 · Avg: 67│ │
+│ └─────────────────────────────────────────────────────────────────────────┘ │
+│ Snapshot from 12/7/2024, 2:30:45 PM                                         │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**View Modal Sections:**
+
+1. **Header Row**:
+   - Dataset name (title)
+   - Status badge (Draft/Active/Archived)
+   - Created date
+   - Total rows badge (from snapshot)
+
+2. **Tables & Joins Section**:
+   - Primary table name
+   - Secondary table names
+   - Join keys with visual arrow (↔) showing column relationships
+   - Join type badge (LEFT, INNER, etc.)
+
+3. **Filters Applied Section**:
+   - **Date Filter**: Column name + range type (rolling days or fixed start date)
+   - **Customer Filters**: List of applied filters with column details
+     - Top revenue: shows percent + customer column + revenue column
+     - Transaction count: shows filter type and value
+     - Spending: shows filter type and value
+     - Category/Numeric filters: shows column and criteria
+   - **Product Filters**: Same structure as customer filters
+   - Color-coded left borders (blue for dates, green for customers, purple for products)
+
+4. **Column Statistics Section**:
+   - Table with Column, Type, Statistics columns
+   - Statistics vary by type:
+     - STRING: Unique count
+     - INTEGER/FLOAT: Min · Max · Avg
+     - DATE/TIMESTAMP: Min · Max · Unique
+     - BOOL: True count · False count
+   - Snapshot timestamp at bottom
+
+**Data Storage - summary_snapshot Field:**
+
+The `summary_snapshot` JSONField stores the Dataset Summary from wizard Step 4:
+
+```json
+{
+  "total_rows": 8233,
+  "filters_applied": {
+    "dates": {
+      "type": "rolling",
+      "days": 30,
+      "column": "transactions.trans_date"
+    },
+    "customers": {
+      "type": "multiple",
+      "count": 1,
+      "filters": [
+        {
+          "type": "top_revenue",
+          "percent": 80,
+          "customer_column": "customers.customer_id",
+          "revenue_column": "transactions.amount"
+        }
+      ]
+    },
+    "products": {
+      "type": "multiple",
+      "count": 1,
+      "filters": [
+        {
+          "type": "top_revenue",
+          "percent": 75,
+          "product_column": "transactions.product_id",
+          "revenue_column": "transactions.amount"
+        }
+      ]
+    }
+  },
+  "column_stats": {
+    "customers.customer_id": {"type": "INTEGER", "min": 59, "max": 999900, "avg": 503600},
+    "transactions.category": {"type": "STRING", "unique_count": 4},
+    "transactions.quantity": {"type": "INTEGER", "min": 1, "max": 9, "avg": 6.35}
+  },
+  "snapshot_at": "2024-12-07T14:30:45.123Z"
+}
+```
+
+**When summary_snapshot is Saved:**
+- On **Create**: When clicking "Save" in Step 4, current `datasetStatsData` is saved
+- On **Edit**: When saving after edit, new summary from Step 4 replaces old snapshot
+- The snapshot captures whatever statistics are displayed at save time (filtered or unfiltered)
+
+**API Endpoint:**
+- `GET /api/datasets/{dataset_id}/summary/` - Returns dataset configuration + summary_snapshot
 
 ### Dataset Creation Wizard
 
@@ -849,6 +991,24 @@ class Dataset(models.Model):
     #   ...
     # }
 
+    # Summary snapshot from wizard Step 4 (for View modal)
+    summary_snapshot = models.JSONField(default=dict)
+    # Saved when dataset is created/updated, displayed in View modal
+    # Example:
+    # {
+    #   "total_rows": 8233,
+    #   "filters_applied": {
+    #       "dates": {"type": "rolling", "days": 30, "column": "trans_date"},
+    #       "customers": {"type": "multiple", "count": 1, "filters": [...]},
+    #       "products": {"type": "multiple", "count": 1, "filters": [...]}
+    #   },
+    #   "column_stats": {
+    #       "customers.customer_id": {"type": "INTEGER", "min": 59, "max": 999900},
+    #       ...
+    #   },
+    #   "snapshot_at": "2024-12-07T10:30:00Z"
+    # }
+
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -1036,6 +1196,7 @@ class DatasetVersion(models.Model):
 | DELETE | `/api/datasets/{dataset_id}/` | Delete dataset |
 | POST | `/api/datasets/{dataset_id}/clone/` | Clone dataset |
 | POST | `/api/datasets/{dataset_id}/archive/` | Archive dataset |
+| GET | `/api/datasets/{dataset_id}/summary/` | Get dataset summary + snapshot for View modal |
 
 ### Table Analysis
 

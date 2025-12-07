@@ -235,6 +235,7 @@ def create_dataset(request, model_id):
             selected_columns=data.get('selected_columns', {}),
             column_mapping=data.get('column_mapping', {}),
             filters=data.get('filters', {}),
+            summary_snapshot=data.get('summary_snapshot', {}),
             created_by=request.user,
         )
 
@@ -353,6 +354,9 @@ def update_dataset(request, dataset_id):
 
         if 'filters' in data:
             dataset.filters = data['filters']
+
+        if 'summary_snapshot' in data:
+            dataset.summary_snapshot = data['summary_snapshot']
 
         # Clear cached analysis when config changes
         config_fields = ['primary_table', 'secondary_tables', 'join_config',
@@ -1114,8 +1118,8 @@ def get_tfx_queries(request, dataset_id):
 @require_http_methods(["GET"])
 def get_dataset_summary(request, dataset_id):
     """
-    Get a summary of dataset configuration and cached analysis.
-    Does NOT run a new BigQuery query - returns cached data.
+    Get a summary of dataset configuration and saved summary snapshot.
+    Does NOT run a new BigQuery query - returns saved snapshot data from wizard Step 4.
     """
     try:
         dataset = get_object_or_404(Dataset, id=dataset_id)
@@ -1124,27 +1128,8 @@ def get_dataset_summary(request, dataset_id):
         tables = dataset.get_all_tables()
         total_columns = sum(len(cols) for cols in (dataset.selected_columns or {}).values())
 
-        # Get filter summary
-        filters = dataset.filters or {}
-        filter_summary = []
-
-        date_filter = filters.get('date_range', {})
-        if date_filter.get('type') == 'rolling':
-            filter_summary.append(f"Last {date_filter.get('months', 6)} months")
-        elif date_filter.get('type') == 'fixed':
-            start = date_filter.get('start', 'N/A')
-            end = date_filter.get('end', 'N/A')
-            filter_summary.append(f"Date: {start} to {end}")
-
-        product_filter = filters.get('product_filter', {})
-        if product_filter.get('type') == 'top_revenue_percent':
-            filter_summary.append(f"Top {product_filter.get('value', 80)}% products by revenue")
-
-        customer_filter = filters.get('customer_filter', {})
-        if customer_filter.get('type') == 'min_transactions':
-            filter_summary.append(f"Min {customer_filter.get('value', 2)} transactions per customer")
-
-        # Note: split_config removed - handled by Training domain
+        # Get summary snapshot (saved from Step 4 Dataset Summary panel)
+        snapshot = dataset.summary_snapshot or {}
 
         summary = {
             'id': dataset.id,
@@ -1158,19 +1143,21 @@ def get_dataset_summary(request, dataset_id):
             },
             'columns': {
                 'total_selected': total_columns,
+                'selected': dataset.selected_columns or {},
                 'mapping': dataset.column_mapping or {},
             },
+            # Join configuration for connecting tables
+            'join_config': dataset.join_config or {},
             'filters': {
-                'summary': filter_summary if filter_summary else ['No filters applied'],
-                'config': filters,
+                'config': dataset.filters or {},
             },
-            'cached_analysis': {
-                'row_count': dataset.row_count_estimate,
-                'unique_users': dataset.unique_users_estimate,
-                'unique_products': dataset.unique_products_estimate,
-                'date_range_start': dataset.date_range_start.isoformat() if dataset.date_range_start else None,
-                'date_range_end': dataset.date_range_end.isoformat() if dataset.date_range_end else None,
-                'has_analysis': dataset.row_count_estimate is not None,
+            # Summary snapshot from wizard Step 4
+            'summary_snapshot': {
+                'total_rows': snapshot.get('total_rows', 0),
+                'filters_applied': snapshot.get('filters_applied', {}),
+                'column_stats': snapshot.get('column_stats', {}),
+                'snapshot_at': snapshot.get('snapshot_at'),
+                'has_snapshot': bool(snapshot.get('column_stats')),
             },
             'timestamps': {
                 'created_at': dataset.created_at.isoformat(),

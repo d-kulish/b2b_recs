@@ -2161,13 +2161,13 @@ class DatasetStatsService:
                         INTERVAL {days} DAY
                     )
                 """)
-                applied_filters['dates'] = {'type': 'rolling', 'days': days}
+                applied_filters['dates'] = {'type': 'rolling', 'days': days, 'column': timestamp_col}
 
             elif date_filter['type'] == 'fixed':
                 start_date = date_filter.get('start_date')
                 if start_date:
                     where_clauses.append(f"`{primary_alias}`.`{ts_col_name}` >= '{start_date}'")
-                    applied_filters['dates'] = {'type': 'fixed', 'start_date': start_date}
+                    applied_filters['dates'] = {'type': 'fixed', 'start_date': start_date, 'column': timestamp_col}
 
         # Customer filters (new structure with top_revenue, aggregation_filters, category_filters, etc.)
         customer_filter = filters.get('customer_filter', {})
@@ -2218,7 +2218,12 @@ class DatasetStatsService:
                 where_clauses.append(
                     f"`{primary_alias}`.`{customer_col}` IN (SELECT `{customer_col}` FROM top_customers)"
                 )
-                customer_filter_summary.append({'type': 'top_revenue', 'percent': percent})
+                customer_filter_summary.append({
+                    'type': 'top_revenue',
+                    'percent': percent,
+                    'customer_column': top_revenue.get('customer_column'),
+                    'revenue_column': top_revenue.get('revenue_column')
+                })
 
         # Aggregation filters (transaction count, spending)
         aggregation_filters = customer_filter.get('aggregation_filters', [])
@@ -2503,7 +2508,12 @@ class DatasetStatsService:
                 where_clauses.append(
                     f"`{primary_alias}`.`{product_col}` IN (SELECT `{product_col}` FROM top_products)"
                 )
-                product_filter_summary.append({'type': 'top_revenue', 'percent': percent})
+                product_filter_summary.append({
+                    'type': 'top_revenue',
+                    'percent': percent,
+                    'product_column': product_filter.get('product_column'),
+                    'revenue_column': product_filter.get('revenue_column')
+                })
 
         # New structure: top_revenue as nested object
         top_revenue = product_filter.get('top_revenue', {})
@@ -2531,7 +2541,12 @@ class DatasetStatsService:
                 where_clauses.append(
                     f"`{primary_alias}`.`{product_col}` IN (SELECT `{product_col}` FROM top_products)"
                 )
-                product_filter_summary.append({'type': 'top_revenue', 'percent': percent})
+                product_filter_summary.append({
+                    'type': 'top_revenue',
+                    'percent': percent,
+                    'product_column': top_revenue.get('product_column'),
+                    'revenue_column': top_revenue.get('revenue_column')
+                })
 
         # Category filters (IN / NOT IN for STRING columns)
         category_filters = product_filter.get('category_filters', [])

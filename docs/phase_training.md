@@ -18,7 +18,7 @@ The Training domain allows users to:
 5. Track artifacts in ML Metadata
 
 ### Key Principle
-**Training is the production execution of a validated configuration.** Users should run Quick Tests in Engineering & Testing first, then promote the best config to Full Training.
+**Training is the production execution of a validated configuration.** Users should run Quick Tests in Modeling first, then promote the best config to Full Training.
 
 ### Output
 - Trained TFRS model (SavedModel with embedded Transform)
@@ -784,7 +784,7 @@ def epoch_complete_webhook(request, run_id):
 
 ### Depends On
 - **Datasets Domain**: Provides Dataset definition for ExampleGen
-- **Engineering & Testing Domain**: Provides Feature Config for Transform
+- **Modeling Domain**: Provides Feature Config for Transform
 
 ### Depended On By
 - **Experiments Domain**: Training results feed into comparison
@@ -796,6 +796,6 @@ def epoch_complete_webhook(request, run_id):
 
 - [Implementation Overview](../implementation.md)
 - [Datasets Phase](phase_datasets.md)
-- [Engineering & Testing Phase](phase_engineering_testing.md)
+- [Modeling Phase](phase_modeling.md)
 - [Experiments Phase](phase_experiments.md)
 - [Deployment Phase](phase_deployment.md)

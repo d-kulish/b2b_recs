@@ -144,48 +144,14 @@ def model_dashboard(request, model_id):
 
 
 @login_required
-def model_pipeline_config(request, model_id):
+def model_modeling(request, model_id):
     """
-    Pipeline Configuration - Wizard-style interface for configuring ML pipeline parameters.
-    """
-    model = get_object_or_404(ModelEndpoint, id=model_id)
+    Modeling - Configure feature transformations, embedding dimensions, and run Quick Tests.
 
-    try:
-        pipeline_config = model.pipeline_config
-    except PipelineConfiguration.DoesNotExist:
-        pipeline_config = PipelineConfiguration.objects.create(
-            model_endpoint=model,
-        )
-
-    if request.method == 'POST':
-        # Update pipeline configuration
-        pipeline_config.top_revenue_percentile = float(request.POST.get('top_revenue_percentile', 0.8))
-        pipeline_config.min_transactions = int(request.POST.get('min_transactions', 10))
-        pipeline_config.embedding_dim = int(request.POST.get('embedding_dim', 128))
-        pipeline_config.batch_size = int(request.POST.get('batch_size', 8192))
-        pipeline_config.epochs = int(request.POST.get('epochs', 3))
-        pipeline_config.learning_rate = float(request.POST.get('learning_rate', 0.1))
-        pipeline_config.use_gpu = request.POST.get('use_gpu') == 'on'
-        pipeline_config.gpu_type = request.POST.get('gpu_type', 'nvidia-tesla-t4')
-        pipeline_config.gpu_count = int(request.POST.get('gpu_count', 4))
-        pipeline_config.use_preemptible = request.POST.get('use_preemptible') == 'on'
-        pipeline_config.save()
-
-        messages.success(request, 'Pipeline configuration updated successfully!')
-        return redirect('model_pipeline_config', model_id=model_id)
-
-    context = {
-        'model': model,
-        'pipeline_config': pipeline_config,
-    }
-
-    return render(request, 'ml_platform/model_pipeline_config.html', context)
-
-
-@login_required
-def model_feature_engineering(request, model_id):
-    """
-    Feature Engineering - Visual designer interface for creating features.
+    This page allows users to:
+    1. Create/edit Feature Configs (embedding dims, cross features, etc.)
+    2. Run Quick Tests on Vertex AI Pipelines (TFX minus Pusher)
+    3. Compare results and iterate before full training
     """
     model = get_object_or_404(ModelEndpoint, id=model_id)
 
@@ -193,7 +159,7 @@ def model_feature_engineering(request, model_id):
         'model': model,
     }
 
-    return render(request, 'ml_platform/model_feature_engineering.html', context)
+    return render(request, 'ml_platform/model_modeling.html', context)
 
 
 @login_required

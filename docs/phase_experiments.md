@@ -614,7 +614,7 @@ MLFLOW_TRACKING_URI = os.environ.get('MLFLOW_TRACKING_URI', 'http://mlflow-serve
 ## Dependencies on Other Domains
 
 ### Depends On
-- **Engineering & Testing Domain**: Quick Test results
+- **Modeling Domain**: Quick Test results
 - **Training Domain**: Full Training results
 
 ### Depended On By
@@ -625,6 +625,6 @@ MLFLOW_TRACKING_URI = os.environ.get('MLFLOW_TRACKING_URI', 'http://mlflow-serve
 ## Related Documentation
 
 - [Implementation Overview](../implementation.md)
-- [Engineering & Testing Phase](phase_engineering_testing.md)
+- [Modeling Phase](phase_modeling.md)
 - [Training Phase](phase_training.md)
 - [Deployment Phase](phase_deployment.md)

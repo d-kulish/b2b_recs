@@ -1458,11 +1458,11 @@
         <div class="modal-footer-wizard-neu">
             <div class="footer-left"></div>
             <div class="footer-right">
-                <button onclick="copyQuery()" class="btn-neu btn-neu-action btn-neu-nav-wide">
-                    <span class="btn-neu-inner"><i class="fas fa-copy mr-1"></i>Copy SQL</span>
+                <button onclick="copyQuery()" class="btn-neu btn-neu-action btn-neu-save" style="width: 130px;">
+                    <span class="btn-neu-inner">Copy SQL</span>
                 </button>
-                <button onclick="closeQueryModal()" class="btn-neu btn-neu-action btn-neu-secondary">
-                    <span class="btn-neu-inner">Close</span>
+                <button onclick="closeQueryModal()" class="btn-neu btn-neu-action btn-neu-cancel" style="width: 130px;">
+                    <span class="btn-neu-inner">Cancel</span>
                 </button>
             </div>
         </div>
@@ -9475,7 +9475,6 @@ function viewGeneratedQuery() {
                     <div class="flex items-center gap-4">
                         <span class="text-gray-600"><i class="fas fa-database mr-1"></i>${formatBytes(validation.total_bytes_processed || 0)} processed</span>
                         <span class="text-gray-600"><i class="fas fa-dollar-sign mr-1"></i>Est. $${(validation.estimated_cost_usd || 0).toFixed(4)}</span>
-                        ${validation.is_valid ? '<span class="text-green-600"><i class="fas fa-check-circle mr-1"></i>Valid</span>' : '<span class="text-red-600"><i class="fas fa-times-circle mr-1"></i>Invalid</span>'}
                     </div>
                 `;
             }

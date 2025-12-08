@@ -17,7 +17,7 @@ The Datasets domain allows users to:
 
 ### Key Principles
 
-1. **Datasets define WHAT data, not HOW to transform it.** Feature engineering (embeddings, buckets, crosses) is handled in the Engineering & Testing domain.
+1. **Datasets define WHAT data, not HOW to transform it.** Feature engineering (embeddings, buckets, crosses) is handled in the Modeling domain.
 
 2. **Dataset is Configuration Only.** No BigQuery views, tables, or data copies are created. The dataset stores configuration (JSON) that is used to generate SQL queries at training time.
 
@@ -30,7 +30,7 @@ The Datasets domain allows users to:
 ### Output
 A Dataset definition (JSON stored in Django) that is used by:
 - TFX ExampleGen to extract data from BigQuery (via generated SQL query)
-- Engineering & Testing domain to create Feature Configs
+- Modeling domain to create Feature Configs
 
 ### What Gets Stored
 
@@ -1599,7 +1599,7 @@ class SmartDefaultsService:
     def get_embedding_recommendations(self, column_stats: Dict) -> Dict:
         """
         Recommend embedding dimensions based on cardinality.
-        (Used by Engineering & Testing domain)
+        (Used by Modeling domain)
         """
         cardinality_to_dim = {
             (0, 50): 8,
@@ -1784,7 +1784,7 @@ class TestQueryGeneration:
 - **Connections Domain**: For accessing BigQuery (uses same GCP project)
 
 ### Depended On By
-- **Engineering & Testing Domain**: Uses Dataset to create Feature Configs
+- **Modeling Domain**: Uses Dataset to create Feature Configs
 - **Training Domain**: Uses Dataset definition for ExampleGen
 
 ---
@@ -1792,5 +1792,5 @@ class TestQueryGeneration:
 ## Related Documentation
 
 - [Implementation Overview](../implementation.md)
-- [Engineering & Testing Phase](phase_engineering_testing.md)
+- [Modeling Phase](phase_modeling.md)
 - [Training Phase](phase_training.md)

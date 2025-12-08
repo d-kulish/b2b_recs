@@ -41,14 +41,9 @@
                     <span class="font-medium">Dataset Manager</span>
                 </a>
 
-                <a href="{% url 'model_feature_engineering' model.id %}"
-                   class="block px-4 py-3 rounded-lg transition-all bg-white border border-black {% if request.resolver_match.url_name == 'model_feature_engineering' %}bg-blue-50 text-blue-700 shadow-sm{% else %}text-gray-700 hover:bg-gray-50{% endif %}">
-                    <span class="font-medium">Feature Engineering</span>
-                </a>
-
-                <a href="{% url 'model_pipeline_config' model.id %}"
-                   class="block px-4 py-3 rounded-lg transition-all bg-white border border-black {% if request.resolver_match.url_name == 'model_pipeline_config' %}bg-blue-50 text-blue-700 shadow-sm{% else %}text-gray-700 hover:bg-gray-50{% endif %}">
-                    <span class="font-medium">Pipeline Settings</span>
+                <a href="{% url 'model_modeling' model.id %}"
+                   class="block px-4 py-3 rounded-lg transition-all bg-white border border-black {% if request.resolver_match.url_name == 'model_modeling' %}bg-blue-50 text-blue-700 shadow-sm{% else %}text-gray-700 hover:bg-gray-50{% endif %}">
+                    <span class="font-medium">Modeling</span>
                 </a>
 
                 <a href="{% url 'model_experiments' model.id %}"
@@ -116,8 +111,7 @@
                                 {% if request.resolver_match.url_name == 'model_dashboard' %}Dashboard
                                 {% elif request.resolver_match.url_name == 'model_etl' %}ETL
                                 {% elif request.resolver_match.url_name == 'model_dataset' %}Dataset Manager
-                                {% elif request.resolver_match.url_name == 'model_feature_engineering' %}Feature Engineering
-                                {% elif request.resolver_match.url_name == 'model_pipeline_config' %}Pipeline Settings
+                                {% elif request.resolver_match.url_name == 'model_modeling' %}Modeling
                                 {% elif request.resolver_match.url_name == 'model_experiments' %}Experiments
                                 {% elif request.resolver_match.url_name == 'model_training' %}Training
                                 {% elif request.resolver_match.url_name == 'model_deployment' %}Deployment

@@ -28,8 +28,7 @@ urlpatterns = [
     # Individual Model/Endpoint Pages
     path('models/<int:model_id>/', views.model_dashboard, name='model_dashboard'),
     # Note: model_dataset is now handled by datasets sub-app
-    path('models/<int:model_id>/pipeline-config/', views.model_pipeline_config, name='model_pipeline_config'),
-    path('models/<int:model_id>/feature-engineering/', views.model_feature_engineering, name='model_feature_engineering'),
+    path('models/<int:model_id>/modeling/', views.model_modeling, name='model_modeling'),
     path('models/<int:model_id>/training/', views.model_training, name='model_training'),
     path('models/<int:model_id>/experiments/', views.model_experiments, name='model_experiments'),
     path('models/<int:model_id>/deployment/', views.model_deployment, name='model_deployment'),

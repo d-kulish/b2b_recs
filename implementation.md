@@ -608,6 +608,11 @@ gs://client-acme-prod-ml-platform/
 
 The platform is organized into distinct domains that represent the end-to-end ML workflow. Each domain has its own Django sub-app, UI, and business logic.
 
+**Model Architecture**: The platform builds **Two-Tower TFRS (TensorFlow Recommenders)** models exclusively. These models can serve:
+- **Top-N Recommendations**: Retrieve best candidates for a user
+- **Ranking**: Score user-item pairs for relevance
+- **Combined**: Retrieval + ranking pipeline
+
 ### Domain Overview
 
 ```
@@ -615,13 +620,13 @@ The platform is organized into distinct domains that represent the end-to-end ML
 │                           ML PLATFORM DOMAINS                                │
 │                                                                              │
 │  ┌──────────────┐    ┌──────────────┐    ┌────────────────────┐            │
-│  │     ETL      │    │   DATASETS   │    │ ENGINEERING &      │            │
-│  │   (Done ✅)  │    │  (Done ✅)   │    │ TESTING            │            │
-│  │              │    │              │    │                    │            │
-│  │ Source → BQ  │    │ What data?   │    │ How to preprocess? │            │
-│  │              │    │ Which cols?  │    │ Which features?    │            │
-│  │              │    │ Filters?     │    │ Embedding dims?    │            │
-│  │              │    │ (Config only)│    │ Quick experiments  │            │
+│  │     ETL      │    │   DATASETS   │    │     MODELING       │            │
+│  │   (Done ✅)  │    │  (Done ✅)   │    │                    │            │
+│  │              │    │              │    │ Feature Config     │            │
+│  │ Source → BQ  │    │ What data?   │    │ Embedding dims     │            │
+│  │              │    │ Which cols?  │    │ Cross features     │            │
+│  │              │    │ Filters?     │    │ Quick Tests        │            │
+│  │              │    │ (Config only)│    │ (TFX minus Pusher) │            │
 │  └──────────────┘    └──────┬───────┘    └──────────┬─────────┘            │
 │                             │                       │                       │
 │                             └───────────┬───────────┘                       │
@@ -629,13 +634,15 @@ The platform is organized into distinct domains that represent the end-to-end ML
 │                              ┌──────────────────┐                           │
 │                              │     TRAINING     │                           │
 │                              │                  │                           │
-│                              │ TFX Pipeline:    │                           │
-│                              │ • ExampleGen     │ ← Receives SQL query     │
-│                              │ • StatisticsGen  │ ← Handles train/eval     │
-│                              │ • SchemaGen      │   split internally       │
+│                              │ Full TFX Pipeline│                           │
+│                              │ on Vertex AI:    │                           │
+│                              │ • ExampleGen     │ ← 100% data              │
+│                              │ • StatisticsGen  │ ← train/eval split       │
+│                              │ • SchemaGen      │                           │
 │                              │ • Transform      │                           │
-│                              │ • Trainer        │                           │
+│                              │ • Trainer (GPU)  │                           │
 │                              │ • Evaluator      │                           │
+│                              │ • Pusher         │                           │
 │                              └────────┬─────────┘                           │
 │                                       │                                     │
 │         ┌─────────────────────────────┼─────────────────────────┐          │
@@ -651,16 +658,53 @@ The platform is organized into distinct domains that represent the end-to-end ML
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
+### Navigation Structure
+
+The platform uses the following navigation menu:
+
+| Menu Item | Domain | Description |
+|-----------|--------|-------------|
+| **Dashboard** | - | Model health, recent runs, performance overview |
+| **ETL** | ETL | Configure data sources, schedule extractions |
+| **Dataset Manager** | Datasets | Define WHAT data (tables, columns, filters) |
+| **Modeling** | Modeling | Configure HOW to transform + Quick Tests |
+| **Training** | Training | Execute full TFX pipeline |
+| **Experiments** | Experiments | Compare results via MLflow |
+| **Deployment** | Deployment | Deploy and manage model versions |
+
+**Note**: "Pipeline Settings" was removed as it created confusion. Training hyperparameters (epochs, batch size, GPU config) are configured when starting a training run. Feature configuration (embedding dims, crosses) is done in Modeling.
+
 ### Domain Responsibilities
 
 | Domain | Purpose | Status | Documentation |
 |--------|---------|--------|---------------|
 | **ETL** | Extract data from sources → BigQuery | ✅ Done | - |
 | **Datasets** | Define WHAT data goes into training (configuration only) | ✅ Done | [docs/phase_datasets.md](docs/phase_datasets.md) |
-| **Engineering & Testing** | Define HOW to transform features + quick experiments | Planned | [docs/phase_engineering_testing.md](docs/phase_engineering_testing.md) |
+| **Modeling** | Define HOW to transform features + Quick Tests on Vertex AI | Planned | [docs/phase_modeling.md](docs/phase_modeling.md) |
 | **Training** | Execute full TFX pipeline (includes train/eval split) | Planned | [docs/phase_training.md](docs/phase_training.md) |
 | **Experiments** | Compare results via MLflow heatmaps | Planned | [docs/phase_experiments.md](docs/phase_experiments.md) |
 | **Deployment** | Deploy and serve models | Planned | [docs/phase_deployment.md](docs/phase_deployment.md) |
+
+### Quick Test vs Full Training
+
+Both Quick Tests (in Modeling) and Full Training run on **Vertex AI Pipelines** with TFX components:
+
+| Aspect | Quick Test (Modeling) | Full Training |
+|--------|----------------------|---------------|
+| **Purpose** | Validate config, iterate quickly | Production model |
+| **Data** | 10% sample | 100% |
+| **TFX Components** | ExampleGen → StatisticsGen → SchemaGen → Transform → Trainer → Evaluator | Same + **Pusher** |
+| **Trainer** | CPU or 1x GPU, 2 epochs | 4x GPU, 10-50 epochs |
+| **Artifacts** | Temporary (24h retention) | Permanent |
+| **Duration** | ~10-20 min | ~2-6 hours |
+| **Cost** | ~$2-5 | ~$25-50 |
+
+Quick Tests validate:
+- BigQuery query syntax and data quality (StatisticsGen)
+- Schema correctness (SchemaGen)
+- `preprocessing_fn` compilation and vocabularies (Transform)
+- Model builds and converges (Trainer)
+- Metrics compute correctly (Evaluator)
 
 ### Tool Responsibilities
 
@@ -668,7 +712,7 @@ The platform is organized into distinct domains that represent the end-to-end ML
 |------|---------------|
 | **ML Metadata (MLMD)** | TFX artifact lineage, schema versions, vocabularies, production model tracking |
 | **MLflow** | Experiment comparison UI, metrics heatmaps, "which config scored best" |
-| **Vertex AI Pipelines** | Orchestrate TFX pipeline execution |
+| **Vertex AI Pipelines** | Orchestrate TFX pipeline execution (both Quick Tests and Full Training) |
 | **Dataflow** | Execute Beam transforms at scale (ExampleGen, Transform) |
 
 ---

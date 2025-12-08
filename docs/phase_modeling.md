@@ -1,24 +1,34 @@
-# Phase: Engineering & Testing Domain
+# Phase: Modeling Domain
 
 ## Document Purpose
-This document provides detailed specifications for implementing the **Engineering & Testing** domain in the ML Platform. This domain defines HOW data is transformed for training and enables rapid experimentation.
+This document provides detailed specifications for implementing the **Modeling** domain in the ML Platform. This domain defines HOW data is transformed for training and enables rapid experimentation via Quick Tests.
 
-**Last Updated**: 2025-12-01
+**Last Updated**: 2025-12-08
 
 ---
 
 ## Overview
 
 ### Purpose
-The Engineering & Testing domain allows users to:
+The Modeling domain allows users to:
 1. Configure feature preprocessing (embeddings, buckets, crosses)
-2. Define Query Tower and Candidate Tower features
-3. Run quick experiments to validate configurations
+2. Define Query Tower and Candidate Tower features for TFRS two-tower models
+3. Run Quick Tests on Vertex AI Pipelines (full TFX pipeline minus Pusher)
 4. Compare results via MLflow heatmaps
 5. Iterate until finding the best configuration
 
 ### Key Principle
-**This is the experimentation sandbox.** Users can create multiple Feature Configs per Dataset, run quick tests, and compare results without committing to expensive full training runs.
+**This is the experimentation sandbox.** Users can create multiple Feature Configs per Dataset, run Quick Tests, and compare results without committing to expensive full training runs.
+
+### Quick Test Architecture
+Quick Tests run on **Vertex AI Pipelines** with the full TFX pipeline (minus Pusher):
+- ExampleGen (10% data sample)
+- StatisticsGen (data quality validation)
+- SchemaGen (schema inference)
+- Transform (vocabulary generation, preprocessing)
+- Trainer (CPU or 1x GPU, 2 epochs)
+- Evaluator (metrics computation)
+- **NO Pusher** (artifacts are temporary)
 
 ### Output
 A Feature Config (JSON stored in Django) that:
@@ -34,7 +44,7 @@ A Feature Config (JSON stored in Django) that:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│ Engineering & Testing                                    [+ New Config]     │
+│ Modeling                                                 [+ New Config]     │
 │ Dataset: Q4 2024 Training Data                                              │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                              │

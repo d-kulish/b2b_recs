@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides detailed specifications for implementing the **Datasets** domain in the ML Platform. The Datasets domain defines WHAT data goes into model training.
 
-**Last Updated**: 2025-12-07 (v9 - Added Dataset Edit functionality with filter restoration)
+**Last Updated**: 2025-12-08 (v10 - Implemented edit-time versioning, removed status field)
 
 ---
 
@@ -25,7 +25,7 @@ The Datasets domain allows users to:
 
 4. **Dynamic Rolling Windows.** Date filters like "last 90 days" are resolved at training execution time, ensuring fresh data is always used.
 
-5. **Versioning at Training Time.** When a dataset is used for training, a `DatasetVersion` snapshot captures the exact configuration and generated SQL for reproducibility.
+5. **Edit-time Versioning.** Version 1 is created when a dataset is first saved. A new version is created each time the dataset configuration is edited, enabling rollback to previous configurations.
 
 ### Output
 A Dataset definition (JSON stored in Django) that is used by:
@@ -36,11 +36,18 @@ A Dataset definition (JSON stored in Django) that is used by:
 
 ```
 Dataset (Django Model)
-├── Metadata: name, description, status, version
+├── Metadata: name, description
 ├── Tables: primary_table, secondary_tables
 ├── Schema: selected_columns, join_config, column_mapping
 ├── Filters: date_filter, customer_filter, product_filter
+├── Cached: row_count_estimate, summary_snapshot (not versioned)
 └── NO split_config (handled by Training domain)
+
+DatasetVersion (Django Model) - Created on each save
+├── version_number: Auto-incremented (starts at 1)
+├── config_snapshot: Full configuration at time of save
+├── actual_row_count, actual_unique_users, actual_unique_products
+└── created_at: Timestamp
 ```
 
 ### SQL Generation Flow
@@ -50,16 +57,16 @@ Dataset (Django Model)
 │  Dataset Config  │ --> │  SQL Generator   │ --> │  BigQuery SQL    │
 │  (JSON in Django)│     │  (on demand)     │     │  (for ExampleGen)│
 └──────────────────┘     └──────────────────┘     └──────────────────┘
-                                 │
-                                 │ At training time:
-                                 ▼
-                         ┌──────────────────┐
-                         │ DatasetVersion   │
-                         │ (frozen snapshot)│
-                         │ - config_snapshot│
-                         │ - generated_sql  │
-                         │ - execution_date │
-                         └──────────────────┘
+         │
+         │ On each save (create/edit):
+         ▼
+┌──────────────────┐
+│ DatasetVersion   │
+│ (frozen snapshot)│
+│ - version_number │  (v1, v2, v3...)
+│ - config_snapshot│  (full config JSON)
+│ - created_at     │
+└──────────────────┘
 ```
 
 ---

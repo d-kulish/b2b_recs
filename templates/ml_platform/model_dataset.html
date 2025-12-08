@@ -1427,7 +1427,7 @@ function renderDatasetsList(datasets) {
                 <!-- Column 1: Dataset Info -->
                 <div class="card-content">
                     <div class="card-header">
-                        <span class="status-dot ${ds.status === 'active' ? 'green' : 'gray'}"></span>
+                        <span class="status-dot green"></span>
                         <h4 class="card-title">${escapeHtml(ds.name)}</h4>
                     </div>
                     <div class="card-body">
@@ -1436,16 +1436,12 @@ function renderDatasetsList(datasets) {
                     </div>
                 </div>
 
-                <!-- Column 2: Tables & Status -->
+                <!-- Column 2: Tables & Versions -->
                 <div class="card-meta-column">
                     <span class="card-label">Tables:</span>
                     <span class="card-schedule-info">${ds.table_count} table${ds.table_count !== 1 ? 's' : ''}</span>
-                    <span class="card-label">Status:</span>
-                    <span class="card-schedule-info">
-                        <span class="px-2 py-0.5 rounded text-xs font-medium ${ds.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}">
-                            ${ds.status.charAt(0).toUpperCase() + ds.status.slice(1)}
-                        </span>
-                    </span>
+                    <span class="card-label">Versions:</span>
+                    <span class="card-schedule-info">${ds.version_count || 0}</span>
                 </div>
 
                 <!-- Column 3: Estimates -->
@@ -3822,6 +3818,26 @@ function openTopProductsModal() {
     // Auto-enable top products filter when modal opens
     document.getElementById('enableTopProducts').checked = true;
     productFiltersState.pending.topRevenue.enabled = true;
+
+    // Restore values from pending state if they exist
+    const pending = productFiltersState.pending.topRevenue;
+    if (pending.productColumn) {
+        document.getElementById('productIdColumn').value = pending.productColumn;
+    }
+    if (pending.revenueColumn) {
+        document.getElementById('revenueColumn').value = pending.revenueColumn;
+    }
+    document.getElementById('revenueThreshold').value = pending.thresholdPercent || 80;
+
+    // Update analyze button state
+    updateAnalyzeButtonState();
+
+    // Show analysis results if we have data
+    if (productAnalysisData) {
+        document.getElementById('productAnalysisResults').classList.remove('hidden');
+        drawRevenueDistributionChart(productAnalysisData.distribution, pending.thresholdPercent || 80);
+        updateProductSelectionForThreshold(pending.thresholdPercent || 80);
+    }
 }
 
 function closeTopProductsModal() {
@@ -5632,14 +5648,15 @@ function updateProductsFilterSummary() {
         const revenueCol = pending.topRevenue.revenueColumn?.split('.').pop() || 'revenue';
 
         // Get the number of products from analysis data if available
+        // Use distribution data to find the actual product count at the user's threshold
         let productCount = null;
-        if (productAnalysisData && productAnalysisData.thresholds) {
+        if (productAnalysisData && productAnalysisData.distribution) {
             const threshold = pending.topRevenue.thresholdPercent;
-            const thresholdKeys = Object.keys(productAnalysisData.thresholds).map(Number).sort((a, b) => a - b);
-            const selectedThreshold = thresholdKeys.find(t => t >= threshold) || thresholdKeys[thresholdKeys.length - 1];
-            const thresholdData = productAnalysisData.thresholds[String(selectedThreshold)];
-            if (thresholdData) {
-                productCount = thresholdData.products;
+            for (const point of productAnalysisData.distribution) {
+                if (point.cumulative_revenue_percent >= threshold) {
+                    productCount = point.product_count;
+                    break;
+                }
             }
         }
 
@@ -8113,16 +8130,33 @@ function displayProductAnalysisResults(data) {
 
 function updateProductSelectionForThreshold(threshold, data = null) {
     if (!data) data = productAnalysisData;
-    if (!data || !data.thresholds) return;
+    if (!data || !data.distribution) return;
 
-    // Find the closest threshold
-    const thresholdKeys = Object.keys(data.thresholds).map(Number).sort((a, b) => a - b);
-    let selectedThreshold = thresholdKeys.find(t => t >= threshold) || thresholdKeys[thresholdKeys.length - 1];
+    // Find the actual product count at the user's threshold using distribution data
+    // This matches how Top Customers calculates the count
+    let productCount = null;
+    let productPercent = null;
+    for (const point of data.distribution) {
+        if (point.cumulative_revenue_percent >= threshold) {
+            productCount = point.product_count;
+            // Calculate percent of total products
+            productPercent = data.total_products > 0
+                ? ((point.product_count / data.total_products) * 100).toFixed(0)
+                : 0;
+            break;
+        }
+    }
 
-    const thresholdData = data.thresholds[String(selectedThreshold)];
-    if (thresholdData) {
-        document.getElementById('selectedProductsCount').textContent = thresholdData.products.toLocaleString();
-        document.getElementById('selectedProductsPercent').textContent = `(${thresholdData.percent}%)`;
+    // If threshold is higher than all distribution points, use the last point
+    if (productCount === null && data.distribution.length > 0) {
+        const lastPoint = data.distribution[data.distribution.length - 1];
+        productCount = lastPoint.product_count;
+        productPercent = 100;
+    }
+
+    if (productCount !== null) {
+        document.getElementById('selectedProductsCount').textContent = productCount.toLocaleString();
+        document.getElementById('selectedProductsPercent').textContent = `(${productPercent}%)`;
     }
 
     document.getElementById('revenueCoverage').textContent = `${threshold}%`;
@@ -8147,16 +8181,26 @@ function onThresholdChange() {
 function updateProductsSummary() {
     const threshold = parseInt(document.getElementById('revenueThreshold')?.value) || 80;
 
-    if (productAnalysisData && productAnalysisData.thresholds) {
-        const thresholdKeys = Object.keys(productAnalysisData.thresholds).map(Number).sort((a, b) => a - b);
-        let selectedThreshold = thresholdKeys.find(t => t >= threshold) || thresholdKeys[thresholdKeys.length - 1];
-        const thresholdData = productAnalysisData.thresholds[String(selectedThreshold)];
+    if (productAnalysisData && productAnalysisData.distribution) {
+        // Find the actual product count at the user's threshold using distribution data
+        let productCount = null;
+        for (const point of productAnalysisData.distribution) {
+            if (point.cumulative_revenue_percent >= threshold) {
+                productCount = point.product_count;
+                break;
+            }
+        }
 
-        if (thresholdData) {
+        // If threshold is higher than all distribution points, use the last point
+        if (productCount === null && productAnalysisData.distribution.length > 0) {
+            productCount = productAnalysisData.distribution[productAnalysisData.distribution.length - 1].product_count;
+        }
+
+        if (productCount !== null) {
             // Summary element removed from tablet header design
             const productsSummary = document.getElementById('productsSummary');
             if (productsSummary) {
-                productsSummary.textContent = `${thresholdData.products.toLocaleString()} products at ${threshold}%`;
+                productsSummary.textContent = `${productCount.toLocaleString()} products at ${threshold}%`;
             }
         }
     }
@@ -8614,11 +8658,8 @@ function renderDatasetDetail(summary) {
 
     const html = `
         <div class="space-y-4">
-            <!-- Status & Info -->
+            <!-- Info -->
             <div class="flex items-center gap-3">
-                <span class="px-3 py-1 rounded-full text-sm font-medium ${summary.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}">
-                    ${summary.status.charAt(0).toUpperCase() + summary.status.slice(1)}
-                </span>
                 <span class="text-sm text-gray-500">Created ${new Date(summary.timestamps.created_at).toLocaleDateString()}</span>
                 ${snapshot.has_snapshot ? `<span class="px-3 py-1 rounded-full text-sm font-bold bg-green-100 text-green-700">${formatNumber(snapshot.total_rows)} rows</span>` : ''}
             </div>

@@ -1,7 +1,7 @@
 # Dataset Manager
 
-**Last Updated:** December 2, 2025
-**Status:** Production Ready ✅ | Visual Schema Builder ✅ | TFX Query Generation ✅
+**Last Updated:** December 8, 2025
+**Status:** Production Ready ✅ | Visual Schema Builder ✅ | TFX Query Generation ✅ | Edit-time Versioning ✅
 
 Django-based dataset configuration system for defining ML training data from BigQuery tables. Part of the B2B Recommendations Platform.
 
@@ -204,38 +204,54 @@ class Dataset(models.Model):
     model = ForeignKey(Model)          # Parent model
     name = CharField(max_length=200)   # Unique per model
     description = TextField(blank=True)
-    status = CharField(choices=['draft', 'active'])
 
-    # Configuration (JSON)
-    config = JSONField(default=dict)
-    # {
-    #   "tables": [...],
-    #   "joins": [...],
-    #   "columns": {...},
-    #   "ml_mapping": {...},
-    #   "filters": {...},
-    #   "split_config": {...}
-    # }
+    # Source tables
+    primary_table = CharField()
+    secondary_tables = JSONField()     # List of additional tables
+    join_config = JSONField()          # Join configuration
+    selected_columns = JSONField()     # Columns per table
+    column_mapping = JSONField()       # ML concept mappings
+    filters = JSONField()              # Date/customer/product filters
 
-    # Cached analysis
-    cached_row_count = IntegerField(null=True)
-    cached_analysis = JSONField(null=True)
-    analysis_updated_at = DateTimeField(null=True)
+    # Cached analysis (metadata - not versioned)
+    row_count_estimate = BigIntegerField(null=True)
+    unique_users_estimate = IntegerField(null=True)
+    unique_products_estimate = IntegerField(null=True)
+    summary_snapshot = JSONField()     # Step 4 summary for View modal
 
     created_at = DateTimeField(auto_now_add=True)
     updated_at = DateTimeField(auto_now=True)
 ```
 
 ### **DatasetVersion Model**
+
+Automatic versioning is implemented to track configuration changes:
+- **Version 1** is created when a dataset is first saved
+- **New versions** are created each time the dataset configuration is edited
+- Only **configuration fields** are versioned (not metadata/statistics)
+
 ```python
 class DatasetVersion(models.Model):
     dataset = ForeignKey(Dataset)
-    version_number = IntegerField()
-    config_snapshot = JSONField()      # Full config at this version
-    query_snapshot = TextField()       # Generated query
+    version_number = IntegerField()       # Auto-incremented (starts at 1)
+    config_snapshot = JSONField()         # Full config at this version
+    actual_row_count = BigIntegerField()  # Row count at time of version
+    actual_unique_users = IntegerField()  # Unique users at time of version
+    actual_unique_products = IntegerField() # Unique products at time of version
+    generated_query = TextField()         # Generated SQL query
     created_at = DateTimeField()
-    created_by = ForeignKey(User, null=True)
 ```
+
+**Versioned Fields (config_snapshot):**
+- `name`, `description`
+- `primary_table`, `secondary_tables`
+- `join_config`, `selected_columns`
+- `column_mapping`, `filters`
+
+**NOT Versioned (metadata - can be regenerated):**
+- `summary_snapshot`, `row_count_estimate`
+- `unique_users_estimate`, `unique_products_estimate`
+- `column_stats`
 
 ---
 

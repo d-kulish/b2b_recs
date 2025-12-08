@@ -1093,7 +1093,7 @@ class Dataset(models.Model):
         verbose_name_plural = 'Datasets'
 
     def __str__(self):
-        return f"{self.name} ({self.status})"
+        return self.name
 
     def get_all_tables(self):
         """Returns list of all tables (primary + secondary)"""

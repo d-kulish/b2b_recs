@@ -23,6 +23,48 @@ logger = logging.getLogger(__name__)
 # HELPER FUNCTIONS
 # =============================================================================
 
+def create_dataset_version(dataset, user=None):
+    """
+    Create a new DatasetVersion snapshot for the given dataset.
+
+    Captures the current configuration (fields needed for SQL generation/rollback):
+    - primary_table, secondary_tables, join_config
+    - selected_columns, column_mapping, filters
+
+    Does NOT capture metadata/statistics (summary_snapshot, row_count_estimate, etc.)
+    as these are derived data that can be regenerated.
+
+    Args:
+        dataset: Dataset instance to snapshot
+        user: Optional user who triggered the version creation
+
+    Returns:
+        DatasetVersion instance
+    """
+    config_snapshot = {
+        'name': dataset.name,
+        'description': dataset.description,
+        'primary_table': dataset.primary_table,
+        'secondary_tables': dataset.secondary_tables,
+        'join_config': dataset.join_config,
+        'selected_columns': dataset.selected_columns,
+        'column_mapping': dataset.column_mapping,
+        'filters': dataset.filters,
+    }
+
+    version = DatasetVersion.objects.create(
+        dataset=dataset,
+        config_snapshot=config_snapshot,
+        actual_row_count=dataset.row_count_estimate,
+        actual_unique_users=dataset.unique_users_estimate,
+        actual_unique_products=dataset.unique_products_estimate,
+        # generated_query left blank for now - will be populated when Training domain is implemented
+    )
+
+    logger.info(f"Created version {version.version_number} for dataset '{dataset.name}' (id={dataset.id})")
+    return version
+
+
 def serialize_dataset(ds, include_details=False):
     """
     Serialize a Dataset object to dict.
@@ -231,10 +273,14 @@ def create_dataset(request, model_id):
             created_by=request.user,
         )
 
+        # Create version 1 - initial snapshot of the dataset configuration
+        version = create_dataset_version(dataset, user=request.user)
+
         return JsonResponse({
             'status': 'success',
             'message': 'Dataset created successfully',
             'dataset_id': dataset.id,
+            'version': version.version_number,
             'dataset': serialize_dataset(dataset),
         })
 
@@ -294,8 +340,8 @@ def update_dataset(request, dataset_id):
     Update an existing dataset.
 
     All fields are optional - only provided fields will be updated.
-    Note: Updating an active dataset will NOT automatically create a new version.
-    Versions are created when the dataset is used in training.
+    A new version is created each time the dataset configuration is updated,
+    capturing the new configuration for potential rollback.
     """
     try:
         dataset = get_object_or_404(Dataset, id=dataset_id)
@@ -321,6 +367,12 @@ def update_dataset(request, dataset_id):
                 'message': 'Validation failed',
                 'errors': errors,
             }, status=400)
+
+        # Check if any configuration fields are being changed (not just metadata)
+        # These are the fields that affect SQL generation and should trigger versioning
+        config_fields = ['name', 'description', 'primary_table', 'secondary_tables',
+                         'join_config', 'selected_columns', 'column_mapping', 'filters']
+        config_changed = any(field in data for field in config_fields)
 
         # Update fields if provided (split_config removed - handled by Training domain)
         if 'name' in data:
@@ -351,9 +403,9 @@ def update_dataset(request, dataset_id):
             dataset.summary_snapshot = data['summary_snapshot']
 
         # Clear cached analysis when config changes
-        config_fields = ['primary_table', 'secondary_tables', 'join_config',
-                         'selected_columns', 'filters']
-        if any(field in data for field in config_fields):
+        analysis_fields = ['primary_table', 'secondary_tables', 'join_config',
+                           'selected_columns', 'filters']
+        if any(field in data for field in analysis_fields):
             dataset.row_count_estimate = None
             dataset.unique_users_estimate = None
             dataset.unique_products_estimate = None
@@ -361,12 +413,21 @@ def update_dataset(request, dataset_id):
 
         dataset.save()
 
-        return JsonResponse({
+        # Create a new version if configuration fields changed
+        version = None
+        if config_changed:
+            version = create_dataset_version(dataset, user=request.user)
+
+        response_data = {
             'status': 'success',
             'message': 'Dataset updated successfully',
             'dataset_id': dataset.id,
             'dataset': serialize_dataset(dataset, include_details=True),
-        })
+        }
+        if version:
+            response_data['version'] = version.version_number
+
+        return JsonResponse(response_data)
 
     except json.JSONDecodeError:
         return JsonResponse({
@@ -950,7 +1011,6 @@ def get_dataset_summary(request, dataset_id):
             'id': dataset.id,
             'name': dataset.name,
             'description': dataset.description,
-            'status': dataset.status,
             'tables': {
                 'primary': dataset.primary_table,
                 'secondary': dataset.secondary_tables or [],
@@ -1036,7 +1096,6 @@ def compare_datasets(request, model_id):
             comparison.append({
                 'id': ds.id,
                 'name': ds.name,
-                'status': ds.status,
                 'tables': {
                     'primary': ds.primary_table,
                     'secondary_count': len(ds.secondary_tables or []),

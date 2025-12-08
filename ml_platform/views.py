@@ -141,25 +141,7 @@ def model_dashboard(request, model_id):
 
 
 # Note: model_dataset view has been moved to ml_platform/datasets/views.py
-
-
-@login_required
-def model_modeling(request, model_id):
-    """
-    Modeling - Configure feature transformations, embedding dimensions, and run Quick Tests.
-
-    This page allows users to:
-    1. Create/edit Feature Configs (embedding dims, cross features, etc.)
-    2. Run Quick Tests on Vertex AI Pipelines (TFX minus Pusher)
-    3. Compare results and iterate before full training
-    """
-    model = get_object_or_404(ModelEndpoint, id=model_id)
-
-    context = {
-        'model': model,
-    }
-
-    return render(request, 'ml_platform/model_modeling.html', context)
+# Note: model_modeling view has been moved to ml_platform/modeling/views.py
 
 
 @login_required

@@ -13,6 +13,8 @@ from .models import (
     Deployment,
     PredictionLog,
     SystemMetrics,
+    FeatureConfig,
+    FeatureConfigVersion,
 )
 
 
@@ -115,3 +117,21 @@ class SystemMetricsAdmin(admin.ModelAdmin):
     list_display = ['date', 'total_endpoints', 'active_endpoints', 'total_pipeline_runs', 'total_predictions']
     list_filter = ['date']
     readonly_fields = ['recorded_at']
+
+
+@admin.register(FeatureConfig)
+class FeatureConfigAdmin(admin.ModelAdmin):
+    list_display = ['name', 'dataset', 'status', 'version', 'buyer_tensor_dim', 'product_tensor_dim', 'created_at', 'updated_at']
+    list_filter = ['status', 'created_at']
+    search_fields = ['name', 'description', 'dataset__name']
+    readonly_fields = ['created_at', 'updated_at', 'buyer_tensor_dim', 'product_tensor_dim']
+    raw_id_fields = ['dataset', 'created_by']
+
+
+@admin.register(FeatureConfigVersion)
+class FeatureConfigVersionAdmin(admin.ModelAdmin):
+    list_display = ['feature_config', 'version', 'buyer_tensor_dim', 'product_tensor_dim', 'created_at']
+    list_filter = ['created_at']
+    search_fields = ['feature_config__name']
+    readonly_fields = ['created_at']
+    raw_id_fields = ['feature_config', 'created_by']

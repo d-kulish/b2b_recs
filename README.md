@@ -16,7 +16,7 @@ This platform enables businesses to:
 - **Load** data into BigQuery for analytics and ML model training
 - **Automate** ETL pipelines with Cloud Scheduler (minute-level precision)
 - **Scale** with Dataflow for large datasets (> 1M rows)
-- **Build** recommendation models (future phase)
+- **Build** recommendation models with TFRS (TensorFlow Recommenders)
 
 ---
 
@@ -58,6 +58,20 @@ This platform enables businesses to:
 - 🔄 **TFX Integration:** Query generation ready for TFX ExampleGen component (split handled by Training domain)
 - 👁️ **Live Preview:** See sample data from joined tables in real-time with seeded sampling
 - 📦 **Dataset as Configuration:** Datasets store configuration only; no BigQuery copies created
+
+### **Modeling (Feature Engineering)** ✅
+- 🧠 **TFRS Two-Tower Architecture:** Configure BuyerModel (Query Tower) and ProductModel (Candidate Tower)
+- 🎯 **Feature Configuration Wizard:** 2-step wizard for creating feature configs
+  - Step 1: Basic info (name, dataset selection)
+  - Step 2: Drag-and-drop column assignment to towers
+- ⚙️ **Feature Processing Options:**
+  - **String Features:** Embedding with configurable dimensions, vocabulary size, OOV buckets
+  - **Numeric Features:** Normalization (z-score, min-max, log) or Bucketization with custom boundaries
+  - **Timestamp Features:** Cyclical encoding (hour, day of week, month, day of month)
+- 🔗 **Cross Features:** Hash bucket configuration for feature interactions
+- 📊 **Tensor Dimension Preview:** Real-time calculation of input dimensions for both towers
+- 📝 **Version Control:** Track configuration changes with version history
+- 🎨 **Smart Defaults:** Auto-configure features based on column types and statistics
 
 ### **Platform Features**
 - 🎨 ETL Wizard UI (5-step data source configuration)
@@ -179,6 +193,7 @@ gcloud run jobs execute django-migrate-and-createsuperuser --region europe-centr
 | [`etl_runner/etl_runner.md`](etl_runner/etl_runner.md) | ETL Runner technical documentation |
 | [`ml_platform/datasets/datasets.md`](ml_platform/datasets/datasets.md) | Dataset Manager documentation |
 | [`docs/phase_datasets.md`](docs/phase_datasets.md) | Dataset domain specification |
+| [`docs/phase_modeling.md`](docs/phase_modeling.md) | Modeling (Feature Engineering) specification |
 | This file | Project overview and quick start |
 
 ---
@@ -230,9 +245,10 @@ gcloud run jobs execute django-migrate-and-createsuperuser --region europe-centr
 - Incremental and snapshot loading
 - Dataflow for large datasets (> 1M rows)
 - **Dataset Management** - Full UI with 4-step wizard and Visual Schema Builder (27 endpoints)
+- **Modeling (Feature Engineering)** - Feature config wizard with drag-drop UI, tensor dimension preview (11 endpoints)
 
 ### **🔮 Next Up**
-1. ML model training pipeline integration (TFX)
+1. Training Pipeline - TFX integration with ExampleGen, model training jobs
 2. Real-time streaming ETL (Pub/Sub)
 3. Data quality validation rules
 
@@ -311,6 +327,17 @@ WHERE source_type='gcs';
 
 ## 📝 Recent Updates
 
+**December 8, 2025 - Modeling (Feature Engineering) Domain Complete**
+- ✅ New `ml_platform/modeling/` sub-app with services, API, views
+- ✅ `FeatureConfig` and `FeatureConfigVersion` models for tracking feature engineering configurations
+- ✅ 2-step wizard: Basic Info → Feature Assignment (drag-and-drop)
+- ✅ Feature processing: String embeddings, Numeric normalization/bucketization, Timestamp cyclical encoding
+- ✅ Cross feature configuration with hash buckets
+- ✅ Real-time tensor dimension preview for BuyerModel and ProductModel towers
+- ✅ Smart defaults service for auto-configuring features based on column types
+- ✅ Version history tracking for configuration changes
+- ✅ 11 REST API endpoints for feature config CRUD, smart defaults, dimension calculation
+
 **December 6, 2025 - Dataset Wizard Finalized (4 Steps)**
 - ✅ Removed Step 5 (Train/Eval Split) - now handled by Training domain
 - ✅ Dataset is now "configuration only" - no BigQuery objects created
@@ -380,6 +407,6 @@ Private/Proprietary
 
 ---
 
-**Project Stats:** 18 models • 55+ files • 124 URL patterns • ~6,500 LOC • 100% auth coverage
+**Project Stats:** 20 models • 60+ files • 135 URL patterns • ~8,000 LOC • 100% auth coverage
 
 **Deployed:** November 2025 | **Region:** EU (Warsaw) | **Status:** Production Ready ✅

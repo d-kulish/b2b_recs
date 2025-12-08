@@ -1,3 +1,4 @@
+
 # Phase: Modeling Domain
 
 ## Document Purpose
@@ -11,30 +12,97 @@ This document provides detailed specifications for implementing the **Modeling**
 
 ### Purpose
 The Modeling domain allows users to:
-1. Configure feature preprocessing (embeddings, buckets, crosses)
-2. Define Query Tower and Candidate Tower features for TFRS two-tower models
-3. Run Quick Tests on Vertex AI Pipelines (full TFX pipeline minus Pusher)
-4. Compare results via MLflow heatmaps
-5. Iterate until finding the best configuration
+1. Configure feature preprocessing (embeddings, buckets, crosses, cyclical features)
+2. Define **BuyerModel** (Query Tower) and **ProductModel** (Candidate Tower) features for TFRS two-tower models
+3. Visually assign columns to either model via drag-and-drop
+4. Preview tensor dimensions in real-time
+5. Run Quick Tests on Vertex AI Pipelines (future scope)
+6. Compare results via MLflow heatmaps (future scope)
+7. Iterate until finding the best configuration
 
 ### Key Principle
-**This is the experimentation sandbox.** Users can create multiple Feature Configs per Dataset, run Quick Tests, and compare results without committing to expensive full training runs.
+**This is the experimentation sandbox.** Users can create multiple Feature Configs per Dataset, configure different feature engineering approaches, and compare results without committing to expensive full training runs.
 
-### Quick Test Architecture
-Quick Tests run on **Vertex AI Pipelines** with the full TFX pipeline (minus Pusher):
-- ExampleGen (10% data sample)
-- StatisticsGen (data quality validation)
-- SchemaGen (schema inference)
-- Transform (vocabulary generation, preprocessing)
-- Trainer (CPU or 1x GPU, 2 epochs)
-- Evaluator (metrics computation)
-- **NO Pusher** (artifacts are temporary)
+### Terminology
+
+| Term | Definition |
+|------|------------|
+| **BuyerModel** | Query Tower - represents the user/customer making a query |
+| **ProductModel** | Candidate Tower - represents products/items being recommended |
+| **Feature Config** | A complete specification of how columns are transformed and assigned to models |
+| **Cross Feature** | A hashed combination of two or more features (e.g., customer_id × city) |
+| **Cyclical Feature** | Sin/cos encoding of temporal patterns (e.g., day of week, hour of day) |
 
 ### Output
 A Feature Config (JSON stored in Django) that:
-- Defines the TFX Transform `preprocessing_fn`
+- Defines which columns go to BuyerModel vs ProductModel
+- Specifies transformation logic for each column (embeddings, buckets, cyclical)
+- Defines cross features within each model
+- Generates the TFX Transform `preprocessing_fn`
 - Is used by both Quick Tests and Full Training
 - Captures all feature engineering decisions for reproducibility
+
+---
+
+## Feature Transformation Types
+
+### Supported Transformations
+
+| Data Type | Transform | Output | Description |
+|-----------|-----------|--------|-------------|
+| **STRING** | Vocabulary Embedding | `embedding_dim` D | Lookup table → learned embedding vectors |
+| **INTEGER** | Normalize | 1D | Scale to [-1, 1] or [0, 1] |
+| **INTEGER** | Bucketize + Embed | `embedding_dim` D | Quantile buckets → embedding |
+| **FLOAT** | Normalize | 1D | Scale to [-1, 1] or [0, 1] |
+| **FLOAT** | Bucketize + Embed | `embedding_dim` D | Quantile buckets → embedding |
+| **FLOAT** | Log Transform | 1D | log(1 + x) for skewed distributions |
+| **TIMESTAMP** | Normalize | 1D | UTC seconds scaled to [-1, 1] |
+| **TIMESTAMP** | Bucketize + Embed | `embedding_dim` D | Time buckets → embedding |
+| **TIMESTAMP** | Cyclical (each) | 2D per cycle | Sin/cos encoding for patterns |
+| **CROSS** | Hash + Embed | `embedding_dim` D | Feature interaction via hashing |
+
+### Cyclical Features for Timestamps
+
+Cyclical features encode temporal patterns using sin/cos pairs, ensuring smooth transitions (e.g., hour 23 is close to hour 0):
+
+| Cycle | Range | Use Case |
+|-------|-------|----------|
+| **Annual** | Quarter of year (1-4) | Seasonal patterns (Q1 promotions, holiday seasons) |
+| **Quarterly** | Month of quarter (1-3) | End-of-quarter patterns |
+| **Monthly** | Day of month (1-31) | Payday patterns, billing cycles |
+| **Weekly** | Day of week (0-6) | Weekday vs weekend behavior |
+| **Daily** | Hour of day (0-23) | Intra-day patterns (morning, lunch, evening) |
+
+Each cyclical feature produces **2 dimensions** (sin + cos). Users can **stack multiple cycles** on the same timestamp column.
+
+### TFX Compatibility
+
+All transformations are compatible with TFX Transform component:
+
+```python
+# Vocabulary embedding (from recommenders.ipynb)
+tft.compute_and_apply_vocabulary(
+    inputs['customer_id'],
+    num_oov_buckets=NUM_OOV_BUCKETS,
+    vocab_filename='customer_id_vocab'
+)
+
+# Bucketization
+tft.bucketize(inputs['revenue'], num_buckets=100)
+
+# Normalization
+tft.scale_to_z_score(inputs['amount'])
+```
+
+The Trainer then loads vocabularies from Transform artifacts to create embeddings:
+```python
+unique_ids = tf_transform_output.vocabulary_by_name('customer_id_vocab')
+vocab_str = [b.decode() for b in unique_ids]
+embedding = tf.keras.Sequential([
+    tf.keras.layers.StringLookup(vocabulary=vocab_str, mask_token=None),
+    tf.keras.layers.Embedding(len(vocab_str) + 1, embedding_dim)
+])
+```
 
 ---
 
@@ -52,30 +120,30 @@ A Feature Config (JSON stored in Django) that:
 │                                                                              │
 │ ┌────────────────────────────────────────────────────────────────────────┐  │
 │ │ ★ config-042: Large embeddings                            Best 47.3%  │  │
-│ │ user_id: 64d | product_id: 64d | crosses: cat×subcat, user×city       │  │
+│ │ BuyerModel: 120D | ProductModel: 104D | Crosses: 2                    │  │
 │ │ Quick Tests: 3 | Last: 2 hours ago | Status: Tested ✓                 │  │
 │ │ [View] [Edit] [Clone] [▶ Run Quick Test] [▶ Full Training]            │  │
 │ └────────────────────────────────────────────────────────────────────────┘  │
 │                                                                              │
 │ ┌────────────────────────────────────────────────────────────────────────┐  │
 │ │ config-038: With cross features                                 46.1% │  │
-│ │ user_id: 64d | product_id: 64d | crosses: cat×subcat                  │  │
+│ │ BuyerModel: 96D | ProductModel: 72D | Crosses: 1                      │  │
 │ │ Quick Tests: 2 | Last: 1 day ago | Status: Tested ✓                   │  │
 │ │ [View] [Edit] [Clone] [▶ Run Quick Test]                              │  │
 │ └────────────────────────────────────────────────────────────────────────┘  │
 │                                                                              │
 │ ┌────────────────────────────────────────────────────────────────────────┐  │
 │ │ config-035: Baseline (minimal)                                  42.0% │  │
-│ │ user_id: 32d | product_id: 32d | crosses: none                        │  │
+│ │ BuyerModel: 64D | ProductModel: 32D | Crosses: 0                      │  │
 │ │ Quick Tests: 1 | Last: 3 days ago | Status: Tested ✓                  │  │
 │ │ [View] [Clone]                                                        │  │
 │ └────────────────────────────────────────────────────────────────────────┘  │
 │                                                                              │
 │ ┌────────────────────────────────────────────────────────────────────────┐  │
 │ │ config-044: Testing 128d embeddings                              Draft │  │
-│ │ user_id: 128d | product_id: 128d | crosses: all                       │  │
+│ │ BuyerModel: 180D | ProductModel: 128D | Crosses: 3                    │  │
 │ │ Quick Tests: 0 | Status: Not tested                                   │  │
-│ │ [View] [Edit] [▶ Run Quick Test] [Delete]                             │  │
+│ │ [View] [Edit] [Delete]                                                │  │
 │ └────────────────────────────────────────────────────────────────────────┘  │
 │                                                                              │
 │ [Compare Selected] [View Heatmap]                                           │
@@ -83,122 +151,332 @@ A Feature Config (JSON stored in Django) that:
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Feature Config Creation/Edit
+### Feature Config Wizard
 
-#### Template Selection (New Config Only)
+The wizard has **2 steps**:
+1. **Basic Info**: Name, description, dataset selection, starting point
+2. **Feature Assignment**: Drag-and-drop columns, configure transforms, preview tensors
+
+#### Step 1: Basic Info
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│ Create Feature Config                                                        │
+│ Create Feature Config                                        Step 1 of 2    │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                              │
-│ Start from Template                                                          │
+│ Config Name *                                                                │
+│ ┌─────────────────────────────────────────────────────────────────────────┐ │
+│ │ Q4 2024 - Rich Features v2                                              │ │
+│ └─────────────────────────────────────────────────────────────────────────┘ │
 │                                                                              │
-│ ┌────────────────────────────────────────────────────────────────────────┐  │
-│ │ ○ Minimal                                                              │  │
-│ │   user_id (32d) + product_id (32d) only                               │  │
-│ │   Best for: initial testing, small datasets                           │  │
-│ │   Estimated quick test: ~3 min, $0.50                                 │  │
-│ └────────────────────────────────────────────────────────────────────────┘  │
+│ Description                                                                  │
+│ ┌─────────────────────────────────────────────────────────────────────────┐ │
+│ │ Testing larger embeddings with quarterly cyclical features              │ │
+│ └─────────────────────────────────────────────────────────────────────────┘ │
 │                                                                              │
-│ ┌────────────────────────────────────────────────────────────────────────┐  │
-│ │ ● Recommended (based on your data)                                    │  │
-│ │   All mapped features with smart defaults                             │  │
-│ │   Embedding dims based on cardinality analysis                        │  │
-│ │   Best for: most use cases                                            │  │
-│ │   Estimated quick test: ~8 min, $1.50                                 │  │
-│ └────────────────────────────────────────────────────────────────────────┘  │
+│ Base Dataset *                                                               │
+│ ┌─────────────────────────────────────────────────────────────────────────┐ │
+│ │ Q4 2024 Transactions (v3)                                           ▼  │ │
+│ └─────────────────────────────────────────────────────────────────────────┘ │
+│   Dataset columns: 14 | Rows: ~2.4M | Last updated: 2 hours ago            │
 │                                                                              │
-│ ┌────────────────────────────────────────────────────────────────────────┐  │
-│ │ ○ Rich Features                                                        │  │
-│ │   All features + cross features + temporal buckets                    │  │
-│ │   Higher embedding dims                                                │  │
-│ │   Best for: large datasets, maximum accuracy                          │  │
-│ │   Estimated quick test: ~12 min, $2.50                                │  │
-│ └────────────────────────────────────────────────────────────────────────┘  │
+│ Start From                                                                   │
+│ ┌────────────────────┐  ┌────────────────────┐  ┌────────────────────┐     │
+│ │ ○ Blank            │  │ ● Smart Defaults   │  │ ○ Clone Existing   │     │
+│ │   Empty config     │  │   Auto-configure   │  │   Copy from...     │     │
+│ │   (manual setup)   │  │   based on data    │  │   [Select ▼]       │     │
+│ └────────────────────┘  └────────────────────┘  └────────────────────┘     │
 │                                                                              │
-│ ┌────────────────────────────────────────────────────────────────────────┐  │
-│ │ ○ Custom                                                               │  │
-│ │   Start from scratch                                                  │  │
-│ └────────────────────────────────────────────────────────────────────────┘  │
-│                                                                              │
-│                                                    [Cancel]  [Continue →]   │
+│                                              [Cancel]  [Continue →]         │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-#### Feature Configuration Editor
+#### Step 2: Feature Assignment (Drag & Drop Builder)
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│ Feature Config: config-042                                    [Save Draft]  │
+│ Feature Config: Q4 2024 - Rich Features v2                   Step 2 of 2    │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                              │
-│ Config Name                                                                  │
 │ ┌─────────────────────────────────────────────────────────────────────────┐ │
-│ │ Large embeddings experiment                                             │ │
+│ │ AVAILABLE COLUMNS                              [Apply Smart Defaults]   │ │
+│ │ Drag columns to BuyerModel or ProductModel                              │ │
+│ ├─────────────────────────────────────────────────────────────────────────┤ │
+│ │                                                                          │ │
+│ │ ┌──────────────────┐ ┌──────────────────┐ ┌──────────────────┐         │ │
+│ │ │ ≡ customer_id    │ │ ≡ product_id     │ │ ≡ trans_date     │         │ │
+│ │ │   STRING         │ │   INTEGER        │ │   TIMESTAMP      │         │ │
+│ │ │   125K unique    │ │   45K unique     │ │                  │         │ │
+│ │ └──────────────────┘ └──────────────────┘ └──────────────────┘         │ │
+│ │                                                                          │ │
+│ │ ┌──────────────────┐ ┌──────────────────┐ ┌──────────────────┐         │ │
+│ │ │ ≡ city           │ │ ≡ category       │ │ ≡ subcategory    │         │ │
+│ │ │   STRING         │ │   STRING         │ │   STRING         │         │ │
+│ │ │   28 unique      │ │   12 unique      │ │   156 unique     │         │ │
+│ │ └──────────────────┘ └──────────────────┘ └──────────────────┘         │ │
+│ │                                                                          │ │
+│ │ ┌──────────────────┐ ┌──────────────────┐ ┌──────────────────┐         │ │
+│ │ │ ≡ revenue        │ │ ≡ product_name   │ │ ≡ quantity       │         │ │
+│ │ │   FLOAT          │ │   STRING         │ │   INTEGER        │         │ │
+│ │ │   range: 0-50K   │ │   43K unique     │ │   range: 1-999   │         │ │
+│ │ └──────────────────┘ └──────────────────┘ └──────────────────┘         │ │
+│ │                                                                          │ │
+│ └─────────────────────────────────────────────────────────────────────────┘ │
+│                                                                              │
+│ ┌─────────────────────────────┐    ┌─────────────────────────────────────┐ │
+│ │ BUYER MODEL                 │    │ PRODUCT MODEL                       │ │
+│ │ Drop features here          │    │ Drop features here                  │ │
+│ ├─────────────────────────────┤    ├─────────────────────────────────────┤ │
+│ │                             │    │                                     │ │
+│ │ ┌─────────────────────────┐ │    │ ┌─────────────────────────────────┐ │ │
+│ │ │ customer_id      ✕ ⚙️   │ │    │ │ product_id             ✕ ⚙️    │ │ │
+│ │ │ Embedding: 64D          │ │    │ │ Embedding: 32D                  │ │ │
+│ │ └─────────────────────────┘ │    │ └─────────────────────────────────┘ │ │
+│ │                             │    │                                     │ │
+│ │ ┌─────────────────────────┐ │    │ ┌─────────────────────────────────┐ │ │
+│ │ │ city             ✕ ⚙️   │ │    │ │ category               ✕ ⚙️    │ │ │
+│ │ │ Embedding: 16D          │ │    │ │ Embedding: 16D                  │ │ │
+│ │ │ ⚠️ Also in ProductModel │ │    │ └─────────────────────────────────┘ │ │
+│ │ └─────────────────────────┘ │    │                                     │ │
+│ │                             │    │ ┌─────────────────────────────────┐ │ │
+│ │ ┌─────────────────────────┐ │    │ │ subcategory            ✕ ⚙️    │ │ │
+│ │ │ revenue          ✕ ⚙️   │ │    │ │ Embedding: 24D                  │ │ │
+│ │ │ Buckets: 100 → 32D      │ │    │ └─────────────────────────────────┘ │ │
+│ │ │ + Normalized: 1D        │ │    │                                     │ │
+│ │ └─────────────────────────┘ │    │ ┌─────────────────────────────────┐ │ │
+│ │                             │    │ │ product_name           ✕ ⚙️    │ │ │
+│ │ ┌─────────────────────────┐ │    │ │ Embedding: 32D                  │ │ │
+│ │ │ trans_date       ✕ ⚙️   │ │    │ └─────────────────────────────────┘ │ │
+│ │ │ Normalized: 1D          │ │    │                                     │ │
+│ │ │ Cyclical: quarterly,    │ │    │                                     │ │
+│ │ │ monthly, weekly (6D)    │ │    │                                     │ │
+│ │ └─────────────────────────┘ │    │                                     │ │
+│ │                             │    │                                     │ │
+│ │ [+ Add Cross Feature]       │    │ [+ Add Cross Feature]               │ │
+│ │                             │    │                                     │ │
+│ │ ┌─────────────────────────┐ │    │                                     │ │
+│ │ │ ✕ customer_id × city    │ │    │                                     │ │
+│ │ │ Hash: 5000 → 16D        │ │    │                                     │ │
+│ │ └─────────────────────────┘ │    │                                     │ │
+│ │                             │    │                                     │ │
+│ └─────────────────────────────┘    └─────────────────────────────────────┘ │
+│                                                                              │
+│ ═══════════════════════════════════════════════════════════════════════════ │
+│ TENSOR PREVIEW                                                 [↻ Refresh]  │
+│ ═══════════════════════════════════════════════════════════════════════════ │
+│                                                                              │
+│ ┌─────────────────────────────┐    ┌─────────────────────────────────────┐ │
+│ │ BUYER TENSOR                │    │ PRODUCT TENSOR                      │ │
+│ │ Total: 136D                 │    │ Total: 104D                         │ │
+│ ├─────────────────────────────┤    ├─────────────────────────────────────┤ │
+│ │ customer_id      64D  ████  │    │ product_id       32D  ███           │ │
+│ │ city             16D  ██    │    │ category         16D  ██            │ │
+│ │ revenue_bucket   32D  ███   │    │ subcategory      24D  ██            │ │
+│ │ revenue_norm      1D  ░     │    │ product_name     32D  ███           │ │
+│ │ date_norm         1D  ░     │    │                                     │ │
+│ │ cyclical          6D  █     │    │                                     │ │
+│ │ customer×city    16D  ██    │    │                                     │ │
+│ ├─────────────────────────────┤    ├─────────────────────────────────────┤ │
+│ │ Sample (customer_12345):    │    │ Sample (product_67890):             │ │
+│ │ [0.23, -0.15, 0.87, ...]   │    │ [0.45, 0.12, -0.33, ...]            │ │
+│ └─────────────────────────────┘    └─────────────────────────────────────┘ │
+│                                                                              │
+│                                    [Cancel]  [← Back]  [Save Config]        │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Key UI Elements:**
+
+1. **Data Leakage Warning**: When a column is assigned to BOTH models, show `⚠️ Also in [other model]` badge
+2. **Drag Handle**: `≡` icon indicates draggable columns
+3. **Settings Button**: `⚙️` opens configuration modal for that feature
+4. **Remove Button**: `✕` removes feature from model
+5. **Live Tensor Preview**: Updates when features are added/removed/configured
+
+### Feature Configuration Modals
+
+#### String Feature Modal
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Configure Feature: product_name                                        ✕    │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│ Source Column: product_name                                                  │
+│ Data Type: STRING                                                            │
+│ Unique Values: 43,521                                                        │
+│ Sample Values: "Organic Coffee Beans 500g", "Premium Olive Oil 1L", ...     │
+│                                                                              │
+│ ═══════════════════════════════════════════════════════════════════════════ │
+│ TRANSFORMATION                                                               │
+│ ═══════════════════════════════════════════════════════════════════════════ │
+│                                                                              │
+│ Transform Type: Vocabulary Embedding (learned)                               │
+│                                                                              │
+│ Embedding Dimension                                                          │
+│ ┌─────────────────────────────────────────────────────────────────────────┐ │
+│ │ [32 ▼]    Recommended: 32-64 for 43K unique values                     │ │
+│ └─────────────────────────────────────────────────────────────────────────┘ │
+│                                                                              │
+│ Vocabulary Settings                                                          │
+│ ┌─────────────────────────────────────────────────────────────────────────┐ │
+│ │ Max vocabulary size: [50000 ▼]                                         │ │
+│ │ OOV (out-of-vocab) buckets: [10 ▼]                                     │ │
+│ │ Min frequency threshold: [5 ▼]                                         │ │
+│ └─────────────────────────────────────────────────────────────────────────┘ │
+│                                                                              │
+│ ─────────────────────────────────────────────────────────────────────────── │
+│ Total Feature Dimensions: 32D                                                │
+│                                                                              │
+│                                                    [Cancel]  [Apply]        │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+#### Numeric Feature Modal (INTEGER / FLOAT)
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Configure Feature: revenue                                             ✕    │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│ Source Column: revenue                                                       │
+│ Data Type: FLOAT                                                             │
+│ Range: 0.00 - 48,523.00                                                      │
+│ Mean: 245.67 | Median: 89.00 | Std: 512.34                                  │
+│                                                                              │
+│ ═══════════════════════════════════════════════════════════════════════════ │
+│ TRANSFORMATION OPTIONS (select multiple)                                     │
+│ ═══════════════════════════════════════════════════════════════════════════ │
+│                                                                              │
+│ ┌─────────────────────────────────────────────────────────────────────────┐ │
+│ │ ☑ Normalize                                                     +1D    │ │
+│ │   Range: ( ) [0, 1]  (●) [-1, 1]                                       │ │
+│ │   Outputs single normalized value                                       │ │
+│ └─────────────────────────────────────────────────────────────────────────┘ │
+│                                                                              │
+│ ┌─────────────────────────────────────────────────────────────────────────┐ │
+│ │ ☑ Bucketize + Embed                                                    │ │
+│ │   Number of buckets: [100 ▼]  (default: 100)                           │ │
+│ │   Embedding dimension: [32 ▼]                                   +32D   │ │
+│ │   ⓘ Buckets created using quantiles (equal frequency)                  │ │
+│ └─────────────────────────────────────────────────────────────────────────┘ │
+│                                                                              │
+│ ┌─────────────────────────────────────────────────────────────────────────┐ │
+│ │ ☐ Log Transform (before other transforms)                               │ │
+│ │   Applies log(1 + x) for skewed distributions                          │ │
+│ └─────────────────────────────────────────────────────────────────────────┘ │
+│                                                                              │
+│ ─────────────────────────────────────────────────────────────────────────── │
+│ Total Feature Dimensions: 33D (1D norm + 32D bucket embedding)              │
+│                                                                              │
+│                                                    [Cancel]  [Apply]        │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+#### Timestamp Feature Modal
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Configure Feature: trans_date                                         ✕     │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│ Source Column: trans_date                                                    │
+│ Data Type: TIMESTAMP                                                         │
+│ Sample Values: 2024-10-15 14:23:00, 2024-10-16 09:45:00, ...                │
+│                                                                              │
+│ ═══════════════════════════════════════════════════════════════════════════ │
+│ BASIC TRANSFORMS                                                             │
+│ ═══════════════════════════════════════════════════════════════════════════ │
+│                                                                              │
+│ ┌─────────────────────────────────────────────────────────────────────────┐ │
+│ │ ☑ Normalize to [-1, 1]                                         +1D     │ │
+│ │   Converts timestamp to UTC seconds, normalizes to range                │ │
+│ └─────────────────────────────────────────────────────────────────────────┘ │
+│                                                                              │
+│ ┌─────────────────────────────────────────────────────────────────────────┐ │
+│ │ ☐ Bucketize                                                             │ │
+│ │   Number of buckets: [100 ▼]                                            │ │
+│ │   Embedding dimension: [32 ▼]                                   +32D    │ │
 │ └─────────────────────────────────────────────────────────────────────────┘ │
 │                                                                              │
 │ ═══════════════════════════════════════════════════════════════════════════ │
-│ QUERY TOWER (User Side)                                                      │
+│ CYCLICAL FEATURES (select multiple - stackable)                              │
 │ ═══════════════════════════════════════════════════════════════════════════ │
 │                                                                              │
-│ ┌─────────────┬─────────────┬───────────────┬────────────────────────────┐  │
-│ │ Feature     │ Include     │ Embedding Dim │ Recommendation             │  │
-│ ├─────────────┼─────────────┼───────────────┼────────────────────────────┤  │
-│ │ user_id     │ ☑           │ [64 ▼]        │ 64-128 (125K unique)       │  │
-│ │ city        │ ☑           │ [16 ▼]        │ 8-16 (28 unique)           │  │
-│ └─────────────┴─────────────┴───────────────┴────────────────────────────┘  │
+│ ┌─────────────────────────────────────────────────────────────────────────┐ │
+│ │ ☐ Annual (quarter of year 1-4)                         sin/cos  +2D    │ │
+│ │   Captures yearly seasonality (Q1 promotions, holidays)                 │ │
+│ └─────────────────────────────────────────────────────────────────────────┘ │
+│                                                                              │
+│ ┌─────────────────────────────────────────────────────────────────────────┐ │
+│ │ ☑ Quarterly (month of quarter 1-3)                     sin/cos  +2D    │ │
+│ │   Captures end-of-quarter patterns                                      │ │
+│ └─────────────────────────────────────────────────────────────────────────┘ │
+│                                                                              │
+│ ┌─────────────────────────────────────────────────────────────────────────┐ │
+│ │ ☑ Monthly (day of month 1-31)                          sin/cos  +2D    │ │
+│ │   Captures monthly patterns (paydays, billing cycles)                   │ │
+│ └─────────────────────────────────────────────────────────────────────────┘ │
+│                                                                              │
+│ ┌─────────────────────────────────────────────────────────────────────────┐ │
+│ │ ☑ Weekly (day of week 0-6)                             sin/cos  +2D    │ │
+│ │   Captures weekly patterns (weekday vs weekend)                         │ │
+│ └─────────────────────────────────────────────────────────────────────────┘ │
+│                                                                              │
+│ ┌─────────────────────────────────────────────────────────────────────────┐ │
+│ │ ☐ Daily (hour of day 0-23)                             sin/cos  +2D    │ │
+│ │   Captures intra-day patterns (morning, lunch, evening)                 │ │
+│ └─────────────────────────────────────────────────────────────────────────┘ │
+│                                                                              │
+│ ─────────────────────────────────────────────────────────────────────────── │
+│ Total Feature Dimensions: 7D (1D norm + 6D cyclical)                        │
+│                                                                              │
+│                                                    [Cancel]  [Apply]        │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+#### Cross Feature Modal
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Add Cross Feature to BuyerModel                                        ✕    │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│ Cross features capture interactions between columns.                         │
+│ Only features already in this model can be crossed.                         │
 │                                                                              │
 │ ═══════════════════════════════════════════════════════════════════════════ │
-│ CANDIDATE TOWER (Product Side)                                               │
+│ SELECT FEATURES TO CROSS (2-3 features)                                      │
 │ ═══════════════════════════════════════════════════════════════════════════ │
 │                                                                              │
-│ ┌─────────────┬─────────────┬───────────────┬────────────────────────────┐  │
-│ │ Feature     │ Include     │ Embedding Dim │ Recommendation             │  │
-│ ├─────────────┼─────────────┼───────────────┼────────────────────────────┤  │
-│ │ product_id  │ ☑           │ [64 ▼]        │ 64 (45K unique)            │  │
-│ │ product_name│ ☑           │ [32 ▼]        │ 32 (43K unique)            │  │
-│ │ category    │ ☑           │ [16 ▼]        │ 8 (12 unique)              │  │
-│ │ subcategory │ ☑           │ [16 ▼]        │ 16-32 (156 unique)         │  │
-│ └─────────────┴─────────────┴───────────────┴────────────────────────────┘  │
+│ Available in BuyerModel:                                                     │
+│ ┌──────────────────────────────────────────────────────────────────────┐   │
+│ │ ☑ customer_id                                                        │   │
+│ │ ☑ city                                                               │   │
+│ │ ☐ revenue_bucket                                                     │   │
+│ │ ☐ trans_date_bucket                                                  │   │
+│ └──────────────────────────────────────────────────────────────────────┘   │
+│                                                                              │
+│ Selected: customer_id × city                                                 │
 │                                                                              │
 │ ═══════════════════════════════════════════════════════════════════════════ │
-│ NUMERIC FEATURES                                                             │
+│ CROSS FEATURE SETTINGS                                                       │
 │ ═══════════════════════════════════════════════════════════════════════════ │
 │                                                                              │
-│ ┌─────────────┬─────────────┬───────────────┬────────────────────────────┐  │
-│ │ Feature     │ Include     │ Transform     │ Settings                   │  │
-│ ├─────────────┼─────────────┼───────────────┼────────────────────────────┤  │
-│ │ revenue     │ ☑           │ [Bucketize ▼] │ Buckets: [10 ▼]            │  │
-│ │ timestamp   │ ☑           │ [Hour of Day▼]│ Buckets: [24 ▼]            │  │
-│ └─────────────┴─────────────┴───────────────┴────────────────────────────┘  │
+│ Hash Bucket Size                                                             │
+│ ┌─────────────────────────────────────────────────────────────────────────┐ │
+│ │ [5000 ▼]   Recommended: 5000 (125K × 28 combinations → hashed)        │ │
+│ └─────────────────────────────────────────────────────────────────────────┘ │
 │                                                                              │
-│ ═══════════════════════════════════════════════════════════════════════════ │
-│ CROSS FEATURES                                                               │
-│ ═══════════════════════════════════════════════════════════════════════════ │
+│ Embedding Dimension                                                          │
+│ ┌─────────────────────────────────────────────────────────────────────────┐ │
+│ │ [16 ▼]     Recommended: 16 for cross features                          │ │
+│ └─────────────────────────────────────────────────────────────────────────┘ │
 │                                                                              │
-│ ┌─────────────────────────────────┬─────────────┬────────────────────────┐  │
-│ │ Cross                           │ Include     │ Hash Bucket Size       │  │
-│ ├─────────────────────────────────┼─────────────┼────────────────────────┤  │
-│ │ category × subcategory          │ ☑           │ [1000 ▼]               │  │
-│ │ user_id × city                  │ ☑           │ [5000 ▼]               │  │
-│ │ product_id × category           │ ☐           │ [1000 ▼]               │  │
-│ └─────────────────────────────────┴─────────────┴────────────────────────┘  │
+│ ─────────────────────────────────────────────────────────────────────────── │
+│ Total Feature Dimensions: +16D                                               │
 │                                                                              │
-│ [+ Add Cross Feature]                                                        │
-│                                                                              │
-│ ═══════════════════════════════════════════════════════════════════════════ │
-│ VOCABULARY SETTINGS (Advanced)                                               │
-│ ═══════════════════════════════════════════════════════════════════════════ │
-│                                                                              │
-│ Max vocabulary size: [100000 ▼]                                             │
-│ OOV (out-of-vocab) buckets: [10 ▼]                                          │
-│ Min frequency threshold: [5 ▼]                                              │
-│                                                                              │
-│ ═══════════════════════════════════════════════════════════════════════════ │
-│                                                                              │
-│                        [Cancel]  [Save Draft]  [▶ Run Quick Test]           │
-│                                                                              │
+│                                                    [Cancel]  [Add Cross]    │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -366,13 +644,14 @@ A Feature Config (JSON stored in Django) that:
 
 class FeatureConfig(models.Model):
     """
-    Defines how to transform features for training.
-    Generates the TFX Transform preprocessing_fn.
+    Defines how to transform features for BuyerModel and ProductModel.
+    Many configs can exist per Dataset. Versioned via FeatureConfigVersion.
     """
     # Basic info
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True)
-    dataset = models.ForeignKey('Dataset', on_delete=models.CASCADE, related_name='feature_configs')
+    dataset = models.ForeignKey('Dataset', on_delete=models.CASCADE,
+                                related_name='feature_configs')
 
     # Status
     STATUS_CHOICES = [
@@ -383,48 +662,24 @@ class FeatureConfig(models.Model):
     ]
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
 
-    # Query tower features (JSON)
-    query_tower = models.JSONField(default=list)
-    # Example:
-    # [
-    #   {"name": "user_id", "embedding_dim": 64},
-    #   {"name": "city", "embedding_dim": 16}
-    # ]
+    # Version tracking
+    version = models.PositiveIntegerField(default=1)
 
-    # Candidate tower features (JSON)
-    candidate_tower = models.JSONField(default=list)
-    # Example:
-    # [
-    #   {"name": "product_id", "embedding_dim": 64},
-    #   {"name": "product_name", "embedding_dim": 32},
-    #   {"name": "category", "embedding_dim": 16},
-    #   {"name": "subcategory", "embedding_dim": 16}
-    # ]
+    # BuyerModel features (JSON) - see schema below
+    buyer_model_features = models.JSONField(default=list)
 
-    # Numeric features (JSON)
-    numeric_features = models.JSONField(default=list)
-    # Example:
-    # [
-    #   {"name": "revenue", "transform": "bucketize", "buckets": 10},
-    #   {"name": "timestamp", "transform": "hour_of_day", "buckets": 24}
-    # ]
+    # ProductModel features (JSON) - see schema below
+    product_model_features = models.JSONField(default=list)
 
-    # Cross features (JSON)
-    cross_features = models.JSONField(default=list)
-    # Example:
-    # [
-    #   {"features": ["category", "subcategory"], "hash_bucket_size": 1000},
-    #   {"features": ["user_id", "city"], "hash_bucket_size": 5000}
-    # ]
+    # Cross features for BuyerModel (JSON)
+    buyer_model_crosses = models.JSONField(default=list)
 
-    # Vocabulary settings (JSON)
-    vocabulary_settings = models.JSONField(default=dict)
-    # Example:
-    # {
-    #   "max_size": 100000,
-    #   "oov_buckets": 10,
-    #   "min_frequency": 5
-    # }
+    # Cross features for ProductModel (JSON)
+    product_model_crosses = models.JSONField(default=list)
+
+    # Computed tensor dimensions (cached for display)
+    buyer_tensor_dim = models.PositiveIntegerField(null=True, blank=True)
+    product_tensor_dim = models.PositiveIntegerField(null=True, blank=True)
 
     # Best metrics from quick tests
     best_recall_at_100 = models.FloatField(null=True, blank=True)
@@ -439,20 +694,94 @@ class FeatureConfig(models.Model):
         ordering = ['-best_recall_at_100', '-updated_at']
 
     def __str__(self):
-        return f"{self.name} ({self.status})"
+        return f"{self.name} v{self.version} ({self.status})"
+
+    def calculate_tensor_dims(self):
+        """Calculate and cache tensor dimensions for both models."""
+        self.buyer_tensor_dim = self._calc_model_dim(
+            self.buyer_model_features, self.buyer_model_crosses
+        )
+        self.product_tensor_dim = self._calc_model_dim(
+            self.product_model_features, self.product_model_crosses
+        )
+
+    def _calc_model_dim(self, features, crosses):
+        """Calculate total dimension for a model."""
+        total = 0
+        for f in features:
+            total += self._calc_feature_dim(f)
+        for c in crosses:
+            total += c.get('embedding_dim', 16)
+        return total
+
+    def _calc_feature_dim(self, feature):
+        """Calculate dimension for a single feature."""
+        dim = 0
+        transforms = feature.get('transforms', {})
+
+        # String embedding
+        if feature.get('type') == 'string_embedding':
+            dim += feature.get('embedding_dim', 32)
+
+        # Numeric transforms
+        if transforms.get('normalize', {}).get('enabled'):
+            dim += 1
+        if transforms.get('bucketize', {}).get('enabled'):
+            dim += transforms['bucketize'].get('embedding_dim', 32)
+        if transforms.get('log_transform'):
+            pass  # Log doesn't add dimensions, just transforms
+
+        # Cyclical features (2D each for sin/cos)
+        cyclical = transforms.get('cyclical', {})
+        for cycle in ['annual', 'quarterly', 'monthly', 'weekly', 'daily']:
+            if cyclical.get(cycle):
+                dim += 2
+
+        return dim
 
     def get_config_hash(self):
         """Generate hash of configuration for duplicate detection."""
         import hashlib
         import json
         config = {
-            'query_tower': self.query_tower,
-            'candidate_tower': self.candidate_tower,
-            'numeric_features': self.numeric_features,
-            'cross_features': self.cross_features,
-            'vocabulary_settings': self.vocabulary_settings,
+            'buyer_model_features': self.buyer_model_features,
+            'product_model_features': self.product_model_features,
+            'buyer_model_crosses': self.buyer_model_crosses,
+            'product_model_crosses': self.product_model_crosses,
         }
         return hashlib.md5(json.dumps(config, sort_keys=True).encode()).hexdigest()
+
+    def get_columns_in_both_models(self):
+        """Return columns that appear in both models (data leakage warning)."""
+        buyer_cols = {f['column'] for f in self.buyer_model_features}
+        product_cols = {f['column'] for f in self.product_model_features}
+        return buyer_cols & product_cols
+
+
+class FeatureConfigVersion(models.Model):
+    """
+    Stores historical versions of a FeatureConfig for audit trail.
+    Created automatically when FeatureConfig is updated.
+    """
+    feature_config = models.ForeignKey(FeatureConfig, on_delete=models.CASCADE,
+                                        related_name='versions')
+    version = models.PositiveIntegerField()
+
+    # Snapshot of config at this version
+    buyer_model_features = models.JSONField()
+    product_model_features = models.JSONField()
+    buyer_model_crosses = models.JSONField()
+    product_model_crosses = models.JSONField()
+    buyer_tensor_dim = models.PositiveIntegerField()
+    product_tensor_dim = models.PositiveIntegerField()
+
+    # Metadata
+    created_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey('auth.User', on_delete=models.SET_NULL, null=True)
+
+    class Meta:
+        unique_together = ['feature_config', 'version']
+        ordering = ['-version']
 
 
 class QuickTest(models.Model):
@@ -514,7 +843,9 @@ class QuickTest(models.Model):
         ordering = ['-created_at']
 ```
 
-### JSON Schema: query_tower / candidate_tower
+### JSON Schema: buyer_model_features / product_model_features
+
+Each feature in the array specifies a column and its transformation:
 
 ```json
 {
@@ -522,28 +853,112 @@ class QuickTest(models.Model):
   "type": "array",
   "items": {
     "type": "object",
-    "required": ["name", "embedding_dim"],
+    "required": ["column", "type"],
     "properties": {
-      "name": {
+      "column": {
         "type": "string",
-        "description": "Feature name (must match Dataset column mapping)"
+        "description": "Column name from Dataset"
+      },
+      "type": {
+        "enum": ["string_embedding", "numeric", "timestamp"],
+        "description": "Feature type determines available transforms"
       },
       "embedding_dim": {
         "type": "integer",
         "minimum": 4,
         "maximum": 256,
-        "description": "Embedding dimension"
+        "description": "For string_embedding type"
       },
-      "vocab_size": {
-        "type": "integer",
-        "description": "Max vocabulary size (optional, defaults to vocabulary_settings.max_size)"
+      "vocab_settings": {
+        "type": "object",
+        "properties": {
+          "max_size": {"type": "integer", "default": 100000},
+          "oov_buckets": {"type": "integer", "default": 10},
+          "min_frequency": {"type": "integer", "default": 5}
+        }
+      },
+      "transforms": {
+        "type": "object",
+        "description": "For numeric/timestamp types",
+        "properties": {
+          "normalize": {
+            "type": "object",
+            "properties": {
+              "enabled": {"type": "boolean"},
+              "range": {"enum": [[-1, 1], [0, 1]]}
+            }
+          },
+          "bucketize": {
+            "type": "object",
+            "properties": {
+              "enabled": {"type": "boolean"},
+              "buckets": {"type": "integer", "default": 100},
+              "embedding_dim": {"type": "integer", "default": 32}
+            }
+          },
+          "log_transform": {"type": "boolean"},
+          "cyclical": {
+            "type": "object",
+            "description": "For timestamp type only",
+            "properties": {
+              "annual": {"type": "boolean", "description": "Quarter of year (1-4)"},
+              "quarterly": {"type": "boolean", "description": "Month of quarter (1-3)"},
+              "monthly": {"type": "boolean", "description": "Day of month (1-31)"},
+              "weekly": {"type": "boolean", "description": "Day of week (0-6)"},
+              "daily": {"type": "boolean", "description": "Hour of day (0-23)"}
+            }
+          }
+        }
       }
     }
   }
 }
 ```
 
-### JSON Schema: numeric_features
+**Example: buyer_model_features**
+
+```json
+[
+  {
+    "column": "customer_id",
+    "type": "string_embedding",
+    "embedding_dim": 64,
+    "vocab_settings": {"max_size": 100000, "oov_buckets": 10, "min_frequency": 5}
+  },
+  {
+    "column": "city",
+    "type": "string_embedding",
+    "embedding_dim": 16,
+    "vocab_settings": {"max_size": 1000, "oov_buckets": 5, "min_frequency": 5}
+  },
+  {
+    "column": "revenue",
+    "type": "numeric",
+    "transforms": {
+      "normalize": {"enabled": true, "range": [-1, 1]},
+      "bucketize": {"enabled": true, "buckets": 100, "embedding_dim": 32},
+      "log_transform": false
+    }
+  },
+  {
+    "column": "trans_date",
+    "type": "timestamp",
+    "transforms": {
+      "normalize": {"enabled": true, "range": [-1, 1]},
+      "bucketize": {"enabled": false},
+      "cyclical": {
+        "annual": false,
+        "quarterly": true,
+        "monthly": true,
+        "weekly": true,
+        "daily": false
+      }
+    }
+  }
+]
+```
+
+### JSON Schema: buyer_model_crosses / product_model_crosses
 
 ```json
 {
@@ -551,48 +966,48 @@ class QuickTest(models.Model):
   "type": "array",
   "items": {
     "type": "object",
-    "required": ["name", "transform"],
-    "properties": {
-      "name": {
-        "type": "string"
-      },
-      "transform": {
-        "enum": ["bucketize", "normalize", "log", "hour_of_day", "day_of_week"]
-      },
-      "buckets": {
-        "type": "integer",
-        "minimum": 2,
-        "maximum": 100
-      }
-    }
-  }
-}
-```
-
-### JSON Schema: cross_features
-
-```json
-{
-  "$schema": "http://json-schema.org/draft-07/schema#",
-  "type": "array",
-  "items": {
-    "type": "object",
-    "required": ["features", "hash_bucket_size"],
+    "required": ["features", "hash_bucket_size", "embedding_dim"],
     "properties": {
       "features": {
         "type": "array",
         "items": {"type": "string"},
         "minItems": 2,
-        "maxItems": 3
+        "maxItems": 3,
+        "description": "Column names to cross (must be in same model)"
       },
       "hash_bucket_size": {
         "type": "integer",
         "minimum": 100,
-        "maximum": 100000
+        "maximum": 100000,
+        "description": "Hash bucket size for the cross"
+      },
+      "embedding_dim": {
+        "type": "integer",
+        "minimum": 4,
+        "maximum": 64,
+        "default": 16,
+        "description": "Embedding dimension for crossed feature"
       }
     }
   }
 }
+```
+
+**Example: buyer_model_crosses**
+
+```json
+[
+  {
+    "features": ["customer_id", "city"],
+    "hash_bucket_size": 5000,
+    "embedding_dim": 16
+  },
+  {
+    "features": ["revenue_bucket", "trans_date_bucket"],
+    "hash_bucket_size": 3000,
+    "embedding_dim": 12
+  }
+]
 ```
 
 ---
@@ -775,11 +1190,11 @@ def preprocessing_fn(inputs):
 ### Smart Defaults Service
 
 ```python
-# ml_platform/engineering/services.py
+# ml_platform/modeling/services.py
 
 class SmartDefaultsService:
     """
-    Provides embedding dimension recommendations based on cardinality.
+    Auto-configures features based on column statistics and mapping.
     """
 
     CARDINALITY_TO_DIM = [
@@ -798,19 +1213,183 @@ class SmartDefaultsService:
                 return dim
         return 128
 
-    def generate_recommended_config(self, dataset: 'Dataset') -> dict:
+    def generate_smart_defaults(self, dataset: 'Dataset') -> dict:
         """
-        Generate a recommended FeatureConfig based on dataset column stats.
+        Generate smart defaults based on dataset columns and their mapping.
+        Uses column statistics to determine appropriate transforms.
         """
-        pass
+        buyer_features = []
+        product_features = []
 
-    def generate_minimal_config(self, dataset: 'Dataset') -> dict:
-        """Generate minimal config (user_id + product_id only)."""
-        pass
+        for col in dataset.selected_columns:
+            col_name = col['name']
+            col_type = col['type']
+            mapping = dataset.column_mapping.get(col_name)
+            stats = col.get('statistics', {})
 
-    def generate_rich_config(self, dataset: 'Dataset') -> dict:
-        """Generate rich config with all features and crosses."""
-        pass
+            # Determine target model based on column mapping
+            if mapping in ['customer_id']:
+                target = buyer_features
+                feature = self._create_id_feature(col_name, stats, is_primary=True)
+            elif mapping in ['product_id']:
+                target = product_features
+                feature = self._create_id_feature(col_name, stats, is_primary=True)
+            elif mapping and mapping.startswith('customer_'):
+                target = buyer_features
+                feature = self._create_feature(col_name, col_type, stats)
+            elif mapping and mapping.startswith('product_'):
+                target = product_features
+                feature = self._create_feature(col_name, col_type, stats)
+            elif mapping in ['category', 'subcategory']:
+                target = product_features
+                feature = self._create_feature(col_name, col_type, stats)
+            elif mapping in ['transaction_date', 'revenue', 'quantity']:
+                target = buyer_features  # Context features go to query tower
+                feature = self._create_feature(col_name, col_type, stats)
+            else:
+                continue  # Skip unmapped columns
+
+            if feature:
+                target.append(feature)
+
+        # Add default cross features
+        buyer_crosses = self._generate_default_crosses(buyer_features)
+        product_crosses = self._generate_default_crosses(product_features)
+
+        return {
+            'buyer_model_features': buyer_features,
+            'product_model_features': product_features,
+            'buyer_model_crosses': buyer_crosses,
+            'product_model_crosses': product_crosses,
+        }
+
+    def _create_id_feature(self, col_name: str, stats: dict, is_primary: bool) -> dict:
+        """Create feature config for ID columns."""
+        cardinality = stats.get('unique_count', 10000)
+        return {
+            'column': col_name,
+            'type': 'string_embedding',
+            'embedding_dim': self.get_embedding_recommendation(cardinality),
+            'vocab_settings': {
+                'max_size': min(cardinality * 2, 500000),
+                'oov_buckets': 10,
+                'min_frequency': 5 if is_primary else 1
+            }
+        }
+
+    def _create_feature(self, col_name: str, col_type: str, stats: dict) -> dict:
+        """Create feature config based on column type."""
+        if col_type == 'STRING':
+            cardinality = stats.get('unique_count', 1000)
+            return {
+                'column': col_name,
+                'type': 'string_embedding',
+                'embedding_dim': self.get_embedding_recommendation(cardinality),
+                'vocab_settings': {
+                    'max_size': min(cardinality * 2, 100000),
+                    'oov_buckets': 10,
+                    'min_frequency': 5
+                }
+            }
+        elif col_type in ['INTEGER', 'FLOAT']:
+            return {
+                'column': col_name,
+                'type': 'numeric',
+                'transforms': {
+                    'normalize': {'enabled': True, 'range': [-1, 1]},
+                    'bucketize': {'enabled': True, 'buckets': 100, 'embedding_dim': 32},
+                    'log_transform': stats.get('skewness', 0) > 2
+                }
+            }
+        elif col_type == 'TIMESTAMP':
+            return {
+                'column': col_name,
+                'type': 'timestamp',
+                'transforms': {
+                    'normalize': {'enabled': True, 'range': [-1, 1]},
+                    'bucketize': {'enabled': False},
+                    'cyclical': {
+                        'annual': False,
+                        'quarterly': True,
+                        'monthly': True,
+                        'weekly': True,
+                        'daily': False
+                    }
+                }
+            }
+        return None
+
+    def _generate_default_crosses(self, features: list) -> list:
+        """Generate sensible default cross features."""
+        crosses = []
+        feature_names = [f['column'] for f in features]
+
+        # Common cross patterns
+        if 'customer_id' in feature_names and 'city' in feature_names:
+            crosses.append({
+                'features': ['customer_id', 'city'],
+                'hash_bucket_size': 5000,
+                'embedding_dim': 16
+            })
+
+        if 'category' in feature_names and 'subcategory' in feature_names:
+            crosses.append({
+                'features': ['category', 'subcategory'],
+                'hash_bucket_size': 1000,
+                'embedding_dim': 16
+            })
+
+        return crosses
+
+
+class TensorDimensionCalculator:
+    """
+    Calculates tensor dimensions for preview display.
+    """
+
+    def calculate(self, features: list, crosses: list) -> dict:
+        """
+        Calculate total dimensions and breakdown by feature.
+        Returns dict with 'total' and 'breakdown' keys.
+        """
+        breakdown = []
+        total = 0
+
+        for feature in features:
+            dims = self._feature_dims(feature)
+            for name, dim in dims.items():
+                breakdown.append({'name': name, 'dim': dim})
+                total += dim
+
+        for cross in crosses:
+            name = ' × '.join(cross['features'])
+            dim = cross.get('embedding_dim', 16)
+            breakdown.append({'name': name, 'dim': dim})
+            total += dim
+
+        return {'total': total, 'breakdown': breakdown}
+
+    def _feature_dims(self, feature: dict) -> dict:
+        """Get dimension breakdown for a single feature."""
+        result = {}
+        col = feature['column']
+        transforms = feature.get('transforms', {})
+
+        if feature.get('type') == 'string_embedding':
+            result[col] = feature.get('embedding_dim', 32)
+        else:
+            if transforms.get('normalize', {}).get('enabled'):
+                result[f'{col}_norm'] = 1
+            if transforms.get('bucketize', {}).get('enabled'):
+                result[f'{col}_bucket'] = transforms['bucketize'].get('embedding_dim', 32)
+
+            cyclical = transforms.get('cyclical', {})
+            cyclical_dims = sum(2 for c in ['annual', 'quarterly', 'monthly', 'weekly', 'daily']
+                               if cyclical.get(c))
+            if cyclical_dims > 0:
+                result[f'{col}_cyclical'] = cyclical_dims
+
+        return result
 ```
 
 ---
@@ -858,31 +1437,56 @@ Quick Test runs a mini TFX pipeline:
 
 ## Implementation Checklist
 
-### Phase 1: Basic Feature Config CRUD
-- [ ] Create Django models (FeatureConfig, QuickTest)
-- [ ] Create engineering sub-app structure
-- [ ] Implement basic API endpoints
-- [ ] Create feature config list page
-- [ ] Create feature config editor
+### Phase 1: Data Model & Backend
+- [ ] Create `FeatureConfig` Django model with JSON fields
+- [ ] Create `FeatureConfigVersion` model for versioning
+- [ ] Create database migrations
+- [ ] Implement `SmartDefaultsService` (auto-configure based on column stats)
+- [ ] Implement `TensorDimensionCalculator` service
+- [ ] Create CRUD API endpoints (`/api/feature-configs/`)
+- [ ] Add column statistics endpoint from Dataset
 
-### Phase 2: Templates and Recommendations
-- [ ] Implement SmartDefaultsService
-- [ ] Create template selection UI
-- [ ] Add embedding recommendations to editor
-- [ ] Show cardinality hints in UI
+### Phase 2: Wizard UI - Step 1
+- [ ] Create Feature Config list page (with tensor dimension summary)
+- [ ] Build Step 1 form (name, description, dataset selector)
+- [ ] Implement "Start From" options (Blank / Smart Defaults / Clone)
+- [ ] Connect Step 1 to backend API
+- [ ] Add dataset info display (columns, rows, last updated)
 
-### Phase 3: Quick Test
-- [ ] Implement PreprocessingFnGenerator
-- [ ] Create Quick Test dialog
-- [ ] Implement Quick Test pipeline trigger
-- [ ] Create progress tracking UI
-- [ ] Create results display
+### Phase 3: Wizard UI - Step 2 (Drag & Drop)
+- [ ] Build Available Columns panel (draggable cards with stats)
+- [ ] Build BuyerModel / ProductModel drop zones
+- [ ] Implement drag & drop with Vue.js Draggable (or similar)
+- [ ] Create feature card component (shows transform summary)
+- [ ] Add data leakage warning badge for features in both models
+- [ ] Implement "Apply Smart Defaults" button
 
-### Phase 4: MLflow Integration
-- [ ] Log Quick Test runs to MLflow
-- [ ] Create heatmap visualization
-- [ ] Implement experiment comparison
-- [ ] Tag experiments for filtering
+### Phase 4: Feature Configuration Modals
+- [ ] String feature modal (embedding dim, vocab settings)
+- [ ] Numeric feature modal (normalize, bucketize, log transform)
+- [ ] Timestamp feature modal (normalize, bucketize, cyclical options)
+- [ ] Cross feature modal (feature selection, hash bucket size, embedding dim)
+- [ ] Live dimension counter in each modal
+
+### Phase 5: Tensor Preview Panel
+- [ ] Build tensor preview component (side-by-side Buyer/Product)
+- [ ] Implement real-time dimension calculation
+- [ ] Add dimension breakdown bars (visual proportion)
+- [ ] Add sample row preview (mock/computed data)
+- [ ] Implement refresh button functionality
+
+### Phase 6: TFX Integration (Future Scope)
+- [ ] Implement `PreprocessingFnGenerator` service
+- [ ] Generate `preprocessing_fn` code from FeatureConfig JSON
+- [ ] Create Trainer module template using Transform output
+- [ ] Handle cyclical feature generation in TFX Transform
+
+### Phase 7: Quick Test Integration (Future Scope)
+- [ ] Create Quick Test model and API
+- [ ] Integrate with Vertex AI Pipelines trigger
+- [ ] Show Quick Test progress in UI
+- [ ] Display results and update best metrics
+- [ ] MLflow integration for experiment tracking
 
 ---
 

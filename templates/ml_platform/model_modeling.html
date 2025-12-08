@@ -1,10 +1,1813 @@
 {% extends 'base_model.html' %}
+{% load humanize %}
+{% load static %}
 
-{% block title %}{{ model.name }} - PLACEHOLDER{% endblock %}
+{% block title %}{{ model.name }} - Modeling{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/cards.css' %}?v=4">
+<link rel="stylesheet" href="{% static 'css/modals.css' %}?v=2">
+<style>
+    /* Feature Config specific styles */
+    .tensor-dim-bar {
+        height: 8px;
+        background: #e5e7eb;
+        border-radius: 4px;
+        overflow: hidden;
+    }
+    .tensor-dim-fill {
+        height: 100%;
+        border-radius: 4px;
+        transition: width 0.3s ease;
+    }
+    .tensor-dim-fill.buyer {
+        background: linear-gradient(90deg, #3b82f6, #60a5fa);
+    }
+    .tensor-dim-fill.product {
+        background: linear-gradient(90deg, #10b981, #34d399);
+    }
+    .tensor-breakdown {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        margin-top: 8px;
+    }
+    .tensor-breakdown-item {
+        font-size: 11px;
+        padding: 2px 6px;
+        background: #f3f4f6;
+        border-radius: 4px;
+        color: #6b7280;
+    }
+    .config-card {
+        transition: all 0.2s ease;
+    }
+    .config-card:hover {
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+    .status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 8px;
+        border-radius: 9999px;
+        font-size: 11px;
+        font-weight: 500;
+    }
+    .status-badge.draft {
+        background: #fef3c7;
+        color: #92400e;
+    }
+    .status-badge.active {
+        background: #d1fae5;
+        color: #065f46;
+    }
+    .status-badge.archived {
+        background: #e5e7eb;
+        color: #6b7280;
+    }
+    .leakage-warning {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 6px;
+        background: #fef3c7;
+        border-radius: 4px;
+        font-size: 11px;
+        color: #92400e;
+    }
+
+    /* Drag and drop styles */
+    .column-card {
+        background: white;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        padding: 10px 12px;
+        cursor: grab;
+        transition: all 0.2s ease;
+        user-select: none;
+    }
+    .column-card:hover {
+        border-color: #3b82f6;
+        box-shadow: 0 2px 8px rgba(59, 130, 246, 0.15);
+    }
+    .column-card.dragging {
+        opacity: 0.5;
+        cursor: grabbing;
+    }
+    .column-card .drag-handle {
+        color: #9ca3af;
+        margin-right: 8px;
+    }
+    .column-card .column-type {
+        font-size: 10px;
+        padding: 1px 4px;
+        background: #f3f4f6;
+        border-radius: 3px;
+        color: #6b7280;
+        text-transform: uppercase;
+    }
+
+    .drop-zone {
+        min-height: 200px;
+        border: 2px dashed #e5e7eb;
+        border-radius: 12px;
+        padding: 16px;
+        transition: all 0.2s ease;
+    }
+    .drop-zone.drag-over {
+        border-color: #3b82f6;
+        background: #eff6ff;
+    }
+    .drop-zone-empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 150px;
+        color: #9ca3af;
+    }
+
+    .assigned-feature {
+        background: white;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        padding: 12px;
+        margin-bottom: 8px;
+    }
+    .assigned-feature:hover {
+        border-color: #d1d5db;
+    }
+    .feature-config-btn {
+        width: 28px;
+        height: 28px;
+        border-radius: 6px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: none;
+        cursor: pointer;
+        transition: all 0.15s ease;
+    }
+    .feature-config-btn.settings {
+        background: #f3f4f6;
+        color: #6b7280;
+    }
+    .feature-config-btn.settings:hover {
+        background: #e5e7eb;
+        color: #374151;
+    }
+    .feature-config-btn.remove {
+        background: #fef2f2;
+        color: #dc2626;
+    }
+    .feature-config-btn.remove:hover {
+        background: #fee2e2;
+    }
+
+    .cross-feature {
+        background: #f0fdf4;
+        border: 1px solid #bbf7d0;
+        border-radius: 8px;
+        padding: 10px 12px;
+        margin-bottom: 8px;
+    }
+
+    /* Tensor preview */
+    .tensor-preview-panel {
+        background: #f9fafb;
+        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        padding: 16px;
+    }
+    .tensor-preview-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 12px;
+    }
+    .tensor-preview-title {
+        font-weight: 600;
+        color: #374151;
+    }
+    .tensor-preview-total {
+        font-size: 24px;
+        font-weight: 700;
+    }
+    .tensor-preview-total.buyer {
+        color: #3b82f6;
+    }
+    .tensor-preview-total.product {
+        color: #10b981;
+    }
+    .tensor-breakdown-bar {
+        display: flex;
+        height: 24px;
+        border-radius: 6px;
+        overflow: hidden;
+        background: #e5e7eb;
+        margin-bottom: 8px;
+    }
+    .tensor-breakdown-segment {
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 10px;
+        font-weight: 500;
+        color: white;
+        transition: width 0.3s ease;
+        overflow: hidden;
+        white-space: nowrap;
+    }
+
+    /* Modal form styles */
+    .modal-form-group {
+        margin-bottom: 16px;
+    }
+    .modal-form-label {
+        display: block;
+        font-size: 13px;
+        font-weight: 500;
+        color: #374151;
+        margin-bottom: 6px;
+    }
+    .modal-form-hint {
+        font-size: 12px;
+        color: #6b7280;
+        margin-top: 4px;
+    }
+    .transform-option {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 12px;
+        background: #f9fafb;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        margin-bottom: 8px;
+    }
+    .transform-option input[type="checkbox"] {
+        margin-top: 2px;
+    }
+    .transform-option-content {
+        flex: 1;
+    }
+    .transform-option-title {
+        font-weight: 500;
+        color: #374151;
+    }
+    .transform-option-desc {
+        font-size: 12px;
+        color: #6b7280;
+        margin-top: 2px;
+    }
+    .transform-option-dim {
+        font-size: 12px;
+        font-weight: 600;
+        color: #3b82f6;
+        white-space: nowrap;
+    }
+</style>
+{% endblock %}
 
 {% block model_content %}
-<div class="bg-white rounded-lg shadow p-6">
-    <h2 class="text-2xl font-bold text-gray-900 mb-4">PLACEHOLDER_TITLE</h2>
-    <p class="text-gray-600">This page is under development.</p>
+<div class="space-y-6">
+    <!-- Modeling Container -->
+    <div class="bg-white rounded-xl border border-black shadow-lg p-6">
+        <div class="flex items-center justify-between mb-6">
+            <h2 class="text-2xl font-bold text-gray-900">Modeling</h2>
+            <div class="btn-group">
+                <button onclick="refreshConfigs()" class="btn btn-secondary btn-sm" style="width: 140px;">
+                    <i class="fas fa-sync-alt"></i>Refresh
+                </button>
+                <button onclick="openWizard()" class="btn btn-primary btn-sm" style="width: 160px;">
+                    <i class="fas fa-plus"></i>New Feature Config
+                </button>
+            </div>
+        </div>
+
+        <!-- Filter Bar -->
+        <div class="flex items-center gap-4 mb-4">
+            <div class="flex items-center gap-2">
+                <label class="text-sm font-medium text-gray-600">Dataset:</label>
+                <select id="datasetFilter" onchange="filterConfigs()" class="form-select text-sm" style="min-width: 200px;">
+                    <option value="">All Datasets</option>
+                </select>
+            </div>
+            <div class="flex items-center gap-2">
+                <label class="text-sm font-medium text-gray-600">Status:</label>
+                <select id="statusFilter" onchange="filterConfigs()" class="form-select text-sm" style="width: 120px;">
+                    <option value="">All</option>
+                    <option value="draft">Draft</option>
+                    <option value="active">Active</option>
+                    <option value="archived">Archived</option>
+                </select>
+            </div>
+            <div class="flex-1">
+                <input type="text" id="searchInput" placeholder="Search feature configs..."
+                       class="form-input w-full text-sm" onkeyup="debounceSearch()">
+            </div>
+        </div>
+
+        <!-- Feature Configs List -->
+        <div id="configsList" class="space-y-3" style="min-height: 200px;">
+            <!-- Loading state -->
+            <div id="configsLoading" class="flex items-center justify-center py-12">
+                <i class="fas fa-spinner fa-spin text-2xl text-gray-400 mr-3"></i>
+                <span class="text-gray-500">Loading feature configs...</span>
+            </div>
+            <!-- Empty state (hidden by default) -->
+            <div id="configsEmpty" class="card-empty-state hidden">
+                <p class="card-empty-state-title">No feature configs yet</p>
+                <p class="card-empty-state-text">Create your first feature config to define how columns are transformed for training</p>
+            </div>
+            <!-- Config cards will be inserted here -->
+        </div>
+    </div>
 </div>
+
+<!-- Feature Config Wizard Modal -->
+<div id="featureConfigWizardModal" class="modal-overlay hidden">
+    <div class="modal-container modal-container-wizard" style="max-width: 1100px;">
+        <!-- Modal Header -->
+        <div class="modal-header-wizard">
+            <div class="modal-header-content">
+                <div class="modal-header-icon info">
+                    <i class="fas fa-cogs text-lg"></i>
+                </div>
+                <div class="modal-header-info">
+                    <h3 class="modal-header-title" id="wizardTitle">Create Feature Config</h3>
+                    <p class="modal-step-counter">Step <span id="currentStep">1</span> of 2</p>
+                </div>
+            </div>
+
+            <!-- Progress Bar -->
+            <div class="progress-bar-pills">
+                <div id="progress1" class="progress-step-pill current">Basic Info</div>
+                <div id="progress2" class="progress-step-pill future">Features</div>
+            </div>
+        </div>
+
+        <!-- Modal Body -->
+        <div class="modal-body-wizard" style="max-height: calc(90vh - 200px); overflow-y: auto;">
+            <!-- Step 1: Basic Info -->
+            <div id="wizardStep1" class="wizard-step active">
+                <h4 class="wizard-section-title">Basic Information</h4>
+
+                <!-- Config Name -->
+                <div class="wizard-field-group">
+                    <label class="wizard-field-label">Config Name <span class="required">*</span></label>
+                    <input type="text" id="configName" placeholder="e.g., Rich Features v1"
+                           class="form-input w-full" oninput="validateConfigName()">
+                    <p id="nameError" class="text-xs text-red-600 mt-1 hidden"></p>
+                </div>
+
+                <!-- Description -->
+                <div class="wizard-field-group">
+                    <label class="wizard-field-label">Description <span class="optional">(optional)</span></label>
+                    <textarea id="configDescription" placeholder="Describe the purpose of this feature configuration..."
+                              class="form-textarea w-full" rows="2"></textarea>
+                </div>
+
+                <!-- Dataset Selection -->
+                <div class="wizard-field-group">
+                    <label class="wizard-field-label">Base Dataset <span class="required">*</span></label>
+                    <select id="configDataset" class="form-select w-full" onchange="onDatasetChange()">
+                        <option value="">Select a dataset...</option>
+                    </select>
+                    <div id="datasetInfo" class="text-xs text-gray-500 mt-2 hidden">
+                        <span id="datasetInfoText"></span>
+                    </div>
+                </div>
+
+                <!-- Start From Options -->
+                <div class="wizard-field-group">
+                    <label class="wizard-field-label">Start From</label>
+                    <div class="flex flex-wrap gap-3 mt-2">
+                        <label class="flex items-center gap-2 p-3 border rounded-lg cursor-pointer hover:bg-gray-50 transition">
+                            <input type="radio" name="startFrom" value="blank" checked onchange="onStartFromChange()">
+                            <div>
+                                <div class="font-medium text-sm">Blank</div>
+                                <div class="text-xs text-gray-500">Start from scratch</div>
+                            </div>
+                        </label>
+                        <label class="flex items-center gap-2 p-3 border rounded-lg cursor-pointer hover:bg-gray-50 transition">
+                            <input type="radio" name="startFrom" value="smart_defaults" onchange="onStartFromChange()">
+                            <div>
+                                <div class="font-medium text-sm">Smart Defaults</div>
+                                <div class="text-xs text-gray-500">Auto-configure based on data</div>
+                            </div>
+                        </label>
+                        <label class="flex items-center gap-2 p-3 border rounded-lg cursor-pointer hover:bg-gray-50 transition">
+                            <input type="radio" name="startFrom" value="clone" onchange="onStartFromChange()">
+                            <div>
+                                <div class="font-medium text-sm">Clone Existing</div>
+                                <div class="text-xs text-gray-500">Copy from another config</div>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Clone Selection (hidden by default) -->
+                <div id="cloneSelection" class="wizard-field-group hidden">
+                    <label class="wizard-field-label">Clone From</label>
+                    <select id="cloneFromConfig" class="form-select w-full">
+                        <option value="">Select a config to clone...</option>
+                    </select>
+                </div>
+
+                <div class="wizard-info-box info">
+                    <i class="fas fa-info-circle"></i>
+                    <div>
+                        <strong>What is a Feature Config?</strong><br>
+                        A feature config defines how dataset columns are transformed into tensors for the two-tower model (BuyerModel and ProductModel).
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 2: Feature Assignment -->
+            <div id="wizardStep2" class="wizard-step hidden">
+                <div class="flex gap-4">
+                    <!-- Left side: Available Columns -->
+                    <div class="flex-1">
+                        <div class="flex items-center justify-between mb-3">
+                            <h4 class="wizard-section-title" style="margin-bottom: 0;">Available Columns</h4>
+                            <button type="button" class="btn btn-secondary btn-xs" onclick="applySmartDefaults()">
+                                <i class="fas fa-magic mr-1"></i>Smart Defaults
+                            </button>
+                        </div>
+                        <p class="text-xs text-gray-500 mb-3">Drag columns to BuyerModel or ProductModel</p>
+
+                        <div id="availableColumns" class="grid grid-cols-2 gap-2" style="max-height: 200px; overflow-y: auto;">
+                            <!-- Column cards will be inserted here -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Model Drop Zones -->
+                <div class="grid grid-cols-2 gap-4 mt-4">
+                    <!-- Buyer Model -->
+                    <div>
+                        <div class="flex items-center gap-2 mb-2">
+                            <span class="w-3 h-3 rounded-full bg-blue-500"></span>
+                            <h5 class="font-semibold text-gray-800">BuyerModel (Query Tower)</h5>
+                        </div>
+                        <div id="buyerModelZone" class="drop-zone"
+                             ondrop="dropFeature(event, 'buyer')"
+                             ondragover="allowDrop(event)"
+                             ondragenter="dragEnter(event)"
+                             ondragleave="dragLeave(event)">
+                            <div id="buyerModelEmpty" class="drop-zone-empty">
+                                <i class="fas fa-user-circle text-3xl mb-2"></i>
+                                <span>Drop customer/user features here</span>
+                            </div>
+                            <div id="buyerModelFeatures"></div>
+                            <div id="buyerModelCrosses" class="mt-3"></div>
+                            <button type="button" class="btn btn-secondary btn-xs mt-2" onclick="openCrossModal('buyer')" id="addBuyerCrossBtn" style="display: none;">
+                                <i class="fas fa-plus mr-1"></i>Add Cross Feature
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Product Model -->
+                    <div>
+                        <div class="flex items-center gap-2 mb-2">
+                            <span class="w-3 h-3 rounded-full bg-green-500"></span>
+                            <h5 class="font-semibold text-gray-800">ProductModel (Candidate Tower)</h5>
+                        </div>
+                        <div id="productModelZone" class="drop-zone"
+                             ondrop="dropFeature(event, 'product')"
+                             ondragover="allowDrop(event)"
+                             ondragenter="dragEnter(event)"
+                             ondragleave="dragLeave(event)">
+                            <div id="productModelEmpty" class="drop-zone-empty">
+                                <i class="fas fa-box text-3xl mb-2"></i>
+                                <span>Drop product/item features here</span>
+                            </div>
+                            <div id="productModelFeatures"></div>
+                            <div id="productModelCrosses" class="mt-3"></div>
+                            <button type="button" class="btn btn-secondary btn-xs mt-2" onclick="openCrossModal('product')" id="addProductCrossBtn" style="display: none;">
+                                <i class="fas fa-plus mr-1"></i>Add Cross Feature
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tensor Preview -->
+                <div class="grid grid-cols-2 gap-4 mt-4">
+                    <div class="tensor-preview-panel">
+                        <div class="tensor-preview-header">
+                            <span class="tensor-preview-title">Buyer Tensor</span>
+                            <span id="buyerTensorTotal" class="tensor-preview-total buyer">0D</span>
+                        </div>
+                        <div id="buyerTensorBar" class="tensor-breakdown-bar"></div>
+                        <div id="buyerTensorBreakdown" class="tensor-breakdown"></div>
+                    </div>
+                    <div class="tensor-preview-panel">
+                        <div class="tensor-preview-header">
+                            <span class="tensor-preview-title">Product Tensor</span>
+                            <span id="productTensorTotal" class="tensor-preview-total product">0D</span>
+                        </div>
+                        <div id="productTensorBar" class="tensor-breakdown-bar"></div>
+                        <div id="productTensorBreakdown" class="tensor-breakdown"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal Footer -->
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" onclick="closeWizard()">Cancel</button>
+            <div class="flex gap-2">
+                <button type="button" id="backBtn" class="btn btn-secondary hidden" onclick="prevStep()">
+                    <i class="fas fa-arrow-left mr-1"></i>Back
+                </button>
+                <button type="button" id="nextBtn" class="btn btn-primary" onclick="nextStep()">
+                    Continue<i class="fas fa-arrow-right ml-1"></i>
+                </button>
+                <button type="button" id="saveBtn" class="btn btn-primary hidden" onclick="saveConfig()">
+                    <i class="fas fa-save mr-1"></i>Save Config
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Feature Configuration Modal -->
+<div id="featureConfigModal" class="modal-overlay hidden">
+    <div class="modal-container" style="max-width: 500px;">
+        <div class="modal-header">
+            <div class="modal-header-icon info">
+                <i class="fas fa-cog"></i>
+            </div>
+            <h3 class="modal-header-title" id="featureModalTitle">Configure Feature</h3>
+            <button type="button" class="modal-close-btn" onclick="closeFeatureModal()">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="modal-body" id="featureModalBody">
+            <!-- Content will be dynamically generated -->
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" onclick="closeFeatureModal()">Cancel</button>
+            <button type="button" class="btn btn-primary" onclick="applyFeatureConfig()">Apply</button>
+        </div>
+    </div>
+</div>
+
+<!-- Cross Feature Modal -->
+<div id="crossFeatureModal" class="modal-overlay hidden">
+    <div class="modal-container" style="max-width: 450px;">
+        <div class="modal-header">
+            <div class="modal-header-icon info">
+                <i class="fas fa-times"></i>
+            </div>
+            <h3 class="modal-header-title">Add Cross Feature</h3>
+            <button type="button" class="modal-close-btn" onclick="closeCrossModal()">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="modal-body">
+            <div class="modal-form-group">
+                <label class="modal-form-label">Select 2-3 features to cross</label>
+                <div id="crossFeatureOptions" class="space-y-2">
+                    <!-- Feature checkboxes will be inserted here -->
+                </div>
+            </div>
+            <div id="crossPreview" class="text-sm text-gray-600 mt-3 hidden">
+                Selected: <span id="crossPreviewText" class="font-medium"></span>
+            </div>
+            <div class="modal-form-group mt-4">
+                <label class="modal-form-label">Hash Bucket Size</label>
+                <select id="crossHashBuckets" class="form-select w-full">
+                    <option value="1000">1,000</option>
+                    <option value="5000" selected>5,000</option>
+                    <option value="10000">10,000</option>
+                    <option value="50000">50,000</option>
+                </select>
+                <p class="modal-form-hint">Number of hash buckets for the crossed features</p>
+            </div>
+            <div class="modal-form-group">
+                <label class="modal-form-label">Embedding Dimension</label>
+                <select id="crossEmbedDim" class="form-select w-full">
+                    <option value="8">8</option>
+                    <option value="16" selected>16</option>
+                    <option value="32">32</option>
+                </select>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" onclick="closeCrossModal()">Cancel</button>
+            <button type="button" class="btn btn-primary" onclick="addCrossFeature()">Add Cross</button>
+        </div>
+    </div>
+</div>
+
+<!-- View Config Modal -->
+<div id="viewConfigModal" class="modal-overlay hidden">
+    <div class="modal-container" style="max-width: 700px;">
+        <div class="modal-header">
+            <div class="modal-header-icon info">
+                <i class="fas fa-eye"></i>
+            </div>
+            <h3 class="modal-header-title" id="viewConfigTitle">Feature Config Details</h3>
+            <button type="button" class="modal-close-btn" onclick="closeViewModal()">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="modal-body" id="viewConfigBody" style="max-height: 70vh; overflow-y: auto;">
+            <!-- Content will be dynamically generated -->
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" onclick="closeViewModal()">Close</button>
+        </div>
+    </div>
+</div>
+
+<script>
+const modelId = {{ model.id }};
+let allConfigs = [];
+let allDatasets = [];
+let currentStep = 1;
+let editingConfigId = null;
+let searchTimeout = null;
+
+// Current feature config state
+let configState = {
+    name: '',
+    description: '',
+    datasetId: null,
+    startFrom: 'blank',
+    cloneFromId: null,
+    buyerFeatures: [],
+    productFeatures: [],
+    buyerCrosses: [],
+    productCrosses: [],
+    availableColumns: []
+};
+
+// Currently editing feature
+let editingFeature = null;
+let editingFeatureModel = null;
+let crossFeatureModel = null;
+
+// =============================================================================
+// INITIALIZATION
+// =============================================================================
+
+document.addEventListener('DOMContentLoaded', function() {
+    loadDatasets();
+    loadConfigs();
+});
+
+function loadDatasets() {
+    fetch(`/api/models/${modelId}/modeling/datasets/`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                allDatasets = data.data;
+                populateDatasetFilters();
+            }
+        })
+        .catch(err => console.error('Error loading datasets:', err));
+}
+
+function loadConfigs() {
+    document.getElementById('configsLoading').classList.remove('hidden');
+    document.getElementById('configsEmpty').classList.add('hidden');
+
+    const datasetId = document.getElementById('datasetFilter').value;
+    const status = document.getElementById('statusFilter').value;
+
+    let url = `/api/models/${modelId}/feature-configs/?`;
+    if (datasetId) url += `dataset_id=${datasetId}&`;
+    if (status) url += `status=${status}&`;
+
+    fetch(url)
+        .then(r => r.json())
+        .then(data => {
+            document.getElementById('configsLoading').classList.add('hidden');
+            if (data.success) {
+                allConfigs = data.data;
+                renderConfigs();
+            } else {
+                showError(data.error || 'Failed to load configs');
+            }
+        })
+        .catch(err => {
+            document.getElementById('configsLoading').classList.add('hidden');
+            console.error('Error loading configs:', err);
+            showError('Failed to load feature configs');
+        });
+}
+
+function refreshConfigs() {
+    loadConfigs();
+}
+
+function populateDatasetFilters() {
+    const filterSelect = document.getElementById('datasetFilter');
+    const wizardSelect = document.getElementById('configDataset');
+
+    // Clear existing options (except first)
+    filterSelect.innerHTML = '<option value="">All Datasets</option>';
+    wizardSelect.innerHTML = '<option value="">Select a dataset...</option>';
+
+    allDatasets.forEach(ds => {
+        const opt1 = document.createElement('option');
+        opt1.value = ds.id;
+        opt1.textContent = ds.name;
+        filterSelect.appendChild(opt1);
+
+        const opt2 = document.createElement('option');
+        opt2.value = ds.id;
+        opt2.textContent = ds.name;
+        wizardSelect.appendChild(opt2);
+    });
+}
+
+// =============================================================================
+// RENDER CONFIGS LIST
+// =============================================================================
+
+function renderConfigs() {
+    const container = document.getElementById('configsList');
+    const emptyState = document.getElementById('configsEmpty');
+    const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+
+    // Filter by search
+    let filtered = allConfigs;
+    if (searchTerm) {
+        filtered = allConfigs.filter(c =>
+            c.name.toLowerCase().includes(searchTerm) ||
+            (c.description && c.description.toLowerCase().includes(searchTerm))
+        );
+    }
+
+    // Remove old cards
+    container.querySelectorAll('.config-card').forEach(el => el.remove());
+
+    if (filtered.length === 0) {
+        emptyState.classList.remove('hidden');
+        return;
+    }
+
+    emptyState.classList.add('hidden');
+
+    filtered.forEach(config => {
+        const card = createConfigCard(config);
+        container.appendChild(card);
+    });
+}
+
+function createConfigCard(config) {
+    const card = document.createElement('div');
+    card.className = 'config-card bg-white border border-gray-200 rounded-lg p-4 hover:border-gray-300';
+
+    const buyerDim = config.buyer_tensor_dim || 0;
+    const productDim = config.product_tensor_dim || 0;
+    const totalDim = buyerDim + productDim;
+    const maxDim = 300; // For bar width calculation
+
+    const leakageWarning = config.columns_in_both_models && config.columns_in_both_models.length > 0
+        ? `<span class="leakage-warning"><i class="fas fa-exclamation-triangle"></i>${config.columns_in_both_models.length} shared</span>`
+        : '';
+
+    card.innerHTML = `
+        <div class="flex items-start justify-between">
+            <div class="flex-1">
+                <div class="flex items-center gap-2 mb-1">
+                    <h3 class="font-semibold text-gray-900">${escapeHtml(config.name)}</h3>
+                    <span class="text-xs text-gray-400">v${config.version}</span>
+                    <span class="status-badge ${config.status}">${config.status}</span>
+                    ${leakageWarning}
+                </div>
+                <p class="text-sm text-gray-500 mb-2">Dataset: ${escapeHtml(config.dataset_name)}</p>
+                ${config.description ? `<p class="text-sm text-gray-600 mb-3">${escapeHtml(config.description)}</p>` : ''}
+
+                <div class="grid grid-cols-2 gap-4 mb-3">
+                    <div>
+                        <div class="flex items-center justify-between text-xs mb-1">
+                            <span class="text-gray-500">BuyerModel</span>
+                            <span class="font-semibold text-blue-600">${buyerDim}D</span>
+                        </div>
+                        <div class="tensor-dim-bar">
+                            <div class="tensor-dim-fill buyer" style="width: ${Math.min(buyerDim / maxDim * 100, 100)}%"></div>
+                        </div>
+                        <div class="text-xs text-gray-400 mt-1">${config.buyer_features_count} features, ${config.buyer_crosses_count} crosses</div>
+                    </div>
+                    <div>
+                        <div class="flex items-center justify-between text-xs mb-1">
+                            <span class="text-gray-500">ProductModel</span>
+                            <span class="font-semibold text-green-600">${productDim}D</span>
+                        </div>
+                        <div class="tensor-dim-bar">
+                            <div class="tensor-dim-fill product" style="width: ${Math.min(productDim / maxDim * 100, 100)}%"></div>
+                        </div>
+                        <div class="text-xs text-gray-400 mt-1">${config.product_features_count} features, ${config.product_crosses_count} crosses</div>
+                    </div>
+                </div>
+
+                <div class="text-xs text-gray-400">
+                    Updated ${formatTimeAgo(config.updated_at)}
+                    ${config.created_by ? ` by ${config.created_by}` : ''}
+                </div>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-2 mt-3 pt-3 border-t border-gray-100">
+            <button onclick="viewConfig(${config.id})" class="btn btn-secondary btn-xs">
+                <i class="fas fa-eye mr-1"></i>View
+            </button>
+            <button onclick="editConfig(${config.id})" class="btn btn-secondary btn-xs">
+                <i class="fas fa-edit mr-1"></i>Edit
+            </button>
+            <button onclick="cloneConfig(${config.id})" class="btn btn-secondary btn-xs">
+                <i class="fas fa-copy mr-1"></i>Clone
+            </button>
+            <button onclick="deleteConfig(${config.id}, '${escapeHtml(config.name)}')" class="btn btn-secondary btn-xs text-red-600 hover:bg-red-50">
+                <i class="fas fa-trash mr-1"></i>Delete
+            </button>
+        </div>
+    `;
+
+    return card;
+}
+
+// =============================================================================
+// WIZARD FUNCTIONS
+// =============================================================================
+
+function openWizard(configId = null) {
+    editingConfigId = configId;
+    currentStep = 1;
+
+    // Reset state
+    configState = {
+        name: '',
+        description: '',
+        datasetId: null,
+        startFrom: 'blank',
+        cloneFromId: null,
+        buyerFeatures: [],
+        productFeatures: [],
+        buyerCrosses: [],
+        productCrosses: [],
+        availableColumns: []
+    };
+
+    // Reset form
+    document.getElementById('configName').value = '';
+    document.getElementById('configDescription').value = '';
+    document.getElementById('configDataset').value = '';
+    document.getElementById('datasetInfo').classList.add('hidden');
+    document.querySelector('input[name="startFrom"][value="blank"]').checked = true;
+    document.getElementById('cloneSelection').classList.add('hidden');
+
+    // Update UI
+    document.getElementById('wizardTitle').textContent = configId ? 'Edit Feature Config' : 'Create Feature Config';
+    updateWizardStep();
+
+    // Show modal
+    document.getElementById('featureConfigWizardModal').classList.remove('hidden');
+
+    // If editing, load config data
+    if (configId) {
+        loadConfigForEdit(configId);
+    }
+}
+
+function closeWizard() {
+    document.getElementById('featureConfigWizardModal').classList.add('hidden');
+    editingConfigId = null;
+}
+
+function loadConfigForEdit(configId) {
+    fetch(`/api/feature-configs/${configId}/`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                const config = data.data;
+                document.getElementById('configName').value = config.name;
+                document.getElementById('configDescription').value = config.description || '';
+                document.getElementById('configDataset').value = config.dataset_id;
+
+                configState.name = config.name;
+                configState.description = config.description || '';
+                configState.datasetId = config.dataset_id;
+                configState.buyerFeatures = config.buyer_model_features || [];
+                configState.productFeatures = config.product_model_features || [];
+                configState.buyerCrosses = config.buyer_model_crosses || [];
+                configState.productCrosses = config.product_model_crosses || [];
+
+                onDatasetChange();
+            }
+        });
+}
+
+function updateWizardStep() {
+    // Update step visibility
+    document.getElementById('wizardStep1').classList.toggle('hidden', currentStep !== 1);
+    document.getElementById('wizardStep1').classList.toggle('active', currentStep === 1);
+    document.getElementById('wizardStep2').classList.toggle('hidden', currentStep !== 2);
+    document.getElementById('wizardStep2').classList.toggle('active', currentStep === 2);
+
+    // Update progress pills
+    document.getElementById('progress1').className = 'progress-step-pill ' + (currentStep >= 1 ? 'current' : 'future');
+    document.getElementById('progress2').className = 'progress-step-pill ' + (currentStep >= 2 ? 'current' : 'future');
+
+    // Update buttons
+    document.getElementById('backBtn').classList.toggle('hidden', currentStep === 1);
+    document.getElementById('nextBtn').classList.toggle('hidden', currentStep === 2);
+    document.getElementById('saveBtn').classList.toggle('hidden', currentStep !== 2);
+
+    // Update step counter
+    document.getElementById('currentStep').textContent = currentStep;
+}
+
+function nextStep() {
+    if (currentStep === 1) {
+        // Validate step 1
+        const name = document.getElementById('configName').value.trim();
+        const datasetId = document.getElementById('configDataset').value;
+
+        if (!name) {
+            document.getElementById('nameError').textContent = 'Name is required';
+            document.getElementById('nameError').classList.remove('hidden');
+            return;
+        }
+        if (!datasetId) {
+            showError('Please select a dataset');
+            return;
+        }
+
+        configState.name = name;
+        configState.description = document.getElementById('configDescription').value.trim();
+        configState.datasetId = parseInt(datasetId);
+        configState.startFrom = document.querySelector('input[name="startFrom"]:checked').value;
+
+        // Load columns and initialize step 2
+        loadColumnsForStep2();
+
+        currentStep = 2;
+        updateWizardStep();
+    }
+}
+
+function prevStep() {
+    if (currentStep > 1) {
+        currentStep--;
+        updateWizardStep();
+    }
+}
+
+function validateConfigName() {
+    document.getElementById('nameError').classList.add('hidden');
+}
+
+function onDatasetChange() {
+    const datasetId = document.getElementById('configDataset').value;
+    const datasetInfo = document.getElementById('datasetInfo');
+
+    if (datasetId) {
+        const dataset = allDatasets.find(d => d.id == datasetId);
+        if (dataset) {
+            document.getElementById('datasetInfoText').textContent =
+                `${dataset.row_count_estimate ? dataset.row_count_estimate.toLocaleString() + ' rows' : 'Unknown rows'} | ` +
+                `${dataset.unique_users_estimate || '?'} users | ${dataset.unique_products_estimate || '?'} products`;
+            datasetInfo.classList.remove('hidden');
+        }
+        loadCloneOptions(datasetId);
+    } else {
+        datasetInfo.classList.add('hidden');
+    }
+}
+
+function onStartFromChange() {
+    const startFrom = document.querySelector('input[name="startFrom"]:checked').value;
+    document.getElementById('cloneSelection').classList.toggle('hidden', startFrom !== 'clone');
+}
+
+function loadCloneOptions(datasetId) {
+    const select = document.getElementById('cloneFromConfig');
+    select.innerHTML = '<option value="">Select a config to clone...</option>';
+
+    allConfigs.filter(c => c.dataset_id == datasetId).forEach(config => {
+        const opt = document.createElement('option');
+        opt.value = config.id;
+        opt.textContent = `${config.name} (${config.buyer_tensor_dim || 0}D + ${config.product_tensor_dim || 0}D)`;
+        select.appendChild(opt);
+    });
+}
+
+// =============================================================================
+// STEP 2: FEATURE ASSIGNMENT
+// =============================================================================
+
+function loadColumnsForStep2() {
+    const datasetId = configState.datasetId;
+    const startFrom = configState.startFrom;
+
+    fetch(`/api/datasets/${datasetId}/columns/`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                configState.availableColumns = data.data.columns;
+
+                // Handle start from options
+                if (startFrom === 'smart_defaults') {
+                    applySmartDefaults();
+                } else if (startFrom === 'clone') {
+                    const cloneFromId = document.getElementById('cloneFromConfig').value;
+                    if (cloneFromId) {
+                        loadCloneData(cloneFromId);
+                    } else {
+                        renderStep2();
+                    }
+                } else {
+                    renderStep2();
+                }
+            }
+        });
+}
+
+function loadCloneData(configId) {
+    fetch(`/api/feature-configs/${configId}/`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                configState.buyerFeatures = data.data.buyer_model_features || [];
+                configState.productFeatures = data.data.product_model_features || [];
+                configState.buyerCrosses = data.data.buyer_model_crosses || [];
+                configState.productCrosses = data.data.product_model_crosses || [];
+                renderStep2();
+            }
+        });
+}
+
+function applySmartDefaults() {
+    fetch('/api/feature-configs/smart-defaults/', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({dataset_id: configState.datasetId})
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            configState.buyerFeatures = data.data.buyer_model_features || [];
+            configState.productFeatures = data.data.product_model_features || [];
+            configState.buyerCrosses = data.data.buyer_model_crosses || [];
+            configState.productCrosses = data.data.product_model_crosses || [];
+            renderStep2();
+        }
+    });
+}
+
+function renderStep2() {
+    renderAvailableColumns();
+    renderAssignedFeatures('buyer');
+    renderAssignedFeatures('product');
+    updateTensorPreview();
+}
+
+function renderAvailableColumns() {
+    const container = document.getElementById('availableColumns');
+    container.innerHTML = '';
+
+    // Get assigned column names
+    const assignedCols = new Set([
+        ...configState.buyerFeatures.map(f => f.column),
+        ...configState.productFeatures.map(f => f.column)
+    ]);
+
+    configState.availableColumns.forEach(col => {
+        if (assignedCols.has(col.name)) return;
+
+        const card = document.createElement('div');
+        card.className = 'column-card';
+        card.draggable = true;
+        card.dataset.column = JSON.stringify(col);
+        card.ondragstart = (e) => dragStart(e, col);
+        card.ondragend = dragEnd;
+
+        card.innerHTML = `
+            <div class="flex items-center justify-between">
+                <div class="flex items-center">
+                    <i class="fas fa-grip-vertical drag-handle"></i>
+                    <span class="font-medium text-sm">${escapeHtml(col.name)}</span>
+                </div>
+                <span class="column-type">${col.type}</span>
+            </div>
+            ${col.stats.cardinality ? `<div class="text-xs text-gray-400 mt-1">${col.stats.cardinality.toLocaleString()} unique</div>` : ''}
+        `;
+
+        container.appendChild(card);
+    });
+}
+
+function renderAssignedFeatures(model) {
+    const features = model === 'buyer' ? configState.buyerFeatures : configState.productFeatures;
+    const crosses = model === 'buyer' ? configState.buyerCrosses : configState.productCrosses;
+    const container = document.getElementById(`${model}ModelFeatures`);
+    const crossContainer = document.getElementById(`${model}ModelCrosses`);
+    const emptyState = document.getElementById(`${model}ModelEmpty`);
+    const addCrossBtn = document.getElementById(`add${model.charAt(0).toUpperCase() + model.slice(1)}CrossBtn`);
+
+    container.innerHTML = '';
+    crossContainer.innerHTML = '';
+
+    if (features.length === 0) {
+        emptyState.style.display = 'flex';
+        addCrossBtn.style.display = 'none';
+    } else {
+        emptyState.style.display = 'none';
+        addCrossBtn.style.display = 'inline-flex';
+
+        features.forEach((feature, idx) => {
+            const el = createAssignedFeatureElement(feature, model, idx);
+            container.appendChild(el);
+        });
+    }
+
+    crosses.forEach((cross, idx) => {
+        const el = createCrossFeatureElement(cross, model, idx);
+        crossContainer.appendChild(el);
+    });
+}
+
+function createAssignedFeatureElement(feature, model, idx) {
+    const div = document.createElement('div');
+    div.className = 'assigned-feature';
+
+    const dimStr = getFeatureDimString(feature);
+
+    div.innerHTML = `
+        <div class="flex items-center justify-between">
+            <div>
+                <div class="font-medium text-sm">${escapeHtml(feature.column)}</div>
+                <div class="text-xs text-gray-500">${dimStr}</div>
+            </div>
+            <div class="flex items-center gap-1">
+                <button type="button" class="feature-config-btn settings" onclick="openFeatureConfig('${model}', ${idx})">
+                    <i class="fas fa-cog"></i>
+                </button>
+                <button type="button" class="feature-config-btn remove" onclick="removeFeature('${model}', ${idx})">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
+    `;
+
+    return div;
+}
+
+function createCrossFeatureElement(cross, model, idx) {
+    const div = document.createElement('div');
+    div.className = 'cross-feature';
+
+    div.innerHTML = `
+        <div class="flex items-center justify-between">
+            <div>
+                <div class="font-medium text-sm">${cross.features.join(' × ')}</div>
+                <div class="text-xs text-gray-500">Hash: ${cross.hash_bucket_size.toLocaleString()} → ${cross.embedding_dim}D</div>
+            </div>
+            <button type="button" class="feature-config-btn remove" onclick="removeCross('${model}', ${idx})">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    `;
+
+    return div;
+}
+
+function getFeatureDimString(feature) {
+    const parts = [];
+    if (feature.type === 'string_embedding') {
+        parts.push(`Embedding: ${feature.embedding_dim || 32}D`);
+    } else if (feature.type === 'numeric') {
+        const t = feature.transforms || {};
+        if (t.normalize?.enabled) parts.push('Norm: 1D');
+        if (t.bucketize?.enabled) parts.push(`Bucket: ${t.bucketize.embedding_dim || 32}D`);
+    } else if (feature.type === 'timestamp') {
+        const t = feature.transforms || {};
+        if (t.normalize?.enabled) parts.push('Norm: 1D');
+        const cyclical = t.cyclical || {};
+        const cycles = ['annual', 'quarterly', 'monthly', 'weekly', 'daily'].filter(c => cyclical[c]).length;
+        if (cycles > 0) parts.push(`Cyclical: ${cycles * 2}D`);
+    }
+    return parts.join(' + ') || 'Not configured';
+}
+
+// =============================================================================
+// DRAG AND DROP
+// =============================================================================
+
+function dragStart(e, col) {
+    e.target.classList.add('dragging');
+    e.dataTransfer.setData('text/plain', JSON.stringify(col));
+    e.dataTransfer.effectAllowed = 'move';
+}
+
+function dragEnd(e) {
+    e.target.classList.remove('dragging');
+}
+
+function allowDrop(e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+}
+
+function dragEnter(e) {
+    e.preventDefault();
+    e.currentTarget.classList.add('drag-over');
+}
+
+function dragLeave(e) {
+    e.currentTarget.classList.remove('drag-over');
+}
+
+function dropFeature(e, model) {
+    e.preventDefault();
+    e.currentTarget.classList.remove('drag-over');
+
+    const colData = JSON.parse(e.dataTransfer.getData('text/plain'));
+    const feature = createDefaultFeature(colData);
+
+    if (model === 'buyer') {
+        configState.buyerFeatures.push(feature);
+    } else {
+        configState.productFeatures.push(feature);
+    }
+
+    renderStep2();
+}
+
+function createDefaultFeature(col) {
+    const type = col.type.toUpperCase();
+
+    if (['STRING', 'BYTES'].includes(type)) {
+        const cardinality = col.stats?.cardinality || 1000;
+        return {
+            column: col.name,
+            type: 'string_embedding',
+            embedding_dim: getRecommendedEmbedDim(cardinality),
+            vocab_settings: {
+                max_size: Math.min(cardinality * 2, 100000),
+                oov_buckets: 10,
+                min_frequency: 5
+            }
+        };
+    } else if (['INTEGER', 'INT64', 'FLOAT', 'FLOAT64', 'NUMERIC'].includes(type)) {
+        return {
+            column: col.name,
+            type: 'numeric',
+            transforms: {
+                normalize: {enabled: true, range: [-1, 1]},
+                bucketize: {enabled: true, buckets: 100, embedding_dim: 32},
+                log_transform: false
+            }
+        };
+    } else if (['TIMESTAMP', 'DATETIME', 'DATE'].includes(type)) {
+        return {
+            column: col.name,
+            type: 'timestamp',
+            transforms: {
+                normalize: {enabled: true, range: [-1, 1]},
+                bucketize: {enabled: false},
+                cyclical: {
+                    annual: false,
+                    quarterly: true,
+                    monthly: true,
+                    weekly: true,
+                    daily: false
+                }
+            }
+        };
+    }
+
+    return {column: col.name, type: 'string_embedding', embedding_dim: 32};
+}
+
+function getRecommendedEmbedDim(cardinality) {
+    if (cardinality < 50) return 8;
+    if (cardinality < 500) return 16;
+    if (cardinality < 5000) return 32;
+    if (cardinality < 50000) return 64;
+    if (cardinality < 500000) return 96;
+    return 128;
+}
+
+function removeFeature(model, idx) {
+    if (model === 'buyer') {
+        configState.buyerFeatures.splice(idx, 1);
+    } else {
+        configState.productFeatures.splice(idx, 1);
+    }
+    renderStep2();
+}
+
+function removeCross(model, idx) {
+    if (model === 'buyer') {
+        configState.buyerCrosses.splice(idx, 1);
+    } else {
+        configState.productCrosses.splice(idx, 1);
+    }
+    renderStep2();
+}
+
+// =============================================================================
+// TENSOR PREVIEW
+// =============================================================================
+
+function updateTensorPreview() {
+    fetch('/api/feature-configs/calculate-dims/', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            buyer_model_features: configState.buyerFeatures,
+            product_model_features: configState.productFeatures,
+            buyer_model_crosses: configState.buyerCrosses,
+            product_model_crosses: configState.productCrosses
+        })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            renderTensorPreview('buyer', data.data.buyer_tensor_dim, data.data.buyer_tensor_breakdown);
+            renderTensorPreview('product', data.data.product_tensor_dim, data.data.product_tensor_breakdown);
+        }
+    });
+}
+
+function renderTensorPreview(model, total, breakdown) {
+    document.getElementById(`${model}TensorTotal`).textContent = `${total}D`;
+
+    const barContainer = document.getElementById(`${model}TensorBar`);
+    const breakdownContainer = document.getElementById(`${model}TensorBreakdown`);
+
+    barContainer.innerHTML = '';
+    breakdownContainer.innerHTML = '';
+
+    if (!breakdown || breakdown.length === 0) return;
+
+    const colors = model === 'buyer'
+        ? ['#3b82f6', '#60a5fa', '#93c5fd', '#bfdbfe', '#dbeafe']
+        : ['#10b981', '#34d399', '#6ee7b7', '#a7f3d0', '#d1fae5'];
+
+    breakdown.forEach((item, idx) => {
+        const pct = (item.dim / total) * 100;
+        const color = colors[idx % colors.length];
+
+        const segment = document.createElement('div');
+        segment.className = 'tensor-breakdown-segment';
+        segment.style.width = `${pct}%`;
+        segment.style.backgroundColor = color;
+        segment.title = `${item.name}: ${item.dim}D`;
+        if (pct > 10) {
+            segment.textContent = item.dim;
+        }
+        barContainer.appendChild(segment);
+
+        const tag = document.createElement('span');
+        tag.className = 'tensor-breakdown-item';
+        tag.textContent = `${item.name}: ${item.dim}D`;
+        breakdownContainer.appendChild(tag);
+    });
+}
+
+// =============================================================================
+// FEATURE CONFIGURATION MODAL
+// =============================================================================
+
+function openFeatureConfig(model, idx) {
+    editingFeatureModel = model;
+    const features = model === 'buyer' ? configState.buyerFeatures : configState.productFeatures;
+    editingFeature = {...features[idx], _idx: idx};
+
+    document.getElementById('featureModalTitle').textContent = `Configure: ${editingFeature.column}`;
+    renderFeatureConfigForm();
+    document.getElementById('featureConfigModal').classList.remove('hidden');
+}
+
+function closeFeatureModal() {
+    document.getElementById('featureConfigModal').classList.add('hidden');
+    editingFeature = null;
+    editingFeatureModel = null;
+}
+
+function renderFeatureConfigForm() {
+    const body = document.getElementById('featureModalBody');
+
+    if (editingFeature.type === 'string_embedding') {
+        body.innerHTML = `
+            <div class="modal-form-group">
+                <label class="modal-form-label">Embedding Dimension</label>
+                <select id="featureEmbedDim" class="form-select w-full">
+                    ${[8, 16, 32, 64, 96, 128].map(d =>
+                        `<option value="${d}" ${editingFeature.embedding_dim == d ? 'selected' : ''}>${d}</option>`
+                    ).join('')}
+                </select>
+                <p class="modal-form-hint">Higher dimensions capture more information but increase model size</p>
+            </div>
+            <div class="modal-form-group">
+                <label class="modal-form-label">Max Vocabulary Size</label>
+                <input type="number" id="featureVocabSize" class="form-input w-full"
+                       value="${editingFeature.vocab_settings?.max_size || 100000}">
+            </div>
+            <div class="modal-form-group">
+                <label class="modal-form-label">OOV Buckets</label>
+                <input type="number" id="featureOovBuckets" class="form-input w-full"
+                       value="${editingFeature.vocab_settings?.oov_buckets || 10}">
+            </div>
+        `;
+    } else if (editingFeature.type === 'numeric') {
+        const t = editingFeature.transforms || {};
+        body.innerHTML = `
+            <div class="transform-option">
+                <input type="checkbox" id="featureNormalize" ${t.normalize?.enabled ? 'checked' : ''}>
+                <div class="transform-option-content">
+                    <div class="transform-option-title">Normalize</div>
+                    <div class="transform-option-desc">Scale values to [-1, 1] range</div>
+                </div>
+                <span class="transform-option-dim">+1D</span>
+            </div>
+            <div class="transform-option">
+                <input type="checkbox" id="featureBucketize" ${t.bucketize?.enabled ? 'checked' : ''}>
+                <div class="transform-option-content">
+                    <div class="transform-option-title">Bucketize + Embed</div>
+                    <div class="transform-option-desc">Quantile buckets with learned embedding</div>
+                    <div class="mt-2">
+                        <label class="text-xs text-gray-500">Buckets:</label>
+                        <select id="featureBuckets" class="form-select form-select-sm ml-2" style="width: 80px;">
+                            ${[10, 50, 100, 200].map(b =>
+                                `<option value="${b}" ${(t.bucketize?.buckets || 100) == b ? 'selected' : ''}>${b}</option>`
+                            ).join('')}
+                        </select>
+                        <label class="text-xs text-gray-500 ml-3">Dim:</label>
+                        <select id="featureBucketDim" class="form-select form-select-sm ml-2" style="width: 80px;">
+                            ${[8, 16, 32, 64].map(d =>
+                                `<option value="${d}" ${(t.bucketize?.embedding_dim || 32) == d ? 'selected' : ''}>${d}</option>`
+                            ).join('')}
+                        </select>
+                    </div>
+                </div>
+                <span class="transform-option-dim">+32D</span>
+            </div>
+            <div class="transform-option">
+                <input type="checkbox" id="featureLogTransform" ${t.log_transform ? 'checked' : ''}>
+                <div class="transform-option-content">
+                    <div class="transform-option-title">Log Transform</div>
+                    <div class="transform-option-desc">Apply log(1 + x) for skewed distributions</div>
+                </div>
+            </div>
+        `;
+    } else if (editingFeature.type === 'timestamp') {
+        const t = editingFeature.transforms || {};
+        const c = t.cyclical || {};
+        body.innerHTML = `
+            <div class="transform-option">
+                <input type="checkbox" id="featureNormalize" ${t.normalize?.enabled ? 'checked' : ''}>
+                <div class="transform-option-content">
+                    <div class="transform-option-title">Normalize</div>
+                    <div class="transform-option-desc">Scale timestamp to [-1, 1] range</div>
+                </div>
+                <span class="transform-option-dim">+1D</span>
+            </div>
+            <div class="modal-form-group mt-4">
+                <label class="modal-form-label">Cyclical Features (sin/cos encoding)</label>
+                <div class="space-y-2 mt-2">
+                    <label class="flex items-center gap-2">
+                        <input type="checkbox" id="cyclicalAnnual" ${c.annual ? 'checked' : ''}>
+                        <span class="text-sm">Annual (quarter of year)</span>
+                        <span class="text-xs text-blue-600 ml-auto">+2D</span>
+                    </label>
+                    <label class="flex items-center gap-2">
+                        <input type="checkbox" id="cyclicalQuarterly" ${c.quarterly ? 'checked' : ''}>
+                        <span class="text-sm">Quarterly (month of quarter)</span>
+                        <span class="text-xs text-blue-600 ml-auto">+2D</span>
+                    </label>
+                    <label class="flex items-center gap-2">
+                        <input type="checkbox" id="cyclicalMonthly" ${c.monthly ? 'checked' : ''}>
+                        <span class="text-sm">Monthly (day of month)</span>
+                        <span class="text-xs text-blue-600 ml-auto">+2D</span>
+                    </label>
+                    <label class="flex items-center gap-2">
+                        <input type="checkbox" id="cyclicalWeekly" ${c.weekly ? 'checked' : ''}>
+                        <span class="text-sm">Weekly (day of week)</span>
+                        <span class="text-xs text-blue-600 ml-auto">+2D</span>
+                    </label>
+                    <label class="flex items-center gap-2">
+                        <input type="checkbox" id="cyclicalDaily" ${c.daily ? 'checked' : ''}>
+                        <span class="text-sm">Daily (hour of day)</span>
+                        <span class="text-xs text-blue-600 ml-auto">+2D</span>
+                    </label>
+                </div>
+            </div>
+        `;
+    }
+}
+
+function applyFeatureConfig() {
+    const features = editingFeatureModel === 'buyer' ? configState.buyerFeatures : configState.productFeatures;
+    const idx = editingFeature._idx;
+
+    if (editingFeature.type === 'string_embedding') {
+        features[idx].embedding_dim = parseInt(document.getElementById('featureEmbedDim').value);
+        features[idx].vocab_settings = {
+            max_size: parseInt(document.getElementById('featureVocabSize').value),
+            oov_buckets: parseInt(document.getElementById('featureOovBuckets').value),
+            min_frequency: 5
+        };
+    } else if (editingFeature.type === 'numeric') {
+        features[idx].transforms = {
+            normalize: {enabled: document.getElementById('featureNormalize').checked, range: [-1, 1]},
+            bucketize: {
+                enabled: document.getElementById('featureBucketize').checked,
+                buckets: parseInt(document.getElementById('featureBuckets').value),
+                embedding_dim: parseInt(document.getElementById('featureBucketDim').value)
+            },
+            log_transform: document.getElementById('featureLogTransform').checked
+        };
+    } else if (editingFeature.type === 'timestamp') {
+        features[idx].transforms = {
+            normalize: {enabled: document.getElementById('featureNormalize').checked, range: [-1, 1]},
+            bucketize: {enabled: false},
+            cyclical: {
+                annual: document.getElementById('cyclicalAnnual').checked,
+                quarterly: document.getElementById('cyclicalQuarterly').checked,
+                monthly: document.getElementById('cyclicalMonthly').checked,
+                weekly: document.getElementById('cyclicalWeekly').checked,
+                daily: document.getElementById('cyclicalDaily').checked
+            }
+        };
+    }
+
+    closeFeatureModal();
+    renderStep2();
+}
+
+// =============================================================================
+// CROSS FEATURE MODAL
+// =============================================================================
+
+function openCrossModal(model) {
+    crossFeatureModel = model;
+    const features = model === 'buyer' ? configState.buyerFeatures : configState.productFeatures;
+
+    const container = document.getElementById('crossFeatureOptions');
+    container.innerHTML = '';
+
+    features.forEach(f => {
+        const label = document.createElement('label');
+        label.className = 'flex items-center gap-2 p-2 border rounded cursor-pointer hover:bg-gray-50';
+        label.innerHTML = `
+            <input type="checkbox" class="cross-feature-checkbox" value="${f.column}" onchange="updateCrossPreview()">
+            <span class="text-sm">${f.column}</span>
+        `;
+        container.appendChild(label);
+    });
+
+    document.getElementById('crossPreview').classList.add('hidden');
+    document.getElementById('crossFeatureModal').classList.remove('hidden');
+}
+
+function closeCrossModal() {
+    document.getElementById('crossFeatureModal').classList.add('hidden');
+    crossFeatureModel = null;
+}
+
+function updateCrossPreview() {
+    const checked = Array.from(document.querySelectorAll('.cross-feature-checkbox:checked')).map(cb => cb.value);
+
+    if (checked.length >= 2) {
+        document.getElementById('crossPreviewText').textContent = checked.join(' × ');
+        document.getElementById('crossPreview').classList.remove('hidden');
+    } else {
+        document.getElementById('crossPreview').classList.add('hidden');
+    }
+}
+
+function addCrossFeature() {
+    const checked = Array.from(document.querySelectorAll('.cross-feature-checkbox:checked')).map(cb => cb.value);
+
+    if (checked.length < 2) {
+        showError('Please select at least 2 features');
+        return;
+    }
+    if (checked.length > 3) {
+        showError('Please select at most 3 features');
+        return;
+    }
+
+    const cross = {
+        features: checked,
+        hash_bucket_size: parseInt(document.getElementById('crossHashBuckets').value),
+        embedding_dim: parseInt(document.getElementById('crossEmbedDim').value)
+    };
+
+    if (crossFeatureModel === 'buyer') {
+        configState.buyerCrosses.push(cross);
+    } else {
+        configState.productCrosses.push(cross);
+    }
+
+    closeCrossModal();
+    renderStep2();
+}
+
+// =============================================================================
+// SAVE CONFIG
+// =============================================================================
+
+function saveConfig() {
+    const payload = {
+        name: configState.name,
+        description: configState.description,
+        dataset_id: configState.datasetId,
+        buyer_model_features: configState.buyerFeatures,
+        product_model_features: configState.productFeatures,
+        buyer_model_crosses: configState.buyerCrosses,
+        product_model_crosses: configState.productCrosses
+    };
+
+    const url = editingConfigId
+        ? `/api/feature-configs/${editingConfigId}/update/`
+        : `/api/models/${modelId}/feature-configs/create/`;
+    const method = editingConfigId ? 'PUT' : 'POST';
+
+    fetch(url, {
+        method: method,
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload)
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            closeWizard();
+            loadConfigs();
+            showSuccess(editingConfigId ? 'Feature config updated' : 'Feature config created');
+        } else {
+            showError(data.error || data.errors?.name || 'Failed to save');
+        }
+    })
+    .catch(err => {
+        console.error('Error saving:', err);
+        showError('Failed to save feature config');
+    });
+}
+
+// =============================================================================
+// CONFIG ACTIONS
+// =============================================================================
+
+function viewConfig(configId) {
+    fetch(`/api/feature-configs/${configId}/`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                renderViewModal(data.data);
+                document.getElementById('viewConfigModal').classList.remove('hidden');
+            }
+        });
+}
+
+function renderViewModal(config) {
+    document.getElementById('viewConfigTitle').textContent = config.name;
+
+    const body = document.getElementById('viewConfigBody');
+    body.innerHTML = `
+        <div class="mb-4">
+            <div class="flex items-center gap-2 mb-2">
+                <span class="status-badge ${config.status}">${config.status}</span>
+                <span class="text-sm text-gray-500">v${config.version}</span>
+            </div>
+            <p class="text-sm text-gray-600">${config.description || 'No description'}</p>
+            <p class="text-xs text-gray-400 mt-2">Dataset: ${config.dataset_name}</p>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4 mb-4">
+            <div class="p-4 bg-blue-50 rounded-lg">
+                <h4 class="font-semibold text-blue-800 mb-2">BuyerModel: ${config.buyer_tensor_dim || 0}D</h4>
+                <div class="space-y-1">
+                    ${(config.buyer_model_features || []).map(f => `
+                        <div class="text-sm text-blue-700">${f.column} (${f.type})</div>
+                    `).join('')}
+                    ${(config.buyer_model_crosses || []).map(c => `
+                        <div class="text-sm text-blue-600 italic">${c.features.join(' × ')}</div>
+                    `).join('')}
+                </div>
+            </div>
+            <div class="p-4 bg-green-50 rounded-lg">
+                <h4 class="font-semibold text-green-800 mb-2">ProductModel: ${config.product_tensor_dim || 0}D</h4>
+                <div class="space-y-1">
+                    ${(config.product_model_features || []).map(f => `
+                        <div class="text-sm text-green-700">${f.column} (${f.type})</div>
+                    `).join('')}
+                    ${(config.product_model_crosses || []).map(c => `
+                        <div class="text-sm text-green-600 italic">${c.features.join(' × ')}</div>
+                    `).join('')}
+                </div>
+            </div>
+        </div>
+
+        <div class="text-xs text-gray-400">
+            Created ${formatTimeAgo(config.created_at)} by ${config.created_by || 'Unknown'}
+        </div>
+    `;
+}
+
+function closeViewModal() {
+    document.getElementById('viewConfigModal').classList.add('hidden');
+}
+
+function editConfig(configId) {
+    openWizard(configId);
+}
+
+function cloneConfig(configId) {
+    const config = allConfigs.find(c => c.id === configId);
+    const newName = prompt('Enter name for cloned config:', `${config.name} (Copy)`);
+
+    if (newName) {
+        fetch(`/api/feature-configs/${configId}/clone/`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({name: newName})
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                loadConfigs();
+                showSuccess('Config cloned successfully');
+            } else {
+                showError(data.error || 'Failed to clone');
+            }
+        });
+    }
+}
+
+function deleteConfig(configId, configName) {
+    if (confirm(`Are you sure you want to delete "${configName}"?`)) {
+        fetch(`/api/feature-configs/${configId}/delete/`, {
+            method: 'DELETE'
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                loadConfigs();
+                showSuccess('Config deleted');
+            } else {
+                showError(data.error || 'Failed to delete');
+            }
+        });
+    }
+}
+
+// =============================================================================
+// UTILITIES
+// =============================================================================
+
+function filterConfigs() {
+    loadConfigs();
+}
+
+function debounceSearch() {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(() => {
+        renderConfigs();
+    }, 300);
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function formatTimeAgo(isoString) {
+    if (!isoString) return 'Unknown';
+    const date = new Date(isoString);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return 'just now';
+    if (diffMins < 60) return `${diffMins} min ago`;
+    if (diffHours < 24) return `${diffHours} hours ago`;
+    if (diffDays < 7) return `${diffDays} days ago`;
+    return date.toLocaleDateString();
+}
+
+function showError(message) {
+    alert('Error: ' + message);
+}
+
+function showSuccess(message) {
+    // Could use a toast notification here
+    console.log('Success:', message);
+}
+</script>
 {% endblock %}

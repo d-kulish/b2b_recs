@@ -1178,3 +1178,245 @@ class DatasetVersion(models.Model):
             ).order_by('-version_number').first()
             self.version_number = (last_version.version_number + 1) if last_version else 1
         super().save(*args, **kwargs)
+
+
+# =============================================================================
+# FEATURE CONFIG MODELS (Modeling Domain)
+# =============================================================================
+
+class FeatureConfig(models.Model):
+    """
+    Defines HOW data is transformed for training TFRS two-tower models.
+
+    A Feature Config specifies:
+    - Which columns go to BuyerModel (Query Tower) vs ProductModel (Candidate Tower)
+    - Transformation logic for each column (embeddings, buckets, cyclical)
+    - Cross features within each model
+    - Generates the TFX Transform preprocessing_fn
+
+    Multiple Feature Configs can exist per Dataset for experimentation.
+    """
+
+    # Basic info
+    name = models.CharField(
+        max_length=255,
+        help_text="Feature config name (e.g., 'Rich Features v2')"
+    )
+    description = models.TextField(
+        blank=True,
+        help_text="Optional description of this feature configuration"
+    )
+    dataset = models.ForeignKey(
+        Dataset,
+        on_delete=models.CASCADE,
+        related_name='feature_configs',
+        help_text="The dataset this feature config is based on"
+    )
+
+    # Status
+    STATUS_CHOICES = [
+        ('draft', 'Draft'),
+        ('active', 'Active'),
+        ('archived', 'Archived'),
+    ]
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='draft',
+        help_text="Feature config status"
+    )
+
+    # Version tracking
+    version = models.PositiveIntegerField(
+        default=1,
+        help_text="Current version number"
+    )
+
+    # BuyerModel (Query Tower) features
+    # JSON array of feature configurations
+    # Example: [
+    #   {"column": "customer_id", "type": "string_embedding", "embedding_dim": 64,
+    #    "vocab_settings": {"max_size": 100000, "oov_buckets": 10, "min_frequency": 5}},
+    #   {"column": "revenue", "type": "numeric", "transforms": {
+    #       "normalize": {"enabled": true, "range": [-1, 1]},
+    #       "bucketize": {"enabled": true, "buckets": 100, "embedding_dim": 32}
+    #   }}
+    # ]
+    buyer_model_features = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Features assigned to BuyerModel (Query Tower)"
+    )
+
+    # ProductModel (Candidate Tower) features
+    product_model_features = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Features assigned to ProductModel (Candidate Tower)"
+    )
+
+    # Cross features for BuyerModel
+    # Example: [
+    #   {"features": ["customer_id", "city"], "hash_bucket_size": 5000, "embedding_dim": 16}
+    # ]
+    buyer_model_crosses = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Cross features for BuyerModel"
+    )
+
+    # Cross features for ProductModel
+    product_model_crosses = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Cross features for ProductModel"
+    )
+
+    # Cached tensor dimensions (for quick display)
+    buyer_tensor_dim = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Total tensor dimensions for BuyerModel"
+    )
+    product_tensor_dim = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Total tensor dimensions for ProductModel"
+    )
+
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    # Created by
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_feature_configs'
+    )
+
+    class Meta:
+        ordering = ['-updated_at']
+        unique_together = ['dataset', 'name']
+        verbose_name = 'Feature Config'
+        verbose_name_plural = 'Feature Configs'
+
+    def __str__(self):
+        return f"{self.name} v{self.version}"
+
+    def calculate_tensor_dims(self):
+        """Calculate and cache tensor dimensions for both models."""
+        self.buyer_tensor_dim = self._calc_model_dim(
+            self.buyer_model_features, self.buyer_model_crosses
+        )
+        self.product_tensor_dim = self._calc_model_dim(
+            self.product_model_features, self.product_model_crosses
+        )
+
+    def _calc_model_dim(self, features, crosses):
+        """Calculate total dimension for a model."""
+        total = 0
+        for f in features:
+            total += self._calc_feature_dim(f)
+        for c in crosses:
+            total += c.get('embedding_dim', 16)
+        return total
+
+    def _calc_feature_dim(self, feature):
+        """Calculate dimension for a single feature."""
+        dim = 0
+        transforms = feature.get('transforms', {})
+
+        # String embedding
+        if feature.get('type') == 'string_embedding':
+            dim += feature.get('embedding_dim', 32)
+
+        # Numeric transforms
+        if transforms.get('normalize', {}).get('enabled'):
+            dim += 1
+        if transforms.get('bucketize', {}).get('enabled'):
+            dim += transforms['bucketize'].get('embedding_dim', 32)
+
+        # Cyclical features (2D each for sin/cos)
+        cyclical = transforms.get('cyclical', {})
+        for cycle in ['annual', 'quarterly', 'monthly', 'weekly', 'daily']:
+            if cyclical.get(cycle):
+                dim += 2
+
+        return dim
+
+    def get_columns_in_both_models(self):
+        """Return columns that appear in both models (data leakage warning)."""
+        buyer_cols = {f['column'] for f in self.buyer_model_features}
+        product_cols = {f['column'] for f in self.product_model_features}
+        return list(buyer_cols & product_cols)
+
+    def get_config_hash(self):
+        """Generate hash of configuration for duplicate detection."""
+        import hashlib
+        import json
+        config = {
+            'buyer_model_features': self.buyer_model_features,
+            'product_model_features': self.product_model_features,
+            'buyer_model_crosses': self.buyer_model_crosses,
+            'product_model_crosses': self.product_model_crosses,
+        }
+        return hashlib.md5(json.dumps(config, sort_keys=True).encode()).hexdigest()
+
+
+class FeatureConfigVersion(models.Model):
+    """
+    Stores historical versions of a FeatureConfig for audit trail.
+    Created automatically when FeatureConfig is saved with changes.
+    """
+
+    feature_config = models.ForeignKey(
+        FeatureConfig,
+        on_delete=models.CASCADE,
+        related_name='versions',
+        help_text="The feature config this version belongs to"
+    )
+    version = models.PositiveIntegerField(
+        help_text="Version number"
+    )
+
+    # Snapshot of config at this version
+    buyer_model_features = models.JSONField(
+        help_text="Snapshot of buyer model features"
+    )
+    product_model_features = models.JSONField(
+        help_text="Snapshot of product model features"
+    )
+    buyer_model_crosses = models.JSONField(
+        help_text="Snapshot of buyer model crosses"
+    )
+    product_model_crosses = models.JSONField(
+        help_text="Snapshot of product model crosses"
+    )
+    buyer_tensor_dim = models.PositiveIntegerField(
+        help_text="Buyer tensor dimensions at this version"
+    )
+    product_tensor_dim = models.PositiveIntegerField(
+        help_text="Product tensor dimensions at this version"
+    )
+
+    # Metadata
+    created_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_feature_config_versions'
+    )
+
+    class Meta:
+        ordering = ['-version']
+        unique_together = ['feature_config', 'version']
+        verbose_name = 'Feature Config Version'
+        verbose_name_plural = 'Feature Config Versions'
+
+    def __str__(self):
+        return f"{self.feature_config.name} v{self.version}"

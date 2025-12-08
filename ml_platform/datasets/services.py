@@ -766,12 +766,13 @@ class BigQueryService:
                 select_parts.append('NULL as unique_products')
 
             # Wrap in analysis query
+            select_clause = ',\n                '.join(select_parts)
             analysis_query = f"""
             WITH dataset AS (
                 {query}
             )
             SELECT
-                {',\n                '.join(select_parts)}
+                {select_clause}
             FROM dataset
             """
 
@@ -857,34 +858,32 @@ class BigQueryService:
 
         Note: Train/eval split is now handled by the Training domain (TFX ExampleGen).
         This method generates the base query without split logic.
+
+        Supports filters from Step 4 of the Dataset Wizard:
+        - history: Date filter with rolling window or fixed start date
+        - product_filter: top_revenue, category_filters, numeric_filters
+        - customer_filter: top_revenue, aggregation_filters, category_filters, numeric_filters
+
+        IMPORTANT: Date filter is applied FIRST via a filtered_data CTE, so that
+        top products/customers are calculated from the date-filtered data, not all history.
         """
         try:
             selected_columns = dataset.selected_columns or {}
             column_mapping = dataset.column_mapping or {}
             filters = dataset.filters or {}
+            primary_table = dataset.primary_table
 
             # If no columns selected, select all from primary table
             if not selected_columns:
-                schema = self.get_table_schema(dataset.primary_table)
+                schema = self.get_table_schema(primary_table)
                 selected_columns = {
-                    dataset.primary_table: [col['name'] for col in schema]
+                    primary_table: [col['name'] for col in schema]
                 }
 
-            # Helper to extract column name from potential "table.column" format
-            def extract_col(value):
-                if not value:
-                    return None
-                if '.' in value:
-                    return value.split('.')[-1]
-                return value
+            # Get table alias (last part of table name)
+            primary_alias = primary_table.split('.')[-1]
 
-            # Get column references (handle table.column format from legacy data)
-            primary_alias = dataset.primary_table.split('.')[-1]
-            user_col = extract_col(column_mapping.get('user_id'))
-            product_col = extract_col(column_mapping.get('product_id'))
-            revenue_col = extract_col(column_mapping.get('revenue'))
-
-            # Build SELECT clause
+            # Build SELECT clause with full table.column references
             select_cols = []
             reverse_mapping = {v: k for k, v in column_mapping.items()}
 
@@ -893,77 +892,193 @@ class BigQueryService:
                 for col in columns:
                     if for_analysis and col in reverse_mapping:
                         mapped_name = reverse_mapping[col]
-                        select_cols.append(f"`{table_alias}`.`{col}` AS `{mapped_name}`")
+                        select_cols.append(f"{table_alias}.{col} AS {mapped_name}")
                     else:
-                        select_cols.append(f"`{table_alias}`.`{col}`")
+                        select_cols.append(f"{table_alias}.{col}")
 
             if not select_cols:
                 select_cols = ['*']
 
-            # Build FROM clause
-            from_clause = f"`{self.project_id}.{dataset.primary_table}` AS `{primary_alias}`"
-
-            # Build JOIN clauses
-            join_clauses = []
-            for secondary_table in (dataset.secondary_tables or []):
-                join_config = dataset.join_config.get(secondary_table, {})
-                join_key = join_config.get('join_key', 'id')
-                join_type = join_config.get('join_type', 'LEFT').upper()
-                secondary_col = join_config.get('secondary_column', join_key)
-
-                secondary_alias = secondary_table.split('.')[-1]
-                join_clauses.append(
-                    f"{join_type} JOIN `{self.project_id}.{secondary_table}` AS `{secondary_alias}` "
-                    f"ON `{primary_alias}`.`{join_key}` = `{secondary_alias}`.`{secondary_col}`"
-                )
-
-            # Build WHERE clauses
-            where_clauses = []
-
-            # Check if we need CTEs for complex filters
+            # =========================================================
+            # BUILD CTEs - Date filter FIRST, then product/customer filters
+            # =========================================================
             ctes = []
-            product_filter = filters.get('product_filter', {})
-            customer_filter = filters.get('customer_filter', {})
+            final_where_clauses = []
 
-            # Product filter (top N% by revenue) - requires product and revenue columns
+            # 1. Check if we have a date filter - this becomes the base filtered_data CTE
+            history_filter = filters.get('history')
+            has_date_filter = False
+            date_filter_clause = None
+
+            if history_filter:
+                date_filter_clause = self._generate_date_filter(history_filter, primary_table)
+                if date_filter_clause:
+                    has_date_filter = True
+
+            # 2. Build the filtered_data CTE if we have a date filter
+            # This CTE includes the primary table with JOINs, filtered by date
+            if has_date_filter:
+                # Build SELECT clause for filtered_data with unique aliases to avoid ambiguity
+                filtered_select_cols = []
+                seen_cols = set()
+                for table, columns in selected_columns.items():
+                    table_alias = table.split('.')[-1]
+                    for col in columns:
+                        # Use table_col as alias if column name is duplicated
+                        if col in seen_cols:
+                            filtered_select_cols.append(f"{table_alias}.{col} AS {table_alias}_{col}")
+                        else:
+                            filtered_select_cols.append(f"{table_alias}.{col}")
+                            seen_cols.add(col)
+
+                if not filtered_select_cols:
+                    filtered_select_cols = [f"{primary_alias}.*"]
+
+                filtered_select_str = ',\n        '.join(filtered_select_cols)
+
+                # Build JOIN clauses for the filtered_data CTE
+                filtered_data_joins = []
+                for secondary_table in (dataset.secondary_tables or []):
+                    join_config = dataset.join_config.get(secondary_table, {})
+                    join_key = join_config.get('join_key', 'id')
+                    join_type = join_config.get('join_type', 'LEFT').upper()
+                    secondary_col = join_config.get('secondary_column', join_key)
+                    secondary_alias = secondary_table.split('.')[-1]
+
+                    filtered_data_joins.append(
+                        f"    {join_type} JOIN `{self.project_id}.{secondary_table}` AS {secondary_alias} "
+                        f"ON {primary_alias}.{join_key} = {secondary_alias}.{secondary_col}"
+                    )
+
+                join_clause_str = '\n'.join(filtered_data_joins) if filtered_data_joins else ''
+
+                filtered_data_cte = f"""
+    SELECT
+        {filtered_select_str}
+    FROM `{self.project_id}.{primary_table}` AS {primary_alias}
+{join_clause_str}
+    WHERE {date_filter_clause}"""
+                ctes.append(('filtered_data', filtered_data_cte))
+
+            # 3. Product filters - use filtered_data if available
+            product_filter = filters.get('product_filter', {})
+            if product_filter:
+                source_table = 'filtered_data' if has_date_filter else f'`{self.project_id}.{primary_table}`'
+                product_ctes, product_wheres = self._generate_product_filter_clauses_v2(
+                    product_filter, source_table, primary_table
+                )
+                ctes.extend(product_ctes)
+                final_where_clauses.extend(product_wheres)
+
+            # 4. Customer filters - use filtered_data if available
+            customer_filter = filters.get('customer_filter', {})
+            if customer_filter:
+                source_table = 'filtered_data' if has_date_filter else f'`{self.project_id}.{primary_table}`'
+                customer_ctes, customer_wheres = self._generate_customer_filter_clauses_v2(
+                    customer_filter, source_table, primary_table
+                )
+                ctes.extend(customer_ctes)
+                final_where_clauses.extend(customer_wheres)
+
+            # =========================================================
+            # LEGACY FILTER SUPPORT (backward compatibility)
+            # =========================================================
+            def extract_col(value):
+                if not value:
+                    return None
+                if '.' in value:
+                    return value.split('.')[-1]
+                return value
+
+            user_col = extract_col(column_mapping.get('user_id'))
+            product_col = extract_col(column_mapping.get('product_id'))
+            revenue_col = extract_col(column_mapping.get('revenue'))
+
+            # Legacy product filter (type == 'top_revenue_percent')
             if product_filter.get('type') == 'top_revenue_percent' and product_col and revenue_col:
                 percent = product_filter.get('value', 80)
-                cte = self._generate_top_products_cte(
-                    primary_alias, product_col, revenue_col, percent
+                source = 'filtered_data' if has_date_filter else f'`{self.project_id}.{self.dataset_name}.{primary_alias}`'
+                cte = self._generate_top_products_cte_legacy(
+                    source, product_col, revenue_col, percent
                 )
-                ctes.append(('top_products', cte))
-                where_clauses.append(
-                    f"`{primary_alias}`.`{product_col}` IN (SELECT {product_col} FROM top_products)"
+                ctes.append(('legacy_top_products', cte))
+                final_where_clauses.append(
+                    f"{primary_alias}.{product_col} IN (SELECT {product_col} FROM legacy_top_products)"
                 )
 
-            # Customer filter (min transactions) - requires user column
+            # Legacy customer filter (type == 'min_transactions')
             if customer_filter.get('type') == 'min_transactions' and user_col:
                 min_count = customer_filter.get('value', 2)
-                cte = self._generate_active_users_cte(
-                    primary_alias, user_col, min_count
+                source = 'filtered_data' if has_date_filter else f'`{self.project_id}.{self.dataset_name}.{primary_alias}`'
+                cte = self._generate_active_users_cte_legacy(
+                    source, user_col, min_count
                 )
-                ctes.append(('active_users', cte))
-                where_clauses.append(
-                    f"`{primary_alias}`.`{user_col}` IN (SELECT {user_col} FROM active_users)"
+                ctes.append(('legacy_active_users', cte))
+                final_where_clauses.append(
+                    f"{primary_alias}.{user_col} IN (SELECT {user_col} FROM legacy_active_users)"
                 )
 
-            # Build final query
+            # =========================================================
+            # BUILD FINAL QUERY
+            # =========================================================
             query_parts = []
 
             # Add CTEs if needed
             if ctes:
                 cte_strs = [f"{name} AS (\n{cte}\n)" for name, cte in ctes]
-                query_parts.append(f"WITH {',\n'.join(cte_strs)}")
+                cte_joined = ',\n'.join(cte_strs)
+                query_parts.append(f"WITH {cte_joined}")
 
-            # Main SELECT
-            query_parts.append(f"SELECT\n  {',\n  '.join(select_cols)}")
-            query_parts.append(f"FROM {from_clause}")
+            # Main SELECT - when using filtered_data, use plain column names (with aliases for duplicates)
+            if has_date_filter:
+                # Build SELECT with same aliasing used in filtered_data CTE
+                plain_select_cols = []
+                seen_cols = set()
+                for table, columns in selected_columns.items():
+                    table_alias = table.split('.')[-1]
+                    for col in columns:
+                        if col in seen_cols:
+                            # Use the aliased name from filtered_data
+                            plain_select_cols.append(f"{table_alias}_{col}")
+                        else:
+                            plain_select_cols.append(col)
+                            seen_cols.add(col)
+                if not plain_select_cols:
+                    plain_select_cols = ['*']
+                select_joined = ',\n  '.join(plain_select_cols)
+            else:
+                select_joined = ',\n  '.join(select_cols)
 
-            if join_clauses:
-                query_parts.append("\n".join(join_clauses))
+            query_parts.append(f"SELECT\n  {select_joined}")
 
-            if where_clauses:
-                query_parts.append(f"WHERE {' AND '.join(where_clauses)}")
+            # FROM clause - use filtered_data if we have date filter, otherwise original tables
+            if has_date_filter:
+                query_parts.append("FROM filtered_data")
+            else:
+                from_clause = f"`{self.project_id}.{primary_table}` AS {primary_alias}"
+                query_parts.append(f"FROM {from_clause}")
+
+                # Add JOINs only if not using filtered_data (which already has joins)
+                join_clauses = []
+                for secondary_table in (dataset.secondary_tables or []):
+                    join_config = dataset.join_config.get(secondary_table, {})
+                    join_key = join_config.get('join_key', 'id')
+                    join_type = join_config.get('join_type', 'LEFT').upper()
+                    secondary_col = join_config.get('secondary_column', join_key)
+                    secondary_alias = secondary_table.split('.')[-1]
+
+                    join_clauses.append(
+                        f"{join_type} JOIN `{self.project_id}.{secondary_table}` AS {secondary_alias} "
+                        f"ON {primary_alias}.{join_key} = {secondary_alias}.{secondary_col}"
+                    )
+
+                if join_clauses:
+                    query_parts.append("\n".join(join_clauses))
+
+            # WHERE clause for product/customer filters
+            if final_where_clauses:
+                where_joined = ' AND\n  '.join(final_where_clauses)
+                query_parts.append(f"WHERE\n  {where_joined}")
 
             return "\n".join(query_parts)
 
@@ -1005,10 +1120,893 @@ class BigQueryService:
     GROUP BY `{user_col}`
     HAVING COUNT(*) >= {min_count}"""
 
+    # =========================================================================
+    # NEW FILTER GENERATION METHODS (Step 4 filters)
+    # =========================================================================
+
+    def _generate_date_filter(self, history_config, primary_table):
+        """
+        Generate WHERE clause for date/history filter.
+
+        Args:
+            history_config: Dict with timestamp_column, rolling_days, start_date
+            primary_table: Primary table name for reference
+
+        Returns:
+            SQL WHERE clause string or None
+
+        Note: Rolling window uses the MAX date in the dataset as reference point,
+        not the current date. This ensures consistent results and works with
+        historical data.
+        """
+        if not history_config:
+            return None
+
+        timestamp_col = history_config.get('timestamp_column')
+        if not timestamp_col:
+            return None
+
+        rolling_days = history_config.get('rolling_days')
+        start_date = history_config.get('start_date')
+
+        # Extract just the column name for the subquery
+        col_name = timestamp_col.split('.')[-1] if '.' in timestamp_col else timestamp_col
+
+        # Use rolling window relative to MAX date in the dataset
+        if rolling_days:
+            return f"{timestamp_col} >= TIMESTAMP_SUB((SELECT MAX({col_name}) FROM `{self.project_id}.{primary_table}`), INTERVAL {rolling_days} DAY)"
+
+        # Use fixed start date - convert to timestamp for comparison
+        if start_date:
+            return f"{timestamp_col} >= TIMESTAMP('{start_date}')"
+
+        return None
+
+    def _generate_product_filter_clauses(self, product_filter, primary_table):
+        """
+        Generate CTEs and WHERE clauses for product filters.
+
+        Args:
+            product_filter: Dict with top_revenue, aggregation_filters, category_filters, numeric_filters
+            primary_table: Primary table name
+
+        Returns:
+            Tuple of (list of CTE tuples, list of WHERE clauses)
+        """
+        ctes = []
+        where_clauses = []
+
+        if not product_filter:
+            return ctes, where_clauses
+
+        # Top revenue filter (top N% products by revenue)
+        top_revenue = product_filter.get('top_revenue', {})
+        if top_revenue.get('enabled'):
+            product_col = top_revenue.get('product_column')
+            revenue_col = top_revenue.get('revenue_column')
+            threshold = top_revenue.get('threshold_percent', 80)
+
+            if product_col and revenue_col:
+                cte = self._generate_top_products_cte_v2(
+                    primary_table, product_col, revenue_col, threshold
+                )
+                ctes.append(('top_products', cte))
+                where_clauses.append(
+                    f"{product_col} IN (SELECT product_id FROM top_products)"
+                )
+
+        # Aggregation filters (transaction count, total revenue per product)
+        aggregation_filters = product_filter.get('aggregation_filters', [])
+        for af in aggregation_filters:
+            agg_type = af.get('type')
+            product_col = af.get('product_column')
+            amount_col = af.get('amount_column')
+            filter_type = af.get('filter_type', 'greater_than')
+            value = af.get('value')
+            min_val = af.get('min')
+            max_val = af.get('max')
+
+            if not product_col:
+                continue
+
+            cte_name = f"filtered_products_{len(ctes)}"
+            cte = self._generate_product_aggregation_cte(
+                primary_table, product_col, amount_col, agg_type, filter_type, value, min_val, max_val
+            )
+            if cte:
+                ctes.append((cte_name, cte))
+                where_clauses.append(
+                    f"{product_col} IN (SELECT product_id FROM {cte_name})"
+                )
+
+        # Category filters (include/exclude specific values)
+        category_filters = product_filter.get('category_filters', [])
+        for cf in category_filters:
+            column = cf.get('column')
+            mode = cf.get('mode', 'include')
+            values = cf.get('values', [])
+
+            if column and values:
+                # Escape values for SQL
+                escaped_values = [f"'{v}'" for v in values]
+                values_str = ', '.join(escaped_values)
+
+                if mode == 'include':
+                    where_clauses.append(f"{column} IN ({values_str})")
+                else:  # exclude
+                    where_clauses.append(f"{column} NOT IN ({values_str})")
+
+        # Numeric filters (range, greater_than, less_than, equals)
+        numeric_filters = product_filter.get('numeric_filters', [])
+        for nf in numeric_filters:
+            column = nf.get('column')
+            filter_type = nf.get('type', 'range')
+            min_val = nf.get('min')
+            max_val = nf.get('max')
+            value = nf.get('value')
+            include_nulls = nf.get('include_nulls', False)
+
+            if not column:
+                continue
+
+            condition = None
+            if filter_type == 'range' and min_val is not None and max_val is not None:
+                condition = f"{column} BETWEEN {min_val} AND {max_val}"
+            elif filter_type == 'greater_than' and value is not None:
+                condition = f"{column} > {value}"
+            elif filter_type == 'less_than' and value is not None:
+                condition = f"{column} < {value}"
+            elif filter_type == 'equals' and value is not None:
+                condition = f"{column} = {value}"
+            elif min_val is not None:
+                condition = f"{column} >= {min_val}"
+            elif max_val is not None:
+                condition = f"{column} <= {max_val}"
+
+            if condition:
+                if include_nulls:
+                    where_clauses.append(f"({condition} OR {column} IS NULL)")
+                else:
+                    where_clauses.append(condition)
+
+        return ctes, where_clauses
+
+    def _generate_top_products_cte_v2(self, primary_table, product_col, revenue_col, percent):
+        """
+        Generate CTE for top N% products by revenue (new format with full column names).
+
+        Args:
+            primary_table: Full table name (e.g., 'raw_data.transactions')
+            product_col: Full column reference (e.g., 'transactions.product_id')
+            revenue_col: Full column reference (e.g., 'transactions.amount')
+            percent: Percentage threshold (e.g., 80 for top 80%)
+
+        Returns:
+            SQL CTE query string
+        """
+        # Extract just the column names (without table prefix) for the CTE query
+        product_col_name = product_col.split('.')[-1] if '.' in product_col else product_col
+        revenue_col_name = revenue_col.split('.')[-1] if '.' in revenue_col else revenue_col
+
+        return f"""
+    SELECT {product_col_name} as product_id
+    FROM (
+        SELECT
+            {product_col_name} as product_id,
+            SUM({revenue_col_name}) as total_revenue,
+            SUM(SUM({revenue_col_name})) OVER () as grand_total,
+            SUM(SUM({revenue_col_name})) OVER (ORDER BY SUM({revenue_col_name}) DESC) as running_total
+        FROM `{self.project_id}.{primary_table}`
+        GROUP BY {product_col_name}
+    )
+    WHERE running_total <= grand_total * {percent / 100}
+       OR running_total - total_revenue < grand_total * {percent / 100}"""
+
+    def _generate_product_aggregation_cte(self, primary_table, product_col, amount_col,
+                                          agg_type, filter_type, value, min_val, max_val):
+        """
+        Generate CTE for product aggregation filters (transaction count, total revenue, etc.).
+
+        Args:
+            primary_table: Full table name
+            product_col: Product column reference
+            amount_col: Amount/revenue column reference (optional for count)
+            agg_type: 'transaction_count' or 'total_revenue'
+            filter_type: 'greater_than', 'less_than', 'between', 'equals'
+            value: Single value for comparison
+            min_val: Min value for range
+            max_val: Max value for range
+
+        Returns:
+            SQL CTE query string or None
+        """
+        product_col_name = product_col.split('.')[-1] if '.' in product_col else product_col
+
+        # Determine aggregation function
+        if agg_type == 'transaction_count':
+            agg_expr = 'COUNT(*)'
+        elif agg_type == 'total_revenue' and amount_col:
+            amount_col_name = amount_col.split('.')[-1] if '.' in amount_col else amount_col
+            agg_expr = f'SUM({amount_col_name})'
+        else:
+            return None
+
+        # Build HAVING condition
+        if filter_type == 'greater_than' and value is not None:
+            having = f"HAVING {agg_expr} > {value}"
+        elif filter_type == 'less_than' and value is not None:
+            having = f"HAVING {agg_expr} < {value}"
+        elif filter_type == 'equals' and value is not None:
+            having = f"HAVING {agg_expr} = {value}"
+        elif filter_type == 'between' and min_val is not None and max_val is not None:
+            having = f"HAVING {agg_expr} BETWEEN {min_val} AND {max_val}"
+        elif filter_type == 'range' and min_val is not None and max_val is not None:
+            having = f"HAVING {agg_expr} BETWEEN {min_val} AND {max_val}"
+        elif min_val is not None:
+            having = f"HAVING {agg_expr} >= {min_val}"
+        elif max_val is not None:
+            having = f"HAVING {agg_expr} <= {max_val}"
+        else:
+            return None
+
+        return f"""
+    SELECT {product_col_name} as product_id
+    FROM `{self.project_id}.{primary_table}`
+    GROUP BY {product_col_name}
+    {having}"""
+
+    def _generate_customer_filter_clauses(self, customer_filter, primary_table):
+        """
+        Generate CTEs and WHERE clauses for customer filters.
+
+        Args:
+            customer_filter: Dict with top_revenue, aggregation_filters, category_filters, numeric_filters
+            primary_table: Primary table name
+
+        Returns:
+            Tuple of (list of CTE tuples, list of WHERE clauses)
+        """
+        ctes = []
+        where_clauses = []
+
+        if not customer_filter:
+            return ctes, where_clauses
+
+        # Top revenue filter (top N% customers by revenue)
+        top_revenue = customer_filter.get('top_revenue', {})
+        if top_revenue.get('enabled'):
+            customer_col = top_revenue.get('customer_column')
+            revenue_col = top_revenue.get('revenue_column')
+            percent = top_revenue.get('percent', 80)
+
+            if customer_col and revenue_col:
+                cte = self._generate_top_customers_cte(
+                    primary_table, customer_col, revenue_col, percent
+                )
+                ctes.append(('top_customers', cte))
+                where_clauses.append(
+                    f"{customer_col} IN (SELECT customer_id FROM top_customers)"
+                )
+
+        # Aggregation filters (min transactions, min/max spend, etc.)
+        aggregation_filters = customer_filter.get('aggregation_filters', [])
+        for af in aggregation_filters:
+            agg_type = af.get('type')
+            customer_col = af.get('customer_column')
+            amount_col = af.get('amount_column')
+            filter_type = af.get('filter_type', 'greater_than')
+            value = af.get('value')
+            min_val = af.get('min')
+            max_val = af.get('max')
+
+            if not customer_col:
+                continue
+
+            cte_name = f"filtered_customers_{len(ctes)}"
+            cte = self._generate_customer_aggregation_cte(
+                primary_table, customer_col, amount_col, agg_type, filter_type, value, min_val, max_val
+            )
+            if cte:
+                ctes.append((cte_name, cte))
+                where_clauses.append(
+                    f"{customer_col} IN (SELECT customer_id FROM {cte_name})"
+                )
+
+        # Category filters
+        category_filters = customer_filter.get('category_filters', [])
+        for cf in category_filters:
+            column = cf.get('column')
+            mode = cf.get('mode', 'include')
+            values = cf.get('values', [])
+
+            if column and values:
+                escaped_values = [f"'{v}'" for v in values]
+                values_str = ', '.join(escaped_values)
+
+                if mode == 'include':
+                    where_clauses.append(f"{column} IN ({values_str})")
+                else:
+                    where_clauses.append(f"{column} NOT IN ({values_str})")
+
+        # Numeric filters
+        numeric_filters = customer_filter.get('numeric_filters', [])
+        for nf in numeric_filters:
+            column = nf.get('column')
+            filter_type = nf.get('type', 'range')
+            min_val = nf.get('min')
+            max_val = nf.get('max')
+            value = nf.get('value')
+            include_nulls = nf.get('include_nulls', False)
+
+            if not column:
+                continue
+
+            condition = None
+            if filter_type == 'range' and min_val is not None and max_val is not None:
+                condition = f"{column} BETWEEN {min_val} AND {max_val}"
+            elif filter_type == 'greater_than' and value is not None:
+                condition = f"{column} > {value}"
+            elif filter_type == 'less_than' and value is not None:
+                condition = f"{column} < {value}"
+            elif filter_type == 'equals' and value is not None:
+                condition = f"{column} = {value}"
+            elif min_val is not None:
+                condition = f"{column} >= {min_val}"
+            elif max_val is not None:
+                condition = f"{column} <= {max_val}"
+
+            if condition:
+                if include_nulls:
+                    where_clauses.append(f"({condition} OR {column} IS NULL)")
+                else:
+                    where_clauses.append(condition)
+
+        return ctes, where_clauses
+
+    def _generate_top_customers_cte(self, primary_table, customer_col, revenue_col, percent):
+        """
+        Generate CTE for top N% customers by revenue.
+
+        Args:
+            primary_table: Full table name
+            customer_col: Full column reference for customer ID (e.g., 'customers.customer_id')
+            revenue_col: Full column reference for revenue (e.g., 'transactions.total_amount')
+            percent: Percentage threshold
+
+        Returns:
+            SQL CTE query string
+
+        Note: The CTE queries only the primary table. If customer_col references a different table
+        (e.g., 'customers.customer_id'), we use just the column name since customer_id exists
+        in the transactions table as a foreign key.
+        """
+        # Extract just the column names (without table prefix) for the CTE query
+        customer_col_name = customer_col.split('.')[-1] if '.' in customer_col else customer_col
+        revenue_col_name = revenue_col.split('.')[-1] if '.' in revenue_col else revenue_col
+
+        return f"""
+    SELECT {customer_col_name} as customer_id
+    FROM (
+        SELECT
+            {customer_col_name} as customer_id,
+            SUM({revenue_col_name}) as total_revenue,
+            SUM(SUM({revenue_col_name})) OVER () as grand_total,
+            SUM(SUM({revenue_col_name})) OVER (ORDER BY SUM({revenue_col_name}) DESC) as running_total
+        FROM `{self.project_id}.{primary_table}`
+        GROUP BY {customer_col_name}
+    )
+    WHERE running_total <= grand_total * {percent / 100}
+       OR running_total - total_revenue < grand_total * {percent / 100}"""
+
+    def _generate_customer_aggregation_cte(self, primary_table, customer_col, amount_col,
+                                            agg_type, filter_type, value, min_val, max_val):
+        """
+        Generate CTE for customer aggregation filters (transaction count, total spend, etc.).
+
+        Args:
+            primary_table: Full table name
+            customer_col: Customer column reference
+            amount_col: Amount/revenue column reference (optional for count)
+            agg_type: 'transaction_count', 'total_spend', 'avg_spend'
+            filter_type: 'greater_than', 'less_than', 'between', 'equals'
+            value: Single value for comparison
+            min_val: Min value for range
+            max_val: Max value for range
+
+        Returns:
+            SQL CTE query string or None
+        """
+        customer_col_name = customer_col.split('.')[-1] if '.' in customer_col else customer_col
+
+        # Determine aggregation function
+        if agg_type == 'transaction_count':
+            agg_expr = 'COUNT(*)'
+        elif agg_type == 'total_spend' and amount_col:
+            agg_expr = f'SUM({amount_col})'
+        elif agg_type == 'avg_spend' and amount_col:
+            agg_expr = f'AVG({amount_col})'
+        else:
+            return None
+
+        # Build HAVING condition
+        if filter_type == 'greater_than' and value is not None:
+            having = f"HAVING {agg_expr} > {value}"
+        elif filter_type == 'less_than' and value is not None:
+            having = f"HAVING {agg_expr} < {value}"
+        elif filter_type == 'equals' and value is not None:
+            having = f"HAVING {agg_expr} = {value}"
+        elif filter_type == 'between' and min_val is not None and max_val is not None:
+            having = f"HAVING {agg_expr} BETWEEN {min_val} AND {max_val}"
+        elif min_val is not None:
+            having = f"HAVING {agg_expr} >= {min_val}"
+        elif max_val is not None:
+            having = f"HAVING {agg_expr} <= {max_val}"
+        else:
+            return None
+
+        return f"""
+    SELECT {customer_col_name} as customer_id
+    FROM `{self.project_id}.{primary_table}`
+    GROUP BY {customer_col}
+    {having}"""
+
     # NOTE: generate_train_query, generate_eval_query, and generate_tfx_queries
     # have been removed. Train/eval split is now handled by the Training domain
     # using TFX ExampleGen's built-in split functionality.
     # The base generate_query() method should be used instead.
+
+    # =========================================================================
+    # V2 FILTER METHODS - Use source_table parameter for filtered_data CTE support
+    # =========================================================================
+
+    def _generate_product_filter_clauses_v2(self, product_filter, source_table, primary_table):
+        """
+        Generate CTEs and WHERE clauses for product filters.
+        V2: Accepts source_table parameter to use filtered_data CTE when date filter is applied.
+
+        Args:
+            product_filter: Dict with top_revenue, aggregation_filters, category_filters,
+                           numeric_filters, date_filters
+            source_table: Either 'filtered_data' or full table reference
+            primary_table: Original primary table name (for column references)
+
+        Returns:
+            Tuple of (list of CTE tuples, list of WHERE clauses)
+
+        Supported filters:
+            - top_revenue: Top N% products by revenue
+            - aggregation_filters: Filter by aggregated metrics per product
+              (transaction_count, total_revenue)
+            - category_filters: Include/exclude specific categorical values
+            - numeric_filters: Range, greater_than, less_than, equals for numeric columns
+            - date_filters: Per-column date filtering (relative or fixed date ranges)
+        """
+        ctes = []
+        where_clauses = []
+
+        if not product_filter:
+            return ctes, where_clauses
+
+        # Top revenue filter (top N% products by revenue)
+        top_revenue = product_filter.get('top_revenue', {})
+        if top_revenue.get('enabled'):
+            product_col = top_revenue.get('product_column')
+            revenue_col = top_revenue.get('revenue_column')
+            threshold = top_revenue.get('threshold_percent', 80)
+
+            if product_col and revenue_col:
+                # Extract just the column names
+                product_col_name = product_col.split('.')[-1] if '.' in product_col else product_col
+                revenue_col_name = revenue_col.split('.')[-1] if '.' in revenue_col else revenue_col
+
+                cte = f"""
+    SELECT {product_col_name} as product_id
+    FROM (
+        SELECT
+            {product_col_name} as product_id,
+            SUM({revenue_col_name}) as total_revenue,
+            SUM(SUM({revenue_col_name})) OVER () as grand_total,
+            SUM(SUM({revenue_col_name})) OVER (ORDER BY SUM({revenue_col_name}) DESC) as running_total
+        FROM {source_table}
+        GROUP BY {product_col_name}
+    )
+    WHERE running_total <= grand_total * {threshold / 100}
+       OR running_total - total_revenue < grand_total * {threshold / 100}"""
+                ctes.append(('top_products', cte))
+                where_clauses.append(
+                    f"{product_col_name} IN (SELECT product_id FROM top_products)"
+                )
+
+        # Aggregation filters (transaction count, total revenue per product)
+        aggregation_filters = product_filter.get('aggregation_filters', [])
+        for idx, af in enumerate(aggregation_filters):
+            agg_type = af.get('type')
+            product_col = af.get('product_column')
+            amount_col = af.get('amount_column')
+            filter_type = af.get('filter_type', 'greater_than')
+            value = af.get('value')
+            min_val = af.get('min')
+            max_val = af.get('max')
+
+            if not product_col:
+                continue
+
+            product_col_name = product_col.split('.')[-1] if '.' in product_col else product_col
+
+            # Determine aggregation function
+            if agg_type == 'transaction_count':
+                agg_expr = 'COUNT(*)'
+            elif agg_type == 'total_revenue' and amount_col:
+                amount_col_name = amount_col.split('.')[-1] if '.' in amount_col else amount_col
+                agg_expr = f'SUM({amount_col_name})'
+            else:
+                continue
+
+            # Build HAVING condition
+            if filter_type == 'greater_than' and value is not None:
+                having = f"HAVING {agg_expr} > {value}"
+            elif filter_type == 'less_than' and value is not None:
+                having = f"HAVING {agg_expr} < {value}"
+            elif filter_type == 'equals' and value is not None:
+                having = f"HAVING {agg_expr} = {value}"
+            elif filter_type in ('between', 'range') and min_val is not None and max_val is not None:
+                having = f"HAVING {agg_expr} BETWEEN {min_val} AND {max_val}"
+            elif min_val is not None:
+                having = f"HAVING {agg_expr} >= {min_val}"
+            elif max_val is not None:
+                having = f"HAVING {agg_expr} <= {max_val}"
+            else:
+                continue
+
+            cte_name = f"filtered_products_{len(ctes)}"
+            cte = f"""
+    SELECT {product_col_name} as product_id
+    FROM {source_table}
+    GROUP BY {product_col_name}
+    {having}"""
+            ctes.append((cte_name, cte))
+            where_clauses.append(
+                f"{product_col_name} IN (SELECT product_id FROM {cte_name})"
+            )
+
+        # Category filters (include/exclude specific values)
+        category_filters = product_filter.get('category_filters', [])
+        for cf in category_filters:
+            column = cf.get('column')
+            mode = cf.get('mode', 'include')
+            values = cf.get('values', [])
+
+            if column and values:
+                col_name = column.split('.')[-1] if '.' in column else column
+                escaped_values = [f"'{v}'" for v in values]
+                values_str = ', '.join(escaped_values)
+
+                if mode == 'include':
+                    where_clauses.append(f"{col_name} IN ({values_str})")
+                else:
+                    where_clauses.append(f"{col_name} NOT IN ({values_str})")
+
+        # Numeric filters
+        numeric_filters = product_filter.get('numeric_filters', [])
+        for nf in numeric_filters:
+            column = nf.get('column')
+            filter_type = nf.get('type', 'range')
+            min_val = nf.get('min')
+            max_val = nf.get('max')
+            value = nf.get('value')
+            include_nulls = nf.get('include_nulls', False)
+
+            if not column:
+                continue
+
+            col_name = column.split('.')[-1] if '.' in column else column
+            condition = None
+
+            if filter_type == 'range' and min_val is not None and max_val is not None:
+                condition = f"{col_name} BETWEEN {min_val} AND {max_val}"
+            elif filter_type == 'greater_than' and value is not None:
+                condition = f"{col_name} > {value}"
+            elif filter_type == 'less_than' and value is not None:
+                condition = f"{col_name} < {value}"
+            elif filter_type == 'equals' and value is not None:
+                condition = f"{col_name} = {value}"
+            elif min_val is not None:
+                condition = f"{col_name} >= {min_val}"
+            elif max_val is not None:
+                condition = f"{col_name} <= {max_val}"
+
+            if condition:
+                if include_nulls:
+                    where_clauses.append(f"({condition} OR {col_name} IS NULL)")
+                else:
+                    where_clauses.append(condition)
+
+        # Date filters (per-column date filtering)
+        date_filters = product_filter.get('date_filters', [])
+        for df in date_filters:
+            column = df.get('column')
+            date_type = df.get('date_type', 'fixed')
+            relative_option = df.get('relative_option')
+            start_date = df.get('start_date')
+            end_date = df.get('end_date')
+            include_nulls = df.get('include_nulls', False)
+
+            if not column:
+                continue
+
+            col_name = column.split('.')[-1] if '.' in column else column
+            condition = None
+
+            if date_type == 'relative' and relative_option:
+                # Relative date filter using MAX date in source_table
+                days_map = {
+                    'last_7_days': 7,
+                    'last_14_days': 14,
+                    'last_30_days': 30,
+                    'last_60_days': 60,
+                    'last_90_days': 90,
+                    'last_180_days': 180,
+                    'last_365_days': 365,
+                    'last_year': 365,
+                    'last_month': 30,
+                    'last_week': 7
+                }
+                days = days_map.get(relative_option)
+                if days:
+                    condition = f"{col_name} >= TIMESTAMP_SUB((SELECT MAX({col_name}) FROM {source_table}), INTERVAL {days} DAY)"
+            elif date_type == 'fixed':
+                # Fixed date range
+                conditions = []
+                if start_date:
+                    conditions.append(f"{col_name} >= TIMESTAMP('{start_date}')")
+                if end_date:
+                    conditions.append(f"{col_name} <= TIMESTAMP('{end_date}')")
+                if conditions:
+                    condition = ' AND '.join(conditions)
+
+            if condition:
+                if include_nulls:
+                    where_clauses.append(f"({condition} OR {col_name} IS NULL)")
+                else:
+                    where_clauses.append(condition)
+
+        return ctes, where_clauses
+
+    def _generate_customer_filter_clauses_v2(self, customer_filter, source_table, primary_table):
+        """
+        Generate CTEs and WHERE clauses for customer filters.
+        V2: Accepts source_table parameter to use filtered_data CTE when date filter is applied.
+
+        Args:
+            customer_filter: Dict with top_revenue, aggregation_filters, category_filters,
+                           numeric_filters, date_filters
+            source_table: Either 'filtered_data' or full table reference
+            primary_table: Original primary table name (for column references)
+
+        Returns:
+            Tuple of (list of CTE tuples, list of WHERE clauses)
+
+        Supported filters:
+            - top_revenue: Top N% customers by revenue
+            - aggregation_filters: Filter by aggregated metrics per customer
+              (transaction_count, total_spend, avg_spend)
+            - category_filters: Include/exclude specific categorical values
+            - numeric_filters: Range, greater_than, less_than, equals for numeric columns
+            - date_filters: Per-column date filtering (relative or fixed date ranges)
+        """
+        ctes = []
+        where_clauses = []
+
+        if not customer_filter:
+            return ctes, where_clauses
+
+        # Top revenue filter (top N% customers by revenue)
+        top_revenue = customer_filter.get('top_revenue', {})
+        if top_revenue.get('enabled'):
+            customer_col = top_revenue.get('customer_column')
+            revenue_col = top_revenue.get('revenue_column')
+            percent = top_revenue.get('percent', 80)
+
+            if customer_col and revenue_col:
+                customer_col_name = customer_col.split('.')[-1] if '.' in customer_col else customer_col
+                revenue_col_name = revenue_col.split('.')[-1] if '.' in revenue_col else revenue_col
+
+                cte = f"""
+    SELECT {customer_col_name} as customer_id
+    FROM (
+        SELECT
+            {customer_col_name} as customer_id,
+            SUM({revenue_col_name}) as total_revenue,
+            SUM(SUM({revenue_col_name})) OVER () as grand_total,
+            SUM(SUM({revenue_col_name})) OVER (ORDER BY SUM({revenue_col_name}) DESC) as running_total
+        FROM {source_table}
+        GROUP BY {customer_col_name}
+    )
+    WHERE running_total <= grand_total * {percent / 100}
+       OR running_total - total_revenue < grand_total * {percent / 100}"""
+                ctes.append(('top_customers', cte))
+                where_clauses.append(
+                    f"{customer_col_name} IN (SELECT customer_id FROM top_customers)"
+                )
+
+        # Aggregation filters (min transactions, spending, etc.)
+        aggregation_filters = customer_filter.get('aggregation_filters', [])
+        for idx, af in enumerate(aggregation_filters):
+            agg_type = af.get('type')
+            customer_col = af.get('customer_column')
+            amount_col = af.get('amount_column')
+            filter_type = af.get('filter_type', 'greater_than')
+            value = af.get('value')
+            min_val = af.get('min')
+            max_val = af.get('max')
+
+            if not customer_col:
+                continue
+
+            customer_col_name = customer_col.split('.')[-1] if '.' in customer_col else customer_col
+            amount_col_name = amount_col.split('.')[-1] if amount_col and '.' in amount_col else amount_col
+
+            # Determine aggregation expression
+            if agg_type == 'transaction_count':
+                agg_expr = 'COUNT(*)'
+            elif agg_type == 'total_spend' and amount_col_name:
+                agg_expr = f'SUM({amount_col_name})'
+            elif agg_type == 'avg_spend' and amount_col_name:
+                agg_expr = f'AVG({amount_col_name})'
+            else:
+                continue
+
+            # Build HAVING condition
+            if filter_type == 'greater_than' and value is not None:
+                having = f"HAVING {agg_expr} > {value}"
+            elif filter_type == 'less_than' and value is not None:
+                having = f"HAVING {agg_expr} < {value}"
+            elif filter_type == 'equals' and value is not None:
+                having = f"HAVING {agg_expr} = {value}"
+            elif filter_type == 'between' and min_val is not None and max_val is not None:
+                having = f"HAVING {agg_expr} BETWEEN {min_val} AND {max_val}"
+            elif min_val is not None:
+                having = f"HAVING {agg_expr} >= {min_val}"
+            elif max_val is not None:
+                having = f"HAVING {agg_expr} <= {max_val}"
+            else:
+                continue
+
+            cte_name = f"filtered_customers_{idx}"
+            cte = f"""
+    SELECT {customer_col_name} as customer_id
+    FROM {source_table}
+    GROUP BY {customer_col_name}
+    {having}"""
+            ctes.append((cte_name, cte))
+            where_clauses.append(f"{customer_col_name} IN (SELECT customer_id FROM {cte_name})")
+
+        # Category filters
+        category_filters = customer_filter.get('category_filters', [])
+        for cf in category_filters:
+            column = cf.get('column')
+            mode = cf.get('mode', 'include')
+            values = cf.get('values', [])
+
+            if column and values:
+                col_name = column.split('.')[-1] if '.' in column else column
+                escaped_values = [f"'{v}'" for v in values]
+                values_str = ', '.join(escaped_values)
+
+                if mode == 'include':
+                    where_clauses.append(f"{col_name} IN ({values_str})")
+                else:
+                    where_clauses.append(f"{col_name} NOT IN ({values_str})")
+
+        # Numeric filters
+        numeric_filters = customer_filter.get('numeric_filters', [])
+        for nf in numeric_filters:
+            column = nf.get('column')
+            filter_type = nf.get('type', 'range')
+            min_val = nf.get('min')
+            max_val = nf.get('max')
+            value = nf.get('value')
+            include_nulls = nf.get('include_nulls', False)
+
+            if not column:
+                continue
+
+            col_name = column.split('.')[-1] if '.' in column else column
+            condition = None
+
+            if filter_type == 'range' and min_val is not None and max_val is not None:
+                condition = f"{col_name} BETWEEN {min_val} AND {max_val}"
+            elif filter_type == 'greater_than' and value is not None:
+                condition = f"{col_name} > {value}"
+            elif filter_type == 'less_than' and value is not None:
+                condition = f"{col_name} < {value}"
+            elif filter_type == 'equals' and value is not None:
+                condition = f"{col_name} = {value}"
+            elif min_val is not None:
+                condition = f"{col_name} >= {min_val}"
+            elif max_val is not None:
+                condition = f"{col_name} <= {max_val}"
+
+            if condition:
+                if include_nulls:
+                    where_clauses.append(f"({condition} OR {col_name} IS NULL)")
+                else:
+                    where_clauses.append(condition)
+
+        # Date filters (per-column date filtering)
+        date_filters = customer_filter.get('date_filters', [])
+        for df in date_filters:
+            column = df.get('column')
+            date_type = df.get('date_type', 'fixed')
+            relative_option = df.get('relative_option')
+            start_date = df.get('start_date')
+            end_date = df.get('end_date')
+            include_nulls = df.get('include_nulls', False)
+
+            if not column:
+                continue
+
+            col_name = column.split('.')[-1] if '.' in column else column
+            condition = None
+
+            if date_type == 'relative' and relative_option:
+                # Relative date filter using MAX date in source_table
+                days_map = {
+                    'last_7_days': 7,
+                    'last_14_days': 14,
+                    'last_30_days': 30,
+                    'last_60_days': 60,
+                    'last_90_days': 90,
+                    'last_180_days': 180,
+                    'last_365_days': 365,
+                    'last_year': 365,
+                    'last_month': 30,
+                    'last_week': 7
+                }
+                days = days_map.get(relative_option)
+                if days:
+                    condition = f"{col_name} >= TIMESTAMP_SUB((SELECT MAX({col_name}) FROM {source_table}), INTERVAL {days} DAY)"
+            elif date_type == 'fixed':
+                # Fixed date range
+                conditions = []
+                if start_date:
+                    conditions.append(f"{col_name} >= TIMESTAMP('{start_date}')")
+                if end_date:
+                    conditions.append(f"{col_name} <= TIMESTAMP('{end_date}')")
+                if conditions:
+                    condition = ' AND '.join(conditions)
+
+            if condition:
+                if include_nulls:
+                    where_clauses.append(f"({condition} OR {col_name} IS NULL)")
+                else:
+                    where_clauses.append(condition)
+
+        return ctes, where_clauses
+
+    def _generate_top_products_cte_legacy(self, source_table, product_col, revenue_col, percent):
+        """Legacy CTE generator that accepts source_table parameter."""
+        return f"""
+    SELECT {product_col}
+    FROM (
+        SELECT
+            {product_col},
+            SUM({revenue_col}) as total_revenue,
+            SUM(SUM({revenue_col})) OVER () as grand_total,
+            SUM(SUM({revenue_col})) OVER (ORDER BY SUM({revenue_col}) DESC) as running_total
+        FROM {source_table}
+        GROUP BY {product_col}
+    )
+    WHERE running_total <= grand_total * {percent / 100}
+       OR running_total - total_revenue < grand_total * {percent / 100}"""
+
+    def _generate_active_users_cte_legacy(self, source_table, user_col, min_count):
+        """Legacy CTE generator that accepts source_table parameter."""
+        return f"""
+    SELECT {user_col}
+    FROM {source_table}
+    GROUP BY {user_col}
+    HAVING COUNT(*) >= {min_count}"""
 
     def validate_query(self, query):
         """
@@ -2547,6 +3545,99 @@ class DatasetStatsService:
                     'product_column': top_revenue.get('product_column'),
                     'revenue_column': top_revenue.get('revenue_column')
                 })
+
+        # Aggregation filters (transaction count, total revenue per product)
+        product_agg_filters = product_filter.get('aggregation_filters', [])
+        product_cte_counter = 0
+        for agg_filter in product_agg_filters:
+            agg_type = agg_filter.get('type')  # 'transaction_count' or 'total_revenue'
+            product_col = self._extract_column_name(agg_filter.get('product_column'))
+            filter_type = agg_filter.get('filter_type', 'greater_than')
+
+            if not product_col:
+                continue
+
+            product_cte_counter += 1
+            cte_name = f"product_agg_{product_cte_counter}"
+
+            if agg_type == 'transaction_count':
+                # Build HAVING clause based on filter_type
+                having_conditions = []
+                if filter_type == 'greater_than':
+                    value = agg_filter.get('value', 0)
+                    having_conditions.append(f"COUNT(*) > {value}")
+                elif filter_type == 'less_than':
+                    value = agg_filter.get('value', 0)
+                    having_conditions.append(f"COUNT(*) < {value}")
+                elif filter_type == 'range':
+                    min_val = agg_filter.get('min')
+                    max_val = agg_filter.get('max')
+                    if min_val is not None:
+                        having_conditions.append(f"COUNT(*) >= {min_val}")
+                    if max_val is not None:
+                        having_conditions.append(f"COUNT(*) <= {max_val}")
+
+                if having_conditions:
+                    cte = f"""
+                        SELECT `{product_col}`
+                        FROM `{full_table_ref}`
+                        GROUP BY `{product_col}`
+                        HAVING {' AND '.join(having_conditions)}
+                    """
+                    ctes.append((cte_name, cte))
+                    where_clauses.append(
+                        f"`{primary_alias}`.`{product_col}` IN (SELECT `{product_col}` FROM {cte_name})"
+                    )
+                    product_filter_summary.append({
+                        'type': 'transaction_count',
+                        'filter_type': filter_type,
+                        'value': agg_filter.get('value'),
+                        'min': agg_filter.get('min'),
+                        'max': agg_filter.get('max'),
+                        'product_column': agg_filter.get('product_column')
+                    })
+
+            elif agg_type == 'total_revenue':
+                amount_col = self._extract_column_name(agg_filter.get('amount_column'))
+                if not amount_col:
+                    continue
+
+                # Build HAVING clause based on filter_type
+                having_conditions = []
+                if filter_type == 'greater_than':
+                    value = agg_filter.get('value', 0)
+                    having_conditions.append(f"SUM(`{amount_col}`) > {value}")
+                elif filter_type == 'less_than':
+                    value = agg_filter.get('value', 0)
+                    having_conditions.append(f"SUM(`{amount_col}`) < {value}")
+                elif filter_type == 'range':
+                    min_val = agg_filter.get('min')
+                    max_val = agg_filter.get('max')
+                    if min_val is not None:
+                        having_conditions.append(f"SUM(`{amount_col}`) >= {min_val}")
+                    if max_val is not None:
+                        having_conditions.append(f"SUM(`{amount_col}`) <= {max_val}")
+
+                if having_conditions:
+                    cte = f"""
+                        SELECT `{product_col}`
+                        FROM `{full_table_ref}`
+                        GROUP BY `{product_col}`
+                        HAVING {' AND '.join(having_conditions)}
+                    """
+                    ctes.append((cte_name, cte))
+                    where_clauses.append(
+                        f"`{primary_alias}`.`{product_col}` IN (SELECT `{product_col}` FROM {cte_name})"
+                    )
+                    product_filter_summary.append({
+                        'type': 'total_revenue',
+                        'filter_type': filter_type,
+                        'value': agg_filter.get('value'),
+                        'min': agg_filter.get('min'),
+                        'max': agg_filter.get('max'),
+                        'product_column': agg_filter.get('product_column'),
+                        'amount_column': agg_filter.get('amount_column')
+                    })
 
         # Category filters (IN / NOT IN for STRING columns)
         category_filters = product_filter.get('category_filters', [])

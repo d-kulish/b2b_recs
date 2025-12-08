@@ -110,6 +110,16 @@
     align-items: center;
 }
 
+/* Card Layout: 5-Column Structure for Dataset Cards (40% + 30% + 15% + 10% + 5%) */
+/* Columns: Name/Description | Tables | Stats | View | Edit/Delete */
+/* Using fr units to account for gap spacing: 8fr + 6fr + 3fr + 2fr + 1fr = 20fr */
+.card-container-dataset {
+    display: grid;
+    grid-template-columns: 8fr 6fr 3fr 2fr 1fr;
+    gap: 12px;
+    align-items: center;
+}
+
 .card-content {
     min-width: 0;
     overflow: hidden;
@@ -268,6 +278,20 @@
 
 .card-action-btn.run i {
     font-size: 11px;
+}
+
+/* View Action Button (green like Run, with text) */
+.card-action-btn.view {
+    width: 64px;
+    height: 32px;
+    background-color: #10b981;
+    color: #ffffff;
+    font-weight: 600;
+    font-size: 12px;
+}
+
+.card-action-btn.view:hover {
+    background-color: #059669;
 }
 
 /* Pause Action Button (yellow, same size as Run) */

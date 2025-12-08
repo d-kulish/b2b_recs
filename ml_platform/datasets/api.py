@@ -76,6 +76,10 @@ def serialize_dataset(ds, include_details=False):
     Returns:
         Dict representation of the dataset
     """
+    # Extract summary_snapshot data for card display
+    snapshot = ds.summary_snapshot or {}
+    column_stats = snapshot.get('column_stats', {})
+
     data = {
         'id': ds.id,
         'name': ds.name,
@@ -91,6 +95,9 @@ def serialize_dataset(ds, include_details=False):
         'last_used_at': ds.last_used_at.isoformat() if ds.last_used_at else None,
         'created_by': ds.created_by.username if ds.created_by else None,
         'version_count': ds.versions.count(),
+        # Summary snapshot fields for card display
+        'snapshot_total_rows': snapshot.get('total_rows'),
+        'snapshot_column_count': len(column_stats) if column_stats else None,
     }
 
     if include_details:
@@ -891,21 +898,17 @@ def get_generated_query(request, dataset_id):
 
     Query params:
         - for_analysis: If 'true', use mapped column names
-        - split: 'train', 'eval', or empty for full dataset
+
+    Note: Train/eval split is now handled by the Training domain (TFX ExampleGen).
+    This endpoint returns the base query without split logic.
     """
     try:
         dataset = get_object_or_404(Dataset, id=dataset_id)
         bq_service = BigQueryService(dataset.model_endpoint)
 
         for_analysis = request.GET.get('for_analysis', 'false').lower() == 'true'
-        split = request.GET.get('split', None)
-        if split and split not in ('train', 'eval'):
-            return JsonResponse({
-                'status': 'error',
-                'message': "split must be 'train', 'eval', or empty",
-            }, status=400)
 
-        query = bq_service.generate_query(dataset, for_analysis=for_analysis, split=split)
+        query = bq_service.generate_query(dataset, for_analysis=for_analysis)
 
         # Get validation info
         validation = bq_service.validate_query(query)
@@ -914,7 +917,6 @@ def get_generated_query(request, dataset_id):
             'status': 'success',
             'query': query,
             'for_analysis': for_analysis,
-            'split': split,
             'validation': validation,
             'dataset_name': dataset.name,
         })

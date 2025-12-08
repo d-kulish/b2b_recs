@@ -405,6 +405,13 @@
                                 </button>
                             </div>
                             <div class="filter-button-wrapper">
+                                <span class="filter-button-label">Filter by metrics</span>
+                                <button type="button" class="filter-button" onclick="openProductMetricsModal()">
+                                    <i class="fas fa-calculator"></i>
+                                    Product Metrics
+                                </button>
+                            </div>
+                            <div class="filter-button-wrapper">
                                 <span class="filter-button-label">Filter by columns</span>
                                 <button type="button" class="filter-button" onclick="openFilterColumnsModal()">
                                     <i class="fas fa-filter"></i>
@@ -533,6 +540,145 @@
                                     <span class="btn-neu-inner">Apply</span>
                                 </button>
                                 <button onclick="closeTopProductsModal()" class="btn-neu btn-neu-action btn-neu-cancel">
+                                    <span class="btn-neu-inner">Cancel</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Product Metrics Modal -->
+                <div class="modal-overlay hidden" id="productMetricsModal">
+                    <div class="modal-container modal-container-lg">
+                        <div class="modal-header">
+                            <div class="modal-header-icon info">
+                                <i class="fas fa-calculator"></i>
+                            </div>
+                            <h3 class="modal-header-title">Product Metrics Filters</h3>
+                        </div>
+                        <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
+                            <!-- Existing Aggregation Filters List -->
+                            <div id="existingProductAggregationFiltersSection" class="hidden">
+                                <label class="text-xs font-medium text-gray-600 mb-2 block">Existing Filters</label>
+                                <div class="existing-filters-list" id="existingProductAggregationFiltersList">
+                                    <!-- Filter items will be inserted here dynamically -->
+                                </div>
+                                <div class="existing-filters-divider"></div>
+                            </div>
+
+                            <!-- Transaction Count Filter Section -->
+                            <div class="customer-metrics-section">
+                                <div class="customer-metrics-section-header">
+                                    <i class="fas fa-shopping-cart"></i>
+                                    <span>Transaction Count Filter</span>
+                                </div>
+                                <div class="customer-metrics-section-body">
+                                    <p class="wizard-field-hint mb-3">
+                                        <i class="fas fa-info-circle mr-1"></i>
+                                        Filter products based on their number of transactions
+                                    </p>
+                                    <div class="customer-metrics-form-row">
+                                        <div class="customer-metrics-field">
+                                            <label class="text-xs font-medium text-gray-600 mb-1 block">Product ID Column</label>
+                                            <select id="productTxnCountProductColumn" class="form-select text-sm">
+                                                <option value="">Select column...</option>
+                                            </select>
+                                        </div>
+                                        <div class="customer-metrics-field">
+                                            <label class="text-xs font-medium text-gray-600 mb-1 block">Filter Type</label>
+                                            <select id="productTxnCountFilterType" class="form-select text-sm" onchange="updateProductTxnCountInputs()">
+                                                <option value="greater_than">Greater than</option>
+                                                <option value="less_than">Less than</option>
+                                                <option value="range">Range</option>
+                                            </select>
+                                        </div>
+                                        <div class="customer-metrics-field" id="productTxnCountValueContainer">
+                                            <label class="text-xs font-medium text-gray-600 mb-1 block">Value</label>
+                                            <input type="number" id="productTxnCountValue" class="form-input text-sm" min="1" placeholder="e.g., 5">
+                                        </div>
+                                        <div class="customer-metrics-field hidden" id="productTxnCountMinContainer">
+                                            <label class="text-xs font-medium text-gray-600 mb-1 block">Min</label>
+                                            <input type="number" id="productTxnCountMin" class="form-input text-sm" min="0" placeholder="Min">
+                                        </div>
+                                        <div class="customer-metrics-field hidden" id="productTxnCountMaxContainer">
+                                            <label class="text-xs font-medium text-gray-600 mb-1 block">Max</label>
+                                            <input type="number" id="productTxnCountMax" class="form-input text-sm" min="0" placeholder="Max">
+                                        </div>
+                                        <div class="customer-metrics-field customer-metrics-field-btn">
+                                            <label class="text-xs font-medium text-gray-600 mb-1 block">&nbsp;</label>
+                                            <button type="button" class="filter-button" onclick="addProductTransactionCountFilter()">
+                                                <i class="fas fa-plus"></i>
+                                                Add Filter
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Revenue Filter Section -->
+                            <div class="customer-metrics-section">
+                                <div class="customer-metrics-section-header">
+                                    <i class="fas fa-dollar-sign"></i>
+                                    <span>Revenue Filter</span>
+                                </div>
+                                <div class="customer-metrics-section-body">
+                                    <p class="wizard-field-hint mb-3">
+                                        <i class="fas fa-info-circle mr-1"></i>
+                                        Filter products based on their total revenue
+                                    </p>
+                                    <div class="customer-metrics-form-row">
+                                        <div class="customer-metrics-field">
+                                            <label class="text-xs font-medium text-gray-600 mb-1 block">Product ID Column</label>
+                                            <select id="productRevenueProductColumn" class="form-select text-sm">
+                                                <option value="">Select column...</option>
+                                            </select>
+                                        </div>
+                                        <div class="customer-metrics-field">
+                                            <label class="text-xs font-medium text-gray-600 mb-1 block">Amount Column</label>
+                                            <select id="productRevenueAmountColumn" class="form-select text-sm">
+                                                <option value="">Select column...</option>
+                                            </select>
+                                        </div>
+                                        <div class="customer-metrics-field">
+                                            <label class="text-xs font-medium text-gray-600 mb-1 block">Filter Type</label>
+                                            <select id="productRevenueFilterType" class="form-select text-sm" onchange="updateProductRevenueInputs()">
+                                                <option value="greater_than">Greater than</option>
+                                                <option value="less_than">Less than</option>
+                                                <option value="range">Range</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="customer-metrics-form-row mt-3">
+                                        <div class="customer-metrics-field" id="productRevenueValueContainer">
+                                            <label class="text-xs font-medium text-gray-600 mb-1 block">Value</label>
+                                            <input type="number" id="productRevenueValue" class="form-input text-sm" min="0" step="0.01" placeholder="e.g., 1000">
+                                        </div>
+                                        <div class="customer-metrics-field hidden" id="productRevenueMinContainer">
+                                            <label class="text-xs font-medium text-gray-600 mb-1 block">Min</label>
+                                            <input type="number" id="productRevenueMin" class="form-input text-sm" min="0" step="0.01" placeholder="Min">
+                                        </div>
+                                        <div class="customer-metrics-field hidden" id="productRevenueMaxContainer">
+                                            <label class="text-xs font-medium text-gray-600 mb-1 block">Max</label>
+                                            <input type="number" id="productRevenueMax" class="form-input text-sm" min="0" step="0.01" placeholder="Max">
+                                        </div>
+                                        <div class="customer-metrics-field customer-metrics-field-btn">
+                                            <label class="text-xs font-medium text-gray-600 mb-1 block">&nbsp;</label>
+                                            <button type="button" class="filter-button" onclick="addProductRevenueFilter()">
+                                                <i class="fas fa-plus"></i>
+                                                Add Filter
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-footer-wizard-neu">
+                            <div class="footer-left"></div>
+                            <div class="footer-right">
+                                <button onclick="applyProductMetricsFilters()" class="btn-neu btn-neu-action btn-neu-save">
+                                    <span class="btn-neu-inner">Apply</span>
+                                </button>
+                                <button onclick="cancelProductMetricsModal()" class="btn-neu btn-neu-action btn-neu-cancel">
                                     <span class="btn-neu-inner">Cancel</span>
                                 </button>
                             </div>
@@ -1278,13 +1424,13 @@
         <div class="modal-footer-wizard-neu">
             <div class="footer-left"></div>
             <div class="footer-right">
-                <button onclick="viewGeneratedQuery()" class="btn-neu btn-neu-action btn-neu-nav-wide">
-                    <span class="btn-neu-inner"><i class="fas fa-code mr-1"></i>View SQL</span>
+                <button onclick="viewGeneratedQuery()" class="btn-neu btn-neu-action btn-neu-nav-wide" style="width: 130px;">
+                    <span class="btn-neu-inner" style="white-space: nowrap;">View SQL</span>
                 </button>
-                <button onclick="editDatasetFromDetail()" class="btn-neu btn-neu-action btn-neu-save">
+                <button onclick="editDatasetFromDetail()" class="btn-neu btn-neu-action btn-neu-save" style="width: 130px;">
                     <span class="btn-neu-inner"><i class="fas fa-edit mr-1"></i>Edit</span>
                 </button>
-                <button onclick="closeDetailModal()" class="btn-neu btn-neu-action btn-neu-secondary">
+                <button onclick="closeDetailModal()" class="btn-neu btn-neu-action btn-neu-cancel" style="width: 130px;">
                     <span class="btn-neu-inner">Close</span>
                 </button>
             </div>
@@ -1421,42 +1567,73 @@ function renderDatasetsList(datasets) {
         return;
     }
 
-    container.innerHTML = datasets.map(ds => `
+    container.innerHTML = datasets.map(ds => {
+        // Format description (truncate to 50 chars)
+        const description = ds.description
+            ? `${escapeHtml(ds.description.substring(0, 50))}${ds.description.length > 50 ? '...' : ''}`
+            : 'N/A';
+
+        // Format primary table (strip raw_data. prefix)
+        const primaryTable = ds.primary_table
+            ? ds.primary_table.replace('raw_data.', '')
+            : 'N/A';
+
+        // Format secondary tables count
+        const secondaryCount = ds.secondary_tables?.length || 0;
+        const secondaryText = secondaryCount === 0
+            ? 'None'
+            : `${secondaryCount} table${secondaryCount !== 1 ? 's' : ''}`;
+
+        // Format stats from summary_snapshot
+        const rowCount = ds.snapshot_total_rows != null
+            ? formatNumber(ds.snapshot_total_rows)
+            : 'N/A';
+        const columnCount = ds.snapshot_column_count != null
+            ? ds.snapshot_column_count
+            : 'N/A';
+
+        return `
         <div class="card">
-            <div class="card-container-5col">
-                <!-- Column 1: Dataset Info -->
+            <div class="card-container-dataset">
+                <!-- Column 1 (40%): Name + Description + Version -->
                 <div class="card-content">
                     <div class="card-header">
                         <span class="status-dot green"></span>
                         <h4 class="card-title">${escapeHtml(ds.name)}</h4>
                     </div>
                     <div class="card-body">
-                        <span class="card-value"><span class="card-label">Primary:</span> ${ds.primary_table ? ds.primary_table.replace('raw_data.', '') : 'Not set'}</span>
-                        ${ds.description ? `<span class="card-value text-gray-500 text-xs truncate">${escapeHtml(ds.description.substring(0, 50))}${ds.description.length > 50 ? '...' : ''}</span>` : ''}
+                        <span class="card-value text-gray-500 text-xs">${description}</span>
+                    </div>
+                    <div class="card-version text-gray-400" style="font-size: 10px; margin-top: 2px;">
+                        Version: ${ds.version_count || 1}
                     </div>
                 </div>
 
-                <!-- Column 2: Tables & Versions -->
+                <!-- Column 2 (30%): Primary + Secondary Tables -->
                 <div class="card-meta-column">
-                    <span class="card-label">Tables:</span>
-                    <span class="card-schedule-info">${ds.table_count} table${ds.table_count !== 1 ? 's' : ''}</span>
-                    <span class="card-label">Versions:</span>
-                    <span class="card-schedule-info">${ds.version_count || 0}</span>
+                    <span class="card-label">Primary:</span>
+                    <span class="card-schedule-info">${primaryTable}</span>
+                    <span class="card-label">Secondary:</span>
+                    <span class="card-schedule-info">${secondaryText}</span>
                 </div>
 
-                <!-- Column 3: Estimates -->
+                <!-- Column 3 (15%): Dataset Stats -->
                 <div class="card-meta-column">
-                    <span class="card-label">Est. Rows:</span>
-                    <span class="card-schedule-info">${ds.row_count_estimate ? formatNumber(ds.row_count_estimate) : '—'}</span>
-                    <span class="card-label">Users/Products:</span>
-                    <span class="card-schedule-info">${ds.unique_users_estimate ? formatNumber(ds.unique_users_estimate) : '—'} / ${ds.unique_products_estimate ? formatNumber(ds.unique_products_estimate) : '—'}</span>
+                    <span class="card-label">Rows:</span>
+                    <span class="card-schedule-info">${rowCount}</span>
+                    <span class="card-label">Columns:</span>
+                    <span class="card-schedule-info">${columnCount}</span>
                 </div>
 
-                <!-- Column 4: Edit & Delete -->
-                <div class="card-actions">
-                    <button onclick="viewDataset(${ds.id})" class="card-action-btn edit" title="View details">
-                        <i class="fas fa-eye"></i>
+                <!-- Column 4 (10%): View Button -->
+                <div class="card-run-actions">
+                    <button onclick="viewDataset(${ds.id})" class="card-action-btn view" title="View details">
+                        View
                     </button>
+                </div>
+
+                <!-- Column 5 (5%): Edit & Delete -->
+                <div class="card-actions">
                     <button onclick="editDataset(${ds.id})" class="card-action-btn edit" title="Edit dataset">
                         <i class="fas fa-edit"></i>
                     </button>
@@ -1466,7 +1643,8 @@ function renderDatasetsList(datasets) {
                 </div>
             </div>
         </div>
-    `).join('');
+        `;
+    }).join('');
 }
 
 function renderPagination(pagination) {
@@ -1604,12 +1782,14 @@ function resetWizard() {
     committedDatesFilter.timestampColumn = null;
     productFiltersState.pending = {
         topRevenue: { enabled: false, productColumn: null, revenueColumn: null, thresholdPercent: 80 },
+        aggregationFilters: [],
         categoryFilters: [],
         numericFilters: [],
         dateFilters: []
     };
     productFiltersState.committed = {
         topRevenue: { enabled: false, productColumn: null, revenueColumn: null, thresholdPercent: 80 },
+        aggregationFilters: [],
         categoryFilters: [],
         numericFilters: [],
         dateFilters: []
@@ -1816,15 +1996,27 @@ function collectStepData(step) {
         case 4:
             // Data Filters - New structure with sub-chapters
 
-            // History filter (rolling window)
+            // History filter (rolling window OR start date)
             const timestampCol = document.getElementById('timestampColumn')?.value;
             const rollingDays = parseInt(document.getElementById('rollingDays')?.value) || 30;
+            const startDateValue = document.getElementById('startDateInput')?.value || null;
 
             if (timestampCol) {
-                wizardData.filters.history = {
-                    timestamp_column: timestampCol,
-                    rolling_days: rollingDays
-                };
+                // Save based on the current filter mode
+                // historyFilterMode is 'rolling' or 'startDate'
+                if (historyFilterMode === 'startDate' && startDateValue) {
+                    // Start Date mode - save start_date, no rolling_days
+                    wizardData.filters.history = {
+                        timestamp_column: timestampCol,
+                        start_date: startDateValue
+                    };
+                } else {
+                    // Rolling Window mode (default) - save rolling_days, no start_date
+                    wizardData.filters.history = {
+                        timestamp_column: timestampCol,
+                        rolling_days: rollingDays
+                    };
+                }
             }
 
             // Products filter
@@ -3471,6 +3663,7 @@ let productFiltersState = {
             revenueColumn: null,
             thresholdPercent: 80
         },
+        aggregationFilters: [],  // [{type: 'transaction_count'|'total_revenue', productColumn, amountColumn?, filterType, value, min?, max?}]
         categoryFilters: [],  // [{column, mode, values, colInfo}]
         numericFilters: [],   // [{column, type, min, max, value, includeNulls, colInfo}]
         dateFilters: []       // [{column, filterType, relativeOption, startDate, endDate, includeNulls, colInfo}]
@@ -3482,6 +3675,7 @@ let productFiltersState = {
             revenueColumn: null,
             thresholdPercent: 80
         },
+        aggregationFilters: [],
         categoryFilters: [],
         numericFilters: [],
         dateFilters: []
@@ -3638,6 +3832,19 @@ function restoreFiltersFromSavedData(filters) {
             }
         }
 
+        // Handle aggregation filters
+        if (productFilter.aggregation_filters?.length > 0) {
+            productFiltersState.committed.aggregationFilters = productFilter.aggregation_filters.map(f => ({
+                type: f.type,
+                productColumn: f.product_column,
+                amountColumn: f.amount_column,
+                filterType: f.filter_type,
+                value: f.value,
+                min: f.min,
+                max: f.max
+            }));
+        }
+
         // Handle category filters
         if (productFilter.category_filters?.length > 0) {
             productFiltersState.committed.categoryFilters = productFilter.category_filters.map(f => ({
@@ -3664,6 +3871,7 @@ function restoreFiltersFromSavedData(filters) {
 
         // Mark as applied if there are any product filters
         const hasProductFilters = productFiltersState.committed.topRevenue.enabled ||
+            productFiltersState.committed.aggregationFilters.length > 0 ||
             productFiltersState.committed.categoryFilters.length > 0 ||
             productFiltersState.committed.numericFilters.length > 0;
 
@@ -4621,6 +4829,356 @@ function removeAggregationFilter(index) {
     updateCustomersFilterSummary();
     updateCustomersRefreshButtonState();
     populateCustomerMetricsDropdowns(); // Refresh dropdowns
+}
+
+// ============================================================================
+// PRODUCT METRICS MODAL
+// ============================================================================
+
+// Snapshot of aggregation filters when modal opens (for Cancel functionality)
+let productMetricsModalSnapshot = null;
+
+async function openProductMetricsModal() {
+    const modal = document.getElementById('productMetricsModal');
+    modal.classList.remove('hidden');
+
+    // Store snapshot of current aggregation filters for Cancel functionality
+    productMetricsModalSnapshot = JSON.parse(JSON.stringify(productFiltersState.pending.aggregationFilters));
+
+    // Pre-fetch column analysis if not cached (needed to identify numeric columns)
+    if (Object.keys(productFiltersState.columnAnalysis).length === 0) {
+        await fetchColumnAnalysis();
+    }
+
+    // Populate column dropdowns
+    populateProductMetricsDropdowns();
+
+    // Render existing aggregation filters
+    renderExistingProductAggregationFilters();
+
+    // Reset form inputs
+    resetProductMetricsInputs();
+}
+
+function closeProductMetricsModal() {
+    const modal = document.getElementById('productMetricsModal');
+    modal.classList.add('hidden');
+    productMetricsModalSnapshot = null;
+}
+
+function applyProductMetricsFilters() {
+    // Changes are already in pending state, just close the modal
+    closeProductMetricsModal();
+
+    // Update the summary and button state
+    updateProductsFilterSummary();
+    updateProductsRefreshButtonState();
+}
+
+function cancelProductMetricsModal() {
+    // Restore the snapshot (revert any changes made during this modal session)
+    if (productMetricsModalSnapshot !== null) {
+        productFiltersState.pending.aggregationFilters = productMetricsModalSnapshot;
+    }
+
+    closeProductMetricsModal();
+
+    // Update the summary and button state to reflect reverted state
+    updateProductsFilterSummary();
+    updateProductsRefreshButtonState();
+}
+
+function populateProductMetricsDropdowns() {
+    // Get columns from schema builder
+    const columns = [];
+    Object.entries(schemaBuilderState.selectedColumns).forEach(([table, cols]) => {
+        const shortTable = table.replace('raw_data.', '');
+        cols.forEach(col => {
+            columns.push({ table: shortTable, column: col, fullName: `${shortTable}.${col}` });
+        });
+    });
+
+    // Get column types from analysis if available
+    const colAnalysis = productFiltersState.columnAnalysis;
+
+    // Get timestamp column to exclude
+    const timestampCol = document.getElementById('timestampColumn')?.value;
+
+    // Numeric columns for amount (aggregation columns are REUSABLE)
+    // Only exclude DATE columns
+    const numericColumns = columns.filter(col => {
+        const info = colAnalysis[col.fullName];
+        const isNumeric = info?.type && ['INTEGER', 'FLOAT', 'INT64', 'FLOAT64', 'NUMERIC', 'BIGNUMERIC'].includes(info.type.toUpperCase());
+        // Only exclude DATE columns (they can only be used once)
+        const isDateExcluded = isColumnCommittedInAnyFilter(col.fullName, 'date');
+        const isTimestamp = timestampCol && col.fullName === timestampCol;
+        return isNumeric && !isDateExcluded && !isTimestamp;
+    });
+
+    // Transaction Count - Product ID (grouping column - only exclude date columns)
+    const txnCountProductSelect = document.getElementById('productTxnCountProductColumn');
+    txnCountProductSelect.innerHTML = '<option value="">Select column...</option>';
+    columns.forEach(col => {
+        // Exclude timestamp column and date-filtered columns
+        if (timestampCol && col.fullName === timestampCol) return;
+        if (isColumnCommittedInAnyFilter(col.fullName, 'date')) return;
+
+        const option = document.createElement('option');
+        option.value = col.fullName;
+        option.textContent = col.fullName;
+        txnCountProductSelect.appendChild(option);
+    });
+
+    // Revenue - Product ID (grouping column - only exclude date columns)
+    const revenueProductSelect = document.getElementById('productRevenueProductColumn');
+    revenueProductSelect.innerHTML = '<option value="">Select column...</option>';
+    columns.forEach(col => {
+        // Exclude timestamp column and date-filtered columns
+        if (timestampCol && col.fullName === timestampCol) return;
+        if (isColumnCommittedInAnyFilter(col.fullName, 'date')) return;
+
+        const option = document.createElement('option');
+        option.value = col.fullName;
+        option.textContent = col.fullName;
+        revenueProductSelect.appendChild(option);
+    });
+
+    // Revenue - Amount Column (aggregation column - REUSABLE across sub-chapters)
+    // But within Product Metrics, we exclude columns already used in PENDING aggregations
+    // to avoid duplicate filters within the same modal
+    const revenueAmountSelect = document.getElementById('productRevenueAmountColumn');
+    revenueAmountSelect.innerHTML = '<option value="">Select column...</option>';
+    numericColumns.forEach(col => {
+        // Check if this column is already used in pending product aggregations (within same modal)
+        const isUsedInPending = productFiltersState.pending.aggregationFilters.some(f => f.amountColumn === col.fullName);
+        // Check if used as revenue column in top products (within same modal)
+        const isUsedAsRevenue = productFiltersState.pending.topRevenue.revenueColumn === col.fullName;
+        // Note: We do NOT exclude based on committed state - aggregation columns are reusable!
+        if (!isUsedInPending && !isUsedAsRevenue) {
+            const option = document.createElement('option');
+            option.value = col.fullName;
+            option.textContent = col.fullName;
+            revenueAmountSelect.appendChild(option);
+        }
+    });
+}
+
+function resetProductMetricsInputs() {
+    // Reset transaction count inputs
+    document.getElementById('productTxnCountFilterType').value = 'greater_than';
+    document.getElementById('productTxnCountValue').value = '';
+    document.getElementById('productTxnCountMin').value = '';
+    document.getElementById('productTxnCountMax').value = '';
+    updateProductTxnCountInputs();
+
+    // Reset revenue inputs
+    document.getElementById('productRevenueFilterType').value = 'greater_than';
+    document.getElementById('productRevenueValue').value = '';
+    document.getElementById('productRevenueMin').value = '';
+    document.getElementById('productRevenueMax').value = '';
+    updateProductRevenueInputs();
+}
+
+function updateProductTxnCountInputs() {
+    const filterType = document.getElementById('productTxnCountFilterType').value;
+    const valueContainer = document.getElementById('productTxnCountValueContainer');
+    const minContainer = document.getElementById('productTxnCountMinContainer');
+    const maxContainer = document.getElementById('productTxnCountMaxContainer');
+
+    if (filterType === 'range') {
+        valueContainer.classList.add('hidden');
+        minContainer.classList.remove('hidden');
+        maxContainer.classList.remove('hidden');
+    } else {
+        valueContainer.classList.remove('hidden');
+        minContainer.classList.add('hidden');
+        maxContainer.classList.add('hidden');
+    }
+}
+
+function updateProductRevenueInputs() {
+    const filterType = document.getElementById('productRevenueFilterType').value;
+    const valueContainer = document.getElementById('productRevenueValueContainer');
+    const minContainer = document.getElementById('productRevenueMinContainer');
+    const maxContainer = document.getElementById('productRevenueMaxContainer');
+
+    if (filterType === 'range') {
+        valueContainer.classList.add('hidden');
+        minContainer.classList.remove('hidden');
+        maxContainer.classList.remove('hidden');
+    } else {
+        valueContainer.classList.remove('hidden');
+        minContainer.classList.add('hidden');
+        maxContainer.classList.add('hidden');
+    }
+}
+
+function addProductTransactionCountFilter() {
+    const productColumn = document.getElementById('productTxnCountProductColumn').value;
+    const filterType = document.getElementById('productTxnCountFilterType').value;
+
+    if (!productColumn) {
+        showNotification('Please select a product ID column', 'error');
+        return;
+    }
+
+    let filterData = {
+        type: 'transaction_count',
+        productColumn: productColumn,
+        filterType: filterType
+    };
+
+    if (filterType === 'range') {
+        const min = parseFloat(document.getElementById('productTxnCountMin').value);
+        const max = parseFloat(document.getElementById('productTxnCountMax').value);
+        if (isNaN(min) || isNaN(max)) {
+            showNotification('Please enter valid min and max values', 'error');
+            return;
+        }
+        filterData.min = min;
+        filterData.max = max;
+    } else {
+        const value = parseFloat(document.getElementById('productTxnCountValue').value);
+        if (isNaN(value)) {
+            showNotification('Please enter a valid value', 'error');
+            return;
+        }
+        filterData.value = value;
+    }
+
+    // Add to pending state
+    productFiltersState.pending.aggregationFilters.push(filterData);
+
+    // Update UI
+    renderExistingProductAggregationFilters();
+    updateProductsFilterSummary();
+    updateProductsRefreshButtonState();
+
+    // Reset inputs
+    document.getElementById('productTxnCountProductColumn').value = '';
+    document.getElementById('productTxnCountValue').value = '';
+    document.getElementById('productTxnCountMin').value = '';
+    document.getElementById('productTxnCountMax').value = '';
+
+    showNotification('Transaction count filter added', 'success');
+}
+
+function addProductRevenueFilter() {
+    const productColumn = document.getElementById('productRevenueProductColumn').value;
+    const amountColumn = document.getElementById('productRevenueAmountColumn').value;
+    const filterType = document.getElementById('productRevenueFilterType').value;
+
+    if (!productColumn) {
+        showNotification('Please select a product ID column', 'error');
+        return;
+    }
+    if (!amountColumn) {
+        showNotification('Please select an amount column', 'error');
+        return;
+    }
+
+    let filterData = {
+        type: 'total_revenue',
+        productColumn: productColumn,
+        amountColumn: amountColumn,
+        filterType: filterType
+    };
+
+    if (filterType === 'range') {
+        const min = parseFloat(document.getElementById('productRevenueMin').value);
+        const max = parseFloat(document.getElementById('productRevenueMax').value);
+        if (isNaN(min) || isNaN(max)) {
+            showNotification('Please enter valid min and max values', 'error');
+            return;
+        }
+        filterData.min = min;
+        filterData.max = max;
+    } else {
+        const value = parseFloat(document.getElementById('productRevenueValue').value);
+        if (isNaN(value)) {
+            showNotification('Please enter a valid value', 'error');
+            return;
+        }
+        filterData.value = value;
+    }
+
+    // Add to pending state
+    productFiltersState.pending.aggregationFilters.push(filterData);
+
+    // Update UI
+    renderExistingProductAggregationFilters();
+    updateProductsFilterSummary();
+    updateProductsRefreshButtonState();
+    populateProductMetricsDropdowns(); // Refresh to exclude used amount column
+
+    // Reset inputs
+    document.getElementById('productRevenueProductColumn').value = '';
+    document.getElementById('productRevenueAmountColumn').value = '';
+    document.getElementById('productRevenueValue').value = '';
+    document.getElementById('productRevenueMin').value = '';
+    document.getElementById('productRevenueMax').value = '';
+
+    showNotification('Revenue filter added', 'success');
+}
+
+function renderExistingProductAggregationFilters() {
+    const container = document.getElementById('existingProductAggregationFiltersList');
+    const section = document.getElementById('existingProductAggregationFiltersSection');
+    const filters = productFiltersState.pending.aggregationFilters;
+
+    if (filters.length === 0) {
+        section.classList.add('hidden');
+        return;
+    }
+
+    section.classList.remove('hidden');
+    container.innerHTML = filters.map((filter, index) => {
+        let description = '';
+        if (filter.type === 'transaction_count') {
+            if (filter.filterType === 'range') {
+                description = `Transactions: ${filter.min} - ${filter.max}`;
+            } else if (filter.filterType === 'greater_than') {
+                description = `Transactions > ${filter.value}`;
+            } else {
+                description = `Transactions < ${filter.value}`;
+            }
+            description += ` (grouped by ${filter.productColumn})`;
+        } else if (filter.type === 'total_revenue') {
+            if (filter.filterType === 'range') {
+                description = `Revenue: $${filter.min} - $${filter.max}`;
+            } else if (filter.filterType === 'greater_than') {
+                description = `Revenue > $${filter.value}`;
+            } else {
+                description = `Revenue < $${filter.value}`;
+            }
+            description += ` (SUM of ${filter.amountColumn})`;
+        }
+
+        return `
+            <div class="existing-filter-item">
+                <div class="existing-filter-info">
+                    <div class="existing-filter-column">
+                        <span class="existing-filter-column-name">${filter.type === 'transaction_count' ? 'Transaction Count' : 'Revenue'}</span>
+                        <span class="existing-filter-type-badge">${filter.filterType.replace('_', ' ')}</span>
+                    </div>
+                    <div class="existing-filter-value">${description}</div>
+                </div>
+                <div class="existing-filter-actions">
+                    <button class="existing-filter-btn delete" onclick="removeProductAggregationFilter(${index})" title="Remove">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function removeProductAggregationFilter(index) {
+    productFiltersState.pending.aggregationFilters.splice(index, 1);
+    renderExistingProductAggregationFilters();
+    updateProductsFilterSummary();
+    updateProductsRefreshButtonState();
+    populateProductMetricsDropdowns(); // Refresh dropdowns
 }
 
 // ============================================================================
@@ -5711,6 +6269,37 @@ function updateProductsFilterSummary() {
         });
     });
 
+    // Aggregation filters - unified format: "Metric: type, condition (grouped by col)"
+    pending.aggregationFilters.forEach((f, idx) => {
+        const productCol = f.productColumn?.split('.').pop() || 'product';
+        let desc = '';
+        if (f.type === 'transaction_count') {
+            if (f.filterType === 'range') {
+                desc = `Txn Count: ${f.min} - ${f.max} (by ${productCol})`;
+            } else if (f.filterType === 'greater_than') {
+                desc = `Txn Count: > ${f.value} (by ${productCol})`;
+            } else {
+                desc = `Txn Count: < ${f.value} (by ${productCol})`;
+            }
+        } else if (f.type === 'total_revenue') {
+            const amountCol = f.amountColumn?.split('.').pop() || 'amount';
+            if (f.filterType === 'range') {
+                desc = `Revenue: $${f.min} - $${f.max} (SUM ${amountCol} by ${productCol})`;
+            } else if (f.filterType === 'greater_than') {
+                desc = `Revenue: > $${f.value} (SUM ${amountCol} by ${productCol})`;
+            } else {
+                desc = `Revenue: < $${f.value} (SUM ${amountCol} by ${productCol})`;
+            }
+        }
+        filters.push({
+            number: filterNumber++,
+            type: 'aggregation',
+            index: idx,
+            description: desc,
+            deleteAction: `deleteFilterFromSummary("aggregation", ${idx})`
+        });
+    });
+
     // Date filters - unified format: "Date: column, condition"
     pending.dateFilters.forEach((f, idx) => {
         const shortName = f.column.split('.').pop();
@@ -5762,6 +6351,8 @@ function deleteFilterFromSummary(filterType, index) {
         pending.topRevenue.enabled = false;
         pending.topRevenue.productColumn = null;
         pending.topRevenue.revenueColumn = null;
+    } else if (filterType === 'aggregation') {
+        pending.aggregationFilters.splice(index, 1);
     } else if (filterType === 'category') {
         pending.categoryFilters.splice(index, 1);
     } else if (filterType === 'numeric') {
@@ -5789,6 +6380,7 @@ function updateProductsFilterStatus() {
     let filterCount = 0;
 
     if (committed.topRevenue.enabled) filterCount++;
+    filterCount += committed.aggregationFilters.length;
     filterCount += committed.categoryFilters.length;
     filterCount += committed.numericFilters.length;
     filterCount += committed.dateFilters.length;
@@ -6946,6 +7538,19 @@ function buildProductFilterForApi() {
         };
     }
 
+    // Aggregation filters (transaction count, total revenue)
+    if (pending.aggregationFilters.length > 0) {
+        result.aggregation_filters = pending.aggregationFilters.map(f => ({
+            type: f.type,
+            product_column: f.productColumn,
+            amount_column: f.amountColumn,
+            filter_type: f.filterType,
+            value: f.value,
+            min: f.min,
+            max: f.max
+        }));
+    }
+
     // Category filters
     if (pending.categoryFilters.length > 0) {
         result.category_filters = pending.categoryFilters
@@ -7644,6 +8249,19 @@ async function fetchDatasetStats(withFilters = false) {
                         revenue_column: productCommitted.topRevenue.revenueColumn,
                         threshold_percent: productCommitted.topRevenue.thresholdPercent
                     };
+                }
+
+                // Aggregation filters (transaction count, total revenue)
+                if (productCommitted.aggregationFilters.length > 0) {
+                    productFilter.aggregation_filters = productCommitted.aggregationFilters.map(f => ({
+                        type: f.type,
+                        product_column: f.productColumn,
+                        amount_column: f.amountColumn,
+                        filter_type: f.filterType,
+                        value: f.value,
+                        min: f.min,
+                        max: f.max
+                    }));
                 }
 
                 // Category filters

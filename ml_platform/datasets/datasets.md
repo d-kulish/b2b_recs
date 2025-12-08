@@ -1,7 +1,7 @@
 # Dataset Manager
 
 **Last Updated:** December 8, 2025
-**Status:** Production Ready ✅ | Visual Schema Builder ✅ | TFX Query Generation ✅ | Edit-time Versioning ✅
+**Status:** Production Ready ✅ | Visual Schema Builder ✅ | TFX Query Generation ✅ | Edit-time Versioning ✅ | Product Metrics ✅ | View SQL ✅
 
 Django-based dataset configuration system for defining ML training data from BigQuery tables. Part of the B2B Recommendations Platform.
 
@@ -64,15 +64,34 @@ Map any columns to ML concepts:
 
 ### **3. Data Filters**
 
+**Date Filters:**
+- Rolling window (last N days from MAX date in dataset)
+- Fixed start date (all data from a specific date)
+- Uses TIMESTAMP_SUB for rolling windows
+
 **Top N% Products by Revenue:**
 - Uses CTE with window functions for running totals
 - Filters to products representing top N% of total revenue
 - Example: Top 20% products = ~80% of revenue (Pareto principle)
 
-**Minimum Transactions per Customer:**
-- CTE with HAVING clause for transaction counts
-- Filters out cold-start users with few interactions
-- Improves model training quality
+**Product Metrics Filters:**
+- Transaction Count Filter: Products with COUNT(*) > N transactions
+- Revenue Filter: Products with SUM(amount) > N total revenue
+- Both use GROUP BY product_id with HAVING clause
+
+**Top N% Customers by Revenue:**
+- Same Pareto-based filtering as products
+- Filters to customers representing top N% of total revenue
+
+**Customer Metrics Filters:**
+- Transaction Count Filter: Customers with COUNT(*) > N transactions
+- Spending Filter: Customers with SUM(amount) > N total spending
+- Both use GROUP BY customer_id with HAVING clause
+
+**Category/Numeric/Date Column Filters:**
+- Category: Include/exclude specific values (IN / NOT IN)
+- Numeric: Range, greater than, less than, equals
+- Date: Relative (last N days) or fixed date range
 
 ### **4. Train/Eval Split**
 
@@ -100,7 +119,7 @@ Automated analysis with issue detection:
 
 ---
 
-## 5-Step Wizard Flow
+## 4-Step Wizard Flow
 
 ### **Step 1: Basic Information**
 - Dataset name (with real-time availability check)
@@ -117,16 +136,32 @@ Automated analysis with issue detection:
 - Visual connection lines between joined tables
 - Column checkboxes for selection
 - Live preview of resulting dataset
+- ML column mapping (user_id, product_id, revenue)
 
-### **Step 4: ML Column Mapping**
-- Map selected columns to ML concepts
-- Auto-suggestions for common patterns
-- Validation (user_id and product_id required)
+### **Step 4: Filters**
+Three collapsible sub-chapters:
 
-### **Step 5: Filters & Split**
-- Top N% products filter (optional)
-- Minimum transactions filter (optional)
-- Train/eval split configuration
+**Dates Sub-chapter:**
+- Select timestamp column
+- Rolling window (last N days) OR fixed start date
+- Refresh Dataset button to apply
+
+**Customers Sub-chapter:**
+- Top Customers: Filter by cumulative revenue (Pareto)
+- Customer Metrics: Transaction count filter, Spending filter
+- Filter Columns: Category, numeric, date filters
+- Refresh Dataset button to apply
+
+**Products Sub-chapter:**
+- Top Products: Filter by cumulative revenue (Pareto)
+- Product Metrics: Transaction count filter, Revenue filter
+- Filter Columns: Category, numeric, date filters
+- Refresh Dataset button to apply
+
+**Dataset Summary Panel:**
+- Shows total rows with applied filters
+- Column statistics (min/max/avg/unique)
+- Updates on each Refresh Dataset click
 
 ---
 
@@ -256,6 +291,16 @@ class DatasetVersion(models.Model):
 ---
 
 ## Query Generation
+
+### **View SQL Feature**
+
+The View modal includes a "View SQL" button that generates a production-ready SQL query from the saved dataset configuration:
+
+- **Generates complete SQL** with all filters applied (date, products, customers)
+- **Uses CTEs** (Common Table Expressions) for complex filter logic
+- **Filter execution order**: Date filter first, then product/customer filters
+- **Rolling windows** use MAX(date) from dataset for reproducibility
+- **Copy to clipboard** for easy use in BigQuery console
 
 ### **Basic Query Structure**
 ```sql

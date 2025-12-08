@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides detailed specifications for implementing the **Datasets** domain in the ML Platform. The Datasets domain defines WHAT data goes into model training.
 
-**Last Updated**: 2025-12-08 (v10 - Implemented edit-time versioning, removed status field)
+**Last Updated**: 2025-12-08 (v11 - Added Product Metrics filters, View SQL functionality, fixed date filter persistence)
 
 ---
 
@@ -238,6 +238,64 @@ The `summary_snapshot` JSONField stores the Dataset Summary from wizard Step 4:
 
 **API Endpoint:**
 - `GET /api/datasets/{dataset_id}/summary/` - Returns dataset configuration + summary_snapshot
+
+### View SQL Functionality
+
+The "View SQL" button in the View modal generates a production-ready SQL query from the saved dataset configuration. This query can be copied and run directly in BigQuery.
+
+**Key Features:**
+- Generates complete SQL with all filters applied (date, products, customers)
+- Uses CTEs (Common Table Expressions) for complex filters
+- Rolling window date filters use `MAX(date)` from the dataset (not current date) for reproducibility
+- All filter logic is applied in the correct order: date filter first, then product/customer filters
+
+**SQL Generation Order:**
+1. **filtered_data CTE**: Apply date filter first (if configured)
+2. **Product filter CTEs**: top_products, filtered_products_N (from filtered_data)
+3. **Customer filter CTEs**: top_customers, filtered_customers_N (from filtered_data)
+4. **Final SELECT**: From filtered_data with WHERE clauses for product/customer filters
+
+**Example Generated SQL:**
+```sql
+WITH filtered_data AS (
+    SELECT customer_id, product_id, category, amount, transaction_date
+    FROM `project.raw_data.transactions` AS transactions
+    WHERE transaction_date >= TIMESTAMP_SUB(
+        (SELECT MAX(transaction_date) FROM `project.raw_data.transactions`),
+        INTERVAL 30 DAY
+    )
+),
+filtered_products_0 AS (
+    SELECT product_id
+    FROM filtered_data
+    GROUP BY product_id
+    HAVING COUNT(*) > 3
+),
+top_customers AS (
+    SELECT customer_id
+    FROM (
+        SELECT customer_id, SUM(amount) as total_revenue,
+               SUM(SUM(amount)) OVER () as grand_total,
+               SUM(SUM(amount)) OVER (ORDER BY SUM(amount) DESC) as running_total
+        FROM filtered_data
+        GROUP BY customer_id
+    )
+    WHERE running_total <= grand_total * 0.8
+       OR running_total - total_revenue < grand_total * 0.8
+)
+SELECT customer_id, product_id, category, amount, transaction_date
+FROM filtered_data
+WHERE product_id IN (SELECT product_id FROM filtered_products_0)
+  AND category IN ('Electronics', 'Home Decor')
+  AND customer_id IN (SELECT customer_id FROM top_customers)
+```
+
+**API Endpoint:**
+- `GET /api/datasets/{dataset_id}/query/` - Returns generated SQL query
+
+**Backend Service:**
+- `BigQueryService.generate_query()` in `ml_platform/datasets/services.py`
+- Uses `_generate_date_filter()`, `_generate_product_filter_clauses_v2()`, `_generate_customer_filter_clauses_v2()`
 
 ### Dataset Edit Functionality
 
@@ -669,17 +727,19 @@ The Products sub-chapter uses a **pending/committed state** model:
 - Filter changes are "pending" until committed
 - **Refresh Dataset**: Commits pending changes and updates Dataset Summary
 
-Products sub-chapter uses a **minimalist 3-button navigation** design with modal-based configuration:
+Products sub-chapter uses a **4-button navigation** design with modal-based configuration:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│ Products                                            [2 filters applied]  ▼  │
+│ Products                                            [3 filters applied]  ▼  │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│  Filter by revenue        Filter by columns                                  │
-│  [ Top Products ]         [ Filter Columns ]        [ Refresh Dataset ]      │
+│  Filter by revenue      Filter by metrics      Filter by columns            │
+│  [ Top Products ]       [ Product Metrics ]    [ Filter Columns ]           │
+│                                                                              │
+│                                                 [ Refresh Dataset ]          │
 │                                                                              │
 │  ┌───────────────────────────────────────────────────────────────────────┐  │
-│  │ Top 80% products • category                              (summary)   │  │
+│  │ Filter #1: Top 80% revenue • Filter #2: transactions > 5  [trash]    │  │
 │  └───────────────────────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -688,12 +748,30 @@ Products sub-chapter uses a **minimalist 3-button navigation** design with modal
 
 1. **Top Products** - Opens modal for revenue-based product filtering
    - Helper label above: "Filter by revenue"
-2. **Filter Columns** - Opens modal to manage column filters (STRING, INTEGER, FLOAT, DATE types)
+2. **Product Metrics** - Opens modal for aggregation-based product filtering
+   - Helper label above: "Filter by metrics"
+3. **Filter Columns** - Opens modal to manage column filters (STRING, INTEGER, FLOAT, DATE types)
    - Helper label above: "Filter by columns"
-3. **Refresh Dataset** - Commits all pending changes and updates Dataset Summary
+4. **Refresh Dataset** - Commits all pending changes and updates Dataset Summary
    - Black background with white text when enabled
    - Grey/disabled until at least one filter is configured
    - No helper label (empty space for alignment)
+
+**Product Metrics Button** (opens modal):
+Two separate filter sections with Apply/Cancel buttons:
+
+1. **Transaction Count Filter**:
+   - Select Product ID column (grouping column)
+   - Select filter type: Greater than / Less than / Range
+   - Enter value(s)
+   - Filters products by their total number of transactions (COUNT of rows per product)
+
+2. **Revenue Filter**:
+   - Select Product ID column (grouping column)
+   - Select Amount column (aggregation column - excluded after use)
+   - Select filter type: Greater than / Less than / Range
+   - Enter value(s)
+   - Filters products by their total revenue (SUM of amount)
 
 **Summary Line:**
 - Shows numbered filters with delete buttons: "Filter #1: Top 80% revenue (X products)", "Filter #2: unit_price: < 20"
@@ -710,17 +788,37 @@ Products sub-chapter uses a **minimalist 3-button navigation** design with modal
 
 ---
 
+**State Management for Products**:
+```javascript
+let productFiltersState = {
+    pending: {
+        topRevenue: { enabled, productColumn, revenueColumn, thresholdPercent },
+        aggregationFilters: [{ type, productColumn, amountColumn?, filterType, value, min?, max? }],
+        categoryFilters: [...],
+        numericFilters: [...],
+        dateFilters: [...]
+    },
+    committed: { /* same structure */ },
+    columnAnalysis: {},
+    selectedFilterColumn: null
+};
+```
+
+---
+
 **Cross-Sub-chapter Column Exclusion**
 
 To prevent the same column from being used in multiple filters across different sub-chapters, the system implements centralized column tracking:
 
 1. **Committed State Tracking**: Each sub-chapter tracks which columns have been "committed" (applied via Refresh Dataset)
    - Dates: `committedDatesFilter.timestampColumn`
-   - Products: `productFiltersState.committed` (topRevenue columns, category/numeric/date filter columns)
+   - Products: `productFiltersState.committed` (topRevenue columns, aggregation columns, category/numeric/date filter columns)
+   - Customers: `customerFiltersState.committed` (topRevenue columns, aggregation columns, category/numeric/date filter columns)
 
 2. **Column Availability Rules**:
-   - Columns committed in Dates sub-chapter are excluded from Products dropdowns
-   - Columns committed in Products sub-chapter are excluded from Dates timestamp dropdown
+   - Columns committed in Dates sub-chapter are excluded from Products and Customers dropdowns
+   - Columns committed in Products sub-chapter are excluded from Dates and Customers dropdowns
+   - Columns committed in Customers sub-chapter are excluded from Dates and Products dropdowns
    - Within Products, columns used in pending filters are excluded from the Filter Columns dropdown
 
 3. **State Lifecycle**:

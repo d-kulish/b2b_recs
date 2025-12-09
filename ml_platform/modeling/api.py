@@ -557,17 +557,29 @@ def list_datasets_for_model(request, model_id):
             model_endpoint=model
         ).order_by('-updated_at')
 
-        data = [{
-            'id': ds.id,
-            'name': ds.name,
-            'description': ds.description,
-            'primary_table': ds.primary_table,
-            'row_count_estimate': ds.row_count_estimate,
-            'unique_users_estimate': ds.unique_users_estimate,
-            'unique_products_estimate': ds.unique_products_estimate,
-            'updated_at': ds.updated_at.isoformat() if ds.updated_at else None,
-            'feature_configs_count': ds.feature_configs.count(),
-        } for ds in datasets]
+        data = []
+        for ds in datasets:
+            # Get total_rows from summary_snapshot
+            summary = ds.summary_snapshot or {}
+            total_rows = summary.get('total_rows')
+
+            # Count columns from selected_columns
+            column_count = 0
+            if ds.selected_columns:
+                for table_cols in ds.selected_columns.values():
+                    if isinstance(table_cols, list):
+                        column_count += len(table_cols)
+
+            data.append({
+                'id': ds.id,
+                'name': ds.name,
+                'description': ds.description,
+                'primary_table': ds.primary_table,
+                'total_rows': total_rows,
+                'column_count': column_count,
+                'updated_at': ds.updated_at.isoformat() if ds.updated_at else None,
+                'feature_configs_count': ds.feature_configs.count(),
+            })
 
         return JsonResponse({
             'success': True,

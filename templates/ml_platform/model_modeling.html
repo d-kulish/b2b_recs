@@ -276,13 +276,13 @@
     <!-- Modeling Container -->
     <div class="bg-white rounded-xl border border-black shadow-lg p-6">
         <div class="flex items-center justify-between mb-6">
-            <h2 class="text-2xl font-bold text-gray-900">Modeling</h2>
+            <h2 class="text-2xl font-bold text-gray-900">Features</h2>
             <div class="btn-group">
-                <button onclick="refreshConfigs()" class="btn btn-secondary btn-sm" style="width: 140px;">
+                <button onclick="refreshConfigs()" class="btn btn-secondary btn-sm" style="width: 150px;">
                     <i class="fas fa-sync-alt"></i>Refresh
                 </button>
-                <button onclick="openWizard()" class="btn btn-primary btn-sm" style="width: 160px;">
-                    <i class="fas fa-plus"></i>New Feature Config
+                <button onclick="openWizard()" class="btn btn-primary btn-sm" style="width: 150px;">
+                    <i class="fas fa-plus"></i>New Feats Set
                 </button>
             </div>
         </div>
@@ -517,17 +517,21 @@
         </div>
 
         <!-- Modal Footer -->
-        <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" onclick="closeWizard()">Cancel</button>
-            <div class="flex gap-2">
-                <button type="button" id="backBtn" class="btn btn-secondary hidden" onclick="prevStep()">
-                    <i class="fas fa-arrow-left mr-1"></i>Back
+        <div class="modal-footer-wizard-neu">
+            <div class="footer-left">
+                <button type="button" id="backBtn" class="btn-neu btn-neu-nav hidden" onclick="prevStep()">
+                    <span class="btn-neu-inner"><i class="fas fa-chevron-left"></i></span>
                 </button>
-                <button type="button" id="nextBtn" class="btn btn-primary" onclick="nextStep()">
-                    Continue<i class="fas fa-arrow-right ml-1"></i>
+                <button type="button" id="nextBtn" class="btn-neu btn-neu-nav" onclick="nextStep()">
+                    <span class="btn-neu-inner"><i class="fas fa-chevron-right"></i></span>
                 </button>
-                <button type="button" id="saveBtn" class="btn btn-primary hidden" onclick="saveConfig()">
-                    <i class="fas fa-save mr-1"></i>Save Config
+            </div>
+            <div class="footer-right">
+                <button type="button" id="saveBtn" class="btn-neu btn-neu-action btn-neu-save hidden" onclick="saveConfig()">
+                    <span class="btn-neu-inner">Save</span>
+                </button>
+                <button type="button" class="btn-neu btn-neu-action btn-neu-cancel" onclick="closeWizard()">
+                    <span class="btn-neu-inner">Cancel</span>
                 </button>
             </div>
         </div>
@@ -549,9 +553,16 @@
         <div class="modal-body" id="featureModalBody">
             <!-- Content will be dynamically generated -->
         </div>
-        <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" onclick="closeFeatureModal()">Cancel</button>
-            <button type="button" class="btn btn-primary" onclick="applyFeatureConfig()">Apply</button>
+        <div class="modal-footer-wizard-neu">
+            <div class="footer-left"></div>
+            <div class="footer-right">
+                <button type="button" class="btn-neu btn-neu-action btn-neu-save" onclick="applyFeatureConfig()">
+                    <span class="btn-neu-inner">Apply</span>
+                </button>
+                <button type="button" class="btn-neu btn-neu-action btn-neu-cancel" onclick="closeFeatureModal()">
+                    <span class="btn-neu-inner">Cancel</span>
+                </button>
+            </div>
         </div>
     </div>
 </div>
@@ -597,9 +608,16 @@
                 </select>
             </div>
         </div>
-        <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" onclick="closeCrossModal()">Cancel</button>
-            <button type="button" class="btn btn-primary" onclick="addCrossFeature()">Add Cross</button>
+        <div class="modal-footer-wizard-neu">
+            <div class="footer-left"></div>
+            <div class="footer-right">
+                <button type="button" class="btn-neu btn-neu-action btn-neu-save" onclick="addCrossFeature()">
+                    <span class="btn-neu-inner">Add Cross</span>
+                </button>
+                <button type="button" class="btn-neu btn-neu-action btn-neu-cancel" onclick="closeCrossModal()">
+                    <span class="btn-neu-inner">Cancel</span>
+                </button>
+            </div>
         </div>
     </div>
 </div>
@@ -619,8 +637,13 @@
         <div class="modal-body" id="viewConfigBody" style="max-height: 70vh; overflow-y: auto;">
             <!-- Content will be dynamically generated -->
         </div>
-        <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" onclick="closeViewModal()">Close</button>
+        <div class="modal-footer-wizard-neu">
+            <div class="footer-left"></div>
+            <div class="footer-right">
+                <button type="button" class="btn-neu btn-neu-action btn-neu-secondary" onclick="closeViewModal()">
+                    <span class="btn-neu-inner">Close</span>
+                </button>
+            </div>
         </div>
     </div>
 </div>
@@ -913,9 +936,18 @@ function updateWizardStep() {
     document.getElementById('wizardStep2').classList.toggle('hidden', currentStep !== 2);
     document.getElementById('wizardStep2').classList.toggle('active', currentStep === 2);
 
-    // Update progress pills
-    document.getElementById('progress1').className = 'progress-step-pill ' + (currentStep >= 1 ? 'current' : 'future');
-    document.getElementById('progress2').className = 'progress-step-pill ' + (currentStep >= 2 ? 'current' : 'future');
+    // Update progress pills - use completed/current/future classes
+    for (let i = 1; i <= 2; i++) {
+        const pill = document.getElementById(`progress${i}`);
+        pill.classList.remove('current', 'completed', 'future');
+        if (i < currentStep) {
+            pill.classList.add('completed');
+        } else if (i === currentStep) {
+            pill.classList.add('current');
+        } else {
+            pill.classList.add('future');
+        }
+    }
 
     // Update buttons
     document.getElementById('backBtn').classList.toggle('hidden', currentStep === 1);
@@ -973,9 +1005,13 @@ function onDatasetChange() {
     if (datasetId) {
         const dataset = allDatasets.find(d => d.id == datasetId);
         if (dataset) {
-            document.getElementById('datasetInfoText').textContent =
-                `${dataset.row_count_estimate ? dataset.row_count_estimate.toLocaleString() + ' rows' : 'Unknown rows'} | ` +
-                `${dataset.unique_users_estimate || '?'} users | ${dataset.unique_products_estimate || '?'} products`;
+            const rowsText = dataset.total_rows != null
+                ? dataset.total_rows.toLocaleString() + ' rows'
+                : 'Unknown rows';
+            const colsText = dataset.column_count != null
+                ? dataset.column_count + ' columns'
+                : '? columns';
+            document.getElementById('datasetInfoText').textContent = `${rowsText} | ${colsText}`;
             datasetInfo.classList.remove('hidden');
         }
         loadCloneOptions(datasetId);

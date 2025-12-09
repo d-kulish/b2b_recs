@@ -4,11 +4,25 @@
 ## Document Purpose
 This document provides detailed specifications for implementing the **Modeling** domain in the ML Platform. This domain defines HOW data is transformed for training and enables rapid experimentation via Quick Tests.
 
-**Last Updated**: 2025-12-09
+**Last Updated**: 2025-12-10
 
 ---
 
 ## Recent Updates (December 2025)
+
+### TFX Code Generation (2025-12-10)
+- **Automatic code generation** - Feature Configs now automatically generate TFX Transform `preprocessing_fn` code
+- **PreprocessingFnGenerator** service converts JSON config to executable Python code
+- **Database storage** - Generated code stored in `FeatureConfig.generated_transform_code` field
+- **API endpoints** for viewing and regenerating code:
+  - `GET /api/feature-configs/{id}/generated-code/`
+  - `POST /api/feature-configs/{id}/regenerate-code/`
+- **Auto-triggers** - Code regenerated on create, update (if features changed), and clone
+- See [TFX Code Generation](tfx_code_generation.md) for full details
+
+### CSRF Bug Fix (2025-12-10)
+- Fixed missing CSRF token in Feature Config save/clone/delete operations
+- Added `getCookie()` helper and `X-CSRFToken` header to all POST/PUT/DELETE fetch calls
 
 ### Primary ID Requirement
 - **Customer ID** and **Product ID** are now **required** fields that must be assigned before adding other features
@@ -45,6 +59,15 @@ This document provides detailed specifications for implementing the **Modeling**
 - **Cyclical Features section** no longer has a parent toggle checkbox - individual options are directly selectable
 - **Added "Yearly" (month of year)** cyclical option (+2D) for annual seasonality patterns
 - Cyclical options now include: Yearly, Quarterly, Monthly, Weekly, Daily
+
+### Cross Feature Improvements
+- **Feature type badges** in cross feature modal (ID, Numeric, Temporal, Text)
+- **Bucketization options** for numeric/temporal features when crossing
+  - Numeric and temporal features need to be discretized before crossing
+  - Separate "crossing buckets" parameter (coarse granularity, e.g., 5-20 buckets)
+  - This is independent from the main tensor's bucketization
+- **New data structure** for cross features includes per-feature bucket configuration
+- **Display shows bucket details** for crossed numeric/temporal features
 
 ---
 
@@ -1033,10 +1056,29 @@ For backward compatibility, the system also supports the legacy format with `typ
     "properties": {
       "features": {
         "type": "array",
-        "items": {"type": "string"},
         "minItems": 2,
         "maxItems": 3,
-        "description": "Column names to cross (must be in same model)"
+        "description": "Features to cross (array of feature config objects)",
+        "items": {
+          "type": "object",
+          "required": ["column", "type"],
+          "properties": {
+            "column": {
+              "type": "string",
+              "description": "Column name"
+            },
+            "type": {
+              "enum": ["text", "numeric", "temporal"],
+              "description": "Data type of the feature"
+            },
+            "crossing_buckets": {
+              "type": "integer",
+              "minimum": 5,
+              "maximum": 100,
+              "description": "Number of buckets for crossing (only for numeric/temporal)"
+            }
+          }
+        }
       },
       "hash_bucket_size": {
         "type": "integer",
@@ -1061,17 +1103,25 @@ For backward compatibility, the system also supports the legacy format with `typ
 ```json
 [
   {
-    "features": ["customer_id", "city"],
+    "features": [
+      {"column": "customer_id", "type": "text"},
+      {"column": "city", "type": "text"}
+    ],
     "hash_bucket_size": 5000,
     "embedding_dim": 16
   },
   {
-    "features": ["revenue_bucket", "trans_date_bucket"],
+    "features": [
+      {"column": "revenue", "type": "numeric", "crossing_buckets": 10},
+      {"column": "trans_date", "type": "temporal", "crossing_buckets": 20}
+    ],
     "hash_bucket_size": 3000,
     "embedding_dim": 12
   }
 ]
 ```
+
+**Note:** Numeric and temporal features require `crossing_buckets` to discretize them before crossing. This is separate from the bucketization used in the main tensor - typically coarser (5-20 buckets) for effective crossing.
 
 ---
 
@@ -1500,49 +1550,55 @@ Quick Test runs a mini TFX pipeline:
 
 ## Implementation Checklist
 
-### Phase 1: Data Model & Backend
-- [ ] Create `FeatureConfig` Django model with JSON fields
-- [ ] Create `FeatureConfigVersion` model for versioning
-- [ ] Create database migrations
-- [ ] Implement `SmartDefaultsService` (auto-configure based on column stats)
-- [ ] Implement `TensorDimensionCalculator` service
-- [ ] Create CRUD API endpoints (`/api/feature-configs/`)
-- [ ] Add column statistics endpoint from Dataset
+### Phase 1: Data Model & Backend ✅
+- [x] Create `FeatureConfig` Django model with JSON fields
+- [x] Create `FeatureConfigVersion` model for versioning
+- [x] Create database migrations
+- [x] Implement `SmartDefaultsService` (auto-configure based on column stats)
+- [x] Implement `TensorDimensionCalculator` service
+- [x] Create CRUD API endpoints (`/api/feature-configs/`)
+- [x] Add column statistics endpoint from Dataset
 
-### Phase 2: Wizard UI - Step 1
-- [ ] Create Feature Config list page (with tensor dimension summary)
-- [ ] Build Step 1 form (name, description, dataset selector)
-- [ ] Implement "Start From" options (Blank / Smart Defaults / Clone)
-- [ ] Connect Step 1 to backend API
-- [ ] Add dataset info display (columns, rows, last updated)
+### Phase 2: Wizard UI - Step 1 ✅
+- [x] Create Feature Config list page (with tensor dimension summary)
+- [x] Build Step 1 form (name, description, dataset selector)
+- [x] Implement "Start From" options (Blank / Smart Defaults / Clone)
+- [x] Connect Step 1 to backend API
+- [x] Add dataset info display (columns, rows, last updated)
 
-### Phase 3: Wizard UI - Step 2 (Drag & Drop)
-- [ ] Build Available Columns panel (draggable cards with stats)
-- [ ] Build BuyerModel / ProductModel drop zones
-- [ ] Implement drag & drop with Vue.js Draggable (or similar)
-- [ ] Create feature card component (shows transform summary)
-- [ ] Add data leakage warning badge for features in both models
-- [ ] Implement "Apply Smart Defaults" button
+### Phase 3: Wizard UI - Step 2 (Drag & Drop) ✅
+- [x] Build Available Columns panel (draggable cards with stats)
+- [x] Build BuyerModel / ProductModel drop zones
+- [x] Implement drag & drop with native HTML5 API
+- [x] Create feature card component (shows transform summary)
+- [x] Add data leakage warning badge for features in both models
+- [x] Implement "Apply Smart Defaults" button
 
-### Phase 4: Feature Configuration Modals
-- [ ] String feature modal (embedding dim, vocab settings)
-- [ ] Numeric feature modal (normalize, bucketize, log transform)
-- [ ] Timestamp feature modal (normalize, bucketize, cyclical options)
-- [ ] Cross feature modal (feature selection, hash bucket size, embedding dim)
-- [ ] Live dimension counter in each modal
+### Phase 4: Feature Configuration Modals ✅
+- [x] String feature modal (embedding dim, vocab auto-detected)
+- [x] Numeric feature modal (normalize, bucketize)
+- [x] Timestamp feature modal (normalize, bucketize, cyclical options)
+- [x] Cross feature modal (feature selection, hash bucket size, embedding dim, crossing buckets)
+- [x] Live dimension counter in each modal
 
-### Phase 5: Tensor Preview Panel
-- [ ] Build tensor preview component (side-by-side Buyer/Product)
-- [ ] Implement real-time dimension calculation
-- [ ] Add dimension breakdown bars (visual proportion)
+### Phase 5: Tensor Preview Panel ✅
+- [x] Build tensor preview component (side-by-side Buyer/Product)
+- [x] Implement real-time dimension calculation (client-side)
+- [x] Add dimension breakdown bars (visual proportion)
 - [ ] Add sample row preview (mock/computed data)
-- [ ] Implement refresh button functionality
+- [x] Implement refresh button functionality
 
-### Phase 6: TFX Integration (Future Scope)
-- [ ] Implement `PreprocessingFnGenerator` service
-- [ ] Generate `preprocessing_fn` code from FeatureConfig JSON
-- [ ] Create Trainer module template using Transform output
-- [ ] Handle cyclical feature generation in TFX Transform
+### Phase 6: TFX Code Generation ✅
+- [x] Implement `PreprocessingFnGenerator` service
+- [x] Generate `preprocessing_fn` code from FeatureConfig JSON
+- [x] Handle text features → `tft.compute_and_apply_vocabulary()`
+- [x] Handle numeric features → `tft.scale_to_z_score()` + `tft.bucketize()`
+- [x] Handle temporal features → normalize + cyclical (sin/cos) + bucketize
+- [x] Handle cross features → `tf.sparse.cross_hashed()` with separate bucketization
+- [x] Add database fields for generated code storage
+- [x] Add API endpoints for viewing/regenerating code
+- [ ] Implement `TrainerModuleGenerator` service
+- [ ] Generate Trainer module code that loads Transform artifacts
 
 ### Phase 7: Quick Test Integration (Future Scope)
 - [ ] Create Quick Test model and API
@@ -1567,6 +1623,7 @@ Quick Test runs a mini TFX pipeline:
 
 ## Related Documentation
 
+- [TFX Code Generation](tfx_code_generation.md) - Auto-generated Transform/Trainer code
 - [Implementation Overview](../implementation.md)
 - [Datasets Phase](phase_datasets.md)
 - [Training Phase](phase_training.md)

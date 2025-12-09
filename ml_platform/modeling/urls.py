@@ -27,6 +27,12 @@ urlpatterns = [
     path('api/feature-configs/<int:config_id>/versions/',
          api.list_versions, name='api_modeling_list_versions'),
 
+    # Generated code endpoints
+    path('api/feature-configs/<int:config_id>/generated-code/',
+         api.get_generated_code, name='api_modeling_get_generated_code'),
+    path('api/feature-configs/<int:config_id>/regenerate-code/',
+         api.regenerate_code, name='api_modeling_regenerate_code'),
+
     # Utility endpoints
     path('api/feature-configs/smart-defaults/',
          api.generate_smart_defaults, name='api_modeling_smart_defaults'),

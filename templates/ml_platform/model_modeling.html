@@ -902,7 +902,7 @@
 
 <!-- Cross Feature Modal -->
 <div id="crossFeatureModal" class="modal-overlay hidden">
-    <div class="modal-container" style="max-width: 450px;">
+    <div class="modal-container" style="max-width: 500px;">
         <div class="modal-header">
             <div class="modal-header-icon info">
                 <i class="fas fa-times"></i>
@@ -921,6 +921,16 @@
             </div>
             <div id="crossPreview" class="text-sm text-gray-600 mt-3 hidden">
                 Selected: <span id="crossPreviewText" class="font-medium"></span>
+            </div>
+            <!-- Bucketization options for numeric/temporal features -->
+            <div id="crossBucketOptions" class="mt-4 hidden">
+                <div class="text-sm font-medium text-gray-700 mb-2">
+                    <i class="fas fa-info-circle text-blue-500 mr-1"></i>
+                    Numeric/temporal features need bucketization for crossing
+                </div>
+                <div id="crossBucketInputs" class="space-y-3">
+                    <!-- Bucket inputs for each numeric/temporal feature will be inserted here -->
+                </div>
             </div>
             <div class="modal-form-group mt-4">
                 <label class="modal-form-label">Hash Bucket Size</label>
@@ -1013,6 +1023,27 @@ let configState = {
 let editingFeature = null;
 let editingFeatureModel = null;
 let crossFeatureModel = null;
+
+// =============================================================================
+// CSRF TOKEN HELPER
+// =============================================================================
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+const csrftoken = getCookie('csrftoken');
 
 // =============================================================================
 // INITIALIZATION
@@ -1923,15 +1954,44 @@ function createAssignedFeatureElement(feature, model, idx) {
     return div;
 }
 
+function getCrossFeatureNames(cross) {
+    // Handle both old format (array of strings) and new format (array of objects)
+    if (!cross.features || cross.features.length === 0) return [];
+    if (typeof cross.features[0] === 'string') {
+        return cross.features;
+    }
+    return cross.features.map(f => f.column);
+}
+
+function getCrossFeatureDetails(cross) {
+    // Build detailed description including bucket info for numeric/temporal
+    if (!cross.features || cross.features.length === 0) return '';
+    if (typeof cross.features[0] === 'string') {
+        return ''; // Old format, no bucket details
+    }
+
+    const details = cross.features
+        .filter(f => f.crossing_buckets)
+        .map(f => `${f.column}: ${f.crossing_buckets} buckets`);
+
+    return details.length > 0 ? details.join(', ') : '';
+}
+
 function createCrossFeatureElement(cross, model, idx) {
     const div = document.createElement('div');
     div.className = 'cross-feature';
 
+    const featureNames = getCrossFeatureNames(cross);
+    const bucketDetails = getCrossFeatureDetails(cross);
+
     div.innerHTML = `
         <div class="flex items-center justify-between">
             <div>
-                <div class="font-medium text-sm">${cross.features.join(' × ')}</div>
-                <div class="text-xs text-gray-500">Hash: ${cross.hash_bucket_size.toLocaleString()} → ${cross.embedding_dim}D</div>
+                <div class="font-medium text-sm">${featureNames.join(' × ')}</div>
+                <div class="text-xs text-gray-500">
+                    Hash: ${cross.hash_bucket_size.toLocaleString()} → ${cross.embedding_dim}D
+                    ${bucketDetails ? `<br><span class="text-blue-600">${bucketDetails}</span>` : ''}
+                </div>
             </div>
             <button type="button" class="feature-config-btn remove" onclick="removeCross('${model}', ${idx})">
                 <i class="fas fa-times"></i>
@@ -2387,7 +2447,8 @@ function updateTensorPreview() {
     // Buyer cross features
     configState.buyerCrosses.forEach(cross => {
         const dim = cross.embedding_dim || 16;
-        const name = (cross.features || []).join(' × ');
+        const featureNames = getCrossFeatureNames(cross);
+        const name = featureNames.join(' × ');
         buyerBreakdown.push({ name: name, dim: dim, is_cross: true });
         buyerTotal += dim;
     });
@@ -2417,7 +2478,8 @@ function updateTensorPreview() {
     // Product cross features
     configState.productCrosses.forEach(cross => {
         const dim = cross.embedding_dim || 16;
-        const name = (cross.features || []).join(' × ');
+        const featureNames = getCrossFeatureNames(cross);
+        const name = featureNames.join(' × ');
         productBreakdown.push({ name: name, dim: dim, is_cross: true });
         productTotal += dim;
     });
@@ -2782,15 +2844,34 @@ function openCrossModal(model) {
     allFeatures.forEach(f => {
         const label = document.createElement('label');
         const isPrimaryId = f.is_primary_id;
+        const dataType = f.data_type || getDataTypeFromBqType(f.bq_type);
+        const dataTypeLabel = getDataTypeLabel(dataType);
+
+        // Determine badge color based on data type
+        let typeBadge = '';
+        if (isPrimaryId) {
+            typeBadge = '<span class="text-xs bg-amber-100 text-amber-700 px-1 rounded">ID</span>';
+        } else if (dataType === 'numeric') {
+            typeBadge = '<span class="text-xs bg-blue-100 text-blue-700 px-1 rounded">Numeric</span>';
+        } else if (dataType === 'temporal') {
+            typeBadge = '<span class="text-xs bg-purple-100 text-purple-700 px-1 rounded">Temporal</span>';
+        } else {
+            typeBadge = '<span class="text-xs bg-gray-100 text-gray-600 px-1 rounded">Text</span>';
+        }
+
         label.className = 'flex items-center gap-2 p-2 border rounded cursor-pointer hover:bg-gray-50';
         label.innerHTML = `
-            <input type="checkbox" class="cross-feature-checkbox" value="${f.column}" onchange="updateCrossPreview()">
-            <span class="text-sm">${f.column}</span>
-            ${isPrimaryId ? '<span class="text-xs bg-amber-100 text-amber-700 px-1 rounded">ID</span>' : ''}
+            <input type="checkbox" class="cross-feature-checkbox" value="${f.column}"
+                   data-type="${dataType}" onchange="updateCrossPreview()">
+            <span class="text-sm flex-1">${f.column}</span>
+            ${typeBadge}
         `;
         container.appendChild(label);
     });
 
+    // Reset bucket options
+    document.getElementById('crossBucketOptions').classList.add('hidden');
+    document.getElementById('crossBucketInputs').innerHTML = '';
     document.getElementById('crossPreview').classList.add('hidden');
     document.getElementById('crossFeatureModal').classList.remove('hidden');
 }
@@ -2801,7 +2882,8 @@ function closeCrossModal() {
 }
 
 function updateCrossPreview() {
-    const checked = Array.from(document.querySelectorAll('.cross-feature-checkbox:checked')).map(cb => cb.value);
+    const checkedInputs = Array.from(document.querySelectorAll('.cross-feature-checkbox:checked'));
+    const checked = checkedInputs.map(cb => cb.value);
 
     if (checked.length >= 2) {
         document.getElementById('crossPreviewText').textContent = checked.join(' × ');
@@ -2809,22 +2891,91 @@ function updateCrossPreview() {
     } else {
         document.getElementById('crossPreview').classList.add('hidden');
     }
+
+    // Check for numeric/temporal features that need bucketization
+    const numericTemporalFeatures = checkedInputs.filter(cb => {
+        const dataType = cb.dataset.type;
+        return dataType === 'numeric' || dataType === 'temporal';
+    });
+
+    const bucketOptionsContainer = document.getElementById('crossBucketOptions');
+    const bucketInputsContainer = document.getElementById('crossBucketInputs');
+
+    if (numericTemporalFeatures.length > 0) {
+        bucketInputsContainer.innerHTML = '';
+
+        numericTemporalFeatures.forEach(cb => {
+            const column = cb.value;
+            const dataType = cb.dataset.type;
+            const typeLabel = dataType === 'numeric' ? 'Numeric' : 'Temporal';
+            const typeColor = dataType === 'numeric' ? 'blue' : 'purple';
+
+            const div = document.createElement('div');
+            div.className = 'flex items-center gap-3 p-3 bg-gray-50 rounded-lg border';
+            div.innerHTML = `
+                <div class="flex-1">
+                    <div class="flex items-center gap-2">
+                        <span class="text-sm font-medium">${column}</span>
+                        <span class="text-xs bg-${typeColor}-100 text-${typeColor}-700 px-1 rounded">${typeLabel}</span>
+                    </div>
+                    <div class="text-xs text-gray-500 mt-1">Buckets for crossing (coarse granularity recommended)</div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <label class="text-xs text-gray-600">Buckets:</label>
+                    <select class="cross-bucket-select form-select text-sm" data-column="${column}" style="width: 80px;">
+                        <option value="5">5</option>
+                        <option value="10" selected>10</option>
+                        <option value="20">20</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                    </select>
+                </div>
+            `;
+            bucketInputsContainer.appendChild(div);
+        });
+
+        bucketOptionsContainer.classList.remove('hidden');
+    } else {
+        bucketOptionsContainer.classList.add('hidden');
+        bucketInputsContainer.innerHTML = '';
+    }
 }
 
 function addCrossFeature() {
-    const checked = Array.from(document.querySelectorAll('.cross-feature-checkbox:checked')).map(cb => cb.value);
+    const checkedInputs = Array.from(document.querySelectorAll('.cross-feature-checkbox:checked'));
 
-    if (checked.length < 2) {
+    if (checkedInputs.length < 2) {
         showError('Please select at least 2 features');
         return;
     }
-    if (checked.length > 3) {
+    if (checkedInputs.length > 3) {
         showError('Please select at most 3 features');
         return;
     }
 
+    // Build features array with type and bucket info
+    const features = checkedInputs.map(cb => {
+        const column = cb.value;
+        const dataType = cb.dataset.type;
+
+        const featureConfig = {
+            column: column,
+            type: dataType
+        };
+
+        // Add crossing_buckets for numeric/temporal features
+        if (dataType === 'numeric' || dataType === 'temporal') {
+            const bucketSelect = document.querySelector(`.cross-bucket-select[data-column="${column}"]`);
+            if (bucketSelect) {
+                featureConfig.crossing_buckets = parseInt(bucketSelect.value);
+            }
+        }
+
+        return featureConfig;
+    });
+
     const cross = {
-        features: checked,
+        features: features,
         hash_bucket_size: parseInt(document.getElementById('crossHashBuckets').value),
         embedding_dim: parseInt(document.getElementById('crossEmbedDim').value)
     };
@@ -2875,7 +3026,10 @@ function saveConfig() {
 
     fetch(url, {
         method: method,
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrftoken
+        },
         body: JSON.stringify(payload)
     })
     .then(r => r.json())
@@ -2969,7 +3123,10 @@ function cloneConfig(configId) {
     if (newName) {
         fetch(`/api/feature-configs/${configId}/clone/`, {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrftoken
+            },
             body: JSON.stringify({name: newName})
         })
         .then(r => r.json())
@@ -2987,7 +3144,10 @@ function cloneConfig(configId) {
 function deleteConfig(configId, configName) {
     if (confirm(`Are you sure you want to delete "${configName}"?`)) {
         fetch(`/api/feature-configs/${configId}/delete/`, {
-            method: 'DELETE'
+            method: 'DELETE',
+            headers: {
+                'X-CSRFToken': csrftoken
+            }
         })
         .then(r => r.json())
         .then(data => {

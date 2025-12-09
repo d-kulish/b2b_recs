@@ -17,6 +17,7 @@ from .services import (
     SmartDefaultsService,
     TensorDimensionCalculator,
     SemanticTypeService,
+    PreprocessingFnGenerator,
     serialize_feature_config,
     validate_feature_config,
 )
@@ -157,6 +158,14 @@ def create_feature_config(request, model_id):
         fc.calculate_tensor_dims()
         fc.save()
 
+        # Generate TFX Transform code
+        try:
+            generator = PreprocessingFnGenerator(fc)
+            generator.generate_and_save()
+        except Exception as gen_error:
+            logger.warning(f"Failed to generate transform code for config {fc.id}: {gen_error}")
+            # Don't fail the request if code generation fails
+
         return JsonResponse({
             'success': True,
             'data': serialize_feature_config(fc, include_details=True),
@@ -277,6 +286,15 @@ def update_feature_config(request, config_id):
         fc.calculate_tensor_dims()
         fc.save()
 
+        # Regenerate TFX Transform code if features changed
+        if features_changed:
+            try:
+                generator = PreprocessingFnGenerator(fc)
+                generator.generate_and_save()
+            except Exception as gen_error:
+                logger.warning(f"Failed to regenerate transform code for config {fc.id}: {gen_error}")
+                # Don't fail the request if code generation fails
+
         return JsonResponse({
             'success': True,
             'data': serialize_feature_config(fc, include_details=True),
@@ -368,6 +386,13 @@ def clone_feature_config(request, config_id):
         # Calculate tensor dimensions
         clone.calculate_tensor_dims()
         clone.save()
+
+        # Generate TFX Transform code for clone
+        try:
+            generator = PreprocessingFnGenerator(clone)
+            generator.generate_and_save()
+        except Exception as gen_error:
+            logger.warning(f"Failed to generate transform code for cloned config {clone.id}: {gen_error}")
 
         return JsonResponse({
             'success': True,
@@ -772,6 +797,91 @@ def get_schema_with_sample(request, dataset_id):
 
     except Exception as e:
         logger.exception(f"Error getting schema with sample for dataset {dataset_id}: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e),
+        }, status=500)
+
+
+@login_required
+@require_http_methods(["GET"])
+def get_generated_code(request, config_id):
+    """
+    Get generated TFX code for a feature config.
+
+    Query params:
+        type: 'transform' | 'trainer' (default: 'transform')
+
+    Returns:
+        JsonResponse with generated code and metadata
+    """
+    try:
+        fc = get_object_or_404(FeatureConfig, id=config_id)
+        code_type = request.GET.get('type', 'transform')
+
+        if code_type == 'transform':
+            code = fc.generated_transform_code
+        elif code_type == 'trainer':
+            code = fc.generated_trainer_code
+        else:
+            return JsonResponse({
+                'success': False,
+                'error': f'Invalid code type: {code_type}. Use "transform" or "trainer".',
+            }, status=400)
+
+        return JsonResponse({
+            'success': True,
+            'data': {
+                'code': code or '',
+                'code_type': code_type,
+                'generated_at': fc.generated_at.isoformat() if fc.generated_at else None,
+                'config_id': fc.id,
+                'config_name': fc.name,
+                'has_code': bool(code),
+            },
+        })
+
+    except Exception as e:
+        logger.exception(f"Error getting generated code for config {config_id}: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e),
+        }, status=500)
+
+
+@login_required
+@require_http_methods(["POST"])
+def regenerate_code(request, config_id):
+    """
+    Regenerate TFX code for a feature config.
+
+    Useful if code generation failed or config was created before
+    the generator was implemented.
+
+    Returns:
+        JsonResponse with newly generated code
+    """
+    try:
+        fc = get_object_or_404(FeatureConfig, id=config_id)
+
+        # Generate Transform code
+        generator = PreprocessingFnGenerator(fc)
+        code = generator.generate_and_save()
+
+        return JsonResponse({
+            'success': True,
+            'data': {
+                'code': code,
+                'code_type': 'transform',
+                'generated_at': fc.generated_at.isoformat() if fc.generated_at else None,
+                'config_id': fc.id,
+                'config_name': fc.name,
+            },
+            'message': 'Transform code regenerated successfully',
+        })
+
+    except Exception as e:
+        logger.exception(f"Error regenerating code for config {config_id}: {e}")
         return JsonResponse({
             'success': False,
             'error': str(e),

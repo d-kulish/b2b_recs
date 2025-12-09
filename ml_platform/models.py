@@ -1284,6 +1284,21 @@ class FeatureConfig(models.Model):
         help_text="Total tensor dimensions for ProductModel"
     )
 
+    # Generated TFX code (stored as text for Cloud Run compatibility)
+    generated_transform_code = models.TextField(
+        blank=True,
+        help_text="Auto-generated TFX Transform preprocessing_fn code"
+    )
+    generated_trainer_code = models.TextField(
+        blank=True,
+        help_text="Auto-generated TFX Trainer module code"
+    )
+    generated_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When code was last generated"
+    )
+
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

@@ -4,9 +4,11 @@ Modeling Domain Services
 Contains business logic for Feature Engineering:
 - SmartDefaultsService: Auto-configures features based on column mapping and statistics
 - TensorDimensionCalculator: Calculates tensor dimensions for preview
+- PreprocessingFnGenerator: Generates TFX Transform preprocessing_fn code
 """
 
 from typing import Dict, List, Any, Optional, Tuple
+from datetime import datetime
 
 
 class SmartDefaultsService:
@@ -739,3 +741,497 @@ class SemanticTypeService:
             Internal feature type (e.g., 'string_embedding', 'numeric')
         """
         return cls.SEMANTIC_TYPES.get(semantic_type, {}).get('feature_type', 'string_embedding')
+
+
+class PreprocessingFnGenerator:
+    """
+    Generates TFX Transform preprocessing_fn from FeatureConfig.
+
+    The generated code:
+    - Creates vocabularies for text features (tft.compute_and_apply_vocabulary)
+    - Normalizes numeric features (tft.scale_to_z_score)
+    - Bucketizes numeric/temporal features (tft.bucketize)
+    - Extracts cyclical patterns from temporal features (sin/cos)
+    - Creates cross feature hashes (tf.sparse.cross_hashed)
+
+    All embedding creation happens in Trainer, not Transform.
+    Transform outputs indices/floats, Trainer creates embeddings from those.
+
+    Output naming convention:
+    - Text: {column} (vocab index)
+    - Numeric normalize: {column}_norm (float)
+    - Numeric/Temporal bucketize: {column}_bucket (bucket index)
+    - Temporal cyclical: {column}_{cycle}_sin, {column}_{cycle}_cos (floats)
+    - Cross bucketize (for numeric/temporal): {column}_cross_bucket (bucket index)
+    - Cross hash: {col1}_x_{col2}_cross (hash index)
+    """
+
+    NUM_OOV_BUCKETS = 1
+
+    def __init__(self, feature_config: 'FeatureConfig'):
+        """
+        Initialize with a FeatureConfig instance.
+
+        Args:
+            feature_config: FeatureConfig model instance
+        """
+        self.config = feature_config
+        self.buyer_features = feature_config.buyer_model_features or []
+        self.product_features = feature_config.product_model_features or []
+        self.buyer_crosses = feature_config.buyer_model_crosses or []
+        self.product_crosses = feature_config.product_model_crosses or []
+
+    def generate(self) -> str:
+        """
+        Generate complete preprocessing_fn module as Python code string.
+
+        Returns:
+            Python code string containing the preprocessing_fn function
+        """
+        # Collect all features organized by type
+        all_features = self._collect_all_features()
+
+        # Build code sections
+        header = self._generate_header()
+        imports = self._generate_imports()
+        constants = self._generate_constants()
+
+        fn_start = self._generate_function_start()
+        text_code = self._generate_text_transforms(all_features['text'])
+        numeric_code = self._generate_numeric_transforms(all_features['numeric'])
+        temporal_code = self._generate_temporal_transforms(all_features['temporal'])
+        cross_code = self._generate_cross_transforms()
+        fn_end = self._generate_function_end()
+
+        # Combine all sections
+        sections = [
+            header,
+            imports,
+            constants,
+            fn_start,
+        ]
+
+        if text_code:
+            sections.append(text_code)
+        if numeric_code:
+            sections.append(numeric_code)
+        if temporal_code:
+            sections.append(temporal_code)
+        if cross_code:
+            sections.append(cross_code)
+
+        sections.append(fn_end)
+
+        return '\n'.join(sections)
+
+    def _collect_all_features(self) -> Dict[str, List[Dict]]:
+        """
+        Organize all features by type for code generation.
+
+        Merges buyer and product features, deduplicating by column name.
+        Supports both old format (type=string_embedding/numeric/timestamp)
+        and new format (data_type=text/numeric/temporal).
+
+        Returns:
+            Dict with keys 'text', 'numeric', 'temporal', each containing list of features
+        """
+        all_features = {'text': [], 'numeric': [], 'temporal': []}
+        seen_columns = set()
+
+        for feature in self.buyer_features + self.product_features:
+            col = feature.get('column')
+            if col in seen_columns:
+                continue
+            seen_columns.add(col)
+
+            # Determine feature type (support both old and new format)
+            data_type = feature.get('data_type')
+            feature_type = feature.get('type', '')
+
+            if data_type == 'text' or feature_type == 'string_embedding':
+                all_features['text'].append(feature)
+            elif data_type == 'numeric' or feature_type == 'numeric':
+                all_features['numeric'].append(feature)
+            elif data_type == 'temporal' or feature_type == 'timestamp':
+                all_features['temporal'].append(feature)
+
+        return all_features
+
+    def _generate_header(self) -> str:
+        """Generate file header with metadata."""
+        buyer_cols = [f.get('column', '?') for f in self.buyer_features]
+        product_cols = [f.get('column', '?') for f in self.product_features]
+
+        buyer_cross_desc = []
+        for c in self.buyer_crosses:
+            features = c.get('features', [])
+            if isinstance(features[0], dict):
+                names = [f.get('column', '?') for f in features]
+            else:
+                names = features
+            buyer_cross_desc.append(' × '.join(names))
+
+        product_cross_desc = []
+        for c in self.product_crosses:
+            features = c.get('features', [])
+            if isinstance(features[0], dict):
+                names = [f.get('column', '?') for f in features]
+            else:
+                names = features
+            product_cross_desc.append(' × '.join(names))
+
+        return f'''# Auto-generated TFX Transform preprocessing_fn
+# FeatureConfig: "{self.config.name}" (ID: {self.config.id})
+# Generated at: {datetime.utcnow().isoformat()}Z
+#
+# BuyerModel features: {', '.join(buyer_cols) if buyer_cols else 'none'}
+# ProductModel features: {', '.join(product_cols) if product_cols else 'none'}
+# Buyer crosses: {', '.join(buyer_cross_desc) if buyer_cross_desc else 'none'}
+# Product crosses: {', '.join(product_cross_desc) if product_cross_desc else 'none'}
+'''
+
+    def _generate_imports(self) -> str:
+        """Generate import statements."""
+        return '''import math
+import tensorflow as tf
+import tensorflow_transform as tft
+'''
+
+    def _generate_constants(self) -> str:
+        """Generate module constants."""
+        return f'''NUM_OOV_BUCKETS = {self.NUM_OOV_BUCKETS}
+'''
+
+    def _generate_function_start(self) -> str:
+        """Generate function definition and docstring."""
+        return '''
+def preprocessing_fn(inputs):
+    """
+    TFX Transform preprocessing function.
+
+    Outputs vocabulary indices for text features, normalized values for numeric,
+    cyclical encodings for temporal, and hashed indices for crosses.
+
+    Embeddings are created in the Trainer module, not here.
+    """
+    outputs = {}
+'''
+
+    def _generate_function_end(self) -> str:
+        """Generate function return statement."""
+        return '''
+    return outputs
+'''
+
+    def _generate_text_transforms(self, features: List[Dict]) -> str:
+        """
+        Generate tft.compute_and_apply_vocabulary() calls for text features.
+
+        Args:
+            features: List of text feature configurations
+
+        Returns:
+            Python code string for text transforms
+        """
+        if not features:
+            return ''
+
+        lines = [
+            '    # =========================================================================',
+            '    # TEXT FEATURES → Vocabulary lookup (outputs: vocab indices)',
+            '    # =========================================================================',
+            ''
+        ]
+
+        for feature in features:
+            col = feature.get('column')
+            bq_type = feature.get('bq_type', 'STRING')
+
+            # Get embedding dim for comment (used in Trainer, not here)
+            transforms = feature.get('transforms', {})
+            if transforms.get('embedding', {}).get('embedding_dim'):
+                embed_dim = transforms['embedding']['embedding_dim']
+            else:
+                embed_dim = feature.get('embedding_dim', 32)
+
+            lines.append(f"    # {col}: {bq_type} → vocab index (embedding_dim={embed_dim} in Trainer)")
+            lines.append(f"    outputs['{col}'] = tft.compute_and_apply_vocabulary(")
+            lines.append(f"        inputs['{col}'],")
+            lines.append(f"        num_oov_buckets=NUM_OOV_BUCKETS,")
+            lines.append(f"        vocab_filename='{col}_vocab'")
+            lines.append(f"    )")
+            lines.append('')
+
+        return '\n'.join(lines)
+
+    def _generate_numeric_transforms(self, features: List[Dict]) -> str:
+        """
+        Generate normalize/bucketize calls for numeric features.
+
+        Args:
+            features: List of numeric feature configurations
+
+        Returns:
+            Python code string for numeric transforms
+        """
+        if not features:
+            return ''
+
+        lines = [
+            '    # =========================================================================',
+            '    # NUMERIC FEATURES → Normalize / Bucketize',
+            '    # =========================================================================',
+            ''
+        ]
+
+        for feature in features:
+            col = feature.get('column')
+            bq_type = feature.get('bq_type', 'FLOAT64')
+            transforms = feature.get('transforms', {})
+
+            normalize = transforms.get('normalize', {})
+            bucketize = transforms.get('bucketize', {})
+
+            has_normalize = normalize.get('enabled', False)
+            has_bucketize = bucketize.get('enabled', False)
+
+            if not has_normalize and not has_bucketize:
+                continue
+
+            # Describe transforms
+            transform_desc = []
+            if has_normalize:
+                transform_desc.append('normalize')
+            if has_bucketize:
+                transform_desc.append(f"bucketize({bucketize.get('buckets', 100)})")
+
+            lines.append(f"    # {col}: {bq_type} → {' + '.join(transform_desc)}")
+
+            # Cast to float
+            lines.append(f"    {col}_float = tf.cast(inputs['{col}'], tf.float32)")
+
+            if has_normalize:
+                lines.append(f"    outputs['{col}_norm'] = tft.scale_to_z_score({col}_float)")
+
+            if has_bucketize:
+                buckets = bucketize.get('buckets', 100)
+                lines.append(f"    outputs['{col}_bucket'] = tft.bucketize({col}_float, num_buckets={buckets})")
+
+            lines.append('')
+
+        return '\n'.join(lines)
+
+    def _generate_temporal_transforms(self, features: List[Dict]) -> str:
+        """
+        Generate normalize/cyclical/bucketize for temporal features.
+
+        Args:
+            features: List of temporal feature configurations
+
+        Returns:
+            Python code string for temporal transforms
+        """
+        if not features:
+            return ''
+
+        lines = [
+            '    # =========================================================================',
+            '    # TEMPORAL FEATURES → Normalize / Cyclical / Bucketize',
+            '    # =========================================================================',
+            ''
+        ]
+
+        for feature in features:
+            col = feature.get('column')
+            bq_type = feature.get('bq_type', 'TIMESTAMP')
+            transforms = feature.get('transforms', {})
+
+            normalize = transforms.get('normalize', {})
+            cyclical = transforms.get('cyclical', {})
+            bucketize = transforms.get('bucketize', {})
+
+            has_normalize = normalize.get('enabled', False)
+            has_bucketize = bucketize.get('enabled', False)
+
+            # Check cyclical options (support both old and new format)
+            cyclical_options = []
+            if cyclical.get('enabled') or cyclical.get('yearly') or cyclical.get('weekly'):
+                # New format has 'enabled' flag, old format has direct options
+                for cycle in ['yearly', 'quarterly', 'monthly', 'weekly', 'daily']:
+                    if cyclical.get(cycle):
+                        cyclical_options.append(cycle)
+            # Also check old 'annual' key
+            if cyclical.get('annual'):
+                cyclical_options.append('yearly')
+
+            has_cyclical = len(cyclical_options) > 0
+
+            if not has_normalize and not has_cyclical and not has_bucketize:
+                continue
+
+            # Describe transforms
+            transform_desc = []
+            if has_normalize:
+                transform_desc.append('normalize')
+            if has_cyclical:
+                transform_desc.append(f"cyclical({', '.join(cyclical_options)})")
+            if has_bucketize:
+                transform_desc.append(f"bucketize({bucketize.get('buckets', 100)})")
+
+            lines.append(f"    # {col}: {bq_type} → {' + '.join(transform_desc)}")
+            lines.append(f"    # Convert timestamp to float seconds since epoch")
+            lines.append(f"    {col}_seconds = tf.cast(")
+            lines.append(f"        tf.cast(inputs['{col}'], tf.int64),")
+            lines.append(f"        tf.float32")
+            lines.append(f"    )")
+            lines.append('')
+
+            if has_normalize:
+                lines.append(f"    # Normalize")
+                lines.append(f"    outputs['{col}_norm'] = tft.scale_to_z_score({col}_seconds)")
+                lines.append('')
+
+            if has_cyclical:
+                lines.append(f"    # Cyclical encoding")
+                lines.append(f"    SECONDS_PER_DAY = 86400.0")
+                lines.append(f"    days_since_epoch = {col}_seconds / SECONDS_PER_DAY")
+                lines.append('')
+
+                if 'yearly' in cyclical_options:
+                    lines.append(f"    # Yearly: month of year (approximated via day of year)")
+                    lines.append(f"    day_of_year_frac = tf.math.mod(days_since_epoch, 365.25) / 365.25")
+                    lines.append(f"    outputs['{col}_yearly_sin'] = tf.sin(2.0 * math.pi * day_of_year_frac)")
+                    lines.append(f"    outputs['{col}_yearly_cos'] = tf.cos(2.0 * math.pi * day_of_year_frac)")
+                    lines.append('')
+
+                if 'quarterly' in cyclical_options:
+                    lines.append(f"    # Quarterly: month of quarter (approximated)")
+                    lines.append(f"    quarter_frac = tf.math.mod(days_since_epoch, 91.31) / 91.31")
+                    lines.append(f"    outputs['{col}_quarterly_sin'] = tf.sin(2.0 * math.pi * quarter_frac)")
+                    lines.append(f"    outputs['{col}_quarterly_cos'] = tf.cos(2.0 * math.pi * quarter_frac)")
+                    lines.append('')
+
+                if 'monthly' in cyclical_options:
+                    lines.append(f"    # Monthly: day of month (approximated via 30.44 days)")
+                    lines.append(f"    day_of_month_frac = tf.math.mod(days_since_epoch, 30.44) / 30.44")
+                    lines.append(f"    outputs['{col}_monthly_sin'] = tf.sin(2.0 * math.pi * day_of_month_frac)")
+                    lines.append(f"    outputs['{col}_monthly_cos'] = tf.cos(2.0 * math.pi * day_of_month_frac)")
+                    lines.append('')
+
+                if 'weekly' in cyclical_options:
+                    lines.append(f"    # Weekly: day of week (Monday=0)")
+                    lines.append(f"    # Unix epoch (1970-01-01) was Thursday, so +4 to align Monday=0")
+                    lines.append(f"    day_of_week_frac = tf.math.mod(days_since_epoch + 4, 7.0) / 7.0")
+                    lines.append(f"    outputs['{col}_weekly_sin'] = tf.sin(2.0 * math.pi * day_of_week_frac)")
+                    lines.append(f"    outputs['{col}_weekly_cos'] = tf.cos(2.0 * math.pi * day_of_week_frac)")
+                    lines.append('')
+
+                if 'daily' in cyclical_options:
+                    lines.append(f"    # Daily: hour of day")
+                    lines.append(f"    hour_frac = tf.math.mod({col}_seconds, SECONDS_PER_DAY) / SECONDS_PER_DAY")
+                    lines.append(f"    outputs['{col}_daily_sin'] = tf.sin(2.0 * math.pi * hour_frac)")
+                    lines.append(f"    outputs['{col}_daily_cos'] = tf.cos(2.0 * math.pi * hour_frac)")
+                    lines.append('')
+
+            if has_bucketize:
+                buckets = bucketize.get('buckets', 100)
+                lines.append(f"    # Bucketize")
+                lines.append(f"    outputs['{col}_bucket'] = tft.bucketize({col}_seconds, num_buckets={buckets})")
+                lines.append('')
+
+        return '\n'.join(lines)
+
+    def _generate_cross_transforms(self) -> str:
+        """
+        Generate cross feature hashing (with bucketization for numeric/temporal).
+
+        Returns:
+            Python code string for cross transforms
+        """
+        all_crosses = []
+
+        for cross in self.buyer_crosses:
+            all_crosses.append(('buyer', cross))
+        for cross in self.product_crosses:
+            all_crosses.append(('product', cross))
+
+        if not all_crosses:
+            return ''
+
+        lines = [
+            '    # =========================================================================',
+            '    # CROSS FEATURES → Bucketize (for numeric/temporal) + Hash',
+            '    # =========================================================================',
+            ''
+        ]
+
+        # Track bucketized columns to avoid duplicates
+        bucketized_for_cross = set()
+
+        for model, cross in all_crosses:
+            features = cross.get('features', [])
+            hash_bucket_size = cross.get('hash_bucket_size', 5000)
+
+            # Build feature names and check if bucketization needed
+            feature_names = []
+            cross_inputs = []
+
+            for f in features:
+                # Handle both old format (string) and new format (dict)
+                if isinstance(f, str):
+                    col = f
+                    f_type = 'text'
+                    crossing_buckets = None
+                else:
+                    col = f.get('column', '')
+                    f_type = f.get('type', 'text')
+                    crossing_buckets = f.get('crossing_buckets')
+
+                feature_names.append(col)
+
+                if f_type in ['numeric', 'temporal'] and crossing_buckets:
+                    # Need to bucketize this column for crossing
+                    bucket_var = f"{col}_cross_bucket"
+
+                    if bucket_var not in bucketized_for_cross:
+                        bucketized_for_cross.add(bucket_var)
+                        lines.append(f"    # Bucketize {col} for crossing ({crossing_buckets} buckets)")
+                        lines.append(f"    {bucket_var} = tft.bucketize(")
+                        lines.append(f"        tf.cast(inputs['{col}'], tf.float32),")
+                        lines.append(f"        num_buckets={crossing_buckets}")
+                        lines.append(f"    )")
+                        lines.append('')
+
+                    cross_inputs.append(f"tf.as_string({bucket_var})")
+                else:
+                    # Text feature - use directly
+                    cross_inputs.append(f"inputs['{col}']")
+
+            # Generate cross name
+            cross_name = '_x_'.join(feature_names) + '_cross'
+
+            lines.append(f"    # Cross: {' × '.join(feature_names)} ({model}Model)")
+            lines.append(f"    outputs['{cross_name}'] = tf.sparse.cross_hashed(")
+            lines.append(f"        inputs=[")
+            for i, inp in enumerate(cross_inputs):
+                comma = ',' if i < len(cross_inputs) - 1 else ''
+                lines.append(f"            {inp}{comma}")
+            lines.append(f"        ],")
+            lines.append(f"        num_buckets={hash_bucket_size}")
+            lines.append(f"    )")
+            lines.append('')
+
+        return '\n'.join(lines)
+
+    def generate_and_save(self) -> str:
+        """
+        Generate code and save to the FeatureConfig model.
+
+        Returns:
+            Generated Python code string
+        """
+        code = self.generate()
+        self.config.generated_transform_code = code
+        self.config.generated_at = datetime.utcnow()
+        self.config.save(update_fields=['generated_transform_code', 'generated_at'])
+        return code

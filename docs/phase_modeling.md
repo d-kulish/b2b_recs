@@ -8,6 +8,35 @@ This document provides detailed specifications for implementing the **Modeling**
 
 ---
 
+## Recent Updates (December 2025)
+
+### Primary ID Requirement
+- **Customer ID** and **Product ID** are now **required** fields that must be assigned before adding other features
+- Primary ID zones are visually distinct with key icon and "Required" badge
+- Each model (BuyerModel/ProductModel) unlocks independently when its primary ID is assigned
+- Removing a primary ID locks the model and clears all associated features
+
+### Primary ID Configuration
+- Any column can be used as Customer ID or Product ID (user defines based on domain knowledge)
+- Primary ID columns are **automatically converted to Text type** regardless of original BigQuery type
+- Default embedding dimension: 32D
+- Embedding dimension options: Preset buttons (8D, 16D, 32D, 64D, 128D, 256D) + Custom input (4-1024)
+- Configuration is limited to embedding dimension only (no other transforms)
+
+### Text Feature Improvements
+- **Embedding is always applied** for text features (no checkbox needed)
+- **Vocabulary is auto-detected** from training data (removed manual "Max Vocab" input)
+- **+1 OOV dimension** is automatically reserved for new/unknown values (handled by TensorFlow's StringLookup)
+- Same dimension selector style as primary IDs: presets + custom input
+
+### UI/UX Improvements
+- Renamed "Additional Features" to **"Context Features"** for clarity
+- Feature card buttons now arranged **vertically** (settings + delete)
+- Delete button uses **trash bin icon** instead of X
+- Improved tooltips and informational messages
+
+---
+
 ## Overview
 
 ### Purpose
@@ -356,8 +385,9 @@ The feature configuration modal is a unified interface that adapts based on the 
 
 **Text:**
 - Embedding (+configurable D): Vocabulary lookup → learned vectors
-  - Dimension: 8/16/32/64/96/128
-  - Max Vocab: configurable (default 100,000)
+  - Dimension: 8/16/32/64/128/256 (presets) or custom 4-1024
+  - Vocabulary: Auto-detected from training data (no manual limit)
+  - +1 OOV: Automatically reserved for unknown values
 
 **Temporal:**
 - Normalize (+1D): Scale timestamp to [-1, 1]
@@ -867,11 +897,10 @@ Each feature specifies a column, data type, and transforms:
           },
           "embedding": {
             "type": "object",
-            "description": "For text type",
+            "description": "For text type (always enabled, vocab auto-detected)",
             "properties": {
-              "enabled": {"type": "boolean"},
-              "embedding_dim": {"type": "integer", "default": 32},
-              "vocab_size": {"type": "integer", "default": 100000}
+              "enabled": {"type": "boolean", "default": true},
+              "embedding_dim": {"type": "integer", "default": 32, "minimum": 4, "maximum": 1024}
             }
           },
           "cyclical": {
@@ -900,8 +929,9 @@ Each feature specifies a column, data type, and transforms:
     "column": "customer_id",
     "bq_type": "STRING",
     "data_type": "text",
+    "is_primary_id": true,
     "transforms": {
-      "embedding": {"enabled": true, "embedding_dim": 64, "vocab_size": 100000}
+      "embedding": {"enabled": true, "embedding_dim": 64}
     }
   },
   {
@@ -909,7 +939,7 @@ Each feature specifies a column, data type, and transforms:
     "bq_type": "STRING",
     "data_type": "text",
     "transforms": {
-      "embedding": {"enabled": true, "embedding_dim": 16, "vocab_size": 1000}
+      "embedding": {"enabled": true, "embedding_dim": 16}
     }
   },
   {

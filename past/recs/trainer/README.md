@@ -245,9 +245,61 @@ docker push europe-west4-docker.pkg.dev/PROJECT_ID/metro-recs-repo/trainer:lates
 The Enhanced Trainer is the third component in the pipeline:
 
 1. **DataExtractor** - Creates TFRecord files with product metadata from BigQuery
-2. **VocabBuilder** - Builds vocabularies including category/subcategory vocabularies  
+2. **VocabBuilder** - Builds vocabularies including category/subcategory vocabularies
 3. **Trainer** ← You are here - Trains retrieval model with product metadata features
 4. **Serving** - Deploys model with product understanding to production
+
+---
+
+## ML Platform Integration (Feature Config)
+
+The trainer is designed to work with the **ML Platform's Modeling (Feature Engineering)** functionality, which provides a visual interface for configuring features.
+
+### Feature Config → Trainer Mapping
+
+The ML Platform's Feature Config defines features that map to this trainer:
+
+| Feature Config | Trainer Implementation |
+|----------------|----------------------|
+| **Primary ID (Customer ID)** | `StringLookup` + `Embedding(vocab_size + 1, dim)` |
+| **Primary ID (Product ID)** | `StringLookup` + `Embedding(vocab_size + 1, dim)` |
+| **Text features** | `StringLookup` + `Embedding(vocab_size + 1, dim)` |
+| **Numeric (Normalize)** | `tf.keras.layers.Normalization` |
+| **Numeric (Bucketize)** | `tft.bucketize` + Embedding |
+| **Temporal (Cyclical)** | Sin/Cos encoding for periodic patterns |
+| **Cross Features** | `tf.sparse.cross_hashed` + Embedding |
+
+### Vocabulary and OOV Handling
+
+The trainer uses TensorFlow's `StringLookup` layer which automatically handles vocabularies:
+
+```python
+# From main.py - Customer embedding example
+self.customers_embedding = tf.keras.Sequential([
+    tf.keras.layers.StringLookup(vocabulary=user_vocab, mask_token=None),
+    tf.keras.layers.Embedding(len(user_vocab) + 1, 64),  # +1 for OOV token
+])
+```
+
+**Key points:**
+- **Vocabulary is auto-detected**: Built by `VocabBuilder` from training data
+- **+1 OOV dimension**: Index 0 is reserved for unknown/new values (Out-of-Vocabulary)
+- **No manual vocab limit needed**: The actual vocab size comes from scanning the data
+
+### Embedding Dimension Guidelines
+
+Based on production experience, recommended embedding dimensions:
+
+| Cardinality | Recommended Dim | Example |
+|-------------|-----------------|---------|
+| < 50 | 8D | Cities (3) |
+| 50 - 500 | 16D | Categories (24) |
+| 500 - 5,000 | 24-32D | Subcategories (125) |
+| 5,000 - 50,000 | 32-64D | Products (~1.5K) |
+| 50,000 - 500,000 | 64-128D | Customers (~34K) |
+| 500,000+ | 128-256D | Large customer bases |
+
+The ML Platform's Feature Config UI provides preset options (8, 16, 32, 64, 128, 256) plus custom input (4-1024) for flexibility.
 
 
 

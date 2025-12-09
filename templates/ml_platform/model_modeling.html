@@ -406,6 +406,150 @@
         border-left: 2px solid #ef4444;
         background: #fef2f2;
     }
+
+    /* Primary ID Drop Zone Styles */
+    .primary-id-zone {
+        border: 2px dashed #f59e0b;
+        border-radius: 10px;
+        padding: 16px;
+        margin-bottom: 12px;
+        background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+        position: relative;
+    }
+    .primary-id-zone.buyer {
+        border-color: #3b82f6;
+        background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+    }
+    .primary-id-zone.product {
+        border-color: #10b981;
+        background: linear-gradient(135deg, #f0fdf4 0%, #d1fae5 100%);
+    }
+    .primary-id-zone.drag-over {
+        border-style: solid;
+        box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.3);
+    }
+    .primary-id-zone.buyer.drag-over {
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
+    }
+    .primary-id-zone.product.drag-over {
+        box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.3);
+    }
+    .primary-id-zone-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 10px;
+    }
+    .primary-id-zone-icon {
+        width: 24px;
+        height: 24px;
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+    }
+    .primary-id-zone.buyer .primary-id-zone-icon {
+        background: #3b82f6;
+        color: white;
+    }
+    .primary-id-zone.product .primary-id-zone-icon {
+        background: #10b981;
+        color: white;
+    }
+    .primary-id-zone-title {
+        font-weight: 600;
+        font-size: 14px;
+        color: #374151;
+    }
+    .primary-id-zone-required {
+        font-size: 10px;
+        font-weight: 500;
+        padding: 2px 6px;
+        border-radius: 4px;
+        background: #fef3c7;
+        color: #92400e;
+        margin-left: auto;
+    }
+    .primary-id-zone-empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        color: #6b7280;
+        text-align: center;
+    }
+    .primary-id-zone-empty i {
+        font-size: 24px;
+        margin-bottom: 8px;
+        opacity: 0.5;
+    }
+    .primary-id-zone-empty span {
+        font-size: 13px;
+    }
+
+    /* Assigned Primary ID Feature */
+    .primary-id-assigned {
+        background: white;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        padding: 12px;
+    }
+    .primary-id-zone.buyer .primary-id-assigned {
+        border-color: #93c5fd;
+    }
+    .primary-id-zone.product .primary-id-assigned {
+        border-color: #6ee7b7;
+    }
+
+    /* Additional Features Section - Locked State */
+    .additional-features-section {
+        border: 2px dashed #e5e7eb;
+        border-radius: 10px;
+        padding: 16px;
+        min-height: 120px;
+        transition: all 0.3s ease;
+    }
+    .additional-features-section.locked {
+        background: #f9fafb;
+        opacity: 0.6;
+        pointer-events: none;
+    }
+    .additional-features-section.locked::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        cursor: not-allowed;
+    }
+    .additional-features-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 10px;
+        color: #6b7280;
+        font-size: 13px;
+        font-weight: 500;
+    }
+    .additional-features-header i {
+        font-size: 12px;
+    }
+    .locked-message {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        color: #9ca3af;
+        text-align: center;
+    }
+    .locked-message i {
+        font-size: 20px;
+        margin-bottom: 8px;
+    }
+    .locked-message span {
+        font-size: 12px;
+    }
 </style>
 {% endblock %}
 
@@ -596,14 +740,38 @@
                             <span class="w-3 h-3 rounded-full bg-blue-500"></span>
                             <h5 class="font-semibold text-gray-800">BuyerModel (Query Tower)</h5>
                         </div>
-                        <div id="buyerModelZone" class="drop-zone"
-                             ondrop="dropFeature(event, 'buyer')"
+
+                        <!-- Primary ID Zone: Customer ID -->
+                        <div id="customerIdZone" class="primary-id-zone buyer"
+                             ondrop="dropPrimaryId(event, 'buyer')"
                              ondragover="allowDrop(event)"
-                             ondragenter="dragEnter(event)"
+                             ondragenter="dragEnterPrimaryId(event)"
+                             ondragleave="dragLeavePrimaryId(event)">
+                            <div class="primary-id-zone-header">
+                                <div class="primary-id-zone-icon">
+                                    <i class="fas fa-key"></i>
+                                </div>
+                                <span class="primary-id-zone-title">Customer ID</span>
+                                <span class="primary-id-zone-required">Required</span>
+                            </div>
+                            <div id="customerIdContent">
+                                <!-- Will be rendered by JS: empty state or assigned feature -->
+                            </div>
+                        </div>
+
+                        <!-- Context Features Section -->
+                        <div id="buyerAdditionalSection" class="additional-features-section locked"
+                             ondrop="dropFeature(event, 'buyer')"
+                             ondragover="allowDropIfUnlocked(event, 'buyer')"
+                             ondragenter="dragEnterIfUnlocked(event, 'buyer')"
                              ondragleave="dragLeave(event)">
-                            <div id="buyerModelEmpty" class="drop-zone-empty">
-                                <i class="fas fa-user-circle text-3xl mb-2"></i>
-                                <span>Drop customer/user features here</span>
+                            <div class="additional-features-header">
+                                <i class="fas fa-layer-group"></i>
+                                <span>Context Features</span>
+                            </div>
+                            <div id="buyerLockedMessage" class="locked-message">
+                                <i class="fas fa-lock"></i>
+                                <span>Assign Customer ID first to add more features</span>
                             </div>
                             <div id="buyerModelFeatures"></div>
                             <div id="buyerModelCrosses" class="mt-3"></div>
@@ -619,14 +787,38 @@
                             <span class="w-3 h-3 rounded-full bg-green-500"></span>
                             <h5 class="font-semibold text-gray-800">ProductModel (Candidate Tower)</h5>
                         </div>
-                        <div id="productModelZone" class="drop-zone"
-                             ondrop="dropFeature(event, 'product')"
+
+                        <!-- Primary ID Zone: Product ID -->
+                        <div id="productIdZone" class="primary-id-zone product"
+                             ondrop="dropPrimaryId(event, 'product')"
                              ondragover="allowDrop(event)"
-                             ondragenter="dragEnter(event)"
+                             ondragenter="dragEnterPrimaryId(event)"
+                             ondragleave="dragLeavePrimaryId(event)">
+                            <div class="primary-id-zone-header">
+                                <div class="primary-id-zone-icon">
+                                    <i class="fas fa-key"></i>
+                                </div>
+                                <span class="primary-id-zone-title">Product ID</span>
+                                <span class="primary-id-zone-required">Required</span>
+                            </div>
+                            <div id="productIdContent">
+                                <!-- Will be rendered by JS: empty state or assigned feature -->
+                            </div>
+                        </div>
+
+                        <!-- Context Features Section -->
+                        <div id="productAdditionalSection" class="additional-features-section locked"
+                             ondrop="dropFeature(event, 'product')"
+                             ondragover="allowDropIfUnlocked(event, 'product')"
+                             ondragenter="dragEnterIfUnlocked(event, 'product')"
                              ondragleave="dragLeave(event)">
-                            <div id="productModelEmpty" class="drop-zone-empty">
-                                <i class="fas fa-box text-3xl mb-2"></i>
-                                <span>Drop product/item features here</span>
+                            <div class="additional-features-header">
+                                <i class="fas fa-layer-group"></i>
+                                <span>Context Features</span>
+                            </div>
+                            <div id="productLockedMessage" class="locked-message">
+                                <i class="fas fa-lock"></i>
+                                <span>Assign Product ID first to add more features</span>
                             </div>
                             <div id="productModelFeatures"></div>
                             <div id="productModelCrosses" class="mt-3"></div>
@@ -806,6 +998,10 @@ let configState = {
     datasetId: null,
     startFrom: 'blank',
     cloneFromId: null,
+    // Primary ID features (required before adding other features)
+    customerIdFeature: null,  // Primary ID for BuyerModel
+    productIdFeature: null,   // Primary ID for ProductModel
+    // Additional features (unlocked after primary ID is set)
     buyerFeatures: [],
     productFeatures: [],
     buyerCrosses: [],
@@ -1018,6 +1214,8 @@ function openWizard(configId = null) {
         datasetId: null,
         startFrom: 'blank',
         cloneFromId: null,
+        customerIdFeature: null,
+        productIdFeature: null,
         buyerFeatures: [],
         productFeatures: [],
         buyerCrosses: [],
@@ -1066,8 +1264,29 @@ function loadConfigForEdit(configId) {
                 configState.name = config.name;
                 configState.description = config.description || '';
                 configState.datasetId = config.dataset_id;
-                configState.buyerFeatures = config.buyer_model_features || [];
-                configState.productFeatures = config.product_model_features || [];
+
+                // Extract primary ID features from the features arrays
+                // Assume first feature with is_primary_id flag is the primary ID
+                const buyerFeatures = config.buyer_model_features || [];
+                const productFeatures = config.product_model_features || [];
+
+                // Find and extract primary ID features
+                const buyerPrimaryIdx = buyerFeatures.findIndex(f => f.is_primary_id);
+                if (buyerPrimaryIdx !== -1) {
+                    configState.customerIdFeature = buyerFeatures[buyerPrimaryIdx];
+                    configState.buyerFeatures = buyerFeatures.filter((_, idx) => idx !== buyerPrimaryIdx);
+                } else {
+                    configState.buyerFeatures = buyerFeatures;
+                }
+
+                const productPrimaryIdx = productFeatures.findIndex(f => f.is_primary_id);
+                if (productPrimaryIdx !== -1) {
+                    configState.productIdFeature = productFeatures[productPrimaryIdx];
+                    configState.productFeatures = productFeatures.filter((_, idx) => idx !== productPrimaryIdx);
+                } else {
+                    configState.productFeatures = productFeatures;
+                }
+
                 configState.buyerCrosses = config.buyer_model_crosses || [];
                 configState.productCrosses = config.product_model_crosses || [];
 
@@ -1228,8 +1447,26 @@ function loadCloneData(configId) {
         .then(r => r.json())
         .then(data => {
             if (data.success) {
-                configState.buyerFeatures = data.data.buyer_model_features || [];
-                configState.productFeatures = data.data.product_model_features || [];
+                const buyerFeatures = data.data.buyer_model_features || [];
+                const productFeatures = data.data.product_model_features || [];
+
+                // Find and extract primary ID features
+                const buyerPrimaryIdx = buyerFeatures.findIndex(f => f.is_primary_id);
+                if (buyerPrimaryIdx !== -1) {
+                    configState.customerIdFeature = buyerFeatures[buyerPrimaryIdx];
+                    configState.buyerFeatures = buyerFeatures.filter((_, idx) => idx !== buyerPrimaryIdx);
+                } else {
+                    configState.buyerFeatures = buyerFeatures;
+                }
+
+                const productPrimaryIdx = productFeatures.findIndex(f => f.is_primary_id);
+                if (productPrimaryIdx !== -1) {
+                    configState.productIdFeature = productFeatures[productPrimaryIdx];
+                    configState.productFeatures = productFeatures.filter((_, idx) => idx !== productPrimaryIdx);
+                } else {
+                    configState.productFeatures = productFeatures;
+                }
+
                 configState.buyerCrosses = data.data.buyer_model_crosses || [];
                 configState.productCrosses = data.data.product_model_crosses || [];
                 renderStep2();
@@ -1240,10 +1477,79 @@ function loadCloneData(configId) {
 function renderStep2() {
     renderAvailableColumns();
     renderSampleTable();
+    renderPrimaryIdZone('buyer');
+    renderPrimaryIdZone('product');
     renderAssignedFeatures('buyer');
     renderAssignedFeatures('product');
+    updateAdditionalFeaturesLockState();
     updateTensorPreview();
     updateSubchapterStatuses();
+}
+
+// Render the primary ID zone (Customer ID or Product ID)
+function renderPrimaryIdZone(model) {
+    const idFeature = model === 'buyer' ? configState.customerIdFeature : configState.productIdFeature;
+    const contentContainer = document.getElementById(model === 'buyer' ? 'customerIdContent' : 'productIdContent');
+    const idLabel = model === 'buyer' ? 'Customer ID' : 'Product ID';
+
+    if (!idFeature) {
+        // Empty state - show drop prompt
+        contentContainer.innerHTML = `
+            <div class="primary-id-zone-empty">
+                <i class="fas fa-arrow-down"></i>
+                <span>Drag a column here to set as ${idLabel}</span>
+            </div>
+        `;
+    } else {
+        // Assigned state - show the feature card
+        const embedDim = idFeature.transforms?.embedding?.embedding_dim || 32;
+        contentContainer.innerHTML = `
+            <div class="primary-id-assigned">
+                <div class="flex items-center justify-between">
+                    <div class="flex-1">
+                        <div class="font-medium text-sm">${escapeHtml(idFeature.column)}</div>
+                        <div class="text-xs text-gray-500">
+                            ${idFeature.bq_type || 'STRING'} → Text • Embed: ${embedDim}D
+                        </div>
+                    </div>
+                    <div class="flex flex-col gap-1 ml-2">
+                        <button type="button" class="feature-config-btn settings" onclick="openPrimaryIdConfig('${model}')" title="Configure embedding">
+                            <i class="fas fa-cog"></i>
+                        </button>
+                        <button type="button" class="feature-config-btn remove" onclick="removePrimaryId('${model}')" title="Remove">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+}
+
+// Update lock state of additional features sections
+function updateAdditionalFeaturesLockState() {
+    const buyerSection = document.getElementById('buyerAdditionalSection');
+    const productSection = document.getElementById('productAdditionalSection');
+    const buyerLockedMsg = document.getElementById('buyerLockedMessage');
+    const productLockedMsg = document.getElementById('productLockedMessage');
+
+    // Buyer model: unlocked if customerIdFeature is set
+    if (configState.customerIdFeature) {
+        buyerSection.classList.remove('locked');
+        buyerLockedMsg.style.display = 'none';
+    } else {
+        buyerSection.classList.add('locked');
+        buyerLockedMsg.style.display = 'flex';
+    }
+
+    // Product model: unlocked if productIdFeature is set
+    if (configState.productIdFeature) {
+        productSection.classList.remove('locked');
+        productLockedMsg.style.display = 'none';
+    } else {
+        productSection.classList.add('locked');
+        productLockedMsg.style.display = 'flex';
+    }
 }
 
 function toggleModelingSubchapter(name) {
@@ -1288,9 +1594,17 @@ function renderAvailableColumns() {
     const container = document.getElementById('availableColumns');
     container.innerHTML = '';
 
-    // Get assigned column names by model
+    // Get assigned column names by model (including primary IDs)
     const buyerCols = new Set(configState.buyerFeatures.map(f => f.column));
     const productCols = new Set(configState.productFeatures.map(f => f.column));
+
+    // Add primary ID columns to the sets
+    if (configState.customerIdFeature) {
+        buyerCols.add(configState.customerIdFeature.column);
+    }
+    if (configState.productIdFeature) {
+        productCols.add(configState.productIdFeature.column);
+    }
 
     configState.availableColumns.forEach(col => {
         const inBuyer = buyerCols.has(col.name);
@@ -1481,9 +1795,17 @@ function renderSampleTable() {
         return;
     }
 
-    // Get assignment status for each column
+    // Get assignment status for each column (including primary IDs)
     const buyerCols = new Set(configState.buyerFeatures.map(f => f.column));
     const productCols = new Set(configState.productFeatures.map(f => f.column));
+
+    // Add primary ID columns
+    if (configState.customerIdFeature) {
+        buyerCols.add(configState.customerIdFeature.column);
+    }
+    if (configState.productIdFeature) {
+        productCols.add(configState.productIdFeature.column);
+    }
 
     let html = `
         <div class="sample-table-wrapper">
@@ -1544,23 +1866,25 @@ function renderAssignedFeatures(model) {
     const crosses = model === 'buyer' ? configState.buyerCrosses : configState.productCrosses;
     const container = document.getElementById(`${model}ModelFeatures`);
     const crossContainer = document.getElementById(`${model}ModelCrosses`);
-    const emptyState = document.getElementById(`${model}ModelEmpty`);
     const addCrossBtn = document.getElementById(`add${model.charAt(0).toUpperCase() + model.slice(1)}CrossBtn`);
 
     container.innerHTML = '';
     crossContainer.innerHTML = '';
 
-    if (features.length === 0) {
-        emptyState.style.display = 'flex';
-        addCrossBtn.style.display = 'none';
-    } else {
-        emptyState.style.display = 'none';
+    // Show/hide cross feature button based on whether there are features
+    // (including primary ID feature)
+    const hasPrimaryId = model === 'buyer' ? configState.customerIdFeature : configState.productIdFeature;
+    const hasFeatures = features.length > 0 || hasPrimaryId;
+
+    if (hasFeatures) {
         addCrossBtn.style.display = 'inline-flex';
 
         features.forEach((feature, idx) => {
             const el = createAssignedFeatureElement(feature, model, idx);
             container.appendChild(el);
         });
+    } else {
+        addCrossBtn.style.display = 'none';
     }
 
     crosses.forEach((cross, idx) => {
@@ -1587,21 +1911,21 @@ function createAssignedFeatureElement(feature, model, idx) {
 
     div.innerHTML = `
         <div class="flex items-center justify-between ${warningClass}">
-            <div>
+            <div class="flex-1">
                 <div class="font-medium text-sm">${escapeHtml(feature.column)}</div>
                 <div class="text-xs ${displayInfo.hasTransforms ? 'text-gray-500' : 'text-amber-600'}">
                     ${displayInfo.dataTypeLabel} • ${displayInfo.transformStr}
                 </div>
-            </div>
-            <div class="flex items-center gap-2">
-                <select class="data-type-select" onchange="updateFeatureDataType('${model}', ${idx}, this.value)" title="Data type">
+                <select class="data-type-select mt-1" onchange="updateFeatureDataType('${model}', ${idx}, this.value)" title="Data type">
                     ${dataTypeOptions}
                 </select>
+            </div>
+            <div class="flex flex-col gap-1 ml-2">
                 <button type="button" class="feature-config-btn settings ${displayInfo.hasTransforms ? '' : 'needs-attention'}" onclick="openFeatureConfig('${model}', ${idx})" title="Configure transforms">
                     <i class="fas fa-cog"></i>
                 </button>
                 <button type="button" class="feature-config-btn remove" onclick="removeFeature('${model}', ${idx})" title="Remove">
-                    <i class="fas fa-times"></i>
+                    <i class="fas fa-trash-alt"></i>
                 </button>
             </div>
         </div>
@@ -1679,6 +2003,12 @@ function dropFeature(e, model) {
     e.preventDefault();
     e.currentTarget.classList.remove('drag-over');
 
+    // Check if the model is unlocked (primary ID must be set first)
+    const isUnlocked = model === 'buyer' ? configState.customerIdFeature : configState.productIdFeature;
+    if (!isUnlocked) {
+        return; // Can't drop if locked
+    }
+
     const colData = JSON.parse(e.dataTransfer.getData('text/plain'));
     const feature = createDefaultFeature(colData);
 
@@ -1689,6 +2019,287 @@ function dropFeature(e, model) {
     }
 
     renderStep2();
+}
+
+// =============================================================================
+// PRIMARY ID DROP HANDLING
+// =============================================================================
+
+function dragEnterPrimaryId(e) {
+    e.preventDefault();
+    e.currentTarget.classList.add('drag-over');
+}
+
+function dragLeavePrimaryId(e) {
+    e.currentTarget.classList.remove('drag-over');
+}
+
+function allowDropIfUnlocked(e, model) {
+    const isUnlocked = model === 'buyer' ? configState.customerIdFeature : configState.productIdFeature;
+    if (isUnlocked) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+    }
+}
+
+function dragEnterIfUnlocked(e, model) {
+    const isUnlocked = model === 'buyer' ? configState.customerIdFeature : configState.productIdFeature;
+    if (isUnlocked) {
+        e.preventDefault();
+        e.currentTarget.classList.add('drag-over');
+    }
+}
+
+function dropPrimaryId(e, model) {
+    e.preventDefault();
+    e.currentTarget.classList.remove('drag-over');
+
+    const colData = JSON.parse(e.dataTransfer.getData('text/plain'));
+
+    // Create primary ID feature with forced text type and embedding transform
+    const primaryIdFeature = {
+        column: colData.name,
+        bq_type: colData.bq_type || colData.type || 'STRING',
+        data_type: 'text',  // Force to text regardless of original type
+        is_primary_id: true,
+        stats: colData.stats || {},
+        transforms: {
+            embedding: {
+                enabled: true,
+                embedding_dim: 32,  // Default 32D
+                vocab_size: 100000
+            }
+        }
+    };
+
+    if (model === 'buyer') {
+        configState.customerIdFeature = primaryIdFeature;
+    } else {
+        configState.productIdFeature = primaryIdFeature;
+    }
+
+    renderStep2();
+}
+
+function removePrimaryId(model) {
+    if (model === 'buyer') {
+        configState.customerIdFeature = null;
+        // Also clear additional features since the model is now locked
+        configState.buyerFeatures = [];
+        configState.buyerCrosses = [];
+    } else {
+        configState.productIdFeature = null;
+        // Also clear additional features since the model is now locked
+        configState.productFeatures = [];
+        configState.productCrosses = [];
+    }
+    renderStep2();
+}
+
+function openPrimaryIdConfig(model) {
+    const feature = model === 'buyer' ? configState.customerIdFeature : configState.productIdFeature;
+    if (!feature) return;
+
+    editingFeature = {...feature, _model: model, _isPrimaryId: true};
+    editingFeatureModel = model;
+
+    const idLabel = model === 'buyer' ? 'Customer ID' : 'Product ID';
+    document.getElementById('featureModalTitle').textContent = `Configure: ${idLabel}`;
+    renderPrimaryIdConfigForm();
+    document.getElementById('featureConfigModal').classList.remove('hidden');
+}
+
+function renderPrimaryIdConfigForm() {
+    const body = document.getElementById('featureModalBody');
+    const embedDim = editingFeature.transforms?.embedding?.embedding_dim || 32;
+    const presetDims = [8, 16, 32, 64, 128, 256];
+    const isCustom = !presetDims.includes(embedDim);
+
+    body.innerHTML = `
+        <div class="mb-4">
+            <div class="text-sm text-gray-600 mb-2">
+                <strong>Column:</strong> ${escapeHtml(editingFeature.column)}
+            </div>
+            <div class="text-sm text-gray-500">
+                Original type: ${editingFeature.bq_type || 'STRING'} → <span class="text-blue-600 font-medium">Text (forced)</span>
+            </div>
+        </div>
+
+        <div class="p-4 bg-blue-50 border border-blue-200 rounded-lg mb-4">
+            <div class="text-sm text-blue-800">
+                <i class="fas fa-info-circle mr-2"></i>
+                Primary ID columns use text embedding. Other transforms are not available.
+            </div>
+        </div>
+
+        <div class="modal-form-group">
+            <label class="modal-form-label">Embedding Dimension</label>
+            <div class="flex gap-2 flex-wrap items-center justify-center">
+                ${presetDims.map(dim => `
+                    <button type="button"
+                            class="primary-id-dim-btn px-3 py-2 rounded-lg border transition-all ${embedDim === dim && !isCustom
+                                ? 'bg-blue-500 text-white border-blue-500'
+                                : 'bg-white text-gray-700 border-gray-300 hover:border-blue-400'}"
+                            onclick="selectPrimaryIdDim(${dim})">
+                        ${dim}D
+                    </button>
+                `).join('')}
+            </div>
+            <div class="flex items-center gap-3 mt-3">
+                <span class="text-sm text-gray-600">Custom:</span>
+                <input type="number"
+                       id="customEmbedDimInput"
+                       class="form-input text-sm"
+                       style="width: 100px;"
+                       min="4"
+                       max="1024"
+                       step="1"
+                       value="${isCustom ? embedDim : ''}"
+                       placeholder="e.g. 512"
+                       onchange="onCustomDimChange(this.value)"
+                       oninput="onCustomDimInput(this.value)">
+                <span class="text-xs text-gray-500">Range: 4 - 1024</span>
+            </div>
+            <p class="modal-form-hint mt-2">
+                <i class="fas fa-lightbulb text-amber-500 mr-1"></i>
+                Tip: Use larger dimensions (256-512) for millions of unique IDs, smaller (8-32) for few unique values
+            </p>
+        </div>
+
+        <input type="hidden" id="primaryIdEmbedDim" value="${embedDim}">
+    `;
+}
+
+function selectPrimaryIdDim(dim) {
+    document.getElementById('primaryIdEmbedDim').value = dim;
+
+    // Clear custom input when preset is selected
+    const customInput = document.getElementById('customEmbedDimInput');
+    if (customInput) {
+        customInput.value = '';
+    }
+
+    // Update button styles
+    const buttons = document.querySelectorAll('.primary-id-dim-btn');
+    buttons.forEach(btn => {
+        const btnDim = parseInt(btn.textContent);
+        if (btnDim === dim) {
+            btn.className = 'primary-id-dim-btn px-3 py-2 rounded-lg border transition-all bg-blue-500 text-white border-blue-500';
+        } else {
+            btn.className = 'primary-id-dim-btn px-3 py-2 rounded-lg border transition-all bg-white text-gray-700 border-gray-300 hover:border-blue-400';
+        }
+    });
+}
+
+function onCustomDimInput(value) {
+    // Live update as user types - deselect preset buttons
+    if (value) {
+        const buttons = document.querySelectorAll('.primary-id-dim-btn');
+        buttons.forEach(btn => {
+            btn.className = 'primary-id-dim-btn px-3 py-2 rounded-lg border transition-all bg-white text-gray-700 border-gray-300 hover:border-blue-400';
+        });
+    }
+}
+
+function onCustomDimChange(value) {
+    // Validate and set the custom dimension
+    let dim = parseInt(value);
+    if (isNaN(dim) || dim < 4) {
+        dim = 4;
+        document.getElementById('customEmbedDimInput').value = 4;
+    } else if (dim > 1024) {
+        dim = 1024;
+        document.getElementById('customEmbedDimInput').value = 1024;
+    }
+
+    document.getElementById('primaryIdEmbedDim').value = dim;
+
+    // Deselect all preset buttons
+    const buttons = document.querySelectorAll('.primary-id-dim-btn');
+    buttons.forEach(btn => {
+        btn.className = 'primary-id-dim-btn px-3 py-2 rounded-lg border transition-all bg-white text-gray-700 border-gray-300 hover:border-blue-400';
+    });
+}
+
+function applyPrimaryIdConfig() {
+    const model = editingFeature._model;
+    const newDim = parseInt(document.getElementById('primaryIdEmbedDim').value) || 32;
+
+    if (model === 'buyer' && configState.customerIdFeature) {
+        configState.customerIdFeature.transforms.embedding.embedding_dim = newDim;
+    } else if (model === 'product' && configState.productIdFeature) {
+        configState.productIdFeature.transforms.embedding.embedding_dim = newDim;
+    }
+
+    closeFeatureModal();
+    renderStep2();
+}
+
+// =============================================================================
+// TEXT EMBEDDING DIMENSION SELECTION (for context features)
+// =============================================================================
+
+function selectTextEmbedDim(dim) {
+    document.getElementById('featureEmbedDim').value = dim;
+
+    // Clear custom input when preset is selected
+    const customInput = document.getElementById('customTextEmbedDimInput');
+    if (customInput) {
+        customInput.value = '';
+    }
+
+    // Update dimension label
+    const dimLabel = document.getElementById('embeddingDimLabel');
+    if (dimLabel) {
+        dimLabel.textContent = `+${dim}D`;
+    }
+
+    // Update button styles
+    const buttons = document.querySelectorAll('.text-embed-dim-btn');
+    buttons.forEach(btn => {
+        const btnDim = parseInt(btn.textContent);
+        if (btnDim === dim) {
+            btn.className = 'text-embed-dim-btn px-3 py-2 rounded-lg border transition-all bg-blue-500 text-white border-blue-500';
+        } else {
+            btn.className = 'text-embed-dim-btn px-3 py-2 rounded-lg border transition-all bg-white text-gray-700 border-gray-300 hover:border-blue-400';
+        }
+    });
+}
+
+function onCustomTextEmbedDimInput(value) {
+    // Live update as user types - deselect preset buttons
+    if (value) {
+        const buttons = document.querySelectorAll('.text-embed-dim-btn');
+        buttons.forEach(btn => {
+            btn.className = 'text-embed-dim-btn px-3 py-2 rounded-lg border transition-all bg-white text-gray-700 border-gray-300 hover:border-blue-400';
+        });
+    }
+}
+
+function onCustomTextEmbedDimChange(value) {
+    // Validate and set the custom dimension
+    let dim = parseInt(value);
+    if (isNaN(dim) || dim < 4) {
+        dim = 4;
+        document.getElementById('customTextEmbedDimInput').value = 4;
+    } else if (dim > 1024) {
+        dim = 1024;
+        document.getElementById('customTextEmbedDimInput').value = 1024;
+    }
+
+    document.getElementById('featureEmbedDim').value = dim;
+
+    // Update dimension label
+    const dimLabel = document.getElementById('embeddingDimLabel');
+    if (dimLabel) {
+        dimLabel.textContent = `+${dim}D`;
+    }
+
+    // Deselect all preset buttons
+    const buttons = document.querySelectorAll('.text-embed-dim-btn');
+    buttons.forEach(btn => {
+        btn.className = 'text-embed-dim-btn px-3 py-2 rounded-lg border transition-all bg-white text-gray-700 border-gray-300 hover:border-blue-400';
+    });
 }
 
 function createDefaultFeature(col) {
@@ -1762,12 +2373,20 @@ function removeCross(model, idx) {
 // =============================================================================
 
 function updateTensorPreview() {
+    // Build feature arrays including primary IDs at the front
+    const buyerFeatures = configState.customerIdFeature
+        ? [configState.customerIdFeature, ...configState.buyerFeatures]
+        : configState.buyerFeatures;
+    const productFeatures = configState.productIdFeature
+        ? [configState.productIdFeature, ...configState.productFeatures]
+        : configState.productFeatures;
+
     fetch('/api/feature-configs/calculate-dims/', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
-            buyer_model_features: configState.buyerFeatures,
-            product_model_features: configState.productFeatures,
+            buyer_model_features: buyerFeatures,
+            product_model_features: productFeatures,
             buyer_model_crosses: configState.buyerCrosses,
             product_model_crosses: configState.productCrosses
         })
@@ -1883,28 +2502,62 @@ function renderFeatureConfigForm() {
             </div>
         `;
     } else if (dataType === 'text') {
+        const embedDim = t.embedding?.embedding_dim || 32;
+        const presetDims = [8, 16, 32, 64, 128, 256];
+        const isCustomDim = !presetDims.includes(embedDim);
+
         transformsHtml = `
-            <div class="transform-option">
-                <input type="checkbox" id="featureEmbedding" ${t.embedding?.enabled ? 'checked' : ''}>
-                <div class="transform-option-content">
-                    <div class="transform-option-title">Embedding</div>
-                    <div class="transform-option-desc">Learn vector representation for categorical values</div>
-                    <div class="mt-2">
-                        <label class="text-xs text-gray-500">Dimension:</label>
-                        <select id="featureEmbedDim" class="form-select form-select-sm ml-2" style="width: 80px;">
-                            ${[8, 16, 32, 64, 96, 128].map(d =>
-                                `<option value="${d}" ${(t.embedding?.embedding_dim || 32) == d ? 'selected' : ''}>${d}</option>`
-                            ).join('')}
-                        </select>
+            <div class="p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                <div class="flex items-center justify-between mb-3">
+                    <div>
+                        <div class="font-medium text-gray-800">Embedding</div>
+                        <div class="text-xs text-gray-500">Learn vector representation for categorical values</div>
                     </div>
-                    <div class="mt-2">
-                        <label class="text-xs text-gray-500">Max Vocab:</label>
-                        <input type="number" id="featureVocabSize" class="form-input form-input-sm ml-2" style="width: 100px;"
-                               value="${t.embedding?.vocab_size || 100000}">
+                    <span class="text-blue-600 font-medium" id="embeddingDimLabel">+${embedDim}D</span>
+                </div>
+
+                <div class="mb-3">
+                    <label class="text-xs text-gray-600 font-medium mb-2 block">Embedding Dimension</label>
+                    <div class="flex gap-2 flex-wrap items-center justify-center">
+                        ${presetDims.map(dim => `
+                            <button type="button"
+                                    class="text-embed-dim-btn px-3 py-2 rounded-lg border transition-all ${embedDim === dim && !isCustomDim
+                                        ? 'bg-blue-500 text-white border-blue-500'
+                                        : 'bg-white text-gray-700 border-gray-300 hover:border-blue-400'}"
+                                    onclick="selectTextEmbedDim(${dim})">
+                                ${dim}D
+                            </button>
+                        `).join('')}
+                    </div>
+                    <div class="flex items-center gap-3 mt-3 justify-center">
+                        <span class="text-xs text-gray-600">Custom:</span>
+                        <input type="number"
+                               id="customTextEmbedDimInput"
+                               class="form-input text-sm"
+                               style="width: 80px;"
+                               min="4"
+                               max="1024"
+                               step="1"
+                               value="${isCustomDim ? embedDim : ''}"
+                               placeholder="e.g. 512"
+                               onchange="onCustomTextEmbedDimChange(this.value)"
+                               oninput="onCustomTextEmbedDimInput(this.value)">
+                        <span class="text-xs text-gray-400">4 - 1024</span>
                     </div>
                 </div>
-                <span class="transform-option-dim" id="embeddingDimLabel">+${t.embedding?.embedding_dim || 32}D</span>
+
+                <div class="border-t border-gray-200 pt-3 mt-3 space-y-2">
+                    <div class="flex items-start gap-2 text-xs text-gray-600">
+                        <i class="fas fa-database text-blue-500 mt-0.5"></i>
+                        <span><strong>Vocabulary:</strong> Auto-detected from training data (no manual limit needed)</span>
+                    </div>
+                    <div class="flex items-start gap-2 text-xs text-gray-600">
+                        <i class="fas fa-plus-circle text-green-500 mt-0.5"></i>
+                        <span><strong>+1 OOV:</strong> One extra dimension is automatically reserved for new/unknown values</span>
+                    </div>
+                </div>
             </div>
+            <input type="hidden" id="featureEmbedDim" value="${embedDim}">
         `;
     } else if (dataType === 'temporal') {
         const c = t.cyclical || {};
@@ -1998,6 +2651,12 @@ function onModalDataTypeChange(newDataType) {
 }
 
 function applyFeatureConfig() {
+    // Check if we're editing a primary ID feature
+    if (editingFeature._isPrimaryId) {
+        applyPrimaryIdConfig();
+        return;
+    }
+
     const features = editingFeatureModel === 'buyer' ? configState.buyerFeatures : configState.productFeatures;
     const idx = editingFeature._idx;
     const dataType = editingFeature.data_type || getDataTypeFromBqType(editingFeature.bq_type);
@@ -2023,15 +2682,12 @@ function applyFeatureConfig() {
             };
         }
     } else if (dataType === 'text') {
-        const embeddingEl = document.getElementById('featureEmbedding');
-
-        if (embeddingEl?.checked) {
-            transforms.embedding = {
-                enabled: true,
-                embedding_dim: parseInt(document.getElementById('featureEmbedDim').value) || 32,
-                vocab_size: parseInt(document.getElementById('featureVocabSize').value) || 100000
-            };
-        }
+        // Text features always use embedding (no checkbox needed)
+        // Vocab size is auto-detected from training data, so we don't store it
+        transforms.embedding = {
+            enabled: true,
+            embedding_dim: parseInt(document.getElementById('featureEmbedDim').value) || 32
+        };
     } else if (dataType === 'temporal') {
         const normalizeEl = document.getElementById('featureNormalize');
         const cyclicalEl = document.getElementById('featureCyclical');
@@ -2070,17 +2726,25 @@ function applyFeatureConfig() {
 
 function openCrossModal(model) {
     crossFeatureModel = model;
-    const features = model === 'buyer' ? configState.buyerFeatures : configState.productFeatures;
+
+    // Get all features for this model, including the primary ID
+    const primaryId = model === 'buyer' ? configState.customerIdFeature : configState.productIdFeature;
+    const additionalFeatures = model === 'buyer' ? configState.buyerFeatures : configState.productFeatures;
+
+    // Combine: primary ID first, then additional features
+    const allFeatures = primaryId ? [primaryId, ...additionalFeatures] : additionalFeatures;
 
     const container = document.getElementById('crossFeatureOptions');
     container.innerHTML = '';
 
-    features.forEach(f => {
+    allFeatures.forEach(f => {
         const label = document.createElement('label');
+        const isPrimaryId = f.is_primary_id;
         label.className = 'flex items-center gap-2 p-2 border rounded cursor-pointer hover:bg-gray-50';
         label.innerHTML = `
             <input type="checkbox" class="cross-feature-checkbox" value="${f.column}" onchange="updateCrossPreview()">
             <span class="text-sm">${f.column}</span>
+            ${isPrimaryId ? '<span class="text-xs bg-amber-100 text-amber-700 px-1 rounded">ID</span>' : ''}
         `;
         container.appendChild(label);
     });
@@ -2138,12 +2802,26 @@ function addCrossFeature() {
 // =============================================================================
 
 function saveConfig() {
+    // Validate: require primary ID features
+    if (!configState.customerIdFeature) {
+        showError('Customer ID is required. Please drag a column to the Customer ID zone.');
+        return;
+    }
+    if (!configState.productIdFeature) {
+        showError('Product ID is required. Please drag a column to the Product ID zone.');
+        return;
+    }
+
+    // Build feature arrays with primary IDs at the front
+    const buyerFeatures = [configState.customerIdFeature, ...configState.buyerFeatures];
+    const productFeatures = [configState.productIdFeature, ...configState.productFeatures];
+
     const payload = {
         name: configState.name,
         description: configState.description,
         dataset_id: configState.datasetId,
-        buyer_model_features: configState.buyerFeatures,
-        product_model_features: configState.productFeatures,
+        buyer_model_features: buyerFeatures,
+        product_model_features: productFeatures,
         buyer_model_crosses: configState.buyerCrosses,
         product_model_crosses: configState.productCrosses
     };

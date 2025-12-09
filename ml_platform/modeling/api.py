@@ -16,6 +16,7 @@ from ml_platform.models import ModelEndpoint, Dataset, FeatureConfig, FeatureCon
 from .services import (
     SmartDefaultsService,
     TensorDimensionCalculator,
+    SemanticTypeService,
     serialize_feature_config,
     validate_feature_config,
 )
@@ -640,6 +641,137 @@ def get_dataset_columns(request, dataset_id):
 
     except Exception as e:
         logger.exception(f"Error getting dataset columns: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e),
+        }, status=500)
+
+
+@login_required
+@require_http_methods(["GET"])
+def get_schema_with_sample(request, dataset_id):
+    """
+    Get column schema with accurate types from BigQuery and sample data.
+
+    This endpoint executes the dataset query with LIMIT to get:
+    1. Accurate column types from BigQuery result schema
+    2. Sample data rows for preview
+    3. Inferred semantic types for feature engineering
+
+    Returns:
+        JsonResponse with columns, sample_rows, and column_order
+    """
+    try:
+        from ml_platform.datasets.services import BigQueryService
+
+        dataset = get_object_or_404(Dataset, id=dataset_id)
+        bq_service = BigQueryService(dataset.model_endpoint)
+
+        # Generate the dataset query
+        base_query = bq_service.generate_query(dataset)
+
+        # Execute with LIMIT to get schema + sample
+        sample_query = f"SELECT * FROM ({base_query}) LIMIT 10"
+
+        logger.info(f"Executing schema sample query for dataset {dataset_id}")
+        result = bq_service.client.query(sample_query).result()
+
+        # Extract schema from result
+        schema_fields = list(result.schema)
+
+        # Build column order from schema
+        column_order = [field.name for field in schema_fields]
+
+        # Convert rows to list of dicts
+        sample_rows = []
+        for row in result:
+            row_dict = {}
+            for field in schema_fields:
+                val = getattr(row, field.name, None)
+                # Handle special types for JSON serialization
+                if val is None:
+                    row_dict[field.name] = None
+                elif hasattr(val, 'isoformat'):
+                    row_dict[field.name] = val.isoformat()
+                elif isinstance(val, bytes):
+                    row_dict[field.name] = val.decode('utf-8', errors='replace')
+                else:
+                    row_dict[field.name] = val
+            sample_rows.append(row_dict)
+
+        # Get existing stats from dataset for enrichment
+        existing_stats = dataset.column_stats or {}
+        summary_stats = (dataset.summary_snapshot or {}).get('column_stats', {})
+
+        # Merge stats sources
+        merged_stats = {**summary_stats, **existing_stats}
+
+        # Get column mapping for role detection
+        column_mapping_reverse = {v: k for k, v in (dataset.column_mapping or {}).items()}
+
+        # Build columns with semantic types
+        columns = []
+        for field in schema_fields:
+            col_name = field.name
+            bq_type = field.field_type
+
+            # Try to find stats - could be under different keys
+            stats = {}
+            for table in (dataset.selected_columns or {}).keys():
+                stats_key = f"{table.replace('raw_data.', '')}.{col_name}"
+                if stats_key in merged_stats:
+                    stats = merged_stats[stats_key]
+                    break
+                # Also try without table prefix
+                if col_name in merged_stats:
+                    stats = merged_stats[col_name]
+                    break
+
+            # Extract sample values for this column
+            sample_values = [row.get(col_name) for row in sample_rows if row.get(col_name) is not None]
+
+            # Add total_rows to stats for cardinality ratio calculation
+            if sample_rows:
+                stats['total_rows'] = len(sample_rows)
+
+            # Infer semantic type
+            semantic_type = SemanticTypeService.infer_semantic_type(
+                col_name=col_name,
+                bq_type=bq_type,
+                stats=stats,
+                sample_values=sample_values
+            )
+
+            # Get available options for this BigQuery type
+            semantic_type_options = SemanticTypeService.get_type_options(bq_type)
+
+            columns.append({
+                'name': col_name,
+                'bq_type': bq_type,
+                'semantic_type': semantic_type,
+                'semantic_type_options': semantic_type_options,
+                'mapping_role': column_mapping_reverse.get(col_name),
+                'stats': {
+                    'cardinality': stats.get('cardinality') or stats.get('unique_count'),
+                    'null_percent': stats.get('null_percent'),
+                    'min': stats.get('min'),
+                    'max': stats.get('max'),
+                    'avg': stats.get('avg'),
+                },
+            })
+
+        return JsonResponse({
+            'success': True,
+            'data': {
+                'columns': columns,
+                'sample_rows': sample_rows,
+                'column_order': column_order,
+                'row_count': len(sample_rows),
+            },
+        })
+
+    except Exception as e:
+        logger.exception(f"Error getting schema with sample for dataset {dataset_id}: {e}")
         return JsonResponse({
             'success': False,
             'error': str(e),

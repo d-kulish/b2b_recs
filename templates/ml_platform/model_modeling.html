@@ -77,27 +77,41 @@
         color: #92400e;
     }
 
-    /* Drag and drop styles */
+    /* Drag and drop styles - Compact column cards */
     .column-card {
         background: white;
         border: 1px solid #e5e7eb;
-        border-radius: 8px;
-        padding: 10px 12px;
+        border-radius: 6px;
+        padding: 6px 8px;
         cursor: grab;
-        transition: all 0.2s ease;
+        transition: all 0.15s ease;
         user-select: none;
+        display: flex;
+        align-items: center;
+        gap: 6px;
     }
     .column-card:hover {
         border-color: #3b82f6;
-        box-shadow: 0 2px 8px rgba(59, 130, 246, 0.15);
+        background: #f8fafc;
     }
     .column-card.dragging {
         opacity: 0.5;
         cursor: grabbing;
     }
     .column-card .drag-handle {
-        color: #9ca3af;
-        margin-right: 8px;
+        color: #d1d5db;
+        font-size: 10px;
+        flex-shrink: 0;
+    }
+    .column-card .column-name {
+        font-size: 12px;
+        font-weight: 500;
+        color: #374151;
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
     }
     .column-card .column-type {
         font-size: 10px;
@@ -268,6 +282,130 @@
         color: #3b82f6;
         white-space: nowrap;
     }
+
+    /* Sample Table Styles */
+    .sample-table-container {
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        overflow: hidden;
+    }
+    .sample-table-wrapper {
+        max-height: 240px;
+        overflow: auto;
+    }
+    .sample-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+    }
+    .sample-table th {
+        position: sticky;
+        top: 0;
+        background: #f9fafb;
+        padding: 8px 12px;
+        text-align: left;
+        font-weight: 600;
+        color: #374151;
+        border-bottom: 2px solid #e5e7eb;
+        white-space: nowrap;
+    }
+    .sample-table td {
+        padding: 6px 12px;
+        border-bottom: 1px solid #f3f4f6;
+        max-width: 200px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .sample-table tr:hover td {
+        background: #f9fafb;
+    }
+
+    /* Column assignment colors for sample table */
+    .col-buyer {
+        background-color: #eff6ff !important;
+    }
+    .col-product {
+        background-color: #f0fdf4 !important;
+    }
+    .col-both {
+        background-color: #fef2f2 !important;
+    }
+    .sample-table th.col-buyer {
+        background-color: #dbeafe !important;
+        border-bottom-color: #3b82f6;
+    }
+    .sample-table th.col-product {
+        background-color: #dcfce7 !important;
+        border-bottom-color: #10b981;
+    }
+    .sample-table th.col-both {
+        background-color: #fee2e2 !important;
+        border-bottom-color: #ef4444;
+    }
+    .null-value {
+        color: #9ca3af;
+        font-style: italic;
+    }
+
+    /* BQ type badge in column cards */
+    .column-bq-type {
+        font-size: 9px;
+        padding: 1px 4px;
+        background: #f3f4f6;
+        border-radius: 3px;
+        color: #6b7280;
+        font-family: monospace;
+        flex-shrink: 0;
+        text-transform: uppercase;
+    }
+
+    /* Data type dropdown in assigned features */
+    .data-type-select {
+        font-size: 11px;
+        padding: 2px 8px;
+        border: 1px solid #d1d5db;
+        border-radius: 4px;
+        background: white;
+        color: #374151;
+        cursor: pointer;
+    }
+    .data-type-select:hover {
+        border-color: #3b82f6;
+    }
+    .data-type-select:focus {
+        outline: none;
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+    }
+
+    /* Needs attention state for features without transforms */
+    .feature-config-btn.needs-attention {
+        background: #fef3c7;
+        color: #d97706;
+        animation: pulse-attention 2s infinite;
+    }
+    @keyframes pulse-attention {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.6; }
+    }
+    .feature-needs-config {
+        border-left: 3px solid #f59e0b;
+    }
+
+    /* Column card assignment states */
+    .column-card.assigned-buyer {
+        border-left: 2px solid #3b82f6;
+        background: #eff6ff;
+    }
+    .column-card.assigned-product {
+        border-left: 2px solid #10b981;
+        background: #f0fdf4;
+    }
+    .column-card.assigned-both {
+        border-left: 2px solid #ef4444;
+        background: #fef2f2;
+    }
 </style>
 {% endblock %}
 
@@ -393,13 +531,6 @@
                             </div>
                         </label>
                         <label class="flex items-center gap-2 p-3 border rounded-lg cursor-pointer hover:bg-gray-50 transition">
-                            <input type="radio" name="startFrom" value="smart_defaults" onchange="onStartFromChange()">
-                            <div>
-                                <div class="font-medium text-sm">Smart Defaults</div>
-                                <div class="text-xs text-gray-500">Auto-configure based on data</div>
-                            </div>
-                        </label>
-                        <label class="flex items-center gap-2 p-3 border rounded-lg cursor-pointer hover:bg-gray-50 transition">
                             <input type="radio" name="startFrom" value="clone" onchange="onStartFromChange()">
                             <div>
                                 <div class="font-medium text-sm">Clone Existing</div>
@@ -428,18 +559,30 @@
 
             <!-- Step 2: Feature Assignment -->
             <div id="wizardStep2" class="wizard-step hidden">
-                <div class="flex gap-4">
-                    <!-- Left side: Available Columns -->
-                    <div class="flex-1">
-                        <div class="flex items-center justify-between mb-3">
-                            <h4 class="wizard-section-title" style="margin-bottom: 0;">Available Columns</h4>
-                            <button type="button" class="btn btn-secondary btn-xs" onclick="applySmartDefaults()">
-                                <i class="fas fa-magic mr-1"></i>Smart Defaults
-                            </button>
+                <!-- Dataset Sample - Collapsible Tablet -->
+                <div class="filter-subchapter" id="datasetSampleSubchapter">
+                    <div class="subchapter-header-tablet" onclick="toggleModelingSubchapter('datasetSample')">
+                        <span class="subchapter-title">Dataset Sample</span>
+                        <span class="subchapter-filter-status" id="datasetSampleStatus"></span>
+                        <i id="datasetSampleChevron" class="fas fa-chevron-right subchapter-chevron"></i>
+                    </div>
+                    <div id="datasetSampleContent" class="subchapter-content-outside hidden">
+                        <div id="sampleDataTable" class="sample-table-container">
+                            <!-- Table will be rendered here -->
                         </div>
-                        <p class="text-xs text-gray-500 mb-3">Drag columns to BuyerModel or ProductModel</p>
+                    </div>
+                </div>
 
-                        <div id="availableColumns" class="grid grid-cols-2 gap-2" style="max-height: 200px; overflow-y: auto;">
+                <!-- Available Columns - Collapsible Tablet -->
+                <div class="filter-subchapter" id="availableColumnsSubchapter">
+                    <div class="subchapter-header-tablet" onclick="toggleModelingSubchapter('availableColumns')">
+                        <span class="subchapter-title">Available Columns</span>
+                        <span class="subchapter-filter-status" id="availableColumnsStatus"></span>
+                        <i id="availableColumnsChevron" class="fas fa-chevron-down subchapter-chevron"></i>
+                    </div>
+                    <div id="availableColumnsContent" class="subchapter-content-outside">
+                        <p class="text-xs text-gray-500 mb-2">Drag columns to BuyerModel or ProductModel</p>
+                        <div id="availableColumns" class="grid grid-cols-4 gap-2" style="max-height: 180px; overflow-y: auto;">
                             <!-- Column cards will be inserted here -->
                         </div>
                     </div>
@@ -667,7 +810,9 @@ let configState = {
     productFeatures: [],
     buyerCrosses: [],
     productCrosses: [],
-    availableColumns: []
+    availableColumns: [],
+    sampleRows: [],
+    columnOrder: []
 };
 
 // Currently editing feature
@@ -877,7 +1022,9 @@ function openWizard(configId = null) {
         productFeatures: [],
         buyerCrosses: [],
         productCrosses: [],
-        availableColumns: []
+        availableColumns: [],
+        sampleRows: [],
+        columnOrder: []
     };
 
     // Reset form
@@ -1045,16 +1192,17 @@ function loadColumnsForStep2() {
     const datasetId = configState.datasetId;
     const startFrom = configState.startFrom;
 
-    fetch(`/api/datasets/${datasetId}/columns/`)
+    // Use new schema-with-sample endpoint for accurate types and sample data
+    fetch(`/api/datasets/${datasetId}/schema-with-sample/`)
         .then(r => r.json())
         .then(data => {
             if (data.success) {
                 configState.availableColumns = data.data.columns;
+                configState.sampleRows = data.data.sample_rows || [];
+                configState.columnOrder = data.data.column_order || [];
 
                 // Handle start from options
-                if (startFrom === 'smart_defaults') {
-                    applySmartDefaults();
-                } else if (startFrom === 'clone') {
+                if (startFrom === 'clone') {
                     const cloneFromId = document.getElementById('cloneFromConfig').value;
                     if (cloneFromId) {
                         loadCloneData(cloneFromId);
@@ -1064,7 +1212,14 @@ function loadColumnsForStep2() {
                 } else {
                     renderStep2();
                 }
+            } else {
+                console.error('Failed to load schema:', data.error);
+                showToast('Failed to load column schema', 'error');
             }
+        })
+        .catch(err => {
+            console.error('Error loading schema:', err);
+            showToast('Error loading column schema', 'error');
         });
 }
 
@@ -1082,64 +1237,306 @@ function loadCloneData(configId) {
         });
 }
 
-function applySmartDefaults() {
-    fetch('/api/feature-configs/smart-defaults/', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({dataset_id: configState.datasetId})
-    })
-    .then(r => r.json())
-    .then(data => {
-        if (data.success) {
-            configState.buyerFeatures = data.data.buyer_model_features || [];
-            configState.productFeatures = data.data.product_model_features || [];
-            configState.buyerCrosses = data.data.buyer_model_crosses || [];
-            configState.productCrosses = data.data.product_model_crosses || [];
-            renderStep2();
-        }
-    });
-}
-
 function renderStep2() {
     renderAvailableColumns();
+    renderSampleTable();
     renderAssignedFeatures('buyer');
     renderAssignedFeatures('product');
     updateTensorPreview();
+    updateSubchapterStatuses();
+}
+
+function toggleModelingSubchapter(name) {
+    const content = document.getElementById(`${name}Content`);
+    const chevron = document.getElementById(`${name}Chevron`);
+
+    if (content.classList.contains('hidden')) {
+        content.classList.remove('hidden');
+        chevron.classList.remove('fa-chevron-right');
+        chevron.classList.add('fa-chevron-down');
+    } else {
+        content.classList.add('hidden');
+        chevron.classList.remove('fa-chevron-down');
+        chevron.classList.add('fa-chevron-right');
+    }
+}
+
+function updateSubchapterStatuses() {
+    // Update Dataset Sample status
+    const sampleStatus = document.getElementById('datasetSampleStatus');
+    const sampleRows = configState.sampleRows || [];
+    if (sampleStatus) {
+        sampleStatus.textContent = sampleRows.length > 0 ? `${sampleRows.length} rows` : '';
+    }
+
+    // Update Available Columns status
+    const columnsStatus = document.getElementById('availableColumnsStatus');
+    const totalCols = configState.availableColumns.length;
+    const buyerCount = configState.buyerFeatures.length;
+    const productCount = configState.productFeatures.length;
+
+    if (columnsStatus) {
+        if (buyerCount > 0 || productCount > 0) {
+            columnsStatus.textContent = `${buyerCount} buyer, ${productCount} product`;
+        } else {
+            columnsStatus.textContent = totalCols > 0 ? `${totalCols} columns` : '';
+        }
+    }
 }
 
 function renderAvailableColumns() {
     const container = document.getElementById('availableColumns');
     container.innerHTML = '';
 
-    // Get assigned column names
-    const assignedCols = new Set([
-        ...configState.buyerFeatures.map(f => f.column),
-        ...configState.productFeatures.map(f => f.column)
-    ]);
+    // Get assigned column names by model
+    const buyerCols = new Set(configState.buyerFeatures.map(f => f.column));
+    const productCols = new Set(configState.productFeatures.map(f => f.column));
 
     configState.availableColumns.forEach(col => {
-        if (assignedCols.has(col.name)) return;
+        const inBuyer = buyerCols.has(col.name);
+        const inProduct = productCols.has(col.name);
 
         const card = document.createElement('div');
         card.className = 'column-card';
-        card.draggable = true;
-        card.dataset.column = JSON.stringify(col);
-        card.ondragstart = (e) => dragStart(e, col);
-        card.ondragend = dragEnd;
 
+        // Add assignment state classes
+        if (inBuyer && inProduct) {
+            card.classList.add('assigned-both');
+        } else if (inBuyer) {
+            card.classList.add('assigned-buyer');
+        } else if (inProduct) {
+            card.classList.add('assigned-product');
+        }
+
+        // Only allow dragging if not assigned to both models
+        const canDrag = !(inBuyer && inProduct);
+        card.draggable = canDrag;
+        card.dataset.column = JSON.stringify(col);
+        if (canDrag) {
+            card.ondragstart = (e) => dragStart(e, col);
+            card.ondragend = dragEnd;
+        }
+
+        // Simple layout: drag handle | name | BQ type badge
         card.innerHTML = `
-            <div class="flex items-center justify-between">
-                <div class="flex items-center">
-                    <i class="fas fa-grip-vertical drag-handle"></i>
-                    <span class="font-medium text-sm">${escapeHtml(col.name)}</span>
-                </div>
-                <span class="column-type">${col.type}</span>
-            </div>
-            ${col.stats.cardinality ? `<div class="text-xs text-gray-400 mt-1">${col.stats.cardinality.toLocaleString()} unique</div>` : ''}
+            <i class="fas fa-grip-vertical drag-handle"></i>
+            <span class="column-name" title="${escapeHtml(col.name)}">${escapeHtml(col.name)}</span>
+            <span class="column-bq-type">${formatBqType(col.bq_type || 'STRING')}</span>
         `;
 
         container.appendChild(card);
     });
+}
+
+function formatBqType(bqType) {
+    // Format BigQuery types to shorter display names
+    const typeMap = {
+        'STRING': 'STR',
+        'INTEGER': 'INT',
+        'INT64': 'INT',
+        'FLOAT': 'FLOAT',
+        'FLOAT64': 'FLOAT',
+        'NUMERIC': 'NUM',
+        'BIGNUMERIC': 'NUM',
+        'BOOLEAN': 'BOOL',
+        'BOOL': 'BOOL',
+        'TIMESTAMP': 'TIME',
+        'DATETIME': 'TIME',
+        'DATE': 'DATE',
+        'TIME': 'TIME',
+        'BYTES': 'BYTES',
+    };
+    return typeMap[bqType?.toUpperCase()] || bqType || 'STR';
+}
+
+// Data Type System
+// Three main data types: numeric, text, temporal
+const DATA_TYPES = {
+    numeric: { label: 'Numeric', icon: 'hashtag' },
+    text: { label: 'Text', icon: 'font' },
+    temporal: { label: 'Temporal', icon: 'calendar' }
+};
+
+function getDataTypeLabel(dataType) {
+    return DATA_TYPES[dataType]?.label || dataType;
+}
+
+function getDataTypeFromBqType(bqType) {
+    // Map BigQuery type to our data type system
+    const type = (bqType || 'STRING').toUpperCase();
+
+    if (['INTEGER', 'INT64', 'FLOAT', 'FLOAT64', 'NUMERIC', 'BIGNUMERIC'].includes(type)) {
+        return 'numeric';
+    } else if (['TIMESTAMP', 'DATETIME', 'DATE', 'TIME'].includes(type)) {
+        return 'temporal';
+    } else {
+        // STRING, BYTES, etc.
+        return 'text';
+    }
+}
+
+function getTransformOptionsForDataType(dataType) {
+    // Return available transforms based on data type
+    switch (dataType) {
+        case 'numeric':
+            return [
+                { key: 'normalize', label: 'Normalize', desc: 'Scale to [-1, 1] range', outputDim: 1 },
+                { key: 'bucketize', label: 'Bucketize', desc: 'Discretize into buckets + embed', outputDim: 'configurable' }
+            ];
+        case 'text':
+            return [
+                { key: 'embedding', label: 'Embedding', desc: 'Learn vector representation', outputDim: 'configurable' }
+            ];
+        case 'temporal':
+            return [
+                { key: 'normalize', label: 'Normalize', desc: 'Scale timestamp to [-1, 1]', outputDim: 1 },
+                { key: 'cyclical', label: 'Cyclical', desc: 'Extract periodic patterns (month, week, etc.)', outputDim: 'varies' },
+                { key: 'bucketize', label: 'Bucketize', desc: 'Discretize into time buckets + embed', outputDim: 'configurable' }
+            ];
+        default:
+            return [];
+    }
+}
+
+function updateFeatureDataType(model, idx, newDataType) {
+    const features = model === 'buyer' ? configState.buyerFeatures : configState.productFeatures;
+    if (features[idx]) {
+        features[idx].data_type = newDataType;
+        // Clear transforms when data type changes - user must reconfigure
+        features[idx].transforms = {};
+    }
+    renderStep2();
+}
+
+function getFeatureDisplayInfo(feature) {
+    // Returns display string showing data type and transform output
+    const dataType = feature.data_type || getDataTypeFromBqType(feature.bq_type);
+    const dataTypeLabel = getDataTypeLabel(dataType);
+    const transforms = feature.transforms || {};
+
+    // Calculate total output dimension
+    let outputParts = [];
+    let totalDim = 0;
+
+    if (dataType === 'numeric') {
+        if (transforms.normalize?.enabled) {
+            outputParts.push('Norm: 1D');
+            totalDim += 1;
+        }
+        if (transforms.bucketize?.enabled) {
+            const dim = transforms.bucketize.embedding_dim || 32;
+            outputParts.push(`Bucket: ${dim}D`);
+            totalDim += dim;
+        }
+    } else if (dataType === 'text') {
+        if (transforms.embedding?.enabled) {
+            const dim = transforms.embedding.embedding_dim || 32;
+            outputParts.push(`Embed: ${dim}D`);
+            totalDim += dim;
+        }
+    } else if (dataType === 'temporal') {
+        if (transforms.normalize?.enabled) {
+            outputParts.push('Norm: 1D');
+            totalDim += 1;
+        }
+        if (transforms.cyclical?.enabled) {
+            const cyclical = transforms.cyclical;
+            let cyclicalDim = 0;
+            if (cyclical.annual) cyclicalDim += 2;
+            if (cyclical.quarterly) cyclicalDim += 2;
+            if (cyclical.monthly) cyclicalDim += 2;
+            if (cyclical.weekly) cyclicalDim += 2;
+            if (cyclical.daily) cyclicalDim += 2;
+            if (cyclicalDim > 0) {
+                outputParts.push(`Cyclical: ${cyclicalDim}D`);
+                totalDim += cyclicalDim;
+            }
+        }
+        if (transforms.bucketize?.enabled) {
+            const dim = transforms.bucketize.embedding_dim || 32;
+            outputParts.push(`Bucket: ${dim}D`);
+            totalDim += dim;
+        }
+    }
+
+    const transformStr = outputParts.length > 0
+        ? outputParts.join(' + ')
+        : 'No transform selected';
+
+    return {
+        dataTypeLabel,
+        transformStr,
+        totalDim,
+        hasTransforms: outputParts.length > 0
+    };
+}
+
+function renderSampleTable() {
+    const container = document.getElementById('sampleDataTable');
+    const rows = configState.sampleRows || [];
+    const columns = configState.columnOrder || [];
+
+    if (rows.length === 0 || columns.length === 0) {
+        container.innerHTML = '<p class="text-gray-500 text-sm p-4">No sample data available</p>';
+        return;
+    }
+
+    // Get assignment status for each column
+    const buyerCols = new Set(configState.buyerFeatures.map(f => f.column));
+    const productCols = new Set(configState.productFeatures.map(f => f.column));
+
+    let html = `
+        <div class="sample-table-wrapper">
+            <table class="sample-table">
+                <thead>
+                    <tr>
+                        ${columns.map(col => {
+                            let headerClass = '';
+                            const inBuyer = buyerCols.has(col);
+                            const inProduct = productCols.has(col);
+
+                            if (inBuyer && inProduct) {
+                                headerClass = 'col-both';
+                            } else if (inBuyer) {
+                                headerClass = 'col-buyer';
+                            } else if (inProduct) {
+                                headerClass = 'col-product';
+                            }
+
+                            return `<th class="${headerClass}">${escapeHtml(col)}</th>`;
+                        }).join('')}
+                    </tr>
+                </thead>
+                <tbody>
+                    ${rows.slice(0, 10).map(row => `
+                        <tr>
+                            ${columns.map(col => {
+                                let cellClass = '';
+                                const inBuyer = buyerCols.has(col);
+                                const inProduct = productCols.has(col);
+
+                                if (inBuyer && inProduct) {
+                                    cellClass = 'col-both';
+                                } else if (inBuyer) {
+                                    cellClass = 'col-buyer';
+                                } else if (inProduct) {
+                                    cellClass = 'col-product';
+                                }
+
+                                const val = row[col];
+                                const displayVal = val === null || val === undefined
+                                    ? '<span class="null-value">NULL</span>'
+                                    : escapeHtml(String(val));
+                                return `<td class="${cellClass}">${displayVal}</td>`;
+                            }).join('')}
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </div>
+    `;
+
+    container.innerHTML = html;
 }
 
 function renderAssignedFeatures(model) {
@@ -1176,19 +1573,34 @@ function createAssignedFeatureElement(feature, model, idx) {
     const div = document.createElement('div');
     div.className = 'assigned-feature';
 
-    const dimStr = getFeatureDimString(feature);
+    // Get display info
+    const displayInfo = getFeatureDisplayInfo(feature);
+    const currentDataType = feature.data_type || getDataTypeFromBqType(feature.bq_type);
+
+    // Build data type options
+    const dataTypeOptions = ['numeric', 'text', 'temporal'].map(dt =>
+        `<option value="${dt}" ${currentDataType === dt ? 'selected' : ''}>${getDataTypeLabel(dt)}</option>`
+    ).join('');
+
+    // Warning indicator if no transforms selected
+    const warningClass = displayInfo.hasTransforms ? '' : 'feature-needs-config';
 
     div.innerHTML = `
-        <div class="flex items-center justify-between">
+        <div class="flex items-center justify-between ${warningClass}">
             <div>
                 <div class="font-medium text-sm">${escapeHtml(feature.column)}</div>
-                <div class="text-xs text-gray-500">${dimStr}</div>
+                <div class="text-xs ${displayInfo.hasTransforms ? 'text-gray-500' : 'text-amber-600'}">
+                    ${displayInfo.dataTypeLabel} • ${displayInfo.transformStr}
+                </div>
             </div>
-            <div class="flex items-center gap-1">
-                <button type="button" class="feature-config-btn settings" onclick="openFeatureConfig('${model}', ${idx})">
+            <div class="flex items-center gap-2">
+                <select class="data-type-select" onchange="updateFeatureDataType('${model}', ${idx}, this.value)" title="Data type">
+                    ${dataTypeOptions}
+                </select>
+                <button type="button" class="feature-config-btn settings ${displayInfo.hasTransforms ? '' : 'needs-attention'}" onclick="openFeatureConfig('${model}', ${idx})" title="Configure transforms">
                     <i class="fas fa-cog"></i>
                 </button>
-                <button type="button" class="feature-config-btn remove" onclick="removeFeature('${model}', ${idx})">
+                <button type="button" class="feature-config-btn remove" onclick="removeFeature('${model}', ${idx})" title="Remove">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
@@ -1280,49 +1692,42 @@ function dropFeature(e, model) {
 }
 
 function createDefaultFeature(col) {
-    const type = col.type.toUpperCase();
+    // Create feature with BQ type, but NO transforms applied
+    // User must configure transforms via the settings modal
+    const bqType = col.bq_type || col.type || 'STRING';
+    const dataType = getDataTypeFromBqType(bqType);
 
-    if (['STRING', 'BYTES'].includes(type)) {
-        const cardinality = col.stats?.cardinality || 1000;
-        return {
-            column: col.name,
-            type: 'string_embedding',
-            embedding_dim: getRecommendedEmbedDim(cardinality),
-            vocab_settings: {
-                max_size: Math.min(cardinality * 2, 100000),
-                oov_buckets: 10,
-                min_frequency: 5
-            }
-        };
-    } else if (['INTEGER', 'INT64', 'FLOAT', 'FLOAT64', 'NUMERIC'].includes(type)) {
-        return {
-            column: col.name,
-            type: 'numeric',
-            transforms: {
-                normalize: {enabled: true, range: [-1, 1]},
-                bucketize: {enabled: true, buckets: 100, embedding_dim: 32},
-                log_transform: false
-            }
-        };
-    } else if (['TIMESTAMP', 'DATETIME', 'DATE'].includes(type)) {
-        return {
-            column: col.name,
-            type: 'timestamp',
-            transforms: {
-                normalize: {enabled: true, range: [-1, 1]},
-                bucketize: {enabled: false},
-                cyclical: {
-                    annual: false,
-                    quarterly: true,
-                    monthly: true,
-                    weekly: true,
-                    daily: false
-                }
-            }
-        };
+    return {
+        column: col.name,
+        bq_type: bqType,
+        data_type: dataType,  // Numeric, Text, or Temporal
+        stats: col.stats || {},
+        transforms: {}  // Empty - user must configure
+    };
+}
+
+function detectCyclicalPeriod(col) {
+    const colName = (col.name || '').toLowerCase();
+    const min = col.stats?.min;
+    const max = col.stats?.max;
+
+    // Try to detect from column name
+    if (colName.includes('hour')) return 24;
+    if (colName.includes('day_of_week') || colName.includes('weekday')) return 7;
+    if (colName.includes('month')) return 12;
+    if (colName.includes('day_of_month') || colName.includes('day')) return 31;
+    if (colName.includes('quarter')) return 4;
+
+    // Try to detect from value range
+    if (min !== undefined && max !== undefined) {
+        if (min >= 0 && max <= 23) return 24;
+        if (min >= 0 && max <= 6) return 7;
+        if (min >= 1 && max <= 12) return 12;
+        if (min >= 1 && max <= 31) return 31;
+        if (min >= 1 && max <= 4) return 4;
     }
 
-    return {column: col.name, type: 'string_embedding', embedding_dim: 32};
+    return 12; // Default to monthly
 }
 
 function getRecommendedEmbedDim(cardinality) {
@@ -1434,32 +1839,18 @@ function closeFeatureModal() {
 
 function renderFeatureConfigForm() {
     const body = document.getElementById('featureModalBody');
+    const dataType = editingFeature.data_type || getDataTypeFromBqType(editingFeature.bq_type);
+    const t = editingFeature.transforms || {};
 
-    if (editingFeature.type === 'string_embedding') {
-        body.innerHTML = `
-            <div class="modal-form-group">
-                <label class="modal-form-label">Embedding Dimension</label>
-                <select id="featureEmbedDim" class="form-select w-full">
-                    ${[8, 16, 32, 64, 96, 128].map(d =>
-                        `<option value="${d}" ${editingFeature.embedding_dim == d ? 'selected' : ''}>${d}</option>`
-                    ).join('')}
-                </select>
-                <p class="modal-form-hint">Higher dimensions capture more information but increase model size</p>
-            </div>
-            <div class="modal-form-group">
-                <label class="modal-form-label">Max Vocabulary Size</label>
-                <input type="number" id="featureVocabSize" class="form-input w-full"
-                       value="${editingFeature.vocab_settings?.max_size || 100000}">
-            </div>
-            <div class="modal-form-group">
-                <label class="modal-form-label">OOV Buckets</label>
-                <input type="number" id="featureOovBuckets" class="form-input w-full"
-                       value="${editingFeature.vocab_settings?.oov_buckets || 10}">
-            </div>
-        `;
-    } else if (editingFeature.type === 'numeric') {
-        const t = editingFeature.transforms || {};
-        body.innerHTML = `
+    // Build data type selector
+    const dataTypeOptions = ['numeric', 'text', 'temporal'].map(dt =>
+        `<option value="${dt}" ${dataType === dt ? 'selected' : ''}>${getDataTypeLabel(dt)}</option>`
+    ).join('');
+
+    let transformsHtml = '';
+
+    if (dataType === 'numeric') {
+        transformsHtml = `
             <div class="transform-option">
                 <input type="checkbox" id="featureNormalize" ${t.normalize?.enabled ? 'checked' : ''}>
                 <div class="transform-option-content">
@@ -1472,7 +1863,7 @@ function renderFeatureConfigForm() {
                 <input type="checkbox" id="featureBucketize" ${t.bucketize?.enabled ? 'checked' : ''}>
                 <div class="transform-option-content">
                     <div class="transform-option-title">Bucketize + Embed</div>
-                    <div class="transform-option-desc">Quantile buckets with learned embedding</div>
+                    <div class="transform-option-desc">Discretize into buckets with learned embedding</div>
                     <div class="mt-2">
                         <label class="text-xs text-gray-500">Buckets:</label>
                         <select id="featureBuckets" class="form-select form-select-sm ml-2" style="width: 80px;">
@@ -1488,20 +1879,36 @@ function renderFeatureConfigForm() {
                         </select>
                     </div>
                 </div>
-                <span class="transform-option-dim">+32D</span>
-            </div>
-            <div class="transform-option">
-                <input type="checkbox" id="featureLogTransform" ${t.log_transform ? 'checked' : ''}>
-                <div class="transform-option-content">
-                    <div class="transform-option-title">Log Transform</div>
-                    <div class="transform-option-desc">Apply log(1 + x) for skewed distributions</div>
-                </div>
+                <span class="transform-option-dim" id="bucketizeDimLabel">+${t.bucketize?.embedding_dim || 32}D</span>
             </div>
         `;
-    } else if (editingFeature.type === 'timestamp') {
-        const t = editingFeature.transforms || {};
+    } else if (dataType === 'text') {
+        transformsHtml = `
+            <div class="transform-option">
+                <input type="checkbox" id="featureEmbedding" ${t.embedding?.enabled ? 'checked' : ''}>
+                <div class="transform-option-content">
+                    <div class="transform-option-title">Embedding</div>
+                    <div class="transform-option-desc">Learn vector representation for categorical values</div>
+                    <div class="mt-2">
+                        <label class="text-xs text-gray-500">Dimension:</label>
+                        <select id="featureEmbedDim" class="form-select form-select-sm ml-2" style="width: 80px;">
+                            ${[8, 16, 32, 64, 96, 128].map(d =>
+                                `<option value="${d}" ${(t.embedding?.embedding_dim || 32) == d ? 'selected' : ''}>${d}</option>`
+                            ).join('')}
+                        </select>
+                    </div>
+                    <div class="mt-2">
+                        <label class="text-xs text-gray-500">Max Vocab:</label>
+                        <input type="number" id="featureVocabSize" class="form-input form-input-sm ml-2" style="width: 100px;"
+                               value="${t.embedding?.vocab_size || 100000}">
+                    </div>
+                </div>
+                <span class="transform-option-dim" id="embeddingDimLabel">+${t.embedding?.embedding_dim || 32}D</span>
+            </div>
+        `;
+    } else if (dataType === 'temporal') {
         const c = t.cyclical || {};
-        body.innerHTML = `
+        transformsHtml = `
             <div class="transform-option">
                 <input type="checkbox" id="featureNormalize" ${t.normalize?.enabled ? 'checked' : ''}>
                 <div class="transform-option-content">
@@ -1510,74 +1917,148 @@ function renderFeatureConfigForm() {
                 </div>
                 <span class="transform-option-dim">+1D</span>
             </div>
-            <div class="modal-form-group mt-4">
-                <label class="modal-form-label">Cyclical Features (sin/cos encoding)</label>
-                <div class="space-y-2 mt-2">
-                    <label class="flex items-center gap-2">
-                        <input type="checkbox" id="cyclicalAnnual" ${c.annual ? 'checked' : ''}>
-                        <span class="text-sm">Annual (quarter of year)</span>
-                        <span class="text-xs text-blue-600 ml-auto">+2D</span>
-                    </label>
-                    <label class="flex items-center gap-2">
-                        <input type="checkbox" id="cyclicalQuarterly" ${c.quarterly ? 'checked' : ''}>
-                        <span class="text-sm">Quarterly (month of quarter)</span>
-                        <span class="text-xs text-blue-600 ml-auto">+2D</span>
-                    </label>
-                    <label class="flex items-center gap-2">
-                        <input type="checkbox" id="cyclicalMonthly" ${c.monthly ? 'checked' : ''}>
-                        <span class="text-sm">Monthly (day of month)</span>
-                        <span class="text-xs text-blue-600 ml-auto">+2D</span>
-                    </label>
-                    <label class="flex items-center gap-2">
-                        <input type="checkbox" id="cyclicalWeekly" ${c.weekly ? 'checked' : ''}>
-                        <span class="text-sm">Weekly (day of week)</span>
-                        <span class="text-xs text-blue-600 ml-auto">+2D</span>
-                    </label>
-                    <label class="flex items-center gap-2">
-                        <input type="checkbox" id="cyclicalDaily" ${c.daily ? 'checked' : ''}>
-                        <span class="text-sm">Daily (hour of day)</span>
-                        <span class="text-xs text-blue-600 ml-auto">+2D</span>
-                    </label>
+            <div class="transform-option">
+                <input type="checkbox" id="featureCyclical" ${t.cyclical?.enabled ? 'checked' : ''}>
+                <div class="transform-option-content">
+                    <div class="transform-option-title">Cyclical Features</div>
+                    <div class="transform-option-desc">Extract periodic patterns using sin/cos encoding</div>
+                    <div class="space-y-1 mt-2 ml-2">
+                        <label class="flex items-center gap-2 text-xs">
+                            <input type="checkbox" id="cyclicalQuarterly" ${c.quarterly ? 'checked' : ''}>
+                            <span>Quarterly (month of quarter)</span>
+                            <span class="text-blue-600 ml-auto">+2D</span>
+                        </label>
+                        <label class="flex items-center gap-2 text-xs">
+                            <input type="checkbox" id="cyclicalMonthly" ${c.monthly ? 'checked' : ''}>
+                            <span>Monthly (day of month)</span>
+                            <span class="text-blue-600 ml-auto">+2D</span>
+                        </label>
+                        <label class="flex items-center gap-2 text-xs">
+                            <input type="checkbox" id="cyclicalWeekly" ${c.weekly ? 'checked' : ''}>
+                            <span>Weekly (day of week)</span>
+                            <span class="text-blue-600 ml-auto">+2D</span>
+                        </label>
+                        <label class="flex items-center gap-2 text-xs">
+                            <input type="checkbox" id="cyclicalDaily" ${c.daily ? 'checked' : ''}>
+                            <span>Daily (hour of day)</span>
+                            <span class="text-blue-600 ml-auto">+2D</span>
+                        </label>
+                    </div>
                 </div>
+                <span class="transform-option-dim">varies</span>
+            </div>
+            <div class="transform-option">
+                <input type="checkbox" id="featureBucketize" ${t.bucketize?.enabled ? 'checked' : ''}>
+                <div class="transform-option-content">
+                    <div class="transform-option-title">Bucketize + Embed</div>
+                    <div class="transform-option-desc">Discretize into time buckets with learned embedding</div>
+                    <div class="mt-2">
+                        <label class="text-xs text-gray-500">Buckets:</label>
+                        <select id="featureBuckets" class="form-select form-select-sm ml-2" style="width: 80px;">
+                            ${[10, 50, 100, 200].map(b =>
+                                `<option value="${b}" ${(t.bucketize?.buckets || 100) == b ? 'selected' : ''}>${b}</option>`
+                            ).join('')}
+                        </select>
+                        <label class="text-xs text-gray-500 ml-3">Dim:</label>
+                        <select id="featureBucketDim" class="form-select form-select-sm ml-2" style="width: 80px;">
+                            ${[8, 16, 32, 64].map(d =>
+                                `<option value="${d}" ${(t.bucketize?.embedding_dim || 32) == d ? 'selected' : ''}>${d}</option>`
+                            ).join('')}
+                        </select>
+                    </div>
+                </div>
+                <span class="transform-option-dim">+${t.bucketize?.embedding_dim || 32}D</span>
             </div>
         `;
     }
+
+    body.innerHTML = `
+        <div class="modal-form-group">
+            <label class="modal-form-label">Data Type</label>
+            <select id="modalDataType" class="form-select w-full" onchange="onModalDataTypeChange(this.value)">
+                ${dataTypeOptions}
+            </select>
+            <p class="modal-form-hint">Original BQ type: ${editingFeature.bq_type || 'STRING'}</p>
+        </div>
+        <div class="modal-form-group">
+            <label class="modal-form-label">Transformations</label>
+            <p class="text-xs text-gray-500 mb-2">Select at least one transformation to include this feature in the model</p>
+            <div id="transformOptions">
+                ${transformsHtml}
+            </div>
+        </div>
+    `;
+}
+
+function onModalDataTypeChange(newDataType) {
+    // Update the editing feature's data type and re-render the form
+    editingFeature.data_type = newDataType;
+    editingFeature.transforms = {};  // Clear transforms when type changes
+    renderFeatureConfigForm();
 }
 
 function applyFeatureConfig() {
     const features = editingFeatureModel === 'buyer' ? configState.buyerFeatures : configState.productFeatures;
     const idx = editingFeature._idx;
+    const dataType = editingFeature.data_type || getDataTypeFromBqType(editingFeature.bq_type);
 
-    if (editingFeature.type === 'string_embedding') {
-        features[idx].embedding_dim = parseInt(document.getElementById('featureEmbedDim').value);
-        features[idx].vocab_settings = {
-            max_size: parseInt(document.getElementById('featureVocabSize').value),
-            oov_buckets: parseInt(document.getElementById('featureOovBuckets').value),
-            min_frequency: 5
-        };
-    } else if (editingFeature.type === 'numeric') {
-        features[idx].transforms = {
-            normalize: {enabled: document.getElementById('featureNormalize').checked, range: [-1, 1]},
-            bucketize: {
-                enabled: document.getElementById('featureBucketize').checked,
-                buckets: parseInt(document.getElementById('featureBuckets').value),
-                embedding_dim: parseInt(document.getElementById('featureBucketDim').value)
-            },
-            log_transform: document.getElementById('featureLogTransform').checked
-        };
-    } else if (editingFeature.type === 'timestamp') {
-        features[idx].transforms = {
-            normalize: {enabled: document.getElementById('featureNormalize').checked, range: [-1, 1]},
-            bucketize: {enabled: false},
-            cyclical: {
-                annual: document.getElementById('cyclicalAnnual').checked,
-                quarterly: document.getElementById('cyclicalQuarterly').checked,
-                monthly: document.getElementById('cyclicalMonthly').checked,
-                weekly: document.getElementById('cyclicalWeekly').checked,
-                daily: document.getElementById('cyclicalDaily').checked
-            }
-        };
+    // Update the data type
+    features[idx].data_type = dataType;
+
+    // Build transforms based on data type
+    const transforms = {};
+
+    if (dataType === 'numeric') {
+        const normalizeEl = document.getElementById('featureNormalize');
+        const bucketizeEl = document.getElementById('featureBucketize');
+
+        if (normalizeEl?.checked) {
+            transforms.normalize = { enabled: true, range: [-1, 1] };
+        }
+        if (bucketizeEl?.checked) {
+            transforms.bucketize = {
+                enabled: true,
+                buckets: parseInt(document.getElementById('featureBuckets').value) || 100,
+                embedding_dim: parseInt(document.getElementById('featureBucketDim').value) || 32
+            };
+        }
+    } else if (dataType === 'text') {
+        const embeddingEl = document.getElementById('featureEmbedding');
+
+        if (embeddingEl?.checked) {
+            transforms.embedding = {
+                enabled: true,
+                embedding_dim: parseInt(document.getElementById('featureEmbedDim').value) || 32,
+                vocab_size: parseInt(document.getElementById('featureVocabSize').value) || 100000
+            };
+        }
+    } else if (dataType === 'temporal') {
+        const normalizeEl = document.getElementById('featureNormalize');
+        const cyclicalEl = document.getElementById('featureCyclical');
+        const bucketizeEl = document.getElementById('featureBucketize');
+
+        if (normalizeEl?.checked) {
+            transforms.normalize = { enabled: true, range: [-1, 1] };
+        }
+        if (cyclicalEl?.checked) {
+            transforms.cyclical = {
+                enabled: true,
+                quarterly: document.getElementById('cyclicalQuarterly')?.checked || false,
+                monthly: document.getElementById('cyclicalMonthly')?.checked || false,
+                weekly: document.getElementById('cyclicalWeekly')?.checked || false,
+                daily: document.getElementById('cyclicalDaily')?.checked || false
+            };
+        }
+        if (bucketizeEl?.checked) {
+            transforms.bucketize = {
+                enabled: true,
+                buckets: parseInt(document.getElementById('featureBuckets').value) || 100,
+                embedding_dim: parseInt(document.getElementById('featureBucketDim').value) || 32
+            };
+        }
     }
+
+    features[idx].transforms = transforms;
 
     closeFeatureModal();
     renderStep2();

@@ -38,4 +38,6 @@ urlpatterns = [
          api.list_datasets_for_model, name='api_modeling_list_datasets'),
     path('api/datasets/<int:dataset_id>/columns/',
          api.get_dataset_columns, name='api_modeling_dataset_columns'),
+    path('api/datasets/<int:dataset_id>/schema-with-sample/',
+         api.get_schema_with_sample, name='api_modeling_schema_with_sample'),
 ]

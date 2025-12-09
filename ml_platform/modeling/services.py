@@ -326,6 +326,10 @@ class TensorDimensionCalculator:
         """
         Get dimension breakdown for a single feature.
 
+        Supports both:
+        - Old format: feature.type = 'string_embedding'/'numeric'/'timestamp'
+        - New format: feature.data_type = 'numeric'/'text'/'temporal'
+
         Args:
             feature: Feature configuration dict
 
@@ -334,29 +338,51 @@ class TensorDimensionCalculator:
         """
         result = {}
         col = feature.get('column', 'unknown')
-        feature_type = feature.get('type', '')
         transforms = feature.get('transforms', {})
 
-        if feature_type == 'string_embedding':
-            result[col] = feature.get('embedding_dim', 32)
+        # Check for new data_type format first, fall back to old type format
+        data_type = feature.get('data_type')
+        feature_type = feature.get('type', '')
 
-        elif feature_type == 'numeric':
+        # Handle new format (data_type = 'numeric', 'text', 'temporal')
+        if data_type == 'text' or (not data_type and feature_type == 'string_embedding'):
+            # Text/Embedding type
+            if data_type == 'text':
+                # New format: embedding settings in transforms
+                if transforms.get('embedding', {}).get('enabled'):
+                    result[col] = transforms['embedding'].get('embedding_dim', 32)
+            else:
+                # Old format: embedding_dim at top level
+                result[col] = feature.get('embedding_dim', 32)
+
+        elif data_type == 'numeric' or (not data_type and feature_type == 'numeric'):
+            # Numeric type
             if transforms.get('normalize', {}).get('enabled'):
                 result[f'{col}_norm'] = 1
             if transforms.get('bucketize', {}).get('enabled'):
                 result[f'{col}_bucket'] = transforms['bucketize'].get('embedding_dim', 32)
 
-        elif feature_type == 'timestamp':
+        elif data_type == 'temporal' or (not data_type and feature_type == 'timestamp'):
+            # Temporal/Timestamp type
             if transforms.get('normalize', {}).get('enabled'):
                 result[f'{col}_norm'] = 1
             if transforms.get('bucketize', {}).get('enabled'):
                 result[f'{col}_bucket'] = transforms['bucketize'].get('embedding_dim', 32)
 
             cyclical = transforms.get('cyclical', {})
-            cyclical_dims = sum(2 for c in ['annual', 'quarterly', 'monthly', 'weekly', 'daily']
-                               if cyclical.get(c))
-            if cyclical_dims > 0:
-                result[f'{col}_cyclical'] = cyclical_dims
+            if data_type == 'temporal':
+                # New format: cyclical.enabled + sub-options
+                if cyclical.get('enabled'):
+                    cyclical_dims = sum(2 for c in ['quarterly', 'monthly', 'weekly', 'daily']
+                                       if cyclical.get(c))
+                    if cyclical_dims > 0:
+                        result[f'{col}_cyclical'] = cyclical_dims
+            else:
+                # Old format: direct cyclical options
+                cyclical_dims = sum(2 for c in ['annual', 'quarterly', 'monthly', 'weekly', 'daily']
+                                   if cyclical.get(c))
+                if cyclical_dims > 0:
+                    result[f'{col}_cyclical'] = cyclical_dims
 
         return result
 
@@ -439,7 +465,8 @@ def validate_feature_config(data: Dict, dataset, exclude_config_id: Optional[int
             for i, f in enumerate(features):
                 if not f.get('column'):
                     errors[f'{feature_list_key}[{i}]'] = 'Feature must have a column name'
-                if not f.get('type'):
+                # Support both old 'type' and new 'data_type' format
+                if not f.get('type') and not f.get('data_type'):
                     errors[f'{feature_list_key}[{i}]'] = 'Feature must have a type'
 
     # Validate crosses have required fields
@@ -451,3 +478,264 @@ def validate_feature_config(data: Dict, dataset, exclude_config_id: Optional[int
                     errors[f'{cross_list_key}[{i}]'] = 'Cross feature must have at least 2 features'
 
     return (len(errors) == 0, errors)
+
+
+class SemanticTypeService:
+    """
+    Infers semantic types from BigQuery types and column statistics.
+
+    Semantic Types (user-friendly names):
+    - "number"    : Continuous numeric values → Normalize, Bucketize, Log
+    - "id"        : Categorical IDs/codes    → Embedding
+    - "category"  : Categorical text         → Embedding
+    - "date"      : Timestamps/dates         → Normalize, Cyclical
+    - "cyclical"  : Periodic numeric values  → Sin/Cos encoding
+    """
+
+    SEMANTIC_TYPES = {
+        'number': {
+            'label': 'Number',
+            'description': 'Continuous numeric values',
+            'transforms': ['normalize', 'bucketize', 'log_transform'],
+            'feature_type': 'numeric',
+        },
+        'id': {
+            'label': 'ID / Code',
+            'description': 'Categorical identifiers',
+            'transforms': ['embedding'],
+            'feature_type': 'string_embedding',
+        },
+        'category': {
+            'label': 'Category',
+            'description': 'Categorical text values',
+            'transforms': ['embedding'],
+            'feature_type': 'string_embedding',
+        },
+        'date': {
+            'label': 'Date / Time',
+            'description': 'Temporal values',
+            'transforms': ['normalize', 'cyclical'],
+            'feature_type': 'timestamp',
+        },
+        'cyclical': {
+            'label': 'Cyclical',
+            'description': 'Periodic numeric values (hour, day, month)',
+            'transforms': ['cyclical_encoding'],
+            'feature_type': 'cyclical',
+        }
+    }
+
+    # Patterns that indicate ID columns
+    ID_PATTERNS = ['_id', 'id_', '_key', 'key_', '_code', 'code_', 'zip', 'postal', 'sku']
+
+    # BigQuery type mappings
+    BQ_NUMERIC_TYPES = ['INT64', 'INTEGER', 'FLOAT64', 'FLOAT', 'NUMERIC', 'BIGNUMERIC']
+    BQ_STRING_TYPES = ['STRING', 'BYTES']
+    BQ_TIMESTAMP_TYPES = ['TIMESTAMP', 'DATETIME', 'DATE', 'TIME']
+
+    @classmethod
+    def get_type_label(cls, semantic_type: str) -> str:
+        """Get user-friendly label for a semantic type."""
+        return cls.SEMANTIC_TYPES.get(semantic_type, {}).get('label', semantic_type)
+
+    @classmethod
+    def get_type_options(cls, bq_type: str) -> List[str]:
+        """
+        Get available semantic type options based on BigQuery type.
+
+        Args:
+            bq_type: BigQuery column type (e.g., 'INT64', 'STRING')
+
+        Returns:
+            List of valid semantic type keys
+        """
+        bq_type_upper = bq_type.upper() if bq_type else 'STRING'
+
+        if bq_type_upper in cls.BQ_NUMERIC_TYPES:
+            return ['number', 'id', 'cyclical']
+        elif bq_type_upper in cls.BQ_STRING_TYPES:
+            return ['category', 'id', 'date']
+        elif bq_type_upper in cls.BQ_TIMESTAMP_TYPES:
+            return ['date', 'category']
+        else:
+            return ['category', 'id']
+
+    @classmethod
+    def infer_semantic_type(
+        cls,
+        col_name: str,
+        bq_type: str,
+        stats: Optional[Dict] = None,
+        sample_values: Optional[List] = None
+    ) -> str:
+        """
+        Infer semantic type from column name, BigQuery type, and statistics.
+
+        Args:
+            col_name: Column name
+            bq_type: BigQuery column type
+            stats: Column statistics (cardinality, min, max, etc.)
+            sample_values: Sample values from the column
+
+        Returns:
+            Inferred semantic type key
+        """
+        stats = stats or {}
+        bq_type_upper = bq_type.upper() if bq_type else 'STRING'
+        col_lower = col_name.lower()
+
+        # String types
+        if bq_type_upper in cls.BQ_STRING_TYPES:
+            # Check if it looks like a timestamp
+            if sample_values and cls._looks_like_timestamp(sample_values):
+                return 'date'
+            # Check if column name suggests ID
+            if any(pattern in col_lower for pattern in cls.ID_PATTERNS):
+                return 'id'
+            return 'category'
+
+        # Timestamp types
+        if bq_type_upper in cls.BQ_TIMESTAMP_TYPES:
+            return 'date'
+
+        # Numeric types - need more analysis
+        if bq_type_upper in cls.BQ_NUMERIC_TYPES:
+            # Check for ID patterns in name
+            if any(pattern in col_lower for pattern in cls.ID_PATTERNS):
+                return 'id'
+
+            # Check for high cardinality (likely an ID)
+            cardinality = stats.get('cardinality') or stats.get('unique_count', 0)
+            total_rows = stats.get('total_rows', 1)
+            if total_rows > 0 and cardinality > 100:
+                # If >10% unique values, probably an ID
+                if cardinality / total_rows > 0.1:
+                    return 'id'
+
+            # Check for cyclical patterns based on value range
+            min_val = stats.get('min')
+            max_val = stats.get('max')
+            if min_val is not None and max_val is not None:
+                try:
+                    min_val = float(min_val)
+                    max_val = float(max_val)
+                    # Hour of day
+                    if 0 <= min_val and max_val <= 23 and max_val - min_val >= 10:
+                        return 'cyclical'
+                    # Day of week
+                    if 0 <= min_val and max_val <= 6:
+                        return 'cyclical'
+                    # Month
+                    if 1 <= min_val and max_val <= 12 and max_val - min_val >= 6:
+                        return 'cyclical'
+                    # Day of month
+                    if 1 <= min_val and max_val <= 31 and max_val - min_val >= 15:
+                        return 'cyclical'
+                except (TypeError, ValueError):
+                    pass
+
+            return 'number'
+
+        # Default to category for unknown types
+        return 'category'
+
+    @classmethod
+    def _looks_like_timestamp(cls, sample_values: List) -> bool:
+        """
+        Check if sample values look like timestamps.
+
+        Args:
+            sample_values: List of sample values
+
+        Returns:
+            True if values appear to be timestamps
+        """
+        import re
+
+        # Date patterns to check
+        date_patterns = [
+            r'^\d{4}-\d{2}-\d{2}',           # 2024-01-15
+            r'^\d{2}/\d{2}/\d{4}',           # 01/15/2024
+            r'^\d{2}-\d{2}-\d{4}',           # 15-01-2024
+            r'^\d{4}/\d{2}/\d{2}',           # 2024/01/15
+            r'^\d{8}$',                       # 20240115
+        ]
+
+        # Check at least 3 non-null values
+        valid_values = [v for v in sample_values if v is not None and str(v).strip()][:5]
+        if len(valid_values) < 2:
+            return False
+
+        matches = 0
+        for val in valid_values:
+            val_str = str(val).strip()
+            for pattern in date_patterns:
+                if re.match(pattern, val_str):
+                    matches += 1
+                    break
+
+        # If majority of values match date patterns
+        return matches >= len(valid_values) * 0.6
+
+    @classmethod
+    def detect_cyclical_period(cls, col_name: str, stats: Optional[Dict] = None) -> int:
+        """
+        Detect the period for cyclical encoding based on column stats.
+
+        Args:
+            col_name: Column name
+            stats: Column statistics
+
+        Returns:
+            Detected period (e.g., 24 for hours, 7 for days, 12 for months)
+        """
+        stats = stats or {}
+        col_lower = col_name.lower()
+
+        min_val = stats.get('min')
+        max_val = stats.get('max')
+
+        # Try to detect from column name first
+        if 'hour' in col_lower:
+            return 24
+        if 'day_of_week' in col_lower or 'weekday' in col_lower:
+            return 7
+        if 'month' in col_lower:
+            return 12
+        if 'day_of_month' in col_lower or 'day' in col_lower:
+            return 31
+        if 'quarter' in col_lower:
+            return 4
+
+        # Try to detect from value range
+        if min_val is not None and max_val is not None:
+            try:
+                min_val = float(min_val)
+                max_val = float(max_val)
+                if 0 <= min_val and max_val <= 23:
+                    return 24
+                if 0 <= min_val and max_val <= 6:
+                    return 7
+                if 1 <= min_val and max_val <= 12:
+                    return 12
+                if 1 <= min_val and max_val <= 31:
+                    return 31
+                if 1 <= min_val and max_val <= 4:
+                    return 4
+            except (TypeError, ValueError):
+                pass
+
+        return 12  # Default to monthly
+
+    @classmethod
+    def get_feature_type(cls, semantic_type: str) -> str:
+        """
+        Get the internal feature type for a semantic type.
+
+        Args:
+            semantic_type: Semantic type key
+
+        Returns:
+            Internal feature type (e.g., 'string_embedding', 'numeric')
+        """
+        return cls.SEMANTIC_TYPES.get(semantic_type, {}).get('feature_type', 'string_embedding')

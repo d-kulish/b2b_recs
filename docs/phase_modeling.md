@@ -34,6 +34,17 @@ This document provides detailed specifications for implementing the **Modeling**
 - Feature card buttons now arranged **vertically** (settings + delete)
 - Delete button uses **trash bin icon** instead of X
 - Improved tooltips and informational messages
+- **"Required" badge** now uses transparent background (matches model container colors)
+- **Data type dropdown removed** from feature card surface (only configurable via settings modal)
+- **BQ type transformation display** shows original type with arrow: `STRING → Text • Embed: 32D`
+- **Context Features containers** now have same gradient background styling as Primary ID zones (blue for Buyer, green for Product)
+- **Unconfigured features** have light orange background instead of orange left border, turns white when transforms are applied
+- **Tensor Preview** now calculates dimensions client-side in real-time (no API call needed)
+
+### Temporal Feature Improvements
+- **Cyclical Features section** no longer has a parent toggle checkbox - individual options are directly selectable
+- **Added "Yearly" (month of year)** cyclical option (+2D) for annual seasonality patterns
+- Cyclical options now include: Yearly, Quarterly, Monthly, Weekly, Daily
 
 ---
 
@@ -103,7 +114,7 @@ Cyclical features encode temporal patterns using sin/cos pairs, ensuring smooth 
 
 | Cycle | Range | Use Case |
 |-------|-------|----------|
-| **Annual** | Quarter of year (1-4) | Seasonal patterns (Q1 promotions, holiday seasons) |
+| **Yearly** | Month of year (1-12) | Annual seasonality (holiday seasons, summer/winter patterns) |
 | **Quarterly** | Month of quarter (1-3) | End-of-quarter patterns |
 | **Monthly** | Day of month (1-31) | Payday patterns, billing cycles |
 | **Weekly** | Day of week (0-6) | Weekday vs weekend behavior |
@@ -391,7 +402,8 @@ The feature configuration modal is a unified interface that adapts based on the 
 
 **Temporal:**
 - Normalize (+1D): Scale timestamp to [-1, 1]
-- Cyclical Features (varies): Sin/cos encoding for periodic patterns
+- Cyclical Features (varies): Sin/cos encoding for periodic patterns (no parent toggle - select individual options directly)
+  - Yearly: month of year (+2D)
   - Quarterly: month of quarter (+2D)
   - Monthly: day of month (+2D)
   - Weekly: day of week (+2D)
@@ -420,8 +432,9 @@ The feature configuration modal is a unified interface that adapts based on the 
 │ └─────────────────────────────────────────────────────────────────────────┘ │
 │                                                                              │
 │ ┌─────────────────────────────────────────────────────────────────────────┐ │
-│ │ ☑ Cyclical Features                                              varies │ │
+│ │ Cyclical Features                                                varies │ │
 │ │   Extract periodic patterns using sin/cos encoding                      │ │
+│ │     ☐ Yearly (month of year)                                       +2D │ │
 │ │     ☐ Quarterly (month of quarter)                                 +2D │ │
 │ │     ☑ Monthly (day of month)                                       +2D │ │
 │ │     ☑ Weekly (day of week)                                         +2D │ │
@@ -908,6 +921,7 @@ Each feature specifies a column, data type, and transforms:
             "description": "For temporal type",
             "properties": {
               "enabled": {"type": "boolean"},
+              "yearly": {"type": "boolean", "description": "Month of year (1-12)"},
               "quarterly": {"type": "boolean", "description": "Month of quarter (1-3)"},
               "monthly": {"type": "boolean", "description": "Day of month (1-31)"},
               "weekly": {"type": "boolean", "description": "Day of week (0-6)"},
@@ -959,6 +973,7 @@ Each feature specifies a column, data type, and transforms:
       "normalize": {"enabled": true, "range": [-1, 1]},
       "cyclical": {
         "enabled": true,
+        "yearly": false,
         "quarterly": true,
         "monthly": true,
         "weekly": true,

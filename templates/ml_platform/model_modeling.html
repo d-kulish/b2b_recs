@@ -360,25 +360,6 @@
         text-transform: uppercase;
     }
 
-    /* Data type dropdown in assigned features */
-    .data-type-select {
-        font-size: 11px;
-        padding: 2px 8px;
-        border: 1px solid #d1d5db;
-        border-radius: 4px;
-        background: white;
-        color: #374151;
-        cursor: pointer;
-    }
-    .data-type-select:hover {
-        border-color: #3b82f6;
-    }
-    .data-type-select:focus {
-        outline: none;
-        border-color: #3b82f6;
-        box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
-    }
-
     /* Needs attention state for features without transforms */
     .feature-config-btn.needs-attention {
         background: #fef3c7;
@@ -389,8 +370,9 @@
         0%, 100% { opacity: 1; }
         50% { opacity: 0.6; }
     }
-    .feature-needs-config {
-        border-left: 3px solid #f59e0b;
+    .assigned-feature.feature-needs-config {
+        background: #fef3c7;
+        border-color: #fcd34d;
     }
 
     /* Column card assignment states */
@@ -467,8 +449,8 @@
         font-weight: 500;
         padding: 2px 6px;
         border-radius: 4px;
-        background: #fef3c7;
-        color: #92400e;
+        background: transparent;
+        color: #6b7280;
         margin-left: auto;
     }
     .primary-id-zone-empty {
@@ -511,8 +493,15 @@
         min-height: 120px;
         transition: all 0.3s ease;
     }
+    .additional-features-section.buyer {
+        border-color: #3b82f6;
+        background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+    }
+    .additional-features-section.product {
+        border-color: #10b981;
+        background: linear-gradient(135deg, #f0fdf4 0%, #d1fae5 100%);
+    }
     .additional-features-section.locked {
-        background: #f9fafb;
         opacity: 0.6;
         pointer-events: none;
     }
@@ -521,6 +510,15 @@
         position: absolute;
         inset: 0;
         cursor: not-allowed;
+    }
+    .additional-features-section.drag-over {
+        border-style: solid;
+    }
+    .additional-features-section.buyer.drag-over {
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
+    }
+    .additional-features-section.product.drag-over {
+        box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.3);
     }
     .additional-features-header {
         display: flex;
@@ -760,7 +758,7 @@
                         </div>
 
                         <!-- Context Features Section -->
-                        <div id="buyerAdditionalSection" class="additional-features-section locked"
+                        <div id="buyerAdditionalSection" class="additional-features-section buyer locked"
                              ondrop="dropFeature(event, 'buyer')"
                              ondragover="allowDropIfUnlocked(event, 'buyer')"
                              ondragenter="dragEnterIfUnlocked(event, 'buyer')"
@@ -807,7 +805,7 @@
                         </div>
 
                         <!-- Context Features Section -->
-                        <div id="productAdditionalSection" class="additional-features-section locked"
+                        <div id="productAdditionalSection" class="additional-features-section product locked"
                              ondrop="dropFeature(event, 'product')"
                              ondragover="allowDropIfUnlocked(event, 'product')"
                              ondragenter="dragEnterIfUnlocked(event, 'product')"
@@ -1756,7 +1754,7 @@ function getFeatureDisplayInfo(feature) {
         if (transforms.cyclical?.enabled) {
             const cyclical = transforms.cyclical;
             let cyclicalDim = 0;
-            if (cyclical.annual) cyclicalDim += 2;
+            if (cyclical.yearly || cyclical.annual) cyclicalDim += 2;
             if (cyclical.quarterly) cyclicalDim += 2;
             if (cyclical.monthly) cyclicalDim += 2;
             if (cyclical.weekly) cyclicalDim += 2;
@@ -1895,30 +1893,21 @@ function renderAssignedFeatures(model) {
 
 function createAssignedFeatureElement(feature, model, idx) {
     const div = document.createElement('div');
-    div.className = 'assigned-feature';
 
     // Get display info
     const displayInfo = getFeatureDisplayInfo(feature);
-    const currentDataType = feature.data_type || getDataTypeFromBqType(feature.bq_type);
+    const bqType = feature.bq_type || 'STRING';
 
-    // Build data type options
-    const dataTypeOptions = ['numeric', 'text', 'temporal'].map(dt =>
-        `<option value="${dt}" ${currentDataType === dt ? 'selected' : ''}>${getDataTypeLabel(dt)}</option>`
-    ).join('');
-
-    // Warning indicator if no transforms selected
-    const warningClass = displayInfo.hasTransforms ? '' : 'feature-needs-config';
+    // Apply warning class to the outer div if no transforms selected
+    div.className = displayInfo.hasTransforms ? 'assigned-feature' : 'assigned-feature feature-needs-config';
 
     div.innerHTML = `
-        <div class="flex items-center justify-between ${warningClass}">
+        <div class="flex items-center justify-between">
             <div class="flex-1">
                 <div class="font-medium text-sm">${escapeHtml(feature.column)}</div>
                 <div class="text-xs ${displayInfo.hasTransforms ? 'text-gray-500' : 'text-amber-600'}">
-                    ${displayInfo.dataTypeLabel} • ${displayInfo.transformStr}
+                    ${bqType} → ${displayInfo.dataTypeLabel} • ${displayInfo.transformStr}
                 </div>
-                <select class="data-type-select mt-1" onchange="updateFeatureDataType('${model}', ${idx}, this.value)" title="Data type">
-                    ${dataTypeOptions}
-                </select>
             </div>
             <div class="flex flex-col gap-1 ml-2">
                 <button type="button" class="feature-config-btn settings ${displayInfo.hasTransforms ? '' : 'needs-attention'}" onclick="openFeatureConfig('${model}', ${idx})" title="Configure transforms">
@@ -1965,7 +1954,7 @@ function getFeatureDimString(feature) {
         const t = feature.transforms || {};
         if (t.normalize?.enabled) parts.push('Norm: 1D');
         const cyclical = t.cyclical || {};
-        const cycles = ['annual', 'quarterly', 'monthly', 'weekly', 'daily'].filter(c => cyclical[c]).length;
+        const cycles = ['yearly', 'annual', 'quarterly', 'monthly', 'weekly', 'daily'].filter(c => cyclical[c]).length;
         if (cycles > 0) parts.push(`Cyclical: ${cycles * 2}D`);
     }
     return parts.join(' + ') || 'Not configured';
@@ -2373,31 +2362,69 @@ function removeCross(model, idx) {
 // =============================================================================
 
 function updateTensorPreview() {
-    // Build feature arrays including primary IDs at the front
-    const buyerFeatures = configState.customerIdFeature
-        ? [configState.customerIdFeature, ...configState.buyerFeatures]
-        : configState.buyerFeatures;
-    const productFeatures = configState.productIdFeature
-        ? [configState.productIdFeature, ...configState.productFeatures]
-        : configState.productFeatures;
+    // Calculate buyer tensor dimensions
+    const buyerBreakdown = [];
+    let buyerTotal = 0;
 
-    fetch('/api/feature-configs/calculate-dims/', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-            buyer_model_features: buyerFeatures,
-            product_model_features: productFeatures,
-            buyer_model_crosses: configState.buyerCrosses,
-            product_model_crosses: configState.productCrosses
-        })
-    })
-    .then(r => r.json())
-    .then(data => {
-        if (data.success) {
-            renderTensorPreview('buyer', data.data.buyer_tensor_dim, data.data.buyer_tensor_breakdown);
-            renderTensorPreview('product', data.data.product_tensor_dim, data.data.product_tensor_breakdown);
+    // Primary ID (Customer ID)
+    if (configState.customerIdFeature) {
+        const info = getFeatureDisplayInfo(configState.customerIdFeature);
+        if (info.totalDim > 0) {
+            buyerBreakdown.push({ name: configState.customerIdFeature.column, dim: info.totalDim });
+            buyerTotal += info.totalDim;
+        }
+    }
+
+    // Buyer context features
+    configState.buyerFeatures.forEach(feature => {
+        const info = getFeatureDisplayInfo(feature);
+        if (info.totalDim > 0) {
+            buyerBreakdown.push({ name: feature.column, dim: info.totalDim });
+            buyerTotal += info.totalDim;
         }
     });
+
+    // Buyer cross features
+    configState.buyerCrosses.forEach(cross => {
+        const dim = cross.embedding_dim || 16;
+        const name = (cross.features || []).join(' × ');
+        buyerBreakdown.push({ name: name, dim: dim, is_cross: true });
+        buyerTotal += dim;
+    });
+
+    // Calculate product tensor dimensions
+    const productBreakdown = [];
+    let productTotal = 0;
+
+    // Primary ID (Product ID)
+    if (configState.productIdFeature) {
+        const info = getFeatureDisplayInfo(configState.productIdFeature);
+        if (info.totalDim > 0) {
+            productBreakdown.push({ name: configState.productIdFeature.column, dim: info.totalDim });
+            productTotal += info.totalDim;
+        }
+    }
+
+    // Product context features
+    configState.productFeatures.forEach(feature => {
+        const info = getFeatureDisplayInfo(feature);
+        if (info.totalDim > 0) {
+            productBreakdown.push({ name: feature.column, dim: info.totalDim });
+            productTotal += info.totalDim;
+        }
+    });
+
+    // Product cross features
+    configState.productCrosses.forEach(cross => {
+        const dim = cross.embedding_dim || 16;
+        const name = (cross.features || []).join(' × ');
+        productBreakdown.push({ name: name, dim: dim, is_cross: true });
+        productTotal += dim;
+    });
+
+    // Render both previews
+    renderTensorPreview('buyer', buyerTotal, buyerBreakdown);
+    renderTensorPreview('product', productTotal, productBreakdown);
 }
 
 function renderTensorPreview(model, total, breakdown) {
@@ -2570,35 +2597,41 @@ function renderFeatureConfigForm() {
                 </div>
                 <span class="transform-option-dim">+1D</span>
             </div>
-            <div class="transform-option">
-                <input type="checkbox" id="featureCyclical" ${t.cyclical?.enabled ? 'checked' : ''}>
-                <div class="transform-option-content">
-                    <div class="transform-option-title">Cyclical Features</div>
-                    <div class="transform-option-desc">Extract periodic patterns using sin/cos encoding</div>
-                    <div class="space-y-1 mt-2 ml-2">
-                        <label class="flex items-center gap-2 text-xs">
-                            <input type="checkbox" id="cyclicalQuarterly" ${c.quarterly ? 'checked' : ''}>
-                            <span>Quarterly (month of quarter)</span>
-                            <span class="text-blue-600 ml-auto">+2D</span>
-                        </label>
-                        <label class="flex items-center gap-2 text-xs">
-                            <input type="checkbox" id="cyclicalMonthly" ${c.monthly ? 'checked' : ''}>
-                            <span>Monthly (day of month)</span>
-                            <span class="text-blue-600 ml-auto">+2D</span>
-                        </label>
-                        <label class="flex items-center gap-2 text-xs">
-                            <input type="checkbox" id="cyclicalWeekly" ${c.weekly ? 'checked' : ''}>
-                            <span>Weekly (day of week)</span>
-                            <span class="text-blue-600 ml-auto">+2D</span>
-                        </label>
-                        <label class="flex items-center gap-2 text-xs">
-                            <input type="checkbox" id="cyclicalDaily" ${c.daily ? 'checked' : ''}>
-                            <span>Daily (hour of day)</span>
-                            <span class="text-blue-600 ml-auto">+2D</span>
-                        </label>
+            <div class="transform-option" style="flex-direction: column; align-items: stretch;">
+                <div class="flex items-start gap-2 w-full">
+                    <div class="transform-option-content flex-1">
+                        <div class="transform-option-title">Cyclical Features</div>
+                        <div class="transform-option-desc">Extract periodic patterns using sin/cos encoding</div>
                     </div>
+                    <span class="transform-option-dim">varies</span>
                 </div>
-                <span class="transform-option-dim">varies</span>
+                <div class="space-y-1 mt-3">
+                    <label class="flex items-center gap-2 text-xs">
+                        <input type="checkbox" id="cyclicalYearly" ${c.yearly ? 'checked' : ''}>
+                        <span>Yearly (month of year)</span>
+                        <span class="text-blue-600 ml-auto">+2D</span>
+                    </label>
+                    <label class="flex items-center gap-2 text-xs">
+                        <input type="checkbox" id="cyclicalQuarterly" ${c.quarterly ? 'checked' : ''}>
+                        <span>Quarterly (month of quarter)</span>
+                        <span class="text-blue-600 ml-auto">+2D</span>
+                    </label>
+                    <label class="flex items-center gap-2 text-xs">
+                        <input type="checkbox" id="cyclicalMonthly" ${c.monthly ? 'checked' : ''}>
+                        <span>Monthly (day of month)</span>
+                        <span class="text-blue-600 ml-auto">+2D</span>
+                    </label>
+                    <label class="flex items-center gap-2 text-xs">
+                        <input type="checkbox" id="cyclicalWeekly" ${c.weekly ? 'checked' : ''}>
+                        <span>Weekly (day of week)</span>
+                        <span class="text-blue-600 ml-auto">+2D</span>
+                    </label>
+                    <label class="flex items-center gap-2 text-xs">
+                        <input type="checkbox" id="cyclicalDaily" ${c.daily ? 'checked' : ''}>
+                        <span>Daily (hour of day)</span>
+                        <span class="text-blue-600 ml-auto">+2D</span>
+                    </label>
+                </div>
             </div>
             <div class="transform-option">
                 <input type="checkbox" id="featureBucketize" ${t.bucketize?.enabled ? 'checked' : ''}>
@@ -2690,21 +2723,30 @@ function applyFeatureConfig() {
         };
     } else if (dataType === 'temporal') {
         const normalizeEl = document.getElementById('featureNormalize');
-        const cyclicalEl = document.getElementById('featureCyclical');
         const bucketizeEl = document.getElementById('featureBucketize');
 
         if (normalizeEl?.checked) {
             transforms.normalize = { enabled: true, range: [-1, 1] };
         }
-        if (cyclicalEl?.checked) {
+
+        // Check if any cyclical option is selected
+        const yearly = document.getElementById('cyclicalYearly')?.checked || false;
+        const quarterly = document.getElementById('cyclicalQuarterly')?.checked || false;
+        const monthly = document.getElementById('cyclicalMonthly')?.checked || false;
+        const weekly = document.getElementById('cyclicalWeekly')?.checked || false;
+        const daily = document.getElementById('cyclicalDaily')?.checked || false;
+
+        if (yearly || quarterly || monthly || weekly || daily) {
             transforms.cyclical = {
                 enabled: true,
-                quarterly: document.getElementById('cyclicalQuarterly')?.checked || false,
-                monthly: document.getElementById('cyclicalMonthly')?.checked || false,
-                weekly: document.getElementById('cyclicalWeekly')?.checked || false,
-                daily: document.getElementById('cyclicalDaily')?.checked || false
+                yearly: yearly,
+                quarterly: quarterly,
+                monthly: monthly,
+                weekly: weekly,
+                daily: daily
             };
         }
+
         if (bucketizeEl?.checked) {
             transforms.bucketize = {
                 enabled: true,

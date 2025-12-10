@@ -10,6 +10,28 @@ This document provides detailed specifications for implementing the **Modeling**
 
 ## Recent Updates (December 2025)
 
+### UI Improvements (2025-12-10)
+
+**Feature Set Tablets:**
+- Limited description display to 80 characters on card view
+- Reorganized layout: version and updated info moved to dataset row
+- Added View/Edit/Delete buttons to top-right corner of each card
+- Tensor visualization bars now span full width
+- Replaced detailed tensor breakdown tags with summary ("N features, M crosses")
+- Detailed tensor breakdown moved to View modal
+- Clone and Code buttons styled consistently (150px width, btn-sm)
+
+**Code Viewer Modal:**
+- Close button styled with red background (btn-neu-cancel) matching Cancel buttons elsewhere
+
+**Base Template:**
+- Fixed header/content alignment by removing extra padding-right from header
+
+**Status Field Removal:**
+- Completely removed `status` field from FeatureConfig model
+- Removed from API endpoints, serializer, admin, and all UI components
+- Created migration `0027_remove_feature_config_status.py`
+
 ### Quick Test Pipeline Integration (2025-12-10)
 
 Full Vertex AI Pipeline integration for validating feature configurations:
@@ -736,15 +758,6 @@ class FeatureConfig(models.Model):
     description = models.TextField(blank=True)
     dataset = models.ForeignKey('Dataset', on_delete=models.CASCADE,
                                 related_name='feature_configs')
-
-    # Status
-    STATUS_CHOICES = [
-        ('draft', 'Draft'),
-        ('tested', 'Tested'),
-        ('promoted', 'Promoted'),  # Used in full training
-        ('archived', 'Archived'),
-    ]
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
 
     # Version tracking
     version = models.PositiveIntegerField(default=1)

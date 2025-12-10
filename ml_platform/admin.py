@@ -121,8 +121,8 @@ class SystemMetricsAdmin(admin.ModelAdmin):
 
 @admin.register(FeatureConfig)
 class FeatureConfigAdmin(admin.ModelAdmin):
-    list_display = ['name', 'dataset', 'status', 'version', 'buyer_tensor_dim', 'product_tensor_dim', 'created_at', 'updated_at']
-    list_filter = ['status', 'created_at']
+    list_display = ['name', 'dataset', 'version', 'buyer_tensor_dim', 'product_tensor_dim', 'created_at', 'updated_at']
+    list_filter = ['created_at']
     search_fields = ['name', 'description', 'dataset__name']
     readonly_fields = ['created_at', 'updated_at', 'buyer_tensor_dim', 'product_tensor_dim']
     raw_id_fields = ['dataset', 'created_by']

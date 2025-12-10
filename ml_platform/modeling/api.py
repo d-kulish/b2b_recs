@@ -35,7 +35,6 @@ def list_feature_configs(request, model_id):
 
     Query params:
         dataset_id: Filter by dataset (optional)
-        status: Filter by status (optional)
 
     Returns:
         JsonResponse with list of serialized feature configs
@@ -53,12 +52,8 @@ def list_feature_configs(request, model_id):
         if dataset_id:
             configs = configs.filter(dataset_id=dataset_id)
 
-        status = request.GET.get('status')
-        if status:
-            configs = configs.filter(status=status)
-
-        # Serialize
-        data = [serialize_feature_config(fc) for fc in configs]
+        # Serialize with details for tensor visualization
+        data = [serialize_feature_config(fc, include_details=True) for fc in configs]
 
         return JsonResponse({
             'success': True,
@@ -148,7 +143,6 @@ def create_feature_config(request, model_id):
             name=data['name'].strip(),
             description=data.get('description', '').strip(),
             dataset=dataset,
-            status='draft',
             buyer_model_features=data.get('buyer_model_features', []),
             product_model_features=data.get('product_model_features', []),
             buyer_model_crosses=data.get('buyer_model_crosses', []),
@@ -242,7 +236,6 @@ def update_feature_config(request, config_id):
     Request body:
         name: str (optional)
         description: str (optional)
-        status: str (optional)
         buyer_model_features: list (optional)
         product_model_features: list (optional)
         buyer_model_crosses: list (optional)
@@ -291,8 +284,6 @@ def update_feature_config(request, config_id):
             fc.name = data['name'].strip()
         if 'description' in data:
             fc.description = data['description'].strip()
-        if 'status' in data:
-            fc.status = data['status']
         if 'buyer_model_features' in data:
             fc.buyer_model_features = data['buyer_model_features']
         if 'product_model_features' in data:
@@ -414,7 +405,6 @@ def clone_feature_config(request, config_id):
             name=new_name,
             description=data.get('description', source.description),
             dataset=source.dataset,
-            status='draft',
             buyer_model_features=source.buyer_model_features,
             product_model_features=source.product_model_features,
             buyer_model_crosses=source.buyer_model_crosses,

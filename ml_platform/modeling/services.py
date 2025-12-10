@@ -444,7 +444,6 @@ def serialize_feature_config(fc, include_details: bool = False) -> Dict[str, Any
         'description': fc.description,
         'dataset_id': fc.dataset_id,
         'dataset_name': fc.dataset.name,
-        'status': fc.status,
         'version': fc.version,
         'buyer_tensor_dim': fc.buyer_tensor_dim,
         'product_tensor_dim': fc.product_tensor_dim,

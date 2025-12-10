@@ -1224,19 +1224,6 @@ class FeatureConfig(models.Model):
         help_text="The dataset this feature config is based on"
     )
 
-    # Status
-    STATUS_CHOICES = [
-        ('draft', 'Draft'),
-        ('active', 'Active'),
-        ('archived', 'Archived'),
-    ]
-    status = models.CharField(
-        max_length=20,
-        choices=STATUS_CHOICES,
-        default='draft',
-        help_text="Feature config status"
-    )
-
     # Version tracking
     version = models.PositiveIntegerField(
         default=1,

@@ -949,15 +949,6 @@
                     <option value="">All Datasets</option>
                 </select>
             </div>
-            <div class="flex items-center gap-2">
-                <label class="text-sm font-medium text-gray-600">Status:</label>
-                <select id="statusFilter" onchange="filterConfigs()" class="form-select text-sm" style="width: 120px;">
-                    <option value="">All</option>
-                    <option value="draft">Draft</option>
-                    <option value="active">Active</option>
-                    <option value="archived">Archived</option>
-                </select>
-            </div>
             <div class="flex-1">
                 <input type="text" id="searchInput" placeholder="Search feature configs..."
                        class="form-input w-full text-sm" onkeyup="debounceSearch()">
@@ -1062,16 +1053,17 @@
         </div>
 
         <!-- Modal Body -->
-        <div class="modal-body-wizard" style="max-height: calc(90vh - 200px); overflow-y: auto;">
-            <!-- Step 1: Basic Info -->
-            <div id="wizardStep1" class="wizard-step active" style="position: relative;">
-                <!-- Loading overlay for edit mode -->
-                <div id="wizardStep1Loading" style="display: none; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(255,255,255,0.8); align-items: center; justify-content: center; z-index: 10;">
-                    <div class="flex items-center gap-3">
-                        <i class="fas fa-spinner fa-spin text-2xl text-blue-500"></i>
-                        <span class="text-gray-600">Loading config data...</span>
-                    </div>
+        <div class="modal-body-wizard" style="max-height: calc(90vh - 200px); overflow-y: auto; position: relative;">
+            <!-- Loading overlay for wizard (covers modal body) -->
+            <div id="wizardLoadingOverlay" style="display: none; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(255,255,255,0.9); z-index: 100;">
+                <div style="position: sticky; top: 50%; transform: translateY(-50%); display: flex; align-items: center; justify-content: center; gap: 12px;">
+                    <i class="fas fa-spinner fa-spin text-2xl text-blue-500"></i>
+                    <span class="text-gray-600" id="wizardLoadingText">Loading...</span>
                 </div>
+            </div>
+
+            <!-- Step 1: Basic Info -->
+            <div id="wizardStep1" class="wizard-step active">
                 <h4 class="wizard-section-title">Basic Information</h4>
 
                 <!-- Config Name -->
@@ -1139,7 +1131,7 @@
             </div>
 
             <!-- Step 2: Feature Assignment -->
-            <div id="wizardStep2" class="wizard-step hidden">
+            <div id="wizardStep2" class="wizard-step hidden" style="position: relative;">
                 <!-- Dataset Sample - Collapsible Tablet -->
                 <div class="filter-subchapter" id="datasetSampleSubchapter">
                     <div class="subchapter-header-tablet" onclick="toggleModelingSubchapter('datasetSample')">
@@ -1491,7 +1483,7 @@
                 <span class="text-sm text-gray-500" id="transformCodeConfigName"></span>
             </div>
             <div class="footer-right">
-                <button type="button" class="btn-neu btn-neu-action btn-neu-secondary" onclick="closeTransformCodeViewer()">
+                <button type="button" class="btn-neu btn-neu-action btn-neu-cancel" onclick="closeTransformCodeViewer()">
                     <span class="btn-neu-inner">Close</span>
                 </button>
             </div>
@@ -1560,7 +1552,7 @@
                 <span class="text-sm text-gray-500" id="trainerCodeConfigName"></span>
             </div>
             <div class="footer-right">
-                <button type="button" class="btn-neu btn-neu-action btn-neu-secondary" onclick="closeTrainerCodeViewer()">
+                <button type="button" class="btn-neu btn-neu-action btn-neu-cancel" onclick="closeTrainerCodeViewer()">
                     <span class="btn-neu-inner">Close</span>
                 </button>
             </div>
@@ -1819,11 +1811,9 @@ function loadConfigs() {
     document.getElementById('configsEmpty').classList.add('hidden');
 
     const datasetId = document.getElementById('datasetFilter').value;
-    const status = document.getElementById('statusFilter').value;
 
     let url = `/api/models/${modelId}/feature-configs/?`;
     if (datasetId) url += `dataset_id=${datasetId}&`;
-    if (status) url += `status=${status}&`;
 
     fetch(url)
         .then(r => r.json())
@@ -1906,75 +1896,91 @@ function createConfigCard(config) {
     const card = document.createElement('div');
     card.className = 'config-card bg-white border border-gray-200 rounded-lg p-4 hover:border-gray-300';
 
-    const buyerDim = config.buyer_tensor_dim || 0;
-    const productDim = config.product_tensor_dim || 0;
-    const totalDim = buyerDim + productDim;
-    const maxDim = 300; // For bar width calculation
+    // Calculate tensor breakdowns from feature arrays
+    const buyerResult = calculateTensorBreakdown(
+        config.buyer_model_features || [],
+        config.buyer_model_crosses || []
+    );
+    const productResult = calculateTensorBreakdown(
+        config.product_model_features || [],
+        config.product_model_crosses || []
+    );
+
+    const buyerDim = buyerResult.total || config.buyer_tensor_dim || 0;
+    const productDim = productResult.total || config.product_tensor_dim || 0;
 
     const leakageWarning = config.columns_in_both_models && config.columns_in_both_models.length > 0
         ? `<span class="leakage-warning"><i class="fas fa-exclamation-triangle"></i>${config.columns_in_both_models.length} shared</span>`
         : '';
 
+    const cardId = `config-${config.id}`;
+
     card.innerHTML = `
-        <div class="flex items-start justify-between">
-            <div class="flex-1">
-                <div class="flex items-center gap-2 mb-1">
-                    <h3 class="font-semibold text-gray-900">${escapeHtml(config.name)}</h3>
-                    <span class="text-xs text-gray-400">v${config.version}</span>
-                    <span class="status-badge ${config.status}">${config.status}</span>
-                    ${leakageWarning}
-                </div>
-                <p class="text-sm text-gray-500 mb-2">Dataset: ${escapeHtml(config.dataset_name)}</p>
-                ${config.description ? `<p class="text-sm text-gray-600 mb-3">${escapeHtml(config.description)}</p>` : ''}
+        <div class="flex items-start justify-between mb-2">
+            <div class="flex items-center gap-2">
+                <h3 class="font-semibold text-gray-900">${escapeHtml(config.name)}</h3>
+                ${leakageWarning}
+            </div>
+            <div class="flex items-center gap-2">
+                <button onclick="viewConfig(${config.id})" class="card-action-btn view" title="View feature set">
+                    View
+                </button>
+                <button onclick="editConfig(${config.id})" class="card-action-btn edit" title="Edit feature set">
+                    <i class="fas fa-external-link-alt"></i>
+                </button>
+                <button onclick="deleteConfig(${config.id}, '${escapeHtml(config.name)}')" class="card-action-btn delete" title="Delete feature set">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
+        </div>
+        <div class="flex items-center gap-3 text-xs text-gray-500 mb-2">
+            <span>Dataset: ${escapeHtml(config.dataset_name)}</span>
+            <span>Set version: ${config.version}</span>
+            <span>Updated ${formatTimeAgo(config.updated_at)}${config.created_by ? ` by ${config.created_by}` : ''}</span>
+        </div>
+        ${config.description ? `<p class="text-sm text-gray-600 mb-3">${escapeHtml(config.description.length > 80 ? config.description.substring(0, 80) + '...' : config.description)}</p>` : ''}
 
-                <div class="grid grid-cols-2 gap-4 mb-3">
-                    <div>
-                        <div class="flex items-center justify-between text-xs mb-1">
-                            <span class="text-gray-500">BuyerModel</span>
-                            <span class="font-semibold text-blue-600">${buyerDim}D</span>
-                        </div>
-                        <div class="tensor-dim-bar">
-                            <div class="tensor-dim-fill buyer" style="width: ${Math.min(buyerDim / maxDim * 100, 100)}%"></div>
-                        </div>
-                        <div class="text-xs text-gray-400 mt-1">${config.buyer_features_count} features, ${config.buyer_crosses_count} crosses</div>
-                    </div>
-                    <div>
-                        <div class="flex items-center justify-between text-xs mb-1">
-                            <span class="text-gray-500">ProductModel</span>
-                            <span class="font-semibold text-green-600">${productDim}D</span>
-                        </div>
-                        <div class="tensor-dim-bar">
-                            <div class="tensor-dim-fill product" style="width: ${Math.min(productDim / maxDim * 100, 100)}%"></div>
-                        </div>
-                        <div class="text-xs text-gray-400 mt-1">${config.product_features_count} features, ${config.product_crosses_count} crosses</div>
-                    </div>
+        <div class="grid grid-cols-2 gap-4 mb-3">
+            <div>
+                <div class="flex items-center justify-between text-xs mb-1">
+                    <span class="text-gray-500">Buyer Tensor</span>
+                    <span class="font-semibold text-blue-600">${buyerDim}D</span>
                 </div>
-
-                <div class="text-xs text-gray-400">
-                    Updated ${formatTimeAgo(config.updated_at)}
-                    ${config.created_by ? ` by ${config.created_by}` : ''}
+                <div id="${cardId}-buyer-bar" class="tensor-breakdown-bar"></div>
+                <div class="text-xs text-gray-400 mt-1">${config.buyer_features_count || 0} features, ${config.buyer_crosses_count || 0} crosses</div>
+            </div>
+            <div>
+                <div class="flex items-center justify-between text-xs mb-1">
+                    <span class="text-gray-500">Product Tensor</span>
+                    <span class="font-semibold text-green-600">${productDim}D</span>
                 </div>
+                <div id="${cardId}-product-bar" class="tensor-breakdown-bar"></div>
+                <div class="text-xs text-gray-400 mt-1">${config.product_features_count || 0} features, ${config.product_crosses_count || 0} crosses</div>
             </div>
         </div>
 
         <div class="flex items-center gap-2 mt-3 pt-3 border-t border-gray-100">
-            <button onclick="viewConfig(${config.id})" class="btn btn-secondary btn-xs">
-                <i class="fas fa-eye mr-1"></i>View
+            <button onclick="cloneConfig(${config.id})" class="btn btn-secondary btn-sm" style="width: 150px;">
+                <i class="fas fa-copy"></i>Clone
             </button>
-            <button onclick="editConfig(${config.id})" class="btn btn-secondary btn-xs">
-                <i class="fas fa-edit mr-1"></i>Edit
-            </button>
-            <button onclick="cloneConfig(${config.id})" class="btn btn-secondary btn-xs">
-                <i class="fas fa-copy mr-1"></i>Clone
-            </button>
-            <button onclick="viewTransformCode(${config.id}, '${escapeHtml(config.name)}')" class="btn btn-secondary btn-xs" title="View Transform code (preprocessing_fn)">
-                <i class="fas fa-random mr-1"></i>Transform
-            </button>
-            <button onclick="deleteConfig(${config.id}, '${escapeHtml(config.name)}')" class="btn btn-secondary btn-xs text-red-600 hover:bg-red-50">
-                <i class="fas fa-trash mr-1"></i>Delete
+            <button onclick="viewTransformCode(${config.id}, '${escapeHtml(config.name)}')" class="btn btn-secondary btn-sm" style="width: 150px;" title="View generated TFX code">
+                <i class="fas fa-code"></i>Code
             </button>
         </div>
     `;
+
+    // Render tensor visualizations after card is in DOM (bars only, no breakdown tags)
+    setTimeout(() => {
+        const buyerBar = document.getElementById(`${cardId}-buyer-bar`);
+        const productBar = document.getElementById(`${cardId}-product-bar`);
+
+        if (buyerBar && buyerResult.breakdown.length > 0) {
+            renderTensorPreview('buyer', buyerResult.total, buyerResult.breakdown, buyerBar, null);
+        }
+        if (productBar && productResult.breakdown.length > 0) {
+            renderTensorPreview('product', productResult.total, productResult.breakdown, productBar, null);
+        }
+    }, 0);
 
     return card;
 }
@@ -2082,17 +2088,30 @@ function loadConfigForEdit(configId) {
         });
 }
 
-function updateEditLoadingState() {
-    const loadingOverlay = document.getElementById('wizardStep1Loading');
+function showWizardLoading(show, text = 'Loading...') {
+    const loadingOverlay = document.getElementById('wizardLoadingOverlay');
+    const loadingText = document.getElementById('wizardLoadingText');
     const nextBtn = document.getElementById('nextBtn');
+    const saveBtn = document.getElementById('saveBtn');
 
     if (loadingOverlay) {
-        loadingOverlay.style.display = isLoadingConfigForEdit ? 'flex' : 'none';
+        loadingOverlay.style.display = show ? 'block' : 'none';
+    }
+    if (loadingText) {
+        loadingText.textContent = text;
     }
     if (nextBtn) {
-        nextBtn.disabled = isLoadingConfigForEdit;
-        nextBtn.style.opacity = isLoadingConfigForEdit ? '0.5' : '1';
+        nextBtn.disabled = show;
+        nextBtn.style.opacity = show ? '0.5' : '1';
     }
+    if (saveBtn) {
+        saveBtn.disabled = show;
+        saveBtn.style.opacity = show ? '0.5' : '1';
+    }
+}
+
+function updateEditLoadingState() {
+    showWizardLoading(isLoadingConfigForEdit, 'Loading config data...');
 }
 
 function updateWizardStep() {
@@ -2212,9 +2231,16 @@ function loadCloneOptions(datasetId) {
 // STEP 2: FEATURE ASSIGNMENT
 // =============================================================================
 
+function showStep2Loading(show) {
+    showWizardLoading(show, 'Loading feature data...');
+}
+
 function loadColumnsForStep2() {
     const datasetId = configState.datasetId;
     const startFrom = configState.startFrom;
+
+    // Show loading spinner
+    showStep2Loading(true);
 
     // Use new schema-with-sample endpoint for accurate types and sample data
     fetch(`/api/datasets/${datasetId}/schema-with-sample/`)
@@ -2232,18 +2258,22 @@ function loadColumnsForStep2() {
                         loadCloneData(cloneFromId);
                     } else {
                         renderStep2();
+                        showStep2Loading(false);
                     }
                 } else {
                     renderStep2();
+                    showStep2Loading(false);
                 }
             } else {
                 console.error('Failed to load schema:', data.error);
                 showError('Failed to load column schema');
+                showStep2Loading(false);
             }
         })
         .catch(err => {
             console.error('Error loading schema:', err);
             showError('Error loading column schema');
+            showStep2Loading(false);
         });
 }
 
@@ -2275,7 +2305,14 @@ function loadCloneData(configId) {
                 configState.buyerCrosses = data.data.buyer_model_crosses || [];
                 configState.productCrosses = data.data.product_model_crosses || [];
                 renderStep2();
+                showStep2Loading(false);
+            } else {
+                showStep2Loading(false);
             }
+        })
+        .catch(err => {
+            console.error('Error loading clone data:', err);
+            showStep2Loading(false);
         });
 }
 
@@ -3197,82 +3234,75 @@ function removeCross(model, idx) {
 // TENSOR PREVIEW
 // =============================================================================
 
-function updateTensorPreview() {
-    // Calculate buyer tensor dimensions
-    const buyerBreakdown = [];
-    let buyerTotal = 0;
+/**
+ * Calculate tensor breakdown from feature arrays
+ * @param {Array} features - Array of feature objects
+ * @param {Array} crosses - Array of cross feature objects
+ * @returns {Object} { total: number, breakdown: Array<{name, dim, is_cross?}> }
+ */
+function calculateTensorBreakdown(features, crosses) {
+    const breakdown = [];
+    let total = 0;
 
-    // Primary ID (Customer ID)
-    if (configState.customerIdFeature) {
-        const info = getFeatureDisplayInfo(configState.customerIdFeature);
-        if (info.totalDim > 0) {
-            buyerBreakdown.push({ name: configState.customerIdFeature.column, dim: info.totalDim });
-            buyerTotal += info.totalDim;
-        }
-    }
-
-    // Buyer context features
-    configState.buyerFeatures.forEach(feature => {
+    // Process features
+    (features || []).forEach(feature => {
         const info = getFeatureDisplayInfo(feature);
         if (info.totalDim > 0) {
-            buyerBreakdown.push({ name: feature.column, dim: info.totalDim });
-            buyerTotal += info.totalDim;
+            breakdown.push({ name: feature.column, dim: info.totalDim });
+            total += info.totalDim;
         }
     });
 
-    // Buyer cross features
-    configState.buyerCrosses.forEach(cross => {
+    // Process cross features
+    (crosses || []).forEach(cross => {
         const dim = cross.embedding_dim || 16;
         const featureNames = getCrossFeatureNames(cross);
         const name = featureNames.join(' × ');
-        buyerBreakdown.push({ name: name, dim: dim, is_cross: true });
-        buyerTotal += dim;
+        breakdown.push({ name: name, dim: dim, is_cross: true });
+        total += dim;
     });
 
-    // Calculate product tensor dimensions
-    const productBreakdown = [];
-    let productTotal = 0;
-
-    // Primary ID (Product ID)
-    if (configState.productIdFeature) {
-        const info = getFeatureDisplayInfo(configState.productIdFeature);
-        if (info.totalDim > 0) {
-            productBreakdown.push({ name: configState.productIdFeature.column, dim: info.totalDim });
-            productTotal += info.totalDim;
-        }
-    }
-
-    // Product context features
-    configState.productFeatures.forEach(feature => {
-        const info = getFeatureDisplayInfo(feature);
-        if (info.totalDim > 0) {
-            productBreakdown.push({ name: feature.column, dim: info.totalDim });
-            productTotal += info.totalDim;
-        }
-    });
-
-    // Product cross features
-    configState.productCrosses.forEach(cross => {
-        const dim = cross.embedding_dim || 16;
-        const featureNames = getCrossFeatureNames(cross);
-        const name = featureNames.join(' × ');
-        productBreakdown.push({ name: name, dim: dim, is_cross: true });
-        productTotal += dim;
-    });
-
-    // Render both previews
-    renderTensorPreview('buyer', buyerTotal, buyerBreakdown);
-    renderTensorPreview('product', productTotal, productBreakdown);
+    return { total, breakdown };
 }
 
-function renderTensorPreview(model, total, breakdown) {
-    document.getElementById(`${model}TensorTotal`).textContent = `${total}D`;
+function updateTensorPreview() {
+    // Calculate buyer tensor dimensions
+    const buyerFeatures = [];
+    if (configState.customerIdFeature) {
+        buyerFeatures.push(configState.customerIdFeature);
+    }
+    buyerFeatures.push(...configState.buyerFeatures);
+    const buyerResult = calculateTensorBreakdown(buyerFeatures, configState.buyerCrosses);
 
-    const barContainer = document.getElementById(`${model}TensorBar`);
-    const breakdownContainer = document.getElementById(`${model}TensorBreakdown`);
+    // Calculate product tensor dimensions
+    const productFeatures = [];
+    if (configState.productIdFeature) {
+        productFeatures.push(configState.productIdFeature);
+    }
+    productFeatures.push(...configState.productFeatures);
+    const productResult = calculateTensorBreakdown(productFeatures, configState.productCrosses);
+
+    // Render both previews
+    renderTensorPreview('buyer', buyerResult.total, buyerResult.breakdown);
+    renderTensorPreview('product', productResult.total, productResult.breakdown);
+}
+
+/**
+ * Render tensor visualization bar and breakdown tags
+ * Can be called with either:
+ *   - model name (for wizard): renderTensorPreview('buyer', total, breakdown)
+ *   - DOM elements directly (for cards): renderTensorPreview('buyer', total, breakdown, barEl, breakdownEl)
+ */
+function renderTensorPreview(model, total, breakdown, barContainer = null, breakdownContainer = null) {
+    // Get containers - either from params or by ID (wizard mode)
+    if (!barContainer) {
+        document.getElementById(`${model}TensorTotal`).textContent = `${total}D`;
+        barContainer = document.getElementById(`${model}TensorBar`);
+        breakdownContainer = document.getElementById(`${model}TensorBreakdown`);
+    }
 
     barContainer.innerHTML = '';
-    breakdownContainer.innerHTML = '';
+    if (breakdownContainer) breakdownContainer.innerHTML = '';
 
     if (!breakdown || breakdown.length === 0) return;
 
@@ -3294,10 +3324,12 @@ function renderTensorPreview(model, total, breakdown) {
         }
         barContainer.appendChild(segment);
 
-        const tag = document.createElement('span');
-        tag.className = 'tensor-breakdown-item';
-        tag.textContent = `${item.name}: ${item.dim}D`;
-        breakdownContainer.appendChild(tag);
+        if (breakdownContainer) {
+            const tag = document.createElement('span');
+            tag.className = 'tensor-breakdown-item';
+            tag.textContent = `${item.name}: ${item.dim}D`;
+            breakdownContainer.appendChild(tag);
+        }
     });
 }
 
@@ -3842,37 +3874,54 @@ function viewConfig(configId) {
 function renderViewModal(config) {
     document.getElementById('viewConfigTitle').textContent = config.name;
 
+    // Calculate tensor breakdowns for detailed view
+    const buyerResult = calculateTensorBreakdown(
+        config.buyer_model_features || [],
+        config.buyer_model_crosses || []
+    );
+    const productResult = calculateTensorBreakdown(
+        config.product_model_features || [],
+        config.product_model_crosses || []
+    );
+
     const body = document.getElementById('viewConfigBody');
     body.innerHTML = `
         <div class="mb-4">
-            <div class="flex items-center gap-2 mb-2">
-                <span class="status-badge ${config.status}">${config.status}</span>
-                <span class="text-sm text-gray-500">v${config.version}</span>
+            <div class="flex items-center gap-3 text-xs text-gray-500 mb-2">
+                <span>Version: ${config.version}</span>
+                <span>Dataset: ${config.dataset_name}</span>
             </div>
             <p class="text-sm text-gray-600">${config.description || 'No description'}</p>
-            <p class="text-xs text-gray-400 mt-2">Dataset: ${config.dataset_name}</p>
         </div>
 
         <div class="grid grid-cols-2 gap-4 mb-4">
             <div class="p-4 bg-blue-50 rounded-lg">
-                <h4 class="font-semibold text-blue-800 mb-2">BuyerModel: ${config.buyer_tensor_dim || 0}D</h4>
+                <div class="flex items-center justify-between mb-3">
+                    <h4 class="font-semibold text-blue-800">Buyer Tensor</h4>
+                    <span class="font-semibold text-blue-600">${buyerResult.total}D</span>
+                </div>
+                <div id="viewModal-buyer-bar" class="tensor-breakdown-bar mb-3"></div>
                 <div class="space-y-1">
-                    ${(config.buyer_model_features || []).map(f => `
-                        <div class="text-sm text-blue-700">${f.column} (${f.type})</div>
-                    `).join('')}
-                    ${(config.buyer_model_crosses || []).map(c => `
-                        <div class="text-sm text-blue-600 italic">${c.features.join(' × ')}</div>
+                    ${buyerResult.breakdown.map(item => `
+                        <div class="flex items-center justify-between text-sm">
+                            <span class="${item.is_cross ? 'text-blue-600 italic' : 'text-blue-700'}">${item.name}</span>
+                            <span class="text-blue-500 font-medium">${item.dim}D</span>
+                        </div>
                     `).join('')}
                 </div>
             </div>
             <div class="p-4 bg-green-50 rounded-lg">
-                <h4 class="font-semibold text-green-800 mb-2">ProductModel: ${config.product_tensor_dim || 0}D</h4>
+                <div class="flex items-center justify-between mb-3">
+                    <h4 class="font-semibold text-green-800">Product Tensor</h4>
+                    <span class="font-semibold text-green-600">${productResult.total}D</span>
+                </div>
+                <div id="viewModal-product-bar" class="tensor-breakdown-bar mb-3"></div>
                 <div class="space-y-1">
-                    ${(config.product_model_features || []).map(f => `
-                        <div class="text-sm text-green-700">${f.column} (${f.type})</div>
-                    `).join('')}
-                    ${(config.product_model_crosses || []).map(c => `
-                        <div class="text-sm text-green-600 italic">${c.features.join(' × ')}</div>
+                    ${productResult.breakdown.map(item => `
+                        <div class="flex items-center justify-between text-sm">
+                            <span class="${item.is_cross ? 'text-green-600 italic' : 'text-green-700'}">${item.name}</span>
+                            <span class="text-green-500 font-medium">${item.dim}D</span>
+                        </div>
                     `).join('')}
                 </div>
             </div>
@@ -3882,6 +3931,18 @@ function renderViewModal(config) {
             Created ${formatTimeAgo(config.created_at)} by ${config.created_by || 'Unknown'}
         </div>
     `;
+
+    // Render tensor bars in view modal
+    setTimeout(() => {
+        const buyerBar = document.getElementById('viewModal-buyer-bar');
+        const productBar = document.getElementById('viewModal-product-bar');
+        if (buyerBar && buyerResult.breakdown.length > 0) {
+            renderTensorPreview('buyer', buyerResult.total, buyerResult.breakdown, buyerBar, null);
+        }
+        if (productBar && productResult.breakdown.length > 0) {
+            renderTensorPreview('product', productResult.total, productResult.breakdown, productBar, null);
+        }
+    }, 0);
 }
 
 function closeViewModal() {

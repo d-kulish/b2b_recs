@@ -932,8 +932,8 @@
         <div class="flex items-center justify-between mb-6">
             <h2 class="text-2xl font-bold text-gray-900">Features</h2>
             <div class="btn-group">
-                <button onclick="refreshConfigs()" class="btn btn-secondary btn-sm" style="width: 150px;">
-                    <i class="fas fa-sync-alt"></i>Refresh
+                <button onclick="openCompareModal()" class="btn btn-secondary btn-sm" style="width: 150px;">
+                    <i class="fas fa-columns"></i>Compare
                 </button>
                 <button onclick="openWizard()" class="btn btn-primary btn-sm" style="width: 150px;">
                     <i class="fas fa-plus"></i>New Feats Set
@@ -955,8 +955,8 @@
             </div>
         </div>
 
-        <!-- Feature Configs List -->
-        <div id="configsList" class="space-y-3" style="min-height: 200px;">
+        <!-- Feature Configs List - scrollable, shows ~2 cards -->
+        <div id="configsList" class="space-y-3" style="max-height: 420px; overflow-y: auto; min-height: 100px;">
             <!-- Loading state -->
             <div id="configsLoading" class="flex items-center justify-center py-12">
                 <i class="fas fa-spinner fa-spin text-2xl text-gray-400 mr-3"></i>
@@ -1398,15 +1398,12 @@
 
 <!-- View Config Modal -->
 <div id="viewConfigModal" class="modal-overlay hidden">
-    <div class="modal-container" style="max-width: 700px;">
+    <div class="modal-container" style="max-width: 880px;">
         <div class="modal-header">
             <div class="modal-header-icon info">
                 <i class="fas fa-eye"></i>
             </div>
             <h3 class="modal-header-title" id="viewConfigTitle">Feature Config Details</h3>
-            <button type="button" class="modal-close-btn" onclick="closeViewModal()">
-                <i class="fas fa-times"></i>
-            </button>
         </div>
         <div class="modal-body" id="viewConfigBody" style="max-height: 70vh; overflow-y: auto;">
             <!-- Content will be dynamically generated -->
@@ -1414,7 +1411,119 @@
         <div class="modal-footer-wizard-neu">
             <div class="footer-left"></div>
             <div class="footer-right">
-                <button type="button" class="btn-neu btn-neu-action btn-neu-secondary" onclick="closeViewModal()">
+                <button type="button" class="btn-neu btn-neu-action btn-neu-cancel" onclick="closeViewModal()">
+                    <span class="btn-neu-inner">Close</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Clone Config Modal -->
+<div id="cloneConfigModal" class="modal-overlay hidden">
+    <div class="modal-container" style="max-width: 450px;">
+        <div class="modal-header">
+            <div class="modal-header-icon info">
+                <i class="fas fa-copy"></i>
+            </div>
+            <h3 class="modal-header-title">Clone Feature Config</h3>
+        </div>
+        <div class="modal-body">
+            <div class="mb-4">
+                <label for="cloneConfigName" class="block text-sm font-medium text-gray-700 mb-2">
+                    New config name
+                </label>
+                <input type="text" id="cloneConfigName"
+                       class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                       placeholder="Enter name for cloned config">
+            </div>
+        </div>
+        <div class="modal-footer-wizard-neu">
+            <div class="footer-left"></div>
+            <div class="footer-right">
+                <button type="button" class="btn-neu btn-neu-action btn-neu-save" onclick="submitClone()">
+                    <span class="btn-neu-inner">Clone</span>
+                </button>
+                <button type="button" class="btn-neu btn-neu-action btn-neu-cancel" onclick="closeCloneModal()">
+                    <span class="btn-neu-inner">Cancel</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Compare Feature Sets Modal -->
+<div id="compareModal" class="modal-overlay hidden">
+    <div class="modal-container" style="max-width: 1000px;">
+        <div class="modal-header">
+            <div class="modal-header-icon info">
+                <i class="fas fa-columns"></i>
+            </div>
+            <h3 class="modal-header-title">Compare Feature Sets</h3>
+        </div>
+        <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
+            <!-- Dropdowns row -->
+            <div class="grid grid-cols-2 gap-4 mb-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Left Feature Set</label>
+                    <select id="compareLeftSelect" onchange="onCompareSelectChange('left')"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <option value="">Select feature set...</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Right Feature Set</label>
+                    <select id="compareRightSelect" onchange="onCompareSelectChange('right')"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <option value="">Select feature set...</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Comparison content - table layout for aligned rows -->
+            <div class="border border-gray-200 rounded-lg overflow-hidden bg-white">
+                <table class="w-full compare-table" id="compareTable">
+                    <colgroup>
+                        <col style="width: 50%">
+                        <col style="width: 50%">
+                    </colgroup>
+                    <tbody id="compareTableBody">
+                        <!-- Header row -->
+                        <tr class="compare-row-header">
+                            <td id="compareLeftHeader" class="p-4 align-top border-r border-gray-200 border-b">
+                                <div class="flex items-center justify-center h-full text-gray-400 py-4">
+                                    <span>Select a feature set</span>
+                                </div>
+                            </td>
+                            <td id="compareRightHeader" class="p-4 align-top border-b">
+                                <div class="flex items-center justify-center h-full text-gray-400 py-4">
+                                    <span>Select a feature set</span>
+                                </div>
+                            </td>
+                        </tr>
+                        <!-- Source row -->
+                        <tr class="compare-row-source hidden">
+                            <td id="compareLeftSource" class="p-4 align-top border-r border-gray-200 border-b"></td>
+                            <td id="compareRightSource" class="p-4 align-top border-b"></td>
+                        </tr>
+                        <!-- Buyer Tensor row -->
+                        <tr class="compare-row-buyer hidden">
+                            <td id="compareLeftBuyer" class="p-4 align-top border-r border-gray-200 border-b"></td>
+                            <td id="compareRightBuyer" class="p-4 align-top border-b"></td>
+                        </tr>
+                        <!-- Product Tensor row -->
+                        <tr class="compare-row-product hidden">
+                            <td id="compareLeftProduct" class="p-4 align-top border-r border-gray-200"></td>
+                            <td id="compareRightProduct" class="p-4 align-top"></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="modal-footer-wizard-neu">
+            <div class="footer-left"></div>
+            <div class="footer-right">
+                <button type="button" class="btn-neu btn-neu-action btn-neu-cancel" onclick="closeCompareModal()">
                     <span class="btn-neu-inner">Close</span>
                 </button>
             </div>
@@ -1831,10 +1940,6 @@ function loadConfigs() {
             console.error('Error loading configs:', err);
             showError('Failed to load feature configs');
         });
-}
-
-function refreshConfigs() {
-    loadConfigs();
 }
 
 function populateDatasetFilters() {
@@ -3884,17 +3989,18 @@ function renderViewModal(config) {
         config.product_model_crosses || []
     );
 
+    // Build dataset info section
+    const datasetInfoHtml = buildDatasetInfoHtml(config.dataset_info, config.dataset_name);
+
     const body = document.getElementById('viewConfigBody');
     body.innerHTML = `
-        <div class="mb-4">
-            <div class="flex items-center gap-3 text-xs text-gray-500 mb-2">
-                <span>Version: ${config.version}</span>
-                <span>Dataset: ${config.dataset_name}</span>
-            </div>
-            <p class="text-sm text-gray-600">${config.description || 'No description'}</p>
+        <div class="mb-3">
+            <div class="text-sm text-gray-500">Dataset: <span class="font-medium text-gray-700">${config.dataset_name}</span></div>
         </div>
 
-        <div class="grid grid-cols-2 gap-4 mb-4">
+        ${datasetInfoHtml}
+
+        <div class="grid grid-cols-2 gap-4">
             <div class="p-4 bg-blue-50 rounded-lg">
                 <div class="flex items-center justify-between mb-3">
                     <h4 class="font-semibold text-blue-800">Buyer Tensor</h4>
@@ -3926,10 +4032,6 @@ function renderViewModal(config) {
                 </div>
             </div>
         </div>
-
-        <div class="text-xs text-gray-400">
-            Created ${formatTimeAgo(config.created_at)} by ${config.created_by || 'Unknown'}
-        </div>
     `;
 
     // Render tensor bars in view modal
@@ -3945,8 +4047,361 @@ function renderViewModal(config) {
     }, 0);
 }
 
+/**
+ * Build HTML for dataset information section in View modal.
+ * @param {Object} info - Dataset info from API (dataset_info field)
+ * @param {string} datasetName - Name of the dataset
+ * @returns {string} HTML string for dataset info section
+ */
+function buildDatasetInfoHtml(info, datasetName) {
+    if (!info || !info.primary_table) {
+        return ''; // No dataset info available
+    }
+
+    // Build tables line
+    const tables = [info.primary_table + ' (primary)'];
+    (info.secondary_tables || []).forEach(t => {
+        if (t) tables.push(t);
+    });
+    const tablesLine = tables.join(' &bull; ');
+
+    // Build joins lines
+    const joins = info.joins || [];
+    const joinsHtml = joins.length > 0
+        ? joins.map(j => `<div class="text-gray-700">${j}</div>`).join('')
+        : '<span class="text-gray-400 italic">No joins</span>';
+
+    // Build filters badges
+    const filterBadges = [];
+    if (info.filters?.dates) filterBadges.push(info.filters.dates);
+    if (info.filters?.customers) filterBadges.push(info.filters.customers);
+    if (info.filters?.products) filterBadges.push(info.filters.products);
+    const filtersLine = filterBadges.length > 0
+        ? filterBadges.join(' &bull; ')
+        : '<span class="text-gray-400 italic">No filters</span>';
+
+    // Row count badge
+    const rowsBadge = info.estimated_rows
+        ? `${info.estimated_rows.toLocaleString()} rows`
+        : '';
+
+    return `
+        <div class="mb-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+            <div class="flex items-center justify-between mb-3">
+                <h4 class="font-semibold text-gray-700">
+                    <i class="fas fa-database mr-2 text-gray-400"></i>Dataset Source
+                </h4>
+                ${rowsBadge ? `<span class="text-sm font-medium text-gray-500 bg-white px-2 py-1 rounded border border-gray-200">${rowsBadge}</span>` : ''}
+            </div>
+            <div class="space-y-2 text-sm">
+                <div class="flex">
+                    <span class="text-gray-500 w-16 flex-shrink-0">Tables:</span>
+                    <span class="text-gray-700">${tablesLine}</span>
+                </div>
+                ${joins.length > 0 ? `
+                <div class="flex">
+                    <span class="text-gray-500 w-16 flex-shrink-0">Joins:</span>
+                    <div class="text-gray-700">${joinsHtml}</div>
+                </div>
+                ` : ''}
+                <div class="flex">
+                    <span class="text-gray-500 w-16 flex-shrink-0">Filters:</span>
+                    <span class="text-gray-700">${filtersLine}</span>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
 function closeViewModal() {
     document.getElementById('viewConfigModal').classList.add('hidden');
+}
+
+// =============================================================================
+// COMPARE FEATURE SETS FUNCTIONS
+// =============================================================================
+
+let compareLeftConfig = null;
+let compareRightConfig = null;
+
+function openCompareModal() {
+    // Populate dropdowns with all feature sets
+    const leftSelect = document.getElementById('compareLeftSelect');
+    const rightSelect = document.getElementById('compareRightSelect');
+
+    // Clear existing options except the placeholder
+    leftSelect.innerHTML = '<option value="">Select feature set...</option>';
+    rightSelect.innerHTML = '<option value="">Select feature set...</option>';
+
+    // Add all configs to both dropdowns
+    allConfigs.forEach(config => {
+        const optionLeft = document.createElement('option');
+        optionLeft.value = config.id;
+        optionLeft.textContent = config.name;
+        leftSelect.appendChild(optionLeft);
+
+        const optionRight = document.createElement('option');
+        optionRight.value = config.id;
+        optionRight.textContent = config.name;
+        rightSelect.appendChild(optionRight);
+    });
+
+    // Reset to placeholder state
+    resetCompareColumn('left');
+    resetCompareColumn('right');
+
+    // Hide data rows
+    document.querySelector('.compare-row-source').classList.add('hidden');
+    document.querySelector('.compare-row-buyer').classList.add('hidden');
+    document.querySelector('.compare-row-product').classList.add('hidden');
+
+    // Reset state
+    compareLeftConfig = null;
+    compareRightConfig = null;
+
+    // Show modal
+    document.getElementById('compareModal').classList.remove('hidden');
+}
+
+function closeCompareModal() {
+    document.getElementById('compareModal').classList.add('hidden');
+    compareLeftConfig = null;
+    compareRightConfig = null;
+}
+
+function resetCompareColumn(side) {
+    const prefix = side === 'left' ? 'compareLeft' : 'compareRight';
+
+    document.getElementById(`${prefix}Header`).innerHTML = `
+        <div class="flex items-center justify-center h-full text-gray-400 py-4">
+            <span>Select a feature set</span>
+        </div>
+    `;
+    document.getElementById(`${prefix}Source`).innerHTML = '';
+    document.getElementById(`${prefix}Buyer`).innerHTML = '';
+    document.getElementById(`${prefix}Product`).innerHTML = '';
+}
+
+function onCompareSelectChange(side) {
+    const selectId = side === 'left' ? 'compareLeftSelect' : 'compareRightSelect';
+    const configId = document.getElementById(selectId).value;
+
+    if (!configId) {
+        // Reset this side
+        resetCompareColumn(side);
+        if (side === 'left') compareLeftConfig = null;
+        else compareRightConfig = null;
+        updateCompareRowVisibility();
+        return;
+    }
+
+    // Show loading state in header
+    const prefix = side === 'left' ? 'compareLeft' : 'compareRight';
+    document.getElementById(`${prefix}Header`).innerHTML = `
+        <div class="flex items-center justify-center h-full text-gray-400 py-4">
+            <i class="fas fa-spinner fa-spin mr-2"></i>Loading...
+        </div>
+    `;
+
+    // Fetch config data
+    fetch(`/api/feature-configs/${configId}/`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                if (side === 'left') compareLeftConfig = data.data;
+                else compareRightConfig = data.data;
+                renderCompareColumn(data.data, side);
+                updateCompareRowVisibility();
+            } else {
+                document.getElementById(`${prefix}Header`).innerHTML = `
+                    <div class="flex items-center justify-center h-full text-red-400 py-4">
+                        <span>Failed to load</span>
+                    </div>
+                `;
+            }
+        })
+        .catch(err => {
+            console.error('Error loading config for compare:', err);
+            document.getElementById(`${prefix}Header`).innerHTML = `
+                <div class="flex items-center justify-center h-full text-red-400 py-4">
+                    <span>Error loading</span>
+                </div>
+            `;
+        });
+}
+
+function updateCompareRowVisibility() {
+    // Show rows only if at least one side has data
+    const hasData = compareLeftConfig || compareRightConfig;
+    document.querySelector('.compare-row-source').classList.toggle('hidden', !hasData);
+    document.querySelector('.compare-row-buyer').classList.toggle('hidden', !hasData);
+    document.querySelector('.compare-row-product').classList.toggle('hidden', !hasData);
+}
+
+function renderCompareColumn(config, side) {
+    const prefix = side === 'left' ? 'compareLeft' : 'compareRight';
+
+    // Calculate tensor breakdowns
+    const buyerResult = calculateTensorBreakdown(
+        config.buyer_model_features || [],
+        config.buyer_model_crosses || []
+    );
+    const productResult = calculateTensorBreakdown(
+        config.product_model_features || [],
+        config.product_model_crosses || []
+    );
+
+    // Build dataset info
+    const datasetInfo = config.dataset_info || {};
+
+    // Render Header
+    document.getElementById(`${prefix}Header`).innerHTML = `
+        <h4 class="font-semibold text-gray-900">${escapeHtml(config.name)}</h4>
+        <div class="text-sm text-gray-500">Dataset: ${escapeHtml(config.dataset_name)}</div>
+    `;
+
+    // Render Source
+    document.getElementById(`${prefix}Source`).innerHTML = buildCompareSourceHtml(datasetInfo);
+
+    // Render Buyer Tensor
+    document.getElementById(`${prefix}Buyer`).innerHTML = `
+        <div class="p-3 bg-blue-50 rounded-lg">
+            <div class="flex items-center justify-between mb-2">
+                <h5 class="font-semibold text-blue-800 text-sm">Buyer Tensor</h5>
+                <span class="font-semibold text-blue-600 text-sm">${buyerResult.total}D</span>
+            </div>
+            <div id="compare-${side}-buyer-bar" class="tensor-breakdown-bar mb-2"></div>
+            <div class="space-y-1">
+                ${buyerResult.breakdown.map(item => `
+                    <div class="flex items-center justify-between text-xs">
+                        <span class="${item.is_cross ? 'text-blue-600 italic' : 'text-blue-700'}">${item.name}</span>
+                        <span class="text-blue-500 font-medium">${item.dim}D</span>
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+    `;
+
+    // Render Product Tensor
+    document.getElementById(`${prefix}Product`).innerHTML = `
+        <div class="p-3 bg-green-50 rounded-lg">
+            <div class="flex items-center justify-between mb-2">
+                <h5 class="font-semibold text-green-800 text-sm">Product Tensor</h5>
+                <span class="font-semibold text-green-600 text-sm">${productResult.total}D</span>
+            </div>
+            <div id="compare-${side}-product-bar" class="tensor-breakdown-bar mb-2"></div>
+            <div class="space-y-1">
+                ${productResult.breakdown.map(item => `
+                    <div class="flex items-center justify-between text-xs">
+                        <span class="${item.is_cross ? 'text-green-600 italic' : 'text-green-700'}">${item.name}</span>
+                        <span class="text-green-500 font-medium">${item.dim}D</span>
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+    `;
+
+    // Render tensor bars
+    setTimeout(() => {
+        const buyerBar = document.getElementById(`compare-${side}-buyer-bar`);
+        const productBar = document.getElementById(`compare-${side}-product-bar`);
+        if (buyerBar && buyerResult.breakdown.length > 0) {
+            renderTensorPreview('buyer', buyerResult.total, buyerResult.breakdown, buyerBar, null);
+        }
+        if (productBar && productResult.breakdown.length > 0) {
+            renderTensorPreview('product', productResult.total, productResult.breakdown, productBar, null);
+        }
+    }, 0);
+}
+
+/**
+ * Build compact source info HTML for Compare modal
+ */
+function buildCompareSourceHtml(info) {
+    if (!info || !info.primary_table) {
+        return '<div class="p-3 bg-gray-100 rounded-lg text-sm text-gray-400 italic">No dataset info</div>';
+    }
+
+    // Build tables line
+    const tables = [info.primary_table];
+    (info.secondary_tables || []).forEach(t => {
+        if (t) tables.push(t);
+    });
+    const tablesLine = tables.join(', ');
+
+    // Build filters
+    const filterBadges = [];
+    if (info.filters?.dates) filterBadges.push(info.filters.dates);
+    if (info.filters?.customers) filterBadges.push(info.filters.customers);
+    if (info.filters?.products) filterBadges.push(info.filters.products);
+    const filtersLine = filterBadges.length > 0
+        ? filterBadges.join(' &bull; ')
+        : '<span class="text-gray-400 italic">None</span>';
+
+    // Row count
+    const rowsBadge = info.estimated_rows
+        ? `${info.estimated_rows.toLocaleString()} rows`
+        : '';
+
+    return `
+        <div class="p-3 bg-gray-100 rounded-lg">
+            <div class="flex items-center justify-between mb-2">
+                <span class="font-medium text-gray-700 text-sm">
+                    <i class="fas fa-database mr-1 text-gray-400"></i>Source
+                </span>
+                ${rowsBadge ? `<span class="text-xs font-medium text-gray-500">${rowsBadge}</span>` : ''}
+            </div>
+            <div class="space-y-1 text-xs">
+                <div><span class="text-gray-500">Tables:</span> <span class="text-gray-700">${tablesLine}</span></div>
+                <div><span class="text-gray-500">Filters:</span> <span class="text-gray-700">${filtersLine}</span></div>
+            </div>
+        </div>
+    `;
+}
+
+/**
+ * Build compact dataset info HTML for Compare modal columns (legacy - kept for compatibility)
+ */
+function buildCompareDatasetHtml(info) {
+    if (!info || !info.primary_table) {
+        return '<div class="mb-4 p-3 bg-gray-100 rounded-lg text-sm text-gray-400 italic">No dataset info</div>';
+    }
+
+    // Build tables line
+    const tables = [info.primary_table];
+    (info.secondary_tables || []).forEach(t => {
+        if (t) tables.push(t);
+    });
+    const tablesLine = tables.join(', ');
+
+    // Build filters
+    const filterBadges = [];
+    if (info.filters?.dates) filterBadges.push(info.filters.dates);
+    if (info.filters?.customers) filterBadges.push(info.filters.customers);
+    if (info.filters?.products) filterBadges.push(info.filters.products);
+    const filtersLine = filterBadges.length > 0
+        ? filterBadges.join(' &bull; ')
+        : '<span class="text-gray-400 italic">None</span>';
+
+    // Row count
+    const rowsBadge = info.estimated_rows
+        ? `${info.estimated_rows.toLocaleString()} rows`
+        : '';
+
+    return `
+        <div class="mb-4 p-3 bg-gray-100 rounded-lg">
+            <div class="flex items-center justify-between mb-2">
+                <span class="font-medium text-gray-700 text-sm">
+                    <i class="fas fa-database mr-1 text-gray-400"></i>Source
+                </span>
+                ${rowsBadge ? `<span class="text-xs font-medium text-gray-500">${rowsBadge}</span>` : ''}
+            </div>
+            <div class="space-y-1 text-xs">
+                <div><span class="text-gray-500">Tables:</span> <span class="text-gray-700">${tablesLine}</span></div>
+                <div><span class="text-gray-500">Filters:</span> <span class="text-gray-700">${filtersLine}</span></div>
+            </div>
+        </div>
+    `;
 }
 
 // =============================================================================
@@ -4302,29 +4757,63 @@ function editConfig(configId) {
     openWizard(configId);
 }
 
+// Clone modal state
+let cloneConfigId = null;
+
 function cloneConfig(configId) {
     const config = allConfigs.find(c => c.id === configId);
-    const newName = prompt('Enter name for cloned config:', `${config.name} (Copy)`);
+    cloneConfigId = configId;
 
-    if (newName) {
-        fetch(`/api/feature-configs/${configId}/clone/`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': csrftoken
-            },
-            body: JSON.stringify({name: newName})
-        })
-        .then(r => r.json())
-        .then(data => {
-            if (data.success) {
-                loadConfigs();
-                showSuccess('Config cloned successfully');
-            } else {
-                showError(data.error || 'Failed to clone');
-            }
-        });
+    // Pre-fill with suggested name
+    const input = document.getElementById('cloneConfigName');
+    input.value = `${config.name} (Copy)`;
+
+    // Show modal
+    document.getElementById('cloneConfigModal').classList.remove('hidden');
+
+    // Focus input and select text
+    setTimeout(() => {
+        input.focus();
+        input.select();
+    }, 100);
+}
+
+function closeCloneModal() {
+    document.getElementById('cloneConfigModal').classList.add('hidden');
+    cloneConfigId = null;
+}
+
+function submitClone() {
+    const newName = document.getElementById('cloneConfigName').value.trim();
+
+    if (!newName) {
+        showError('Please enter a name for the cloned config');
+        return;
     }
+
+    if (!cloneConfigId) {
+        showError('No config selected for cloning');
+        return;
+    }
+
+    fetch(`/api/feature-configs/${cloneConfigId}/clone/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrftoken
+        },
+        body: JSON.stringify({name: newName})
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            closeCloneModal();
+            loadConfigs();
+            showSuccess('Config cloned successfully');
+        } else {
+            showError(data.error || 'Failed to clone');
+        }
+    });
 }
 
 function deleteConfig(configId, configName) {

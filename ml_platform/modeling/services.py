@@ -463,6 +463,9 @@ def serialize_feature_config(fc, include_details: bool = False) -> Dict[str, Any
         data['buyer_model_crosses'] = fc.buyer_model_crosses
         data['product_model_crosses'] = fc.product_model_crosses
 
+        # Add dataset info for View modal
+        data['dataset_info'] = get_dataset_info_for_view(fc.dataset)
+
     return data
 
 
@@ -2163,3 +2166,212 @@ def run_fn(fn_args: tfx.components.FnArgs):
         self.config.save(update_fields=['generated_trainer_code', 'generated_at'])
 
         return code, is_valid, error_msg
+
+
+# =============================================================================
+# DATASET INFO HELPERS FOR VIEW MODAL
+# =============================================================================
+
+def _format_joins_summary(join_config: dict) -> list:
+    """
+    Format joins as simple text strings for View modal display.
+
+    Args:
+        join_config: Join configuration from Dataset model
+
+    Returns:
+        List of formatted join strings, e.g.:
+        ["transactions.customer_id ↔ customers.customer_id (LEFT)"]
+    """
+    if not join_config:
+        return []
+
+    joins = join_config.get('joins', [])
+    result = []
+
+    for join in joins:
+        left_table = join.get('left_table', '')
+        left_column = join.get('left_column', '')
+        right_table = join.get('right_table', '')
+        right_column = join.get('right_column', '')
+        join_type = join.get('join_type', 'LEFT').upper()
+
+        if left_table and left_column and right_table and right_column:
+            result.append(
+                f"{left_table}.{left_column} ↔ {right_table}.{right_column} ({join_type})"
+            )
+
+    return result
+
+
+def _format_date_filter_summary(date_filter: dict) -> Optional[str]:
+    """
+    Format date filter as summary text for View modal display.
+
+    Args:
+        date_filter: Date filter from summary_snapshot.filters_applied.dates
+
+    Returns:
+        Summary string, e.g.: "Last 30 days" or "From 2024-01-01" or None
+    """
+    if not date_filter:
+        return None
+
+    filter_type = date_filter.get('type')
+
+    if filter_type == 'rolling':
+        days = date_filter.get('days', 30)
+        return f"Last {days} days"
+    elif filter_type == 'fixed' or date_filter.get('start_date'):
+        start_date = date_filter.get('start_date')
+        if start_date:
+            return f"From {start_date}"
+
+    return None
+
+
+def _format_customer_filter_summary(customer_filter: dict) -> Optional[str]:
+    """
+    Format customer filters as summary text for View modal display.
+
+    Args:
+        customer_filter: Customer filter from summary_snapshot.filters_applied.customers
+
+    Returns:
+        Summary string, e.g.: "Top 80% by revenue" or "2 filters" or None
+    """
+    if not customer_filter:
+        return None
+
+    filter_count = customer_filter.get('count', 0)
+    filters = customer_filter.get('filters', [])
+
+    if filter_count == 0 and not filters:
+        return None
+
+    # Check for top revenue filter
+    for f in filters:
+        if f.get('type') == 'top_revenue':
+            percent = f.get('percent', 80)
+            return f"Top {percent}% customers"
+
+    # Multiple filters
+    if filter_count > 1:
+        return f"{filter_count} customer filters"
+    elif filter_count == 1 or len(filters) == 1:
+        # Single filter - try to describe it
+        if filters:
+            f = filters[0]
+            f_type = f.get('type', '')
+            if f_type == 'transaction_count':
+                return "By transaction count"
+            elif f_type == 'spending':
+                return "By spending"
+        return "1 customer filter"
+
+    return None
+
+
+def _format_product_filter_summary(product_filter: dict) -> Optional[str]:
+    """
+    Format product filters as summary text for View modal display.
+
+    Args:
+        product_filter: Product filter from summary_snapshot.filters_applied.products
+
+    Returns:
+        Summary string, e.g.: "Top 75% by revenue" or "3 filters" or None
+    """
+    if not product_filter:
+        return None
+
+    filter_count = product_filter.get('count', 0)
+    filters = product_filter.get('filters', [])
+
+    if filter_count == 0 and not filters:
+        return None
+
+    # Check for top revenue filter
+    for f in filters:
+        if f.get('type') == 'top_revenue':
+            percent = f.get('percent', 80)
+            return f"Top {percent}% products"
+
+    # Multiple filters
+    if filter_count > 1:
+        return f"{filter_count} product filters"
+    elif filter_count == 1 or len(filters) == 1:
+        # Single filter - try to describe it
+        if filters:
+            f = filters[0]
+            f_type = f.get('type', '')
+            if f_type == 'transaction_count':
+                return "By transaction count"
+            elif f_type == 'category':
+                return "By category"
+        return "1 product filter"
+
+    return None
+
+
+def _count_selected_columns(selected_columns: dict) -> int:
+    """
+    Count total selected columns across all tables.
+
+    Args:
+        selected_columns: Dict of table_name -> list of column names
+
+    Returns:
+        Total count of selected columns
+    """
+    if not selected_columns:
+        return 0
+
+    total = 0
+    for table_columns in selected_columns.values():
+        if isinstance(table_columns, list):
+            total += len(table_columns)
+
+    return total
+
+
+def get_dataset_info_for_view(dataset) -> Dict[str, Any]:
+    """
+    Get dataset information formatted for the Feature Config View modal.
+
+    Args:
+        dataset: Dataset model instance
+
+    Returns:
+        Dict with tables, joins, filters, and estimates
+    """
+    snapshot = dataset.summary_snapshot or {}
+    filters_applied = snapshot.get('filters_applied', {})
+
+    # Build secondary tables list (handle both string and list formats)
+    secondary_tables = dataset.secondary_tables or []
+    if isinstance(secondary_tables, str):
+        secondary_tables = [secondary_tables] if secondary_tables else []
+
+    return {
+        # Tables
+        'primary_table': dataset.primary_table,
+        'secondary_tables': secondary_tables,
+
+        # Joins (simplified text format)
+        'joins': _format_joins_summary(dataset.join_config),
+
+        # Filters summary
+        'filters': {
+            'dates': _format_date_filter_summary(filters_applied.get('dates')),
+            'customers': _format_customer_filter_summary(filters_applied.get('customers')),
+            'products': _format_product_filter_summary(filters_applied.get('products')),
+        },
+
+        # Estimates
+        'estimated_rows': snapshot.get('total_rows'),
+        'column_count': _count_selected_columns(dataset.selected_columns),
+
+        # BigQuery location
+        'bq_location': dataset.bq_location,
+    }

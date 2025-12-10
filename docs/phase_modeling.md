@@ -10,6 +10,67 @@ This document provides detailed specifications for implementing the **Modeling**
 
 ## Recent Updates (December 2025)
 
+### Feature Set View Modal Enhancement (2025-12-10)
+
+**Dataset Information Section:**
+- Added Dataset Source section above tensor visualizations showing:
+  - BigQuery tables (primary + secondary)
+  - Join configuration (formatted as "table1.col ↔ table2.col (JOIN_TYPE)")
+  - Filters summary (dates, customers, products)
+  - Estimated row count badge
+- Removed version number and "Created X ago by Y" timestamp from View modal
+- Increased modal width from 700px to 880px for better readability
+
+**Backend Changes:**
+- Extended `serialize_feature_config()` to include `dataset_info` object
+- Added helper functions for formatting dataset info:
+  - `_format_joins_summary()` - formats joins as readable text
+  - `_format_date_filter_summary()` - "Last 30 days" or "From 2024-01-01"
+  - `_format_customer_filter_summary()` - "Top 80% customers" or "2 customer filters"
+  - `_format_product_filter_summary()` - "Top 75% products" or "3 product filters"
+  - `_count_selected_columns()` - counts total columns across tables
+  - `get_dataset_info_for_view()` - main function building dataset info dict
+
+### Compare Feature Sets (2025-12-10)
+
+**New Feature:**
+- Added "Compare" button (replacing "Refresh") in the Features chapter header
+- Opens a side-by-side comparison modal for any two feature sets
+- Supports cross-dataset comparison (different datasets can be compared)
+
+**Compare Modal Features:**
+- Two dropdown selects to choose Left and Right feature sets
+- Table-based layout ensuring aligned rows for easy comparison:
+  - Header row: Feature set name + dataset name
+  - Source row: Tables, filters, row count (aligned horizontally)
+  - Buyer Tensor row: Tensor bar + features list (aligned horizontally)
+  - Product Tensor row: Tensor bar + features list (aligned horizontally)
+- White background for clean appearance
+- Cross features displayed in italic
+- Tensor dimension bars for visual comparison
+
+**JavaScript Functions:**
+- `openCompareModal()` - Opens modal, populates dropdowns
+- `closeCompareModal()` - Closes modal, resets state
+- `onCompareSelectChange(side)` - Handles dropdown selection, fetches data
+- `renderCompareColumn(config, side)` - Renders feature set into table cells
+- `buildCompareSourceHtml(info)` - Builds compact source section HTML
+- `updateCompareRowVisibility()` - Shows/hides data rows based on selection
+
+### Clone Modal Enhancement (2025-12-10)
+
+- Replaced browser's native `prompt()` dialog with modern modal
+- Clean input field with label "New config name"
+- Pre-filled with suggested name (original name + " (Copy)")
+- Auto-focus and select text for immediate editing
+- Buttons: Clone (green) + Cancel (red)
+
+### Feature Set List Scrolling (2025-12-10)
+
+- Feature configs list now shows approximately 2 cards with scroll for more
+- Added `max-height: 420px` and `overflow-y: auto` to configs container
+- Prevents the Features chapter from becoming too tall with many feature sets
+
 ### UI Improvements (2025-12-10)
 
 **Feature Set Tablets:**

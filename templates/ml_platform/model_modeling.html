@@ -548,6 +548,179 @@
     .locked-message span {
         font-size: 12px;
     }
+
+    /* Code Viewer Modal Styles */
+    .code-viewer-tabs {
+        display: flex;
+        border-bottom: 1px solid #e5e7eb;
+        margin-bottom: 16px;
+    }
+    .code-viewer-tab {
+        padding: 10px 20px;
+        font-size: 14px;
+        font-weight: 500;
+        color: #6b7280;
+        background: transparent;
+        border: none;
+        cursor: pointer;
+        border-bottom: 2px solid transparent;
+        margin-bottom: -1px;
+        transition: all 0.15s ease;
+    }
+    .code-viewer-tab:hover {
+        color: #374151;
+        background: #f9fafb;
+    }
+    .code-viewer-tab.active {
+        color: #3b82f6;
+        border-bottom-color: #3b82f6;
+    }
+    .code-viewer-tab .tab-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 20px;
+        height: 20px;
+        padding: 0 6px;
+        margin-left: 6px;
+        font-size: 11px;
+        font-weight: 600;
+        border-radius: 10px;
+        background: #e5e7eb;
+        color: #6b7280;
+    }
+    .code-viewer-tab.active .tab-badge {
+        background: #dbeafe;
+        color: #3b82f6;
+    }
+    .code-viewer-content {
+        display: none;
+    }
+    .code-viewer-content.active {
+        display: block;
+    }
+    .code-container {
+        position: relative;
+        background: #1e293b;
+        border-radius: 8px;
+        overflow: hidden;
+    }
+    .code-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 10px 14px;
+        background: #334155;
+        border-bottom: 1px solid #475569;
+    }
+    .code-filename {
+        font-size: 12px;
+        font-weight: 500;
+        color: #94a3b8;
+        font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+    }
+    .code-actions {
+        display: flex;
+        gap: 8px;
+    }
+    .code-action-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 5px 10px;
+        font-size: 11px;
+        font-weight: 500;
+        color: #94a3b8;
+        background: #475569;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: all 0.15s ease;
+    }
+    .code-action-btn:hover {
+        background: #64748b;
+        color: #e2e8f0;
+    }
+    .code-action-btn.copied {
+        background: #10b981;
+        color: white;
+    }
+    .code-block {
+        max-height: 450px;
+        overflow: auto;
+        padding: 16px;
+    }
+    .code-block pre {
+        margin: 0;
+        padding: 0;
+        font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+        font-size: 12px;
+        line-height: 1.6;
+        color: #e2e8f0;
+        white-space: pre;
+        tab-size: 4;
+    }
+    /* Simple syntax highlighting */
+    .code-block .keyword {
+        color: #c678dd;
+    }
+    .code-block .string {
+        color: #98c379;
+    }
+    .code-block .comment {
+        color: #7f848e;
+        font-style: italic;
+    }
+    .code-block .function {
+        color: #61afef;
+    }
+    .code-block .decorator {
+        color: #e5c07b;
+    }
+    .code-block .number {
+        color: #d19a66;
+    }
+    .code-block .class-name {
+        color: #e5c07b;
+    }
+    .code-block .builtin {
+        color: #56b6c2;
+    }
+    .code-empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 40px;
+        color: #9ca3af;
+    }
+    .code-empty i {
+        font-size: 32px;
+        margin-bottom: 12px;
+        opacity: 0.5;
+    }
+    .code-empty span {
+        font-size: 14px;
+    }
+    .code-meta {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 12px 16px;
+        background: #f9fafb;
+        border-radius: 8px;
+        margin-bottom: 12px;
+        font-size: 12px;
+        color: #6b7280;
+    }
+    .code-meta-item {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .code-meta-item i {
+        color: #9ca3af;
+    }
 </style>
 {% endblock %}
 
@@ -991,6 +1164,98 @@
     </div>
 </div>
 
+<!-- Code Viewer Modal -->
+<div id="codeViewerModal" class="modal-overlay hidden">
+    <div class="modal-container" style="max-width: 900px;">
+        <div class="modal-header">
+            <div class="modal-header-icon info">
+                <i class="fas fa-code"></i>
+            </div>
+            <h3 class="modal-header-title" id="codeViewerTitle">Generated TFX Code</h3>
+            <button type="button" class="modal-close-btn" onclick="closeCodeViewer()">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="modal-body" style="max-height: 75vh; overflow-y: auto;">
+            <!-- Meta info -->
+            <div class="code-meta" id="codeViewerMeta">
+                <div class="code-meta-item">
+                    <i class="fas fa-clock"></i>
+                    <span id="codeGeneratedAt">-</span>
+                </div>
+                <div class="code-meta-item">
+                    <i class="fas fa-sync-alt"></i>
+                    <button onclick="regenerateCode()" class="text-blue-600 hover:text-blue-800 font-medium" id="regenerateBtn">
+                        Regenerate Code
+                    </button>
+                </div>
+            </div>
+
+            <!-- Tabs -->
+            <div class="code-viewer-tabs">
+                <button class="code-viewer-tab active" data-tab="transform" onclick="switchCodeTab('transform')">
+                    <i class="fas fa-random mr-1"></i>Transform
+                    <span class="tab-badge" id="transformLineCount">-</span>
+                </button>
+                <button class="code-viewer-tab" data-tab="trainer" onclick="switchCodeTab('trainer')">
+                    <i class="fas fa-brain mr-1"></i>Trainer
+                    <span class="tab-badge" id="trainerLineCount">-</span>
+                </button>
+            </div>
+
+            <!-- Transform Code Tab -->
+            <div class="code-viewer-content active" id="transformCodeContent">
+                <div class="code-container">
+                    <div class="code-header">
+                        <span class="code-filename">preprocessing_fn.py</span>
+                        <div class="code-actions">
+                            <button class="code-action-btn" onclick="copyCode('transform')" id="copyTransformBtn">
+                                <i class="fas fa-copy"></i> Copy
+                            </button>
+                            <button class="code-action-btn" onclick="downloadCode('transform')">
+                                <i class="fas fa-download"></i> Download
+                            </button>
+                        </div>
+                    </div>
+                    <div class="code-block">
+                        <pre id="transformCode"></pre>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Trainer Code Tab -->
+            <div class="code-viewer-content" id="trainerCodeContent">
+                <div class="code-container">
+                    <div class="code-header">
+                        <span class="code-filename">trainer_module.py</span>
+                        <div class="code-actions">
+                            <button class="code-action-btn" onclick="copyCode('trainer')" id="copyTrainerBtn">
+                                <i class="fas fa-copy"></i> Copy
+                            </button>
+                            <button class="code-action-btn" onclick="downloadCode('trainer')">
+                                <i class="fas fa-download"></i> Download
+                            </button>
+                        </div>
+                    </div>
+                    <div class="code-block">
+                        <pre id="trainerCode"></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer-wizard-neu">
+            <div class="footer-left">
+                <span class="text-sm text-gray-500" id="codeViewerConfigName"></span>
+            </div>
+            <div class="footer-right">
+                <button type="button" class="btn-neu btn-neu-action btn-neu-secondary" onclick="closeCodeViewer()">
+                    <span class="btn-neu-inner">Close</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 const modelId = {{ model.id }};
 let allConfigs = [];
@@ -1218,6 +1483,9 @@ function createConfigCard(config) {
             </button>
             <button onclick="cloneConfig(${config.id})" class="btn btn-secondary btn-xs">
                 <i class="fas fa-copy mr-1"></i>Clone
+            </button>
+            <button onclick="viewGeneratedCode(${config.id}, '${escapeHtml(config.name)}')" class="btn btn-secondary btn-xs" title="View generated TFX code">
+                <i class="fas fa-code mr-1"></i>Code
             </button>
             <button onclick="deleteConfig(${config.id}, '${escapeHtml(config.name)}')" class="btn btn-secondary btn-xs text-red-600 hover:bg-red-50">
                 <i class="fas fa-trash mr-1"></i>Delete
@@ -3110,6 +3378,250 @@ function renderViewModal(config) {
 
 function closeViewModal() {
     document.getElementById('viewConfigModal').classList.add('hidden');
+}
+
+// =============================================================================
+// CODE VIEWER FUNCTIONS
+// =============================================================================
+
+let currentCodeViewerConfigId = null;
+let currentCodeData = { transform: '', trainer: '' };
+
+function viewGeneratedCode(configId, configName) {
+    currentCodeViewerConfigId = configId;
+    document.getElementById('codeViewerTitle').textContent = `Generated TFX Code`;
+    document.getElementById('codeViewerConfigName').textContent = configName;
+
+    // Reset tabs
+    switchCodeTab('transform');
+
+    // Clear previous content
+    document.getElementById('transformCode').textContent = 'Loading...';
+    document.getElementById('trainerCode').textContent = 'Loading...';
+    document.getElementById('transformLineCount').textContent = '-';
+    document.getElementById('trainerLineCount').textContent = '-';
+    document.getElementById('codeGeneratedAt').textContent = 'Loading...';
+
+    // Show modal
+    document.getElementById('codeViewerModal').classList.remove('hidden');
+
+    // Fetch both transform and trainer code
+    Promise.all([
+        fetch(`/api/feature-configs/${configId}/generated-code/?type=transform`).then(r => r.json()),
+        fetch(`/api/feature-configs/${configId}/generated-code/?type=trainer`).then(r => r.json())
+    ])
+    .then(([transformData, trainerData]) => {
+        // Handle Transform code
+        if (transformData.success && transformData.data.code) {
+            currentCodeData.transform = transformData.data.code;
+            const highlighted = highlightPython(transformData.data.code);
+            document.getElementById('transformCode').innerHTML = highlighted;
+            const lineCount = transformData.data.code.split('\n').length;
+            document.getElementById('transformLineCount').textContent = `${lineCount} lines`;
+        } else {
+            currentCodeData.transform = '';
+            document.getElementById('transformCode').innerHTML = '<span class="comment"># No transform code generated yet</span>';
+            document.getElementById('transformLineCount').textContent = '0';
+        }
+
+        // Handle Trainer code
+        if (trainerData.success && trainerData.data.code) {
+            currentCodeData.trainer = trainerData.data.code;
+            const highlighted = highlightPython(trainerData.data.code);
+            document.getElementById('trainerCode').innerHTML = highlighted;
+            const lineCount = trainerData.data.code.split('\n').length;
+            document.getElementById('trainerLineCount').textContent = `${lineCount} lines`;
+        } else {
+            currentCodeData.trainer = '';
+            document.getElementById('trainerCode').innerHTML = '<span class="comment"># No trainer code generated yet</span>';
+            document.getElementById('trainerLineCount').textContent = '0';
+        }
+
+        // Update generated timestamp
+        const timestamp = transformData.data?.generated_at || trainerData.data?.generated_at;
+        if (timestamp) {
+            document.getElementById('codeGeneratedAt').textContent = `Generated ${formatTimeAgo(timestamp)}`;
+        } else {
+            document.getElementById('codeGeneratedAt').textContent = 'Not generated';
+        }
+    })
+    .catch(err => {
+        console.error('Error fetching code:', err);
+        document.getElementById('transformCode').innerHTML = '<span class="comment"># Error loading code</span>';
+        document.getElementById('trainerCode').innerHTML = '<span class="comment"># Error loading code</span>';
+    });
+}
+
+function closeCodeViewer() {
+    document.getElementById('codeViewerModal').classList.add('hidden');
+    currentCodeViewerConfigId = null;
+    currentCodeData = { transform: '', trainer: '' };
+}
+
+function switchCodeTab(tab) {
+    // Update tabs
+    document.querySelectorAll('.code-viewer-tab').forEach(t => {
+        t.classList.toggle('active', t.dataset.tab === tab);
+    });
+
+    // Update content
+    document.getElementById('transformCodeContent').classList.toggle('active', tab === 'transform');
+    document.getElementById('trainerCodeContent').classList.toggle('active', tab === 'trainer');
+}
+
+function highlightPython(code) {
+    // Tokenization-based syntax highlighting to avoid regex conflicts
+    // First, find all tokens and their positions, then build result
+
+    const tokens = [];
+
+    // Define token patterns (order matters for priority)
+    const patterns = [
+        // Triple-quoted strings (must come before single-line strings)
+        { regex: /"""[\s\S]*?"""|'''[\s\S]*?'''/g, type: 'string' },
+        // Comments
+        { regex: /#[^\n]*/g, type: 'comment' },
+        // Single and double quoted strings
+        { regex: /'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"/g, type: 'string' },
+        // Decorators
+        { regex: /@\w+/g, type: 'decorator' },
+        // Keywords (word boundaries)
+        { regex: /\b(?:def|class|import|from|return|if|else|elif|for|while|try|except|finally|with|as|in|not|and|or|is|None|True|False|lambda|yield|raise|pass|break|continue|global|nonlocal|assert)\b/g, type: 'keyword' },
+        // Builtins
+        { regex: /\b(?:self|print|len|range|str|int|float|list|dict|tuple|set|type|isinstance|hasattr|getattr|setattr|super|property|staticmethod|classmethod|tf|tft|tfrs|logging|math)\b/g, type: 'builtin' },
+        // Function calls and definitions
+        { regex: /\b([a-zA-Z_]\w*)\s*(?=\()/g, type: 'function' },
+        // Numbers
+        { regex: /\b\d+\.?\d*\b/g, type: 'number' },
+    ];
+
+    // Find all tokens
+    patterns.forEach(p => {
+        let match;
+        const regex = new RegExp(p.regex.source, 'g');
+        while ((match = regex.exec(code)) !== null) {
+            tokens.push({
+                start: match.index,
+                end: match.index + match[0].length,
+                text: match[0],
+                type: p.type
+            });
+        }
+    });
+
+    // Sort by start position
+    tokens.sort((a, b) => a.start - b.start);
+
+    // Remove overlapping tokens (keep first/higher priority)
+    const filteredTokens = [];
+    let lastEnd = 0;
+    for (const token of tokens) {
+        if (token.start >= lastEnd) {
+            filteredTokens.push(token);
+            lastEnd = token.end;
+        }
+    }
+
+    // Build result
+    let result = '';
+    let pos = 0;
+
+    for (const token of filteredTokens) {
+        // Add unhighlighted text before this token
+        if (token.start > pos) {
+            result += escapeHtml(code.slice(pos, token.start));
+        }
+        // Add highlighted token
+        result += `<span class="${token.type}">${escapeHtml(token.text)}</span>`;
+        pos = token.end;
+    }
+
+    // Add remaining text
+    if (pos < code.length) {
+        result += escapeHtml(code.slice(pos));
+    }
+
+    return result;
+}
+
+function copyCode(type) {
+    const code = currentCodeData[type];
+    if (!code) {
+        showError('No code to copy');
+        return;
+    }
+
+    navigator.clipboard.writeText(code).then(() => {
+        const btn = document.getElementById(type === 'transform' ? 'copyTransformBtn' : 'copyTrainerBtn');
+        const originalHtml = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+        btn.classList.add('copied');
+
+        setTimeout(() => {
+            btn.innerHTML = originalHtml;
+            btn.classList.remove('copied');
+        }, 2000);
+    }).catch(err => {
+        console.error('Failed to copy:', err);
+        showError('Failed to copy code');
+    });
+}
+
+function downloadCode(type) {
+    const code = currentCodeData[type];
+    if (!code) {
+        showError('No code to download');
+        return;
+    }
+
+    const filename = type === 'transform' ? 'preprocessing_fn.py' : 'trainer_module.py';
+    const blob = new Blob([code], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+function regenerateCode() {
+    if (!currentCodeViewerConfigId) return;
+
+    const btn = document.getElementById('regenerateBtn');
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Regenerating...';
+    btn.disabled = true;
+
+    fetch(`/api/feature-configs/${currentCodeViewerConfigId}/regenerate-code/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrftoken
+        },
+        body: JSON.stringify({ type: 'all' })
+    })
+    .then(r => r.json())
+    .then(data => {
+        btn.innerHTML = 'Regenerate Code';
+        btn.disabled = false;
+
+        if (data.success) {
+            // Reload the code
+            const configName = document.getElementById('codeViewerConfigName').textContent;
+            viewGeneratedCode(currentCodeViewerConfigId, configName);
+            showSuccess('Code regenerated successfully');
+        } else {
+            showError(data.error || 'Failed to regenerate code');
+        }
+    })
+    .catch(err => {
+        console.error('Error regenerating code:', err);
+        btn.innerHTML = 'Regenerate Code';
+        btn.disabled = false;
+        showError('Failed to regenerate code');
+    });
 }
 
 function editConfig(configId) {

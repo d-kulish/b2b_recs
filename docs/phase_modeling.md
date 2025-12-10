@@ -11,12 +11,21 @@ This document provides detailed specifications for implementing the **Modeling**
 ## Recent Updates (December 2025)
 
 ### TFX Code Generation (2025-12-10)
-- **Automatic code generation** - Feature Configs now automatically generate TFX Transform `preprocessing_fn` code
-- **PreprocessingFnGenerator** service converts JSON config to executable Python code
-- **Database storage** - Generated code stored in `FeatureConfig.generated_transform_code` field
+- **Transform code generation** - Feature Configs automatically generate TFX Transform `preprocessing_fn` code
+- **Trainer code generation** - Feature Configs automatically generate TFX Trainer module with:
+  - BuyerModel (Query Tower) and ProductModel (Candidate Tower) classes
+  - RetrievalModel using TFRS with configurable dense layers (default: 128→64→32)
+  - `run_fn()` TFX entry point with training loop
+  - Serving signature for raw input → recommendations
+- **Database storage** - Generated code stored in `generated_transform_code` and `generated_trainer_code` fields
 - **API endpoints** for viewing and regenerating code:
-  - `GET /api/feature-configs/{id}/generated-code/`
-  - `POST /api/feature-configs/{id}/regenerate-code/`
+  - `GET /api/feature-configs/{id}/generated-code/?type=transform|trainer`
+  - `POST /api/feature-configs/{id}/regenerate-code/` (supports `type: all|transform|trainer`)
+- **Code Viewer UI** - "Code" button on Feature Config cards opens modal with:
+  - Tabbed view (Transform / Trainer)
+  - Python syntax highlighting
+  - Copy to clipboard and download functionality
+  - Regenerate button
 - **Auto-triggers** - Code regenerated on create, update (if features changed), and clone
 - See [TFX Code Generation](tfx_code_generation.md) for full details
 
@@ -1594,11 +1603,13 @@ Quick Test runs a mini TFX pipeline:
 - [x] Handle text features → `tft.compute_and_apply_vocabulary()`
 - [x] Handle numeric features → `tft.scale_to_z_score()` + `tft.bucketize()`
 - [x] Handle temporal features → normalize + cyclical (sin/cos) + bucketize
-- [x] Handle cross features → `tf.sparse.cross_hashed()` with separate bucketization
+- [x] Handle cross features → `tft.hash_strings()` (dense output for Trainer compatibility)
 - [x] Add database fields for generated code storage
 - [x] Add API endpoints for viewing/regenerating code
-- [ ] Implement `TrainerModuleGenerator` service
-- [ ] Generate Trainer module code that loads Transform artifacts
+- [x] Implement `TrainerModuleGenerator` service
+- [x] Generate Trainer module code (BuyerModel, ProductModel, RetrievalModel, run_fn, serving signature)
+- [x] Add "Code" button on Feature Config cards
+- [x] Implement code viewer modal with tabs, syntax highlighting, copy/download
 
 ### Phase 7: Quick Test Integration (Future Scope)
 - [ ] Create Quick Test model and API

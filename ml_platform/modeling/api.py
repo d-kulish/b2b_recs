@@ -18,6 +18,7 @@ from .services import (
     TensorDimensionCalculator,
     SemanticTypeService,
     PreprocessingFnGenerator,
+    TrainerModuleGenerator,
     serialize_feature_config,
     validate_feature_config,
 )
@@ -160,10 +161,18 @@ def create_feature_config(request, model_id):
 
         # Generate TFX Transform code
         try:
-            generator = PreprocessingFnGenerator(fc)
-            generator.generate_and_save()
+            transform_generator = PreprocessingFnGenerator(fc)
+            transform_generator.generate_and_save()
         except Exception as gen_error:
             logger.warning(f"Failed to generate transform code for config {fc.id}: {gen_error}")
+            # Don't fail the request if code generation fails
+
+        # Generate TFX Trainer code
+        try:
+            trainer_generator = TrainerModuleGenerator(fc)
+            trainer_generator.generate_and_save()
+        except Exception as gen_error:
+            logger.warning(f"Failed to generate trainer code for config {fc.id}: {gen_error}")
             # Don't fail the request if code generation fails
 
         return JsonResponse({
@@ -286,14 +295,19 @@ def update_feature_config(request, config_id):
         fc.calculate_tensor_dims()
         fc.save()
 
-        # Regenerate TFX Transform code if features changed
+        # Regenerate TFX code if features changed
         if features_changed:
             try:
-                generator = PreprocessingFnGenerator(fc)
-                generator.generate_and_save()
+                transform_generator = PreprocessingFnGenerator(fc)
+                transform_generator.generate_and_save()
             except Exception as gen_error:
                 logger.warning(f"Failed to regenerate transform code for config {fc.id}: {gen_error}")
-                # Don't fail the request if code generation fails
+
+            try:
+                trainer_generator = TrainerModuleGenerator(fc)
+                trainer_generator.generate_and_save()
+            except Exception as gen_error:
+                logger.warning(f"Failed to regenerate trainer code for config {fc.id}: {gen_error}")
 
         return JsonResponse({
             'success': True,
@@ -387,12 +401,18 @@ def clone_feature_config(request, config_id):
         clone.calculate_tensor_dims()
         clone.save()
 
-        # Generate TFX Transform code for clone
+        # Generate TFX code for clone
         try:
-            generator = PreprocessingFnGenerator(clone)
-            generator.generate_and_save()
+            transform_generator = PreprocessingFnGenerator(clone)
+            transform_generator.generate_and_save()
         except Exception as gen_error:
             logger.warning(f"Failed to generate transform code for cloned config {clone.id}: {gen_error}")
+
+        try:
+            trainer_generator = TrainerModuleGenerator(clone)
+            trainer_generator.generate_and_save()
+        except Exception as gen_error:
+            logger.warning(f"Failed to generate trainer code for cloned config {clone.id}: {gen_error}")
 
         return JsonResponse({
             'success': True,
@@ -855,6 +875,9 @@ def regenerate_code(request, config_id):
     """
     Regenerate TFX code for a feature config.
 
+    Request body (optional):
+        type: 'transform' | 'trainer' | 'all' (default: 'all')
+
     Useful if code generation failed or config was created before
     the generator was implemented.
 
@@ -864,20 +887,37 @@ def regenerate_code(request, config_id):
     try:
         fc = get_object_or_404(FeatureConfig, id=config_id)
 
+        # Get code type from request body
+        try:
+            data = json.loads(request.body) if request.body else {}
+        except json.JSONDecodeError:
+            data = {}
+
+        code_type = data.get('type', 'all')
+
+        result = {
+            'config_id': fc.id,
+            'config_name': fc.name,
+        }
+
         # Generate Transform code
-        generator = PreprocessingFnGenerator(fc)
-        code = generator.generate_and_save()
+        if code_type in ['transform', 'all']:
+            transform_generator = PreprocessingFnGenerator(fc)
+            transform_code = transform_generator.generate_and_save()
+            result['transform_code'] = transform_code
+
+        # Generate Trainer code
+        if code_type in ['trainer', 'all']:
+            trainer_generator = TrainerModuleGenerator(fc)
+            trainer_code = trainer_generator.generate_and_save()
+            result['trainer_code'] = trainer_code
+
+        result['generated_at'] = fc.generated_at.isoformat() if fc.generated_at else None
 
         return JsonResponse({
             'success': True,
-            'data': {
-                'code': code,
-                'code_type': 'transform',
-                'generated_at': fc.generated_at.isoformat() if fc.generated_at else None,
-                'config_id': fc.id,
-                'config_name': fc.name,
-            },
-            'message': 'Transform code regenerated successfully',
+            'data': result,
+            'message': f'{code_type.capitalize()} code regenerated successfully',
         })
 
     except Exception as e:

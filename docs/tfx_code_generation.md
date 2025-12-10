@@ -58,11 +58,27 @@ The ML Platform automatically generates TFX-compatible Python code from Feature 
                                     │
                                     ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                      TrainerModuleGenerator (FUTURE)                         │
+│                      TrainerModuleGenerator                                  │
+│                      (ml_platform/modeling/services.py)                      │
 │                                                                              │
 │  - Load vocabularies from Transform artifacts                               │
 │  - Create embeddings with configured dimensions                             │
-│  - Build two-tower TFRS model                                               │
+│  - Build BuyerModel (Query Tower) and ProductModel (Candidate Tower)        │
+│  - Configure TFRS retrieval model with dense layers (default: 128→64→32)   │
+│  - Implement run_fn() for TFX Trainer component                             │
+│  - Provide serving signature for raw input → recommendations                │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                      GENERATED TRAINER CODE                                  │
+│                      (stored in FeatureConfig.generated_trainer_code)        │
+│                                                                              │
+│  - BuyerModel class (Query Tower)                                           │
+│  - ProductModel class (Candidate Tower)                                     │
+│  - RetrievalModel class (TFRS model)                                        │
+│  - run_fn() TFX entry point                                                 │
+│  - Serving signature with pre-computed candidate embeddings                 │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -115,8 +131,8 @@ Located in `ml_platform/modeling/services.py`, this class generates TFX Transfor
 | Temporal normalize | `tft.scale_to_z_score()` | `{column}_norm` (float) |
 | Temporal cyclical | `tf.sin/cos()` | `{column}_{cycle}_sin`, `{column}_{cycle}_cos` |
 | Temporal bucketize | `tft.bucketize()` | `{column}_bucket` (bucket index) |
-| Cross (text × text) | `tf.sparse.cross_hashed()` | `{col1}_x_{col2}_cross` |
-| Cross (with numeric) | bucketize + hash | `{col1}_x_{col2}_cross` |
+| Cross (text × text) | `tft.hash_strings()` | `{col1}_x_{col2}_cross` (dense INT64) |
+| Cross (with numeric) | bucketize + `tft.hash_strings()` | `{col1}_x_{col2}_cross` (dense INT64) |
 
 #### Cyclical Feature Encoding
 
@@ -134,9 +150,11 @@ Temporal features can have cyclical patterns encoded as sin/cos pairs:
 
 Cross features require special handling for numeric/temporal columns:
 
-1. **Text × Text**: Direct crossing via `tf.sparse.cross_hashed()`
-2. **Numeric × Text**: Bucketize numeric first (using `crossing_buckets`), then cross
-3. **Temporal × Anything**: Bucketize temporal first, then cross
+1. **Text × Text**: Concatenate strings, then hash via `tft.hash_strings()`
+2. **Numeric × Text**: Bucketize numeric first (using `crossing_buckets`), convert to string, then hash
+3. **Temporal × Anything**: Bucketize temporal first, convert to string, then hash
+
+**Important**: Cross features now output **dense** INT64 tensors (not sparse) via `tft.hash_strings()`. This simplifies the Trainer code since embedding layers expect dense indices.
 
 The `crossing_buckets` parameter is **separate** from the main tensor's bucketization to allow coarser granularity for crosses (typically 5-20 buckets vs 100 for main tensor).
 
@@ -164,16 +182,19 @@ Response:
 #### Regenerate Code
 ```
 POST /api/feature-configs/{config_id}/regenerate-code/
+Body (optional): { "type": "transform" | "trainer" | "all" }  // default: "all"
 
 Response:
 {
   "success": true,
   "data": {
-    "code": "# Auto-generated TFX Transform...",
-    "code_type": "transform",
-    "generated_at": "2025-12-10T10:35:00Z"
+    "transform_code": "# Auto-generated TFX Transform...",
+    "trainer_code": "# Auto-generated TFX Trainer Module...",
+    "generated_at": "2025-12-10T10:35:00Z",
+    "config_id": 5,
+    "config_name": "Rich Features v1"
   },
-  "message": "Transform code regenerated successfully"
+  "message": "All code regenerated successfully"
 }
 ```
 
@@ -312,75 +333,88 @@ def preprocessing_fn(inputs):
 
 ---
 
-## Next Steps
+## Completed Features
 
-### 1. TrainerModuleGenerator (Priority: High)
+### TrainerModuleGenerator (DONE)
 
-Implement the companion generator that produces TFX Trainer module code:
-
-```python
-class TrainerModuleGenerator:
-    """
-    Generates TFX Trainer module from FeatureConfig.
-
-    The generated code:
-    - Loads vocabularies from Transform artifacts
-    - Creates embeddings with configured dimensions
-    - Builds BuyerModel (Query Tower) and ProductModel (Candidate Tower)
-    - Configures TFRS retrieval model
-    """
-```
-
-**Key responsibilities:**
+Implemented in `ml_platform/modeling/services.py`. The generator produces TFX Trainer module code with:
 
 1. **Load Transform artifacts**
    ```python
-   tf_transform_output = tft.TFTransformOutput(transform_output_dir)
+   tf_transform_output = tft.TFTransformOutput(fn_args.transform_output)
    vocab = tf_transform_output.vocabulary_by_name('customer_id_vocab')
    ```
 
 2. **Create embeddings from vocab indices**
    ```python
    embedding = tf.keras.Sequential([
-       tf.keras.layers.StringLookup(vocabulary=vocab, mask_token=None),
-       tf.keras.layers.Embedding(vocab_size + 1, embedding_dim)
+       tf.keras.layers.StringLookup(vocabulary=vocab_list, mask_token=None),
+       tf.keras.layers.Embedding(len(vocab_list) + 1, embedding_dim)
    ])
    ```
 
 3. **Build two-tower architecture**
    ```python
    class BuyerModel(tf.keras.Model):
-       # Query tower - concatenates all buyer feature embeddings
+       # Query tower - concatenates all buyer feature embeddings + cross embeddings
 
    class ProductModel(tf.keras.Model):
        # Candidate tower - concatenates all product feature embeddings
    ```
 
-4. **Configure TFRS model**
+4. **Configure TFRS model with dense layers**
    ```python
-   model = tfrs.models.Model(
-       query_model=BuyerModel(...),
-       candidate_model=ProductModel(...)
-   )
+   class RetrievalModel(tfrs.Model):
+       # Default: 128 → 64 → 32 dense layers
+       # Configurable via custom_config
    ```
 
-### 2. UI for Viewing Generated Code (Priority: Medium)
+5. **Serving signature**
+   ```python
+   def _build_serving_fn(model, tf_transform_output, product_ids, product_embeddings):
+       # Takes serialized tf.Examples (raw features)
+       # Returns top-100 product recommendations with scores
+   ```
 
-Add a "View Code" button in the Feature Config wizard that opens a modal showing:
-- Generated Transform code with syntax highlighting
-- Copy-to-clipboard functionality
-- "Regenerate" button
-- Timestamp of last generation
+### Dense Cross Features (DONE)
 
-### 3. Quick Test Pipeline Integration (Priority: High)
+Changed from `tf.sparse.cross_hashed()` (sparse) to `tft.hash_strings()` (dense) for cross features. This simplifies Trainer embedding lookup since dense indices work directly with `tf.keras.layers.Embedding`.
+
+### UI for Viewing Generated Code (DONE)
+
+Added "View Code" button on Feature Config cards that opens a modal with:
+- **Two tabs**: Transform (`preprocessing_fn.py`) and Trainer (`trainer_module.py`)
+- **Syntax highlighting** for Python code (keywords, strings, comments, functions, decorators, numbers)
+- **Line count badges** on each tab
+- **Copy to clipboard** functionality with visual feedback
+- **Download as .py file** functionality
+- **Regenerate button** to refresh code from current config
+- **Dark theme** code display (Slate color scheme)
+- **Timestamp** showing when code was last generated
+
+---
+
+## Next Steps
+
+### 1. Quick Test Pipeline Integration (Priority: High)
 
 Create Vertex AI Pipeline that:
-1. Reads generated Transform code from database
-2. Writes it to a temporary module file
+1. Reads generated Transform and Trainer code from database
+2. Writes to temporary module files in GCS
 3. Executes TFX pipeline: ExampleGen → StatisticsGen → SchemaGen → Transform → Trainer
 4. Returns metrics to the platform
+5. Tracks progress in QuickTest model (to be added)
 
-### 4. Code Validation (Priority: Medium)
+### 2. Model Configuration Chapter (Priority: Medium)
+
+Add "Model" chapter in the Modeling page UI for configuring:
+- Dense layer architecture (default: 128 → 64 → 32)
+- Learning rate, epochs, batch size
+- L2 regularization
+- The generated Trainer code will use these configurations
+- Save to FeatureConfig or separate Model entity
+
+### 3. Code Validation (Priority: Low)
 
 Add optional syntax validation before saving:
 ```python
@@ -396,12 +430,6 @@ def validate_generated_code(code: str) -> tuple[bool, str]:
         return False, str(e)
 ```
 
-### 5. Sparse Tensor Handling (Priority: Low)
-
-Currently, `tf.sparse.cross_hashed()` outputs sparse tensors. Consider:
-- Converting to dense in Transform (increases TFRecord size)
-- Converting to dense in Trainer (current approach, handles in embedding lookup)
-
 ---
 
 ## Files Modified
@@ -409,11 +437,36 @@ Currently, `tf.sparse.cross_hashed()` outputs sparse tensors. Consider:
 | File | Changes |
 |------|---------|
 | `ml_platform/models.py` | Added `generated_transform_code`, `generated_trainer_code`, `generated_at` fields |
-| `ml_platform/modeling/services.py` | Added `PreprocessingFnGenerator` class |
-| `ml_platform/modeling/api.py` | Added generator calls to create/update/clone; Added `get_generated_code` and `regenerate_code` endpoints |
+| `ml_platform/modeling/services.py` | Added `PreprocessingFnGenerator` and `TrainerModuleGenerator` classes |
+| `ml_platform/modeling/api.py` | Added generator calls to create/update/clone; Added `get_generated_code` and `regenerate_code` endpoints; Both Transform and Trainer code are generated automatically |
 | `ml_platform/modeling/urls.py` | Added routes for generated code endpoints |
 | `ml_platform/migrations/0024_add_generated_code_fields.py` | Database migration |
-| `templates/ml_platform/model_modeling.html` | Fixed CSRF token bug |
+| `templates/ml_platform/model_modeling.html` | Added "Code" button, code viewer modal with tabs, syntax highlighting, copy/download functionality |
+
+### Recent Changes (Dec 2025)
+
+1. **TrainerModuleGenerator** - Complete implementation generating:
+   - BuyerModel class (Query Tower)
+   - ProductModel class (Candidate Tower)
+   - RetrievalModel class (TFRS model)
+   - run_fn() TFX entry point
+   - Serving signature with pre-computed candidate embeddings
+
+2. **Dense Cross Features** - Changed from sparse to dense output:
+   - Old: `tf.sparse.cross_hashed()` → SparseTensor
+   - New: `tft.hash_strings()` → Dense INT64 tensor
+
+3. **API Updates** - `regenerate_code` endpoint now supports:
+   - `type: "transform"` - Regenerate only Transform code
+   - `type: "trainer"` - Regenerate only Trainer code
+   - `type: "all"` (default) - Regenerate both
+
+4. **Code Viewer UI** - Added modal for viewing generated code:
+   - "Code" button on each Feature Config card
+   - Tabbed view (Transform / Trainer)
+   - Python syntax highlighting with dark theme
+   - Copy to clipboard and download functionality
+   - Regenerate button to refresh code
 
 ---
 

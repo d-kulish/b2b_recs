@@ -1145,6 +1145,9 @@ def preprocessing_fn(inputs):
         """
         Generate cross feature hashing (with bucketization for numeric/temporal).
 
+        Uses tft.hash_strings() to produce DENSE integer indices (not sparse).
+        This makes it easy for Trainer to create embeddings from these indices.
+
         Returns:
             Python code string for cross transforms
         """
@@ -1160,7 +1163,7 @@ def preprocessing_fn(inputs):
 
         lines = [
             '    # =========================================================================',
-            '    # CROSS FEATURES → Bucketize (for numeric/temporal) + Hash',
+            '    # CROSS FEATURES → Bucketize (for numeric/temporal) + Hash (dense output)',
             '    # =========================================================================',
             ''
         ]
@@ -1171,10 +1174,11 @@ def preprocessing_fn(inputs):
         for model, cross in all_crosses:
             features = cross.get('features', [])
             hash_bucket_size = cross.get('hash_bucket_size', 5000)
+            embedding_dim = cross.get('embedding_dim', 16)
 
-            # Build feature names and check if bucketization needed
+            # Build feature names and string representations for hashing
             feature_names = []
-            cross_inputs = []
+            string_parts = []
 
             for f in features:
                 # Handle both old format (string) and new format (dict)
@@ -1202,22 +1206,39 @@ def preprocessing_fn(inputs):
                         lines.append(f"    )")
                         lines.append('')
 
-                    cross_inputs.append(f"tf.as_string({bucket_var})")
+                    string_parts.append(f"tf.strings.as_string({bucket_var})")
                 else:
-                    # Text feature - use directly
-                    cross_inputs.append(f"inputs['{col}']")
+                    # Text feature - use directly (ensure it's string type)
+                    string_parts.append(f"tf.strings.as_string(inputs['{col}'])")
 
             # Generate cross name
             cross_name = '_x_'.join(feature_names) + '_cross'
 
             lines.append(f"    # Cross: {' × '.join(feature_names)} ({model}Model)")
-            lines.append(f"    outputs['{cross_name}'] = tf.sparse.cross_hashed(")
-            lines.append(f"        inputs=[")
-            for i, inp in enumerate(cross_inputs):
-                comma = ',' if i < len(cross_inputs) - 1 else ''
-                lines.append(f"            {inp}{comma}")
-            lines.append(f"        ],")
-            lines.append(f"        num_buckets={hash_bucket_size}")
+            lines.append(f"    # Hash buckets: {hash_bucket_size}, embedding_dim: {embedding_dim} (in Trainer)")
+
+            # Concatenate features with separator and hash to dense index
+            if len(string_parts) == 2:
+                lines.append(f"    {cross_name}_concat = tf.strings.join([")
+                lines.append(f"        {string_parts[0]},")
+                lines.append(f"        tf.constant('_x_'),")
+                lines.append(f"        {string_parts[1]}")
+                lines.append(f"    ])")
+            else:
+                # For 3+ features, join with separator
+                lines.append(f"    {cross_name}_parts = [")
+                for i, part in enumerate(string_parts):
+                    comma = ',' if i < len(string_parts) - 1 else ''
+                    lines.append(f"        {part}{comma}")
+                lines.append(f"    ]")
+                lines.append(f"    {cross_name}_concat = tf.strings.reduce_join(")
+                lines.append(f"        {cross_name}_parts, separator='_x_'")
+                lines.append(f"    )")
+
+            # Hash to dense integer index
+            lines.append(f"    outputs['{cross_name}'] = tft.hash_strings(")
+            lines.append(f"        {cross_name}_concat,")
+            lines.append(f"        hash_buckets={hash_bucket_size}")
             lines.append(f"    )")
             lines.append('')
 
@@ -1234,4 +1255,846 @@ def preprocessing_fn(inputs):
         self.config.generated_transform_code = code
         self.config.generated_at = datetime.utcnow()
         self.config.save(update_fields=['generated_transform_code', 'generated_at'])
+        return code
+
+
+class TrainerModuleGenerator:
+    """
+    Generates TFX Trainer module from FeatureConfig.
+
+    The generated code:
+    - Loads vocabularies from Transform artifacts
+    - Creates embeddings for text features (StringLookup + Embedding)
+    - Uses normalized/cyclical values from Transform for numeric/temporal
+    - Creates embeddings for bucket indices and cross features
+    - Builds two-tower TFRS model (BuyerModel, ProductModel)
+    - Includes configurable dense layers (default: 128 → 64 → 32)
+    - Implements run_fn() for TFX Trainer component
+    - Provides serving signature for raw input → recommendations
+
+    Output naming convention (must match PreprocessingFnGenerator):
+    - Text: {column} (vocab index from Transform)
+    - Numeric: {column}_norm (float), {column}_bucket (index)
+    - Temporal: {column}_norm, {column}_{cycle}_sin/cos, {column}_bucket
+    - Cross: {col1}_x_{col2}_cross (hash index)
+    """
+
+    # Default architecture configuration
+    DEFAULT_DENSE_LAYERS = [128, 64, 32]
+    DEFAULT_LEARNING_RATE = 0.001
+    DEFAULT_EPOCHS = 10
+    DEFAULT_BATCH_SIZE = 1024
+
+    def __init__(self, feature_config: 'FeatureConfig'):
+        """
+        Initialize with a FeatureConfig instance.
+
+        Args:
+            feature_config: FeatureConfig model instance
+        """
+        self.config = feature_config
+        self.buyer_features = feature_config.buyer_model_features or []
+        self.product_features = feature_config.product_model_features or []
+        self.buyer_crosses = feature_config.buyer_model_crosses or []
+        self.product_crosses = feature_config.product_model_crosses or []
+
+    def generate(self) -> str:
+        """
+        Generate complete trainer_module.py as Python code string.
+
+        Returns:
+            Python code string containing the full trainer module
+        """
+        # Collect all features organized by type
+        buyer_by_type = self._collect_features_by_type(self.buyer_features)
+        product_by_type = self._collect_features_by_type(self.product_features)
+
+        # Build code sections
+        sections = [
+            self._generate_header(),
+            self._generate_imports(),
+            self._generate_constants(),
+            self._generate_input_fn(),
+            self._generate_buyer_model(buyer_by_type),
+            self._generate_product_model(product_by_type),
+            self._generate_retrieval_model(),
+            self._generate_serve_fn(),
+            self._generate_run_fn(),
+        ]
+
+        return '\n'.join(sections)
+
+    def _collect_features_by_type(self, features: List[Dict]) -> Dict[str, List[Dict]]:
+        """
+        Organize features by type for code generation.
+
+        Args:
+            features: List of feature configurations
+
+        Returns:
+            Dict with keys 'text', 'numeric', 'temporal', each containing list of features
+        """
+        result = {'text': [], 'numeric': [], 'temporal': []}
+
+        for feature in features:
+            # Determine feature type (support both old and new format)
+            data_type = feature.get('data_type')
+            feature_type = feature.get('type', '')
+
+            if data_type == 'text' or feature_type == 'string_embedding':
+                result['text'].append(feature)
+            elif data_type == 'numeric' or feature_type == 'numeric':
+                result['numeric'].append(feature)
+            elif data_type == 'temporal' or feature_type == 'timestamp':
+                result['temporal'].append(feature)
+
+        return result
+
+    def _generate_header(self) -> str:
+        """Generate file header with metadata."""
+        buyer_cols = [f.get('column', '?') for f in self.buyer_features]
+        product_cols = [f.get('column', '?') for f in self.product_features]
+
+        return f'''# Auto-generated TFX Trainer Module
+# FeatureConfig: "{self.config.name}" (ID: {self.config.id})
+# Generated at: {datetime.utcnow().isoformat()}Z
+#
+# BuyerModel (Query Tower) features: {', '.join(buyer_cols) if buyer_cols else 'none'}
+# ProductModel (Candidate Tower) features: {', '.join(product_cols) if product_cols else 'none'}
+# Buyer crosses: {len(self.buyer_crosses)}
+# Product crosses: {len(self.product_crosses)}
+#
+# This module is designed for TFX Trainer component.
+# It loads Transform artifacts and creates a two-tower TFRS retrieval model.
+'''
+
+    def _generate_imports(self) -> str:
+        """Generate import statements."""
+        return '''import os
+import glob
+from typing import Dict, List, Text
+
+import tensorflow as tf
+import tensorflow_transform as tft
+import tensorflow_recommenders as tfrs
+
+from tfx import v1 as tfx
+from tfx.types import artifact_utils
+from tfx_bsl.public import tfxio
+
+from absl import logging
+'''
+
+    def _generate_constants(self) -> str:
+        """Generate module constants and configuration."""
+        return f'''
+# =============================================================================
+# CONFIGURATION (can be overridden via custom_config in Trainer component)
+# =============================================================================
+
+# Model architecture - dense layers after concatenation
+BUYER_DENSE_LAYERS = {self.DEFAULT_DENSE_LAYERS}
+PRODUCT_DENSE_LAYERS = {self.DEFAULT_DENSE_LAYERS}
+
+# Training hyperparameters
+LEARNING_RATE = {self.DEFAULT_LEARNING_RATE}
+EPOCHS = {self.DEFAULT_EPOCHS}
+BATCH_SIZE = {self.DEFAULT_BATCH_SIZE}
+
+# Regularization
+L2_REGULARIZATION = 0.01
+'''
+
+    def _generate_input_fn(self) -> str:
+        """Generate _input_fn for loading transformed data."""
+        return '''
+# =============================================================================
+# DATA LOADING
+# =============================================================================
+
+def _input_fn(
+    file_pattern: List[Text],
+    data_accessor: tfx.components.DataAccessor,
+    tf_transform_output: tft.TFTransformOutput,
+    batch_size: int = BATCH_SIZE
+) -> tf.data.Dataset:
+    """
+    Load transformed data from TFRecords.
+
+    Args:
+        file_pattern: List of paths to TFRecord files
+        data_accessor: TFX DataAccessor for reading data
+        tf_transform_output: Transform output with schema
+        batch_size: Batch size for training
+
+    Returns:
+        tf.data.Dataset with transformed features
+    """
+    return data_accessor.tf_dataset_factory(
+        file_pattern,
+        tfxio.TensorFlowDatasetOptions(batch_size=batch_size),
+        tf_transform_output.transformed_metadata.schema
+    )
+'''
+
+    def _generate_buyer_model(self, features_by_type: Dict[str, List[Dict]]) -> str:
+        """
+        Generate BuyerModel class (Query Tower).
+
+        Args:
+            features_by_type: Features organized by type (text, numeric, temporal)
+
+        Returns:
+            Python code string for BuyerModel class
+        """
+        lines = [
+            '',
+            '# =============================================================================',
+            '# BUYER MODEL (Query Tower)',
+            '# =============================================================================',
+            '',
+            'class BuyerModel(tf.keras.Model):',
+            '    """',
+            '    Query tower for buyer/user features.',
+            '    ',
+            '    Loads vocabularies from Transform and creates embeddings.',
+            '    Concatenates all feature representations into a single vector.',
+            '    """',
+            '',
+            '    def __init__(self, tf_transform_output: tft.TFTransformOutput):',
+            '        super().__init__()',
+            '        self.tf_transform_output = tf_transform_output',
+            '',
+        ]
+
+        # Generate embedding layers for text features
+        for feature in features_by_type['text']:
+            col = feature.get('column')
+            transforms = feature.get('transforms', {})
+            if transforms.get('embedding', {}).get('embedding_dim'):
+                embed_dim = transforms['embedding']['embedding_dim']
+            else:
+                embed_dim = feature.get('embedding_dim', 32)
+
+            lines.append(f"        # {col}: text → embedding ({embed_dim}D)")
+            lines.append(f"        {col}_vocab = tf_transform_output.vocabulary_by_name('{col}_vocab')")
+            lines.append(f"        {col}_vocab_list = [b.decode() if isinstance(b, bytes) else b for b in {col}_vocab]")
+            lines.append(f"        self.{col}_embedding = tf.keras.Sequential([")
+            lines.append(f"            tf.keras.layers.StringLookup(vocabulary={col}_vocab_list, mask_token=None),")
+            lines.append(f"            tf.keras.layers.Embedding(len({col}_vocab_list) + 1, {embed_dim})")
+            lines.append(f"        ])")
+            lines.append('')
+
+        # Generate embedding layers for numeric bucket features
+        for feature in features_by_type['numeric']:
+            col = feature.get('column')
+            transforms = feature.get('transforms', {})
+            bucketize = transforms.get('bucketize', {})
+
+            if bucketize.get('enabled'):
+                buckets = bucketize.get('buckets', 100)
+                embed_dim = bucketize.get('embedding_dim', 32)
+                lines.append(f"        # {col}: numeric bucket → embedding ({embed_dim}D)")
+                lines.append(f"        self.{col}_bucket_embedding = tf.keras.layers.Embedding({buckets + 1}, {embed_dim})")
+                lines.append('')
+
+        # Generate embedding layers for temporal bucket features
+        for feature in features_by_type['temporal']:
+            col = feature.get('column')
+            transforms = feature.get('transforms', {})
+            bucketize = transforms.get('bucketize', {})
+
+            if bucketize.get('enabled'):
+                buckets = bucketize.get('buckets', 100)
+                embed_dim = bucketize.get('embedding_dim', 32)
+                lines.append(f"        # {col}: temporal bucket → embedding ({embed_dim}D)")
+                lines.append(f"        self.{col}_bucket_embedding = tf.keras.layers.Embedding({buckets + 1}, {embed_dim})")
+                lines.append('')
+
+        # Generate embedding layers for cross features
+        for cross in self.buyer_crosses:
+            features = cross.get('features', [])
+            hash_buckets = cross.get('hash_bucket_size', 5000)
+            embed_dim = cross.get('embedding_dim', 16)
+
+            # Build cross name
+            if isinstance(features[0], dict):
+                feature_names = [f.get('column', '') for f in features]
+            else:
+                feature_names = features
+            cross_name = '_x_'.join(feature_names) + '_cross'
+
+            lines.append(f"        # {' × '.join(feature_names)}: cross → embedding ({embed_dim}D)")
+            lines.append(f"        self.{cross_name}_embedding = tf.keras.layers.Embedding({hash_buckets}, {embed_dim})")
+            lines.append('')
+
+        # Generate call method
+        lines.append('    def call(self, inputs):')
+        lines.append('        """Concatenate all feature embeddings."""')
+        lines.append('        features = []')
+        lines.append('')
+
+        # Text features - use vocab index from transform
+        for feature in features_by_type['text']:
+            col = feature.get('column')
+            lines.append(f"        # {col}: lookup embedding from vocab index")
+            lines.append(f"        features.append(self.{col}_embedding(inputs['{col}']))")
+            lines.append('')
+
+        # Numeric features - normalized value + optional bucket embedding
+        for feature in features_by_type['numeric']:
+            col = feature.get('column')
+            transforms = feature.get('transforms', {})
+            normalize = transforms.get('normalize', {})
+            bucketize = transforms.get('bucketize', {})
+
+            if normalize.get('enabled'):
+                lines.append(f"        # {col}: normalized value (1D)")
+                lines.append(f"        features.append(tf.reshape(inputs['{col}_norm'], (-1, 1)))")
+
+            if bucketize.get('enabled'):
+                lines.append(f"        # {col}: bucket embedding")
+                lines.append(f"        features.append(self.{col}_bucket_embedding(inputs['{col}_bucket']))")
+            lines.append('')
+
+        # Temporal features - normalized + cyclical + optional bucket
+        for feature in features_by_type['temporal']:
+            col = feature.get('column')
+            transforms = feature.get('transforms', {})
+            normalize = transforms.get('normalize', {})
+            cyclical = transforms.get('cyclical', {})
+            bucketize = transforms.get('bucketize', {})
+
+            if normalize.get('enabled'):
+                lines.append(f"        # {col}: normalized value (1D)")
+                lines.append(f"        features.append(tf.reshape(inputs['{col}_norm'], (-1, 1)))")
+
+            # Cyclical features
+            cyclical_opts = []
+            if cyclical.get('enabled') or cyclical.get('yearly') or cyclical.get('weekly'):
+                for cycle in ['yearly', 'quarterly', 'monthly', 'weekly', 'daily']:
+                    if cyclical.get(cycle):
+                        cyclical_opts.append(cycle)
+            if cyclical.get('annual'):
+                cyclical_opts.append('yearly')
+
+            for cycle in cyclical_opts:
+                lines.append(f"        # {col}: {cycle} cyclical (sin/cos)")
+                lines.append(f"        features.append(tf.reshape(inputs['{col}_{cycle}_sin'], (-1, 1)))")
+                lines.append(f"        features.append(tf.reshape(inputs['{col}_{cycle}_cos'], (-1, 1)))")
+
+            if bucketize.get('enabled'):
+                lines.append(f"        # {col}: bucket embedding")
+                lines.append(f"        features.append(self.{col}_bucket_embedding(inputs['{col}_bucket']))")
+            lines.append('')
+
+        # Cross features
+        for cross in self.buyer_crosses:
+            features = cross.get('features', [])
+            if isinstance(features[0], dict):
+                feature_names = [f.get('column', '') for f in features]
+            else:
+                feature_names = features
+            cross_name = '_x_'.join(feature_names) + '_cross'
+
+            lines.append(f"        # {' × '.join(feature_names)}: cross embedding")
+            lines.append(f"        features.append(self.{cross_name}_embedding(inputs['{cross_name}']))")
+            lines.append('')
+
+        lines.append('        return tf.concat(features, axis=1)')
+        lines.append('')
+
+        return '\n'.join(lines)
+
+    def _generate_product_model(self, features_by_type: Dict[str, List[Dict]]) -> str:
+        """
+        Generate ProductModel class (Candidate Tower).
+
+        Args:
+            features_by_type: Features organized by type (text, numeric, temporal)
+
+        Returns:
+            Python code string for ProductModel class
+        """
+        lines = [
+            '',
+            '# =============================================================================',
+            '# PRODUCT MODEL (Candidate Tower)',
+            '# =============================================================================',
+            '',
+            'class ProductModel(tf.keras.Model):',
+            '    """',
+            '    Candidate tower for product/item features.',
+            '    ',
+            '    Loads vocabularies from Transform and creates embeddings.',
+            '    Concatenates all feature representations into a single vector.',
+            '    """',
+            '',
+            '    def __init__(self, tf_transform_output: tft.TFTransformOutput):',
+            '        super().__init__()',
+            '        self.tf_transform_output = tf_transform_output',
+            '',
+        ]
+
+        # Generate embedding layers for text features
+        for feature in features_by_type['text']:
+            col = feature.get('column')
+            transforms = feature.get('transforms', {})
+            if transforms.get('embedding', {}).get('embedding_dim'):
+                embed_dim = transforms['embedding']['embedding_dim']
+            else:
+                embed_dim = feature.get('embedding_dim', 32)
+
+            lines.append(f"        # {col}: text → embedding ({embed_dim}D)")
+            lines.append(f"        {col}_vocab = tf_transform_output.vocabulary_by_name('{col}_vocab')")
+            lines.append(f"        {col}_vocab_list = [b.decode() if isinstance(b, bytes) else b for b in {col}_vocab]")
+            lines.append(f"        self.{col}_embedding = tf.keras.Sequential([")
+            lines.append(f"            tf.keras.layers.StringLookup(vocabulary={col}_vocab_list, mask_token=None),")
+            lines.append(f"            tf.keras.layers.Embedding(len({col}_vocab_list) + 1, {embed_dim})")
+            lines.append(f"        ])")
+            lines.append('')
+
+        # Generate embedding layers for numeric bucket features
+        for feature in features_by_type['numeric']:
+            col = feature.get('column')
+            transforms = feature.get('transforms', {})
+            bucketize = transforms.get('bucketize', {})
+
+            if bucketize.get('enabled'):
+                buckets = bucketize.get('buckets', 100)
+                embed_dim = bucketize.get('embedding_dim', 32)
+                lines.append(f"        # {col}: numeric bucket → embedding ({embed_dim}D)")
+                lines.append(f"        self.{col}_bucket_embedding = tf.keras.layers.Embedding({buckets + 1}, {embed_dim})")
+                lines.append('')
+
+        # Generate embedding layers for temporal bucket features
+        for feature in features_by_type['temporal']:
+            col = feature.get('column')
+            transforms = feature.get('transforms', {})
+            bucketize = transforms.get('bucketize', {})
+
+            if bucketize.get('enabled'):
+                buckets = bucketize.get('buckets', 100)
+                embed_dim = bucketize.get('embedding_dim', 32)
+                lines.append(f"        # {col}: temporal bucket → embedding ({embed_dim}D)")
+                lines.append(f"        self.{col}_bucket_embedding = tf.keras.layers.Embedding({buckets + 1}, {embed_dim})")
+                lines.append('')
+
+        # Generate embedding layers for cross features
+        for cross in self.product_crosses:
+            features = cross.get('features', [])
+            hash_buckets = cross.get('hash_bucket_size', 5000)
+            embed_dim = cross.get('embedding_dim', 16)
+
+            if isinstance(features[0], dict):
+                feature_names = [f.get('column', '') for f in features]
+            else:
+                feature_names = features
+            cross_name = '_x_'.join(feature_names) + '_cross'
+
+            lines.append(f"        # {' × '.join(feature_names)}: cross → embedding ({embed_dim}D)")
+            lines.append(f"        self.{cross_name}_embedding = tf.keras.layers.Embedding({hash_buckets}, {embed_dim})")
+            lines.append('')
+
+        # Generate call method
+        lines.append('    def call(self, inputs):')
+        lines.append('        """Concatenate all feature embeddings."""')
+        lines.append('        features = []')
+        lines.append('')
+
+        # Text features
+        for feature in features_by_type['text']:
+            col = feature.get('column')
+            lines.append(f"        # {col}: lookup embedding from vocab index")
+            lines.append(f"        features.append(self.{col}_embedding(inputs['{col}']))")
+            lines.append('')
+
+        # Numeric features
+        for feature in features_by_type['numeric']:
+            col = feature.get('column')
+            transforms = feature.get('transforms', {})
+            normalize = transforms.get('normalize', {})
+            bucketize = transforms.get('bucketize', {})
+
+            if normalize.get('enabled'):
+                lines.append(f"        # {col}: normalized value (1D)")
+                lines.append(f"        features.append(tf.reshape(inputs['{col}_norm'], (-1, 1)))")
+
+            if bucketize.get('enabled'):
+                lines.append(f"        # {col}: bucket embedding")
+                lines.append(f"        features.append(self.{col}_bucket_embedding(inputs['{col}_bucket']))")
+            lines.append('')
+
+        # Temporal features
+        for feature in features_by_type['temporal']:
+            col = feature.get('column')
+            transforms = feature.get('transforms', {})
+            normalize = transforms.get('normalize', {})
+            cyclical = transforms.get('cyclical', {})
+            bucketize = transforms.get('bucketize', {})
+
+            if normalize.get('enabled'):
+                lines.append(f"        # {col}: normalized value (1D)")
+                lines.append(f"        features.append(tf.reshape(inputs['{col}_norm'], (-1, 1)))")
+
+            cyclical_opts = []
+            if cyclical.get('enabled') or cyclical.get('yearly') or cyclical.get('weekly'):
+                for cycle in ['yearly', 'quarterly', 'monthly', 'weekly', 'daily']:
+                    if cyclical.get(cycle):
+                        cyclical_opts.append(cycle)
+            if cyclical.get('annual'):
+                cyclical_opts.append('yearly')
+
+            for cycle in cyclical_opts:
+                lines.append(f"        # {col}: {cycle} cyclical (sin/cos)")
+                lines.append(f"        features.append(tf.reshape(inputs['{col}_{cycle}_sin'], (-1, 1)))")
+                lines.append(f"        features.append(tf.reshape(inputs['{col}_{cycle}_cos'], (-1, 1)))")
+
+            if bucketize.get('enabled'):
+                lines.append(f"        # {col}: bucket embedding")
+                lines.append(f"        features.append(self.{col}_bucket_embedding(inputs['{col}_bucket']))")
+            lines.append('')
+
+        # Cross features
+        for cross in self.product_crosses:
+            features = cross.get('features', [])
+            if isinstance(features[0], dict):
+                feature_names = [f.get('column', '') for f in features]
+            else:
+                feature_names = features
+            cross_name = '_x_'.join(feature_names) + '_cross'
+
+            lines.append(f"        # {' × '.join(feature_names)}: cross embedding")
+            lines.append(f"        features.append(self.{cross_name}_embedding(inputs['{cross_name}']))")
+            lines.append('')
+
+        lines.append('        return tf.concat(features, axis=1)')
+        lines.append('')
+
+        return '\n'.join(lines)
+
+    def _generate_retrieval_model(self) -> str:
+        """Generate RetrievalModel class (TFRS model)."""
+        return '''
+# =============================================================================
+# RETRIEVAL MODEL (TFRS Two-Tower)
+# =============================================================================
+
+class RetrievalModel(tfrs.Model):
+    """
+    Two-tower retrieval model using TensorFlow Recommenders.
+
+    Query tower (BuyerModel) processes buyer/user features.
+    Candidate tower (ProductModel) processes product/item features.
+    Dense layers project both to the same embedding space.
+    """
+
+    def __init__(
+        self,
+        tf_transform_output: tft.TFTransformOutput,
+        candidates_dataset: tf.data.Dataset,
+        buyer_dense_layers: List[int] = None,
+        product_dense_layers: List[int] = None
+    ):
+        super().__init__()
+
+        buyer_dense_layers = buyer_dense_layers or BUYER_DENSE_LAYERS
+        product_dense_layers = product_dense_layers or PRODUCT_DENSE_LAYERS
+
+        # Feature extraction models
+        self.buyer_model = BuyerModel(tf_transform_output)
+        self.product_model = ProductModel(tf_transform_output)
+
+        # Query tower: BuyerModel → Dense layers
+        query_layers = [self.buyer_model]
+        for i, units in enumerate(buyer_dense_layers):
+            query_layers.append(
+                tf.keras.layers.Dense(
+                    units,
+                    activation='relu' if i < len(buyer_dense_layers) - 1 else None,
+                    kernel_regularizer=tf.keras.regularizers.l2(L2_REGULARIZATION)
+                )
+            )
+        self.query_tower = tf.keras.Sequential(query_layers)
+
+        # Candidate tower: ProductModel → Dense layers
+        candidate_layers = [self.product_model]
+        for i, units in enumerate(product_dense_layers):
+            candidate_layers.append(
+                tf.keras.layers.Dense(
+                    units,
+                    activation='relu' if i < len(product_dense_layers) - 1 else None,
+                    kernel_regularizer=tf.keras.regularizers.l2(L2_REGULARIZATION)
+                )
+            )
+        self.candidate_tower = tf.keras.Sequential(candidate_layers)
+
+        # TFRS Retrieval task with top-k metrics
+        self.task = tfrs.tasks.Retrieval(
+            metrics=tfrs.metrics.FactorizedTopK(
+                candidates=candidates_dataset.batch(128).map(self.candidate_tower)
+            )
+        )
+
+    def compute_loss(self, features: Dict[Text, tf.Tensor], training: bool = False) -> tf.Tensor:
+        """Compute retrieval loss."""
+        query_embeddings = self.query_tower(features)
+        candidate_embeddings = self.candidate_tower(features)
+        return self.task(query_embeddings, candidate_embeddings)
+'''
+
+    def _generate_serve_fn(self) -> str:
+        """Generate serving function for inference."""
+        # Get primary product ID column for candidate indexing
+        product_id_col = None
+        for feature in self.product_features:
+            col = feature.get('column', '')
+            if 'product' in col.lower() or 'item' in col.lower() or 'sku' in col.lower():
+                product_id_col = col
+                break
+
+        if not product_id_col and self.product_features:
+            product_id_col = self.product_features[0].get('column', 'product_id')
+
+        return f'''
+# =============================================================================
+# SERVING FUNCTION
+# =============================================================================
+
+def _build_serving_fn(model, tf_transform_output, product_ids, product_embeddings):
+    """
+    Build serving function that takes raw inputs and returns recommendations.
+
+    Args:
+        model: Trained RetrievalModel
+        tf_transform_output: Transform output for preprocessing
+        product_ids: List of all product IDs
+        product_embeddings: Pre-computed candidate embeddings
+
+    Returns:
+        Serving function
+    """
+    tft_layer = tf_transform_output.transform_features_layer()
+    product_ids_tensor = tf.constant(product_ids)
+
+    @tf.function(input_signature=[
+        tf.TensorSpec(shape=[None], dtype=tf.string, name='examples')
+    ])
+    def serve_fn(serialized_examples):
+        """
+        Serving function that accepts serialized tf.Examples.
+
+        Returns top-100 product recommendations with scores.
+        """
+        # Parse raw features
+        feature_spec = tf_transform_output.raw_feature_spec()
+        parsed_features = tf.io.parse_example(serialized_examples, feature_spec)
+
+        # Apply transform preprocessing
+        transformed_features = tft_layer(parsed_features)
+
+        # Get query embeddings
+        query_embeddings = model.query_tower(transformed_features)
+
+        # Compute similarities with all candidates
+        similarities = tf.linalg.matmul(
+            query_embeddings,
+            product_embeddings,
+            transpose_b=True
+        )
+
+        # Get top-100 recommendations
+        top_scores, top_indices = tf.nn.top_k(similarities, k=100)
+
+        # Map indices to product IDs
+        recommended_products = tf.gather(product_ids_tensor, top_indices)
+
+        return {{
+            'product_ids': recommended_products,
+            'scores': top_scores
+        }}
+
+    return serve_fn
+
+
+def _precompute_candidate_embeddings(model, candidates_dataset, batch_size=128):
+    """
+    Pre-compute embeddings for all candidates.
+
+    Args:
+        model: RetrievalModel with candidate_tower
+        candidates_dataset: Dataset of candidate features
+        batch_size: Batch size for embedding computation
+
+    Returns:
+        Tuple of (product_ids, embeddings tensor)
+    """
+    product_ids = []
+    embeddings = []
+
+    for batch in candidates_dataset.batch(batch_size):
+        # Get product ID from batch
+        if '{product_id_col}' in batch:
+            batch_ids = batch['{product_id_col}'].numpy()
+            if hasattr(batch_ids[0], 'decode'):
+                batch_ids = [b.decode() for b in batch_ids]
+            product_ids.extend(batch_ids)
+
+        # Compute embeddings
+        batch_embeddings = model.candidate_tower(batch)
+        embeddings.append(batch_embeddings)
+
+    return product_ids, tf.concat(embeddings, axis=0)
+'''
+
+    def _generate_run_fn(self) -> str:
+        """Generate run_fn() - the TFX Trainer entry point."""
+        return '''
+# =============================================================================
+# TFX TRAINER ENTRY POINT
+# =============================================================================
+
+def run_fn(fn_args: tfx.components.FnArgs):
+    """
+    TFX Trainer entry point.
+
+    Args:
+        fn_args: Training arguments from TFX including:
+            - train_files: Training data paths
+            - eval_files: Evaluation data paths
+            - transform_output: Transform artifact path
+            - serving_model_dir: Where to save the model
+            - custom_config: Optional configuration overrides
+    """
+    logging.info("Starting TFX Trainer...")
+
+    # Load Transform output
+    tf_transform_output = tft.TFTransformOutput(fn_args.transform_output)
+    logging.info(f"Loaded Transform output from: {fn_args.transform_output}")
+
+    # Get configuration from custom_config or use defaults
+    custom_config = fn_args.custom_config or {}
+    epochs = custom_config.get('epochs', EPOCHS)
+    learning_rate = custom_config.get('learning_rate', LEARNING_RATE)
+    batch_size = custom_config.get('batch_size', BATCH_SIZE)
+    buyer_dense_layers = custom_config.get('buyer_dense_layers', BUYER_DENSE_LAYERS)
+    product_dense_layers = custom_config.get('product_dense_layers', PRODUCT_DENSE_LAYERS)
+
+    logging.info(f"Training config: epochs={epochs}, lr={learning_rate}, batch={batch_size}")
+    logging.info(f"Buyer dense layers: {buyer_dense_layers}")
+    logging.info(f"Product dense layers: {product_dense_layers}")
+
+    # Load datasets
+    train_dataset = _input_fn(
+        fn_args.train_files,
+        fn_args.data_accessor,
+        tf_transform_output,
+        batch_size
+    )
+
+    eval_dataset = _input_fn(
+        fn_args.eval_files,
+        fn_args.data_accessor,
+        tf_transform_output,
+        batch_size
+    )
+
+    # Create candidates dataset for retrieval metrics
+    # Uses eval split to build candidate index
+    candidates_dataset = _input_fn(
+        fn_args.eval_files,
+        fn_args.data_accessor,
+        tf_transform_output,
+        batch_size
+    ).unbatch()
+
+    # Build model
+    logging.info("Building RetrievalModel...")
+    model = RetrievalModel(
+        tf_transform_output=tf_transform_output,
+        candidates_dataset=candidates_dataset,
+        buyer_dense_layers=buyer_dense_layers,
+        product_dense_layers=product_dense_layers
+    )
+
+    # Compile
+    model.compile(
+        optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate)
+    )
+
+    # Calculate steps
+    train_steps = custom_config.get('train_steps', fn_args.train_steps)
+    eval_steps = custom_config.get('eval_steps', fn_args.eval_steps)
+
+    # Training callbacks
+    callbacks = []
+
+    # TensorBoard logging
+    if fn_args.model_run_dir:
+        tensorboard_callback = tf.keras.callbacks.TensorBoard(
+            log_dir=fn_args.model_run_dir,
+            update_freq='epoch'
+        )
+        callbacks.append(tensorboard_callback)
+
+    # Train
+    logging.info(f"Starting training for {epochs} epochs...")
+    model.fit(
+        train_dataset,
+        validation_data=eval_dataset,
+        epochs=epochs,
+        steps_per_epoch=train_steps,
+        validation_steps=eval_steps,
+        callbacks=callbacks
+    )
+    logging.info("Training completed.")
+
+    # Pre-compute candidate embeddings for serving
+    logging.info("Pre-computing candidate embeddings...")
+    candidates_for_serving = _input_fn(
+        fn_args.eval_files,
+        fn_args.data_accessor,
+        tf_transform_output,
+        batch_size
+    ).unbatch()
+
+    product_ids, product_embeddings = _precompute_candidate_embeddings(
+        model, candidates_for_serving
+    )
+    logging.info(f"Pre-computed embeddings for {len(product_ids)} products")
+
+    # Build serving signature
+    logging.info("Building serving signature...")
+    serve_fn = _build_serving_fn(
+        model,
+        tf_transform_output,
+        product_ids,
+        product_embeddings
+    )
+
+    # Save model with serving signature
+    signatures = {
+        'serving_default': serve_fn
+    }
+
+    logging.info(f"Saving model to: {fn_args.serving_model_dir}")
+    tf.saved_model.save(
+        model,
+        fn_args.serving_model_dir,
+        signatures=signatures
+    )
+    logging.info("Model saved successfully!")
+'''
+
+    def generate_and_save(self) -> str:
+        """
+        Generate code and save to the FeatureConfig model.
+
+        Returns:
+            Generated Python code string
+        """
+        code = self.generate()
+        self.config.generated_trainer_code = code
+        self.config.generated_at = datetime.utcnow()
+        self.config.save(update_fields=['generated_trainer_code', 'generated_at'])
         return code

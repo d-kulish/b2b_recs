@@ -5,10 +5,48 @@ Contains business logic for Feature Engineering:
 - SmartDefaultsService: Auto-configures features based on column mapping and statistics
 - TensorDimensionCalculator: Calculates tensor dimensions for preview
 - PreprocessingFnGenerator: Generates TFX Transform preprocessing_fn code
+- TrainerModuleGenerator: Generates TFX Trainer module code
+- validate_python_code: Validates generated Python code syntax
 """
 
 from typing import Dict, List, Any, Optional, Tuple
 from datetime import datetime
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+def validate_python_code(code: str, code_type: str = 'unknown') -> Tuple[bool, Optional[str], Optional[int]]:
+    """
+    Validate that generated Python code is syntactically correct.
+
+    Uses Python's compile() to check syntax without executing the code.
+
+    Args:
+        code: Python code string to validate
+        code_type: Type of code for logging ('transform', 'trainer', etc.)
+
+    Returns:
+        Tuple of (is_valid, error_message, error_line):
+        - is_valid: True if code compiles successfully
+        - error_message: Error description if invalid, None if valid
+        - error_line: Line number where error occurred, None if valid
+    """
+    if not code or not code.strip():
+        return False, "Code is empty", None
+
+    try:
+        compile(code, f'<generated_{code_type}>', 'exec')
+        return True, None, None
+    except SyntaxError as e:
+        error_msg = f"{e.msg}" if e.msg else "Syntax error"
+        if e.text:
+            error_msg += f": {e.text.strip()}"
+        logger.warning(f"Code validation failed for {code_type}: {error_msg} at line {e.lineno}")
+        return False, error_msg, e.lineno
+    except Exception as e:
+        logger.warning(f"Code validation error for {code_type}: {str(e)}")
+        return False, str(e), None
 
 
 class SmartDefaultsService:
@@ -1244,18 +1282,32 @@ def preprocessing_fn(inputs):
 
         return '\n'.join(lines)
 
-    def generate_and_save(self) -> str:
+    def generate_and_save(self) -> Tuple[str, bool, Optional[str]]:
         """
-        Generate code and save to the FeatureConfig model.
+        Generate code, validate it, and save to the FeatureConfig model.
 
         Returns:
-            Generated Python code string
+            Tuple of (code, is_valid, error_message):
+            - code: Generated Python code string
+            - is_valid: True if code passes syntax validation
+            - error_message: Error description if invalid, None if valid
         """
         code = self.generate()
+
+        # Validate the generated code
+        is_valid, error_msg, error_line = validate_python_code(code, 'transform')
+
+        if not is_valid:
+            logger.error(
+                f"Generated transform code for config {self.config.id} has syntax error: "
+                f"{error_msg} at line {error_line}"
+            )
+
         self.config.generated_transform_code = code
         self.config.generated_at = datetime.utcnow()
         self.config.save(update_fields=['generated_transform_code', 'generated_at'])
-        return code
+
+        return code, is_valid, error_msg
 
 
 class TrainerModuleGenerator:
@@ -2086,15 +2138,29 @@ def run_fn(fn_args: tfx.components.FnArgs):
     logging.info("Model saved successfully!")
 '''
 
-    def generate_and_save(self) -> str:
+    def generate_and_save(self) -> Tuple[str, bool, Optional[str]]:
         """
-        Generate code and save to the FeatureConfig model.
+        Generate code, validate it, and save to the FeatureConfig model.
 
         Returns:
-            Generated Python code string
+            Tuple of (code, is_valid, error_message):
+            - code: Generated Python code string
+            - is_valid: True if code passes syntax validation
+            - error_message: Error description if invalid, None if valid
         """
         code = self.generate()
+
+        # Validate the generated code
+        is_valid, error_msg, error_line = validate_python_code(code, 'trainer')
+
+        if not is_valid:
+            logger.error(
+                f"Generated trainer code for config {self.config.id} has syntax error: "
+                f"{error_msg} at line {error_line}"
+            )
+
         self.config.generated_trainer_code = code
         self.config.generated_at = datetime.utcnow()
         self.config.save(update_fields=['generated_trainer_code', 'generated_at'])
-        return code
+
+        return code, is_valid, error_msg

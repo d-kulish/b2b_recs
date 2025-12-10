@@ -72,6 +72,11 @@ This platform enables businesses to:
 - 📊 **Tensor Dimension Preview:** Real-time calculation of input dimensions for both towers
 - 📝 **Version Control:** Track configuration changes with version history
 - 🎨 **Smart Defaults:** Auto-configure features based on column types and statistics
+- 🔧 **TFX Code Generation:** Auto-generate production-ready TFX code from feature configs
+  - **Transform module:** `preprocessing_fn` with vocabularies, normalization, cyclical encoding, crosses
+  - **Trainer module:** BuyerModel, ProductModel, RetrievalModel classes with TFRS integration
+  - **Code Viewer UI:** Tabbed modal with syntax highlighting, copy/download, regenerate
+  - **Code Validation:** Automatic syntax checking with error reporting (line numbers, error messages)
 
 ### **Platform Features**
 - 🎨 ETL Wizard UI (5-step data source configuration)
@@ -326,6 +331,17 @@ WHERE source_type='gcs';
 ---
 
 ## 📝 Recent Updates
+
+**December 10, 2025 - TFX Code Generation & Validation**
+- ✅ **Transform code generation** - Auto-generate TFX `preprocessing_fn` from Feature Configs
+- ✅ **Trainer code generation** - Auto-generate TFX Trainer module with:
+  - BuyerModel (Query Tower) and ProductModel (Candidate Tower) classes
+  - RetrievalModel using TFRS with configurable dense layers (128→64→32)
+  - `run_fn()` TFX entry point with serving signature
+- ✅ **Code Viewer UI** - Modal with Transform/Trainer tabs, syntax highlighting, copy/download
+- ✅ **Code Validation** - Automatic syntax checking with validation badges and error reporting
+- ✅ API endpoints: `GET/POST /api/feature-configs/{id}/generated-code/` and `/regenerate-code/`
+- See [TFX Code Generation docs](docs/tfx_code_generation.md) for details
 
 **December 8, 2025 - Modeling (Feature Engineering) Domain Complete**
 - ✅ New `ml_platform/modeling/` sub-app with services, API, views

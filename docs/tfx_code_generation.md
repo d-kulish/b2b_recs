@@ -392,6 +392,43 @@ Added "View Code" button on Feature Config cards that opens a modal with:
 - **Dark theme** code display (Slate color scheme)
 - **Timestamp** showing when code was last generated
 
+### Code Validation (DONE)
+
+Added syntax validation for generated Python code:
+
+1. **Backend validation** (`ml_platform/modeling/services.py`):
+   ```python
+   def validate_python_code(code: str, code_type: str = 'unknown') -> Tuple[bool, Optional[str], Optional[int]]:
+       """
+       Validate that generated Python code is syntactically correct.
+       Uses Python's compile() to check syntax without executing the code.
+       Returns (is_valid, error_message, error_line)
+       """
+       if not code or not code.strip():
+           return False, "Code is empty", None
+       try:
+           compile(code, f'<generated_{code_type}>', 'exec')
+           return True, None, None
+       except SyntaxError as e:
+           return False, e.msg, e.lineno
+   ```
+
+2. **API responses** now include validation status:
+   - `is_valid`: Boolean indicating if code is syntactically correct
+   - `validation_error`: Error message if validation failed
+   - `error_line`: Line number where error occurred
+
+3. **UI indicators** in code viewer modal:
+   - **Green "Valid" badge** - code is syntactically correct
+   - **Red "Error" badge** - code has syntax errors
+   - **Yellow "Checking" badge** - validation in progress
+   - **Error banner** - displays error message and line number for invalid code
+
+4. **Automatic validation**:
+   - Code is validated when generated/regenerated
+   - Validation status logged for debugging
+   - Both Transform and Trainer code validated independently
+
 ---
 
 ## Next Steps
@@ -414,22 +451,6 @@ Add "Model" chapter in the Modeling page UI for configuring:
 - The generated Trainer code will use these configurations
 - Save to FeatureConfig or separate Model entity
 
-### 3. Code Validation (Priority: Low)
-
-Add optional syntax validation before saving:
-```python
-def validate_generated_code(code: str) -> tuple[bool, str]:
-    """
-    Validate generated Python code is syntactically correct.
-    Returns (is_valid, error_message)
-    """
-    try:
-        compile(code, '<generated>', 'exec')
-        return True, ''
-    except SyntaxError as e:
-        return False, str(e)
-```
-
 ---
 
 ## Files Modified
@@ -437,11 +458,11 @@ def validate_generated_code(code: str) -> tuple[bool, str]:
 | File | Changes |
 |------|---------|
 | `ml_platform/models.py` | Added `generated_transform_code`, `generated_trainer_code`, `generated_at` fields |
-| `ml_platform/modeling/services.py` | Added `PreprocessingFnGenerator` and `TrainerModuleGenerator` classes |
-| `ml_platform/modeling/api.py` | Added generator calls to create/update/clone; Added `get_generated_code` and `regenerate_code` endpoints; Both Transform and Trainer code are generated automatically |
+| `ml_platform/modeling/services.py` | Added `PreprocessingFnGenerator`, `TrainerModuleGenerator` classes, and `validate_python_code()` function |
+| `ml_platform/modeling/api.py` | Added generator calls to create/update/clone; Added `get_generated_code` and `regenerate_code` endpoints with validation status; Both Transform and Trainer code are generated and validated automatically |
 | `ml_platform/modeling/urls.py` | Added routes for generated code endpoints |
 | `ml_platform/migrations/0024_add_generated_code_fields.py` | Database migration |
-| `templates/ml_platform/model_modeling.html` | Added "Code" button, code viewer modal with tabs, syntax highlighting, copy/download functionality |
+| `templates/ml_platform/model_modeling.html` | Added "Code" button, code viewer modal with tabs, syntax highlighting, copy/download, validation badges and error banners |
 
 ### Recent Changes (Dec 2025)
 
@@ -467,6 +488,12 @@ def validate_generated_code(code: str) -> tuple[bool, str]:
    - Python syntax highlighting with dark theme
    - Copy to clipboard and download functionality
    - Regenerate button to refresh code
+
+5. **Code Validation** (2025-12-10) - Added syntax validation:
+   - `validate_python_code()` function using Python's `compile()`
+   - Validation badges in code viewer (Valid/Error/Checking)
+   - Error banner with message and line number for syntax errors
+   - Automatic validation on code generation and regeneration
 
 ---
 

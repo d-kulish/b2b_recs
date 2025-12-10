@@ -26,7 +26,12 @@ This document provides detailed specifications for implementing the **Modeling**
   - Python syntax highlighting
   - Copy to clipboard and download functionality
   - Regenerate button
-- **Auto-triggers** - Code regenerated on create, update (if features changed), and clone
+- **Code Validation** - Generated code is automatically validated:
+  - `validate_python_code()` function using Python's `compile()` for syntax checking
+  - Validation badges in code viewer (green "Valid" / red "Error" / yellow "Checking")
+  - Error banner displays syntax error message and line number
+  - Both Transform and Trainer code validated independently
+- **Auto-triggers** - Code regenerated and validated on create, update (if features changed), and clone
 - See [TFX Code Generation](tfx_code_generation.md) for full details
 
 ### CSRF Bug Fix (2025-12-10)
@@ -1610,6 +1615,9 @@ Quick Test runs a mini TFX pipeline:
 - [x] Generate Trainer module code (BuyerModel, ProductModel, RetrievalModel, run_fn, serving signature)
 - [x] Add "Code" button on Feature Config cards
 - [x] Implement code viewer modal with tabs, syntax highlighting, copy/download
+- [x] Add `validate_python_code()` function for syntax validation
+- [x] Display validation badges (Valid/Error/Checking) in code viewer
+- [x] Show error banner with message and line number for syntax errors
 
 ### Phase 7: Quick Test Integration (Future Scope)
 - [ ] Create Quick Test model and API

@@ -721,6 +721,56 @@
     .code-meta-item i {
         color: #9ca3af;
     }
+    /* Code validation status */
+    .validation-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .validation-badge.valid {
+        background: #dcfce7;
+        color: #166534;
+    }
+    .validation-badge.invalid {
+        background: #fee2e2;
+        color: #991b1b;
+    }
+    .validation-badge.checking {
+        background: #fef3c7;
+        color: #92400e;
+    }
+    .validation-badge i {
+        font-size: 10px;
+    }
+    .validation-error-banner {
+        background: #fef2f2;
+        border: 1px solid #fecaca;
+        border-radius: 6px;
+        padding: 10px 14px;
+        margin-bottom: 12px;
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+    }
+    .validation-error-banner i {
+        color: #dc2626;
+        margin-top: 2px;
+    }
+    .validation-error-banner .error-text {
+        color: #991b1b;
+        font-size: 13px;
+        font-family: 'SF Mono', 'Monaco', 'Menlo', monospace;
+    }
+    .validation-error-banner .error-line {
+        color: #dc2626;
+        font-weight: 600;
+    }
 </style>
 {% endblock %}
 
@@ -1205,9 +1255,19 @@
 
             <!-- Transform Code Tab -->
             <div class="code-viewer-content active" id="transformCodeContent">
+                <div id="transformValidationError" class="validation-error-banner" style="display: none;">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <div class="error-text">
+                        <span id="transformErrorMsg"></span>
+                        <span id="transformErrorLine" class="error-line"></span>
+                    </div>
+                </div>
                 <div class="code-container">
                     <div class="code-header">
                         <span class="code-filename">preprocessing_fn.py</span>
+                        <span id="transformValidationBadge" class="validation-badge checking">
+                            <i class="fas fa-spinner fa-spin"></i> Checking
+                        </span>
                         <div class="code-actions">
                             <button class="code-action-btn" onclick="copyCode('transform')" id="copyTransformBtn">
                                 <i class="fas fa-copy"></i> Copy
@@ -1225,9 +1285,19 @@
 
             <!-- Trainer Code Tab -->
             <div class="code-viewer-content" id="trainerCodeContent">
+                <div id="trainerValidationError" class="validation-error-banner" style="display: none;">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <div class="error-text">
+                        <span id="trainerErrorMsg"></span>
+                        <span id="trainerErrorLine" class="error-line"></span>
+                    </div>
+                </div>
                 <div class="code-container">
                     <div class="code-header">
                         <span class="code-filename">trainer_module.py</span>
+                        <span id="trainerValidationBadge" class="validation-badge checking">
+                            <i class="fas fa-spinner fa-spin"></i> Checking
+                        </span>
                         <div class="code-actions">
                             <button class="code-action-btn" onclick="copyCode('trainer')" id="copyTrainerBtn">
                                 <i class="fas fa-copy"></i> Copy
@@ -3402,6 +3472,10 @@ function viewGeneratedCode(configId, configName) {
     document.getElementById('trainerLineCount').textContent = '-';
     document.getElementById('codeGeneratedAt').textContent = 'Loading...';
 
+    // Reset validation badges to checking state
+    updateValidationBadge('transform', 'checking');
+    updateValidationBadge('trainer', 'checking');
+
     // Show modal
     document.getElementById('codeViewerModal').classList.remove('hidden');
 
@@ -3418,10 +3492,14 @@ function viewGeneratedCode(configId, configName) {
             document.getElementById('transformCode').innerHTML = highlighted;
             const lineCount = transformData.data.code.split('\n').length;
             document.getElementById('transformLineCount').textContent = `${lineCount} lines`;
+            // Update validation status
+            updateValidationBadge('transform', transformData.data.is_valid ? 'valid' : 'invalid',
+                                  transformData.data.validation_error, transformData.data.error_line);
         } else {
             currentCodeData.transform = '';
             document.getElementById('transformCode').innerHTML = '<span class="comment"># No transform code generated yet</span>';
             document.getElementById('transformLineCount').textContent = '0';
+            updateValidationBadge('transform', 'valid'); // No code = no errors
         }
 
         // Handle Trainer code
@@ -3431,10 +3509,14 @@ function viewGeneratedCode(configId, configName) {
             document.getElementById('trainerCode').innerHTML = highlighted;
             const lineCount = trainerData.data.code.split('\n').length;
             document.getElementById('trainerLineCount').textContent = `${lineCount} lines`;
+            // Update validation status
+            updateValidationBadge('trainer', trainerData.data.is_valid ? 'valid' : 'invalid',
+                                  trainerData.data.validation_error, trainerData.data.error_line);
         } else {
             currentCodeData.trainer = '';
             document.getElementById('trainerCode').innerHTML = '<span class="comment"># No trainer code generated yet</span>';
             document.getElementById('trainerLineCount').textContent = '0';
+            updateValidationBadge('trainer', 'valid'); // No code = no errors
         }
 
         // Update generated timestamp
@@ -3449,7 +3531,37 @@ function viewGeneratedCode(configId, configName) {
         console.error('Error fetching code:', err);
         document.getElementById('transformCode').innerHTML = '<span class="comment"># Error loading code</span>';
         document.getElementById('trainerCode').innerHTML = '<span class="comment"># Error loading code</span>';
+        updateValidationBadge('transform', 'invalid', 'Failed to load code');
+        updateValidationBadge('trainer', 'invalid', 'Failed to load code');
     });
+}
+
+function updateValidationBadge(codeType, status, errorMsg = null, errorLine = null) {
+    const badge = document.getElementById(`${codeType}ValidationBadge`);
+    const errorBanner = document.getElementById(`${codeType}ValidationError`);
+    const errorMsgEl = document.getElementById(`${codeType}ErrorMsg`);
+    const errorLineEl = document.getElementById(`${codeType}ErrorLine`);
+
+    // Update badge
+    badge.classList.remove('valid', 'invalid', 'checking');
+    badge.classList.add(status);
+
+    if (status === 'valid') {
+        badge.innerHTML = '<i class="fas fa-check-circle"></i> Valid';
+        errorBanner.style.display = 'none';
+    } else if (status === 'invalid') {
+        badge.innerHTML = '<i class="fas fa-exclamation-circle"></i> Error';
+        if (errorMsg) {
+            errorMsgEl.textContent = errorMsg;
+            errorLineEl.textContent = errorLine ? ` (line ${errorLine})` : '';
+            errorBanner.style.display = 'flex';
+        } else {
+            errorBanner.style.display = 'none';
+        }
+    } else if (status === 'checking') {
+        badge.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Checking';
+        errorBanner.style.display = 'none';
+    }
 }
 
 function closeCodeViewer() {
@@ -3593,6 +3705,10 @@ function regenerateCode() {
     const btn = document.getElementById('regenerateBtn');
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Regenerating...';
     btn.disabled = true;
+
+    // Reset validation badges while regenerating
+    updateValidationBadge('transform', 'checking');
+    updateValidationBadge('trainer', 'checking');
 
     fetch(`/api/feature-configs/${currentCodeViewerConfigId}/regenerate-code/`, {
         method: 'POST',

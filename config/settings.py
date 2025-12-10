@@ -166,8 +166,29 @@ LOGIN_REDIRECT_URL = 'system_dashboard'
 LOGOUT_REDIRECT_URL = 'login'
 
 # GCP Configuration
-GCP_PROJECT_ID = os.environ.get('GCP_PROJECT_ID', '')
-GCP_LOCATION = os.environ.get('GCP_LOCATION', 'US')  # Must match your BigQuery dataset location
+GCP_PROJECT_ID = os.environ.get('GCP_PROJECT_ID', 'b2b-recs')
+GCP_LOCATION = os.environ.get('GCP_LOCATION', 'europe-central2')  # Warsaw, Poland
+
+# =============================================================================
+# VERTEX AI PIPELINES CONFIGURATION
+# =============================================================================
+
+VERTEX_AI_PROJECT = os.environ.get('GCP_PROJECT_ID', 'b2b-recs')
+VERTEX_AI_LOCATION = os.environ.get('VERTEX_AI_LOCATION', 'europe-central2')
+
+# GCS Buckets for ML Pipelines
+GCS_QUICKTEST_BUCKET = os.environ.get('GCS_QUICKTEST_BUCKET', 'b2b-recs-quicktest-artifacts')
+GCS_TRAINING_BUCKET = os.environ.get('GCS_TRAINING_BUCKET', 'b2b-recs-training-artifacts')
+GCS_PIPELINE_STAGING_BUCKET = os.environ.get('GCS_PIPELINE_STAGING_BUCKET', 'b2b-recs-pipeline-staging')
+
+# Pipeline compute defaults
+QUICKTEST_MACHINE_TYPE = os.environ.get('QUICKTEST_MACHINE_TYPE', 'n1-standard-4')
+QUICKTEST_DEFAULT_EPOCHS = int(os.environ.get('QUICKTEST_DEFAULT_EPOCHS', '10'))
+QUICKTEST_DEFAULT_BATCH_SIZE = int(os.environ.get('QUICKTEST_DEFAULT_BATCH_SIZE', '4096'))
+QUICKTEST_DEFAULT_LEARNING_RATE = float(os.environ.get('QUICKTEST_DEFAULT_LEARNING_RATE', '0.001'))
+
+# Polling interval for pipeline status checks (seconds)
+PIPELINE_POLL_INTERVAL = int(os.environ.get('PIPELINE_POLL_INTERVAL', '10'))
 
 # Logging Configuration
 # Ensures exceptions are logged to stdout/stderr for Cloud Run visibility

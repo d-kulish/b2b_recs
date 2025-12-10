@@ -431,18 +431,76 @@ Added syntax validation for generated Python code:
 
 ---
 
+## Quick Test Pipeline Integration (COMPLETED)
+
+### Overview
+
+Quick Test is a mini TFX pipeline on Vertex AI that validates feature configurations before expensive full training runs. It runs the complete pipeline (ExampleGen → StatisticsGen → SchemaGen → Transform → Trainer) on the full dataset and returns metrics (loss, recall@10/50/100).
+
+### Implementation Details
+
+**Backend Components:**
+
+| Component | File | Description |
+|-----------|------|-------------|
+| `QuickTest` model | `ml_platform/models.py:1472-1736` | Django model for tracking pipeline runs |
+| `PipelineService` | `ml_platform/pipelines/services.py` | Submits pipelines, polls status, extracts results |
+| `pipeline_builder` | `ml_platform/pipelines/pipeline_builder.py` | KFP v2 pipeline definition with 6 components |
+| API endpoints | `ml_platform/pipelines/api.py` | REST API for starting/monitoring/cancelling tests |
+
+**API Endpoints:**
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/feature-configs/{id}/quick-test/` | POST | Start a quick test |
+| `/api/quick-tests/{id}/` | GET | Get status and results |
+| `/api/quick-tests/{id}/cancel/` | POST | Cancel running test |
+| `/api/feature-configs/{id}/quick-tests/` | GET | List tests for config |
+
+**Pipeline Stages:**
+
+1. **ExampleGen** - Extract data from BigQuery using Dataset's generated SQL query
+2. **StatisticsGen** - Compute dataset statistics
+3. **SchemaGen** - Infer schema from statistics
+4. **Transform** - Apply `preprocessing_fn` from generated Transform code
+5. **Trainer** - Train TFRS model using generated Trainer code
+6. **SaveMetrics** - Export metrics.json to GCS for Django extraction
+
+**GCS Buckets (with lifecycle policies):**
+
+| Bucket | Lifecycle | Purpose |
+|--------|-----------|---------|
+| `gs://b2b-recs-quicktest-artifacts` | 7 days | Quick test artifacts |
+| `gs://b2b-recs-training-artifacts` | 30 days | Full training artifacts |
+| `gs://b2b-recs-pipeline-staging` | 3 days | Pipeline working directory |
+
+**UI Components (model_modeling.html):**
+
+- **Quick Test button** on Feature Config cards (requires generated code)
+- **Configuration dialog** - Set epochs, batch size, learning rate
+- **Progress modal** - Real-time stage tracking with animated progress bar
+- **Results modal** - Displays metrics, vocabulary stats, error details
+- **Polling** - Automatic status updates every 10 seconds
+
+### Data Flow
+
+```
+FeatureConfig → Dataset (FK) → BigQueryService.generate_query(dataset) → SQL Query
+                                        ↓
+                              Vertex AI Pipeline
+                                        ↓
+                         GCS (transform_module.py, trainer_module.py)
+                                        ↓
+                    Pipeline: ExampleGen → StatisticsGen → SchemaGen → Transform → Trainer
+                                        ↓
+                              metrics.json → QuickTest model → UI
+```
+
+---
+
 ## Next Steps
 
-### 1. Quick Test Pipeline Integration (Priority: High)
-
-Create Vertex AI Pipeline that:
-1. Reads generated Transform and Trainer code from database
-2. Writes to temporary module files in GCS
-3. Executes TFX pipeline: ExampleGen → StatisticsGen → SchemaGen → Transform → Trainer
-4. Returns metrics to the platform
-5. Tracks progress in QuickTest model (to be added)
-
-### 2. Model Configuration Chapter (Priority: Medium)
+### 1. Model Configuration Chapter (Priority: Medium)
 
 Add "Model" chapter in the Modeling page UI for configuring:
 - Dense layer architecture (default: 128 → 64 → 32)
@@ -451,18 +509,36 @@ Add "Model" chapter in the Modeling page UI for configuring:
 - The generated Trainer code will use these configurations
 - Save to FeatureConfig or separate Model entity
 
+### 2. Full Training Pipeline (Priority: High)
+
+Extend Quick Test infrastructure for production training:
+- Longer training runs with checkpointing
+- Model artifact export (SavedModel format)
+- Candidate index building for ANN search
+- Model versioning and deployment
+
 ---
 
 ## Files Modified
 
 | File | Changes |
 |------|---------|
-| `ml_platform/models.py` | Added `generated_transform_code`, `generated_trainer_code`, `generated_at` fields |
+| `ml_platform/models.py` | Added `generated_transform_code`, `generated_trainer_code`, `generated_at` fields; Added `QuickTest` model (lines 1472-1736); Added `update_best_metrics()` method to FeatureConfig |
 | `ml_platform/modeling/services.py` | Added `PreprocessingFnGenerator`, `TrainerModuleGenerator` classes, and `validate_python_code()` function |
 | `ml_platform/modeling/api.py` | Added generator calls to create/update/clone; Added `get_generated_code` and `regenerate_code` endpoints with validation status; Both Transform and Trainer code are generated and validated automatically |
 | `ml_platform/modeling/urls.py` | Added routes for generated code endpoints |
-| `ml_platform/migrations/0024_add_generated_code_fields.py` | Database migration |
-| `templates/ml_platform/model_modeling.html` | Added "Code" button, code viewer modal with tabs, syntax highlighting, copy/download, validation badges and error banners |
+| `ml_platform/migrations/0024_add_generated_code_fields.py` | Database migration for generated code fields |
+| `ml_platform/migrations/0025_add_quicktest_model.py` | Database migration for QuickTest model |
+| `ml_platform/pipelines/__init__.py` | New pipelines module |
+| `ml_platform/pipelines/services.py` | PipelineService class for Vertex AI pipeline management |
+| `ml_platform/pipelines/pipeline_builder.py` | KFP v2 pipeline definition with 6 components |
+| `ml_platform/pipelines/api.py` | 4 REST API endpoints for quick test management |
+| `ml_platform/pipelines/urls.py` | URL routing for pipelines module |
+| `ml_platform/urls.py` | Registered pipelines module URLs |
+| `config/settings.py` | Added Vertex AI configuration settings |
+| `requirements.txt` | Added google-cloud-aiplatform and kfp dependencies |
+| `scripts/setup_vertex_ai.sh` | GCP infrastructure setup script |
+| `templates/ml_platform/model_modeling.html` | Added "Code" button, code viewer modal with tabs, syntax highlighting, copy/download, validation badges and error banners; Added "Test" button, quick test dialogs, progress modal, results modal |
 
 ### Recent Changes (Dec 2025)
 

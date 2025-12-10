@@ -10,6 +10,37 @@ This document provides detailed specifications for implementing the **Modeling**
 
 ## Recent Updates (December 2025)
 
+### Quick Test Pipeline Integration (2025-12-10)
+
+Full Vertex AI Pipeline integration for validating feature configurations:
+
+**Backend:**
+- `QuickTest` model in `ml_platform/models.py` - Tracks pipeline runs with status, progress, results
+- `ml_platform/pipelines/` module - New sub-app for pipeline management:
+  - `services.py` - PipelineService class for submission, polling, result extraction
+  - `pipeline_builder.py` - KFP v2 pipeline with 6 components (ExampleGen, StatisticsGen, SchemaGen, Transform, Trainer, SaveMetrics)
+  - `api.py` - 4 REST endpoints for start/status/cancel/list operations
+- GCS buckets with lifecycle policies (7/30/3 days)
+- IAM roles configured for `django-app` service account
+
+**API Endpoints:**
+- `POST /api/feature-configs/{id}/quick-test/` - Start quick test with configurable epochs, batch size, learning rate
+- `GET /api/quick-tests/{id}/` - Get status and results (auto-polls Vertex AI)
+- `POST /api/quick-tests/{id}/cancel/` - Cancel running pipeline
+- `GET /api/feature-configs/{id}/quick-tests/` - List all tests for a config
+
+**UI (model_modeling.html):**
+- **"Test" button** on Feature Config cards (enabled when code is generated)
+- **Configuration dialog** - Epochs (1-15), batch size (1024-8192), learning rate
+- **Progress modal** - Real-time stage tracking, animated progress bar, elapsed time
+- **Results modal** - Metrics (loss, recall@10/50/100), vocabulary stats, error details, Vertex AI link
+- **Polling** - Automatic status updates every 10 seconds
+
+**Pipeline Flow:**
+```
+FeatureConfig → Dataset → BigQueryService.generate_query() → Vertex AI Pipeline → metrics.json → UI
+```
+
 ### TFX Code Generation (2025-12-10)
 - **Transform code generation** - Feature Configs automatically generate TFX Transform `preprocessing_fn` code
 - **Trainer code generation** - Feature Configs automatically generate TFX Trainer module with:

@@ -1380,6 +1380,38 @@ class FeatureConfig(models.Model):
         }
         return hashlib.md5(json.dumps(config, sort_keys=True).encode()).hexdigest()
 
+    def update_best_metrics(self, quick_test):
+        """
+        Update best metrics if this quick test improved them.
+
+        Args:
+            quick_test: QuickTest instance with results
+
+        Returns:
+            bool: True if any metrics were updated
+        """
+        updated = False
+
+        if quick_test.recall_at_100 is not None:
+            if self.best_recall_at_100 is None or quick_test.recall_at_100 > self.best_recall_at_100:
+                self.best_recall_at_100 = quick_test.recall_at_100
+                updated = True
+
+        if quick_test.recall_at_50 is not None:
+            if self.best_recall_at_50 is None or quick_test.recall_at_50 > self.best_recall_at_50:
+                self.best_recall_at_50 = quick_test.recall_at_50
+                updated = True
+
+        if quick_test.recall_at_10 is not None:
+            if self.best_recall_at_10 is None or quick_test.recall_at_10 > self.best_recall_at_10:
+                self.best_recall_at_10 = quick_test.recall_at_10
+                updated = True
+
+        if updated:
+            self.save(update_fields=['best_recall_at_100', 'best_recall_at_50', 'best_recall_at_10', 'updated_at'])
+
+        return updated
+
 
 class FeatureConfigVersion(models.Model):
     """
@@ -1435,3 +1467,270 @@ class FeatureConfigVersion(models.Model):
 
     def __str__(self):
         return f"{self.feature_config.name} v{self.version}"
+
+
+class QuickTest(models.Model):
+    """
+    Tracks Quick Test pipeline runs for Feature Configs.
+    Quick Tests validate feature engineering by running a mini TFX pipeline on Vertex AI.
+    """
+
+    # Status choices
+    STATUS_PENDING = 'pending'
+    STATUS_SUBMITTING = 'submitting'
+    STATUS_RUNNING = 'running'
+    STATUS_COMPLETED = 'completed'
+    STATUS_FAILED = 'failed'
+    STATUS_CANCELLED = 'cancelled'
+
+    STATUS_CHOICES = [
+        (STATUS_PENDING, 'Pending'),
+        (STATUS_SUBMITTING, 'Submitting'),
+        (STATUS_RUNNING, 'Running'),
+        (STATUS_COMPLETED, 'Completed'),
+        (STATUS_FAILED, 'Failed'),
+        (STATUS_CANCELLED, 'Cancelled'),
+    ]
+
+    # Pipeline stage choices
+    STAGE_CHOICES = [
+        ('pending', 'Pending'),
+        ('example_gen', 'ExampleGen'),
+        ('statistics_gen', 'StatisticsGen'),
+        ('schema_gen', 'SchemaGen'),
+        ('transform', 'Transform'),
+        ('trainer', 'Trainer'),
+        ('completed', 'Completed'),
+        ('failed', 'Failed'),
+    ]
+
+    # =========================================================================
+    # Relationships
+    # =========================================================================
+
+    feature_config = models.ForeignKey(
+        FeatureConfig,
+        on_delete=models.CASCADE,
+        related_name='quick_tests',
+        help_text="Feature Config being tested"
+    )
+
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_quick_tests',
+        help_text="User who initiated the test"
+    )
+
+    # =========================================================================
+    # Test Configuration
+    # =========================================================================
+
+    # Data settings (future: sampling)
+    data_sample_percent = models.IntegerField(
+        default=100,
+        help_text="Percentage of dataset to use (100 = full, future: 5/10/25)"
+    )
+
+    # Training hyperparameters
+    epochs = models.IntegerField(
+        default=10,
+        help_text="Number of training epochs (1-15)"
+    )
+    batch_size = models.IntegerField(
+        default=4096,
+        help_text="Training batch size"
+    )
+    learning_rate = models.FloatField(
+        default=0.001,
+        help_text="Learning rate for optimizer"
+    )
+
+    # =========================================================================
+    # Pipeline Tracking
+    # =========================================================================
+
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=STATUS_PENDING,
+        db_index=True
+    )
+
+    # Vertex AI Pipeline identifiers
+    vertex_pipeline_job_name = models.CharField(
+        max_length=500,
+        blank=True,
+        help_text="Full Vertex AI pipeline job resource name"
+    )
+    vertex_pipeline_job_id = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Short pipeline job ID for display"
+    )
+
+    # Progress tracking
+    current_stage = models.CharField(
+        max_length=50,
+        choices=STAGE_CHOICES,
+        default='pending',
+        help_text="Current pipeline stage"
+    )
+    progress_percent = models.IntegerField(
+        default=0,
+        help_text="Overall progress percentage (0-100)"
+    )
+
+    # Detailed stage information for UI
+    stage_details = models.JSONField(
+        default=list,
+        help_text="List of stage statuses: [{name, status, duration_seconds, error}]"
+    )
+
+    # =========================================================================
+    # Results
+    # =========================================================================
+
+    # Training metrics
+    loss = models.FloatField(
+        null=True,
+        blank=True,
+        help_text="Final training loss"
+    )
+    recall_at_10 = models.FloatField(
+        null=True,
+        blank=True,
+        help_text="Recall@10 metric"
+    )
+    recall_at_50 = models.FloatField(
+        null=True,
+        blank=True,
+        help_text="Recall@50 metric"
+    )
+    recall_at_100 = models.FloatField(
+        null=True,
+        blank=True,
+        help_text="Recall@100 metric"
+    )
+
+    # Vocabulary statistics
+    vocabulary_stats = models.JSONField(
+        default=dict,
+        help_text="Vocabulary sizes and OOV rates per feature"
+    )
+
+    # Error information
+    error_message = models.TextField(
+        blank=True,
+        help_text="Error message if pipeline failed"
+    )
+    error_stage = models.CharField(
+        max_length=50,
+        blank=True,
+        help_text="Stage where error occurred"
+    )
+
+    # =========================================================================
+    # Artifacts
+    # =========================================================================
+
+    gcs_artifacts_path = models.CharField(
+        max_length=500,
+        blank=True,
+        help_text="GCS path for this run's artifacts"
+    )
+
+    # =========================================================================
+    # Timestamps
+    # =========================================================================
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    submitted_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When pipeline was submitted to Vertex AI"
+    )
+    started_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When pipeline started running"
+    )
+    completed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When pipeline completed/failed"
+    )
+
+    # Computed duration
+    duration_seconds = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="Total pipeline duration in seconds"
+    )
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Quick Test'
+        verbose_name_plural = 'Quick Tests'
+
+    def __str__(self):
+        return f"QuickTest #{self.pk} - {self.feature_config.name} ({self.status})"
+
+    @property
+    def is_terminal(self):
+        """Check if the test has reached a terminal state."""
+        return self.status in [
+            self.STATUS_COMPLETED,
+            self.STATUS_FAILED,
+            self.STATUS_CANCELLED
+        ]
+
+    @property
+    def elapsed_seconds(self):
+        """Calculate elapsed time for running tests."""
+        if self.started_at:
+            if self.completed_at:
+                return int((self.completed_at - self.started_at).total_seconds())
+            else:
+                from django.utils import timezone
+                return int((timezone.now() - self.started_at).total_seconds())
+        return None
+
+    def get_initial_stage_details(self):
+        """Create initial stage details structure."""
+        return [
+            {"name": "ExampleGen", "status": "pending", "duration_seconds": None},
+            {"name": "StatisticsGen", "status": "pending", "duration_seconds": None},
+            {"name": "SchemaGen", "status": "pending", "duration_seconds": None},
+            {"name": "Transform", "status": "pending", "duration_seconds": None},
+            {"name": "Trainer", "status": "pending", "duration_seconds": None},
+        ]
+
+    def calculate_progress(self):
+        """Calculate overall progress percentage from stage details."""
+        if not self.stage_details:
+            return 0
+
+        stage_weights = {
+            'ExampleGen': 20,
+            'StatisticsGen': 10,
+            'SchemaGen': 5,
+            'Transform': 25,
+            'Trainer': 40,
+        }
+
+        total_weight = sum(stage_weights.values())
+        completed_weight = 0
+
+        for stage in self.stage_details:
+            if stage.get('status') == 'completed':
+                completed_weight += stage_weights.get(stage['name'], 0)
+            elif stage.get('status') == 'running':
+                # Partial credit for running stage
+                completed_weight += stage_weights.get(stage['name'], 0) * 0.5
+
+        return int((completed_weight / total_weight) * 100)

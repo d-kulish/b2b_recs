@@ -77,6 +77,12 @@ This platform enables businesses to:
   - **Trainer module:** BuyerModel, ProductModel, RetrievalModel classes with TFRS integration
   - **Code Viewer UI:** Tabbed modal with syntax highlighting, copy/download, regenerate
   - **Code Validation:** Automatic syntax checking with error reporting (line numbers, error messages)
+- 🧪 **Quick Test Pipeline:** Validate feature configs on Vertex AI before full training
+  - **One-click testing:** Start pipeline from Feature Config card
+  - **Configurable params:** Epochs, batch size, learning rate
+  - **Real-time progress:** Stage tracking with animated progress bar
+  - **Results display:** Loss, Recall@10/50/100, vocabulary statistics
+  - **Pipeline stages:** ExampleGen → StatisticsGen → SchemaGen → Transform → Trainer
 
 ### **Platform Features**
 - 🎨 ETL Wizard UI (5-step data source configuration)
@@ -251,11 +257,13 @@ gcloud run jobs execute django-migrate-and-createsuperuser --region europe-centr
 - Dataflow for large datasets (> 1M rows)
 - **Dataset Management** - Full UI with 4-step wizard and Visual Schema Builder (27 endpoints)
 - **Modeling (Feature Engineering)** - Feature config wizard with drag-drop UI, tensor dimension preview (11 endpoints)
+- **Quick Test Pipeline** - Vertex AI pipeline integration for validating feature configs (4 endpoints)
 
 ### **🔮 Next Up**
-1. Training Pipeline - TFX integration with ExampleGen, model training jobs
-2. Real-time streaming ETL (Pub/Sub)
-3. Data quality validation rules
+1. Full Training Pipeline - Extended training with checkpointing, model export
+2. Model Deployment - SavedModel export, candidate index building
+3. Real-time streaming ETL (Pub/Sub)
+4. Data quality validation rules
 
 See [`next_steps.md`](next_steps.md) for detailed roadmap.
 
@@ -331,6 +339,16 @@ WHERE source_type='gcs';
 ---
 
 ## 📝 Recent Updates
+
+**December 10, 2025 - Quick Test Pipeline Integration**
+- ✅ **Vertex AI Pipeline** - Full KFP v2 pipeline for validating feature configs
+- ✅ **QuickTest model** - Django model for tracking pipeline runs with status, progress, results
+- ✅ **Pipeline Service** - Submit pipelines, poll status, extract metrics from GCS
+- ✅ **UI Integration** - "Test" button, configuration dialog, progress modal, results display
+- ✅ **GCS Buckets** - Created with lifecycle policies (7/30/3 days)
+- ✅ **IAM Setup** - Service account roles for Vertex AI, Storage, Service Account User
+- ✅ API endpoints: `/api/feature-configs/{id}/quick-test/`, `/api/quick-tests/{id}/`
+- See [TFX Code Generation docs](docs/tfx_code_generation.md) for details
 
 **December 10, 2025 - TFX Code Generation & Validation**
 - ✅ **Transform code generation** - Auto-generate TFX `preprocessing_fn` from Feature Configs
@@ -423,6 +441,6 @@ Private/Proprietary
 
 ---
 
-**Project Stats:** 20 models • 60+ files • 135 URL patterns • ~8,000 LOC • 100% auth coverage
+**Project Stats:** 21 models • 70+ files • 139 URL patterns • ~10,000 LOC • 100% auth coverage
 
 **Deployed:** November 2025 | **Region:** EU (Warsaw) | **Status:** Production Ready ✅

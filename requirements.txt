@@ -41,3 +41,6 @@ urllib3==2.5.0
 gunicorn==22.0.0
 whitenoise==6.11.0
 google-cloud-run==0.12.0
+# Vertex AI Pipelines
+google-cloud-aiplatform>=1.38.0
+kfp>=2.4.0

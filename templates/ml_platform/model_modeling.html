@@ -863,6 +863,65 @@
     .quicktest-metric-value.declined {
         color: #ef4444;
     }
+
+    /* Chapter Section Styles */
+    .chapter-section {
+        background: white;
+        border-radius: 12px;
+        border: 1px solid #e5e7eb;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        padding: 24px;
+    }
+    .chapter-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 16px;
+    }
+    .chapter-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 18px;
+    }
+    .chapter-icon.model-structure {
+        background: linear-gradient(135deg, #8b5cf6 0%, #a78bfa 100%);
+        color: white;
+    }
+    .chapter-icon.quick-test {
+        background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%);
+        color: white;
+    }
+    .chapter-icon.experiments {
+        background: linear-gradient(135deg, #ec4899 0%, #f472b6 100%);
+        color: white;
+    }
+    .chapter-title {
+        font-size: 20px;
+        font-weight: 700;
+        color: #111827;
+    }
+    .chapter-empty-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 48px 24px;
+        color: #9ca3af;
+        text-align: center;
+    }
+    .chapter-empty-icon {
+        font-size: 48px;
+        margin-bottom: 16px;
+        opacity: 0.5;
+    }
+    .chapter-empty-text {
+        font-size: 14px;
+        max-width: 300px;
+    }
 </style>
 {% endblock %}
 
@@ -920,6 +979,64 @@
             <!-- Config cards will be inserted here -->
         </div>
     </div>
+
+    <!-- Model Structure Chapter -->
+    <div class="chapter-section">
+        <div class="chapter-header">
+            <div class="chapter-icon model-structure">
+                <i class="fas fa-layer-group"></i>
+            </div>
+            <h2 class="chapter-title">Model Structure</h2>
+            <div class="ml-auto">
+                <button onclick="openTrainerCodeSelector()" class="btn btn-secondary btn-sm">
+                    <i class="fas fa-brain mr-1"></i>Trainer Code
+                </button>
+            </div>
+        </div>
+        <div id="modelStructureContent">
+            <div class="chapter-empty-state">
+                <i class="fas fa-cubes chapter-empty-icon"></i>
+                <p class="chapter-empty-text">Model architecture configuration will be available here</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Test Chapter -->
+    <div class="chapter-section">
+        <div class="chapter-header">
+            <div class="chapter-icon quick-test">
+                <i class="fas fa-bolt"></i>
+            </div>
+            <h2 class="chapter-title">Quick Test</h2>
+            <div class="ml-auto">
+                <button onclick="openQuickTestSelector()" class="btn btn-primary btn-sm">
+                    <i class="fas fa-play mr-1"></i>Run Quick Test
+                </button>
+            </div>
+        </div>
+        <div id="quickTestContent">
+            <div class="chapter-empty-state">
+                <i class="fas fa-vial chapter-empty-icon"></i>
+                <p class="chapter-empty-text">Quick test functionality will be available here</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Experiments Chapter -->
+    <div class="chapter-section">
+        <div class="chapter-header">
+            <div class="chapter-icon experiments">
+                <i class="fas fa-flask"></i>
+            </div>
+            <h2 class="chapter-title">Experiments</h2>
+        </div>
+        <div id="experimentsContent">
+            <div class="chapter-empty-state">
+                <i class="fas fa-chart-line chapter-empty-icon"></i>
+                <p class="chapter-empty-text">Experiment results and comparisons will be available here</p>
+            </div>
+        </div>
+    </div>
 </div>
 
 <!-- Feature Config Wizard Modal -->
@@ -947,7 +1064,14 @@
         <!-- Modal Body -->
         <div class="modal-body-wizard" style="max-height: calc(90vh - 200px); overflow-y: auto;">
             <!-- Step 1: Basic Info -->
-            <div id="wizardStep1" class="wizard-step active">
+            <div id="wizardStep1" class="wizard-step active" style="position: relative;">
+                <!-- Loading overlay for edit mode -->
+                <div id="wizardStep1Loading" style="display: none; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(255,255,255,0.8); align-items: center; justify-content: center; z-index: 10;">
+                    <div class="flex items-center gap-3">
+                        <i class="fas fa-spinner fa-spin text-2xl text-blue-500"></i>
+                        <span class="text-gray-600">Loading config data...</span>
+                    </div>
+                </div>
                 <h4 class="wizard-section-title">Basic Information</h4>
 
                 <!-- Config Name -->
@@ -1306,111 +1430,137 @@
     </div>
 </div>
 
-<!-- Code Viewer Modal -->
-<div id="codeViewerModal" class="modal-overlay hidden">
+<!-- Transform Code Viewer Modal -->
+<div id="transformCodeViewerModal" class="modal-overlay hidden">
     <div class="modal-container" style="max-width: 900px;">
         <div class="modal-header">
             <div class="modal-header-icon info">
-                <i class="fas fa-code"></i>
+                <i class="fas fa-random"></i>
             </div>
-            <h3 class="modal-header-title" id="codeViewerTitle">Generated TFX Code</h3>
-            <button type="button" class="modal-close-btn" onclick="closeCodeViewer()">
+            <h3 class="modal-header-title">Transform Code</h3>
+            <button type="button" class="modal-close-btn" onclick="closeTransformCodeViewer()">
                 <i class="fas fa-times"></i>
             </button>
         </div>
         <div class="modal-body" style="max-height: 75vh; overflow-y: auto;">
             <!-- Meta info -->
-            <div class="code-meta" id="codeViewerMeta">
+            <div class="code-meta">
                 <div class="code-meta-item">
                     <i class="fas fa-clock"></i>
-                    <span id="codeGeneratedAt">-</span>
+                    <span id="transformCodeGeneratedAt">-</span>
                 </div>
                 <div class="code-meta-item">
                     <i class="fas fa-sync-alt"></i>
-                    <button onclick="regenerateCode()" class="text-blue-600 hover:text-blue-800 font-medium" id="regenerateBtn">
-                        Regenerate Code
+                    <button onclick="regenerateTransformCode()" class="text-blue-600 hover:text-blue-800 font-medium">
+                        Regenerate
                     </button>
                 </div>
             </div>
 
-            <!-- Tabs -->
-            <div class="code-viewer-tabs">
-                <button class="code-viewer-tab active" data-tab="transform" onclick="switchCodeTab('transform')">
-                    <i class="fas fa-random mr-1"></i>Transform
+            <!-- Transform Code Content -->
+            <div id="transformValidationError" class="validation-error-banner" style="display: none;">
+                <i class="fas fa-exclamation-triangle"></i>
+                <div class="error-text">
+                    <span id="transformErrorMsg"></span>
+                    <span id="transformErrorLine" class="error-line"></span>
+                </div>
+            </div>
+            <div class="code-container">
+                <div class="code-header">
+                    <span class="code-filename">preprocessing_fn.py</span>
+                    <span id="transformValidationBadge" class="validation-badge checking">
+                        <i class="fas fa-spinner fa-spin"></i> Checking
+                    </span>
                     <span class="tab-badge" id="transformLineCount">-</span>
-                </button>
-                <button class="code-viewer-tab" data-tab="trainer" onclick="switchCodeTab('trainer')">
-                    <i class="fas fa-brain mr-1"></i>Trainer
-                    <span class="tab-badge" id="trainerLineCount">-</span>
-                </button>
-            </div>
-
-            <!-- Transform Code Tab -->
-            <div class="code-viewer-content active" id="transformCodeContent">
-                <div id="transformValidationError" class="validation-error-banner" style="display: none;">
-                    <i class="fas fa-exclamation-triangle"></i>
-                    <div class="error-text">
-                        <span id="transformErrorMsg"></span>
-                        <span id="transformErrorLine" class="error-line"></span>
+                    <div class="code-actions">
+                        <button class="code-action-btn" onclick="copyCode('transform')" id="copyTransformBtn">
+                            <i class="fas fa-copy"></i> Copy
+                        </button>
+                        <button class="code-action-btn" onclick="downloadCode('transform')">
+                            <i class="fas fa-download"></i> Download
+                        </button>
                     </div>
                 </div>
-                <div class="code-container">
-                    <div class="code-header">
-                        <span class="code-filename">preprocessing_fn.py</span>
-                        <span id="transformValidationBadge" class="validation-badge checking">
-                            <i class="fas fa-spinner fa-spin"></i> Checking
-                        </span>
-                        <div class="code-actions">
-                            <button class="code-action-btn" onclick="copyCode('transform')" id="copyTransformBtn">
-                                <i class="fas fa-copy"></i> Copy
-                            </button>
-                            <button class="code-action-btn" onclick="downloadCode('transform')">
-                                <i class="fas fa-download"></i> Download
-                            </button>
-                        </div>
-                    </div>
-                    <div class="code-block">
-                        <pre id="transformCode"></pre>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Trainer Code Tab -->
-            <div class="code-viewer-content" id="trainerCodeContent">
-                <div id="trainerValidationError" class="validation-error-banner" style="display: none;">
-                    <i class="fas fa-exclamation-triangle"></i>
-                    <div class="error-text">
-                        <span id="trainerErrorMsg"></span>
-                        <span id="trainerErrorLine" class="error-line"></span>
-                    </div>
-                </div>
-                <div class="code-container">
-                    <div class="code-header">
-                        <span class="code-filename">trainer_module.py</span>
-                        <span id="trainerValidationBadge" class="validation-badge checking">
-                            <i class="fas fa-spinner fa-spin"></i> Checking
-                        </span>
-                        <div class="code-actions">
-                            <button class="code-action-btn" onclick="copyCode('trainer')" id="copyTrainerBtn">
-                                <i class="fas fa-copy"></i> Copy
-                            </button>
-                            <button class="code-action-btn" onclick="downloadCode('trainer')">
-                                <i class="fas fa-download"></i> Download
-                            </button>
-                        </div>
-                    </div>
-                    <div class="code-block">
-                        <pre id="trainerCode"></pre>
-                    </div>
+                <div class="code-block">
+                    <pre id="transformCode"></pre>
                 </div>
             </div>
         </div>
         <div class="modal-footer-wizard-neu">
             <div class="footer-left">
-                <span class="text-sm text-gray-500" id="codeViewerConfigName"></span>
+                <span class="text-sm text-gray-500" id="transformCodeConfigName"></span>
             </div>
             <div class="footer-right">
-                <button type="button" class="btn-neu btn-neu-action btn-neu-secondary" onclick="closeCodeViewer()">
+                <button type="button" class="btn-neu btn-neu-action btn-neu-secondary" onclick="closeTransformCodeViewer()">
+                    <span class="btn-neu-inner">Close</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Trainer Code Viewer Modal -->
+<div id="trainerCodeViewerModal" class="modal-overlay hidden">
+    <div class="modal-container" style="max-width: 900px;">
+        <div class="modal-header">
+            <div class="modal-header-icon" style="background: linear-gradient(135deg, #8b5cf6 0%, #a78bfa 100%);">
+                <i class="fas fa-brain"></i>
+            </div>
+            <h3 class="modal-header-title">Trainer Code</h3>
+            <button type="button" class="modal-close-btn" onclick="closeTrainerCodeViewer()">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="modal-body" style="max-height: 75vh; overflow-y: auto;">
+            <!-- Meta info -->
+            <div class="code-meta">
+                <div class="code-meta-item">
+                    <i class="fas fa-clock"></i>
+                    <span id="trainerCodeGeneratedAt">-</span>
+                </div>
+                <div class="code-meta-item">
+                    <i class="fas fa-sync-alt"></i>
+                    <button onclick="regenerateTrainerCode()" class="text-blue-600 hover:text-blue-800 font-medium">
+                        Regenerate
+                    </button>
+                </div>
+            </div>
+
+            <!-- Trainer Code Content -->
+            <div id="trainerValidationError" class="validation-error-banner" style="display: none;">
+                <i class="fas fa-exclamation-triangle"></i>
+                <div class="error-text">
+                    <span id="trainerErrorMsg"></span>
+                    <span id="trainerErrorLine" class="error-line"></span>
+                </div>
+            </div>
+            <div class="code-container">
+                <div class="code-header">
+                    <span class="code-filename">trainer_module.py</span>
+                    <span id="trainerValidationBadge" class="validation-badge checking">
+                        <i class="fas fa-spinner fa-spin"></i> Checking
+                    </span>
+                    <span class="tab-badge" id="trainerLineCount">-</span>
+                    <div class="code-actions">
+                        <button class="code-action-btn" onclick="copyCode('trainer')" id="copyTrainerBtn">
+                            <i class="fas fa-copy"></i> Copy
+                        </button>
+                        <button class="code-action-btn" onclick="downloadCode('trainer')">
+                            <i class="fas fa-download"></i> Download
+                        </button>
+                    </div>
+                </div>
+                <div class="code-block">
+                    <pre id="trainerCode"></pre>
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer-wizard-neu">
+            <div class="footer-left">
+                <span class="text-sm text-gray-500" id="trainerCodeConfigName"></span>
+            </div>
+            <div class="footer-right">
+                <button type="button" class="btn-neu btn-neu-action btn-neu-secondary" onclick="closeTrainerCodeViewer()">
                     <span class="btn-neu-inner">Close</span>
                 </button>
             </div>
@@ -1595,6 +1745,7 @@ let allDatasets = [];
 let currentStep = 1;
 let editingConfigId = null;
 let searchTimeout = null;
+let isLoadingConfigForEdit = false;
 
 // Current feature config state
 let configState = {
@@ -1816,11 +1967,8 @@ function createConfigCard(config) {
             <button onclick="cloneConfig(${config.id})" class="btn btn-secondary btn-xs">
                 <i class="fas fa-copy mr-1"></i>Clone
             </button>
-            <button onclick="viewGeneratedCode(${config.id}, '${escapeHtml(config.name)}')" class="btn btn-secondary btn-xs" title="View generated TFX code">
-                <i class="fas fa-code mr-1"></i>Code
-            </button>
-            <button onclick="openQuickTestDialog(${config.id}, '${escapeHtml(config.name)}')" class="btn btn-primary btn-xs" title="Run Quick Test on Vertex AI" ${config.generated_transform_code ? '' : 'disabled'}>
-                <i class="fas fa-play mr-1"></i>Test
+            <button onclick="viewTransformCode(${config.id}, '${escapeHtml(config.name)}')" class="btn btn-secondary btn-xs" title="View Transform code (preprocessing_fn)">
+                <i class="fas fa-random mr-1"></i>Transform
             </button>
             <button onclick="deleteConfig(${config.id}, '${escapeHtml(config.name)}')" class="btn btn-secondary btn-xs text-red-600 hover:bg-red-50">
                 <i class="fas fa-trash mr-1"></i>Delete
@@ -1884,6 +2032,9 @@ function closeWizard() {
 }
 
 function loadConfigForEdit(configId) {
+    isLoadingConfigForEdit = true;
+    updateEditLoadingState();
+
     fetch(`/api/feature-configs/${configId}/`)
         .then(r => r.json())
         .then(data => {
@@ -1924,7 +2075,24 @@ function loadConfigForEdit(configId) {
 
                 onDatasetChange();
             }
+        })
+        .finally(() => {
+            isLoadingConfigForEdit = false;
+            updateEditLoadingState();
         });
+}
+
+function updateEditLoadingState() {
+    const loadingOverlay = document.getElementById('wizardStep1Loading');
+    const nextBtn = document.getElementById('nextBtn');
+
+    if (loadingOverlay) {
+        loadingOverlay.style.display = isLoadingConfigForEdit ? 'flex' : 'none';
+    }
+    if (nextBtn) {
+        nextBtn.disabled = isLoadingConfigForEdit;
+        nextBtn.style.opacity = isLoadingConfigForEdit ? '0.5' : '1';
+    }
 }
 
 function updateWizardStep() {
@@ -1957,6 +2125,11 @@ function updateWizardStep() {
 }
 
 function nextStep() {
+    // Block navigation while loading config data
+    if (isLoadingConfigForEdit) {
+        return;
+    }
+
     if (currentStep === 1) {
         // Validate step 1
         const name = document.getElementById('configName').value.trim();
@@ -2065,12 +2238,12 @@ function loadColumnsForStep2() {
                 }
             } else {
                 console.error('Failed to load schema:', data.error);
-                showToast('Failed to load column schema', 'error');
+                showError('Failed to load column schema');
             }
         })
         .catch(err => {
             console.error('Error loading schema:', err);
-            showToast('Error loading column schema', 'error');
+            showError('Error loading column schema');
         });
 }
 
@@ -3722,83 +3895,200 @@ function closeViewModal() {
 let currentCodeViewerConfigId = null;
 let currentCodeData = { transform: '', trainer: '' };
 
-function viewGeneratedCode(configId, configName) {
+// Transform Code Viewer
+function viewTransformCode(configId, configName) {
     currentCodeViewerConfigId = configId;
-    document.getElementById('codeViewerTitle').textContent = `Generated TFX Code`;
-    document.getElementById('codeViewerConfigName').textContent = configName;
-
-    // Reset tabs
-    switchCodeTab('transform');
+    document.getElementById('transformCodeConfigName').textContent = configName;
 
     // Clear previous content
     document.getElementById('transformCode').textContent = 'Loading...';
-    document.getElementById('trainerCode').textContent = 'Loading...';
     document.getElementById('transformLineCount').textContent = '-';
-    document.getElementById('trainerLineCount').textContent = '-';
-    document.getElementById('codeGeneratedAt').textContent = 'Loading...';
+    document.getElementById('transformCodeGeneratedAt').textContent = 'Loading...';
 
-    // Reset validation badges to checking state
+    // Reset validation badge
     updateValidationBadge('transform', 'checking');
-    updateValidationBadge('trainer', 'checking');
 
     // Show modal
-    document.getElementById('codeViewerModal').classList.remove('hidden');
+    document.getElementById('transformCodeViewerModal').classList.remove('hidden');
 
-    // Fetch both transform and trainer code
-    Promise.all([
-        fetch(`/api/feature-configs/${configId}/generated-code/?type=transform`).then(r => r.json()),
-        fetch(`/api/feature-configs/${configId}/generated-code/?type=trainer`).then(r => r.json())
-    ])
-    .then(([transformData, trainerData]) => {
-        // Handle Transform code
-        if (transformData.success && transformData.data.code) {
-            currentCodeData.transform = transformData.data.code;
-            const highlighted = highlightPython(transformData.data.code);
-            document.getElementById('transformCode').innerHTML = highlighted;
-            const lineCount = transformData.data.code.split('\n').length;
-            document.getElementById('transformLineCount').textContent = `${lineCount} lines`;
-            // Update validation status
-            updateValidationBadge('transform', transformData.data.is_valid ? 'valid' : 'invalid',
-                                  transformData.data.validation_error, transformData.data.error_line);
-        } else {
-            currentCodeData.transform = '';
-            document.getElementById('transformCode').innerHTML = '<span class="comment"># No transform code generated yet</span>';
-            document.getElementById('transformLineCount').textContent = '0';
-            updateValidationBadge('transform', 'valid'); // No code = no errors
-        }
+    // Fetch transform code
+    fetch(`/api/feature-configs/${configId}/generated-code/?type=transform`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.success && data.data.code) {
+                currentCodeData.transform = data.data.code;
+                const highlighted = highlightPython(data.data.code);
+                document.getElementById('transformCode').innerHTML = highlighted;
+                const lineCount = data.data.code.split('\n').length;
+                document.getElementById('transformLineCount').textContent = `${lineCount} lines`;
+                updateValidationBadge('transform', data.data.is_valid ? 'valid' : 'invalid',
+                                      data.data.validation_error, data.data.error_line);
+            } else {
+                currentCodeData.transform = '';
+                document.getElementById('transformCode').innerHTML = '<span class="comment"># No transform code generated yet</span>';
+                document.getElementById('transformLineCount').textContent = '0';
+                updateValidationBadge('transform', 'valid');
+            }
 
-        // Handle Trainer code
-        if (trainerData.success && trainerData.data.code) {
-            currentCodeData.trainer = trainerData.data.code;
-            const highlighted = highlightPython(trainerData.data.code);
-            document.getElementById('trainerCode').innerHTML = highlighted;
-            const lineCount = trainerData.data.code.split('\n').length;
-            document.getElementById('trainerLineCount').textContent = `${lineCount} lines`;
-            // Update validation status
-            updateValidationBadge('trainer', trainerData.data.is_valid ? 'valid' : 'invalid',
-                                  trainerData.data.validation_error, trainerData.data.error_line);
-        } else {
-            currentCodeData.trainer = '';
-            document.getElementById('trainerCode').innerHTML = '<span class="comment"># No trainer code generated yet</span>';
-            document.getElementById('trainerLineCount').textContent = '0';
-            updateValidationBadge('trainer', 'valid'); // No code = no errors
-        }
+            if (data.data?.generated_at) {
+                document.getElementById('transformCodeGeneratedAt').textContent = `Generated ${formatTimeAgo(data.data.generated_at)}`;
+            } else {
+                document.getElementById('transformCodeGeneratedAt').textContent = 'Not generated';
+            }
+        })
+        .catch(err => {
+            console.error('Error fetching transform code:', err);
+            document.getElementById('transformCode').innerHTML = '<span class="comment"># Error loading code</span>';
+            updateValidationBadge('transform', 'invalid', 'Failed to load code');
+        });
+}
 
-        // Update generated timestamp
-        const timestamp = transformData.data?.generated_at || trainerData.data?.generated_at;
-        if (timestamp) {
-            document.getElementById('codeGeneratedAt').textContent = `Generated ${formatTimeAgo(timestamp)}`;
+function closeTransformCodeViewer() {
+    document.getElementById('transformCodeViewerModal').classList.add('hidden');
+}
+
+function regenerateTransformCode() {
+    if (!currentCodeViewerConfigId) return;
+
+    const configName = document.getElementById('transformCodeConfigName').textContent;
+
+    // Show loading state
+    document.getElementById('transformCode').textContent = 'Regenerating...';
+    updateValidationBadge('transform', 'checking');
+
+    fetch(`/api/feature-configs/${currentCodeViewerConfigId}/regenerate-code/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrftoken
+        },
+        body: JSON.stringify({ type: 'transform' })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            viewTransformCode(currentCodeViewerConfigId, configName);
+            showSuccess('Transform code regenerated');
         } else {
-            document.getElementById('codeGeneratedAt').textContent = 'Not generated';
+            showError(data.error || 'Failed to regenerate code');
         }
     })
     .catch(err => {
-        console.error('Error fetching code:', err);
-        document.getElementById('transformCode').innerHTML = '<span class="comment"># Error loading code</span>';
-        document.getElementById('trainerCode').innerHTML = '<span class="comment"># Error loading code</span>';
-        updateValidationBadge('transform', 'invalid', 'Failed to load code');
-        updateValidationBadge('trainer', 'invalid', 'Failed to load code');
+        console.error('Error regenerating code:', err);
+        showError('Failed to regenerate code');
     });
+}
+
+// Trainer Code Viewer
+function viewTrainerCode(configId, configName) {
+    currentCodeViewerConfigId = configId;
+    document.getElementById('trainerCodeConfigName').textContent = configName;
+
+    // Clear previous content
+    document.getElementById('trainerCode').textContent = 'Loading...';
+    document.getElementById('trainerLineCount').textContent = '-';
+    document.getElementById('trainerCodeGeneratedAt').textContent = 'Loading...';
+
+    // Reset validation badge
+    updateValidationBadge('trainer', 'checking');
+
+    // Show modal
+    document.getElementById('trainerCodeViewerModal').classList.remove('hidden');
+
+    // Fetch trainer code
+    fetch(`/api/feature-configs/${configId}/generated-code/?type=trainer`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.success && data.data.code) {
+                currentCodeData.trainer = data.data.code;
+                const highlighted = highlightPython(data.data.code);
+                document.getElementById('trainerCode').innerHTML = highlighted;
+                const lineCount = data.data.code.split('\n').length;
+                document.getElementById('trainerLineCount').textContent = `${lineCount} lines`;
+                updateValidationBadge('trainer', data.data.is_valid ? 'valid' : 'invalid',
+                                      data.data.validation_error, data.data.error_line);
+            } else {
+                currentCodeData.trainer = '';
+                document.getElementById('trainerCode').innerHTML = '<span class="comment"># No trainer code generated yet</span>';
+                document.getElementById('trainerLineCount').textContent = '0';
+                updateValidationBadge('trainer', 'valid');
+            }
+
+            if (data.data?.generated_at) {
+                document.getElementById('trainerCodeGeneratedAt').textContent = `Generated ${formatTimeAgo(data.data.generated_at)}`;
+            } else {
+                document.getElementById('trainerCodeGeneratedAt').textContent = 'Not generated';
+            }
+        })
+        .catch(err => {
+            console.error('Error fetching trainer code:', err);
+            document.getElementById('trainerCode').innerHTML = '<span class="comment"># Error loading code</span>';
+            updateValidationBadge('trainer', 'invalid', 'Failed to load code');
+        });
+}
+
+function closeTrainerCodeViewer() {
+    document.getElementById('trainerCodeViewerModal').classList.add('hidden');
+}
+
+function regenerateTrainerCode() {
+    if (!currentCodeViewerConfigId) return;
+
+    const configName = document.getElementById('trainerCodeConfigName').textContent;
+
+    // Show loading state
+    document.getElementById('trainerCode').textContent = 'Regenerating...';
+    updateValidationBadge('trainer', 'checking');
+
+    fetch(`/api/feature-configs/${currentCodeViewerConfigId}/regenerate-code/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrftoken
+        },
+        body: JSON.stringify({ type: 'trainer' })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            viewTrainerCode(currentCodeViewerConfigId, configName);
+            showSuccess('Trainer code regenerated');
+        } else {
+            showError(data.error || 'Failed to regenerate code');
+        }
+    })
+    .catch(err => {
+        console.error('Error regenerating code:', err);
+        showError('Failed to regenerate code');
+    });
+}
+
+// Trainer Code Selector (for Model Structure chapter)
+function openTrainerCodeSelector() {
+    // If no configs exist, show message
+    if (!allConfigs || allConfigs.length === 0) {
+        showError('No feature configs available. Create a feature config first.');
+        return;
+    }
+
+    // If only one config, open it directly
+    if (allConfigs.length === 1) {
+        viewTrainerCode(allConfigs[0].id, allConfigs[0].name);
+        return;
+    }
+
+    // Multiple configs - show selection dropdown
+    const configOptions = allConfigs.map(c => `${c.name}`).join('\n');
+    const selectedName = prompt(`Select a Feature Config to view Trainer code:\n\n${allConfigs.map((c, i) => `${i + 1}. ${c.name}`).join('\n')}\n\nEnter number:`);
+
+    if (selectedName) {
+        const index = parseInt(selectedName) - 1;
+        if (index >= 0 && index < allConfigs.length) {
+            viewTrainerCode(allConfigs[index].id, allConfigs[index].name);
+        } else {
+            showError('Invalid selection');
+        }
+    }
 }
 
 function updateValidationBadge(codeType, status, errorMsg = null, errorLine = null) {
@@ -3827,23 +4117,6 @@ function updateValidationBadge(codeType, status, errorMsg = null, errorLine = nu
         badge.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Checking';
         errorBanner.style.display = 'none';
     }
-}
-
-function closeCodeViewer() {
-    document.getElementById('codeViewerModal').classList.add('hidden');
-    currentCodeViewerConfigId = null;
-    currentCodeData = { transform: '', trainer: '' };
-}
-
-function switchCodeTab(tab) {
-    // Update tabs
-    document.querySelectorAll('.code-viewer-tab').forEach(t => {
-        t.classList.toggle('active', t.dataset.tab === tab);
-    });
-
-    // Update content
-    document.getElementById('transformCodeContent').classList.toggle('active', tab === 'transform');
-    document.getElementById('trainerCodeContent').classList.toggle('active', tab === 'trainer');
 }
 
 function highlightPython(code) {
@@ -3964,47 +4237,6 @@ function downloadCode(type) {
     URL.revokeObjectURL(url);
 }
 
-function regenerateCode() {
-    if (!currentCodeViewerConfigId) return;
-
-    const btn = document.getElementById('regenerateBtn');
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Regenerating...';
-    btn.disabled = true;
-
-    // Reset validation badges while regenerating
-    updateValidationBadge('transform', 'checking');
-    updateValidationBadge('trainer', 'checking');
-
-    fetch(`/api/feature-configs/${currentCodeViewerConfigId}/regenerate-code/`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': csrftoken
-        },
-        body: JSON.stringify({ type: 'all' })
-    })
-    .then(r => r.json())
-    .then(data => {
-        btn.innerHTML = 'Regenerate Code';
-        btn.disabled = false;
-
-        if (data.success) {
-            // Reload the code
-            const configName = document.getElementById('codeViewerConfigName').textContent;
-            viewGeneratedCode(currentCodeViewerConfigId, configName);
-            showSuccess('Code regenerated successfully');
-        } else {
-            showError(data.error || 'Failed to regenerate code');
-        }
-    })
-    .catch(err => {
-        console.error('Error regenerating code:', err);
-        btn.innerHTML = 'Regenerate Code';
-        btn.disabled = false;
-        showError('Failed to regenerate code');
-    });
-}
-
 function editConfig(configId) {
     openWizard(configId);
 }
@@ -4108,6 +4340,41 @@ let currentQuickTestId = null;
 let currentQuickTestConfigId = null;
 let currentQuickTestConfigName = '';
 let quickTestPollInterval = null;
+
+// Quick Test Selector (for Quick Test chapter)
+function openQuickTestSelector() {
+    // If no configs exist, show message
+    if (!allConfigs || allConfigs.length === 0) {
+        showError('No feature configs available. Create a feature config first.');
+        return;
+    }
+
+    // Filter configs that have generated transform code
+    const readyConfigs = allConfigs.filter(c => c.generated_transform_code);
+
+    if (readyConfigs.length === 0) {
+        showError('No feature configs with generated code. Generate Transform code first.');
+        return;
+    }
+
+    // If only one ready config, open it directly
+    if (readyConfigs.length === 1) {
+        openQuickTestDialog(readyConfigs[0].id, readyConfigs[0].name);
+        return;
+    }
+
+    // Multiple configs - show selection
+    const selectedName = prompt(`Select a Feature Config for Quick Test:\n\n${readyConfigs.map((c, i) => `${i + 1}. ${c.name}`).join('\n')}\n\nEnter number:`);
+
+    if (selectedName) {
+        const index = parseInt(selectedName) - 1;
+        if (index >= 0 && index < readyConfigs.length) {
+            openQuickTestDialog(readyConfigs[index].id, readyConfigs[index].name);
+        } else {
+            showError('Invalid selection');
+        }
+    }
+}
 
 function openQuickTestDialog(configId, configName) {
     currentQuickTestConfigId = configId;

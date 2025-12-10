@@ -204,7 +204,7 @@ class PipelineService:
         # Generate the SQL query from dataset configuration
         # This uses the existing BigQueryService that handles joins, filters, etc.
         from ml_platform.datasets.services import BigQueryService
-        bq_service = BigQueryService(dataset.model_endpoint)
+        bq_service = BigQueryService(dataset.model_endpoint, dataset=dataset)
         query_sql = bq_service.generate_query(dataset)
 
         return {

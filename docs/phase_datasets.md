@@ -40,6 +40,7 @@ Dataset (Django Model)
 ├── Tables: primary_table, secondary_tables
 ├── Schema: selected_columns, join_config, column_mapping
 ├── Filters: date_filter, customer_filter, product_filter
+├── BigQuery: bq_location (region where BQ dataset exists, e.g., 'US', 'EU')
 ├── Cached: row_count_estimate, summary_snapshot (not versioned)
 └── NO split_config (handled by Training domain)
 
@@ -1172,6 +1173,17 @@ class Dataset(models.Model):
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True)
     ml_model = models.ForeignKey('MLModel', on_delete=models.CASCADE, related_name='datasets')
+
+    # BigQuery location
+    # IMPORTANT: BigQuery datasets are region-locked. Queries must be executed
+    # in the same region where the data resides. This field stores the region
+    # detected when the dataset is first created, ensuring all subsequent
+    # queries use the correct location.
+    bq_location = models.CharField(
+        max_length=50,
+        default='US',
+        help_text="BigQuery region where the dataset exists (e.g., 'US', 'EU', 'europe-central2')"
+    )
 
     # Status
     STATUS_CHOICES = [

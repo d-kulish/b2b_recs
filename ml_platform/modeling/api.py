@@ -747,7 +747,7 @@ def get_schema_with_sample(request, dataset_id):
         from ml_platform.datasets.services import BigQueryService
 
         dataset = get_object_or_404(Dataset, id=dataset_id)
-        bq_service = BigQueryService(dataset.model_endpoint)
+        bq_service = BigQueryService(dataset.model_endpoint, dataset=dataset)
 
         # Generate the dataset query
         base_query = bq_service.generate_query(dataset)

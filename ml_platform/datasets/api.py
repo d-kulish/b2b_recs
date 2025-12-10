@@ -265,6 +265,15 @@ def create_dataset(request, model_id):
                 'errors': errors,
             }, status=400)
 
+        # Detect BigQuery dataset location
+        # This is important because BQ datasets are region-locked
+        try:
+            bq_service = BigQueryService(model)
+            bq_location = bq_service.get_dataset_location()
+        except Exception as e:
+            logger.warning(f"Could not detect BQ location, defaulting to US: {e}")
+            bq_location = 'US'
+
         # Create dataset (split_config removed - handled by Training domain)
         dataset = Dataset.objects.create(
             model_endpoint=model,
@@ -277,6 +286,7 @@ def create_dataset(request, model_id):
             column_mapping=data.get('column_mapping', {}),
             filters=data.get('filters', {}),
             summary_snapshot=data.get('summary_snapshot', {}),
+            bq_location=bq_location,
             created_by=request.user,
         )
 
@@ -826,7 +836,7 @@ def validate_query(request, dataset_id):
     """
     try:
         dataset = get_object_or_404(Dataset, id=dataset_id)
-        bq_service = BigQueryService(dataset.model_endpoint)
+        bq_service = BigQueryService(dataset.model_endpoint, dataset=dataset)
 
         query = bq_service.generate_query(dataset)
         validation = bq_service.validate_query(query)
@@ -858,7 +868,7 @@ def preview_dataset(request, dataset_id):
     """
     try:
         dataset = get_object_or_404(Dataset, id=dataset_id)
-        bq_service = BigQueryService(dataset.model_endpoint)
+        bq_service = BigQueryService(dataset.model_endpoint, dataset=dataset)
 
         limit = min(int(request.GET.get('limit', 100)), 1000)
         output_format = request.GET.get('format', 'table')
@@ -904,7 +914,7 @@ def get_generated_query(request, dataset_id):
     """
     try:
         dataset = get_object_or_404(Dataset, id=dataset_id)
-        bq_service = BigQueryService(dataset.model_endpoint)
+        bq_service = BigQueryService(dataset.model_endpoint, dataset=dataset)
 
         for_analysis = request.GET.get('for_analysis', 'false').lower() == 'true'
 
@@ -940,7 +950,7 @@ def get_dataset_query(request, dataset_id):
     """
     try:
         dataset = get_object_or_404(Dataset, id=dataset_id)
-        bq_service = BigQueryService(dataset.model_endpoint)
+        bq_service = BigQueryService(dataset.model_endpoint, dataset=dataset)
 
         for_analysis = request.GET.get('for_analysis', 'true').lower() == 'true'
 
@@ -973,7 +983,7 @@ def get_tfx_queries(request, dataset_id):
     """
     try:
         dataset = get_object_or_404(Dataset, id=dataset_id)
-        bq_service = BigQueryService(dataset.model_endpoint)
+        bq_service = BigQueryService(dataset.model_endpoint, dataset=dataset)
 
         tfx_config = bq_service.generate_tfx_queries(dataset)
 

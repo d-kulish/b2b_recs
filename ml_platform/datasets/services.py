@@ -63,20 +63,29 @@ class BigQueryService:
     Service class for BigQuery operations related to datasets.
     """
 
-    def __init__(self, model_endpoint):
+    def __init__(self, model_endpoint, dataset=None):
         """
         Initialize BigQuery service for a model endpoint.
 
         Args:
             model_endpoint: ModelEndpoint instance
+            dataset: Optional Dataset instance. If provided, uses the dataset's
+                     bq_location for BigQuery operations. This is important because
+                     BigQuery datasets are region-locked and queries must be executed
+                     in the same region where the data resides.
         """
         self.model_endpoint = model_endpoint
+        self.dataset = dataset
         self.project_id = model_endpoint.gcp_project_id or getattr(
             settings, 'GCP_PROJECT_ID', os.getenv('GCP_PROJECT_ID')
         )
-        self.location = getattr(
-            settings, 'GCP_LOCATION', os.getenv('GCP_LOCATION', 'europe-central2')
-        )
+        # Use dataset's bq_location if available, otherwise fall back to global config
+        if dataset and hasattr(dataset, 'bq_location') and dataset.bq_location:
+            self.location = dataset.bq_location
+        else:
+            self.location = getattr(
+                settings, 'GCP_LOCATION', os.getenv('GCP_LOCATION', 'US')
+            )
         self.dataset_name = 'raw_data'  # Only allow raw_data.* tables
         self._client = None
 
@@ -132,6 +141,33 @@ class BigQueryService:
         """
         normalized = self._normalize_table_name(table_name)
         return f"{self.project_id}.{normalized}"
+
+    def get_dataset_location(self):
+        """
+        Get the location (region) of the BigQuery dataset.
+
+        BigQuery datasets are region-locked and queries must be executed in
+        the same region where the data resides. This method detects the
+        actual location of the raw_data dataset.
+
+        Returns:
+            str: Dataset location (e.g., 'US', 'EU', 'europe-central2')
+
+        Raises:
+            BigQueryServiceError: If unable to get dataset location
+        """
+        try:
+            from google.cloud import bigquery
+            # Use a simple client without location to query dataset metadata
+            client = bigquery.Client(project=self.project_id)
+            dataset_ref = f"{self.project_id}.{self.dataset_name}"
+            dataset = client.get_dataset(dataset_ref)
+            location = dataset.location
+            logger.info(f"Detected BigQuery dataset location: {location}")
+            return location
+        except Exception as e:
+            logger.error(f"Error getting dataset location: {e}")
+            raise BigQueryServiceError(f"Failed to get dataset location: {e}")
 
     # =========================================================================
     # TABLE DISCOVERY

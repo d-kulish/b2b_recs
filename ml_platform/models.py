@@ -937,6 +937,17 @@ class Dataset(models.Model):
         help_text="The model this dataset belongs to"
     )
 
+    # BigQuery location
+    # IMPORTANT: BigQuery datasets are region-locked. Queries must be executed
+    # in the same region where the data resides. This field stores the region
+    # detected when the dataset is first created, ensuring all subsequent
+    # queries use the correct location.
+    bq_location = models.CharField(
+        max_length=50,
+        default='US',
+        help_text="BigQuery region where the dataset exists (e.g., 'US', 'EU', 'europe-central2')"
+    )
+
     # Source tables configuration
     # Primary table (required) - typically transactions
     primary_table = models.CharField(

@@ -89,7 +89,7 @@ This platform enables businesses to:
 - 🗼 **Tower Builder:** Visual layer configuration for Buyer (Query) and Product (Candidate) towers
 - 📊 **Layer Types:** Dense, Dropout, Batch Normalization with configurable parameters
 - 🎯 **5 Presets:** Minimal (64→32), Standard (128→64→32), Deep (256→128→64→32), Asymmetric, Regularized
-- ⚙️ **Training Hyperparameters:** Optimizer (Adagrad/Adam/SGD), learning rate, batch size, epochs
+- ⚙️ **Training Hyperparameters:** Optimizer (Adagrad/Adam/SGD/RMSprop/AdamW/FTRL), learning rate with auto-suggest, batch size
 - 🔄 **Model Types:** Retrieval (Phase 1), Ranking (Phase 2), Multitask (Phase 3)
 - 📋 **CRUD Operations:** Create, view, edit, clone, delete model configs
 - 🔍 **Retrieval Algorithms:** Brute Force (default) or ScaNN for large catalogs (10K+ products)
@@ -360,7 +360,9 @@ WHERE source_type='gcs';
 - ✅ **5 Presets** - Minimal, Standard, Deep, Asymmetric, Regularized
 - ✅ **3-step Wizard** - Basic Info → Architecture → Training
 - ✅ **Layer Types** - Dense, Dropout, Batch Normalization
-- ✅ **Training Params** - Optimizer (Adagrad/Adam/SGD), learning rate, batch size, epochs
+- ✅ **Training Params** - 6 optimizers (Adagrad/Adam/SGD/RMSprop/AdamW/FTRL), learning rate with auto-suggest, batch size
+- ✅ **Step 3 Card-Based UI** - Two-panel layout (Optimizer + Hyperparameters) with LR preset buttons
+- ✅ **Epochs Removed** - Now set per experiment/training run for flexibility
 - ✅ **Retrieval Algorithms** - Brute Force (default) or ScaNN for 10K+ product catalogs
 - ✅ **Layer Drag-Drop Reordering** - Layers movable within towers (output layer locked)
 - ✅ **Keras-style Model Summary** - Total/Trainable/Non-trainable params per tower

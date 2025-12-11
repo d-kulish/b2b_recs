@@ -1608,6 +1608,220 @@
         box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
     }
 
+    /* Training Step Card-based Layout */
+    .training-step-container {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+    }
+    .training-panel {
+        border: 2px dashed #e5e7eb;
+        border-radius: 12px;
+        overflow: hidden;
+        transition: all 0.3s ease;
+        display: flex;
+        flex-direction: column;
+    }
+    .training-panel.optimizer {
+        border-color: #8b5cf6;
+        background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%);
+    }
+    .training-panel.hyperparams {
+        border-color: #f59e0b;
+        background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+    }
+    .training-panel-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 14px 16px;
+        border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+    }
+    .training-panel-title {
+        font-weight: 600;
+        font-size: 14px;
+        color: #374151;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .training-panel-title .panel-icon {
+        width: 28px;
+        height: 28px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        color: white;
+    }
+    .training-panel.optimizer .panel-icon {
+        background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+        box-shadow: 0 2px 4px rgba(139, 92, 246, 0.3);
+    }
+    .training-panel.hyperparams .panel-icon {
+        background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+        box-shadow: 0 2px 4px rgba(245, 158, 11, 0.3);
+    }
+    .training-panel-body {
+        padding: 16px;
+        flex: 1;
+    }
+    .optimizer-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+    }
+    .optimizer-option {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 14px;
+        background: white;
+        border: 2px solid transparent;
+        border-radius: 10px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        min-height: 72px;
+    }
+    .optimizer-option:hover {
+        border-color: rgba(139, 92, 246, 0.3);
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+    }
+    .optimizer-option.selected {
+        border-color: #8b5cf6;
+        background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%);
+        box-shadow: 0 2px 8px rgba(139, 92, 246, 0.2);
+    }
+    .optimizer-option input[type="radio"] {
+        display: none;
+    }
+    .optimizer-radio {
+        width: 18px;
+        height: 18px;
+        border: 2px solid #d1d5db;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s ease;
+        flex-shrink: 0;
+    }
+    .optimizer-option.selected .optimizer-radio {
+        border-color: #8b5cf6;
+        background: #8b5cf6;
+    }
+    .optimizer-radio::after {
+        content: '';
+        width: 6px;
+        height: 6px;
+        background: white;
+        border-radius: 50%;
+        opacity: 0;
+        transition: opacity 0.2s ease;
+    }
+    .optimizer-option.selected .optimizer-radio::after {
+        opacity: 1;
+    }
+    .optimizer-info {
+        flex: 1;
+        min-width: 0;
+    }
+    .optimizer-name {
+        font-weight: 600;
+        font-size: 13px;
+        color: #374151;
+    }
+    .optimizer-desc {
+        font-size: 11px;
+        color: #6b7280;
+        margin-top: 2px;
+    }
+    .optimizer-badge {
+        font-size: 9px;
+        font-weight: 600;
+        padding: 2px 6px;
+        border-radius: 4px;
+        background: #10b981;
+        color: white;
+        text-transform: uppercase;
+        flex-shrink: 0;
+    }
+    .hyperparam-item {
+        background: white;
+        border: 1px solid rgba(0, 0, 0, 0.08);
+        border-radius: 10px;
+        padding: 14px;
+        margin-bottom: 12px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+    }
+    .hyperparam-item:last-child {
+        margin-bottom: 0;
+    }
+    .hyperparam-label {
+        font-size: 12px;
+        font-weight: 600;
+        color: #374151;
+        margin-bottom: 8px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .hyperparam-label i {
+        color: #f59e0b;
+        font-size: 11px;
+    }
+    .hyperparam-input-wrapper {
+        position: relative;
+    }
+    .hyperparam-input {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        font-size: 14px;
+        transition: all 0.2s ease;
+    }
+    .hyperparam-input:focus {
+        outline: none;
+        border-color: #f59e0b;
+        box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.1);
+    }
+    .hyperparam-hint {
+        font-size: 11px;
+        color: #9ca3af;
+        margin-top: 6px;
+    }
+    .lr-presets {
+        display: flex;
+        justify-content: center;
+        gap: 8px;
+        margin-top: 8px;
+    }
+    .lr-preset-btn {
+        padding: 6px 0;
+        width: 56px;
+        font-size: 11px;
+        font-weight: 500;
+        border: 1px solid #e5e7eb;
+        border-radius: 6px;
+        background: white;
+        color: #6b7280;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        text-align: center;
+    }
+    .lr-preset-btn:hover {
+        border-color: #f59e0b;
+        color: #f59e0b;
+    }
+    .lr-preset-btn.active {
+        background: #f59e0b;
+        border-color: #f59e0b;
+        color: white;
+    }
+
     /* Fix for progress bar - ensure last pill has rounded right border */
     .progress-step-pill:last-child {
         border-top-right-radius: 24px;
@@ -1955,39 +2169,125 @@
 
             <!-- Step 3: Training Parameters -->
             <div id="mcStep3" class="wizard-step">
-                <div class="training-params-grid">
-                    <div class="training-param-group">
-                        <label class="training-param-label">Optimizer</label>
-                        <select id="mcOptimizer" class="training-param-input">
-                            <option value="adagrad" selected>Adagrad (recommended)</option>
-                            <option value="adam">Adam</option>
-                            <option value="sgd">SGD</option>
-                        </select>
+                <div class="training-step-container">
+                    <!-- Optimizer Panel -->
+                    <div class="training-panel optimizer">
+                        <div class="training-panel-header">
+                            <div class="training-panel-title">
+                                <div class="panel-icon">
+                                    <i class="fas fa-cogs"></i>
+                                </div>
+                                Optimizer
+                            </div>
+                        </div>
+                        <div class="training-panel-body">
+                            <div class="optimizer-grid">
+                                <label class="optimizer-option selected" onclick="selectOptimizer('adagrad')">
+                                    <input type="radio" name="mcOptimizer" value="adagrad" checked>
+                                    <div class="optimizer-radio"></div>
+                                    <div class="optimizer-info">
+                                        <div class="optimizer-name">Adagrad</div>
+                                        <div class="optimizer-desc">Best for sparse embeddings</div>
+                                    </div>
+                                    <span class="optimizer-badge">Recommended</span>
+                                </label>
+                                <label class="optimizer-option" onclick="selectOptimizer('adam')">
+                                    <input type="radio" name="mcOptimizer" value="adam">
+                                    <div class="optimizer-radio"></div>
+                                    <div class="optimizer-info">
+                                        <div class="optimizer-name">Adam</div>
+                                        <div class="optimizer-desc">Adaptive moments</div>
+                                    </div>
+                                </label>
+                                <label class="optimizer-option" onclick="selectOptimizer('sgd')">
+                                    <input type="radio" name="mcOptimizer" value="sgd">
+                                    <div class="optimizer-radio"></div>
+                                    <div class="optimizer-info">
+                                        <div class="optimizer-name">SGD</div>
+                                        <div class="optimizer-desc">Classic gradient descent</div>
+                                    </div>
+                                </label>
+                                <label class="optimizer-option" onclick="selectOptimizer('rmsprop')">
+                                    <input type="radio" name="mcOptimizer" value="rmsprop">
+                                    <div class="optimizer-radio"></div>
+                                    <div class="optimizer-info">
+                                        <div class="optimizer-name">RMSprop</div>
+                                        <div class="optimizer-desc">Adaptive learning rate</div>
+                                    </div>
+                                </label>
+                                <label class="optimizer-option" onclick="selectOptimizer('adamw')">
+                                    <input type="radio" name="mcOptimizer" value="adamw">
+                                    <div class="optimizer-radio"></div>
+                                    <div class="optimizer-info">
+                                        <div class="optimizer-name">AdamW</div>
+                                        <div class="optimizer-desc">Adam with weight decay</div>
+                                    </div>
+                                </label>
+                                <label class="optimizer-option" onclick="selectOptimizer('ftrl')">
+                                    <input type="radio" name="mcOptimizer" value="ftrl">
+                                    <div class="optimizer-radio"></div>
+                                    <div class="optimizer-info">
+                                        <div class="optimizer-name">FTRL</div>
+                                        <div class="optimizer-desc">Follow the regularized leader</div>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
                     </div>
-                    <div class="training-param-group">
-                        <label class="training-param-label">Learning Rate</label>
-                        <input type="number" id="mcLearningRate" class="training-param-input" value="0.1" step="0.01" min="0.0001" max="1.0" />
-                    </div>
-                    <div class="training-param-group">
-                        <label class="training-param-label">Batch Size</label>
-                        <select id="mcBatchSize" class="training-param-input">
-                            <option value="1024">1024</option>
-                            <option value="2048">2048</option>
-                            <option value="4096" selected>4096 (default)</option>
-                            <option value="8192">8192</option>
-                            <option value="16384">16384</option>
-                        </select>
-                    </div>
-                    <div class="training-param-group">
-                        <label class="training-param-label">Epochs</label>
-                        <input type="number" id="mcEpochs" class="training-param-input" value="5" min="1" max="100" />
+
+                    <!-- Hyperparameters Panel -->
+                    <div class="training-panel hyperparams">
+                        <div class="training-panel-header">
+                            <div class="training-panel-title">
+                                <div class="panel-icon">
+                                    <i class="fas fa-sliders-h"></i>
+                                </div>
+                                Hyperparameters
+                            </div>
+                        </div>
+                        <div class="training-panel-body">
+                            <!-- Learning Rate -->
+                            <div class="hyperparam-item">
+                                <label class="hyperparam-label">
+                                    <i class="fas fa-tachometer-alt"></i>
+                                    Learning Rate
+                                </label>
+                                <div class="hyperparam-input-wrapper">
+                                    <input type="number" id="mcLearningRate" class="hyperparam-input" value="0.1" step="0.01" min="0.0001" max="1.0" />
+                                </div>
+                                <div class="lr-presets">
+                                    <button type="button" class="lr-preset-btn" onclick="setLearningRate(0.001)">0.001</button>
+                                    <button type="button" class="lr-preset-btn" onclick="setLearningRate(0.01)">0.01</button>
+                                    <button type="button" class="lr-preset-btn active" onclick="setLearningRate(0.1)">0.1</button>
+                                    <button type="button" class="lr-preset-btn" onclick="setLearningRate(0.5)">0.5</button>
+                                </div>
+                                <p class="hyperparam-hint">Higher for Adagrad (0.1), lower for Adam (0.001)</p>
+                            </div>
+
+                            <!-- Batch Size -->
+                            <div class="hyperparam-item">
+                                <label class="hyperparam-label">
+                                    <i class="fas fa-layer-group"></i>
+                                    Batch Size
+                                </label>
+                                <select id="mcBatchSize" class="hyperparam-input">
+                                    <option value="512">512 (small datasets)</option>
+                                    <option value="1024">1024</option>
+                                    <option value="2048">2048</option>
+                                    <option value="4096" selected>4096 (recommended)</option>
+                                    <option value="8192">8192</option>
+                                    <option value="16384">16384 (large datasets)</option>
+                                </select>
+                                <p class="hyperparam-hint">Larger batches = faster training, more GPU memory</p>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
                 <!-- Summary Panel -->
-                <div class="mt-6 p-4 bg-purple-50 rounded-lg border border-purple-200">
+                <div class="mt-4 p-4 bg-purple-50 rounded-lg border border-purple-200">
                     <h4 class="font-semibold text-purple-900 mb-3">Configuration Summary</h4>
-                    <div class="grid grid-cols-2 gap-4 text-sm">
+                    <div class="grid grid-cols-3 gap-4 text-sm">
                         <div>
                             <span class="text-purple-700">Model Type:</span>
                             <span id="mcSummaryType" class="font-medium text-purple-900">Retrieval</span>
@@ -2029,7 +2329,7 @@
             </div>
             <div class="footer-right">
                 <button type="button" id="mcBtnCreate" class="btn-neu btn-neu-action btn-neu-save hidden" onclick="createModelConfig()">
-                    <span class="btn-neu-inner">Create</span>
+                    <span class="btn-neu-inner">Save</span>
                 </button>
                 <button type="button" class="btn-neu btn-neu-action btn-neu-cancel" onclick="closeModelConfigWizard()">
                     <span class="btn-neu-inner">Cancel</span>
@@ -6504,8 +6804,7 @@ let mcState = {
     outputEmbeddingDim: 32,
     optimizer: 'adagrad',
     learningRate: 0.1,
-    batchSize: 4096,
-    epochs: 5
+    batchSize: 4096
 };
 
 // Load Model Configs
@@ -6587,10 +6886,6 @@ function renderModelConfigs() {
                     <span class="param-chip-label">Batch:</span>
                     <span class="param-chip-value">${mc.batch_size}</span>
                 </div>
-                <div class="param-chip">
-                    <span class="param-chip-label">Epochs:</span>
-                    <span class="param-chip-value">${mc.epochs}</span>
-                </div>
             </div>
         </div>
     `).join('');
@@ -6630,8 +6925,7 @@ function resetMcState() {
         // Training params
         optimizer: 'adagrad',
         learningRate: 0.1,
-        batchSize: 4096,
-        epochs: 5
+        batchSize: 4096
     };
     document.getElementById('mcName').value = '';
     document.getElementById('mcDescription').value = '';
@@ -6643,6 +6937,10 @@ function resetMcState() {
     document.getElementById('mcScannTopK').value = 100;
     document.getElementById('mcScannNumLeaves').value = 100;
     document.getElementById('mcScannLeavesToSearch').value = 10;
+    // Reset training params UI
+    selectOptimizer('adagrad');
+    setLearningRate(0.1);
+    document.getElementById('mcBatchSize').value = 4096;
 }
 
 // Load Presets from API
@@ -6688,6 +6986,54 @@ function applyPreset(presetName) {
 
     renderTowerLayers();
     updateTowerSummaries();
+}
+
+// Select Optimizer (Step 3)
+function selectOptimizer(optimizer) {
+    mcState.optimizer = optimizer;
+
+    // Update radio buttons
+    document.querySelectorAll('input[name="mcOptimizer"]').forEach(radio => {
+        radio.checked = radio.value === optimizer;
+    });
+
+    // Update visual selection
+    document.querySelectorAll('.optimizer-option').forEach(opt => {
+        const radio = opt.querySelector('input[type="radio"]');
+        opt.classList.toggle('selected', radio && radio.value === optimizer);
+    });
+
+    // Suggest learning rate based on optimizer
+    const lrSuggestions = {
+        'adagrad': 0.1,
+        'adam': 0.001,
+        'sgd': 0.01,
+        'rmsprop': 0.001,
+        'adamw': 0.001,
+        'ftrl': 0.1
+    };
+
+    if (lrSuggestions[optimizer]) {
+        setLearningRate(lrSuggestions[optimizer]);
+    }
+}
+
+// Set Learning Rate (Step 3)
+function setLearningRate(value) {
+    mcState.learningRate = value;
+    document.getElementById('mcLearningRate').value = value;
+
+    // Update preset buttons
+    document.querySelectorAll('.lr-preset-btn').forEach(btn => {
+        const btnValue = parseFloat(btn.textContent);
+        btn.classList.toggle('active', btnValue === value);
+    });
+}
+
+// Get selected optimizer value
+function getSelectedOptimizer() {
+    const selected = document.querySelector('input[name="mcOptimizer"]:checked');
+    return selected ? selected.value : 'adagrad';
 }
 
 // Render Tower Layers
@@ -7383,17 +7729,16 @@ function createModelConfig() {
         scann_num_leaves: mcState.scannNumLeaves,
         scann_leaves_to_search: mcState.scannLeavesToSearch,
         // Training params
-        optimizer: document.getElementById('mcOptimizer').value,
+        optimizer: getSelectedOptimizer(),
         learning_rate: parseFloat(document.getElementById('mcLearningRate').value),
-        batch_size: parseInt(document.getElementById('mcBatchSize').value),
-        epochs: parseInt(document.getElementById('mcEpochs').value)
+        batch_size: parseInt(document.getElementById('mcBatchSize').value)
     };
 
     fetch('/api/model-configs/create/', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            'X-CSRFToken': getCsrfToken()
+            'X-CSRFToken': getCookie('csrftoken')
         },
         body: JSON.stringify(payload)
     })
@@ -7444,10 +7789,6 @@ function viewModelConfig(id) {
             <span class="param-chip-value">${mc.batch_size}</span>
         </div>
         <div class="param-chip">
-            <span class="param-chip-label">Epochs:</span>
-            <span class="param-chip-value">${mc.epochs}</span>
-        </div>
-        <div class="param-chip">
             <span class="param-chip-label">Output Dim:</span>
             <span class="param-chip-value">${mc.output_embedding_dim}</span>
         </div>
@@ -7479,7 +7820,7 @@ function cloneModelConfigById(id) {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            'X-CSRFToken': getCsrfToken()
+            'X-CSRFToken': getCookie('csrftoken')
         },
         body: JSON.stringify({})
     })
@@ -7505,7 +7846,7 @@ function deleteModelConfig(id) {
     fetch(`/api/model-configs/${id}/delete/`, {
         method: 'DELETE',
         headers: {
-            'X-CSRFToken': getCsrfToken()
+            'X-CSRFToken': getCookie('csrftoken')
         }
     })
     .then(r => r.json())
@@ -7544,10 +7885,9 @@ function editModelConfig() {
 
                 document.getElementById('mcName').value = mc.name;
                 document.getElementById('mcDescription').value = mc.description || '';
-                document.getElementById('mcOptimizer').value = mc.optimizer;
-                document.getElementById('mcLearningRate').value = mc.learning_rate;
+                selectOptimizer(mc.optimizer);
+                setLearningRate(mc.learning_rate);
                 document.getElementById('mcBatchSize').value = mc.batch_size;
-                document.getElementById('mcEpochs').value = mc.epochs;
 
                 selectModelType(mc.model_type);
 

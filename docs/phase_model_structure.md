@@ -29,7 +29,7 @@ This document provides detailed specifications for implementing the **Model Stru
 | Step 2: Tower builder | ✅ Done | Layer list with drag-drop reordering, layer edit modals |
 | Step 2: Retrieval Algorithm | ✅ Done | Brute Force (default) / ScaNN selection with Top-K config |
 | Step 2: Model summary | ✅ Done | Keras-style params display (Total/Trainable/Non-trainable) |
-| Step 3: Training parameters | ✅ Done | Optimizer, LR, batch size, epochs + summary |
+| Step 3: Training parameters | ✅ Done | Card-based layout: Optimizer panel (6 options with auto-LR suggest) + Hyperparameters panel (LR with presets, batch size) |
 | View/Edit/Clone/Delete | ✅ Done | All CRUD operations functional |
 | Layer drag-drop reordering | ✅ Done | Layers movable except output layer (locked at bottom) |
 | Unified layer edit modals | ✅ Done | Consistent styling with dimension button selectors |
@@ -65,6 +65,27 @@ This document provides detailed specifications for implementing the **Model Stru
 | `GET` | `/api/model-configs/presets/` | ✅ |
 | `GET` | `/api/model-configs/presets/{name}/` | ✅ |
 | `POST` | `/api/model-configs/validate/` | ✅ |
+
+### Recent Updates (December 2025)
+
+#### Step 3 Training UI Redesign (2025-12-11)
+
+**UI Changes:**
+- **Card-based layout** - Two-panel design matching Step 2 (Optimizer + Hyperparameters)
+- **6 optimizers** - Added RMSprop, AdamW, FTRL to Adagrad/Adam/SGD
+- **Auto-suggest learning rate** - Selecting an optimizer automatically sets recommended LR
+- **LR preset buttons** - Quick-select buttons (0.001, 0.01, 0.05, 0.1) centered below input
+- **Epochs removed** - No longer configured in ModelConfig; set per experiment/training run
+- **Button renamed** - Changed from "Create" to "Save" for consistency
+
+**Backend Changes:**
+- Added `OPTIMIZER_RMSPROP`, `OPTIMIZER_ADAMW`, `OPTIMIZER_FTRL` constants
+- Removed `epochs` from ModelConfig wizard (still available for experiments)
+
+**JavaScript Functions Added:**
+- `selectOptimizer(optimizer)` - Handles optimizer selection + auto-LR suggest
+- `setLearningRate(value)` - Sets LR and highlights matching preset button
+- `getSelectedOptimizer()` - Returns currently selected optimizer
 
 ---
 
@@ -226,6 +247,9 @@ class ModelConfig(models.Model):
         ('adagrad', 'Adagrad'),
         ('adam', 'Adam'),
         ('sgd', 'SGD'),
+        ('rmsprop', 'RMSprop'),
+        ('adamw', 'AdamW'),
+        ('ftrl', 'FTRL'),
     ]
     optimizer = models.CharField(
         max_length=20,
@@ -244,10 +268,8 @@ class ModelConfig(models.Model):
         help_text="Training batch size"
     )
 
-    epochs = models.IntegerField(
-        default=5,
-        help_text="Number of training epochs"
-    )
+    # Note: epochs is NOT stored in ModelConfig. It is specified per experiment/training run
+    # to allow flexibility in experimentation (e.g., quick test with 2 epochs, full training with 20+).
 
     # ═══════════════════════════════════════════════════════════════
     # MULTITASK CONFIGURATION
@@ -1221,83 +1243,65 @@ Output layer (last Dense, special styling):
 
 ### Wizard Step 3: Training Parameters
 
+Step 3 uses a **card-based layout** matching Step 2's design, with two panels:
+- **Optimizer Panel** (purple) - Select optimizer with auto-suggested learning rate
+- **Hyperparameters Panel** (amber) - Configure learning rate and batch size
+
+**Note:** Epochs are NOT configured here - they are specified per experiment/training run for flexibility.
+
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│ Create Model Configuration                                  Step 3 of 3 │
+│ Model Configuration                                         Step 3 of 3 │
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                          │
-│  ════════════════════════════════════════════════════════════════════   │
-│  OPTIMIZER                                                               │
-│  ════════════════════════════════════════════════════════════════════   │
+│  ┌─────────────────────────────────┐  ┌─────────────────────────────────┐
+│  │ ▓▓ OPTIMIZER ▓▓                 │  │ ▒▒ HYPERPARAMETERS ▒▒           │
+│  │ (purple border/background)      │  │ (amber border/background)       │
+│  │                                 │  │                                 │
+│  │ ┌─────────────┐ ┌─────────────┐ │  │ Learning Rate                   │
+│  │ │ ● Adagrad   │ │ ○ Adam      │ │  │ ┌─────────────────────────────┐ │
+│  │ │ Best for    │ │ Popular     │ │  │ │ [0.1________________]       │ │
+│  │ │ sparse      │ │ general     │ │  │ └─────────────────────────────┘ │
+│  │ │ embeddings  │ │ purpose     │ │  │                                 │
+│  │ └─────────────┘ └─────────────┘ │  │ [0.001] [0.01] [0.05] [0.1]     │
+│  │                                 │  │  (preset buttons, centered)     │
+│  │ ┌─────────────┐ ┌─────────────┐ │  │                                 │
+│  │ │ ○ SGD       │ │ ○ RMSprop   │ │  │ Batch Size                      │
+│  │ │ Simple,     │ │ Good for    │ │  │ ┌─────────────────────────────┐ │
+│  │ │ requires    │ │ non-        │ │  │ │ [4096_______________] ▼     │ │
+│  │ │ tuning      │ │ stationary  │ │  │ └─────────────────────────────┘ │
+│  │ └─────────────┘ └─────────────┘ │  │                                 │
+│  │                                 │  │ ⓘ Larger batches train faster   │
+│  │ ┌─────────────┐ ┌─────────────┐ │  │   but use more memory.          │
+│  │ │ ○ AdamW     │ │ ○ FTRL      │ │  │                                 │
+│  │ │ Adam with   │ │ Best for    │ │  └─────────────────────────────────┘
+│  │ │ weight      │ │ very large  │ │
+│  │ │ decay       │ │ sparse data │ │
+│  │ └─────────────┘ └─────────────┘ │
+│  │                                 │
+│  └─────────────────────────────────┘
 │                                                                          │
-│  ┌───────────────────┐ ┌───────────────────┐ ┌───────────────────┐      │
-│  │ ● Adagrad         │ │ ○ Adam            │ │ ○ SGD             │      │
-│  │                   │ │                   │ │                   │      │
-│  │ Adaptive learning │ │ Most popular,     │ │ Simple, requires  │      │
-│  │ rate per param.   │ │ good general      │ │ careful tuning    │      │
-│  │ Excellent for     │ │ purpose optimizer │ │ of learning rate  │      │
-│  │ sparse data.      │ │                   │ │                   │      │
-│  │                   │ │ Recommended LR:   │ │ Recommended LR:   │      │
-│  │ Recommended LR:   │ │ 0.001 - 0.01      │ │ 0.01 - 0.1        │      │
-│  │ 0.05 - 0.1        │ │                   │ │                   │      │
-│  └───────────────────┘ └───────────────────┘ └───────────────────┘      │
-│                                                                          │
-│  Learning Rate                                                           │
-│  ┌───────────────────────────────────────────────────────────────────┐  │
-│  │ [0.001]  [0.01]  [0.05]  [0.1]  [Custom: ____]                    │  │
-│  └───────────────────────────────────────────────────────────────────┘  │
-│                                 ▲                                        │
-│  ⓘ Adagrad typically works well with 0.1 for recommender systems        │
-│                                                                          │
-│  ════════════════════════════════════════════════════════════════════   │
-│  TRAINING SCHEDULE                                                       │
-│  ════════════════════════════════════════════════════════════════════   │
-│                                                                          │
-│  Batch Size                                                              │
-│  ┌───────────────────────────────────────────────────────────────────┐  │
-│  │ [1024]  [2048]  [4096]  [8192]  [Custom: ____]                    │  │
-│  └───────────────────────────────────────────────────────────────────┘  │
-│                          ▲                                               │
-│  ⓘ Larger batches train faster but use more memory. 4096 is a good      │
-│    starting point for most datasets.                                     │
-│                                                                          │
-│  Default Epochs                                                          │
-│  ┌───────────────────────────────────────────────────────────────────┐  │
-│  │ [2]  [3]  [5]  [10]  [20]  [Custom: ____]                         │  │
-│  └───────────────────────────────────────────────────────────────────┘  │
-│                   ▲                                                      │
-│  ⓘ Quick tests typically use 2-5 epochs. Full training uses 10-20+.     │
-│    This can be overridden when starting a Quick Test.                    │
-│                                                                          │
-│  ════════════════════════════════════════════════════════════════════   │
-│  CONFIGURATION SUMMARY                                                   │
-│  ════════════════════════════════════════════════════════════════════   │
-│                                                                          │
-│  ┌───────────────────────────────────────────────────────────────────┐  │
-│  │                                                                    │  │
-│  │  Model: Standard Retrieval v1                                     │  │
-│  │  Type:  Retrieval (Two-Tower)                                     │  │
-│  │                                                                    │  │
-│  │  ┌─────────────────────┐    ┌─────────────────────┐               │  │
-│  │  │ Buyer Tower         │    │ Product Tower       │               │  │
-│  │  │ Dense(128) ReLU     │    │ Dense(128) ReLU     │               │  │
-│  │  │ Dense(64) ReLU      │    │ Dense(64) ReLU      │               │  │
-│  │  │ Dense(32) ReLU      │    │ Dense(32) ReLU      │               │  │
-│  │  │ → 32D embedding     │    │ → 32D embedding     │               │  │
-│  │  └─────────────────────┘    └─────────────────────┘               │  │
-│  │                                                                    │  │
-│  │  Optimizer:  Adagrad @ 0.1                                        │  │
-│  │  Batch Size: 4096                                                 │  │
-│  │  Epochs:     5 (default)                                          │  │
-│  │                                                                    │  │
-│  │  Est. Parameters: ~20K                                            │  │
-│  │  Est. Quick Test: ~8 minutes                                      │  │
-│  │                                                                    │  │
-│  └───────────────────────────────────────────────────────────────────┘  │
-│                                                                          │
-│                                     [Cancel]  [← Back]  [Save Config]   │
+│                                         [Cancel]  [← Back]  [Save]       │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+
+**Auto-Suggest Learning Rate:**
+When selecting an optimizer, the learning rate is automatically set to a recommended value:
+
+| Optimizer | Auto-Suggested LR | Use Case |
+|-----------|-------------------|----------|
+| Adagrad | 0.1 | Sparse embeddings (default for recommenders) |
+| Adam | 0.001 | General purpose, stable convergence |
+| SGD | 0.01 | Simple, requires careful tuning |
+| RMSprop | 0.001 | Non-stationary problems |
+| AdamW | 0.001 | Adam with better weight decay regularization |
+| FTRL | 0.1 | Very large sparse datasets |
+
+**UI Features:**
+- **Radio button cards** for optimizer selection with visual selection state
+- **Preset buttons** for learning rate (0.001, 0.01, 0.05, 0.1) - centered below input
+- **All buttons uniform size** (min-height ensures consistent appearance)
+- **Button text: "Save"** (not "Create" to match edit mode)
 
 ### Step 3 Extension: Ranking/Multitask (Phase 2-3)
 

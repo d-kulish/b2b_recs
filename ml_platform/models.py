@@ -1773,11 +1773,17 @@ class ModelConfig(models.Model):
     OPTIMIZER_ADAGRAD = 'adagrad'
     OPTIMIZER_ADAM = 'adam'
     OPTIMIZER_SGD = 'sgd'
+    OPTIMIZER_RMSPROP = 'rmsprop'
+    OPTIMIZER_ADAMW = 'adamw'
+    OPTIMIZER_FTRL = 'ftrl'
 
     OPTIMIZER_CHOICES = [
         (OPTIMIZER_ADAGRAD, 'Adagrad'),
         (OPTIMIZER_ADAM, 'Adam'),
         (OPTIMIZER_SGD, 'SGD'),
+        (OPTIMIZER_RMSPROP, 'RMSprop'),
+        (OPTIMIZER_ADAMW, 'AdamW'),
+        (OPTIMIZER_FTRL, 'FTRL'),
     ]
 
     # =========================================================================

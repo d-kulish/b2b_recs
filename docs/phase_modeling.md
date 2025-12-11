@@ -16,11 +16,18 @@ This document provides detailed specifications for implementing the **Modeling**
 Added complete Model Structure chapter for configuring neural network architecture independently from feature engineering. This enables flexible experimentation with different model architectures using the same feature set.
 
 **Key Components:**
-- **ModelConfig entity** - Stores tower architecture, training hyperparameters (optimizer, learning rate, batch size, epochs)
+- **ModelConfig entity** - Stores tower architecture, training hyperparameters (optimizer, learning rate, batch size)
 - **3-step wizard** - Basic Info → Architecture → Training
 - **Visual tower builder** - Layer list with add/remove, supports Dense/Dropout/BatchNorm layers
 - **5 presets** - Minimal, Standard, Deep, Asymmetric, Regularized
 - **Full CRUD** - View/Edit/Clone/Delete model configs
+
+**Step 3 Training UI (2025-12-11):**
+- **Card-based layout** - Two-panel design (Optimizer + Hyperparameters) matching Step 2
+- **6 optimizers** - Adagrad, Adam, SGD, RMSprop, AdamW, FTRL
+- **Auto-suggest learning rate** - Selecting optimizer sets recommended LR (e.g., Adagrad → 0.1)
+- **LR preset buttons** - Quick-select (0.001, 0.01, 0.05, 0.1) centered below input
+- **Epochs removed** - Set per experiment/training run for flexibility
 
 **Step 2 Enhancements (2025-12-11):**
 - **Retrieval Algorithm Selection** - Brute Force (default) or ScaNN for large catalogs (10K+ products)

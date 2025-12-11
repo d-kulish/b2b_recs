@@ -12,7 +12,7 @@ from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_http_methods
 from django.shortcuts import get_object_or_404
 
-from ml_platform.models import ModelEndpoint, Dataset, FeatureConfig, FeatureConfigVersion
+from ml_platform.models import ModelEndpoint, Dataset, FeatureConfig, FeatureConfigVersion, ModelConfig
 from .services import (
     SmartDefaultsService,
     TensorDimensionCalculator,
@@ -973,6 +973,528 @@ def regenerate_code(request, config_id):
 
     except Exception as e:
         logger.exception(f"Error regenerating code for config {config_id}: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e),
+        }, status=500)
+
+
+# =============================================================================
+# MODEL CONFIG API ENDPOINTS (Model Structure Domain)
+# =============================================================================
+
+def serialize_model_config(mc, include_details=False):
+    """
+    Serialize a ModelConfig instance to a dictionary.
+
+    Args:
+        mc: ModelConfig instance
+        include_details: If True, includes full layer configurations
+
+    Returns:
+        Dictionary representation of the model config
+    """
+    data = {
+        'id': mc.id,
+        'name': mc.name,
+        'description': mc.description,
+        'model_type': mc.model_type,
+        'model_type_display': mc.get_model_type_display(),
+
+        # Tower summaries
+        'buyer_tower_summary': mc.get_buyer_tower_summary(),
+        'product_tower_summary': mc.get_product_tower_summary(),
+        'buyer_layer_count': mc.count_layers('buyer'),
+        'product_layer_count': mc.count_layers('product'),
+        'output_embedding_dim': mc.output_embedding_dim,
+        'share_tower_weights': mc.share_tower_weights,
+
+        # Training params
+        'optimizer': mc.optimizer,
+        'optimizer_display': mc.get_optimizer_display(),
+        'learning_rate': mc.learning_rate,
+        'batch_size': mc.batch_size,
+        'epochs': mc.epochs,
+
+        # Multitask params
+        'retrieval_weight': mc.retrieval_weight,
+        'ranking_weight': mc.ranking_weight,
+
+        # Metadata
+        'created_at': mc.created_at.isoformat() if mc.created_at else None,
+        'updated_at': mc.updated_at.isoformat() if mc.updated_at else None,
+        'created_by': mc.created_by.username if mc.created_by else None,
+    }
+
+    # Include full layer details if requested
+    if include_details:
+        data['buyer_tower_layers'] = mc.buyer_tower_layers
+        data['product_tower_layers'] = mc.product_tower_layers
+        data['rating_head_layers'] = mc.rating_head_layers
+        data['rating_head_summary'] = mc.get_rating_head_summary()
+        data['towers_identical'] = mc.towers_are_identical()
+        data['estimated_params'] = mc.estimate_params()
+        data['validation_errors'] = mc.validate()
+
+    return data
+
+
+@login_required
+@require_http_methods(["GET"])
+def list_model_configs(request):
+    """
+    List all model configs (global, not scoped to model endpoint).
+
+    Query params:
+        model_type: Filter by model type ('retrieval', 'ranking', 'multitask')
+
+    Returns:
+        JsonResponse with list of serialized model configs
+    """
+    try:
+        configs = ModelConfig.objects.all().select_related('created_by')
+
+        # Apply filters
+        model_type = request.GET.get('model_type')
+        if model_type:
+            configs = configs.filter(model_type=model_type)
+
+        # Serialize
+        data = [serialize_model_config(mc, include_details=False) for mc in configs]
+
+        return JsonResponse({
+            'success': True,
+            'data': data,
+            'count': len(data),
+        })
+
+    except Exception as e:
+        logger.exception(f"Error listing model configs: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e),
+        }, status=500)
+
+
+@login_required
+@require_http_methods(["POST"])
+def create_model_config(request):
+    """
+    Create a new model config.
+
+    Request body:
+        name: str (required)
+        description: str (optional)
+        model_type: str (default: 'retrieval')
+        preset: str (optional) - One of 'minimal', 'standard', 'deep', 'asymmetric', 'regularized'
+        buyer_tower_layers: list (optional - uses preset or default if not provided)
+        product_tower_layers: list (optional)
+        rating_head_layers: list (optional - for ranking/multitask)
+        output_embedding_dim: int (default: 32)
+        share_tower_weights: bool (default: False)
+        optimizer: str (default: 'adagrad')
+        learning_rate: float (default: 0.1)
+        batch_size: int (default: 4096)
+        epochs: int (default: 5)
+        retrieval_weight: float (default: 1.0)
+        ranking_weight: float (default: 0.0)
+
+    Returns:
+        JsonResponse with created model config
+    """
+    try:
+        data = json.loads(request.body)
+
+        # Validate required fields
+        name = data.get('name', '').strip()
+        if not name:
+            return JsonResponse({
+                'success': False,
+                'error': 'Name is required',
+            }, status=400)
+
+        # Check name uniqueness
+        if ModelConfig.objects.filter(name=name).exists():
+            return JsonResponse({
+                'success': False,
+                'error': f'A model config named "{name}" already exists',
+            }, status=400)
+
+        # Handle preset
+        preset_name = data.get('preset')
+        if preset_name:
+            preset = ModelConfig.get_preset(preset_name)
+            buyer_tower_layers = data.get('buyer_tower_layers', preset.get('buyer_tower_layers', []))
+            product_tower_layers = data.get('product_tower_layers', preset.get('product_tower_layers', []))
+            output_embedding_dim = data.get('output_embedding_dim', preset.get('output_embedding_dim', 32))
+        else:
+            # Use provided values or defaults
+            default_layers = ModelConfig.get_default_layers()
+            buyer_tower_layers = data.get('buyer_tower_layers', default_layers)
+            product_tower_layers = data.get('product_tower_layers', default_layers)
+            output_embedding_dim = data.get('output_embedding_dim', 32)
+
+        # Get model type
+        model_type = data.get('model_type', ModelConfig.MODEL_TYPE_RETRIEVAL)
+
+        # Handle rating head for ranking/multitask
+        rating_head_layers = data.get('rating_head_layers', [])
+        if model_type in [ModelConfig.MODEL_TYPE_RANKING, ModelConfig.MODEL_TYPE_MULTITASK]:
+            if not rating_head_layers:
+                rating_head_layers = ModelConfig.get_default_rating_head()
+
+        # Create model config
+        mc = ModelConfig.objects.create(
+            name=name,
+            description=data.get('description', '').strip(),
+            model_type=model_type,
+            buyer_tower_layers=buyer_tower_layers,
+            product_tower_layers=product_tower_layers,
+            rating_head_layers=rating_head_layers,
+            output_embedding_dim=output_embedding_dim,
+            share_tower_weights=data.get('share_tower_weights', False),
+            optimizer=data.get('optimizer', ModelConfig.OPTIMIZER_ADAGRAD),
+            learning_rate=data.get('learning_rate', 0.1),
+            batch_size=data.get('batch_size', 4096),
+            epochs=data.get('epochs', 5),
+            retrieval_weight=data.get('retrieval_weight', 1.0),
+            ranking_weight=data.get('ranking_weight', 0.0),
+            created_by=request.user,
+        )
+
+        # Validate the created config
+        validation_errors = mc.validate()
+
+        return JsonResponse({
+            'success': True,
+            'data': serialize_model_config(mc, include_details=True),
+            'message': 'Model config created successfully',
+            'validation_errors': validation_errors,
+        })
+
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'error': 'Invalid JSON in request body',
+        }, status=400)
+    except Exception as e:
+        logger.exception(f"Error creating model config: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e),
+        }, status=500)
+
+
+@login_required
+@require_http_methods(["GET"])
+def get_model_config(request, config_id):
+    """
+    Get a single model config by ID.
+
+    Returns:
+        JsonResponse with model config details
+    """
+    try:
+        mc = get_object_or_404(
+            ModelConfig.objects.select_related('created_by'),
+            id=config_id
+        )
+
+        return JsonResponse({
+            'success': True,
+            'data': serialize_model_config(mc, include_details=True),
+        })
+
+    except Exception as e:
+        logger.exception(f"Error getting model config: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e),
+        }, status=500)
+
+
+@login_required
+@require_http_methods(["PUT"])
+def update_model_config(request, config_id):
+    """
+    Update an existing model config.
+
+    Request body: Same fields as create_model_config (all optional)
+
+    Returns:
+        JsonResponse with updated model config
+    """
+    try:
+        mc = get_object_or_404(ModelConfig, id=config_id)
+        data = json.loads(request.body)
+
+        # Check name uniqueness if changing
+        new_name = data.get('name', '').strip()
+        if new_name and new_name != mc.name:
+            if ModelConfig.objects.filter(name=new_name).exclude(id=mc.id).exists():
+                return JsonResponse({
+                    'success': False,
+                    'error': f'A model config named "{new_name}" already exists',
+                }, status=400)
+            mc.name = new_name
+
+        # Update fields
+        if 'description' in data:
+            mc.description = data['description'].strip()
+        if 'model_type' in data:
+            mc.model_type = data['model_type']
+        if 'buyer_tower_layers' in data:
+            mc.buyer_tower_layers = data['buyer_tower_layers']
+        if 'product_tower_layers' in data:
+            mc.product_tower_layers = data['product_tower_layers']
+        if 'rating_head_layers' in data:
+            mc.rating_head_layers = data['rating_head_layers']
+        if 'output_embedding_dim' in data:
+            mc.output_embedding_dim = data['output_embedding_dim']
+        if 'share_tower_weights' in data:
+            mc.share_tower_weights = data['share_tower_weights']
+        if 'optimizer' in data:
+            mc.optimizer = data['optimizer']
+        if 'learning_rate' in data:
+            mc.learning_rate = data['learning_rate']
+        if 'batch_size' in data:
+            mc.batch_size = data['batch_size']
+        if 'epochs' in data:
+            mc.epochs = data['epochs']
+        if 'retrieval_weight' in data:
+            mc.retrieval_weight = data['retrieval_weight']
+        if 'ranking_weight' in data:
+            mc.ranking_weight = data['ranking_weight']
+
+        mc.save()
+
+        # Validate the updated config
+        validation_errors = mc.validate()
+
+        return JsonResponse({
+            'success': True,
+            'data': serialize_model_config(mc, include_details=True),
+            'message': 'Model config updated successfully',
+            'validation_errors': validation_errors,
+        })
+
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'error': 'Invalid JSON in request body',
+        }, status=400)
+    except Exception as e:
+        logger.exception(f"Error updating model config: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e),
+        }, status=500)
+
+
+@login_required
+@require_http_methods(["DELETE"])
+def delete_model_config(request, config_id):
+    """
+    Delete a model config.
+
+    Returns:
+        JsonResponse with success status
+    """
+    try:
+        mc = get_object_or_404(ModelConfig, id=config_id)
+        mc_name = mc.name
+
+        # Note: In future, check if config is used in any QuickTests before deleting
+        mc.delete()
+
+        return JsonResponse({
+            'success': True,
+            'message': f'Model config "{mc_name}" deleted successfully',
+        })
+
+    except Exception as e:
+        logger.exception(f"Error deleting model config: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e),
+        }, status=500)
+
+
+@login_required
+@require_http_methods(["POST"])
+def clone_model_config(request, config_id):
+    """
+    Clone a model config.
+
+    Request body:
+        name: str (optional) - Name for the cloned config
+
+    Returns:
+        JsonResponse with cloned model config
+    """
+    try:
+        source = get_object_or_404(ModelConfig, id=config_id)
+        data = json.loads(request.body) if request.body else {}
+
+        new_name = data.get('name', '').strip()
+        if not new_name:
+            new_name = f"{source.name} (Copy)"
+
+        # Check name uniqueness
+        if ModelConfig.objects.filter(name=new_name).exists():
+            # Auto-suffix with number
+            counter = 2
+            base_name = new_name
+            while ModelConfig.objects.filter(name=new_name).exists():
+                new_name = f"{base_name} {counter}"
+                counter += 1
+
+        # Create clone
+        clone = ModelConfig.objects.create(
+            name=new_name,
+            description=data.get('description', source.description),
+            model_type=source.model_type,
+            buyer_tower_layers=source.buyer_tower_layers.copy() if source.buyer_tower_layers else [],
+            product_tower_layers=source.product_tower_layers.copy() if source.product_tower_layers else [],
+            rating_head_layers=source.rating_head_layers.copy() if source.rating_head_layers else [],
+            output_embedding_dim=source.output_embedding_dim,
+            share_tower_weights=source.share_tower_weights,
+            optimizer=source.optimizer,
+            learning_rate=source.learning_rate,
+            batch_size=source.batch_size,
+            epochs=source.epochs,
+            retrieval_weight=source.retrieval_weight,
+            ranking_weight=source.ranking_weight,
+            created_by=request.user,
+        )
+
+        return JsonResponse({
+            'success': True,
+            'data': serialize_model_config(clone, include_details=True),
+            'message': f'Model config cloned as "{new_name}"',
+        })
+
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'error': 'Invalid JSON in request body',
+        }, status=400)
+    except Exception as e:
+        logger.exception(f"Error cloning model config: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e),
+        }, status=500)
+
+
+@login_required
+@require_http_methods(["GET"])
+def get_model_config_presets(request):
+    """
+    Get all available model config presets.
+
+    Returns:
+        JsonResponse with preset configurations
+    """
+    try:
+        presets = ModelConfig.get_all_presets()
+
+        return JsonResponse({
+            'success': True,
+            'data': presets,
+        })
+
+    except Exception as e:
+        logger.exception(f"Error getting model config presets: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e),
+        }, status=500)
+
+
+@login_required
+@require_http_methods(["GET"])
+def get_model_config_preset(request, preset_name):
+    """
+    Get a specific model config preset by name.
+
+    Returns:
+        JsonResponse with preset configuration
+    """
+    try:
+        preset = ModelConfig.get_preset(preset_name)
+
+        if preset_name not in ['minimal', 'standard', 'deep', 'asymmetric', 'regularized']:
+            return JsonResponse({
+                'success': False,
+                'error': f'Unknown preset: {preset_name}',
+            }, status=404)
+
+        return JsonResponse({
+            'success': True,
+            'data': preset,
+        })
+
+    except Exception as e:
+        logger.exception(f"Error getting model config preset: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e),
+        }, status=500)
+
+
+@login_required
+@require_http_methods(["POST"])
+def validate_model_config(request):
+    """
+    Validate a model config without saving it.
+
+    Request body: Same fields as create_model_config
+
+    Returns:
+        JsonResponse with validation result
+    """
+    try:
+        data = json.loads(request.body)
+
+        # Create temporary instance for validation
+        mc = ModelConfig(
+            name=data.get('name', 'temp'),
+            model_type=data.get('model_type', ModelConfig.MODEL_TYPE_RETRIEVAL),
+            buyer_tower_layers=data.get('buyer_tower_layers', []),
+            product_tower_layers=data.get('product_tower_layers', []),
+            rating_head_layers=data.get('rating_head_layers', []),
+            output_embedding_dim=data.get('output_embedding_dim', 32),
+            share_tower_weights=data.get('share_tower_weights', False),
+            retrieval_weight=data.get('retrieval_weight', 1.0),
+            ranking_weight=data.get('ranking_weight', 0.0),
+        )
+
+        errors = mc.validate()
+        is_valid = len(errors) == 0
+
+        return JsonResponse({
+            'success': True,
+            'data': {
+                'is_valid': is_valid,
+                'errors': errors,
+                'buyer_tower_summary': mc.get_buyer_tower_summary(),
+                'product_tower_summary': mc.get_product_tower_summary(),
+                'towers_identical': mc.towers_are_identical(),
+                'estimated_params': mc.estimate_params(
+                    buyer_input_dim=data.get('buyer_input_dim'),
+                    product_input_dim=data.get('product_input_dim'),
+                ),
+            },
+        })
+
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'error': 'Invalid JSON in request body',
+        }, status=400)
+    except Exception as e:
+        logger.exception(f"Error validating model config: {e}")
         return JsonResponse({
             'success': False,
             'error': str(e),

@@ -1732,3 +1732,428 @@ class QuickTest(models.Model):
                 completed_weight += stage_weights.get(stage['name'], 0) * 0.5
 
         return int((completed_weight / total_weight) * 100)
+
+
+# =============================================================================
+# MODEL CONFIG (Model Structure Domain)
+# =============================================================================
+
+class ModelConfig(models.Model):
+    """
+    Defines neural network architecture and training configuration.
+    Completely independent from Dataset/FeatureConfig - can be used with any feature set.
+
+    A ModelConfig specifies:
+    - Model type (Retrieval, Ranking, Multitask)
+    - Tower architecture (layer types, units, activations)
+    - Training hyperparameters (optimizer, learning rate, batch size, epochs)
+    - Output embedding dimensions
+
+    ModelConfigs are global and reusable across any Dataset/FeatureConfig combination.
+    """
+
+    # =========================================================================
+    # Model Types
+    # =========================================================================
+
+    MODEL_TYPE_RETRIEVAL = 'retrieval'
+    MODEL_TYPE_RANKING = 'ranking'
+    MODEL_TYPE_MULTITASK = 'multitask'
+
+    MODEL_TYPE_CHOICES = [
+        (MODEL_TYPE_RETRIEVAL, 'Retrieval'),
+        (MODEL_TYPE_RANKING, 'Ranking'),
+        (MODEL_TYPE_MULTITASK, 'Multitask'),
+    ]
+
+    # =========================================================================
+    # Optimizer Choices
+    # =========================================================================
+
+    OPTIMIZER_ADAGRAD = 'adagrad'
+    OPTIMIZER_ADAM = 'adam'
+    OPTIMIZER_SGD = 'sgd'
+
+    OPTIMIZER_CHOICES = [
+        (OPTIMIZER_ADAGRAD, 'Adagrad'),
+        (OPTIMIZER_ADAM, 'Adam'),
+        (OPTIMIZER_SGD, 'SGD'),
+    ]
+
+    # =========================================================================
+    # Basic Info
+    # =========================================================================
+
+    name = models.CharField(
+        max_length=255,
+        help_text="Descriptive name (e.g., 'Standard Retrieval v1')"
+    )
+    description = models.TextField(
+        blank=True,
+        help_text="Optional description of this configuration"
+    )
+
+    # =========================================================================
+    # Model Type
+    # =========================================================================
+
+    model_type = models.CharField(
+        max_length=20,
+        choices=MODEL_TYPE_CHOICES,
+        default=MODEL_TYPE_RETRIEVAL,
+        help_text="Type of recommendation model"
+    )
+
+    # =========================================================================
+    # Tower Architecture
+    # =========================================================================
+
+    # Buyer/Query tower layer configurations
+    # Schema: Array of layer config objects
+    # [
+    #   {"type": "dense", "units": 128, "activation": "relu", "l2_reg": 0.0},
+    #   {"type": "dropout", "rate": 0.2},
+    #   {"type": "batch_norm"},
+    #   {"type": "dense", "units": 64, "activation": "relu", "l2_reg": 0.0},
+    #   {"type": "dense", "units": 32, "activation": "relu", "l2_reg": 0.0}
+    # ]
+    buyer_tower_layers = models.JSONField(
+        default=list,
+        help_text="Buyer/Query tower layer configurations"
+    )
+
+    # Product/Candidate tower layer configurations
+    product_tower_layers = models.JSONField(
+        default=list,
+        help_text="Product/Candidate tower layer configurations"
+    )
+
+    # Rating prediction layers for ranking/multitask (after embedding concatenation)
+    # Used only for ranking/multitask models
+    # [
+    #   {"type": "dense", "units": 256, "activation": "relu"},
+    #   {"type": "dense", "units": 64, "activation": "relu"},
+    #   {"type": "dense", "units": 1, "activation": null}  # Final scalar output
+    # ]
+    rating_head_layers = models.JSONField(
+        default=list,
+        help_text="Rating prediction layers for ranking/multitask (after embedding concatenation)"
+    )
+
+    # Output embedding dimension (must match between towers)
+    output_embedding_dim = models.IntegerField(
+        default=32,
+        help_text="Dimension of final tower output embeddings (must match between towers)"
+    )
+
+    # Weight sharing option
+    share_tower_weights = models.BooleanField(
+        default=False,
+        help_text="Use identical weights for both towers (requires identical architecture)"
+    )
+
+    # =========================================================================
+    # Training Hyperparameters
+    # =========================================================================
+
+    optimizer = models.CharField(
+        max_length=20,
+        choices=OPTIMIZER_CHOICES,
+        default=OPTIMIZER_ADAGRAD,
+        help_text="Optimizer algorithm"
+    )
+
+    learning_rate = models.FloatField(
+        default=0.1,
+        help_text="Learning rate for optimizer"
+    )
+
+    batch_size = models.IntegerField(
+        default=4096,
+        help_text="Training batch size"
+    )
+
+    epochs = models.IntegerField(
+        default=5,
+        help_text="Number of training epochs"
+    )
+
+    # =========================================================================
+    # Multitask Configuration (Phase 3)
+    # =========================================================================
+
+    retrieval_weight = models.FloatField(
+        default=1.0,
+        help_text="Weight for retrieval loss in multitask model (0.0-1.0)"
+    )
+
+    ranking_weight = models.FloatField(
+        default=0.0,
+        help_text="Weight for ranking loss in multitask model (0.0-1.0)"
+    )
+
+    # Note: rating_column is NOT stored here because ModelConfig is dataset-independent.
+    # It is specified at QuickTest time when the user selects which column to use.
+
+    # =========================================================================
+    # Metadata
+    # =========================================================================
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_model_configs'
+    )
+
+    class Meta:
+        ordering = ['-updated_at']
+        verbose_name = 'Model Configuration'
+        verbose_name_plural = 'Model Configurations'
+
+    def __str__(self):
+        return f"{self.name} ({self.get_model_type_display()})"
+
+    # =========================================================================
+    # Helper Methods
+    # =========================================================================
+
+    def get_buyer_tower_summary(self):
+        """Return human-readable summary like '128→64→32'"""
+        units = [layer['units'] for layer in self.buyer_tower_layers if layer.get('type') == 'dense']
+        return '→'.join(map(str, units)) if units else 'Empty'
+
+    def get_product_tower_summary(self):
+        """Return human-readable summary like '128→64→32'"""
+        units = [layer['units'] for layer in self.product_tower_layers if layer.get('type') == 'dense']
+        return '→'.join(map(str, units)) if units else 'Empty'
+
+    def get_rating_head_summary(self):
+        """Return human-readable summary for rating head"""
+        units = [layer['units'] for layer in self.rating_head_layers if layer.get('type') == 'dense']
+        return '→'.join(map(str, units)) if units else 'None'
+
+    def count_layers(self, tower='buyer'):
+        """Count total layers in a tower"""
+        layers = self.buyer_tower_layers if tower == 'buyer' else self.product_tower_layers
+        return len(layers)
+
+    def towers_are_identical(self):
+        """Check if both towers have identical architecture (required for weight sharing)"""
+        return self.buyer_tower_layers == self.product_tower_layers
+
+    def estimate_params(self, buyer_input_dim=None, product_input_dim=None):
+        """
+        Estimate total trainable parameters.
+
+        Args:
+            buyer_input_dim: Input dimension from FeatureConfig buyer tensor
+            product_input_dim: Input dimension from FeatureConfig product tensor
+
+        Returns:
+            Estimated parameter count (int)
+        """
+        total = 0
+
+        # Buyer tower
+        prev_dim = buyer_input_dim or 100  # Default estimate
+        for layer in self.buyer_tower_layers:
+            if layer.get('type') == 'dense':
+                units = layer['units']
+                total += prev_dim * units + units  # weights + bias
+                prev_dim = units
+
+        # Product tower (skip if sharing weights)
+        if not self.share_tower_weights:
+            prev_dim = product_input_dim or 50  # Default estimate
+            for layer in self.product_tower_layers:
+                if layer.get('type') == 'dense':
+                    units = layer['units']
+                    total += prev_dim * units + units
+                    prev_dim = units
+
+        # Rating head (for ranking/multitask)
+        if self.model_type in [self.MODEL_TYPE_RANKING, self.MODEL_TYPE_MULTITASK] and self.rating_head_layers:
+            # Input is concatenated embeddings
+            prev_dim = self.output_embedding_dim * 2
+            for layer in self.rating_head_layers:
+                if layer.get('type') == 'dense':
+                    units = layer['units']
+                    total += prev_dim * units + units
+                    prev_dim = units
+
+        return total
+
+    def validate(self):
+        """
+        Validate configuration and return list of errors.
+
+        Returns:
+            List of error messages (empty if valid)
+        """
+        errors = []
+
+        # Basic validation
+        if not self.buyer_tower_layers:
+            errors.append("Buyer tower must have at least one layer")
+
+        if not self.product_tower_layers:
+            errors.append("Product tower must have at least one layer")
+
+        # Weight sharing requires identical architectures
+        if self.share_tower_weights and not self.towers_are_identical():
+            errors.append("Weight sharing requires identical tower architectures")
+
+        # Ranking/Multitask validation
+        if self.model_type in [self.MODEL_TYPE_RANKING, self.MODEL_TYPE_MULTITASK]:
+            if not self.rating_head_layers:
+                errors.append("Rating head layers required for ranking/multitask models")
+
+            # Check rating head ends with units=1
+            if self.rating_head_layers:
+                last_layer = self.rating_head_layers[-1]
+                if last_layer.get('type') == 'dense' and last_layer.get('units') != 1:
+                    errors.append("Rating head must end with Dense(1) for scalar output")
+
+        # Multitask weight validation
+        if self.model_type == self.MODEL_TYPE_MULTITASK:
+            if self.retrieval_weight == 0 and self.ranking_weight == 0:
+                errors.append("At least one loss weight must be greater than 0")
+
+        # Output embedding dimension validation
+        if self.output_embedding_dim < 8:
+            errors.append("Output embedding dimension should be at least 8")
+        if self.output_embedding_dim > 512:
+            errors.append("Output embedding dimension should not exceed 512")
+
+        return errors
+
+    # =========================================================================
+    # Class Methods for Presets
+    # =========================================================================
+
+    @classmethod
+    def get_default_layers(cls):
+        """Return default tower layers (standard preset)"""
+        return [
+            {"type": "dense", "units": 128, "activation": "relu", "l2_reg": 0.0},
+            {"type": "dense", "units": 64, "activation": "relu", "l2_reg": 0.0},
+            {"type": "dense", "units": 32, "activation": "relu", "l2_reg": 0.0},
+        ]
+
+    @classmethod
+    def get_preset(cls, preset_name):
+        """
+        Return preset configuration dictionary.
+
+        Args:
+            preset_name: One of 'minimal', 'standard', 'deep', 'asymmetric', 'regularized'
+
+        Returns:
+            Dictionary with preset values
+        """
+        presets = {
+            'minimal': {
+                'name': 'Minimal',
+                'description': 'Fast training, 2 layers, good for initial testing',
+                'buyer_tower_layers': [
+                    {"type": "dense", "units": 64, "activation": "relu", "l2_reg": 0.0},
+                    {"type": "dense", "units": 32, "activation": "relu", "l2_reg": 0.0},
+                ],
+                'product_tower_layers': [
+                    {"type": "dense", "units": 64, "activation": "relu", "l2_reg": 0.0},
+                    {"type": "dense", "units": 32, "activation": "relu", "l2_reg": 0.0},
+                ],
+                'output_embedding_dim': 32,
+                'estimated_time': '~3 min',
+            },
+            'standard': {
+                'name': 'Standard',
+                'description': 'Balanced architecture, 3 layers, recommended starting point',
+                'buyer_tower_layers': [
+                    {"type": "dense", "units": 128, "activation": "relu", "l2_reg": 0.0},
+                    {"type": "dense", "units": 64, "activation": "relu", "l2_reg": 0.0},
+                    {"type": "dense", "units": 32, "activation": "relu", "l2_reg": 0.0},
+                ],
+                'product_tower_layers': [
+                    {"type": "dense", "units": 128, "activation": "relu", "l2_reg": 0.0},
+                    {"type": "dense", "units": 64, "activation": "relu", "l2_reg": 0.0},
+                    {"type": "dense", "units": 32, "activation": "relu", "l2_reg": 0.0},
+                ],
+                'output_embedding_dim': 32,
+                'estimated_time': '~8 min',
+            },
+            'deep': {
+                'name': 'Deep',
+                'description': 'Maximum capacity, 4 layers, best for large datasets',
+                'buyer_tower_layers': [
+                    {"type": "dense", "units": 256, "activation": "relu", "l2_reg": 0.0},
+                    {"type": "dense", "units": 128, "activation": "relu", "l2_reg": 0.0},
+                    {"type": "dense", "units": 64, "activation": "relu", "l2_reg": 0.0},
+                    {"type": "dense", "units": 32, "activation": "relu", "l2_reg": 0.0},
+                ],
+                'product_tower_layers': [
+                    {"type": "dense", "units": 256, "activation": "relu", "l2_reg": 0.0},
+                    {"type": "dense", "units": 128, "activation": "relu", "l2_reg": 0.0},
+                    {"type": "dense", "units": 64, "activation": "relu", "l2_reg": 0.0},
+                    {"type": "dense", "units": 32, "activation": "relu", "l2_reg": 0.0},
+                ],
+                'output_embedding_dim': 32,
+                'estimated_time': '~15 min',
+            },
+            'asymmetric': {
+                'name': 'Asymmetric',
+                'description': 'Larger buyer tower for context-heavy features, smaller product tower',
+                'buyer_tower_layers': [
+                    {"type": "dense", "units": 256, "activation": "relu", "l2_reg": 0.0},
+                    {"type": "dense", "units": 128, "activation": "relu", "l2_reg": 0.0},
+                    {"type": "dense", "units": 64, "activation": "relu", "l2_reg": 0.0},
+                ],
+                'product_tower_layers': [
+                    {"type": "dense", "units": 128, "activation": "relu", "l2_reg": 0.0},
+                    {"type": "dense", "units": 64, "activation": "relu", "l2_reg": 0.0},
+                ],
+                'output_embedding_dim': 64,
+                'estimated_time': '~10 min',
+            },
+            'regularized': {
+                'name': 'Regularized',
+                'description': 'With dropout and L2 regularization to prevent overfitting',
+                'buyer_tower_layers': [
+                    {"type": "dense", "units": 128, "activation": "relu", "l2_reg": 0.01},
+                    {"type": "dropout", "rate": 0.2},
+                    {"type": "dense", "units": 64, "activation": "relu", "l2_reg": 0.01},
+                    {"type": "dropout", "rate": 0.1},
+                    {"type": "dense", "units": 32, "activation": "relu", "l2_reg": 0.0},
+                ],
+                'product_tower_layers': [
+                    {"type": "dense", "units": 128, "activation": "relu", "l2_reg": 0.01},
+                    {"type": "dropout", "rate": 0.2},
+                    {"type": "dense", "units": 64, "activation": "relu", "l2_reg": 0.01},
+                    {"type": "dropout", "rate": 0.1},
+                    {"type": "dense", "units": 32, "activation": "relu", "l2_reg": 0.0},
+                ],
+                'output_embedding_dim': 32,
+                'estimated_time': '~10 min',
+            },
+        }
+        return presets.get(preset_name, presets['standard'])
+
+    @classmethod
+    def get_all_presets(cls):
+        """Return all available presets"""
+        preset_names = ['minimal', 'standard', 'deep', 'asymmetric', 'regularized']
+        return {name: cls.get_preset(name) for name in preset_names}
+
+    @classmethod
+    def get_default_rating_head(cls):
+        """Return default rating head layers for ranking/multitask"""
+        return [
+            {"type": "dense", "units": 256, "activation": "relu", "l2_reg": 0.0},
+            {"type": "dense", "units": 64, "activation": "relu", "l2_reg": 0.0},
+            {"type": "dense", "units": 1, "activation": None},
+        ]

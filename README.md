@@ -84,6 +84,15 @@ This platform enables businesses to:
   - **Results display:** Loss, Recall@10/50/100, vocabulary statistics
   - **Pipeline stages:** ExampleGen → StatisticsGen → SchemaGen → Transform → Trainer
 
+### **Model Structure** ✅
+- 🏗️ **Architecture Configuration:** Define neural network architecture independent from features
+- 🗼 **Tower Builder:** Visual layer configuration for Buyer (Query) and Product (Candidate) towers
+- 📊 **Layer Types:** Dense, Dropout, Batch Normalization with configurable parameters
+- 🎯 **5 Presets:** Minimal (64→32), Standard (128→64→32), Deep (256→128→64→32), Asymmetric, Regularized
+- ⚙️ **Training Hyperparameters:** Optimizer (Adagrad/Adam/SGD), learning rate, batch size, epochs
+- 🔄 **Model Types:** Retrieval (Phase 1), Ranking (Phase 2), Multitask (Phase 3)
+- 📋 **CRUD Operations:** Create, view, edit, clone, delete model configs
+
 ### **Platform Features**
 - 🎨 ETL Wizard UI (5-step data source configuration)
 - 📅 Advanced scheduling (cron with timezone support)
@@ -205,6 +214,7 @@ gcloud run jobs execute django-migrate-and-createsuperuser --region europe-centr
 | [`ml_platform/datasets/datasets.md`](ml_platform/datasets/datasets.md) | Dataset Manager documentation |
 | [`docs/phase_datasets.md`](docs/phase_datasets.md) | Dataset domain specification |
 | [`docs/phase_modeling.md`](docs/phase_modeling.md) | Modeling (Feature Engineering) specification |
+| [`docs/phase_model_structure.md`](docs/phase_model_structure.md) | Model Structure (Architecture) specification |
 | This file | Project overview and quick start |
 
 ---
@@ -258,6 +268,7 @@ gcloud run jobs execute django-migrate-and-createsuperuser --region europe-centr
 - **Dataset Management** - Full UI with 4-step wizard and Visual Schema Builder (27 endpoints)
 - **Modeling (Feature Engineering)** - Feature config wizard with drag-drop UI, tensor dimension preview (11 endpoints)
 - **Quick Test Pipeline** - Vertex AI pipeline integration for validating feature configs (4 endpoints)
+- **Model Structure** - Tower architecture builder with presets, layer configuration, training params (9 endpoints)
 
 ### **🔮 Next Up**
 1. Full Training Pipeline - Extended training with checkpointing, model export
@@ -339,6 +350,17 @@ WHERE source_type='gcs';
 ---
 
 ## 📝 Recent Updates
+
+**December 11, 2025 - Model Structure Chapter**
+- ✅ **ModelConfig entity** - Separate model architecture from feature engineering
+- ✅ **Tower Architecture Builder** - Visual layer configuration for Buyer/Product towers
+- ✅ **5 Presets** - Minimal, Standard, Deep, Asymmetric, Regularized
+- ✅ **3-step Wizard** - Basic Info → Architecture → Training
+- ✅ **Layer Types** - Dense, Dropout, Batch Normalization
+- ✅ **Training Params** - Optimizer (Adagrad/Adam/SGD), learning rate, batch size, epochs
+- ✅ **Phase 1 (Retrieval)** implemented; Ranking/Multitask planned for Phase 2/3
+- ✅ API endpoints: `/api/model-configs/` (full CRUD + clone + presets)
+- See [Phase: Model Structure docs](docs/phase_model_structure.md) for details
 
 **December 10, 2025 - Quick Test Pipeline Integration**
 - ✅ **Vertex AI Pipeline** - Full KFP v2 pipeline for validating feature configs

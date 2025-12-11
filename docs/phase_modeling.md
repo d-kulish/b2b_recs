@@ -4,11 +4,46 @@
 ## Document Purpose
 This document provides detailed specifications for implementing the **Modeling** domain in the ML Platform. This domain defines HOW data is transformed for training and enables rapid experimentation via Quick Tests.
 
-**Last Updated**: 2025-12-10
+**Last Updated**: 2025-12-11
 
 ---
 
 ## Recent Updates (December 2025)
+
+### Model Structure Chapter (2025-12-11)
+
+**New Feature:**
+Added complete Model Structure chapter for configuring neural network architecture independently from feature engineering. This enables flexible experimentation with different model architectures using the same feature set.
+
+**Key Components:**
+- **ModelConfig entity** - Stores tower architecture, training hyperparameters (optimizer, learning rate, batch size, epochs)
+- **3-step wizard** - Basic Info → Architecture → Training
+- **Visual tower builder** - Layer list with add/remove, supports Dense/Dropout/BatchNorm layers
+- **5 presets** - Minimal, Standard, Deep, Asymmetric, Regularized
+- **Full CRUD** - View/Edit/Clone/Delete model configs
+
+**Model Types (Phased):**
+| Phase | Type | Status |
+|-------|------|--------|
+| 1 | Retrieval (Two-Tower) | ✅ Implemented |
+| 2 | Ranking | ⏳ Pending |
+| 3 | Multitask | ⏳ Pending |
+
+**API Endpoints:**
+- `GET /api/model-configs/` - List all configs
+- `POST /api/model-configs/create/` - Create new config
+- `GET/PUT/DELETE /api/model-configs/{id}/` - CRUD operations
+- `POST /api/model-configs/{id}/clone/` - Clone config
+- `GET /api/model-configs/presets/` - Get preset configurations
+
+**Files Modified:**
+- `ml_platform/models.py` - Added `ModelConfig` model
+- `ml_platform/modeling/api.py` - Added ModelConfig API endpoints
+- `ml_platform/modeling/urls.py` - Added URL routing
+- `ml_platform/admin.py` - Admin registration
+- `templates/ml_platform/model_modeling.html` - UI chapter + wizard
+
+**See Also:** [Phase: Model Structure](phase_model_structure.md) for full specifications.
 
 ### Feature Set View Modal Enhancement (2025-12-10)
 

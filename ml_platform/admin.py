@@ -15,6 +15,7 @@ from .models import (
     SystemMetrics,
     FeatureConfig,
     FeatureConfigVersion,
+    ModelConfig,
 )
 
 
@@ -135,3 +136,33 @@ class FeatureConfigVersionAdmin(admin.ModelAdmin):
     search_fields = ['feature_config__name']
     readonly_fields = ['created_at']
     raw_id_fields = ['feature_config', 'created_by']
+
+
+@admin.register(ModelConfig)
+class ModelConfigAdmin(admin.ModelAdmin):
+    list_display = ['name', 'model_type', 'get_buyer_tower_summary', 'get_product_tower_summary',
+                    'output_embedding_dim', 'optimizer', 'epochs', 'created_at']
+    list_filter = ['model_type', 'optimizer', 'created_at']
+    search_fields = ['name', 'description']
+    readonly_fields = ['created_at', 'updated_at']
+    raw_id_fields = ['created_by']
+    fieldsets = (
+        ('Basic Info', {
+            'fields': ('name', 'description', 'model_type')
+        }),
+        ('Tower Architecture', {
+            'fields': ('buyer_tower_layers', 'product_tower_layers', 'output_embedding_dim',
+                       'share_tower_weights', 'rating_head_layers'),
+            'classes': ('collapse',),
+        }),
+        ('Training Hyperparameters', {
+            'fields': ('optimizer', 'learning_rate', 'batch_size', 'epochs'),
+        }),
+        ('Multitask Settings', {
+            'fields': ('retrieval_weight', 'ranking_weight'),
+            'classes': ('collapse',),
+        }),
+        ('Metadata', {
+            'fields': ('created_by', 'created_at', 'updated_at'),
+        }),
+    )

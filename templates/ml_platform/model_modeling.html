@@ -922,6 +922,387 @@
         font-size: 14px;
         max-width: 300px;
     }
+
+    /* =========================================================================
+       Model Config Card Styles
+       ========================================================================= */
+    .model-config-card {
+        background: white;
+        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        padding: 16px;
+        transition: all 0.2s ease;
+        cursor: pointer;
+    }
+    .model-config-card:hover {
+        border-color: #8b5cf6;
+        box-shadow: 0 4px 12px rgba(139, 92, 246, 0.1);
+    }
+    .model-config-card-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        margin-bottom: 12px;
+    }
+    .model-config-name {
+        font-size: 16px;
+        font-weight: 600;
+        color: #111827;
+        margin-bottom: 4px;
+    }
+    .model-config-desc {
+        font-size: 12px;
+        color: #6b7280;
+        line-height: 1.4;
+        max-width: 200px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .model-type-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 4px 8px;
+        border-radius: 6px;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+    .model-type-badge.retrieval {
+        background: linear-gradient(135deg, #8b5cf6 0%, #a78bfa 100%);
+        color: white;
+    }
+    .model-type-badge.ranking {
+        background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%);
+        color: white;
+    }
+    .model-type-badge.multitask {
+        background: linear-gradient(135deg, #ec4899 0%, #f472b6 100%);
+        color: white;
+    }
+
+    /* Tower Architecture Visualization */
+    .tower-visual {
+        display: flex;
+        gap: 12px;
+        margin-bottom: 12px;
+    }
+    .tower-column {
+        flex: 1;
+        min-width: 0;
+    }
+    .tower-label {
+        font-size: 10px;
+        font-weight: 600;
+        color: #6b7280;
+        text-transform: uppercase;
+        margin-bottom: 4px;
+    }
+    .tower-layers {
+        background: #f9fafb;
+        border-radius: 8px;
+        padding: 8px;
+        font-family: 'Monaco', 'Menlo', monospace;
+        font-size: 13px;
+        color: #374151;
+        text-align: center;
+    }
+    .tower-layers.buyer {
+        border-left: 3px solid #3b82f6;
+    }
+    .tower-layers.product {
+        border-left: 3px solid #10b981;
+    }
+
+    /* Training Params Preview */
+    .training-params-preview {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    .param-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 4px 8px;
+        background: #f3f4f6;
+        border-radius: 6px;
+        font-size: 11px;
+        color: #4b5563;
+    }
+    .param-chip-label {
+        color: #9ca3af;
+    }
+    .param-chip-value {
+        font-weight: 600;
+    }
+
+    /* Model Config Actions */
+    .model-config-actions {
+        display: flex;
+        gap: 4px;
+        opacity: 0;
+        transition: opacity 0.2s ease;
+    }
+    .model-config-card:hover .model-config-actions {
+        opacity: 1;
+    }
+    .model-config-action-btn {
+        width: 28px;
+        height: 28px;
+        border-radius: 6px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: none;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        background: #f3f4f6;
+        color: #6b7280;
+    }
+    .model-config-action-btn:hover {
+        background: #e5e7eb;
+        color: #374151;
+    }
+    .model-config-action-btn.delete:hover {
+        background: #fee2e2;
+        color: #dc2626;
+    }
+
+    /* Model Config Grid */
+    .model-config-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 16px;
+    }
+
+    /* Model Config Wizard Styles */
+    .wizard-model-type-selector {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+        margin-bottom: 24px;
+    }
+    .wizard-model-type-option {
+        padding: 16px;
+        border: 2px solid #e5e7eb;
+        border-radius: 12px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        text-align: center;
+    }
+    .wizard-model-type-option:hover:not(.disabled) {
+        border-color: #8b5cf6;
+        background: #faf5ff;
+    }
+    .wizard-model-type-option.selected {
+        border-color: #8b5cf6;
+        background: #f5f3ff;
+    }
+    .wizard-model-type-option.disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+    .wizard-model-type-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 8px;
+        font-size: 20px;
+    }
+    .wizard-model-type-icon.retrieval {
+        background: linear-gradient(135deg, #8b5cf6 0%, #a78bfa 100%);
+        color: white;
+    }
+    .wizard-model-type-icon.ranking {
+        background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%);
+        color: white;
+    }
+    .wizard-model-type-icon.multitask {
+        background: linear-gradient(135deg, #ec4899 0%, #f472b6 100%);
+        color: white;
+    }
+    .wizard-model-type-name {
+        font-weight: 600;
+        color: #111827;
+        margin-bottom: 4px;
+    }
+    .wizard-model-type-desc {
+        font-size: 12px;
+        color: #6b7280;
+    }
+    .wizard-model-type-phase {
+        font-size: 10px;
+        color: #9ca3af;
+        margin-top: 4px;
+    }
+
+    /* Preset Selector */
+    .preset-selector {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 8px;
+        margin-bottom: 16px;
+    }
+    .preset-option {
+        padding: 12px 8px;
+        border: 2px solid #e5e7eb;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        text-align: center;
+    }
+    .preset-option:hover {
+        border-color: #8b5cf6;
+    }
+    .preset-option.selected {
+        border-color: #8b5cf6;
+        background: #f5f3ff;
+    }
+    .preset-option-name {
+        font-size: 12px;
+        font-weight: 600;
+        color: #374151;
+        margin-bottom: 2px;
+    }
+    .preset-option-desc {
+        font-size: 10px;
+        color: #9ca3af;
+    }
+
+    /* Layer Builder */
+    .layer-builder {
+        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        overflow: hidden;
+    }
+    .layer-builder-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 16px;
+        background: #f9fafb;
+        border-bottom: 1px solid #e5e7eb;
+    }
+    .layer-builder-title {
+        font-weight: 600;
+        color: #374151;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .layer-builder-title .tower-indicator {
+        width: 12px;
+        height: 12px;
+        border-radius: 3px;
+    }
+    .layer-builder-title .tower-indicator.buyer {
+        background: #3b82f6;
+    }
+    .layer-builder-title .tower-indicator.product {
+        background: #10b981;
+    }
+    .layer-list {
+        padding: 12px;
+        min-height: 100px;
+    }
+    .layer-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 12px;
+        background: white;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        margin-bottom: 8px;
+    }
+    .layer-item:last-child {
+        margin-bottom: 0;
+    }
+    .layer-item .drag-handle {
+        color: #d1d5db;
+        cursor: grab;
+    }
+    .layer-item .layer-type-badge {
+        font-size: 10px;
+        font-weight: 600;
+        padding: 2px 6px;
+        border-radius: 4px;
+        text-transform: uppercase;
+    }
+    .layer-item .layer-type-badge.dense {
+        background: #dbeafe;
+        color: #1d4ed8;
+    }
+    .layer-item .layer-type-badge.dropout {
+        background: #fef3c7;
+        color: #92400e;
+    }
+    .layer-item .layer-type-badge.batch_norm {
+        background: #d1fae5;
+        color: #065f46;
+    }
+    .layer-item .layer-params {
+        flex: 1;
+        font-size: 12px;
+        color: #4b5563;
+    }
+    .layer-item .layer-actions {
+        display: flex;
+        gap: 4px;
+    }
+    .add-layer-btn {
+        width: 100%;
+        padding: 10px;
+        border: 2px dashed #e5e7eb;
+        border-radius: 8px;
+        background: transparent;
+        color: #9ca3af;
+        font-size: 12px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+    }
+    .add-layer-btn:hover {
+        border-color: #8b5cf6;
+        color: #8b5cf6;
+        background: #faf5ff;
+    }
+
+    /* Training Params Form */
+    .training-params-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 16px;
+    }
+    .training-param-group {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+    .training-param-label {
+        font-size: 12px;
+        font-weight: 500;
+        color: #374151;
+    }
+    .training-param-input {
+        padding: 10px 12px;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        font-size: 14px;
+    }
+    .training-param-input:focus {
+        outline: none;
+        border-color: #8b5cf6;
+        box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
+    }
 </style>
 {% endblock %}
 
@@ -978,17 +1359,32 @@
                 <i class="fas fa-layer-group"></i>
             </div>
             <h2 class="chapter-title">Model Structure</h2>
-            <div class="ml-auto">
+            <div class="ml-auto flex gap-2">
                 <button onclick="openTrainerCodeSelector()" class="btn btn-secondary btn-sm">
                     <i class="fas fa-brain mr-1"></i>Trainer Code
+                </button>
+                <button onclick="openModelConfigWizard()" class="btn btn-primary btn-sm">
+                    <i class="fas fa-plus mr-1"></i>New Model Config
                 </button>
             </div>
         </div>
         <div id="modelStructureContent">
-            <div class="chapter-empty-state">
-                <i class="fas fa-cubes chapter-empty-icon"></i>
-                <p class="chapter-empty-text">Model architecture configuration will be available here</p>
+            <!-- Loading state -->
+            <div id="modelConfigsLoading" class="flex items-center justify-center py-8">
+                <i class="fas fa-spinner fa-spin text-xl text-gray-400 mr-3"></i>
+                <span class="text-gray-500">Loading model configs...</span>
             </div>
+            <!-- Empty state (hidden by default) -->
+            <div id="modelConfigsEmpty" class="chapter-empty-state hidden">
+                <i class="fas fa-cubes chapter-empty-icon"></i>
+                <p class="chapter-empty-text">No model configurations yet</p>
+                <p class="text-sm text-gray-400 mt-2">Create your first model config to define neural network architecture</p>
+                <button onclick="openModelConfigWizard()" class="btn btn-primary btn-sm mt-4">
+                    <i class="fas fa-plus mr-1"></i>Create Model Config
+                </button>
+            </div>
+            <!-- Model config cards container -->
+            <div id="modelConfigsGrid" class="model-config-grid hidden"></div>
         </div>
     </div>
 
@@ -1026,6 +1422,353 @@
                 <i class="fas fa-chart-line chapter-empty-icon"></i>
                 <p class="chapter-empty-text">Experiment results and comparisons will be available here</p>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- Model Config Wizard Modal -->
+<div id="modelConfigWizardModal" class="modal-overlay hidden">
+    <div class="modal-container modal-container-wizard" style="max-width: 900px;">
+        <!-- Modal Header -->
+        <div class="modal-header-wizard">
+            <div class="modal-header-content">
+                <div class="modal-header-icon" style="background: linear-gradient(135deg, #8b5cf6 0%, #a78bfa 100%);">
+                    <i class="fas fa-layer-group text-lg text-white"></i>
+                </div>
+                <div class="modal-header-info">
+                    <h3 class="modal-header-title" id="modelConfigWizardTitle">Create Model Config</h3>
+                    <p class="modal-step-counter">Step <span id="mcCurrentStep">1</span> of 3</p>
+                </div>
+            </div>
+
+            <!-- Progress Bar -->
+            <div class="progress-bar-pills">
+                <div id="mcProgress1" class="progress-step-pill current">Basic Info</div>
+                <div id="mcProgress2" class="progress-step-pill future">Architecture</div>
+                <div id="mcProgress3" class="progress-step-pill future">Training</div>
+            </div>
+
+            <!-- Close button -->
+            <button class="modal-close-btn" onclick="closeModelConfigWizard()">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+
+        <!-- Modal Body -->
+        <div class="modal-body-wizard" style="max-height: calc(90vh - 200px); overflow-y: auto;">
+            <!-- Step 1: Basic Info + Model Type -->
+            <div id="mcStep1" class="wizard-step active">
+                <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Model Type</label>
+                    <div class="wizard-model-type-selector">
+                        <div class="wizard-model-type-option selected" data-type="retrieval" onclick="selectModelType('retrieval')">
+                            <div class="wizard-model-type-icon retrieval">
+                                <i class="fas fa-search"></i>
+                            </div>
+                            <div class="wizard-model-type-name">Retrieval</div>
+                            <div class="wizard-model-type-desc">Two-tower model for candidate retrieval</div>
+                        </div>
+                        <div class="wizard-model-type-option disabled" data-type="ranking">
+                            <div class="wizard-model-type-icon ranking">
+                                <i class="fas fa-sort-amount-down"></i>
+                            </div>
+                            <div class="wizard-model-type-name">Ranking</div>
+                            <div class="wizard-model-type-desc">Score and rank retrieved candidates</div>
+                            <div class="wizard-model-type-phase">(Phase 2)</div>
+                        </div>
+                        <div class="wizard-model-type-option disabled" data-type="multitask">
+                            <div class="wizard-model-type-icon multitask">
+                                <i class="fas fa-project-diagram"></i>
+                            </div>
+                            <div class="wizard-model-type-name">Multitask</div>
+                            <div class="wizard-model-type-desc">Combined retrieval + ranking</div>
+                            <div class="wizard-model-type-phase">(Phase 3)</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Configuration Name <span class="text-red-500">*</span></label>
+                    <input type="text" id="mcName" class="training-param-input w-full" placeholder="e.g., Standard Retrieval v1" />
+                </div>
+
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Description</label>
+                    <textarea id="mcDescription" class="training-param-input w-full" rows="2" placeholder="Optional description..."></textarea>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Start From Preset</label>
+                    <div class="preset-selector">
+                        <div class="preset-option" data-preset="minimal" onclick="selectPreset('minimal')">
+                            <div class="preset-option-name">Minimal</div>
+                            <div class="preset-option-desc">64→32, fast</div>
+                        </div>
+                        <div class="preset-option selected" data-preset="standard" onclick="selectPreset('standard')">
+                            <div class="preset-option-name">Standard</div>
+                            <div class="preset-option-desc">128→64→32</div>
+                        </div>
+                        <div class="preset-option" data-preset="deep" onclick="selectPreset('deep')">
+                            <div class="preset-option-name">Deep</div>
+                            <div class="preset-option-desc">256→128→64→32</div>
+                        </div>
+                        <div class="preset-option" data-preset="asymmetric" onclick="selectPreset('asymmetric')">
+                            <div class="preset-option-name">Asymmetric</div>
+                            <div class="preset-option-desc">Larger buyer</div>
+                        </div>
+                        <div class="preset-option" data-preset="regularized" onclick="selectPreset('regularized')">
+                            <div class="preset-option-name">Regularized</div>
+                            <div class="preset-option-desc">With dropout</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 2: Tower Architecture -->
+            <div id="mcStep2" class="wizard-step">
+                <div class="grid grid-cols-2 gap-6">
+                    <!-- Buyer Tower -->
+                    <div class="layer-builder">
+                        <div class="layer-builder-header">
+                            <div class="layer-builder-title">
+                                <span class="tower-indicator buyer"></span>
+                                Buyer Tower (Query)
+                            </div>
+                            <span id="buyerTowerSummary" class="text-sm text-gray-500">128→64→32</span>
+                        </div>
+                        <div class="layer-list" id="buyerLayerList">
+                            <!-- Layers will be rendered here -->
+                        </div>
+                        <div class="p-3 border-t border-gray-200">
+                            <button class="add-layer-btn" onclick="addLayer('buyer')">
+                                <i class="fas fa-plus"></i> Add Layer
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Product Tower -->
+                    <div class="layer-builder">
+                        <div class="layer-builder-header">
+                            <div class="layer-builder-title">
+                                <span class="tower-indicator product"></span>
+                                Product Tower (Candidate)
+                            </div>
+                            <span id="productTowerSummary" class="text-sm text-gray-500">128→64→32</span>
+                        </div>
+                        <div class="layer-list" id="productLayerList">
+                            <!-- Layers will be rendered here -->
+                        </div>
+                        <div class="p-3 border-t border-gray-200">
+                            <button class="add-layer-btn" onclick="addLayer('product')">
+                                <i class="fas fa-plus"></i> Add Layer
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-4 p-4 bg-gray-50 rounded-lg">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Output Embedding Dimension</label>
+                            <p class="text-xs text-gray-500">Final embedding size for both towers (must match)</p>
+                        </div>
+                        <input type="number" id="mcOutputEmbeddingDim" class="training-param-input" style="width: 100px;" value="32" min="8" max="512" step="8" />
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 3: Training Parameters -->
+            <div id="mcStep3" class="wizard-step">
+                <div class="training-params-grid">
+                    <div class="training-param-group">
+                        <label class="training-param-label">Optimizer</label>
+                        <select id="mcOptimizer" class="training-param-input">
+                            <option value="adagrad" selected>Adagrad (recommended)</option>
+                            <option value="adam">Adam</option>
+                            <option value="sgd">SGD</option>
+                        </select>
+                    </div>
+                    <div class="training-param-group">
+                        <label class="training-param-label">Learning Rate</label>
+                        <input type="number" id="mcLearningRate" class="training-param-input" value="0.1" step="0.01" min="0.0001" max="1.0" />
+                    </div>
+                    <div class="training-param-group">
+                        <label class="training-param-label">Batch Size</label>
+                        <select id="mcBatchSize" class="training-param-input">
+                            <option value="1024">1024</option>
+                            <option value="2048">2048</option>
+                            <option value="4096" selected>4096 (default)</option>
+                            <option value="8192">8192</option>
+                            <option value="16384">16384</option>
+                        </select>
+                    </div>
+                    <div class="training-param-group">
+                        <label class="training-param-label">Epochs</label>
+                        <input type="number" id="mcEpochs" class="training-param-input" value="5" min="1" max="100" />
+                    </div>
+                </div>
+
+                <!-- Summary Panel -->
+                <div class="mt-6 p-4 bg-purple-50 rounded-lg border border-purple-200">
+                    <h4 class="font-semibold text-purple-900 mb-3">Configuration Summary</h4>
+                    <div class="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                            <span class="text-purple-700">Model Type:</span>
+                            <span id="mcSummaryType" class="font-medium text-purple-900">Retrieval</span>
+                        </div>
+                        <div>
+                            <span class="text-purple-700">Buyer Tower:</span>
+                            <span id="mcSummaryBuyer" class="font-medium text-purple-900">128→64→32</span>
+                        </div>
+                        <div>
+                            <span class="text-purple-700">Product Tower:</span>
+                            <span id="mcSummaryProduct" class="font-medium text-purple-900">128→64→32</span>
+                        </div>
+                        <div>
+                            <span class="text-purple-700">Output Dim:</span>
+                            <span id="mcSummaryOutputDim" class="font-medium text-purple-900">32</span>
+                        </div>
+                        <div>
+                            <span class="text-purple-700">Est. Parameters:</span>
+                            <span id="mcSummaryParams" class="font-medium text-purple-900">~50K</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal Footer -->
+        <div class="modal-footer-wizard">
+            <button id="mcBtnBack" class="btn btn-secondary" onclick="mcPrevStep()" style="display: none;">
+                <i class="fas fa-arrow-left mr-1"></i> Back
+            </button>
+            <div class="flex-1"></div>
+            <button class="btn btn-secondary" onclick="closeModelConfigWizard()">Cancel</button>
+            <button id="mcBtnNext" class="btn btn-primary" onclick="mcNextStep()">
+                Next <i class="fas fa-arrow-right ml-1"></i>
+            </button>
+            <button id="mcBtnCreate" class="btn btn-primary hidden" onclick="createModelConfig()">
+                <i class="fas fa-check mr-1"></i> Create Config
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Add Layer Modal -->
+<div id="addLayerModal" class="modal-overlay hidden" onclick="closeAddLayerModal(event)">
+    <div class="modal-container" style="max-width: 400px;" onclick="event.stopPropagation()">
+        <div class="modal-header">
+            <h3 class="modal-title">Add Layer</h3>
+            <button class="modal-close-btn" onclick="closeAddLayerModal()">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="modal-body">
+            <input type="hidden" id="addLayerTower" />
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Layer Type</label>
+                <select id="addLayerType" class="training-param-input w-full" onchange="updateLayerFields()">
+                    <option value="dense">Dense</option>
+                    <option value="dropout">Dropout</option>
+                    <option value="batch_norm">Batch Normalization</option>
+                </select>
+            </div>
+            <div id="denseFields">
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Units</label>
+                    <input type="number" id="addLayerUnits" class="training-param-input w-full" value="64" min="8" max="1024" step="8" />
+                </div>
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Activation</label>
+                    <select id="addLayerActivation" class="training-param-input w-full">
+                        <option value="relu" selected>ReLU</option>
+                        <option value="tanh">Tanh</option>
+                        <option value="sigmoid">Sigmoid</option>
+                        <option value="linear">Linear (None)</option>
+                    </select>
+                </div>
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">L2 Regularization</label>
+                    <input type="number" id="addLayerL2" class="training-param-input w-full" value="0" min="0" max="0.1" step="0.001" />
+                </div>
+            </div>
+            <div id="dropoutFields" class="hidden">
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Dropout Rate</label>
+                    <input type="number" id="addLayerDropoutRate" class="training-param-input w-full" value="0.2" min="0" max="0.9" step="0.1" />
+                </div>
+            </div>
+            <div id="batchNormFields" class="hidden">
+                <p class="text-sm text-gray-500">Batch Normalization layer has no configurable parameters.</p>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeAddLayerModal()">Cancel</button>
+            <button class="btn btn-primary" onclick="confirmAddLayer()">Add Layer</button>
+        </div>
+    </div>
+</div>
+
+<!-- Model Config View Modal -->
+<div id="modelConfigViewModal" class="modal-overlay hidden" onclick="closeModelConfigViewModal(event)">
+    <div class="modal-container" style="max-width: 700px;" onclick="event.stopPropagation()">
+        <div class="modal-header">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-lg flex items-center justify-center" style="background: linear-gradient(135deg, #8b5cf6 0%, #a78bfa 100%);">
+                    <i class="fas fa-layer-group text-white"></i>
+                </div>
+                <div>
+                    <h3 class="modal-title" id="viewMcName">Model Config Name</h3>
+                    <p class="text-sm text-gray-500" id="viewMcDesc">Description</p>
+                </div>
+            </div>
+            <button class="modal-close-btn" onclick="closeModelConfigViewModal()">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="modal-body">
+            <div class="mb-4">
+                <span id="viewMcTypeBadge" class="model-type-badge retrieval">Retrieval</span>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4 mb-6">
+                <div class="p-4 bg-gray-50 rounded-lg">
+                    <div class="flex items-center gap-2 mb-2">
+                        <span class="tower-indicator buyer" style="width: 8px; height: 8px; border-radius: 2px; background: #3b82f6;"></span>
+                        <span class="text-sm font-medium text-gray-700">Buyer Tower</span>
+                    </div>
+                    <div id="viewMcBuyerLayers" class="font-mono text-lg text-gray-900">128→64→32</div>
+                </div>
+                <div class="p-4 bg-gray-50 rounded-lg">
+                    <div class="flex items-center gap-2 mb-2">
+                        <span class="tower-indicator product" style="width: 8px; height: 8px; border-radius: 2px; background: #10b981;"></span>
+                        <span class="text-sm font-medium text-gray-700">Product Tower</span>
+                    </div>
+                    <div id="viewMcProductLayers" class="font-mono text-lg text-gray-900">128→64→32</div>
+                </div>
+            </div>
+
+            <div class="mb-6">
+                <h4 class="text-sm font-medium text-gray-700 mb-3">Training Parameters</h4>
+                <div class="training-params-preview" id="viewMcParams">
+                    <!-- Will be populated dynamically -->
+                </div>
+            </div>
+
+            <div class="text-sm text-gray-500">
+                <span>Created <span id="viewMcCreatedAt"></span></span>
+                <span class="mx-2">•</span>
+                <span>by <span id="viewMcCreatedBy"></span></span>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeModelConfigViewModal()">Close</button>
+            <button class="btn btn-secondary" onclick="cloneModelConfig()">
+                <i class="fas fa-copy mr-1"></i> Clone
+            </button>
+            <button class="btn btn-primary" onclick="editModelConfig()">
+                <i class="fas fa-edit mr-1"></i> Edit
+            </button>
         </div>
     </div>
 </div>
@@ -1901,6 +2644,7 @@ const csrftoken = getCookie('csrftoken');
 document.addEventListener('DOMContentLoaded', function() {
     loadDatasets();
     loadConfigs();
+    loadModelConfigs();
 });
 
 function loadDatasets() {
@@ -5229,6 +5973,618 @@ function getCookie(name) {
         }
     }
     return cookieValue;
+}
+
+// =============================================================================
+// MODEL CONFIG FUNCTIONALITY
+// =============================================================================
+
+let allModelConfigs = [];
+let mcCurrentStep = 1;
+let editingModelConfigId = null;
+let viewingModelConfig = null;
+let presetsData = {};
+
+// Model Config State
+let mcState = {
+    modelType: 'retrieval',
+    name: '',
+    description: '',
+    selectedPreset: 'standard',
+    buyerTowerLayers: [],
+    productTowerLayers: [],
+    outputEmbeddingDim: 32,
+    optimizer: 'adagrad',
+    learningRate: 0.1,
+    batchSize: 4096,
+    epochs: 5
+};
+
+// Load Model Configs
+function loadModelConfigs() {
+    document.getElementById('modelConfigsLoading').classList.remove('hidden');
+    document.getElementById('modelConfigsEmpty').classList.add('hidden');
+    document.getElementById('modelConfigsGrid').classList.add('hidden');
+
+    fetch('/api/model-configs/')
+        .then(r => r.json())
+        .then(data => {
+            document.getElementById('modelConfigsLoading').classList.add('hidden');
+            if (data.success) {
+                allModelConfigs = data.data;
+                renderModelConfigs();
+            } else {
+                console.error('Error loading model configs:', data.error);
+            }
+        })
+        .catch(err => {
+            document.getElementById('modelConfigsLoading').classList.add('hidden');
+            console.error('Error loading model configs:', err);
+        });
+}
+
+// Render Model Config Cards
+function renderModelConfigs() {
+    const grid = document.getElementById('modelConfigsGrid');
+    const empty = document.getElementById('modelConfigsEmpty');
+
+    if (allModelConfigs.length === 0) {
+        empty.classList.remove('hidden');
+        grid.classList.add('hidden');
+        return;
+    }
+
+    empty.classList.add('hidden');
+    grid.classList.remove('hidden');
+
+    grid.innerHTML = allModelConfigs.map(mc => `
+        <div class="model-config-card" onclick="viewModelConfig(${mc.id})">
+            <div class="model-config-card-header">
+                <div>
+                    <div class="model-config-name">${escapeHtml(mc.name)}</div>
+                    ${mc.description ? `<div class="model-config-desc">${escapeHtml(mc.description)}</div>` : ''}
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="model-type-badge ${mc.model_type}">${mc.model_type_display}</span>
+                    <div class="model-config-actions" onclick="event.stopPropagation()">
+                        <button class="model-config-action-btn" onclick="cloneModelConfigById(${mc.id})" title="Clone">
+                            <i class="fas fa-copy"></i>
+                        </button>
+                        <button class="model-config-action-btn delete" onclick="deleteModelConfig(${mc.id})" title="Delete">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="tower-visual">
+                <div class="tower-column">
+                    <div class="tower-label">Buyer</div>
+                    <div class="tower-layers buyer">${mc.buyer_tower_summary}</div>
+                </div>
+                <div class="tower-column">
+                    <div class="tower-label">Product</div>
+                    <div class="tower-layers product">${mc.product_tower_summary}</div>
+                </div>
+            </div>
+            <div class="training-params-preview">
+                <div class="param-chip">
+                    <span class="param-chip-label">Opt:</span>
+                    <span class="param-chip-value">${mc.optimizer_display}</span>
+                </div>
+                <div class="param-chip">
+                    <span class="param-chip-label">LR:</span>
+                    <span class="param-chip-value">${mc.learning_rate}</span>
+                </div>
+                <div class="param-chip">
+                    <span class="param-chip-label">Batch:</span>
+                    <span class="param-chip-value">${mc.batch_size}</span>
+                </div>
+                <div class="param-chip">
+                    <span class="param-chip-label">Epochs:</span>
+                    <span class="param-chip-value">${mc.epochs}</span>
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+
+// Open Model Config Wizard
+function openModelConfigWizard() {
+    editingModelConfigId = null;
+    mcCurrentStep = 1;
+    resetMcState();
+    loadPresets();
+    document.getElementById('modelConfigWizardTitle').textContent = 'Create Model Config';
+    document.getElementById('modelConfigWizardModal').classList.remove('hidden');
+    updateMcStep();
+}
+
+// Close Model Config Wizard
+function closeModelConfigWizard() {
+    document.getElementById('modelConfigWizardModal').classList.add('hidden');
+}
+
+// Reset Model Config State
+function resetMcState() {
+    mcState = {
+        modelType: 'retrieval',
+        name: '',
+        description: '',
+        selectedPreset: 'standard',
+        buyerTowerLayers: [],
+        productTowerLayers: [],
+        outputEmbeddingDim: 32,
+        optimizer: 'adagrad',
+        learningRate: 0.1,
+        batchSize: 4096,
+        epochs: 5
+    };
+    document.getElementById('mcName').value = '';
+    document.getElementById('mcDescription').value = '';
+    selectModelType('retrieval');
+    selectPreset('standard');
+}
+
+// Load Presets from API
+function loadPresets() {
+    fetch('/api/model-configs/presets/')
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                presetsData = data.data;
+                applyPreset('standard');
+            }
+        })
+        .catch(err => console.error('Error loading presets:', err));
+}
+
+// Select Model Type
+function selectModelType(type) {
+    if (type !== 'retrieval') return; // Only retrieval enabled for Phase 1
+
+    mcState.modelType = type;
+    document.querySelectorAll('.wizard-model-type-option').forEach(opt => {
+        opt.classList.toggle('selected', opt.dataset.type === type);
+    });
+}
+
+// Select Preset
+function selectPreset(preset) {
+    mcState.selectedPreset = preset;
+    document.querySelectorAll('.preset-option').forEach(opt => {
+        opt.classList.toggle('selected', opt.dataset.preset === preset);
+    });
+    applyPreset(preset);
+}
+
+// Apply Preset Configuration
+function applyPreset(presetName) {
+    const preset = presetsData[presetName];
+    if (!preset) return;
+
+    mcState.buyerTowerLayers = JSON.parse(JSON.stringify(preset.buyer_tower_layers || []));
+    mcState.productTowerLayers = JSON.parse(JSON.stringify(preset.product_tower_layers || []));
+    mcState.outputEmbeddingDim = preset.output_embedding_dim || 32;
+
+    renderTowerLayers();
+    updateTowerSummaries();
+}
+
+// Render Tower Layers
+function renderTowerLayers() {
+    renderLayerList('buyer', mcState.buyerTowerLayers);
+    renderLayerList('product', mcState.productTowerLayers);
+}
+
+function renderLayerList(tower, layers) {
+    const list = document.getElementById(`${tower}LayerList`);
+    if (!list) return;
+
+    list.innerHTML = layers.map((layer, idx) => {
+        let badge = '';
+        let params = '';
+
+        if (layer.type === 'dense') {
+            badge = '<span class="layer-type-badge dense">Dense</span>';
+            params = `${layer.units} units, ${layer.activation || 'relu'}${layer.l2_reg ? `, L2=${layer.l2_reg}` : ''}`;
+        } else if (layer.type === 'dropout') {
+            badge = '<span class="layer-type-badge dropout">Dropout</span>';
+            params = `rate: ${layer.rate}`;
+        } else if (layer.type === 'batch_norm') {
+            badge = '<span class="layer-type-badge batch_norm">BatchNorm</span>';
+            params = '';
+        }
+
+        return `
+            <div class="layer-item" data-index="${idx}">
+                <span class="drag-handle"><i class="fas fa-grip-vertical"></i></span>
+                ${badge}
+                <span class="layer-params">${params}</span>
+                <div class="layer-actions">
+                    <button class="model-config-action-btn" onclick="removeLayer('${tower}', ${idx})" title="Remove">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+// Update Tower Summaries
+function updateTowerSummaries() {
+    const buyerSummary = getTowerSummary(mcState.buyerTowerLayers);
+    const productSummary = getTowerSummary(mcState.productTowerLayers);
+
+    const buyerEl = document.getElementById('buyerTowerSummary');
+    const productEl = document.getElementById('productTowerSummary');
+
+    if (buyerEl) buyerEl.textContent = buyerSummary;
+    if (productEl) productEl.textContent = productSummary;
+}
+
+function getTowerSummary(layers) {
+    const units = layers.filter(l => l.type === 'dense').map(l => l.units);
+    return units.length > 0 ? units.join('→') : 'Empty';
+}
+
+// Add Layer
+function addLayer(tower) {
+    document.getElementById('addLayerTower').value = tower;
+    document.getElementById('addLayerType').value = 'dense';
+    document.getElementById('addLayerUnits').value = '64';
+    document.getElementById('addLayerActivation').value = 'relu';
+    document.getElementById('addLayerL2').value = '0';
+    document.getElementById('addLayerDropoutRate').value = '0.2';
+    updateLayerFields();
+    document.getElementById('addLayerModal').classList.remove('hidden');
+}
+
+function updateLayerFields() {
+    const type = document.getElementById('addLayerType').value;
+    document.getElementById('denseFields').classList.toggle('hidden', type !== 'dense');
+    document.getElementById('dropoutFields').classList.toggle('hidden', type !== 'dropout');
+    document.getElementById('batchNormFields').classList.toggle('hidden', type !== 'batch_norm');
+}
+
+function closeAddLayerModal(event) {
+    if (event && event.target !== event.currentTarget) return;
+    document.getElementById('addLayerModal').classList.add('hidden');
+}
+
+function confirmAddLayer() {
+    const tower = document.getElementById('addLayerTower').value;
+    const type = document.getElementById('addLayerType').value;
+
+    let layer = { type };
+
+    if (type === 'dense') {
+        layer.units = parseInt(document.getElementById('addLayerUnits').value);
+        layer.activation = document.getElementById('addLayerActivation').value;
+        if (layer.activation === 'linear') layer.activation = null;
+        const l2 = parseFloat(document.getElementById('addLayerL2').value);
+        if (l2 > 0) layer.l2_reg = l2;
+    } else if (type === 'dropout') {
+        layer.rate = parseFloat(document.getElementById('addLayerDropoutRate').value);
+    }
+
+    if (tower === 'buyer') {
+        mcState.buyerTowerLayers.push(layer);
+    } else {
+        mcState.productTowerLayers.push(layer);
+    }
+
+    renderTowerLayers();
+    updateTowerSummaries();
+    closeAddLayerModal();
+}
+
+function removeLayer(tower, index) {
+    if (tower === 'buyer') {
+        mcState.buyerTowerLayers.splice(index, 1);
+    } else {
+        mcState.productTowerLayers.splice(index, 1);
+    }
+    renderTowerLayers();
+    updateTowerSummaries();
+}
+
+// Navigation
+function mcNextStep() {
+    if (mcCurrentStep === 1) {
+        const name = document.getElementById('mcName').value.trim();
+        if (!name) {
+            alert('Please enter a configuration name');
+            return;
+        }
+        mcState.name = name;
+        mcState.description = document.getElementById('mcDescription').value.trim();
+    }
+
+    if (mcCurrentStep < 3) {
+        mcCurrentStep++;
+        updateMcStep();
+    }
+}
+
+function mcPrevStep() {
+    if (mcCurrentStep > 1) {
+        mcCurrentStep--;
+        updateMcStep();
+    }
+}
+
+function updateMcStep() {
+    // Update step content visibility (use 'active' class, not 'hidden')
+    document.getElementById('mcStep1').classList.toggle('active', mcCurrentStep === 1);
+    document.getElementById('mcStep2').classList.toggle('active', mcCurrentStep === 2);
+    document.getElementById('mcStep3').classList.toggle('active', mcCurrentStep === 3);
+
+    // Update progress pills
+    for (let i = 1; i <= 3; i++) {
+        const pill = document.getElementById(`mcProgress${i}`);
+        pill.classList.remove('current', 'completed', 'future');
+        if (i < mcCurrentStep) {
+            pill.classList.add('completed');
+        } else if (i === mcCurrentStep) {
+            pill.classList.add('current');
+        } else {
+            pill.classList.add('future');
+        }
+    }
+
+    // Update step counter
+    document.getElementById('mcCurrentStep').textContent = mcCurrentStep;
+
+    // Update buttons
+    document.getElementById('mcBtnBack').style.display = mcCurrentStep > 1 ? 'inline-flex' : 'none';
+    document.getElementById('mcBtnNext').classList.toggle('hidden', mcCurrentStep === 3);
+    document.getElementById('mcBtnCreate').classList.toggle('hidden', mcCurrentStep !== 3);
+
+    // Update summary on step 3
+    if (mcCurrentStep === 3) {
+        updateMcSummary();
+    }
+
+    // Render layers when entering step 2
+    if (mcCurrentStep === 2) {
+        renderTowerLayers();
+        updateTowerSummaries();
+    }
+}
+
+function updateMcSummary() {
+    document.getElementById('mcSummaryType').textContent = 'Retrieval';
+    document.getElementById('mcSummaryBuyer').textContent = getTowerSummary(mcState.buyerTowerLayers);
+    document.getElementById('mcSummaryProduct').textContent = getTowerSummary(mcState.productTowerLayers);
+    document.getElementById('mcSummaryOutputDim').textContent = document.getElementById('mcOutputEmbeddingDim').value;
+
+    // Estimate params (rough calculation)
+    const buyerParams = estimateTowerParams(mcState.buyerTowerLayers);
+    const productParams = estimateTowerParams(mcState.productTowerLayers);
+    const totalParams = buyerParams + productParams;
+    document.getElementById('mcSummaryParams').textContent = formatParams(totalParams);
+}
+
+function estimateTowerParams(layers) {
+    let params = 0;
+    let prevDim = 100; // Assume input dim
+    for (const layer of layers) {
+        if (layer.type === 'dense') {
+            params += prevDim * layer.units + layer.units;
+            prevDim = layer.units;
+        }
+    }
+    return params;
+}
+
+function formatParams(num) {
+    if (num >= 1000000) return `~${(num / 1000000).toFixed(1)}M`;
+    if (num >= 1000) return `~${(num / 1000).toFixed(0)}K`;
+    return `~${num}`;
+}
+
+// Create Model Config
+function createModelConfig() {
+    const payload = {
+        name: mcState.name,
+        description: mcState.description,
+        model_type: mcState.modelType,
+        buyer_tower_layers: mcState.buyerTowerLayers,
+        product_tower_layers: mcState.productTowerLayers,
+        output_embedding_dim: parseInt(document.getElementById('mcOutputEmbeddingDim').value),
+        optimizer: document.getElementById('mcOptimizer').value,
+        learning_rate: parseFloat(document.getElementById('mcLearningRate').value),
+        batch_size: parseInt(document.getElementById('mcBatchSize').value),
+        epochs: parseInt(document.getElementById('mcEpochs').value)
+    };
+
+    fetch('/api/model-configs/create/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCsrfToken()
+        },
+        body: JSON.stringify(payload)
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            closeModelConfigWizard();
+            loadModelConfigs();
+            showToast('Model config created successfully', 'success');
+        } else {
+            alert('Error: ' + (data.error || 'Unknown error'));
+        }
+    })
+    .catch(err => {
+        console.error('Error creating model config:', err);
+        alert('Error creating model config');
+    });
+}
+
+// View Model Config
+function viewModelConfig(id) {
+    const mc = allModelConfigs.find(c => c.id === id);
+    if (!mc) return;
+
+    viewingModelConfig = mc;
+
+    document.getElementById('viewMcName').textContent = mc.name;
+    document.getElementById('viewMcDesc').textContent = mc.description || 'No description';
+
+    const badge = document.getElementById('viewMcTypeBadge');
+    badge.className = `model-type-badge ${mc.model_type}`;
+    badge.textContent = mc.model_type_display;
+
+    document.getElementById('viewMcBuyerLayers').textContent = mc.buyer_tower_summary;
+    document.getElementById('viewMcProductLayers').textContent = mc.product_tower_summary;
+
+    document.getElementById('viewMcParams').innerHTML = `
+        <div class="param-chip">
+            <span class="param-chip-label">Optimizer:</span>
+            <span class="param-chip-value">${mc.optimizer_display}</span>
+        </div>
+        <div class="param-chip">
+            <span class="param-chip-label">Learning Rate:</span>
+            <span class="param-chip-value">${mc.learning_rate}</span>
+        </div>
+        <div class="param-chip">
+            <span class="param-chip-label">Batch Size:</span>
+            <span class="param-chip-value">${mc.batch_size}</span>
+        </div>
+        <div class="param-chip">
+            <span class="param-chip-label">Epochs:</span>
+            <span class="param-chip-value">${mc.epochs}</span>
+        </div>
+        <div class="param-chip">
+            <span class="param-chip-label">Output Dim:</span>
+            <span class="param-chip-value">${mc.output_embedding_dim}</span>
+        </div>
+    `;
+
+    document.getElementById('viewMcCreatedAt').textContent = new Date(mc.created_at).toLocaleDateString();
+    document.getElementById('viewMcCreatedBy').textContent = mc.created_by || 'Unknown';
+
+    document.getElementById('modelConfigViewModal').classList.remove('hidden');
+}
+
+function closeModelConfigViewModal(event) {
+    if (event && event.target !== event.currentTarget) return;
+    document.getElementById('modelConfigViewModal').classList.add('hidden');
+    viewingModelConfig = null;
+}
+
+// Clone Model Config
+function cloneModelConfig() {
+    if (!viewingModelConfig) return;
+    cloneModelConfigById(viewingModelConfig.id);
+    closeModelConfigViewModal();
+}
+
+function cloneModelConfigById(id) {
+    if (!confirm('Clone this model config?')) return;
+
+    fetch(`/api/model-configs/${id}/clone/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCsrfToken()
+        },
+        body: JSON.stringify({})
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            loadModelConfigs();
+            showToast('Model config cloned successfully', 'success');
+        } else {
+            alert('Error: ' + (data.error || 'Unknown error'));
+        }
+    })
+    .catch(err => {
+        console.error('Error cloning model config:', err);
+        alert('Error cloning model config');
+    });
+}
+
+// Delete Model Config
+function deleteModelConfig(id) {
+    if (!confirm('Are you sure you want to delete this model config?')) return;
+
+    fetch(`/api/model-configs/${id}/delete/`, {
+        method: 'DELETE',
+        headers: {
+            'X-CSRFToken': getCsrfToken()
+        }
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            loadModelConfigs();
+            showToast('Model config deleted', 'success');
+        } else {
+            alert('Error: ' + (data.error || 'Unknown error'));
+        }
+    })
+    .catch(err => {
+        console.error('Error deleting model config:', err);
+        alert('Error deleting model config');
+    });
+}
+
+// Edit Model Config (opens wizard in edit mode)
+function editModelConfig() {
+    if (!viewingModelConfig) return;
+
+    // Fetch full config details
+    fetch(`/api/model-configs/${viewingModelConfig.id}/`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                const mc = data.data;
+                editingModelConfigId = mc.id;
+
+                mcState.name = mc.name;
+                mcState.description = mc.description;
+                mcState.modelType = mc.model_type;
+                mcState.buyerTowerLayers = mc.buyer_tower_layers || [];
+                mcState.productTowerLayers = mc.product_tower_layers || [];
+                mcState.outputEmbeddingDim = mc.output_embedding_dim;
+
+                document.getElementById('mcName').value = mc.name;
+                document.getElementById('mcDescription').value = mc.description || '';
+                document.getElementById('mcOutputEmbeddingDim').value = mc.output_embedding_dim;
+                document.getElementById('mcOptimizer').value = mc.optimizer;
+                document.getElementById('mcLearningRate').value = mc.learning_rate;
+                document.getElementById('mcBatchSize').value = mc.batch_size;
+                document.getElementById('mcEpochs').value = mc.epochs;
+
+                selectModelType(mc.model_type);
+
+                mcCurrentStep = 1;
+                document.getElementById('modelConfigWizardTitle').textContent = 'Edit Model Config';
+                document.getElementById('mcBtnCreate').innerHTML = '<i class="fas fa-check mr-1"></i> Save Changes';
+                closeModelConfigViewModal();
+                document.getElementById('modelConfigWizardModal').classList.remove('hidden');
+                updateMcStep();
+            }
+        })
+        .catch(err => console.error('Error loading model config:', err));
+}
+
+// Helper: Escape HTML
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Helper: Show Toast (if not already defined)
+if (typeof showToast !== 'function') {
+    function showToast(message, type) {
+        console.log(`[${type}] ${message}`);
+    }
 }
 </script>
 {% endblock %}

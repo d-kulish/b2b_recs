@@ -1896,6 +1896,41 @@ class ModelConfig(models.Model):
     # It is specified at QuickTest time when the user selects which column to use.
 
     # =========================================================================
+    # Retrieval Algorithm Configuration
+    # =========================================================================
+
+    RETRIEVAL_ALGORITHM_BRUTE_FORCE = 'brute_force'
+    RETRIEVAL_ALGORITHM_SCANN = 'scann'
+
+    RETRIEVAL_ALGORITHM_CHOICES = [
+        (RETRIEVAL_ALGORITHM_BRUTE_FORCE, 'Brute Force'),
+        (RETRIEVAL_ALGORITHM_SCANN, 'ScaNN'),
+    ]
+
+    retrieval_algorithm = models.CharField(
+        max_length=20,
+        choices=RETRIEVAL_ALGORITHM_CHOICES,
+        default=RETRIEVAL_ALGORITHM_BRUTE_FORCE,
+        help_text="Algorithm for top-K candidate retrieval"
+    )
+
+    top_k = models.IntegerField(
+        default=100,
+        help_text="Number of top candidates to retrieve"
+    )
+
+    # ScaNN-specific parameters (only used when retrieval_algorithm='scann')
+    scann_num_leaves = models.IntegerField(
+        default=100,
+        help_text="Number of partitions for ScaNN index (recommended: sqrt(catalog_size))"
+    )
+
+    scann_leaves_to_search = models.IntegerField(
+        default=10,
+        help_text="Number of partitions to search at query time"
+    )
+
+    # =========================================================================
     # Metadata
     # =========================================================================
 
@@ -2051,7 +2086,7 @@ class ModelConfig(models.Model):
         Return preset configuration dictionary.
 
         Args:
-            preset_name: One of 'minimal', 'standard', 'deep', 'asymmetric', 'regularized'
+            preset_name: One of 'minimal', 'standard', 'deep', 'regularized'
 
         Returns:
             Dictionary with preset values
@@ -2073,69 +2108,54 @@ class ModelConfig(models.Model):
             },
             'standard': {
                 'name': 'Standard',
-                'description': 'Balanced architecture, 3 layers, recommended starting point',
+                'description': 'Balanced 3-layer architecture with L2 regularization',
                 'buyer_tower_layers': [
-                    {"type": "dense", "units": 128, "activation": "relu", "l2_reg": 0.0},
-                    {"type": "dense", "units": 64, "activation": "relu", "l2_reg": 0.0},
-                    {"type": "dense", "units": 32, "activation": "relu", "l2_reg": 0.0},
+                    {"type": "dense", "units": 128, "activation": "relu", "l2_reg": 0.001},
+                    {"type": "dense", "units": 64, "activation": "relu"},
+                    {"type": "dense", "units": 32, "activation": "relu"},
                 ],
                 'product_tower_layers': [
-                    {"type": "dense", "units": 128, "activation": "relu", "l2_reg": 0.0},
-                    {"type": "dense", "units": 64, "activation": "relu", "l2_reg": 0.0},
-                    {"type": "dense", "units": 32, "activation": "relu", "l2_reg": 0.0},
+                    {"type": "dense", "units": 128, "activation": "relu", "l2_reg": 0.001},
+                    {"type": "dense", "units": 64, "activation": "relu"},
+                    {"type": "dense", "units": 32, "activation": "relu"},
                 ],
                 'output_embedding_dim': 32,
                 'estimated_time': '~8 min',
             },
             'deep': {
                 'name': 'Deep',
-                'description': 'Maximum capacity, 4 layers, best for large datasets',
+                'description': 'High capacity 4-layer architecture with L2 regularization',
                 'buyer_tower_layers': [
-                    {"type": "dense", "units": 256, "activation": "relu", "l2_reg": 0.0},
-                    {"type": "dense", "units": 128, "activation": "relu", "l2_reg": 0.0},
-                    {"type": "dense", "units": 64, "activation": "relu", "l2_reg": 0.0},
-                    {"type": "dense", "units": 32, "activation": "relu", "l2_reg": 0.0},
+                    {"type": "dense", "units": 256, "activation": "relu", "l2_reg": 0.001},
+                    {"type": "dense", "units": 128, "activation": "relu"},
+                    {"type": "dense", "units": 64, "activation": "relu"},
+                    {"type": "dense", "units": 32, "activation": "relu"},
                 ],
                 'product_tower_layers': [
-                    {"type": "dense", "units": 256, "activation": "relu", "l2_reg": 0.0},
-                    {"type": "dense", "units": 128, "activation": "relu", "l2_reg": 0.0},
-                    {"type": "dense", "units": 64, "activation": "relu", "l2_reg": 0.0},
-                    {"type": "dense", "units": 32, "activation": "relu", "l2_reg": 0.0},
+                    {"type": "dense", "units": 256, "activation": "relu", "l2_reg": 0.001},
+                    {"type": "dense", "units": 128, "activation": "relu"},
+                    {"type": "dense", "units": 64, "activation": "relu"},
+                    {"type": "dense", "units": 32, "activation": "relu"},
                 ],
                 'output_embedding_dim': 32,
                 'estimated_time': '~15 min',
             },
-            'asymmetric': {
-                'name': 'Asymmetric',
-                'description': 'Larger buyer tower for context-heavy features, smaller product tower',
-                'buyer_tower_layers': [
-                    {"type": "dense", "units": 256, "activation": "relu", "l2_reg": 0.0},
-                    {"type": "dense", "units": 128, "activation": "relu", "l2_reg": 0.0},
-                    {"type": "dense", "units": 64, "activation": "relu", "l2_reg": 0.0},
-                ],
-                'product_tower_layers': [
-                    {"type": "dense", "units": 128, "activation": "relu", "l2_reg": 0.0},
-                    {"type": "dense", "units": 64, "activation": "relu", "l2_reg": 0.0},
-                ],
-                'output_embedding_dim': 64,
-                'estimated_time': '~10 min',
-            },
             'regularized': {
                 'name': 'Regularized',
-                'description': 'With dropout and L2 regularization to prevent overfitting',
+                'description': 'With dropout and stronger L2 to prevent overfitting',
                 'buyer_tower_layers': [
                     {"type": "dense", "units": 128, "activation": "relu", "l2_reg": 0.01},
                     {"type": "dropout", "rate": 0.2},
-                    {"type": "dense", "units": 64, "activation": "relu", "l2_reg": 0.01},
+                    {"type": "dense", "units": 64, "activation": "relu"},
                     {"type": "dropout", "rate": 0.1},
-                    {"type": "dense", "units": 32, "activation": "relu", "l2_reg": 0.0},
+                    {"type": "dense", "units": 32, "activation": "relu"},
                 ],
                 'product_tower_layers': [
                     {"type": "dense", "units": 128, "activation": "relu", "l2_reg": 0.01},
                     {"type": "dropout", "rate": 0.2},
-                    {"type": "dense", "units": 64, "activation": "relu", "l2_reg": 0.01},
+                    {"type": "dense", "units": 64, "activation": "relu"},
                     {"type": "dropout", "rate": 0.1},
-                    {"type": "dense", "units": 32, "activation": "relu", "l2_reg": 0.0},
+                    {"type": "dense", "units": 32, "activation": "relu"},
                 ],
                 'output_embedding_dim': 32,
                 'estimated_time': '~10 min',
@@ -2146,7 +2166,7 @@ class ModelConfig(models.Model):
     @classmethod
     def get_all_presets(cls):
         """Return all available presets"""
-        preset_names = ['minimal', 'standard', 'deep', 'asymmetric', 'regularized']
+        preset_names = ['minimal', 'standard', 'deep', 'regularized']
         return {name: cls.get_preset(name) for name in preset_names}
 
     @classmethod

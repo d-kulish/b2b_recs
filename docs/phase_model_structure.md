@@ -20,14 +20,19 @@ This document provides detailed specifications for implementing the **Model Stru
 | URL routing | ✅ Done | `ml_platform/modeling/urls.py:50-75` |
 | Django admin registration | ✅ Done | `ml_platform/admin.py:141-168` |
 | Preset system (5 presets) | ✅ Done | minimal, standard, deep, asymmetric, regularized |
+| Retrieval algorithm fields | ✅ Done | `retrieval_algorithm`, `top_k`, `scann_num_leaves`, `scann_leaves_to_search` |
 | **Frontend** | | |
 | Model Structure chapter UI | ✅ Done | Cards grid with loading/empty states |
 | ModelConfig card component | ✅ Done | Shows type badge, tower summaries, training params |
 | 3-step wizard modal | ✅ Done | Basic Info → Architecture → Training |
 | Step 1: Model type + presets | ✅ Done | Retrieval active, Ranking/Multitask disabled |
-| Step 2: Tower builder | ✅ Done | Layer list, add layer modal (Dense/Dropout/BatchNorm) |
+| Step 2: Tower builder | ✅ Done | Layer list with drag-drop reordering, layer edit modals |
+| Step 2: Retrieval Algorithm | ✅ Done | Brute Force (default) / ScaNN selection with Top-K config |
+| Step 2: Model summary | ✅ Done | Keras-style params display (Total/Trainable/Non-trainable) |
 | Step 3: Training parameters | ✅ Done | Optimizer, LR, batch size, epochs + summary |
 | View/Edit/Clone/Delete | ✅ Done | All CRUD operations functional |
+| Layer drag-drop reordering | ✅ Done | Layers movable except output layer (locked at bottom) |
+| Unified layer edit modals | ✅ Done | Consistent styling with dimension button selectors |
 
 ### Pending
 
@@ -260,6 +265,41 @@ class ModelConfig(models.Model):
 
     # Note: rating_column is NOT stored here because ModelConfig is dataset-independent.
     # It is specified at QuickTest time when the user selects which column to use.
+
+    # ═══════════════════════════════════════════════════════════════
+    # RETRIEVAL ALGORITHM CONFIGURATION
+    # ═══════════════════════════════════════════════════════════════
+
+    RETRIEVAL_ALGORITHM_BRUTE_FORCE = 'brute_force'
+    RETRIEVAL_ALGORITHM_SCANN = 'scann'
+
+    RETRIEVAL_ALGORITHM_CHOICES = [
+        (RETRIEVAL_ALGORITHM_BRUTE_FORCE, 'Brute Force'),
+        (RETRIEVAL_ALGORITHM_SCANN, 'ScaNN'),
+    ]
+
+    retrieval_algorithm = models.CharField(
+        max_length=20,
+        choices=RETRIEVAL_ALGORITHM_CHOICES,
+        default=RETRIEVAL_ALGORITHM_BRUTE_FORCE,
+        help_text="Algorithm for top-K candidate retrieval"
+    )
+
+    top_k = models.IntegerField(
+        default=100,
+        help_text="Number of top candidates to retrieve"
+    )
+
+    # ScaNN-specific parameters (only used when retrieval_algorithm='scann')
+    scann_num_leaves = models.IntegerField(
+        default=100,
+        help_text="Number of partitions for ScaNN index (recommended: sqrt(catalog_size))"
+    )
+
+    scann_leaves_to_search = models.IntegerField(
+        default=10,
+        help_text="Number of partitions to search at query time"
+    )
 
     # ═══════════════════════════════════════════════════════════════
     # METADATA

@@ -92,6 +92,9 @@ This platform enables businesses to:
 - ⚙️ **Training Hyperparameters:** Optimizer (Adagrad/Adam/SGD), learning rate, batch size, epochs
 - 🔄 **Model Types:** Retrieval (Phase 1), Ranking (Phase 2), Multitask (Phase 3)
 - 📋 **CRUD Operations:** Create, view, edit, clone, delete model configs
+- 🔍 **Retrieval Algorithms:** Brute Force (default) or ScaNN for large catalogs (10K+ products)
+- 📈 **Model Summary:** Keras-style parameter display (Total/Trainable/Non-trainable params)
+- ↕️ **Layer Reordering:** Drag-drop layer reordering within towers (output layer locked)
 
 ### **Platform Features**
 - 🎨 ETL Wizard UI (5-step data source configuration)
@@ -351,13 +354,17 @@ WHERE source_type='gcs';
 
 ## 📝 Recent Updates
 
-**December 11, 2025 - Model Structure Chapter**
+**December 11, 2025 - Model Structure Chapter Enhanced**
 - ✅ **ModelConfig entity** - Separate model architecture from feature engineering
 - ✅ **Tower Architecture Builder** - Visual layer configuration for Buyer/Product towers
 - ✅ **5 Presets** - Minimal, Standard, Deep, Asymmetric, Regularized
 - ✅ **3-step Wizard** - Basic Info → Architecture → Training
 - ✅ **Layer Types** - Dense, Dropout, Batch Normalization
 - ✅ **Training Params** - Optimizer (Adagrad/Adam/SGD), learning rate, batch size, epochs
+- ✅ **Retrieval Algorithms** - Brute Force (default) or ScaNN for 10K+ product catalogs
+- ✅ **Layer Drag-Drop Reordering** - Layers movable within towers (output layer locked)
+- ✅ **Keras-style Model Summary** - Total/Trainable/Non-trainable params per tower
+- ✅ **Unified Layer Edit Modals** - Consistent UI with dimension button selectors
 - ✅ **Phase 1 (Retrieval)** implemented; Ranking/Multitask planned for Phase 2/3
 - ✅ API endpoints: `/api/model-configs/` (full CRUD + clone + presets)
 - See [Phase: Model Structure docs](docs/phase_model_structure.md) for details

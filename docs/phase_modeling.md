@@ -10,9 +10,9 @@ This document provides detailed specifications for implementing the **Modeling**
 
 ## Recent Updates (December 2025)
 
-### Model Structure Chapter (2025-12-11)
+### Model Structure Chapter - Enhanced (2025-12-11)
 
-**New Feature:**
+**New Features:**
 Added complete Model Structure chapter for configuring neural network architecture independently from feature engineering. This enables flexible experimentation with different model architectures using the same feature set.
 
 **Key Components:**
@@ -21,6 +21,15 @@ Added complete Model Structure chapter for configuring neural network architectu
 - **Visual tower builder** - Layer list with add/remove, supports Dense/Dropout/BatchNorm layers
 - **5 presets** - Minimal, Standard, Deep, Asymmetric, Regularized
 - **Full CRUD** - View/Edit/Clone/Delete model configs
+
+**Step 2 Enhancements (2025-12-11):**
+- **Retrieval Algorithm Selection** - Brute Force (default) or ScaNN for large catalogs (10K+ products)
+  - Top-K configuration (default: 100)
+  - ScaNN parameters: num_leaves, leaves_to_search
+- **Layer Drag-Drop Reordering** - Layers can be reordered within towers (except output layer)
+- **Keras-style Model Summary** - Each tower displays Total params, Trainable params, Non-trainable params
+- **Unified Layer Edit Modals** - Consistent UI with dimension button selectors (32, 64, 128, 256, 512 + custom)
+- **Output Layer Alignment** - Output layers and param summaries always align between towers
 
 **Model Types (Phased):**
 | Phase | Type | Status |
@@ -36,12 +45,18 @@ Added complete Model Structure chapter for configuring neural network architectu
 - `POST /api/model-configs/{id}/clone/` - Clone config
 - `GET /api/model-configs/presets/` - Get preset configurations
 
+**Database Fields Added:**
+- `retrieval_algorithm` - 'brute_force' (default) or 'scann'
+- `top_k` - Number of candidates to retrieve (default: 100)
+- `scann_num_leaves` - ScaNN partitions (default: 100)
+- `scann_leaves_to_search` - Partitions to search (default: 10)
+
 **Files Modified:**
-- `ml_platform/models.py` - Added `ModelConfig` model
+- `ml_platform/models.py` - Added `ModelConfig` model with retrieval algorithm fields
 - `ml_platform/modeling/api.py` - Added ModelConfig API endpoints
 - `ml_platform/modeling/urls.py` - Added URL routing
 - `ml_platform/admin.py` - Admin registration
-- `templates/ml_platform/model_modeling.html` - UI chapter + wizard
+- `templates/ml_platform/model_modeling.html` - UI chapter + wizard with enhanced Step 2
 
 **See Also:** [Phase: Model Structure](phase_model_structure.md) for full specifications.
 

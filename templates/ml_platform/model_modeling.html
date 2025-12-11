@@ -1065,6 +1065,10 @@
         background: #e5e7eb;
         color: #374151;
     }
+    .model-config-action-btn.delete {
+        background: #fef2f2;
+        color: #ef4444;
+    }
     .model-config-action-btn.delete:hover {
         background: #fee2e2;
         color: #dc2626;
@@ -1144,7 +1148,7 @@
     /* Preset Selector */
     .preset-selector {
         display: grid;
-        grid-template-columns: repeat(5, 1fr);
+        grid-template-columns: repeat(4, 1fr);
         gap: 8px;
         margin-bottom: 16px;
     }
@@ -1174,41 +1178,72 @@
         color: #9ca3af;
     }
 
-    /* Layer Builder */
-    .layer-builder {
-        border: 1px solid #e5e7eb;
+    /* Tower Builder Panel - matches Feature Config styling */
+    .tower-builder-panel {
+        border: 2px dashed #e5e7eb;
         border-radius: 12px;
         overflow: hidden;
+        transition: all 0.3s ease;
+        display: flex;
+        flex-direction: column;
     }
-    .layer-builder-header {
+    .tower-builder-panel.buyer {
+        border-color: #3b82f6;
+        background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+    }
+    .tower-builder-panel.product {
+        border-color: #10b981;
+        background: linear-gradient(135deg, #f0fdf4 0%, #d1fae5 100%);
+    }
+    .tower-builder-header {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        padding: 12px 16px;
-        background: #f9fafb;
-        border-bottom: 1px solid #e5e7eb;
+        padding: 14px 16px;
+        border-bottom: 1px solid rgba(0, 0, 0, 0.05);
     }
-    .layer-builder-title {
+    .tower-builder-title {
         font-weight: 600;
+        font-size: 14px;
         color: #374151;
         display: flex;
         align-items: center;
-        gap: 8px;
+        gap: 10px;
     }
-    .layer-builder-title .tower-indicator {
-        width: 12px;
-        height: 12px;
-        border-radius: 3px;
+    .tower-builder-title .tower-icon {
+        width: 28px;
+        height: 28px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        color: white;
     }
-    .layer-builder-title .tower-indicator.buyer {
-        background: #3b82f6;
+    .tower-builder-panel.buyer .tower-icon {
+        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+        box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
     }
-    .layer-builder-title .tower-indicator.product {
-        background: #10b981;
+    .tower-builder-panel.product .tower-icon {
+        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        box-shadow: 0 2px 4px rgba(16, 185, 129, 0.3);
+    }
+    .tower-builder-summary {
+        font-size: 13px;
+        font-weight: 600;
+    }
+    .tower-builder-panel.buyer .tower-builder-summary {
+        color: #2563eb;
+    }
+    .tower-builder-panel.product .tower-builder-summary {
+        color: #059669;
     }
     .layer-list {
         padding: 12px;
         min-height: 100px;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
     }
     .layer-item {
         display: flex;
@@ -1216,27 +1251,57 @@
         gap: 8px;
         padding: 10px 12px;
         background: white;
-        border: 1px solid #e5e7eb;
+        border: 1px solid rgba(0, 0, 0, 0.08);
         border-radius: 8px;
         margin-bottom: 8px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+        transition: all 0.2s ease;
+    }
+    .layer-item:hover {
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+    }
+    .tower-builder-panel.buyer .layer-item {
+        border-color: rgba(59, 130, 246, 0.2);
+    }
+    .tower-builder-panel.product .layer-item {
+        border-color: rgba(16, 185, 129, 0.2);
     }
     .layer-item:last-child {
         margin-bottom: 0;
     }
     .layer-item .drag-handle {
-        color: #d1d5db;
+        color: #c4c4c4;
         cursor: grab;
+        transition: color 0.2s ease;
+    }
+    .layer-item:hover .drag-handle {
+        color: #9ca3af;
+    }
+    .layer-item .drag-handle.disabled {
+        cursor: default;
+        opacity: 0.3;
+    }
+    .layer-item.dragging {
+        opacity: 0.5;
+        cursor: grabbing;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+    .layer-item.drag-over {
+        border-color: #3b82f6;
+        border-style: dashed;
+        background: #eff6ff;
     }
     .layer-item .layer-type-badge {
         font-size: 10px;
         font-weight: 600;
-        padding: 2px 6px;
+        padding: 3px 8px;
         border-radius: 4px;
         text-transform: uppercase;
+        letter-spacing: 0.3px;
     }
     .layer-item .layer-type-badge.dense {
-        background: #dbeafe;
-        color: #1d4ed8;
+        background: #e5e7eb;
+        color: #374151;
     }
     .layer-item .layer-type-badge.dropout {
         background: #fef3c7;
@@ -1255,14 +1320,21 @@
         display: flex;
         gap: 4px;
     }
+    /* Output Embedding Layer (last layer - special styling) */
+    .layer-item.output-layer {
+        border: 2px solid #f87171 !important;
+        background: white;
+        margin-top: auto;
+    }
     .add-layer-btn {
         width: 100%;
         padding: 10px;
-        border: 2px dashed #e5e7eb;
+        border: 2px dashed rgba(0, 0, 0, 0.15);
         border-radius: 8px;
-        background: transparent;
-        color: #9ca3af;
+        background: rgba(255, 255, 255, 0.5);
+        color: #6b7280;
         font-size: 12px;
+        font-weight: 500;
         cursor: pointer;
         transition: all 0.2s ease;
         display: flex;
@@ -1270,10 +1342,242 @@
         justify-content: center;
         gap: 6px;
     }
-    .add-layer-btn:hover {
-        border-color: #8b5cf6;
-        color: #8b5cf6;
-        background: #faf5ff;
+    .tower-builder-panel.buyer .add-layer-btn:hover {
+        border-color: #3b82f6;
+        color: #2563eb;
+        background: rgba(255, 255, 255, 0.8);
+    }
+    .tower-builder-panel.product .add-layer-btn:hover {
+        border-color: #10b981;
+        color: #059669;
+        background: rgba(255, 255, 255, 0.8);
+    }
+
+    /* Tower Params Summary (Keras-style) */
+    .tower-params-summary {
+        margin: 8px 12px 12px 12px;
+        padding: 10px 12px;
+        background: rgba(255, 255, 255, 0.7);
+        border-radius: 8px;
+        border-top: 2px solid rgba(0, 0, 0, 0.1);
+        font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+        font-size: 11px;
+    }
+    .tower-params-summary .params-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 2px 0;
+        color: #374151;
+    }
+    .tower-params-summary .params-row span:first-child {
+        color: #6b7280;
+    }
+    .tower-params-summary .params-row span:last-child {
+        font-weight: 600;
+        color: #1f2937;
+    }
+
+    /* Retrieval Algorithm Section */
+    .retrieval-algorithm-section {
+        margin-top: 24px;
+        padding: 20px;
+        background: linear-gradient(135deg, #fefce8 0%, #fef9c3 100%);
+        border: 2px dashed #eab308;
+        border-radius: 16px;
+    }
+    .retrieval-algorithm-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 16px;
+    }
+    .retrieval-algorithm-header .header-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, #eab308 0%, #ca8a04 100%);
+        box-shadow: 0 2px 6px rgba(234, 179, 8, 0.3);
+    }
+    .retrieval-algorithm-header .header-icon i {
+        color: white;
+        font-size: 14px;
+    }
+    .retrieval-algorithm-header h4 {
+        font-size: 14px;
+        font-weight: 600;
+        color: #854d0e;
+        margin: 0;
+    }
+    .retrieval-algorithm-header p {
+        font-size: 11px;
+        color: #a16207;
+        margin: 0;
+    }
+    .algorithm-options {
+        display: flex;
+        gap: 12px;
+        margin-bottom: 16px;
+    }
+    .algorithm-option {
+        flex: 1;
+        padding: 16px;
+        border-radius: 12px;
+        border: 2px solid transparent;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        background: white;
+    }
+    .algorithm-option:hover {
+        border-color: #fbbf24;
+        box-shadow: 0 2px 8px rgba(234, 179, 8, 0.2);
+    }
+    .algorithm-option.selected {
+        border-color: #eab308;
+        background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+        box-shadow: 0 2px 8px rgba(234, 179, 8, 0.25);
+    }
+    .algorithm-option .option-header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 8px;
+    }
+    .algorithm-option .option-radio {
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        border: 2px solid #d1d5db;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s ease;
+    }
+    .algorithm-option.selected .option-radio {
+        border-color: #eab308;
+        background: #eab308;
+    }
+    .algorithm-option.selected .option-radio::after {
+        content: '';
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: white;
+    }
+    .algorithm-option .option-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: #1f2937;
+    }
+    .algorithm-option .option-badge {
+        font-size: 9px;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+    .algorithm-option .option-badge.default {
+        background: #dcfce7;
+        color: #166534;
+    }
+    .algorithm-option .option-badge.advanced {
+        background: #fef3c7;
+        color: #92400e;
+    }
+    .algorithm-option .option-desc {
+        font-size: 11px;
+        color: #6b7280;
+        line-height: 1.4;
+        margin-left: 28px;
+    }
+    .algorithm-params {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 12px 16px;
+        background: rgba(255, 255, 255, 0.8);
+        border-radius: 10px;
+        margin-top: 12px;
+    }
+    .algorithm-param-group {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .algorithm-param-group label {
+        font-size: 12px;
+        font-weight: 500;
+        color: #854d0e;
+        white-space: nowrap;
+    }
+    .algorithm-param-group input,
+    .algorithm-param-group select {
+        padding: 6px 10px;
+        border: 1px solid #fbbf24;
+        border-radius: 6px;
+        font-size: 12px;
+        background: white;
+        color: #1f2937;
+        width: 80px;
+        text-align: center;
+    }
+    .algorithm-param-group input:focus,
+    .algorithm-param-group select:focus {
+        outline: none;
+        border-color: #eab308;
+        box-shadow: 0 0 0 2px rgba(234, 179, 8, 0.2);
+    }
+    .scann-params {
+        margin-top: 12px;
+        padding: 16px;
+        background: rgba(255, 255, 255, 0.9);
+        border-radius: 10px;
+        border: 1px solid #fde68a;
+    }
+    .scann-params-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+    }
+    .scann-param {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+    .scann-param label {
+        font-size: 11px;
+        font-weight: 500;
+        color: #92400e;
+    }
+    .scann-param input {
+        padding: 6px 10px;
+        border: 1px solid #fde68a;
+        border-radius: 6px;
+        font-size: 12px;
+        background: white;
+        color: #1f2937;
+    }
+    .scann-info-banner {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        padding: 10px 12px;
+        background: linear-gradient(135deg, #fefce8 0%, #fef9c3 100%);
+        border-radius: 8px;
+        border: 1px solid #fde68a;
+        margin-top: 12px;
+    }
+    .scann-info-banner i {
+        color: #ca8a04;
+        margin-top: 2px;
+    }
+    .scann-info-banner p {
+        font-size: 11px;
+        color: #854d0e;
+        margin: 0;
+        line-height: 1.4;
     }
 
     /* Training Params Form */
@@ -1302,6 +1606,16 @@
         outline: none;
         border-color: #8b5cf6;
         box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
+    }
+
+    /* Fix for progress bar - ensure last pill has rounded right border */
+    .progress-step-pill:last-child {
+        border-top-right-radius: 24px;
+        border-bottom-right-radius: 24px;
+    }
+    .progress-step-pill:first-child {
+        border-top-left-radius: 24px;
+        border-bottom-left-radius: 24px;
     }
 </style>
 {% endblock %}
@@ -1447,11 +1761,6 @@
                 <div id="mcProgress2" class="progress-step-pill future">Architecture</div>
                 <div id="mcProgress3" class="progress-step-pill future">Training</div>
             </div>
-
-            <!-- Close button -->
-            <button class="modal-close-btn" onclick="closeModelConfigWizard()">
-                <i class="fas fa-times"></i>
-            </button>
         </div>
 
         <!-- Modal Body -->
@@ -1512,10 +1821,6 @@
                             <div class="preset-option-name">Deep</div>
                             <div class="preset-option-desc">256→128→64→32</div>
                         </div>
-                        <div class="preset-option" data-preset="asymmetric" onclick="selectPreset('asymmetric')">
-                            <div class="preset-option-name">Asymmetric</div>
-                            <div class="preset-option-desc">Larger buyer</div>
-                        </div>
                         <div class="preset-option" data-preset="regularized" onclick="selectPreset('regularized')">
                             <div class="preset-option-name">Regularized</div>
                             <div class="preset-option-desc">With dropout</div>
@@ -1528,53 +1833,124 @@
             <div id="mcStep2" class="wizard-step">
                 <div class="grid grid-cols-2 gap-6">
                     <!-- Buyer Tower -->
-                    <div class="layer-builder">
-                        <div class="layer-builder-header">
-                            <div class="layer-builder-title">
-                                <span class="tower-indicator buyer"></span>
+                    <div class="tower-builder-panel buyer">
+                        <div class="tower-builder-header">
+                            <div class="tower-builder-title">
+                                <div class="tower-icon">
+                                    <i class="fas fa-user"></i>
+                                </div>
                                 Buyer Tower (Query)
                             </div>
-                            <span id="buyerTowerSummary" class="text-sm text-gray-500">128→64→32</span>
+                            <span id="buyerTowerSummary" class="tower-builder-summary">128→64→32</span>
                         </div>
-                        <div class="layer-list" id="buyerLayerList">
-                            <!-- Layers will be rendered here -->
-                        </div>
-                        <div class="p-3 border-t border-gray-200">
+                        <div class="p-2">
                             <button class="add-layer-btn" onclick="addLayer('buyer')">
                                 <i class="fas fa-plus"></i> Add Layer
                             </button>
                         </div>
+                        <div class="layer-list" id="buyerLayerList">
+                            <!-- Layers will be rendered here -->
+                        </div>
+                        <div class="tower-params-summary" id="buyerParamsSummary">
+                            <div class="params-row"><span>Total params:</span><span id="buyerTotalParams">0</span></div>
+                            <div class="params-row"><span>Trainable params:</span><span id="buyerTrainableParams">0</span></div>
+                            <div class="params-row"><span>Non-trainable params:</span><span>0</span></div>
+                        </div>
                     </div>
 
                     <!-- Product Tower -->
-                    <div class="layer-builder">
-                        <div class="layer-builder-header">
-                            <div class="layer-builder-title">
-                                <span class="tower-indicator product"></span>
+                    <div class="tower-builder-panel product">
+                        <div class="tower-builder-header">
+                            <div class="tower-builder-title">
+                                <div class="tower-icon">
+                                    <i class="fas fa-box"></i>
+                                </div>
                                 Product Tower (Candidate)
                             </div>
-                            <span id="productTowerSummary" class="text-sm text-gray-500">128→64→32</span>
+                            <span id="productTowerSummary" class="tower-builder-summary">128→64→32</span>
                         </div>
-                        <div class="layer-list" id="productLayerList">
-                            <!-- Layers will be rendered here -->
-                        </div>
-                        <div class="p-3 border-t border-gray-200">
+                        <div class="p-2">
                             <button class="add-layer-btn" onclick="addLayer('product')">
                                 <i class="fas fa-plus"></i> Add Layer
                             </button>
                         </div>
+                        <div class="layer-list" id="productLayerList">
+                            <!-- Layers will be rendered here -->
+                        </div>
+                        <div class="tower-params-summary" id="productParamsSummary">
+                            <div class="params-row"><span>Total params:</span><span id="productTotalParams">0</span></div>
+                            <div class="params-row"><span>Trainable params:</span><span id="productTrainableParams">0</span></div>
+                            <div class="params-row"><span>Non-trainable params:</span><span>0</span></div>
+                        </div>
                     </div>
                 </div>
 
-                <div class="mt-4 p-4 bg-gray-50 rounded-lg">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700">Output Embedding Dimension</label>
-                            <p class="text-xs text-gray-500">Final embedding size for both towers (must match)</p>
+                <!-- Retrieval Algorithm Section -->
+                <div class="retrieval-algorithm-section">
+                    <div class="retrieval-algorithm-header">
+                        <div class="header-icon">
+                            <i class="fas fa-search"></i>
                         </div>
-                        <input type="number" id="mcOutputEmbeddingDim" class="training-param-input" style="width: 100px;" value="32" min="8" max="512" step="8" />
+                        <div>
+                            <h4>Retrieval Algorithm</h4>
+                            <p>How to find top candidates from the product catalog</p>
+                        </div>
+                    </div>
+
+                    <div class="algorithm-options">
+                        <!-- Brute Force Option -->
+                        <div class="algorithm-option selected" onclick="selectRetrievalAlgorithm('brute_force')">
+                            <div class="option-header">
+                                <div class="option-radio"></div>
+                                <span class="option-title">Brute Force</span>
+                                <span class="option-badge default">Default</span>
+                            </div>
+                            <p class="option-desc">Exact nearest neighbor search. Computes similarity with all products. Best for catalogs under 10K items.</p>
+                        </div>
+
+                        <!-- ScaNN Option -->
+                        <div class="algorithm-option" onclick="selectRetrievalAlgorithm('scann')">
+                            <div class="option-header">
+                                <div class="option-radio"></div>
+                                <span class="option-title">ScaNN</span>
+                                <span class="option-badge advanced">Large Scale</span>
+                            </div>
+                            <p class="option-desc">Approximate nearest neighbor. 10-20x faster for large catalogs. ~97% accuracy with optimized parameters.</p>
+                        </div>
+                    </div>
+
+                    <!-- Brute Force Parameters -->
+                    <div id="bruteForceParams" class="algorithm-params">
+                        <div class="algorithm-param-group">
+                            <label>Top K Results:</label>
+                            <input type="number" id="mcTopK" value="100" min="10" max="1000" step="10" />
+                        </div>
+                        <span class="text-xs text-amber-700">Number of recommendations to retrieve per query</span>
+                    </div>
+
+                    <!-- ScaNN Parameters (hidden by default) -->
+                    <div id="scannParams" class="scann-params hidden">
+                        <div class="scann-params-grid">
+                            <div class="scann-param">
+                                <label>Top K Results</label>
+                                <input type="number" id="mcScannTopK" value="100" min="10" max="1000" step="10" />
+                            </div>
+                            <div class="scann-param">
+                                <label>Num Leaves</label>
+                                <input type="number" id="mcScannNumLeaves" value="100" min="10" max="10000" step="10" />
+                            </div>
+                            <div class="scann-param">
+                                <label>Leaves to Search</label>
+                                <input type="number" id="mcScannLeavesToSearch" value="10" min="1" max="1000" step="1" />
+                            </div>
+                        </div>
+                        <div class="scann-info-banner">
+                            <i class="fas fa-info-circle"></i>
+                            <p><strong>Recommended for catalogs with 10,000+ products.</strong> ScaNN uses tree-partitioning for fast approximate search. Default values work well for most cases. Increase "Leaves to Search" for higher accuracy.</p>
+                        </div>
                     </div>
                 </div>
+
             </div>
 
             <!-- Step 3: Training Parameters -->
@@ -1629,6 +2005,10 @@
                             <span id="mcSummaryOutputDim" class="font-medium text-purple-900">32</span>
                         </div>
                         <div>
+                            <span class="text-purple-700">Retrieval:</span>
+                            <span id="mcSummaryRetrieval" class="font-medium text-purple-900">Brute Force (Top 100)</span>
+                        </div>
+                        <div>
                             <span class="text-purple-700">Est. Parameters:</span>
                             <span id="mcSummaryParams" class="font-medium text-purple-900">~50K</span>
                         </div>
@@ -1638,73 +2018,196 @@
         </div>
 
         <!-- Modal Footer -->
-        <div class="modal-footer-wizard">
-            <button id="mcBtnBack" class="btn btn-secondary" onclick="mcPrevStep()" style="display: none;">
-                <i class="fas fa-arrow-left mr-1"></i> Back
-            </button>
-            <div class="flex-1"></div>
-            <button class="btn btn-secondary" onclick="closeModelConfigWizard()">Cancel</button>
-            <button id="mcBtnNext" class="btn btn-primary" onclick="mcNextStep()">
-                Next <i class="fas fa-arrow-right ml-1"></i>
-            </button>
-            <button id="mcBtnCreate" class="btn btn-primary hidden" onclick="createModelConfig()">
-                <i class="fas fa-check mr-1"></i> Create Config
-            </button>
+        <div class="modal-footer-wizard-neu">
+            <div class="footer-left">
+                <button type="button" id="mcBtnBack" class="btn-neu btn-neu-nav hidden" onclick="mcPrevStep()">
+                    <span class="btn-neu-inner"><i class="fas fa-chevron-left"></i></span>
+                </button>
+                <button type="button" id="mcBtnNext" class="btn-neu btn-neu-nav" onclick="mcNextStep()">
+                    <span class="btn-neu-inner"><i class="fas fa-chevron-right"></i></span>
+                </button>
+            </div>
+            <div class="footer-right">
+                <button type="button" id="mcBtnCreate" class="btn-neu btn-neu-action btn-neu-save hidden" onclick="createModelConfig()">
+                    <span class="btn-neu-inner">Create</span>
+                </button>
+                <button type="button" class="btn-neu btn-neu-action btn-neu-cancel" onclick="closeModelConfigWizard()">
+                    <span class="btn-neu-inner">Cancel</span>
+                </button>
+            </div>
         </div>
     </div>
 </div>
 
-<!-- Add Layer Modal -->
-<div id="addLayerModal" class="modal-overlay hidden" onclick="closeAddLayerModal(event)">
-    <div class="modal-container" style="max-width: 400px;" onclick="event.stopPropagation()">
+<!-- Add/Edit Layer Modal -->
+<div id="layerModal" class="modal-overlay hidden" onclick="closeLayerModal(event)">
+    <div class="modal-container" style="max-width: 480px;" onclick="event.stopPropagation()">
         <div class="modal-header">
-            <h3 class="modal-title">Add Layer</h3>
-            <button class="modal-close-btn" onclick="closeAddLayerModal()">
-                <i class="fas fa-times"></i>
-            </button>
+            <div class="flex items-center gap-3">
+                <div id="layerModalIcon" class="w-8 h-8 rounded-lg flex items-center justify-center" style="background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);">
+                    <i class="fas fa-layer-group text-white text-sm"></i>
+                </div>
+                <div>
+                    <h3 class="modal-title" id="layerModalTitle">Edit Layer</h3>
+                    <p class="text-xs text-gray-500" id="layerModalSubtitle">Configure layer parameters</p>
+                </div>
+            </div>
         </div>
         <div class="modal-body">
-            <input type="hidden" id="addLayerTower" />
-            <div class="mb-4">
+            <input type="hidden" id="layerModalTower" />
+            <input type="hidden" id="layerModalIndex" value="-1" />
+            <input type="hidden" id="layerModalMode" value="add" />
+
+            <div class="mb-4" id="layerTypeGroup">
                 <label class="block text-sm font-medium text-gray-700 mb-2">Layer Type</label>
-                <select id="addLayerType" class="training-param-input w-full" onchange="updateLayerFields()">
+                <select id="layerType" class="training-param-input w-full" onchange="updateLayerModalFields()">
                     <option value="dense">Dense</option>
                     <option value="dropout">Dropout</option>
                     <option value="batch_norm">Batch Normalization</option>
                 </select>
             </div>
-            <div id="denseFields">
+
+            <!-- Dense Layer Fields -->
+            <div id="denseFieldsModal">
                 <div class="mb-4">
                     <label class="block text-sm font-medium text-gray-700 mb-2">Units</label>
-                    <input type="number" id="addLayerUnits" class="training-param-input w-full" value="64" min="8" max="1024" step="8" />
+                    <div class="flex gap-2 flex-wrap items-center justify-center mb-3">
+                        <button type="button" class="layer-units-btn px-3 py-2 rounded-lg border transition-all bg-white text-gray-700 border-gray-300 hover:border-blue-400" onclick="selectLayerUnits(32)">32</button>
+                        <button type="button" class="layer-units-btn px-3 py-2 rounded-lg border transition-all bg-blue-500 text-white border-blue-500" onclick="selectLayerUnits(64)">64</button>
+                        <button type="button" class="layer-units-btn px-3 py-2 rounded-lg border transition-all bg-white text-gray-700 border-gray-300 hover:border-blue-400" onclick="selectLayerUnits(128)">128</button>
+                        <button type="button" class="layer-units-btn px-3 py-2 rounded-lg border transition-all bg-white text-gray-700 border-gray-300 hover:border-blue-400" onclick="selectLayerUnits(256)">256</button>
+                        <button type="button" class="layer-units-btn px-3 py-2 rounded-lg border transition-all bg-white text-gray-700 border-gray-300 hover:border-blue-400" onclick="selectLayerUnits(512)">512</button>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <span class="text-sm text-gray-600">Custom:</span>
+                        <input type="number" id="layerUnitsCustom" class="training-param-input" style="width: 100px;" placeholder="e.g. 1024" min="8" max="2048" oninput="onLayerUnitsCustomInput(this.value)" />
+                        <span class="text-xs text-gray-400">Range: 8 - 2048</span>
+                    </div>
+                    <input type="hidden" id="layerUnits" value="64" />
                 </div>
                 <div class="mb-4">
                     <label class="block text-sm font-medium text-gray-700 mb-2">Activation</label>
-                    <select id="addLayerActivation" class="training-param-input w-full">
+                    <select id="layerActivation" class="training-param-input w-full">
                         <option value="relu" selected>ReLU</option>
+                        <option value="leaky_relu">Leaky ReLU</option>
+                        <option value="elu">ELU</option>
+                        <option value="selu">SELU</option>
                         <option value="tanh">Tanh</option>
                         <option value="sigmoid">Sigmoid</option>
+                        <option value="swish">Swish</option>
                         <option value="linear">Linear (None)</option>
                     </select>
                 </div>
                 <div class="mb-4">
-                    <label class="block text-sm font-medium text-gray-700 mb-2">L2 Regularization</label>
-                    <input type="number" id="addLayerL2" class="training-param-input w-full" value="0" min="0" max="0.1" step="0.001" />
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Regularization</label>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs text-gray-500 mb-1">Type</label>
+                            <select id="layerRegType" class="training-param-input w-full" onchange="updateRegStrengthVisibility()">
+                                <option value="none">None</option>
+                                <option value="l2">L2 (Ridge)</option>
+                                <option value="l1">L1 (Lasso)</option>
+                            </select>
+                        </div>
+                        <div id="regStrengthGroup">
+                            <label class="block text-xs text-gray-500 mb-1">Strength</label>
+                            <input type="number" id="layerRegStrength" class="training-param-input w-full" value="0.001" min="0.0001" max="0.1" step="0.0001" />
+                        </div>
+                    </div>
+                    <p class="text-xs text-gray-400 mt-1">L2 shrinks weights; L1 creates sparsity. Typical: 0.001-0.01</p>
                 </div>
             </div>
-            <div id="dropoutFields" class="hidden">
+
+            <!-- Dropout Layer Fields -->
+            <div id="dropoutFieldsModal" class="hidden">
                 <div class="mb-4">
                     <label class="block text-sm font-medium text-gray-700 mb-2">Dropout Rate</label>
-                    <input type="number" id="addLayerDropoutRate" class="training-param-input w-full" value="0.2" min="0" max="0.9" step="0.1" />
+                    <input type="number" id="layerDropoutRate" class="training-param-input w-full" value="0.2" min="0.05" max="0.5" step="0.05" />
+                    <p class="text-xs text-gray-400 mt-1">Fraction of units to drop. Typical: 0.1-0.3</p>
                 </div>
             </div>
-            <div id="batchNormFields" class="hidden">
-                <p class="text-sm text-gray-500">Batch Normalization layer has no configurable parameters.</p>
+
+            <!-- Batch Norm Fields -->
+            <div id="batchNormFieldsModal" class="hidden">
+                <p class="text-sm text-gray-500 py-4">Batch Normalization normalizes layer inputs. No configurable parameters needed.</p>
             </div>
         </div>
-        <div class="modal-footer">
-            <button class="btn btn-secondary" onclick="closeAddLayerModal()">Cancel</button>
-            <button class="btn btn-primary" onclick="confirmAddLayer()">Add Layer</button>
+        <div class="modal-footer-wizard-neu">
+            <div class="footer-left"></div>
+            <div class="footer-right">
+                <button type="button" class="btn-neu btn-neu-action btn-neu-save" id="layerModalSubmitBtn" onclick="submitLayerModal()">
+                    <span class="btn-neu-inner">Save</span>
+                </button>
+                <button type="button" class="btn-neu btn-neu-action btn-neu-cancel" onclick="closeLayerModal()">
+                    <span class="btn-neu-inner">Cancel</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Output Layer Edit Modal (edits both towers) -->
+<div id="outputLayerModal" class="modal-overlay hidden" onclick="closeOutputLayerModal(event)">
+    <div class="modal-container" style="max-width: 480px;" onclick="event.stopPropagation()">
+        <div class="modal-header">
+            <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);">
+                    <i class="fas fa-compress-arrows-alt text-white text-sm"></i>
+                </div>
+                <div>
+                    <h3 class="modal-title">Edit Output Embedding Layer</h3>
+                    <p class="text-xs text-gray-500">Changes apply to both Buyer and Product towers</p>
+                </div>
+            </div>
+        </div>
+        <div class="modal-body">
+            <div class="p-3 mb-4 rounded-lg border border-amber-200" style="background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);">
+                <div class="flex items-start gap-2">
+                    <i class="fas fa-info-circle text-amber-500 mt-0.5"></i>
+                    <p class="text-xs text-amber-700">The output embedding layer defines the final embedding dimension for both towers. Both towers must have matching output dimensions for comparison.</p>
+                </div>
+            </div>
+
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Embedding Dimension</label>
+                <div class="flex gap-2 flex-wrap items-center justify-center mb-3">
+                    <button type="button" class="output-dim-btn px-3 py-2 rounded-lg border transition-all bg-white text-gray-700 border-gray-300 hover:border-blue-400" onclick="selectOutputDim(8)">8D</button>
+                    <button type="button" class="output-dim-btn px-3 py-2 rounded-lg border transition-all bg-white text-gray-700 border-gray-300 hover:border-blue-400" onclick="selectOutputDim(16)">16D</button>
+                    <button type="button" class="output-dim-btn px-3 py-2 rounded-lg border transition-all bg-blue-500 text-white border-blue-500" onclick="selectOutputDim(32)">32D</button>
+                    <button type="button" class="output-dim-btn px-3 py-2 rounded-lg border transition-all bg-white text-gray-700 border-gray-300 hover:border-blue-400" onclick="selectOutputDim(64)">64D</button>
+                    <button type="button" class="output-dim-btn px-3 py-2 rounded-lg border transition-all bg-white text-gray-700 border-gray-300 hover:border-blue-400" onclick="selectOutputDim(128)">128D</button>
+                    <button type="button" class="output-dim-btn px-3 py-2 rounded-lg border transition-all bg-white text-gray-700 border-gray-300 hover:border-blue-400" onclick="selectOutputDim(256)">256D</button>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span class="text-sm text-gray-600">Custom:</span>
+                    <input type="number" id="outputLayerCustomDim" class="training-param-input" style="width: 100px;" placeholder="e.g. 512" min="4" max="1024" oninput="onOutputCustomDimInput(this.value)" />
+                    <span class="text-xs text-gray-400">Range: 4 - 1024</span>
+                </div>
+                <input type="hidden" id="outputLayerUnits" value="32" />
+                <p class="text-xs text-gray-400 mt-2"><i class="fas fa-lightbulb text-amber-500 mr-1"></i>Tip: Use larger dimensions (256-512) for millions of unique IDs, smaller (8-32) for few unique values</p>
+            </div>
+
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Activation Function</label>
+                <select id="outputLayerActivation" class="training-param-input w-full">
+                    <option value="relu" selected>ReLU</option>
+                    <option value="leaky_relu">Leaky ReLU</option>
+                    <option value="elu">ELU</option>
+                    <option value="tanh">Tanh</option>
+                    <option value="linear">Linear (None)</option>
+                </select>
+            </div>
+        </div>
+        <div class="modal-footer-wizard-neu">
+            <div class="footer-left"></div>
+            <div class="footer-right">
+                <button type="button" class="btn-neu btn-neu-action btn-neu-save" onclick="submitOutputLayer()">
+                    <span class="btn-neu-inner">Save</span>
+                </button>
+                <button type="button" class="btn-neu btn-neu-action btn-neu-cancel" onclick="closeOutputLayerModal()">
+                    <span class="btn-neu-inner">Cancel</span>
+                </button>
+            </div>
         </div>
     </div>
 </div>
@@ -5992,6 +6495,11 @@ let mcState = {
     description: '',
     selectedPreset: 'standard',
     buyerTowerLayers: [],
+    // Retrieval Algorithm Settings
+    retrievalAlgorithm: 'brute_force',
+    topK: 100,
+    scannNumLeaves: 100,
+    scannLeavesToSearch: 10,
     productTowerLayers: [],
     outputEmbeddingDim: 32,
     optimizer: 'adagrad',
@@ -6114,6 +6622,12 @@ function resetMcState() {
         buyerTowerLayers: [],
         productTowerLayers: [],
         outputEmbeddingDim: 32,
+        // Retrieval Algorithm Settings
+        retrievalAlgorithm: 'brute_force',
+        topK: 100,
+        scannNumLeaves: 100,
+        scannLeavesToSearch: 10,
+        // Training params
         optimizer: 'adagrad',
         learningRate: 0.1,
         batchSize: 4096,
@@ -6123,6 +6637,12 @@ function resetMcState() {
     document.getElementById('mcDescription').value = '';
     selectModelType('retrieval');
     selectPreset('standard');
+    // Reset retrieval algorithm UI
+    selectRetrievalAlgorithm('brute_force');
+    document.getElementById('mcTopK').value = 100;
+    document.getElementById('mcScannTopK').value = 100;
+    document.getElementById('mcScannNumLeaves').value = 100;
+    document.getElementById('mcScannLeavesToSearch').value = 10;
 }
 
 // Load Presets from API
@@ -6180,13 +6700,26 @@ function renderLayerList(tower, layers) {
     const list = document.getElementById(`${tower}LayerList`);
     if (!list) return;
 
+    // Find the last Dense layer index (output embedding layer)
+    let lastDenseIdx = -1;
+    for (let i = layers.length - 1; i >= 0; i--) {
+        if (layers[i].type === 'dense') {
+            lastDenseIdx = i;
+            break;
+        }
+    }
+
     list.innerHTML = layers.map((layer, idx) => {
         let badge = '';
         let params = '';
+        const isOutputLayer = (layer.type === 'dense' && idx === lastDenseIdx);
 
         if (layer.type === 'dense') {
             badge = '<span class="layer-type-badge dense">Dense</span>';
-            params = `${layer.units} units, ${layer.activation || 'relu'}${layer.l2_reg ? `, L2=${layer.l2_reg}` : ''}`;
+            let regInfo = '';
+            if (layer.l2_reg) regInfo = `, L2=${layer.l2_reg}`;
+            else if (layer.l1_reg) regInfo = `, L1=${layer.l1_reg}`;
+            params = `${layer.units} units, ${layer.activation || 'relu'}${regInfo}`;
         } else if (layer.type === 'dropout') {
             badge = '<span class="layer-type-badge dropout">Dropout</span>';
             params = `rate: ${layer.rate}`;
@@ -6195,19 +6728,144 @@ function renderLayerList(tower, layers) {
             params = '';
         }
 
+        // For output layer: use editOutputLayer and no delete button
+        const editAction = isOutputLayer
+            ? `onclick="editOutputLayer()" title="Edit Output Layer (both towers)"`
+            : `onclick="editLayer('${tower}', ${idx})" title="Edit"`;
+
+        const deleteBtn = isOutputLayer
+            ? ''
+            : `<button class="model-config-action-btn delete" onclick="removeLayer('${tower}', ${idx})" title="Delete">
+                   <i class="fas fa-trash"></i>
+               </button>`;
+
+        // Draggable for all layers except the output layer
+        const draggable = isOutputLayer ? 'false' : 'true';
+        const dragHandleClass = isOutputLayer ? 'drag-handle disabled' : 'drag-handle';
+
         return `
-            <div class="layer-item" data-index="${idx}">
-                <span class="drag-handle"><i class="fas fa-grip-vertical"></i></span>
+            <div class="layer-item${isOutputLayer ? ' output-layer' : ''}"
+                 data-index="${idx}"
+                 data-tower="${tower}"
+                 draggable="${draggable}"
+                 ondragstart="layerDragStart(event, '${tower}', ${idx})"
+                 ondragend="layerDragEnd(event)"
+                 ondragover="layerDragOver(event)"
+                 ondrop="layerDrop(event, '${tower}', ${idx})">
+                <span class="${dragHandleClass}"><i class="fas fa-grip-vertical"></i></span>
                 ${badge}
                 <span class="layer-params">${params}</span>
                 <div class="layer-actions">
-                    <button class="model-config-action-btn" onclick="removeLayer('${tower}', ${idx})" title="Remove">
-                        <i class="fas fa-times"></i>
+                    <button class="model-config-action-btn" ${editAction}>
+                        <i class="fas fa-external-link-alt"></i>
                     </button>
+                    ${deleteBtn}
                 </div>
             </div>
         `;
     }).join('');
+}
+
+// Layer Drag and Drop
+let layerDragData = null;
+
+function layerDragStart(event, tower, index) {
+    // Don't allow dragging the output layer
+    const layers = tower === 'buyer' ? mcState.buyerTowerLayers : mcState.productTowerLayers;
+    const lastDenseIdx = getLastDenseLayerIndex(layers);
+    if (index === lastDenseIdx) {
+        event.preventDefault();
+        return;
+    }
+
+    layerDragData = { tower, index };
+    event.target.classList.add('dragging');
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', JSON.stringify({ tower, index }));
+}
+
+function layerDragEnd(event) {
+    event.target.classList.remove('dragging');
+    // Remove all drag-over classes
+    document.querySelectorAll('.layer-item.drag-over').forEach(el => {
+        el.classList.remove('drag-over');
+    });
+    layerDragData = null;
+}
+
+function layerDragOver(event) {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+
+    const layerItem = event.target.closest('.layer-item');
+    if (layerItem && !layerItem.classList.contains('output-layer')) {
+        // Remove drag-over from all other items
+        document.querySelectorAll('.layer-item.drag-over').forEach(el => {
+            if (el !== layerItem) el.classList.remove('drag-over');
+        });
+        layerItem.classList.add('drag-over');
+    }
+}
+
+function layerDrop(event, targetTower, targetIndex) {
+    event.preventDefault();
+
+    const layerItem = event.target.closest('.layer-item');
+    if (layerItem) {
+        layerItem.classList.remove('drag-over');
+    }
+
+    if (!layerDragData) return;
+
+    const { tower: sourceTower, index: sourceIndex } = layerDragData;
+
+    // Only allow reordering within the same tower
+    if (sourceTower !== targetTower) {
+        layerDragData = null;
+        return;
+    }
+
+    const layers = sourceTower === 'buyer' ? mcState.buyerTowerLayers : mcState.productTowerLayers;
+    const lastDenseIdx = getLastDenseLayerIndex(layers);
+
+    // Can't drop onto or after the output layer
+    if (targetIndex >= lastDenseIdx) {
+        targetIndex = lastDenseIdx - 1;
+    }
+
+    // Don't do anything if dropped on same position
+    if (sourceIndex === targetIndex) {
+        layerDragData = null;
+        return;
+    }
+
+    // Perform the reorder
+    const [movedLayer] = layers.splice(sourceIndex, 1);
+
+    // Adjust target index if we removed from before target
+    let insertIndex = targetIndex;
+    if (sourceIndex < targetIndex) {
+        insertIndex = targetIndex - 1;
+    }
+
+    // Make sure we don't insert after the output layer
+    const newLastDenseIdx = getLastDenseLayerIndex(layers);
+    if (insertIndex >= newLastDenseIdx) {
+        insertIndex = newLastDenseIdx;
+    }
+
+    layers.splice(insertIndex, 0, movedLayer);
+
+    // Update state and re-render
+    if (sourceTower === 'buyer') {
+        mcState.buyerTowerLayers = layers;
+    } else {
+        mcState.productTowerLayers = layers;
+    }
+
+    renderTowerLayers();
+    updateTowerSummaries();
+    layerDragData = null;
 }
 
 // Update Tower Summaries
@@ -6220,6 +6878,10 @@ function updateTowerSummaries() {
 
     if (buyerEl) buyerEl.textContent = buyerSummary;
     if (productEl) productEl.textContent = productSummary;
+
+    // Update params summaries
+    updateTowerParams('buyer', mcState.buyerTowerLayers);
+    updateTowerParams('product', mcState.productTowerLayers);
 }
 
 function getTowerSummary(layers) {
@@ -6227,55 +6889,264 @@ function getTowerSummary(layers) {
     return units.length > 0 ? units.join('→') : 'Empty';
 }
 
-// Add Layer
+// Calculate and display tower parameters (Keras-style)
+function updateTowerParams(tower, layers) {
+    const totalParamsEl = document.getElementById(`${tower}TotalParams`);
+    const trainableParamsEl = document.getElementById(`${tower}TrainableParams`);
+
+    if (!totalParamsEl || !trainableParamsEl) return;
+
+    const params = calculateTowerParams(layers);
+    totalParamsEl.textContent = formatNumber(params);
+    trainableParamsEl.textContent = formatNumber(params);
+}
+
+function calculateTowerParams(layers) {
+    let totalParams = 0;
+    let prevUnits = 100; // Assume input dimension (will be from FeatureConfig in reality)
+
+    for (const layer of layers) {
+        if (layer.type === 'dense') {
+            // Dense layer: (input_units * output_units) + output_units (bias)
+            const units = layer.units || 32;
+            totalParams += (prevUnits * units) + units;
+            prevUnits = units;
+        }
+        // Dropout and BatchNorm have 0 trainable params in this context
+    }
+
+    return totalParams;
+}
+
+function formatNumber(num) {
+    if (num >= 1000000) {
+        return (num / 1000000).toFixed(2) + 'M';
+    } else if (num >= 1000) {
+        return num.toLocaleString();
+    }
+    return num.toString();
+}
+
+// Layer Modal (Add/Edit)
 function addLayer(tower) {
-    document.getElementById('addLayerTower').value = tower;
-    document.getElementById('addLayerType').value = 'dense';
-    document.getElementById('addLayerUnits').value = '64';
-    document.getElementById('addLayerActivation').value = 'relu';
-    document.getElementById('addLayerL2').value = '0';
-    document.getElementById('addLayerDropoutRate').value = '0.2';
-    updateLayerFields();
-    document.getElementById('addLayerModal').classList.remove('hidden');
+    openLayerModal(tower, -1, 'add');
 }
 
-function updateLayerFields() {
-    const type = document.getElementById('addLayerType').value;
-    document.getElementById('denseFields').classList.toggle('hidden', type !== 'dense');
-    document.getElementById('dropoutFields').classList.toggle('hidden', type !== 'dropout');
-    document.getElementById('batchNormFields').classList.toggle('hidden', type !== 'batch_norm');
+function editLayer(tower, index) {
+    openLayerModal(tower, index, 'edit');
 }
 
-function closeAddLayerModal(event) {
+function openLayerModal(tower, index, mode) {
+    document.getElementById('layerModalTower').value = tower;
+    document.getElementById('layerModalIndex').value = index;
+    document.getElementById('layerModalMode').value = mode;
+
+    const titleEl = document.getElementById('layerModalTitle');
+    const subtitleEl = document.getElementById('layerModalSubtitle');
+    const submitBtn = document.getElementById('layerModalSubmitBtn');
+    const typeSelect = document.getElementById('layerType');
+    const towerName = tower === 'buyer' ? 'Buyer Tower' : 'Product Tower';
+
+    if (mode === 'edit') {
+        titleEl.textContent = 'Edit Layer';
+        subtitleEl.textContent = `${towerName} - Layer ${index + 1}`;
+        submitBtn.innerHTML = '<span class="btn-neu-inner">Save</span>';
+
+        // Get the layer data
+        const layers = tower === 'buyer' ? mcState.buyerTowerLayers : mcState.productTowerLayers;
+        const layer = layers[index];
+
+        // Populate fields from existing layer
+        typeSelect.value = layer.type;
+
+        if (layer.type === 'dense') {
+            const units = layer.units || 64;
+            document.getElementById('layerUnits').value = units;
+            updateLayerUnitsButtons(units);
+            document.getElementById('layerActivation').value = layer.activation || 'relu';
+
+            // Set regularization
+            if (layer.l2_reg) {
+                document.getElementById('layerRegType').value = 'l2';
+                document.getElementById('layerRegStrength').value = layer.l2_reg;
+            } else if (layer.l1_reg) {
+                document.getElementById('layerRegType').value = 'l1';
+                document.getElementById('layerRegStrength').value = layer.l1_reg;
+            } else {
+                document.getElementById('layerRegType').value = 'none';
+                document.getElementById('layerRegStrength').value = 0.001;
+            }
+        } else if (layer.type === 'dropout') {
+            document.getElementById('layerDropoutRate').value = layer.rate || 0.2;
+        }
+
+        // Disable type change in edit mode
+        typeSelect.disabled = true;
+    } else {
+        titleEl.textContent = 'Add Layer';
+        subtitleEl.textContent = `Add to ${towerName}`;
+        submitBtn.innerHTML = '<span class="btn-neu-inner">Add Layer</span>';
+
+        // Reset to defaults for add mode
+        typeSelect.value = 'dense';
+        typeSelect.disabled = false;
+        document.getElementById('layerUnits').value = 64;
+        document.getElementById('layerUnitsCustom').value = '';
+        updateLayerUnitsButtons(64);
+        document.getElementById('layerActivation').value = 'relu';
+        document.getElementById('layerRegType').value = 'none';
+        document.getElementById('layerRegStrength').value = 0.001;
+        document.getElementById('layerDropoutRate').value = 0.2;
+    }
+
+    updateLayerModalFields();
+    updateRegStrengthVisibility();
+    document.getElementById('layerModal').classList.remove('hidden');
+}
+
+function updateLayerModalFields() {
+    const type = document.getElementById('layerType').value;
+    document.getElementById('denseFieldsModal').classList.toggle('hidden', type !== 'dense');
+    document.getElementById('dropoutFieldsModal').classList.toggle('hidden', type !== 'dropout');
+    document.getElementById('batchNormFieldsModal').classList.toggle('hidden', type !== 'batch_norm');
+}
+
+function updateRegStrengthVisibility() {
+    const regType = document.getElementById('layerRegType').value;
+    const strengthGroup = document.getElementById('regStrengthGroup');
+    strengthGroup.style.visibility = regType === 'none' ? 'hidden' : 'visible';
+}
+
+// Layer Units button selection
+function selectLayerUnits(units) {
+    document.getElementById('layerUnits').value = units;
+    document.getElementById('layerUnitsCustom').value = '';
+    updateLayerUnitsButtons(units);
+}
+
+function onLayerUnitsCustomInput(value) {
+    if (value) {
+        const units = parseInt(value);
+        if (units >= 8 && units <= 2048) {
+            document.getElementById('layerUnits').value = units;
+            // Deselect all preset buttons when custom value is entered
+            updateLayerUnitsButtons(null);
+        }
+    }
+}
+
+function updateLayerUnitsButtons(selectedUnits) {
+    const presetUnits = [32, 64, 128, 256, 512];
+    const buttons = document.querySelectorAll('.layer-units-btn');
+    const customInput = document.getElementById('layerUnitsCustom');
+
+    buttons.forEach(btn => {
+        const btnUnits = parseInt(btn.textContent);
+        if (btnUnits === selectedUnits) {
+            btn.className = 'layer-units-btn px-3 py-2 rounded-lg border transition-all bg-blue-500 text-white border-blue-500';
+        } else {
+            btn.className = 'layer-units-btn px-3 py-2 rounded-lg border transition-all bg-white text-gray-700 border-gray-300 hover:border-blue-400';
+        }
+    });
+
+    // If selected units is not a preset, show it in custom input
+    if (selectedUnits && !presetUnits.includes(selectedUnits)) {
+        customInput.value = selectedUnits;
+    } else if (customInput) {
+        customInput.value = '';
+    }
+}
+
+// Retrieval Algorithm Selection
+function selectRetrievalAlgorithm(algorithm) {
+    mcState.retrievalAlgorithm = algorithm;
+
+    // Update UI - toggle selected class on options
+    const options = document.querySelectorAll('.algorithm-option');
+    options.forEach(opt => {
+        const optAlgorithm = opt.onclick.toString().includes('brute_force') ? 'brute_force' : 'scann';
+        if (optAlgorithm === algorithm) {
+            opt.classList.add('selected');
+        } else {
+            opt.classList.remove('selected');
+        }
+    });
+
+    // Show/hide parameter panels
+    const bruteForceParams = document.getElementById('bruteForceParams');
+    const scannParams = document.getElementById('scannParams');
+
+    if (algorithm === 'brute_force') {
+        bruteForceParams.classList.remove('hidden');
+        scannParams.classList.add('hidden');
+    } else {
+        bruteForceParams.classList.add('hidden');
+        scannParams.classList.remove('hidden');
+    }
+}
+
+// Update retrieval algorithm state from inputs
+function updateRetrievalAlgorithmState() {
+    if (mcState.retrievalAlgorithm === 'brute_force') {
+        mcState.topK = parseInt(document.getElementById('mcTopK').value) || 100;
+    } else {
+        mcState.topK = parseInt(document.getElementById('mcScannTopK').value) || 100;
+        mcState.scannNumLeaves = parseInt(document.getElementById('mcScannNumLeaves').value) || 100;
+        mcState.scannLeavesToSearch = parseInt(document.getElementById('mcScannLeavesToSearch').value) || 10;
+    }
+}
+
+function closeLayerModal(event) {
     if (event && event.target !== event.currentTarget) return;
-    document.getElementById('addLayerModal').classList.add('hidden');
+    document.getElementById('layerModal').classList.add('hidden');
+    // Re-enable type select in case it was disabled
+    document.getElementById('layerType').disabled = false;
 }
 
-function confirmAddLayer() {
-    const tower = document.getElementById('addLayerTower').value;
-    const type = document.getElementById('addLayerType').value;
+function submitLayerModal() {
+    const tower = document.getElementById('layerModalTower').value;
+    const index = parseInt(document.getElementById('layerModalIndex').value);
+    const mode = document.getElementById('layerModalMode').value;
+    const type = document.getElementById('layerType').value;
 
     let layer = { type };
 
     if (type === 'dense') {
-        layer.units = parseInt(document.getElementById('addLayerUnits').value);
-        layer.activation = document.getElementById('addLayerActivation').value;
+        layer.units = parseInt(document.getElementById('layerUnits').value);
+        layer.activation = document.getElementById('layerActivation').value;
         if (layer.activation === 'linear') layer.activation = null;
-        const l2 = parseFloat(document.getElementById('addLayerL2').value);
-        if (l2 > 0) layer.l2_reg = l2;
-    } else if (type === 'dropout') {
-        layer.rate = parseFloat(document.getElementById('addLayerDropoutRate').value);
-    }
 
-    if (tower === 'buyer') {
-        mcState.buyerTowerLayers.push(layer);
+        const regType = document.getElementById('layerRegType').value;
+        if (regType === 'l2') {
+            layer.l2_reg = parseFloat(document.getElementById('layerRegStrength').value);
+        } else if (regType === 'l1') {
+            layer.l1_reg = parseFloat(document.getElementById('layerRegStrength').value);
+        }
+    } else if (type === 'dropout') {
+        layer.rate = parseFloat(document.getElementById('layerDropoutRate').value);
+    }
+    // batch_norm has no additional fields
+
+    const layers = tower === 'buyer' ? mcState.buyerTowerLayers : mcState.productTowerLayers;
+
+    if (mode === 'edit') {
+        // Replace existing layer
+        layers[index] = layer;
     } else {
-        mcState.productTowerLayers.push(layer);
+        // Add new layer - insert BEFORE the last Dense layer (output layer)
+        const lastDenseIdx = getLastDenseLayerIndex(layers);
+        if (lastDenseIdx !== -1) {
+            // Insert before the output layer
+            layers.splice(lastDenseIdx, 0, layer);
+        } else {
+            // No output layer exists, just push
+            layers.push(layer);
+        }
     }
 
     renderTowerLayers();
     updateTowerSummaries();
-    closeAddLayerModal();
+    closeLayerModal();
 }
 
 function removeLayer(tower, index) {
@@ -6286,6 +7157,107 @@ function removeLayer(tower, index) {
     }
     renderTowerLayers();
     updateTowerSummaries();
+}
+
+// Output Layer Modal (edits last Dense layer on both towers)
+function getLastDenseLayerIndex(layers) {
+    for (let i = layers.length - 1; i >= 0; i--) {
+        if (layers[i].type === 'dense') return i;
+    }
+    return -1;
+}
+
+function editOutputLayer() {
+    // Get the last Dense layer from buyer tower (both should match)
+    const buyerIdx = getLastDenseLayerIndex(mcState.buyerTowerLayers);
+    if (buyerIdx === -1) {
+        alert('No Dense layer found in Buyer tower');
+        return;
+    }
+
+    const buyerLayer = mcState.buyerTowerLayers[buyerIdx];
+    const currentUnits = buyerLayer.units || 32;
+
+    // Populate modal with current values
+    document.getElementById('outputLayerUnits').value = currentUnits;
+    document.getElementById('outputLayerActivation').value = buyerLayer.activation || 'relu';
+
+    // Update dimension button selection
+    updateOutputDimButtons(currentUnits);
+
+    document.getElementById('outputLayerModal').classList.remove('hidden');
+}
+
+// Output dimension button selection
+function selectOutputDim(dim) {
+    document.getElementById('outputLayerUnits').value = dim;
+    document.getElementById('outputLayerCustomDim').value = '';
+    updateOutputDimButtons(dim);
+}
+
+function onOutputCustomDimInput(value) {
+    if (value) {
+        const dim = parseInt(value);
+        if (dim >= 4 && dim <= 1024) {
+            document.getElementById('outputLayerUnits').value = dim;
+            // Deselect all preset buttons when custom value is entered
+            updateOutputDimButtons(null);
+        }
+    }
+}
+
+function updateOutputDimButtons(selectedDim) {
+    const presetDims = [8, 16, 32, 64, 128, 256];
+    const buttons = document.querySelectorAll('.output-dim-btn');
+    const customInput = document.getElementById('outputLayerCustomDim');
+
+    buttons.forEach(btn => {
+        const btnDim = parseInt(btn.textContent);
+        if (btnDim === selectedDim) {
+            btn.className = 'output-dim-btn px-3 py-2 rounded-lg border transition-all bg-blue-500 text-white border-blue-500';
+        } else {
+            btn.className = 'output-dim-btn px-3 py-2 rounded-lg border transition-all bg-white text-gray-700 border-gray-300 hover:border-blue-400';
+        }
+    });
+
+    // If selected dim is not a preset, show it in custom input
+    if (selectedDim && !presetDims.includes(selectedDim)) {
+        customInput.value = selectedDim;
+    } else {
+        customInput.value = '';
+    }
+}
+
+function closeOutputLayerModal(event) {
+    if (event && event.target !== event.currentTarget) return;
+    document.getElementById('outputLayerModal').classList.add('hidden');
+}
+
+function submitOutputLayer() {
+    const units = parseInt(document.getElementById('outputLayerUnits').value);
+    let activation = document.getElementById('outputLayerActivation').value;
+    if (activation === 'linear') activation = null;
+
+    // Update last Dense layer in buyer tower
+    const buyerIdx = getLastDenseLayerIndex(mcState.buyerTowerLayers);
+    if (buyerIdx !== -1) {
+        mcState.buyerTowerLayers[buyerIdx].units = units;
+        mcState.buyerTowerLayers[buyerIdx].activation = activation;
+    }
+
+    // Update last Dense layer in product tower
+    const productIdx = getLastDenseLayerIndex(mcState.productTowerLayers);
+    if (productIdx !== -1) {
+        mcState.productTowerLayers[productIdx].units = units;
+        mcState.productTowerLayers[productIdx].activation = activation;
+    }
+
+    // Update state
+    mcState.outputEmbeddingDim = units;
+
+    renderTowerLayers();
+    updateTowerSummaries();
+    closeOutputLayerModal();
 }
 
 // Navigation
@@ -6336,7 +7308,7 @@ function updateMcStep() {
     document.getElementById('mcCurrentStep').textContent = mcCurrentStep;
 
     // Update buttons
-    document.getElementById('mcBtnBack').style.display = mcCurrentStep > 1 ? 'inline-flex' : 'none';
+    document.getElementById('mcBtnBack').classList.toggle('hidden', mcCurrentStep === 1);
     document.getElementById('mcBtnNext').classList.toggle('hidden', mcCurrentStep === 3);
     document.getElementById('mcBtnCreate').classList.toggle('hidden', mcCurrentStep !== 3);
 
@@ -6356,7 +7328,17 @@ function updateMcSummary() {
     document.getElementById('mcSummaryType').textContent = 'Retrieval';
     document.getElementById('mcSummaryBuyer').textContent = getTowerSummary(mcState.buyerTowerLayers);
     document.getElementById('mcSummaryProduct').textContent = getTowerSummary(mcState.productTowerLayers);
-    document.getElementById('mcSummaryOutputDim').textContent = document.getElementById('mcOutputEmbeddingDim').value;
+    document.getElementById('mcSummaryOutputDim').textContent = mcState.outputEmbeddingDim || 32;
+
+    // Update retrieval algorithm state from inputs before summary
+    updateRetrievalAlgorithmState();
+
+    // Display retrieval algorithm info
+    if (mcState.retrievalAlgorithm === 'brute_force') {
+        document.getElementById('mcSummaryRetrieval').textContent = `Brute Force (Top ${mcState.topK})`;
+    } else {
+        document.getElementById('mcSummaryRetrieval').textContent = `ScaNN (Top ${mcState.topK})`;
+    }
 
     // Estimate params (rough calculation)
     const buyerParams = estimateTowerParams(mcState.buyerTowerLayers);
@@ -6385,13 +7367,22 @@ function formatParams(num) {
 
 // Create Model Config
 function createModelConfig() {
+    // Update retrieval algorithm state from inputs
+    updateRetrievalAlgorithmState();
+
     const payload = {
         name: mcState.name,
         description: mcState.description,
         model_type: mcState.modelType,
         buyer_tower_layers: mcState.buyerTowerLayers,
         product_tower_layers: mcState.productTowerLayers,
-        output_embedding_dim: parseInt(document.getElementById('mcOutputEmbeddingDim').value),
+        output_embedding_dim: mcState.outputEmbeddingDim || 32,
+        // Retrieval algorithm settings
+        retrieval_algorithm: mcState.retrievalAlgorithm,
+        top_k: mcState.topK,
+        scann_num_leaves: mcState.scannNumLeaves,
+        scann_leaves_to_search: mcState.scannLeavesToSearch,
+        // Training params
         optimizer: document.getElementById('mcOptimizer').value,
         learning_rate: parseFloat(document.getElementById('mcLearningRate').value),
         batch_size: parseInt(document.getElementById('mcBatchSize').value),
@@ -6553,7 +7544,6 @@ function editModelConfig() {
 
                 document.getElementById('mcName').value = mc.name;
                 document.getElementById('mcDescription').value = mc.description || '';
-                document.getElementById('mcOutputEmbeddingDim').value = mc.output_embedding_dim;
                 document.getElementById('mcOptimizer').value = mc.optimizer;
                 document.getElementById('mcLearningRate').value = mc.learning_rate;
                 document.getElementById('mcBatchSize').value = mc.batch_size;

@@ -1009,6 +1009,13 @@ def serialize_model_config(mc, include_details=False):
         'output_embedding_dim': mc.output_embedding_dim,
         'share_tower_weights': mc.share_tower_weights,
 
+        # Retrieval algorithm settings
+        'retrieval_algorithm': mc.retrieval_algorithm,
+        'retrieval_algorithm_display': mc.get_retrieval_algorithm_display(),
+        'top_k': mc.top_k,
+        'scann_num_leaves': mc.scann_num_leaves,
+        'scann_leaves_to_search': mc.scann_leaves_to_search,
+
         # Training params
         'optimizer': mc.optimizer,
         'optimizer_display': mc.get_optimizer_display(),
@@ -1086,7 +1093,7 @@ def create_model_config(request):
         name: str (required)
         description: str (optional)
         model_type: str (default: 'retrieval')
-        preset: str (optional) - One of 'minimal', 'standard', 'deep', 'asymmetric', 'regularized'
+        preset: str (optional) - One of 'minimal', 'standard', 'deep', 'regularized'
         buyer_tower_layers: list (optional - uses preset or default if not provided)
         product_tower_layers: list (optional)
         rating_head_layers: list (optional - for ranking/multitask)
@@ -1153,6 +1160,12 @@ def create_model_config(request):
             rating_head_layers=rating_head_layers,
             output_embedding_dim=output_embedding_dim,
             share_tower_weights=data.get('share_tower_weights', False),
+            # Retrieval algorithm settings
+            retrieval_algorithm=data.get('retrieval_algorithm', ModelConfig.RETRIEVAL_ALGORITHM_BRUTE_FORCE),
+            top_k=data.get('top_k', 100),
+            scann_num_leaves=data.get('scann_num_leaves', 100),
+            scann_leaves_to_search=data.get('scann_leaves_to_search', 10),
+            # Training params
             optimizer=data.get('optimizer', ModelConfig.OPTIMIZER_ADAGRAD),
             learning_rate=data.get('learning_rate', 0.1),
             batch_size=data.get('batch_size', 4096),
@@ -1253,6 +1266,17 @@ def update_model_config(request, config_id):
             mc.output_embedding_dim = data['output_embedding_dim']
         if 'share_tower_weights' in data:
             mc.share_tower_weights = data['share_tower_weights']
+        # Retrieval algorithm settings
+        if 'retrieval_algorithm' in data:
+            mc.retrieval_algorithm = data['retrieval_algorithm']
+        if 'top_k' in data:
+            mc.top_k = data['top_k']
+        if 'scann_num_leaves' in data:
+            mc.scann_num_leaves = data['scann_num_leaves']
+        if 'scann_leaves_to_search' in data:
+            mc.scann_leaves_to_search = data['scann_leaves_to_search']
+
+        # Training params
         if 'optimizer' in data:
             mc.optimizer = data['optimizer']
         if 'learning_rate' in data:
@@ -1424,7 +1448,7 @@ def get_model_config_preset(request, preset_name):
     try:
         preset = ModelConfig.get_preset(preset_name)
 
-        if preset_name not in ['minimal', 'standard', 'deep', 'asymmetric', 'regularized']:
+        if preset_name not in ['minimal', 'standard', 'deep', 'regularized']:
             return JsonResponse({
                 'success': False,
                 'error': f'Unknown preset: {preset_name}',

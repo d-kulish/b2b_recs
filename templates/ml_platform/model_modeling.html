@@ -942,32 +942,38 @@
         display: flex;
         align-items: flex-start;
         justify-content: space-between;
-        margin-bottom: 12px;
+        margin-bottom: 8px;
     }
     .model-config-name {
         font-size: 16px;
         font-weight: 600;
         color: #111827;
-        margin-bottom: 4px;
+        margin-bottom: 2px;
     }
     .model-config-desc {
         font-size: 12px;
         color: #6b7280;
         line-height: 1.4;
-        max-width: 200px;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+        max-width: 100%;
+    }
+    .model-config-meta {
+        font-size: 11px;
+        color: #9ca3af;
+        margin-top: 4px;
     }
     .model-type-badge {
         display: inline-flex;
         align-items: center;
         gap: 4px;
-        padding: 4px 8px;
+        padding: 4px 10px;
         border-radius: 6px;
         font-size: 11px;
         font-weight: 600;
         text-transform: uppercase;
+        flex-shrink: 0;
     }
     .model-type-badge.retrieval {
         background: linear-gradient(135deg, #8b5cf6 0%, #a78bfa 100%);
@@ -982,50 +988,220 @@
         color: white;
     }
 
-    /* Tower Architecture Visualization */
-    .tower-visual {
+    /* Tower Architecture Visualization - Card Layout */
+    .mc-card-body {
         display: flex;
-        gap: 12px;
-        margin-bottom: 12px;
+        gap: 20px;
     }
-    .tower-column {
+    .mc-towers-section {
+        flex: 0 0 55%;
+        min-width: 0;
+    }
+    .mc-params-section {
         flex: 1;
         min-width: 0;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+    }
+    .tower-visual {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+    }
+    .tower-column {
+        min-width: 0;
+    }
+    .tower-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 6px;
     }
     .tower-label {
         font-size: 10px;
         font-weight: 600;
         color: #6b7280;
         text-transform: uppercase;
-        margin-bottom: 4px;
+        letter-spacing: 0.5px;
     }
-    .tower-layers {
-        background: #f9fafb;
+    .tower-output-dim {
+        font-size: 10px;
+        font-weight: 600;
+        padding: 2px 6px;
+        border-radius: 4px;
+    }
+    .tower-output-dim.buyer {
+        background: #dbeafe;
+        color: #1d4ed8;
+    }
+    .tower-output-dim.product {
+        background: #d1fae5;
+        color: #047857;
+    }
+
+    /* Tower Stack - Card version (matches wizard Step 2 style) */
+    .tower-stack {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        border-radius: 10px;
+        padding: 10px;
+        max-height: 132px;
+        overflow-y: auto;
+        border: 2px dashed;
+    }
+    .tower-stack.buyer {
+        background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+        border-color: #3b82f6;
+    }
+    .tower-stack.product {
+        background: linear-gradient(135deg, #f0fdf4 0%, #d1fae5 100%);
+        border-color: #10b981;
+    }
+    .tower-stack::-webkit-scrollbar {
+        width: 4px;
+    }
+    .tower-stack::-webkit-scrollbar-track {
+        background: transparent;
+    }
+    .tower-stack::-webkit-scrollbar-thumb {
+        background: rgba(0, 0, 0, 0.15);
+        border-radius: 2px;
+    }
+    .tower-stack::-webkit-scrollbar-thumb:hover {
+        background: rgba(0, 0, 0, 0.25);
+    }
+
+    /* Card Layer Item - Wizard-like style (matches .layer-item from Step 2) */
+    .card-layer-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 10px;
+        background: white;
         border-radius: 8px;
-        padding: 8px;
-        font-family: 'Monaco', 'Menlo', monospace;
-        font-size: 13px;
+        font-size: 11px;
+        border: 1px solid rgba(0, 0, 0, 0.08);
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+    }
+    .tower-stack.buyer .card-layer-item {
+        border-color: rgba(59, 130, 246, 0.2);
+    }
+    .tower-stack.product .card-layer-item {
+        border-color: rgba(16, 185, 129, 0.2);
+    }
+    .card-layer-item.output-layer {
+        border: 2px solid #f87171 !important;
+    }
+    .card-layer-item.empty-placeholder {
+        background: transparent;
+        border: 1px dashed rgba(0, 0, 0, 0.1);
+        visibility: hidden;
+    }
+    .card-layer-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 3px 8px;
+        border-radius: 4px;
+        font-size: 9px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+        flex-shrink: 0;
+    }
+    .card-layer-badge.dense {
+        background: #e5e7eb;
         color: #374151;
-        text-align: center;
     }
-    .tower-layers.buyer {
-        border-left: 3px solid #3b82f6;
+    .card-layer-badge.dropout {
+        background: #fef3c7;
+        color: #92400e;
     }
-    .tower-layers.product {
-        border-left: 3px solid #10b981;
+    .card-layer-badge.batch_norm {
+        background: #d1fae5;
+        color: #065f46;
+    }
+    .card-layer-params {
+        flex: 1;
+        font-size: 11px;
+        color: #4b5563;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    /* Legacy tower-layer for View modal */
+    .tower-layer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 6px 10px;
+        background: white;
+        border-radius: 6px;
+        font-size: 12px;
+        border: 1px solid #e5e7eb;
+    }
+    .tower-layer.output-layer {
+        border: 2px solid #f87171;
+    }
+    .layer-type {
+        font-weight: 500;
+        color: #374151;
+    }
+    .layer-type.dense {
+        color: #1d4ed8;
+    }
+    .layer-type.dropout {
+        color: #dc2626;
+    }
+    .layer-type.batch_norm {
+        color: #7c3aed;
+    }
+    .layer-params {
+        font-size: 11px;
+        color: #6b7280;
+        font-family: 'Monaco', 'Menlo', monospace;
+    }
+
+    /* Model Summary Row */
+    .model-summary-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px 16px;
+        padding: 8px 12px;
+        background: #f9fafb;
+        border-radius: 6px;
+        margin-bottom: 10px;
+        font-size: 11px;
+    }
+    .mc-params-section .model-summary-row {
+        justify-content: flex-start;
+    }
+    .model-summary-item {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+    .model-summary-label {
+        color: #9ca3af;
+    }
+    .model-summary-value {
+        font-weight: 600;
+        color: #374151;
     }
 
     /* Training Params Preview */
     .training-params-preview {
         display: flex;
         flex-wrap: wrap;
-        gap: 8px;
+        gap: 6px;
     }
     .param-chip {
         display: inline-flex;
         align-items: center;
         gap: 4px;
-        padding: 4px 8px;
+        padding: 5px 10px;
         background: #f3f4f6;
         border-radius: 6px;
         font-size: 11px;
@@ -1037,48 +1213,334 @@
     .param-chip-value {
         font-weight: 600;
     }
+    .param-chip.retrieval-algo {
+        background: #f5f3ff;
+        border: 1px solid #e9d5ff;
+    }
+    .param-chip.retrieval-algo .param-chip-value {
+        color: #7c3aed;
+    }
+    .param-chip.model-type-chip {
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        padding: 5px 12px;
+    }
+    .param-chip.model-type-chip.retrieval {
+        background: #dcfce7;
+        color: #166534;
+        border: 1px solid #bbf7d0;
+    }
+    .param-chip.model-type-chip.retrieval .param-chip-value {
+        color: #166534;
+    }
+    .param-chip.model-type-chip.ranking {
+        background: #fef3c7;
+        color: #92400e;
+        border: 1px solid #fde68a;
+    }
+    .param-chip.model-type-chip.ranking .param-chip-value {
+        color: #92400e;
+    }
 
-    /* Model Config Actions */
-    .model-config-actions {
+    /* Compact Tower Display for Cards */
+    .compact-tower-row {
         display: flex;
-        gap: 4px;
-        opacity: 0;
-        transition: opacity 0.2s ease;
+        gap: 16px;
+        margin-bottom: 12px;
     }
-    .model-config-card:hover .model-config-actions {
-        opacity: 1;
+    .compact-tower-item {
+        flex: 1;
+        min-width: 0;
     }
-    .model-config-action-btn {
-        width: 28px;
-        height: 28px;
-        border-radius: 6px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        border: none;
-        cursor: pointer;
-        transition: all 0.15s ease;
-        background: #f3f4f6;
+    .compact-tower-label {
+        font-size: 10px;
+        font-weight: 600;
         color: #6b7280;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 4px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
     }
-    .model-config-action-btn:hover {
+    .compact-tower-label.buyer {
+        color: #3b82f6;
+    }
+    .compact-tower-label.product {
+        color: #10b981;
+    }
+    .compact-tower-layers {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 2px;
+        font-size: 11px;
+    }
+    .compact-layer-type {
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-weight: 500;
+        font-size: 10px;
+    }
+    .compact-layer-type.dense {
         background: #e5e7eb;
         color: #374151;
     }
-    .model-config-action-btn.delete {
+    .compact-layer-type.dropout {
+        background: #fef3c7;
+        color: #92400e;
+    }
+    .compact-layer-type.batch_norm {
+        background: #d1fae5;
+        color: #065f46;
+    }
+    .layer-arrow {
+        color: #9ca3af;
+        font-size: 10px;
+        margin: 0 2px;
+    }
+    .output-dim-badge {
+        font-size: 10px;
+        font-weight: 600;
+        padding: 2px 6px;
+        border-radius: 4px;
+        margin-left: auto;
+    }
+    .output-dim-badge.buyer {
+        background: #dbeafe;
+        color: #1d4ed8;
+    }
+    .output-dim-badge.product {
+        background: #d1fae5;
+        color: #047857;
+    }
+
+    /* Layer Bar Visualization (tensor-bar style for model layers) */
+    .tower-visualization {
+        margin-bottom: 4px;
+    }
+    .towers-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+        margin-bottom: 8px;
+    }
+    .tower-visualization-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 4px;
+    }
+    .tower-visualization-label {
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .tower-visualization-label.buyer {
+        color: #3b82f6;
+    }
+    .tower-visualization-label.product {
+        color: #10b981;
+    }
+    .tower-params-badge {
+        font-size: 10px;
+        font-weight: 600;
+        padding: 2px 8px;
+        border-radius: 4px;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+    .tower-params-badge.buyer {
+        background: #dbeafe;
+        color: #1d4ed8;
+    }
+    .tower-params-badge.product {
+        background: #d1fae5;
+        color: #047857;
+    }
+    .layer-bar-container {
+        display: flex;
+        height: 24px;
+        border-radius: 6px;
+        overflow: hidden;
+        background: #f3f4f6;
+        gap: 1px;
+        width: 100%;
+    }
+    .layer-bar-segment {
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        font-weight: 600;
+        color: white;
+        position: relative;
+        overflow: hidden;
+    }
+    .layer-bar-segment.dense.buyer {
+        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    }
+    .layer-bar-segment.dense.product {
+        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    }
+    .layer-bar-segment.dropout {
+        background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+    }
+    .layer-bar-segment.batch_norm {
+        background: linear-gradient(135deg, #a78bfa 0%, #8b5cf6 100%);
+    }
+    .layer-bar-segment .layer-units {
+        font-size: 11px;
+        font-weight: 600;
+    }
+    .layer-bar-segment .layer-label-small {
+        font-size: 9px;
+        font-weight: 600;
+    }
+    .layer-bar-segment.output-layer::after {
+        content: '';
+        position: absolute;
+        right: 0;
+        top: 0;
+        bottom: 0;
+        width: 3px;
+        background: rgba(255,255,255,0.4);
+    }
+
+    /* Model Config Action Buttons */
+    .model-config-actions {
+        display: flex;
+        gap: 8px;
+    }
+    .mc-action-btn {
+        padding: 6px 14px;
+        border-radius: 6px;
+        font-size: 13px;
+        font-weight: 500;
+        border: none;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        min-width: 36px;
+        height: 34px;
+    }
+    .mc-action-btn.view {
+        background: #10b981;
+        color: white;
+        padding: 6px 16px;
+    }
+    .mc-action-btn.view:hover {
+        background: #059669;
+    }
+    .mc-action-btn.edit {
+        background: #f3f4f6;
+        color: #6b7280;
+        padding: 6px 12px;
+    }
+    .mc-action-btn.edit:hover {
+        background: #e5e7eb;
+        color: #374151;
+    }
+    .mc-action-btn.delete {
         background: #fef2f2;
         color: #ef4444;
+        padding: 6px 12px;
     }
-    .model-config-action-btn.delete:hover {
+    .mc-action-btn.delete:hover {
         background: #fee2e2;
         color: #dc2626;
     }
 
-    /* Model Config Grid */
+    /* Model Config Card Footer */
+    .model-config-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding-top: 12px;
+        border-top: 1px solid #f3f4f6;
+        margin-top: 12px;
+    }
+    .mc-footer-btn {
+        padding: 6px 16px;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 500;
+        border: 1px solid #e5e7eb;
+        background: white;
+        color: #6b7280;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .mc-footer-btn:hover {
+        background: #f9fafb;
+        border-color: #d1d5db;
+        color: #374151;
+    }
+
+    /* Model Config List (full-width cards like feature configs) */
     .model-config-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        max-height: 500px;
+        overflow-y: auto;
+    }
+
+    /* Model Config Filter Bar */
+    .mc-filter-bar {
+        display: flex;
+        align-items: center;
         gap: 16px;
+        margin-bottom: 16px;
+    }
+    .mc-filter-group {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .mc-filter-label {
+        font-size: 13px;
+        font-weight: 500;
+        color: #6b7280;
+    }
+    .mc-filter-select {
+        padding: 6px 12px;
+        border: 1px solid #e5e7eb;
+        border-radius: 6px;
+        font-size: 13px;
+        background: white;
+        min-width: 140px;
+    }
+    .mc-filter-select:focus {
+        outline: none;
+        border-color: #8b5cf6;
+        box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.1);
+    }
+    .mc-search-input {
+        flex: 1;
+        padding: 6px 12px;
+        border: 1px solid #e5e7eb;
+        border-radius: 6px;
+        font-size: 13px;
+        background: white;
+    }
+    .mc-search-input:focus {
+        outline: none;
+        border-color: #8b5cf6;
+        box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.1);
+    }
+    .mc-search-input::placeholder {
+        color: #9ca3af;
     }
 
     /* Model Config Wizard Styles */
@@ -1319,6 +1781,32 @@
     .layer-item .layer-actions {
         display: flex;
         gap: 4px;
+    }
+    .layer-action-btn {
+        width: 28px;
+        height: 28px;
+        border-radius: 6px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: none;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        background: #f3f4f6;
+        color: #6b7280;
+        font-size: 12px;
+    }
+    .layer-action-btn:hover {
+        background: #e5e7eb;
+        color: #374151;
+    }
+    .layer-action-btn.delete {
+        background: #fef2f2;
+        color: #ef4444;
+    }
+    .layer-action-btn.delete:hover {
+        background: #fee2e2;
+        color: #dc2626;
     }
     /* Output Embedding Layer (last layer - special styling) */
     .layer-item.output-layer {
@@ -1897,6 +2385,21 @@
             </div>
         </div>
         <div id="modelStructureContent">
+            <!-- Filter Bar -->
+            <div id="mcFilterBar" class="mc-filter-bar hidden">
+                <div class="mc-filter-group">
+                    <label class="mc-filter-label">Model Type:</label>
+                    <select id="mcModelTypeFilter" class="mc-filter-select" onchange="filterModelConfigs()">
+                        <option value="">All Types</option>
+                        <option value="retrieval">Retrieval</option>
+                        <option value="ranking">Ranking</option>
+                        <option value="multitask">Multitask</option>
+                    </select>
+                </div>
+                <input type="text" id="mcSearchInput" class="mc-search-input"
+                       placeholder="Search model configs..." onkeyup="debounceMcSearch()">
+            </div>
+
             <!-- Loading state -->
             <div id="modelConfigsLoading" class="flex items-center justify-center py-8">
                 <i class="fas fa-spinner fa-spin text-xl text-gray-400 mr-3"></i>
@@ -1910,6 +2413,12 @@
                 <button onclick="openModelConfigWizard()" class="btn btn-primary btn-sm mt-4">
                     <i class="fas fa-plus mr-1"></i>Create Model Config
                 </button>
+            </div>
+            <!-- No results state (for filtered searches) -->
+            <div id="modelConfigsNoResults" class="chapter-empty-state hidden">
+                <i class="fas fa-search chapter-empty-icon"></i>
+                <p class="chapter-empty-text">No matching model configs</p>
+                <p class="text-sm text-gray-400 mt-2">Try adjusting your filters or search term</p>
             </div>
             <!-- Model config cards container -->
             <div id="modelConfigsGrid" class="model-config-grid hidden"></div>
@@ -2012,7 +2521,16 @@
 
                 <div class="mb-4">
                     <label class="block text-sm font-medium text-gray-700 mb-2">Configuration Name <span class="text-red-500">*</span></label>
-                    <input type="text" id="mcName" class="training-param-input w-full" placeholder="e.g., Standard Retrieval v1" />
+                    <div class="relative">
+                        <input type="text" id="mcName" class="training-param-input w-full" placeholder="e.g., Standard Retrieval v1"
+                               oninput="debounceMcNameCheck()" onblur="checkMcNameAvailability()" />
+                        <div id="mcNameStatus" class="absolute right-3 top-1/2 -translate-y-1/2 hidden">
+                            <i id="mcNameSpinner" class="fas fa-spinner fa-spin text-gray-400 hidden"></i>
+                            <i id="mcNameValid" class="fas fa-check-circle text-green-500 hidden"></i>
+                            <i id="mcNameInvalid" class="fas fa-times-circle text-red-500 hidden"></i>
+                        </div>
+                    </div>
+                    <p id="mcNameError" class="text-red-500 text-xs mt-1 hidden"></p>
                 </div>
 
                 <div class="mb-4">
@@ -2514,7 +3032,7 @@
 
 <!-- Model Config View Modal -->
 <div id="modelConfigViewModal" class="modal-overlay hidden" onclick="closeModelConfigViewModal(event)">
-    <div class="modal-container" style="max-width: 700px;" onclick="event.stopPropagation()">
+    <div class="modal-container" style="max-width: 800px;" onclick="event.stopPropagation()">
         <div class="modal-header">
             <div class="flex items-center gap-3">
                 <div class="w-10 h-10 rounded-lg flex items-center justify-center" style="background: linear-gradient(135deg, #8b5cf6 0%, #a78bfa 100%);">
@@ -2530,38 +3048,70 @@
             </button>
         </div>
         <div class="modal-body">
-            <div class="mb-4">
+            <!-- Model Type + Metadata Row -->
+            <div class="flex items-center justify-between mb-4">
                 <span id="viewMcTypeBadge" class="model-type-badge retrieval">Retrieval</span>
-            </div>
-
-            <div class="grid grid-cols-2 gap-4 mb-6">
-                <div class="p-4 bg-gray-50 rounded-lg">
-                    <div class="flex items-center gap-2 mb-2">
-                        <span class="tower-indicator buyer" style="width: 8px; height: 8px; border-radius: 2px; background: #3b82f6;"></span>
-                        <span class="text-sm font-medium text-gray-700">Buyer Tower</span>
-                    </div>
-                    <div id="viewMcBuyerLayers" class="font-mono text-lg text-gray-900">128→64→32</div>
-                </div>
-                <div class="p-4 bg-gray-50 rounded-lg">
-                    <div class="flex items-center gap-2 mb-2">
-                        <span class="tower-indicator product" style="width: 8px; height: 8px; border-radius: 2px; background: #10b981;"></span>
-                        <span class="text-sm font-medium text-gray-700">Product Tower</span>
-                    </div>
-                    <div id="viewMcProductLayers" class="font-mono text-lg text-gray-900">128→64→32</div>
+                <div class="text-sm text-gray-500">
+                    Updated <span id="viewMcUpdatedAt"></span>
+                    <span id="viewMcCreatedByWrapper"> by <span id="viewMcCreatedBy"></span></span>
                 </div>
             </div>
 
+            <!-- Tower Architecture -->
             <div class="mb-6">
+                <h4 class="text-sm font-medium text-gray-700 mb-3">Tower Architecture</h4>
+                <div class="tower-visual">
+                    <div class="tower-column">
+                        <div class="tower-header">
+                            <span class="tower-label">Buyer Tower</span>
+                            <span class="tower-output-dim buyer" id="viewMcBuyerOutputDim">→ 32D</span>
+                        </div>
+                        <div id="viewMcBuyerStack" class="tower-stack buyer">
+                            <!-- Layers will be inserted here -->
+                        </div>
+                    </div>
+                    <div class="tower-column">
+                        <div class="tower-header">
+                            <span class="tower-label">Product Tower</span>
+                            <span class="tower-output-dim product" id="viewMcProductOutputDim">→ 32D</span>
+                        </div>
+                        <div id="viewMcProductStack" class="tower-stack product">
+                            <!-- Layers will be inserted here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Model Summary -->
+            <div class="model-summary-row mb-6" id="viewMcSummaryRow">
+                <div class="model-summary-item">
+                    <span class="model-summary-label">Total params:</span>
+                    <span class="model-summary-value" id="viewMcTotalParams">~25K</span>
+                </div>
+                <div class="model-summary-item">
+                    <span class="model-summary-label">Trainable:</span>
+                    <span class="model-summary-value" id="viewMcTrainableParams">~25K</span>
+                </div>
+                <div class="model-summary-item">
+                    <span class="model-summary-label">Non-trainable:</span>
+                    <span class="model-summary-value" id="viewMcNonTrainableParams">0</span>
+                </div>
+            </div>
+
+            <!-- Training Parameters -->
+            <div class="mb-4">
                 <h4 class="text-sm font-medium text-gray-700 mb-3">Training Parameters</h4>
                 <div class="training-params-preview" id="viewMcParams">
                     <!-- Will be populated dynamically -->
                 </div>
             </div>
 
-            <div class="text-sm text-gray-500">
-                <span>Created <span id="viewMcCreatedAt"></span></span>
-                <span class="mx-2">•</span>
-                <span>by <span id="viewMcCreatedBy"></span></span>
+            <!-- Retrieval Algorithm (for retrieval models) -->
+            <div id="viewMcRetrievalSection" class="mb-4 hidden">
+                <h4 class="text-sm font-medium text-gray-700 mb-3">Retrieval Algorithm</h4>
+                <div class="training-params-preview" id="viewMcRetrievalParams">
+                    <!-- Will be populated dynamically -->
+                </div>
             </div>
         </div>
         <div class="modal-footer">
@@ -2615,8 +3165,15 @@
                 <!-- Config Name -->
                 <div class="wizard-field-group">
                     <label class="wizard-field-label">Config Name <span class="required">*</span></label>
-                    <input type="text" id="configName" placeholder="e.g., Rich Features v1"
-                           class="form-input w-full" oninput="validateConfigName()">
+                    <div class="relative">
+                        <input type="text" id="configName" placeholder="e.g., Rich Features v1"
+                               class="form-input w-full" oninput="debounceConfigNameCheck()" onblur="checkConfigNameAvailability()">
+                        <div id="configNameStatus" class="absolute right-3 top-1/2 -translate-y-1/2 hidden">
+                            <i id="configNameSpinner" class="fas fa-spinner fa-spin text-gray-400 hidden"></i>
+                            <i id="configNameValid" class="fas fa-check-circle text-green-500 hidden"></i>
+                            <i id="configNameInvalid" class="fas fa-times-circle text-red-500 hidden"></i>
+                        </div>
+                    </div>
                     <p id="nameError" class="text-xs text-red-600 mt-1 hidden"></p>
                 </div>
 
@@ -3393,6 +3950,8 @@ let currentStep = 1;
 let editingConfigId = null;
 let searchTimeout = null;
 let isLoadingConfigForEdit = false;
+let configNameCheckTimeout = null;
+let configNameIsValid = false;
 
 // Current feature config state
 let configState = {
@@ -3622,15 +4181,18 @@ function createConfigCard(config) {
     `;
 
     // Render tensor visualizations after card is in DOM (bars only, no breakdown tags)
+    // Use maxTotal for proportional bar widths
+    const maxTotal = Math.max(buyerResult.total || 0, productResult.total || 0);
+
     setTimeout(() => {
         const buyerBar = document.getElementById(`${cardId}-buyer-bar`);
         const productBar = document.getElementById(`${cardId}-product-bar`);
 
         if (buyerBar && buyerResult.breakdown.length > 0) {
-            renderTensorPreview('buyer', buyerResult.total, buyerResult.breakdown, buyerBar, null);
+            renderTensorPreview('buyer', buyerResult.total, buyerResult.breakdown, buyerBar, null, maxTotal);
         }
         if (productBar && productResult.breakdown.length > 0) {
-            renderTensorPreview('product', productResult.total, productResult.breakdown, productBar, null);
+            renderTensorPreview('product', productResult.total, productResult.breakdown, productBar, null, maxTotal);
         }
     }, 0);
 
@@ -3670,6 +4232,10 @@ function openWizard(configId = null) {
     document.getElementById('datasetInfo').classList.add('hidden');
     document.querySelector('input[name="startFrom"][value="blank"]').checked = true;
     document.getElementById('cloneSelection').classList.add('hidden');
+
+    // Reset name validation state
+    configNameIsValid = false;
+    resetConfigNameValidation();
 
     // Update UI
     document.getElementById('wizardTitle').textContent = configId ? 'Edit Feature Config' : 'Create Feature Config';
@@ -3730,6 +4296,9 @@ function loadConfigForEdit(configId) {
 
                 configState.buyerCrosses = config.buyer_model_crosses || [];
                 configState.productCrosses = config.product_model_crosses || [];
+
+                // Mark name as valid since we're editing an existing config
+                configNameIsValid = true;
 
                 onDatasetChange();
             }
@@ -3809,10 +4378,20 @@ function nextStep() {
         if (!name) {
             document.getElementById('nameError').textContent = 'Name is required';
             document.getElementById('nameError').classList.remove('hidden');
+            document.getElementById('configName').classList.add('border-red-500');
             return;
         }
         if (!datasetId) {
             showError('Please select a dataset');
+            return;
+        }
+        // Check if name validation has been performed and is valid
+        if (!configNameIsValid) {
+            // Trigger validation if not done yet
+            checkConfigNameAvailability();
+            // Show error message
+            document.getElementById('nameError').textContent = 'Please wait for name validation or choose a different name';
+            document.getElementById('nameError').classList.remove('hidden');
             return;
         }
 
@@ -3840,6 +4419,93 @@ function validateConfigName() {
     document.getElementById('nameError').classList.add('hidden');
 }
 
+// Reset Feature Config name validation UI
+function resetConfigNameValidation() {
+    document.getElementById('configNameStatus').classList.add('hidden');
+    document.getElementById('configNameSpinner').classList.add('hidden');
+    document.getElementById('configNameValid').classList.add('hidden');
+    document.getElementById('configNameInvalid').classList.add('hidden');
+    document.getElementById('nameError').classList.add('hidden');
+    document.getElementById('nameError').textContent = '';
+    document.getElementById('configName').classList.remove('border-red-500', 'border-green-500');
+}
+
+// Debounced Feature Config name check
+function debounceConfigNameCheck() {
+    clearTimeout(configNameCheckTimeout);
+    // Reset validation state while typing
+    configNameIsValid = false;
+    configNameCheckTimeout = setTimeout(() => {
+        checkConfigNameAvailability();
+    }, 400);
+}
+
+// Check Feature Config name availability
+function checkConfigNameAvailability() {
+    const name = document.getElementById('configName').value.trim();
+    const datasetId = document.getElementById('configDataset').value;
+    const statusEl = document.getElementById('configNameStatus');
+    const spinnerEl = document.getElementById('configNameSpinner');
+    const validEl = document.getElementById('configNameValid');
+    const invalidEl = document.getElementById('configNameInvalid');
+    const errorEl = document.getElementById('nameError');
+    const inputEl = document.getElementById('configName');
+
+    // Reset state
+    statusEl.classList.add('hidden');
+    spinnerEl.classList.add('hidden');
+    validEl.classList.add('hidden');
+    invalidEl.classList.add('hidden');
+    errorEl.classList.add('hidden');
+    inputEl.classList.remove('border-red-500', 'border-green-500');
+
+    if (!name) {
+        configNameIsValid = false;
+        return;
+    }
+
+    if (!datasetId) {
+        // Can't validate without dataset - mark as pending
+        configNameIsValid = false;
+        return;
+    }
+
+    // Show spinner
+    statusEl.classList.remove('hidden');
+    spinnerEl.classList.remove('hidden');
+
+    // Build URL with query params
+    let url = `/api/feature-configs/check-name/?name=${encodeURIComponent(name)}&dataset_id=${datasetId}`;
+    if (editingConfigId) {
+        url += `&exclude_id=${editingConfigId}`;
+    }
+
+    fetch(url)
+        .then(r => r.json())
+        .then(data => {
+            spinnerEl.classList.add('hidden');
+
+            if (data.success && data.data.available) {
+                // Name is available
+                configNameIsValid = true;
+                validEl.classList.remove('hidden');
+                inputEl.classList.add('border-green-500');
+            } else {
+                // Name is taken
+                configNameIsValid = false;
+                invalidEl.classList.remove('hidden');
+                inputEl.classList.add('border-red-500');
+                errorEl.textContent = data.data?.message || 'This name is already taken for this dataset';
+                errorEl.classList.remove('hidden');
+            }
+        })
+        .catch(err => {
+            console.error('Error checking name:', err);
+            spinnerEl.classList.add('hidden');
+            configNameIsValid = false;
+        });
+}
+
 function onDatasetChange() {
     const datasetId = document.getElementById('configDataset').value;
     const datasetInfo = document.getElementById('datasetInfo');
@@ -3857,8 +4523,17 @@ function onDatasetChange() {
             datasetInfo.classList.remove('hidden');
         }
         loadCloneOptions(datasetId);
+        // Re-check name availability when dataset changes (name uniqueness is per dataset)
+        const name = document.getElementById('configName').value.trim();
+        if (name) {
+            configNameIsValid = false;
+            checkConfigNameAvailability();
+        }
     } else {
         datasetInfo.classList.add('hidden');
+        // Reset name validation when no dataset selected
+        configNameIsValid = false;
+        resetConfigNameValidation();
     }
 }
 
@@ -4943,9 +5618,10 @@ function updateTensorPreview() {
  * Render tensor visualization bar and breakdown tags
  * Can be called with either:
  *   - model name (for wizard): renderTensorPreview('buyer', total, breakdown)
- *   - DOM elements directly (for cards): renderTensorPreview('buyer', total, breakdown, barEl, breakdownEl)
+ *   - DOM elements directly (for cards): renderTensorPreview('buyer', total, breakdown, barEl, breakdownEl, maxTotal)
+ * @param maxTotal - max total across both tensors for proportional bar width
  */
-function renderTensorPreview(model, total, breakdown, barContainer = null, breakdownContainer = null) {
+function renderTensorPreview(model, total, breakdown, barContainer = null, breakdownContainer = null, maxTotal = null) {
     // Get containers - either from params or by ID (wizard mode)
     if (!barContainer) {
         document.getElementById(`${model}TensorTotal`).textContent = `${total}D`;
@@ -4957,6 +5633,14 @@ function renderTensorPreview(model, total, breakdown, barContainer = null, break
     if (breakdownContainer) breakdownContainer.innerHTML = '';
 
     if (!breakdown || breakdown.length === 0) return;
+
+    // Set bar container width proportionally if maxTotal provided
+    if (maxTotal && maxTotal > 0) {
+        const widthPercent = (total / maxTotal) * 100;
+        barContainer.style.width = `${widthPercent}%`;
+    } else {
+        barContainer.style.width = '100%';
+    }
 
     const colors = model === 'buyer'
         ? ['#3b82f6', '#60a5fa', '#93c5fd', '#bfdbfe', '#dbeafe']
@@ -5581,15 +6265,17 @@ function renderViewModal(config) {
         </div>
     `;
 
-    // Render tensor bars in view modal
+    // Render tensor bars in view modal with proportional widths
+    const maxTotal = Math.max(buyerResult.total || 0, productResult.total || 0);
+
     setTimeout(() => {
         const buyerBar = document.getElementById('viewModal-buyer-bar');
         const productBar = document.getElementById('viewModal-product-bar');
         if (buyerBar && buyerResult.breakdown.length > 0) {
-            renderTensorPreview('buyer', buyerResult.total, buyerResult.breakdown, buyerBar, null);
+            renderTensorPreview('buyer', buyerResult.total, buyerResult.breakdown, buyerBar, null, maxTotal);
         }
         if (productBar && productResult.breakdown.length > 0) {
-            renderTensorPreview('product', productResult.total, productResult.breakdown, productBar, null);
+            renderTensorPreview('product', productResult.total, productResult.breakdown, productBar, null, maxTotal);
         }
     }, 0);
 }
@@ -5848,15 +6534,17 @@ function renderCompareColumn(config, side) {
         </div>
     `;
 
-    // Render tensor bars
+    // Render tensor bars with proportional widths
+    const maxTotal = Math.max(buyerResult.total || 0, productResult.total || 0);
+
     setTimeout(() => {
         const buyerBar = document.getElementById(`compare-${side}-buyer-bar`);
         const productBar = document.getElementById(`compare-${side}-product-bar`);
         if (buyerBar && buyerResult.breakdown.length > 0) {
-            renderTensorPreview('buyer', buyerResult.total, buyerResult.breakdown, buyerBar, null);
+            renderTensorPreview('buyer', buyerResult.total, buyerResult.breakdown, buyerBar, null, maxTotal);
         }
         if (productBar && productResult.breakdown.length > 0) {
-            renderTensorPreview('product', productResult.total, productResult.breakdown, productBar, null);
+            renderTensorPreview('product', productResult.total, productResult.breakdown, productBar, null, maxTotal);
         }
     }, 0);
 }
@@ -6787,6 +7475,9 @@ let mcCurrentStep = 1;
 let editingModelConfigId = null;
 let viewingModelConfig = null;
 let presetsData = {};
+let mcSearchTimeout = null;
+let mcNameCheckTimeout = null;
+let mcNameIsValid = false;
 
 // Model Config State
 let mcState = {
@@ -6811,9 +7502,11 @@ let mcState = {
 function loadModelConfigs() {
     document.getElementById('modelConfigsLoading').classList.remove('hidden');
     document.getElementById('modelConfigsEmpty').classList.add('hidden');
+    document.getElementById('modelConfigsNoResults').classList.add('hidden');
     document.getElementById('modelConfigsGrid').classList.add('hidden');
+    document.getElementById('mcFilterBar').classList.add('hidden');
 
-    fetch('/api/model-configs/')
+    fetch('/api/model-configs/?include_details=true')
         .then(r => r.json())
         .then(data => {
             document.getElementById('modelConfigsLoading').classList.add('hidden');
@@ -6830,50 +7523,486 @@ function loadModelConfigs() {
         });
 }
 
+// Filter Model Configs
+function filterModelConfigs() {
+    renderModelConfigs();
+}
+
+// Debounced search for Model Configs
+function debounceMcSearch() {
+    clearTimeout(mcSearchTimeout);
+    mcSearchTimeout = setTimeout(() => {
+        filterModelConfigs();
+    }, 300);
+}
+
+// Get filtered model configs based on current filter settings
+function getFilteredModelConfigs() {
+    const typeFilter = document.getElementById('mcModelTypeFilter').value;
+    const searchTerm = document.getElementById('mcSearchInput').value.toLowerCase().trim();
+
+    let filtered = allModelConfigs;
+
+    // Apply model type filter
+    if (typeFilter) {
+        filtered = filtered.filter(mc => mc.model_type === typeFilter);
+    }
+
+    // Apply search filter
+    if (searchTerm) {
+        filtered = filtered.filter(mc =>
+            mc.name.toLowerCase().includes(searchTerm) ||
+            (mc.description && mc.description.toLowerCase().includes(searchTerm))
+        );
+    }
+
+    return filtered;
+}
+
+// Parse tower summary string (e.g., "128→64→32") into layer array
+function parseTowerSummary(summary) {
+    if (!summary || summary === 'Empty') return [];
+
+    // Split by arrow characters (→ or ->)
+    const units = summary.split(/→|->/).map(s => parseInt(s.trim())).filter(n => !isNaN(n));
+
+    // Convert to layer objects
+    return units.map(u => ({
+        type: 'dense',
+        units: u,
+        activation: 'relu'
+    }));
+}
+
+// Render aligned tower layers for model config card (wizard-like style)
+function renderCardTowerLayers(buyerLayers, productLayers) {
+    const maxLen = Math.max(buyerLayers.length, productLayers.length);
+    if (maxLen === 0) {
+        return {
+            buyer: '<div class="text-xs text-gray-400 italic p-2">No layers</div>',
+            product: '<div class="text-xs text-gray-400 italic p-2">No layers</div>'
+        };
+    }
+
+    // Pad shorter array with empty placeholders at the beginning
+    const buyerPadded = [...Array(maxLen - buyerLayers.length).fill(null), ...buyerLayers];
+    const productPadded = [...Array(maxLen - productLayers.length).fill(null), ...productLayers];
+
+    const renderLayer = (layer, idx, totalLen) => {
+        if (!layer) {
+            return '<div class="card-layer-item empty-placeholder">&nbsp;</div>';
+        }
+
+        const isOutput = idx === totalLen - 1;
+        const typeClass = layer.type || 'dense';
+        let badge = '';
+        let params = '';
+
+        if (layer.type === 'dense') {
+            badge = '<span class="card-layer-badge dense">Dense</span>';
+            params = `${layer.units} units`;
+            if (layer.activation) params += `, ${layer.activation}`;
+            if (layer.l2_regularization) params += `, L2=${layer.l2_regularization}`;
+        } else if (layer.type === 'dropout') {
+            badge = '<span class="card-layer-badge dropout">Dropout</span>';
+            params = `rate: ${layer.rate}`;
+        } else if (layer.type === 'batch_norm') {
+            badge = '<span class="card-layer-badge batch_norm">BatchNorm</span>';
+            params = '';
+        }
+
+        return `
+            <div class="card-layer-item${isOutput ? ' output-layer' : ''}">
+                ${badge}
+                <span class="card-layer-params">${params}</span>
+            </div>
+        `;
+    };
+
+    return {
+        buyer: buyerPadded.map((l, i) => renderLayer(l, i, buyerPadded.length)).join(''),
+        product: productPadded.map((l, i) => renderLayer(l, i, productPadded.length)).join('')
+    };
+}
+
+// Render Tower Stack (vertical layer visualization) - for View modal
+function renderTowerStack(layers, tower) {
+    if (!layers || layers.length === 0) {
+        return '<div class="text-xs text-gray-400 italic p-2">No layers</div>';
+    }
+
+    return layers.map((layer, idx) => {
+        let typeClass = layer.type || 'dense';
+        let layerLabel = '';
+        let params = '';
+
+        if (layer.type === 'dense') {
+            layerLabel = 'Dense';
+            params = `${layer.units}`;
+            if (layer.activation) {
+                params += `, ${layer.activation}`;
+            }
+        } else if (layer.type === 'dropout') {
+            layerLabel = 'Dropout';
+            params = `${(layer.rate * 100).toFixed(0)}%`;
+        } else if (layer.type === 'batch_norm') {
+            layerLabel = 'BatchNorm';
+            params = '';
+        } else {
+            layerLabel = layer.type;
+            params = '';
+        }
+
+        const isLast = idx === layers.length - 1;
+        return `
+            <div class="tower-layer ${isLast ? tower : ''}">
+                <span class="layer-type ${typeClass}">${layerLabel}</span>
+                <span class="layer-params">${params}</span>
+            </div>
+        `;
+    }).join('');
+}
+
+// Get compact tower text representation for card display (e.g., "Dense → Dense → Dense")
+function getCompactTowerText(layers) {
+    if (!layers || layers.length === 0) {
+        return '<span class="text-gray-400 italic">No layers</span>';
+    }
+
+    const typeLabels = {
+        'dense': 'Dense',
+        'dropout': 'Drop',
+        'batch_norm': 'BN'
+    };
+
+    return layers.map(layer => {
+        const label = typeLabels[layer.type] || layer.type;
+        return `<span class="compact-layer-type ${layer.type}">${label}</span>`;
+    }).join('<span class="layer-arrow">→</span>');
+}
+
+// Calculate parameters for a single tower (for layer bar display)
+function calculateSingleTowerParams(layers, inputDim = 100) {
+    let params = 0;
+    let prevDim = inputDim;
+    for (const layer of layers) {
+        if (layer.type === 'dense') {
+            // Dense layer: input_dim * units + units (bias)
+            params += prevDim * layer.units + layer.units;
+            prevDim = layer.units;
+        } else if (layer.type === 'batch_norm') {
+            // BatchNorm: 4 params per feature (gamma, beta, moving_mean, moving_var)
+            params += prevDim * 4;
+        }
+        // Dropout has no parameters
+    }
+    return params;
+}
+
+// Format parameter count for display
+function formatParamCount(n) {
+    if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`;
+    if (n >= 1000) return `${(n / 1000).toFixed(1)}K`;
+    return n.toString();
+}
+
+// Render layer bar visualization (tensor-bar style for model layers)
+// maxTotalUnits: max total units across both towers (for proportional bar width)
+function renderLayerBar(tower, layers, container, maxTotalUnits = null) {
+    if (!container) return;
+    container.innerHTML = '';
+
+    if (!layers || layers.length === 0) {
+        container.innerHTML = '<div class="text-gray-400 text-xs italic p-2">No layers</div>';
+        return;
+    }
+
+    // Calculate total units from dense layers in this tower
+    const towerTotal = layers
+        .filter(l => l.type === 'dense')
+        .reduce((sum, l) => sum + (l.units || 32), 0);
+
+    // Set container width proportional to this tower's total vs max total
+    if (maxTotalUnits && maxTotalUnits > 0) {
+        const widthPercent = (towerTotal / maxTotalUnits) * 100;
+        container.style.width = `${widthPercent}%`;
+    }
+
+    // Find last dense layer index (output layer)
+    let lastDenseIdx = -1;
+    for (let i = layers.length - 1; i >= 0; i--) {
+        if (layers[i].type === 'dense') {
+            lastDenseIdx = i;
+            break;
+        }
+    }
+
+    layers.forEach((layer, idx) => {
+        const segment = document.createElement('div');
+        const isOutput = (layer.type === 'dense' && idx === lastDenseIdx);
+
+        if (layer.type === 'dense') {
+            const units = layer.units || 32;
+            // Use flex-grow proportional to units within this tower
+            const flexGrow = units / towerTotal;
+            segment.className = `layer-bar-segment dense ${tower}${isOutput ? ' output-layer' : ''}`;
+            segment.style.flex = `${flexGrow} 0 0`;
+            segment.style.minWidth = '24px';
+            segment.title = `Dense: ${units} units${layer.activation ? ', ' + layer.activation : ''}${isOutput ? ' (Output)' : ''}`;
+
+            // Always show units
+            segment.innerHTML = `<span class="layer-units">${units}</span>`;
+        } else if (layer.type === 'dropout') {
+            segment.className = 'layer-bar-segment dropout';
+            segment.style.flex = '0 0 20px';
+            segment.title = `Dropout: rate=${layer.rate || 0.2}`;
+            segment.innerHTML = '<span class="layer-label-small">D</span>';
+        } else if (layer.type === 'batch_norm') {
+            segment.className = 'layer-bar-segment batch_norm';
+            segment.style.flex = '0 0 24px';
+            segment.title = 'Batch Normalization';
+            segment.innerHTML = '<span class="layer-label-small">BN</span>';
+        }
+
+        container.appendChild(segment);
+    });
+}
+
+// Calculate total dense units for a tower
+function calculateTotalDenseUnits(layers) {
+    return (layers || [])
+        .filter(l => l.type === 'dense')
+        .reduce((sum, l) => sum + (l.units || 32), 0);
+}
+
+// Calculate max total units across both towers (for proportional bar widths)
+function calculateMaxTotalUnits(buyerLayers, productLayers) {
+    const buyerTotal = calculateTotalDenseUnits(buyerLayers);
+    const productTotal = calculateTotalDenseUnits(productLayers);
+    return Math.max(buyerTotal, productTotal);
+}
+
+// Generate tower visualization HTML for model config cards
+// Now accepts featureSetDim as input dimension for accurate parameter calculation
+function generateTowerVisualizationHtml(tower, layers, featureSetDim = 100) {
+    const params = calculateSingleTowerParams(layers, featureSetDim);
+    const formattedParams = formatParamCount(params);
+    const containerId = `tower-bar-${tower}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+    return {
+        html: `
+            <div class="tower-visualization">
+                <div class="tower-visualization-header">
+                    <span class="tower-visualization-label ${tower}">${tower === 'buyer' ? 'BUYER' : 'PRODUCT'}</span>
+                    <span class="tower-params-badge ${tower}">~${formattedParams} params</span>
+                </div>
+                <div class="layer-bar-container" id="${containerId}"></div>
+            </div>
+        `,
+        containerId: containerId,
+        layers: layers,
+        tower: tower,
+        featureSetDim: featureSetDim
+    };
+}
+
+// Calculate model parameter summary
+function calculateModelSummary(mc) {
+    // Estimate parameters based on layer configurations
+    // This is a simplified estimation for display purposes
+    let totalParams = 0;
+    let trainableParams = 0;
+
+    const estimateTowerParams = (layers, inputDim = 100) => {
+        let params = 0;
+        let prevDim = inputDim;
+        for (const layer of layers) {
+            if (layer.type === 'dense') {
+                // Dense layer: input_dim * units + units (bias)
+                params += prevDim * layer.units + layer.units;
+                prevDim = layer.units;
+            } else if (layer.type === 'batch_norm') {
+                // BatchNorm: 4 params per feature (gamma, beta, moving_mean, moving_var)
+                params += prevDim * 4;
+            }
+            // Dropout has no parameters
+        }
+        return params;
+    };
+
+    // Get layers from the full config if available
+    const buyerLayers = mc.buyer_tower_layers || [];
+    const productLayers = mc.product_tower_layers || [];
+
+    if (buyerLayers.length > 0 || productLayers.length > 0) {
+        totalParams = estimateTowerParams(buyerLayers, 100) + estimateTowerParams(productLayers, 50);
+        trainableParams = totalParams;
+    } else {
+        // Fallback: estimate from summary string (e.g., "128→64→32")
+        const estimateFromSummary = (summary, inputDim = 100) => {
+            if (!summary || summary === 'Empty') return 0;
+            const units = summary.split('→').map(n => parseInt(n)).filter(n => !isNaN(n));
+            let params = 0;
+            let prevDim = inputDim;
+            for (const u of units) {
+                params += prevDim * u + u;
+                prevDim = u;
+            }
+            return params;
+        };
+        totalParams = estimateFromSummary(mc.buyer_tower_summary, 100) +
+                      estimateFromSummary(mc.product_tower_summary, 50);
+        trainableParams = totalParams;
+    }
+
+    // Format the number
+    const formatParams = (n) => {
+        if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`;
+        if (n >= 1000) return `${(n / 1000).toFixed(1)}K`;
+        return n.toString();
+    };
+
+    return {
+        total: formatParams(totalParams),
+        trainable: formatParams(trainableParams),
+        nonTrainable: '0'
+    };
+}
+
+// Format time ago for model configs
+function formatMcTimeAgo(isoString) {
+    if (!isoString) return '';
+    const date = new Date(isoString);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return 'just now';
+    if (diffMins < 60) return `${diffMins} min ago`;
+    if (diffHours < 24) return `${diffHours} hours ago`;
+    if (diffDays === 1) return 'yesterday';
+    if (diffDays < 30) return `${diffDays} days ago`;
+    return date.toLocaleDateString();
+}
+
+// Show toast notification
+function showMcToast(message, type = 'info') {
+    // Create toast element
+    const toast = document.createElement('div');
+    toast.className = `fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-lg z-50 text-white text-sm font-medium transition-opacity duration-300`;
+    toast.style.backgroundColor = type === 'success' ? '#10b981' : type === 'error' ? '#ef4444' : '#6b7280';
+    toast.textContent = message;
+    document.body.appendChild(toast);
+
+    // Remove after 3 seconds
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
+
 // Render Model Config Cards
 function renderModelConfigs() {
     const grid = document.getElementById('modelConfigsGrid');
     const empty = document.getElementById('modelConfigsEmpty');
+    const noResults = document.getElementById('modelConfigsNoResults');
+    const filterBar = document.getElementById('mcFilterBar');
 
+    // If no configs at all, show empty state and hide filter bar
     if (allModelConfigs.length === 0) {
         empty.classList.remove('hidden');
+        noResults.classList.add('hidden');
+        grid.classList.add('hidden');
+        filterBar.classList.add('hidden');
+        return;
+    }
+
+    // Show filter bar when there are configs
+    filterBar.classList.remove('hidden');
+
+    // Get filtered results
+    const filtered = getFilteredModelConfigs();
+
+    // If no results after filtering, show no results state
+    if (filtered.length === 0) {
+        empty.classList.add('hidden');
+        noResults.classList.remove('hidden');
         grid.classList.add('hidden');
         return;
     }
 
     empty.classList.add('hidden');
+    noResults.classList.add('hidden');
     grid.classList.remove('hidden');
 
-    grid.innerHTML = allModelConfigs.map(mc => `
-        <div class="model-config-card" onclick="viewModelConfig(${mc.id})">
+    grid.innerHTML = filtered.map(mc => {
+        const summary = calculateModelSummary(mc);
+        const descTruncated = mc.description && mc.description.length > 80
+            ? mc.description.substring(0, 80) + '...'
+            : mc.description;
+
+        // Get layers for layer bar visualization
+        const buyerLayers = mc.buyer_tower_layers && mc.buyer_tower_layers.length > 0
+            ? mc.buyer_tower_layers
+            : parseTowerSummary(mc.buyer_tower_summary);
+
+        const productLayers = mc.product_tower_layers && mc.product_tower_layers.length > 0
+            ? mc.product_tower_layers
+            : parseTowerSummary(mc.product_tower_summary);
+
+        // Calculate max total units across both towers for proportional bar widths
+        const maxTotalUnits = calculateMaxTotalUnits(buyerLayers, productLayers);
+
+        // Use same input dimension (100) for both towers for consistent parameter estimation
+        // In reality, input dim depends on feature set, but we use 100 as default estimate
+        const inputDim = 100;
+
+        // Generate tower visualization with unique IDs
+        const buyerViz = generateTowerVisualizationHtml('buyer', buyerLayers, inputDim);
+        const productViz = generateTowerVisualizationHtml('product', productLayers, inputDim);
+
+        return `
+        <div class="model-config-card" onclick="viewModelConfig(${mc.id})"
+             data-buyer-bar-id="${buyerViz.containerId}"
+             data-product-bar-id="${productViz.containerId}"
+             data-buyer-layers='${JSON.stringify(buyerLayers)}'
+             data-product-layers='${JSON.stringify(productLayers)}'
+             data-max-total-units="${maxTotalUnits}">
+            <!-- Header: Name & Actions -->
             <div class="model-config-card-header">
-                <div>
+                <div style="flex: 1; min-width: 0;">
                     <div class="model-config-name">${escapeHtml(mc.name)}</div>
-                    ${mc.description ? `<div class="model-config-desc">${escapeHtml(mc.description)}</div>` : ''}
+                    ${descTruncated ? `<div class="model-config-desc">${escapeHtml(descTruncated)}</div>` : ''}
+                    <div class="model-config-meta">Updated ${formatMcTimeAgo(mc.updated_at)}${mc.created_by ? ` by ${mc.created_by}` : ''}</div>
                 </div>
-                <div class="flex items-center gap-2">
-                    <span class="model-type-badge ${mc.model_type}">${mc.model_type_display}</span>
-                    <div class="model-config-actions" onclick="event.stopPropagation()">
-                        <button class="model-config-action-btn" onclick="cloneModelConfigById(${mc.id})" title="Clone">
-                            <i class="fas fa-copy"></i>
+                <div class="flex items-center gap-2" onclick="event.stopPropagation()">
+                    <div class="model-config-actions">
+                        <button class="mc-action-btn view" onclick="viewModelConfig(${mc.id})" title="View">
+                            View
                         </button>
-                        <button class="model-config-action-btn delete" onclick="deleteModelConfig(${mc.id})" title="Delete">
+                        <button class="mc-action-btn edit" onclick="editModelConfigById(${mc.id})" title="Edit">
+                            <i class="fas fa-external-link-alt"></i>
+                        </button>
+                        <button class="mc-action-btn delete" onclick="deleteModelConfig(${mc.id})" title="Delete">
                             <i class="fas fa-trash"></i>
                         </button>
                     </div>
                 </div>
             </div>
-            <div class="tower-visual">
-                <div class="tower-column">
-                    <div class="tower-label">Buyer</div>
-                    <div class="tower-layers buyer">${mc.buyer_tower_summary}</div>
-                </div>
-                <div class="tower-column">
-                    <div class="tower-label">Product</div>
-                    <div class="tower-layers product">${mc.product_tower_summary}</div>
-                </div>
+
+            <!-- Tower Layer Bar Visualizations (side by side) -->
+            <div class="towers-grid">
+                ${buyerViz.html}
+                ${productViz.html}
             </div>
+
+            <!-- Model Type & Training Params -->
             <div class="training-params-preview">
+                <div class="param-chip model-type-chip ${mc.model_type}">
+                    <span class="param-chip-value">${mc.model_type_display}</span>
+                </div>
                 <div class="param-chip">
                     <span class="param-chip-label">Opt:</span>
                     <span class="param-chip-value">${mc.optimizer_display}</span>
@@ -6886,9 +8015,109 @@ function renderModelConfigs() {
                     <span class="param-chip-label">Batch:</span>
                     <span class="param-chip-value">${mc.batch_size}</span>
                 </div>
+                ${mc.model_type === 'retrieval' ? `
+                <div class="param-chip">
+                    <span class="param-chip-label">Top N:</span>
+                    <span class="param-chip-value">${mc.top_k || 100}</span>
+                </div>
+                <div class="param-chip">
+                    <span class="param-chip-label">Algorithm:</span>
+                    <span class="param-chip-value">${mc.retrieval_algorithm_display || 'Brute Force'}</span>
+                </div>
+                ` : ''}
+            </div>
+
+            <!-- Footer: Clone & Code buttons -->
+            <div class="model-config-footer" onclick="event.stopPropagation()">
+                <button class="mc-footer-btn" onclick="cloneModelConfigById(${mc.id})" title="Clone this config">
+                    <i class="fas fa-copy"></i> Clone
+                </button>
+                <button class="mc-footer-btn" onclick="showMcCodeComingSoon()" title="View generated code">
+                    <i class="fas fa-code"></i> Code
+                </button>
             </div>
         </div>
-    `).join('');
+        `;
+    }).join('');
+
+    // Render layer bars after HTML is in DOM
+    setTimeout(() => {
+        document.querySelectorAll('.model-config-card').forEach(card => {
+            const buyerBarId = card.dataset.buyerBarId;
+            const productBarId = card.dataset.productBarId;
+            const buyerLayers = JSON.parse(card.dataset.buyerLayers || '[]');
+            const productLayers = JSON.parse(card.dataset.productLayers || '[]');
+            const maxTotalUnits = parseInt(card.dataset.maxTotalUnits) || 416;
+
+            const buyerContainer = document.getElementById(buyerBarId);
+            const productContainer = document.getElementById(productBarId);
+
+            if (buyerContainer) {
+                renderLayerBar('buyer', buyerLayers, buyerContainer, maxTotalUnits);
+            }
+            if (productContainer) {
+                renderLayerBar('product', productLayers, productContainer, maxTotalUnits);
+            }
+        });
+    }, 0);
+}
+
+// Show "Coming Soon" for Code button
+function showMcCodeComingSoon() {
+    showMcToast('Code generation for Model Configs coming soon!', 'info');
+}
+
+// Edit Model Config by ID (opens wizard in edit mode)
+function editModelConfigById(id) {
+    // Fetch full config and open wizard
+    fetch(`/api/model-configs/${id}/`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                const mc = data.data;
+                editingModelConfigId = mc.id;
+                mcCurrentStep = 1;
+
+                // Populate state from config
+                mcState.modelType = mc.model_type;
+                mcState.name = mc.name;
+                mcState.description = mc.description || '';
+                mcState.buyerTowerLayers = mc.buyer_tower_layers || [];
+                mcState.productTowerLayers = mc.product_tower_layers || [];
+                mcState.outputEmbeddingDim = mc.output_embedding_dim || 32;
+                mcState.retrievalAlgorithm = mc.retrieval_algorithm || 'brute_force';
+                mcState.topK = mc.top_k || 100;
+                mcState.scannNumLeaves = mc.scann_num_leaves || 100;
+                mcState.scannLeavesToSearch = mc.scann_leaves_to_search || 10;
+                mcState.optimizer = mc.optimizer || 'adagrad';
+                mcState.learningRate = mc.learning_rate || 0.1;
+                mcState.batchSize = mc.batch_size || 4096;
+
+                // Update wizard UI
+                document.getElementById('mcName').value = mc.name;
+                document.getElementById('mcDescription').value = mc.description || '';
+                selectModelType(mc.model_type);
+                selectRetrievalAlgorithm(mcState.retrievalAlgorithm);
+                document.getElementById('mcTopK').value = mcState.topK;
+                document.getElementById('mcScannTopK').value = mcState.topK;
+                document.getElementById('mcScannNumLeaves').value = mcState.scannNumLeaves;
+                document.getElementById('mcScannLeavesToSearch').value = mcState.scannLeavesToSearch;
+                selectOptimizer(mcState.optimizer);
+                setLearningRate(mcState.learningRate);
+                document.getElementById('mcBatchSize').value = mcState.batchSize;
+
+                renderTowerLayers();
+                updateTowerSummaries();
+
+                // Mark name as valid since we're editing an existing config
+                mcNameIsValid = true;
+
+                document.getElementById('modelConfigWizardTitle').textContent = 'Edit Model Config';
+                document.getElementById('modelConfigWizardModal').classList.remove('hidden');
+                updateMcStep();
+            }
+        })
+        .catch(err => console.error('Error loading model config for edit:', err));
 }
 
 // Open Model Config Wizard
@@ -6941,6 +8170,87 @@ function resetMcState() {
     selectOptimizer('adagrad');
     setLearningRate(0.1);
     document.getElementById('mcBatchSize').value = 4096;
+    // Reset name validation state
+    mcNameIsValid = false;
+    resetMcNameValidation();
+}
+
+// Reset Model Config name validation UI
+function resetMcNameValidation() {
+    document.getElementById('mcNameStatus').classList.add('hidden');
+    document.getElementById('mcNameSpinner').classList.add('hidden');
+    document.getElementById('mcNameValid').classList.add('hidden');
+    document.getElementById('mcNameInvalid').classList.add('hidden');
+    document.getElementById('mcNameError').classList.add('hidden');
+    document.getElementById('mcNameError').textContent = '';
+    document.getElementById('mcName').classList.remove('border-red-500', 'border-green-500');
+}
+
+// Debounced Model Config name check
+function debounceMcNameCheck() {
+    clearTimeout(mcNameCheckTimeout);
+    mcNameCheckTimeout = setTimeout(() => {
+        checkMcNameAvailability();
+    }, 400);
+}
+
+// Check Model Config name availability
+function checkMcNameAvailability() {
+    const name = document.getElementById('mcName').value.trim();
+    const statusEl = document.getElementById('mcNameStatus');
+    const spinnerEl = document.getElementById('mcNameSpinner');
+    const validEl = document.getElementById('mcNameValid');
+    const invalidEl = document.getElementById('mcNameInvalid');
+    const errorEl = document.getElementById('mcNameError');
+    const inputEl = document.getElementById('mcName');
+
+    // Reset state
+    statusEl.classList.add('hidden');
+    spinnerEl.classList.add('hidden');
+    validEl.classList.add('hidden');
+    invalidEl.classList.add('hidden');
+    errorEl.classList.add('hidden');
+    inputEl.classList.remove('border-red-500', 'border-green-500');
+
+    if (!name) {
+        mcNameIsValid = false;
+        return;
+    }
+
+    // Show spinner
+    statusEl.classList.remove('hidden');
+    spinnerEl.classList.remove('hidden');
+
+    // Build URL with query params
+    let url = `/api/model-configs/check-name/?name=${encodeURIComponent(name)}`;
+    if (editingModelConfigId) {
+        url += `&exclude_id=${editingModelConfigId}`;
+    }
+
+    fetch(url)
+        .then(r => r.json())
+        .then(data => {
+            spinnerEl.classList.add('hidden');
+
+            if (data.success && data.data.available) {
+                // Name is available
+                mcNameIsValid = true;
+                validEl.classList.remove('hidden');
+                inputEl.classList.add('border-green-500');
+            } else {
+                // Name is taken
+                mcNameIsValid = false;
+                invalidEl.classList.remove('hidden');
+                inputEl.classList.add('border-red-500');
+                errorEl.textContent = data.data?.message || 'This name is already taken';
+                errorEl.classList.remove('hidden');
+            }
+        })
+        .catch(err => {
+            console.error('Error checking name:', err);
+            spinnerEl.classList.add('hidden');
+            mcNameIsValid = false;
+        });
 }
 
 // Load Presets from API
@@ -7081,7 +8391,7 @@ function renderLayerList(tower, layers) {
 
         const deleteBtn = isOutputLayer
             ? ''
-            : `<button class="model-config-action-btn delete" onclick="removeLayer('${tower}', ${idx})" title="Delete">
+            : `<button class="layer-action-btn delete" onclick="removeLayer('${tower}', ${idx})" title="Delete">
                    <i class="fas fa-trash"></i>
                </button>`;
 
@@ -7102,7 +8412,7 @@ function renderLayerList(tower, layers) {
                 ${badge}
                 <span class="layer-params">${params}</span>
                 <div class="layer-actions">
-                    <button class="model-config-action-btn" ${editAction}>
+                    <button class="layer-action-btn" ${editAction}>
                         <i class="fas fa-external-link-alt"></i>
                     </button>
                     ${deleteBtn}
@@ -7611,7 +8921,18 @@ function mcNextStep() {
     if (mcCurrentStep === 1) {
         const name = document.getElementById('mcName').value.trim();
         if (!name) {
-            alert('Please enter a configuration name');
+            document.getElementById('mcNameError').textContent = 'Name is required';
+            document.getElementById('mcNameError').classList.remove('hidden');
+            document.getElementById('mcName').classList.add('border-red-500');
+            return;
+        }
+        // Check if name validation has been performed and is valid
+        if (!mcNameIsValid) {
+            // Trigger validation if not done yet
+            checkMcNameAvailability();
+            // Show error message
+            document.getElementById('mcNameError').textContent = 'Please wait for name validation or choose a different name';
+            document.getElementById('mcNameError').classList.remove('hidden');
             return;
         }
         mcState.name = name;
@@ -7760,21 +9081,70 @@ function createModelConfig() {
 
 // View Model Config
 function viewModelConfig(id) {
-    const mc = allModelConfigs.find(c => c.id === id);
-    if (!mc) return;
+    // First try to find in cached list, then fetch full details
+    const mcBasic = allModelConfigs.find(c => c.id === id);
+    if (!mcBasic) return;
 
-    viewingModelConfig = mc;
+    // Show modal immediately with basic info, then fetch full details
+    viewingModelConfig = mcBasic;
+    document.getElementById('modelConfigViewModal').classList.remove('hidden');
 
-    document.getElementById('viewMcName').textContent = mc.name;
-    document.getElementById('viewMcDesc').textContent = mc.description || 'No description';
+    // Populate basic info
+    document.getElementById('viewMcName').textContent = mcBasic.name;
+    document.getElementById('viewMcDesc').textContent = mcBasic.description || 'No description';
 
     const badge = document.getElementById('viewMcTypeBadge');
-    badge.className = `model-type-badge ${mc.model_type}`;
-    badge.textContent = mc.model_type_display;
+    badge.className = `model-type-badge ${mcBasic.model_type}`;
+    badge.textContent = mcBasic.model_type_display;
 
-    document.getElementById('viewMcBuyerLayers').textContent = mc.buyer_tower_summary;
-    document.getElementById('viewMcProductLayers').textContent = mc.product_tower_summary;
+    document.getElementById('viewMcUpdatedAt').textContent = formatMcTimeAgo(mcBasic.updated_at);
+    if (mcBasic.created_by) {
+        document.getElementById('viewMcCreatedBy').textContent = mcBasic.created_by;
+        document.getElementById('viewMcCreatedByWrapper').style.display = '';
+    } else {
+        document.getElementById('viewMcCreatedByWrapper').style.display = 'none';
+    }
 
+    // Fetch full details for tower visualization
+    fetch(`/api/model-configs/${id}/`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                const mc = data.data;
+                viewingModelConfig = mc;
+                populateViewModal(mc);
+            } else {
+                // Fallback to basic info
+                populateViewModalBasic(mcBasic);
+            }
+        })
+        .catch(err => {
+            console.error('Error fetching model config details:', err);
+            populateViewModalBasic(mcBasic);
+        });
+}
+
+// Populate View Modal with full details
+function populateViewModal(mc) {
+    // Output dimensions
+    document.getElementById('viewMcBuyerOutputDim').textContent = `→ ${mc.output_embedding_dim}D`;
+    document.getElementById('viewMcProductOutputDim').textContent = `→ ${mc.output_embedding_dim}D`;
+
+    // Tower stacks - use detailed visualization with aligned layers
+    const buyerLayers = mc.buyer_tower_layers || [];
+    const productLayers = mc.product_tower_layers || [];
+    const towerHtml = renderCardTowerLayers(buyerLayers, productLayers);
+
+    document.getElementById('viewMcBuyerStack').innerHTML = towerHtml.buyer;
+    document.getElementById('viewMcProductStack').innerHTML = towerHtml.product;
+
+    // Model summary
+    const summary = calculateModelSummary(mc);
+    document.getElementById('viewMcTotalParams').textContent = `~${summary.total}`;
+    document.getElementById('viewMcTrainableParams').textContent = `~${summary.trainable}`;
+    document.getElementById('viewMcNonTrainableParams').textContent = summary.nonTrainable;
+
+    // Training parameters
     document.getElementById('viewMcParams').innerHTML = `
         <div class="param-chip">
             <span class="param-chip-label">Optimizer:</span>
@@ -7790,14 +9160,96 @@ function viewModelConfig(id) {
         </div>
         <div class="param-chip">
             <span class="param-chip-label">Output Dim:</span>
-            <span class="param-chip-value">${mc.output_embedding_dim}</span>
+            <span class="param-chip-value">${mc.output_embedding_dim}D</span>
         </div>
     `;
 
-    document.getElementById('viewMcCreatedAt').textContent = new Date(mc.created_at).toLocaleDateString();
-    document.getElementById('viewMcCreatedBy').textContent = mc.created_by || 'Unknown';
+    // Retrieval algorithm section (for retrieval models)
+    const retrievalSection = document.getElementById('viewMcRetrievalSection');
+    if (mc.model_type === 'retrieval') {
+        retrievalSection.classList.remove('hidden');
+        document.getElementById('viewMcRetrievalParams').innerHTML = `
+            <div class="param-chip retrieval-algo">
+                <span class="param-chip-label">Algorithm:</span>
+                <span class="param-chip-value">${mc.retrieval_algorithm_display || 'Brute Force'}</span>
+            </div>
+            <div class="param-chip">
+                <span class="param-chip-label">Top-K:</span>
+                <span class="param-chip-value">${mc.top_k || 100}</span>
+            </div>
+            ${mc.retrieval_algorithm === 'scann' ? `
+            <div class="param-chip">
+                <span class="param-chip-label">Num Leaves:</span>
+                <span class="param-chip-value">${mc.scann_num_leaves || 100}</span>
+            </div>
+            <div class="param-chip">
+                <span class="param-chip-label">Leaves to Search:</span>
+                <span class="param-chip-value">${mc.scann_leaves_to_search || 10}</span>
+            </div>
+            ` : ''}
+        `;
+    } else {
+        retrievalSection.classList.add('hidden');
+    }
+}
 
-    document.getElementById('modelConfigViewModal').classList.remove('hidden');
+// Populate View Modal with basic info only (fallback)
+function populateViewModalBasic(mc) {
+    // Output dimensions from summary
+    document.getElementById('viewMcBuyerOutputDim').textContent = `→ ${mc.output_embedding_dim || 32}D`;
+    document.getElementById('viewMcProductOutputDim').textContent = `→ ${mc.output_embedding_dim || 32}D`;
+
+    // Tower stacks - parse from summary string, use detailed visualization
+    const buyerLayers = parseTowerSummary(mc.buyer_tower_summary);
+    const productLayers = parseTowerSummary(mc.product_tower_summary);
+    const towerHtml = renderCardTowerLayers(buyerLayers, productLayers);
+
+    document.getElementById('viewMcBuyerStack').innerHTML = towerHtml.buyer;
+    document.getElementById('viewMcProductStack').innerHTML = towerHtml.product;
+
+    // Model summary
+    const summary = calculateModelSummary(mc);
+    document.getElementById('viewMcTotalParams').textContent = `~${summary.total}`;
+    document.getElementById('viewMcTrainableParams').textContent = `~${summary.trainable}`;
+    document.getElementById('viewMcNonTrainableParams').textContent = summary.nonTrainable;
+
+    // Training parameters
+    document.getElementById('viewMcParams').innerHTML = `
+        <div class="param-chip">
+            <span class="param-chip-label">Optimizer:</span>
+            <span class="param-chip-value">${mc.optimizer_display}</span>
+        </div>
+        <div class="param-chip">
+            <span class="param-chip-label">Learning Rate:</span>
+            <span class="param-chip-value">${mc.learning_rate}</span>
+        </div>
+        <div class="param-chip">
+            <span class="param-chip-label">Batch Size:</span>
+            <span class="param-chip-value">${mc.batch_size}</span>
+        </div>
+        <div class="param-chip">
+            <span class="param-chip-label">Output Dim:</span>
+            <span class="param-chip-value">${mc.output_embedding_dim || 32}D</span>
+        </div>
+    `;
+
+    // Retrieval section
+    const retrievalSection = document.getElementById('viewMcRetrievalSection');
+    if (mc.model_type === 'retrieval') {
+        retrievalSection.classList.remove('hidden');
+        document.getElementById('viewMcRetrievalParams').innerHTML = `
+            <div class="param-chip retrieval-algo">
+                <span class="param-chip-label">Algorithm:</span>
+                <span class="param-chip-value">${mc.retrieval_algorithm_display || 'Brute Force'}</span>
+            </div>
+            <div class="param-chip">
+                <span class="param-chip-label">Top-K:</span>
+                <span class="param-chip-value">${mc.top_k || 100}</span>
+            </div>
+        `;
+    } else {
+        retrievalSection.classList.add('hidden');
+    }
 }
 
 function closeModelConfigViewModal(event) {
@@ -7864,42 +9316,11 @@ function deleteModelConfig(id) {
     });
 }
 
-// Edit Model Config (opens wizard in edit mode)
+// Edit Model Config (opens wizard in edit mode) - from View modal
 function editModelConfig() {
     if (!viewingModelConfig) return;
-
-    // Fetch full config details
-    fetch(`/api/model-configs/${viewingModelConfig.id}/`)
-        .then(r => r.json())
-        .then(data => {
-            if (data.success) {
-                const mc = data.data;
-                editingModelConfigId = mc.id;
-
-                mcState.name = mc.name;
-                mcState.description = mc.description;
-                mcState.modelType = mc.model_type;
-                mcState.buyerTowerLayers = mc.buyer_tower_layers || [];
-                mcState.productTowerLayers = mc.product_tower_layers || [];
-                mcState.outputEmbeddingDim = mc.output_embedding_dim;
-
-                document.getElementById('mcName').value = mc.name;
-                document.getElementById('mcDescription').value = mc.description || '';
-                selectOptimizer(mc.optimizer);
-                setLearningRate(mc.learning_rate);
-                document.getElementById('mcBatchSize').value = mc.batch_size;
-
-                selectModelType(mc.model_type);
-
-                mcCurrentStep = 1;
-                document.getElementById('modelConfigWizardTitle').textContent = 'Edit Model Config';
-                document.getElementById('mcBtnCreate').innerHTML = '<i class="fas fa-check mr-1"></i> Save Changes';
-                closeModelConfigViewModal();
-                document.getElementById('modelConfigWizardModal').classList.remove('hidden');
-                updateMcStep();
-            }
-        })
-        .catch(err => console.error('Error loading model config:', err));
+    editModelConfigById(viewingModelConfig.id);
+    closeModelConfigViewModal();
 }
 
 // Helper: Escape HTML

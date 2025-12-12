@@ -1066,8 +1066,11 @@ def list_model_configs(request):
         if model_type:
             configs = configs.filter(model_type=model_type)
 
+        # Check if full layer details requested
+        include_details = request.GET.get('include_details', 'false').lower() == 'true'
+
         # Serialize
-        data = [serialize_model_config(mc, include_details=False) for mc in configs]
+        data = [serialize_model_config(mc, include_details=include_details) for mc in configs]
 
         return JsonResponse({
             'success': True,
@@ -1519,6 +1522,121 @@ def validate_model_config(request):
         }, status=400)
     except Exception as e:
         logger.exception(f"Error validating model config: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e),
+        }, status=500)
+
+
+@login_required
+@require_http_methods(["GET"])
+def check_model_config_name(request):
+    """
+    Check if a model config name is available.
+
+    Query params:
+        name: str (required) - The name to check
+        exclude_id: int (optional) - Config ID to exclude (for edit mode)
+
+    Returns:
+        JsonResponse with availability status
+    """
+    try:
+        name = request.GET.get('name', '').strip()
+
+        if not name:
+            return JsonResponse({
+                'success': False,
+                'error': 'Name is required',
+            }, status=400)
+
+        # Check if name exists
+        existing = ModelConfig.objects.filter(name=name)
+
+        # Exclude current config if editing
+        exclude_id = request.GET.get('exclude_id')
+        if exclude_id:
+            try:
+                existing = existing.exclude(id=int(exclude_id))
+            except ValueError:
+                pass
+
+        is_available = not existing.exists()
+
+        return JsonResponse({
+            'success': True,
+            'data': {
+                'name': name,
+                'available': is_available,
+                'message': None if is_available else f'A model config named "{name}" already exists',
+            },
+        })
+
+    except Exception as e:
+        logger.exception(f"Error checking model config name: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e),
+        }, status=500)
+
+
+@login_required
+@require_http_methods(["GET"])
+def check_feature_config_name(request):
+    """
+    Check if a feature config name is available for a given dataset.
+
+    Query params:
+        name: str (required) - The name to check
+        dataset_id: int (required) - The dataset ID
+        exclude_id: int (optional) - Config ID to exclude (for edit mode)
+
+    Returns:
+        JsonResponse with availability status
+    """
+    try:
+        name = request.GET.get('name', '').strip()
+        dataset_id = request.GET.get('dataset_id')
+
+        if not name:
+            return JsonResponse({
+                'success': False,
+                'error': 'Name is required',
+            }, status=400)
+
+        if not dataset_id:
+            return JsonResponse({
+                'success': False,
+                'error': 'dataset_id is required',
+            }, status=400)
+
+        # Check if name exists for this dataset
+        existing = FeatureConfig.objects.filter(
+            dataset_id=int(dataset_id),
+            name=name
+        )
+
+        # Exclude current config if editing
+        exclude_id = request.GET.get('exclude_id')
+        if exclude_id:
+            try:
+                existing = existing.exclude(id=int(exclude_id))
+            except ValueError:
+                pass
+
+        is_available = not existing.exists()
+
+        return JsonResponse({
+            'success': True,
+            'data': {
+                'name': name,
+                'available': is_available,
+                'message': None if is_available else f'A feature config named "{name}" already exists for this dataset',
+            },
+        })
+
+    except Exception as e:
+        logger.exception(f"Error checking feature config name: {e}")
         return JsonResponse({
             'success': False,
             'error': str(e),

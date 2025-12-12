@@ -72,4 +72,10 @@ urlpatterns = [
          api.get_model_config_preset, name='api_model_configs_preset'),
     path('api/model-configs/validate/',
          api.validate_model_config, name='api_model_configs_validate'),
+    path('api/model-configs/check-name/',
+         api.check_model_config_name, name='api_model_configs_check_name'),
+
+    # Feature Config name check
+    path('api/feature-configs/check-name/',
+         api.check_feature_config_name, name='api_feature_configs_check_name'),
 ]

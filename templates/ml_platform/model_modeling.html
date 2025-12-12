@@ -943,6 +943,277 @@
         align-items: flex-start;
         justify-content: space-between;
         margin-bottom: 8px;
+        gap: 10px;
+    }
+    /* Model Config Compare Styles */
+    .mc-compare-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+    }
+    .mc-compare-header {
+        padding: 12px;
+        background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+        border-radius: 8px;
+        text-align: center;
+    }
+    .mc-compare-header-name {
+        font-size: 16px;
+        font-weight: 600;
+        color: #111827;
+    }
+    .mc-compare-header-meta {
+        font-size: 12px;
+        color: #6b7280;
+        margin-top: 4px;
+    }
+    .mc-compare-section-title {
+        font-size: 11px;
+        font-weight: 600;
+        color: #6b7280;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        padding: 8px 0 4px 0;
+        border-bottom: 1px solid #e5e7eb;
+    }
+    .mc-compare-section-title.full-width {
+        grid-column: span 2;
+    }
+    .mc-compare-tower {
+        border: 2px dashed;
+        border-radius: 10px;
+        padding: 10px;
+    }
+    .mc-compare-tower.buyer {
+        background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+        border-color: #3b82f6;
+    }
+    .mc-compare-tower.product {
+        background: linear-gradient(135deg, #f0fdf4 0%, #d1fae5 100%);
+        border-color: #10b981;
+    }
+    .mc-compare-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    .mc-compare-table td {
+        padding: 6px 8px;
+        background: white;
+        border-radius: 6px;
+        margin-bottom: 4px;
+    }
+    .mc-compare-table tr {
+        display: block;
+        margin-bottom: 6px;
+    }
+    .mc-compare-table tr:last-child {
+        margin-bottom: 0;
+    }
+    .mc-compare-row-diff td {
+        background: #fef3c7 !important;
+    }
+    .mc-compare-output-layer td {
+        border: 2px solid #f87171 !important;
+    }
+    .mc-compare-layer {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+    }
+    .mc-compare-layer-empty {
+        color: #9ca3af;
+        font-style: italic;
+        text-align: center;
+    }
+    .mc-compare-params {
+        margin-top: 8px;
+        padding: 8px;
+        background: rgba(255,255,255,0.7);
+        border-radius: 6px;
+        font-size: 11px;
+        font-family: monospace;
+        text-align: right;
+        color: #374151;
+    }
+    .mc-compare-params.mc-compare-diff {
+        background: #fef3c7;
+        font-weight: 600;
+    }
+    .mc-compare-params-section {
+        padding: 10px;
+        background: #f9fafb;
+        border-radius: 8px;
+    }
+    .mc-compare-param {
+        display: flex;
+        justify-content: space-between;
+        padding: 6px 8px;
+        font-size: 12px;
+        border-radius: 4px;
+        margin-bottom: 4px;
+    }
+    .mc-compare-param:last-child {
+        margin-bottom: 0;
+    }
+    .mc-compare-param .label {
+        color: #6b7280;
+    }
+    .mc-compare-param .value {
+        font-weight: 600;
+        color: #111827;
+    }
+    .mc-compare-param.mc-compare-diff {
+        background: #fef3c7;
+    }
+
+    /* New aligned layer comparison styles */
+    .mc-compare-tower-section {
+        padding: 12px;
+        border-radius: 8px;
+    }
+    .mc-compare-tower-section.buyer {
+        background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+    }
+    .mc-compare-tower-section.product {
+        background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+    }
+    .mc-compare-tower-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 10px;
+    }
+    .mc-compare-tower-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: #374151;
+    }
+    .mc-compare-tower-section.buyer .mc-compare-tower-title {
+        color: #1e40af;
+    }
+    .mc-compare-tower-section.product .mc-compare-tower-title {
+        color: #166534;
+    }
+    .mc-compare-layers-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+    .mc-compare-layer-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+    }
+    .mc-compare-layer-cell {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 10px;
+        background: white;
+        border-radius: 6px;
+        border: 1px solid rgba(0, 0, 0, 0.08);
+        min-height: 38px;
+    }
+    .mc-compare-tower-section.buyer .mc-compare-layer-cell {
+        border-color: rgba(59, 130, 246, 0.15);
+    }
+    .mc-compare-tower-section.product .mc-compare-layer-cell {
+        border-color: rgba(16, 185, 129, 0.15);
+    }
+    .mc-compare-layer-cell.output-layer {
+        border: 2px solid #f87171 !important;
+        background: #fef2f2;
+    }
+    .mc-compare-layer-cell.placeholder {
+        background: transparent;
+        border: 1px dashed rgba(0, 0, 0, 0.15);
+    }
+    .mc-compare-layer-cell.mc-compare-diff {
+        background: #fef3c7;
+    }
+    .mc-compare-layer-cell .layer-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 3px 8px;
+        border-radius: 4px;
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+        flex-shrink: 0;
+    }
+    .mc-compare-layer-cell .layer-badge.dense {
+        background: #e5e7eb;
+        color: #374151;
+    }
+    .mc-compare-layer-cell .layer-badge.dropout {
+        background: #fef3c7;
+        color: #92400e;
+    }
+    .mc-compare-layer-cell .layer-badge.batch_norm {
+        background: #d1fae5;
+        color: #065f46;
+    }
+    .mc-compare-layer-cell .layer-params {
+        flex: 1;
+        font-size: 12px;
+        color: #4b5563;
+    }
+    .mc-compare-params-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        margin-top: 10px;
+        padding-top: 10px;
+        border-top: 1px solid rgba(0, 0, 0, 0.06);
+    }
+    .mc-compare-params-cell {
+        text-align: right;
+        font-size: 11px;
+        font-family: 'Monaco', 'Menlo', monospace;
+        color: #6b7280;
+    }
+    .mc-compare-params-cell.mc-compare-diff {
+        color: #92400e;
+        font-weight: 600;
+    }
+
+    /* Settings comparison grid */
+    .mc-compare-settings-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+    }
+    .mc-compare-settings-card {
+        background: #f9fafb;
+        border-radius: 8px;
+        padding: 12px;
+    }
+    .mc-compare-settings-card .setting-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 6px 8px;
+        border-radius: 4px;
+        margin-bottom: 4px;
+        font-size: 12px;
+    }
+    .mc-compare-settings-card .setting-row:last-child {
+        margin-bottom: 0;
+    }
+    .mc-compare-settings-card .setting-row .label {
+        color: #6b7280;
+    }
+    .mc-compare-settings-card .setting-row .value {
+        font-weight: 600;
+        color: #111827;
+    }
+    .mc-compare-settings-card .setting-row.mc-compare-diff {
+        background: #fef3c7;
+    }
+    .mc-compare-settings-card .setting-row.mc-compare-diff .value {
+        color: #92400e;
     }
     .model-config-name {
         font-size: 16px;
@@ -1009,6 +1280,18 @@
         grid-template-columns: 1fr 1fr;
         gap: 12px;
     }
+    /* Aligned version: both towers same height with output layers aligned at bottom */
+    .tower-visual-aligned .tower-stack {
+        display: flex;
+        flex-direction: column;
+    }
+    .tower-visual-aligned .tower-column {
+        display: flex;
+        flex-direction: column;
+    }
+    .tower-visual-aligned .tower-stack {
+        flex: 1;
+    }
     .tower-column {
         min-width: 0;
     }
@@ -1044,11 +1327,9 @@
     .tower-stack {
         display: flex;
         flex-direction: column;
-        gap: 6px;
+        gap: 8px;
         border-radius: 10px;
-        padding: 10px;
-        max-height: 132px;
-        overflow-y: auto;
+        padding: 12px;
         border: 2px dashed;
     }
     .tower-stack.buyer {
@@ -1078,10 +1359,9 @@
         display: flex;
         align-items: center;
         gap: 8px;
-        padding: 8px 10px;
+        padding: 10px 12px;
         background: white;
         border-radius: 8px;
-        font-size: 11px;
         border: 1px solid rgba(0, 0, 0, 0.08);
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
     }
@@ -1099,12 +1379,16 @@
         border: 1px dashed rgba(0, 0, 0, 0.1);
         visibility: hidden;
     }
+    .card-layer-item .card-drag-handle {
+        color: #c4c4c4;
+        font-size: 12px;
+    }
     .card-layer-badge {
         display: inline-flex;
         align-items: center;
         padding: 3px 8px;
         border-radius: 4px;
-        font-size: 9px;
+        font-size: 10px;
         font-weight: 600;
         text-transform: uppercase;
         letter-spacing: 0.3px;
@@ -1124,11 +1408,30 @@
     }
     .card-layer-params {
         flex: 1;
-        font-size: 11px;
+        font-size: 12px;
         color: #4b5563;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
+    }
+    .card-layer-actions {
+        display: flex;
+        gap: 4px;
+    }
+    .card-layer-action-btn {
+        width: 28px;
+        height: 28px;
+        border-radius: 6px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: none;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        background: #f3f4f6;
+        color: #6b7280;
+        font-size: 12px;
+    }
+    .card-layer-action-btn:hover {
+        background: #e5e7eb;
+        color: #374151;
     }
 
     /* Legacy tower-layer for View modal */
@@ -1864,6 +2167,20 @@
         font-weight: 600;
         color: #1f2937;
     }
+    /* View modal tower summaries - match tower colors */
+    .tower-params-summary.view-modal {
+        margin: 8px 0 0 0;
+        border: 2px dashed;
+        border-top: 2px dashed;
+    }
+    .tower-column:first-child .tower-params-summary.view-modal {
+        background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+        border-color: #3b82f6;
+    }
+    .tower-column:last-child .tower-params-summary.view-modal {
+        background: linear-gradient(135deg, #f0fdf4 0%, #d1fae5 100%);
+        border-color: #10b981;
+    }
 
     /* Retrieval Algorithm Section */
     .retrieval-algorithm-section {
@@ -2376,10 +2693,10 @@
             </div>
             <h2 class="chapter-title">Model Structure</h2>
             <div class="ml-auto flex gap-2">
-                <button onclick="openTrainerCodeSelector()" class="btn btn-secondary btn-sm">
-                    <i class="fas fa-brain mr-1"></i>Trainer Code
+                <button onclick="openModelConfigCompareModal()" class="btn btn-secondary btn-sm" style="width: 150px;">
+                    <i class="fas fa-columns mr-1"></i>Compare
                 </button>
-                <button onclick="openModelConfigWizard()" class="btn btn-primary btn-sm">
+                <button onclick="openModelConfigWizard()" class="btn btn-primary btn-sm" style="width: 150px;">
                     <i class="fas fa-plus mr-1"></i>New Model Config
                 </button>
             </div>
@@ -3032,7 +3349,7 @@
 
 <!-- Model Config View Modal -->
 <div id="modelConfigViewModal" class="modal-overlay hidden" onclick="closeModelConfigViewModal(event)">
-    <div class="modal-container" style="max-width: 800px;" onclick="event.stopPropagation()">
+    <div class="modal-container" style="max-width: 750px; max-height: 80vh; display: flex; flex-direction: column;" onclick="event.stopPropagation()">
         <div class="modal-header">
             <div class="flex items-center gap-3">
                 <div class="w-10 h-10 rounded-lg flex items-center justify-center" style="background: linear-gradient(135deg, #8b5cf6 0%, #a78bfa 100%);">
@@ -3043,11 +3360,8 @@
                     <p class="text-sm text-gray-500" id="viewMcDesc">Description</p>
                 </div>
             </div>
-            <button class="modal-close-btn" onclick="closeModelConfigViewModal()">
-                <i class="fas fa-times"></i>
-            </button>
         </div>
-        <div class="modal-body">
+        <div class="modal-body" style="overflow-y: auto; flex: 1;">
             <!-- Model Type + Metadata Row -->
             <div class="flex items-center justify-between mb-4">
                 <span id="viewMcTypeBadge" class="model-type-badge retrieval">Retrieval</span>
@@ -3060,30 +3374,38 @@
             <!-- Tower Architecture -->
             <div class="mb-6">
                 <h4 class="text-sm font-medium text-gray-700 mb-3">Tower Architecture</h4>
-                <div class="tower-visual">
+                <div class="tower-visual tower-visual-aligned">
                     <div class="tower-column">
                         <div class="tower-header">
                             <span class="tower-label">Buyer Tower</span>
-                            <span class="tower-output-dim buyer" id="viewMcBuyerOutputDim">→ 32D</span>
                         </div>
                         <div id="viewMcBuyerStack" class="tower-stack buyer">
                             <!-- Layers will be inserted here -->
+                        </div>
+                        <div class="tower-params-summary view-modal" id="viewMcBuyerParamsSummary">
+                            <div class="params-row"><span>Total params:</span><span id="viewMcBuyerTotalParams">0</span></div>
+                            <div class="params-row"><span>Trainable params:</span><span id="viewMcBuyerTrainableParams">0</span></div>
+                            <div class="params-row"><span>Non-trainable params:</span><span>0</span></div>
                         </div>
                     </div>
                     <div class="tower-column">
                         <div class="tower-header">
                             <span class="tower-label">Product Tower</span>
-                            <span class="tower-output-dim product" id="viewMcProductOutputDim">→ 32D</span>
                         </div>
                         <div id="viewMcProductStack" class="tower-stack product">
                             <!-- Layers will be inserted here -->
+                        </div>
+                        <div class="tower-params-summary view-modal" id="viewMcProductParamsSummary">
+                            <div class="params-row"><span>Total params:</span><span id="viewMcProductTotalParams">0</span></div>
+                            <div class="params-row"><span>Trainable params:</span><span id="viewMcProductTrainableParams">0</span></div>
+                            <div class="params-row"><span>Non-trainable params:</span><span>0</span></div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Model Summary -->
-            <div class="model-summary-row mb-6" id="viewMcSummaryRow">
+            <!-- Model Summary (hidden - now shown per-tower above) -->
+            <div class="model-summary-row mb-6 hidden" id="viewMcSummaryRow">
                 <div class="model-summary-item">
                     <span class="model-summary-label">Total params:</span>
                     <span class="model-summary-value" id="viewMcTotalParams">~25K</span>
@@ -3114,14 +3436,132 @@
                 </div>
             </div>
         </div>
-        <div class="modal-footer">
-            <button class="btn btn-secondary" onclick="closeModelConfigViewModal()">Close</button>
-            <button class="btn btn-secondary" onclick="cloneModelConfig()">
-                <i class="fas fa-copy mr-1"></i> Clone
-            </button>
-            <button class="btn btn-primary" onclick="editModelConfig()">
-                <i class="fas fa-edit mr-1"></i> Edit
-            </button>
+        <div class="modal-footer-wizard-neu">
+            <div class="footer-left"></div>
+            <div class="footer-right">
+                <button type="button" class="btn-neu btn-neu-action btn-neu-cancel" onclick="closeModelConfigViewModal()">
+                    <span class="btn-neu-inner">Close</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Clone Model Config Modal -->
+<div id="cloneModelConfigModal" class="modal-overlay hidden">
+    <div class="modal-container" style="max-width: 450px;">
+        <div class="modal-header">
+            <div class="modal-header-icon info">
+                <i class="fas fa-copy"></i>
+            </div>
+            <h3 class="modal-header-title">Clone Model Config</h3>
+        </div>
+        <div class="modal-body">
+            <div class="mb-4">
+                <label for="cloneModelConfigName" class="block text-sm font-medium text-gray-700 mb-2">
+                    New config name
+                </label>
+                <input type="text" id="cloneModelConfigName"
+                       class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                       placeholder="Enter name for cloned config">
+            </div>
+        </div>
+        <div class="modal-footer-wizard-neu">
+            <div class="footer-left"></div>
+            <div class="footer-right">
+                <button type="button" class="btn-neu btn-neu-action btn-neu-save" onclick="submitModelConfigClone()">
+                    <span class="btn-neu-inner">Clone</span>
+                </button>
+                <button type="button" class="btn-neu btn-neu-action btn-neu-cancel" onclick="closeModelConfigCloneModal()">
+                    <span class="btn-neu-inner">Cancel</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Compare Model Configs Modal -->
+<div id="compareModelConfigsModal" class="modal-overlay hidden">
+    <div class="modal-container" style="max-width: 950px; max-height: 85vh; display: flex; flex-direction: column;">
+        <div class="modal-header">
+            <div class="modal-header-icon info">
+                <i class="fas fa-columns"></i>
+            </div>
+            <h3 class="modal-header-title">Compare Model Configs</h3>
+        </div>
+        <div class="modal-body" style="overflow-y: auto; flex: 1;">
+            <!-- Dropdowns row -->
+            <div class="grid grid-cols-2 gap-4 mb-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Left Model Config</label>
+                    <select id="mcCompareLeftSelect" onchange="onMcCompareSelectChange('left')"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <option value="">Select model config...</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Right Model Config</label>
+                    <select id="mcCompareRightSelect" onchange="onMcCompareSelectChange('right')"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <option value="">Select model config...</option>
+                    </select>
+                </div>
+            </div>
+            <!-- Comparison content -->
+            <div id="mcCompareContent" class="space-y-4">
+                <!-- Header Section -->
+                <div id="mcCompareHeaders" class="grid grid-cols-2 gap-4">
+                    <div id="mcCompareLeftHeader" class="p-4 bg-white border border-gray-200 rounded-lg">
+                        <div class="flex items-center justify-center h-full text-gray-400 py-4">
+                            <span>Select a model config</span>
+                        </div>
+                    </div>
+                    <div id="mcCompareRightHeader" class="p-4 bg-white border border-gray-200 rounded-lg">
+                        <div class="flex items-center justify-center h-full text-gray-400 py-4">
+                            <span>Select a model config</span>
+                        </div>
+                    </div>
+                </div>
+                <!-- Buyer Tower Section (aligned layers) -->
+                <div id="mcCompareBuyerSection" class="mc-compare-tower-section buyer hidden">
+                    <div class="mc-compare-tower-header">
+                        <span class="mc-compare-tower-title">Buyer Tower</span>
+                    </div>
+                    <div id="mcCompareBuyerLayers" class="mc-compare-layers-grid">
+                        <!-- Layer rows will be rendered here -->
+                    </div>
+                    <div id="mcCompareBuyerParams" class="mc-compare-params-row">
+                        <!-- Params will be rendered here -->
+                    </div>
+                </div>
+                <!-- Product Tower Section (aligned layers) -->
+                <div id="mcCompareProductSection" class="mc-compare-tower-section product hidden">
+                    <div class="mc-compare-tower-header">
+                        <span class="mc-compare-tower-title">Product Tower</span>
+                    </div>
+                    <div id="mcCompareProductLayers" class="mc-compare-layers-grid">
+                        <!-- Layer rows will be rendered here -->
+                    </div>
+                    <div id="mcCompareProductParams" class="mc-compare-params-row">
+                        <!-- Params will be rendered here -->
+                    </div>
+                </div>
+                <!-- Training Settings Section -->
+                <div id="mcCompareSettingsSection" class="hidden">
+                    <div class="text-sm font-semibold text-gray-700 mb-3">Training Settings</div>
+                    <div id="mcCompareSettingsGrid" class="mc-compare-settings-grid">
+                        <!-- Settings cards will be rendered here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer-wizard-neu">
+            <div class="footer-left"></div>
+            <div class="footer-right">
+                <button type="button" class="btn-neu btn-neu-action btn-neu-cancel" onclick="closeModelConfigCompareModal()">
+                    <span class="btn-neu-inner">Close</span>
+                </button>
+            </div>
         </div>
     </div>
 </div>
@@ -7478,6 +7918,8 @@ let presetsData = {};
 let mcSearchTimeout = null;
 let mcNameCheckTimeout = null;
 let mcNameIsValid = false;
+let mcCompareLeftConfig = null;  // Left side config in compare modal
+let mcCompareRightConfig = null; // Right side config in compare modal
 
 // Model Config State
 let mcState = {
@@ -7574,7 +8016,8 @@ function parseTowerSummary(summary) {
     }));
 }
 
-// Render aligned tower layers for model config card (wizard-like style)
+// Render aligned tower layers for model config card (wizard-like style matching Step 2)
+// Placeholders are inserted before the output layer to keep output layers aligned at bottom
 function renderCardTowerLayers(buyerLayers, productLayers) {
     const maxLen = Math.max(buyerLayers.length, productLayers.length);
     if (maxLen === 0) {
@@ -7584,17 +8027,7 @@ function renderCardTowerLayers(buyerLayers, productLayers) {
         };
     }
 
-    // Pad shorter array with empty placeholders at the beginning
-    const buyerPadded = [...Array(maxLen - buyerLayers.length).fill(null), ...buyerLayers];
-    const productPadded = [...Array(maxLen - productLayers.length).fill(null), ...productLayers];
-
-    const renderLayer = (layer, idx, totalLen) => {
-        if (!layer) {
-            return '<div class="card-layer-item empty-placeholder">&nbsp;</div>';
-        }
-
-        const isOutput = idx === totalLen - 1;
-        const typeClass = layer.type || 'dense';
+    const renderLayer = (layer, isOutput) => {
         let badge = '';
         let params = '';
 
@@ -7603,6 +8036,7 @@ function renderCardTowerLayers(buyerLayers, productLayers) {
             params = `${layer.units} units`;
             if (layer.activation) params += `, ${layer.activation}`;
             if (layer.l2_regularization) params += `, L2=${layer.l2_regularization}`;
+            else if (layer.l2_reg) params += `, L2=${layer.l2_reg}`;
         } else if (layer.type === 'dropout') {
             badge = '<span class="card-layer-badge dropout">Dropout</span>';
             params = `rate: ${layer.rate}`;
@@ -7611,17 +8045,43 @@ function renderCardTowerLayers(buyerLayers, productLayers) {
             params = '';
         }
 
+        // View-only mode: drag handle | badge | params (no action buttons)
         return `
             <div class="card-layer-item${isOutput ? ' output-layer' : ''}">
+                <span class="card-drag-handle"><i class="fas fa-grip-vertical"></i></span>
                 ${badge}
                 <span class="card-layer-params">${params}</span>
             </div>
         `;
     };
 
+    const renderPlaceholder = () => '<div class="card-layer-item empty-placeholder">&nbsp;</div>';
+
+    // Build tower HTML with placeholders inserted before output layer
+    const buildTowerHtml = (layers, placeholderCount) => {
+        if (layers.length === 0) return '';
+
+        const result = [];
+        // All layers except the last (output layer)
+        for (let i = 0; i < layers.length - 1; i++) {
+            result.push(renderLayer(layers[i], false));
+        }
+        // Insert placeholders before output layer
+        for (let i = 0; i < placeholderCount; i++) {
+            result.push(renderPlaceholder());
+        }
+        // Output layer (last layer)
+        result.push(renderLayer(layers[layers.length - 1], true));
+
+        return result.join('');
+    };
+
+    const buyerPlaceholders = maxLen - buyerLayers.length;
+    const productPlaceholders = maxLen - productLayers.length;
+
     return {
-        buyer: buyerPadded.map((l, i) => renderLayer(l, i, buyerPadded.length)).join(''),
-        product: productPadded.map((l, i) => renderLayer(l, i, productPadded.length)).join('')
+        buyer: buildTowerHtml(buyerLayers, buyerPlaceholders),
+        product: buildTowerHtml(productLayers, productPlaceholders)
     };
 }
 
@@ -7728,6 +8188,11 @@ function renderLayerBar(tower, layers, container, maxTotalUnits = null) {
         container.style.width = `${widthPercent}%`;
     }
 
+    // Color palettes for vanishing gradient effect (matching tensor breakdown bars)
+    const buyerColors = ['#3b82f6', '#60a5fa', '#93c5fd', '#bfdbfe', '#dbeafe'];
+    const productColors = ['#10b981', '#34d399', '#6ee7b7', '#a7f3d0', '#d1fae5'];
+    const colors = tower === 'buyer' ? buyerColors : productColors;
+
     // Find last dense layer index (output layer)
     let lastDenseIdx = -1;
     for (let i = layers.length - 1; i >= 0; i--) {
@@ -7736,6 +8201,9 @@ function renderLayerBar(tower, layers, container, maxTotalUnits = null) {
             break;
         }
     }
+
+    // Track dense layer index for color assignment
+    let denseLayerIdx = 0;
 
     layers.forEach((layer, idx) => {
         const segment = document.createElement('div');
@@ -7748,10 +8216,13 @@ function renderLayerBar(tower, layers, container, maxTotalUnits = null) {
             segment.className = `layer-bar-segment dense ${tower}${isOutput ? ' output-layer' : ''}`;
             segment.style.flex = `${flexGrow} 0 0`;
             segment.style.minWidth = '24px';
+            // Apply vanishing gradient color from palette
+            segment.style.background = colors[denseLayerIdx % colors.length];
             segment.title = `Dense: ${units} units${layer.activation ? ', ' + layer.activation : ''}${isOutput ? ' (Output)' : ''}`;
 
             // Always show units
             segment.innerHTML = `<span class="layer-units">${units}</span>`;
+            denseLayerIdx++;
         } else if (layer.type === 'dropout') {
             segment.className = 'layer-bar-segment dropout';
             segment.style.flex = '0 0 20px';
@@ -8028,12 +8499,12 @@ function renderModelConfigs() {
             </div>
 
             <!-- Footer: Clone & Code buttons -->
-            <div class="model-config-footer" onclick="event.stopPropagation()">
-                <button class="mc-footer-btn" onclick="cloneModelConfigById(${mc.id})" title="Clone this config">
-                    <i class="fas fa-copy"></i> Clone
+            <div class="flex items-center gap-2 mt-3 pt-3 border-t border-gray-100" onclick="event.stopPropagation()">
+                <button onclick="cloneModelConfigById(${mc.id})" class="btn btn-secondary btn-sm" style="width: 150px;" title="Clone this config">
+                    <i class="fas fa-copy"></i>Clone
                 </button>
-                <button class="mc-footer-btn" onclick="showMcCodeComingSoon()" title="View generated code">
-                    <i class="fas fa-code"></i> Code
+                <button onclick="showMcCodeComingSoon()" class="btn btn-secondary btn-sm" style="width: 150px;" title="View generated code">
+                    <i class="fas fa-code"></i>Code
                 </button>
             </div>
         </div>
@@ -9032,7 +9503,7 @@ function formatParams(num) {
     return `~${num}`;
 }
 
-// Create Model Config
+// Save Model Config (handles both create and update)
 function createModelConfig() {
     // Update retrieval algorithm state from inputs
     updateRetrievalAlgorithmState();
@@ -9055,8 +9526,15 @@ function createModelConfig() {
         batch_size: parseInt(document.getElementById('mcBatchSize').value)
     };
 
-    fetch('/api/model-configs/create/', {
-        method: 'POST',
+    // Determine endpoint based on edit mode
+    const isEditing = editingModelConfigId !== null;
+    const url = isEditing
+        ? `/api/model-configs/${editingModelConfigId}/update/`
+        : '/api/model-configs/create/';
+    const method = isEditing ? 'PUT' : 'POST';
+
+    fetch(url, {
+        method: method,
         headers: {
             'Content-Type': 'application/json',
             'X-CSRFToken': getCookie('csrftoken')
@@ -9068,14 +9546,14 @@ function createModelConfig() {
         if (data.success) {
             closeModelConfigWizard();
             loadModelConfigs();
-            showToast('Model config created successfully', 'success');
+            showToast(isEditing ? 'Model config updated successfully' : 'Model config created successfully', 'success');
         } else {
             alert('Error: ' + (data.error || 'Unknown error'));
         }
     })
     .catch(err => {
-        console.error('Error creating model config:', err);
-        alert('Error creating model config');
+        console.error(isEditing ? 'Error updating model config:' : 'Error creating model config:', err);
+        alert(isEditing ? 'Error updating model config' : 'Error creating model config');
     });
 }
 
@@ -9126,10 +9604,6 @@ function viewModelConfig(id) {
 
 // Populate View Modal with full details
 function populateViewModal(mc) {
-    // Output dimensions
-    document.getElementById('viewMcBuyerOutputDim').textContent = `→ ${mc.output_embedding_dim}D`;
-    document.getElementById('viewMcProductOutputDim').textContent = `→ ${mc.output_embedding_dim}D`;
-
     // Tower stacks - use detailed visualization with aligned layers
     const buyerLayers = mc.buyer_tower_layers || [];
     const productLayers = mc.product_tower_layers || [];
@@ -9138,7 +9612,15 @@ function populateViewModal(mc) {
     document.getElementById('viewMcBuyerStack').innerHTML = towerHtml.buyer;
     document.getElementById('viewMcProductStack').innerHTML = towerHtml.product;
 
-    // Model summary
+    // Per-tower parameter summaries
+    const buyerParams = calculateSingleTowerParams(buyerLayers);
+    const productParams = calculateSingleTowerParams(productLayers);
+    document.getElementById('viewMcBuyerTotalParams').textContent = buyerParams.toLocaleString();
+    document.getElementById('viewMcBuyerTrainableParams').textContent = buyerParams.toLocaleString();
+    document.getElementById('viewMcProductTotalParams').textContent = productParams.toLocaleString();
+    document.getElementById('viewMcProductTrainableParams').textContent = productParams.toLocaleString();
+
+    // Combined model summary
     const summary = calculateModelSummary(mc);
     document.getElementById('viewMcTotalParams').textContent = `~${summary.total}`;
     document.getElementById('viewMcTrainableParams').textContent = `~${summary.trainable}`;
@@ -9195,10 +9677,6 @@ function populateViewModal(mc) {
 
 // Populate View Modal with basic info only (fallback)
 function populateViewModalBasic(mc) {
-    // Output dimensions from summary
-    document.getElementById('viewMcBuyerOutputDim').textContent = `→ ${mc.output_embedding_dim || 32}D`;
-    document.getElementById('viewMcProductOutputDim').textContent = `→ ${mc.output_embedding_dim || 32}D`;
-
     // Tower stacks - parse from summary string, use detailed visualization
     const buyerLayers = parseTowerSummary(mc.buyer_tower_summary);
     const productLayers = parseTowerSummary(mc.product_tower_summary);
@@ -9207,7 +9685,15 @@ function populateViewModalBasic(mc) {
     document.getElementById('viewMcBuyerStack').innerHTML = towerHtml.buyer;
     document.getElementById('viewMcProductStack').innerHTML = towerHtml.product;
 
-    // Model summary
+    // Per-tower parameter summaries
+    const buyerParams = calculateSingleTowerParams(buyerLayers);
+    const productParams = calculateSingleTowerParams(productLayers);
+    document.getElementById('viewMcBuyerTotalParams').textContent = buyerParams.toLocaleString();
+    document.getElementById('viewMcBuyerTrainableParams').textContent = buyerParams.toLocaleString();
+    document.getElementById('viewMcProductTotalParams').textContent = productParams.toLocaleString();
+    document.getElementById('viewMcProductTrainableParams').textContent = productParams.toLocaleString();
+
+    // Combined model summary
     const summary = calculateModelSummary(mc);
     document.getElementById('viewMcTotalParams').textContent = `~${summary.total}`;
     document.getElementById('viewMcTrainableParams').textContent = `~${summary.trainable}`;
@@ -9265,20 +9751,50 @@ function cloneModelConfig() {
     closeModelConfigViewModal();
 }
 
-function cloneModelConfigById(id) {
-    if (!confirm('Clone this model config?')) return;
+let cloneModelConfigId = null;
 
-    fetch(`/api/model-configs/${id}/clone/`, {
+function cloneModelConfigById(id) {
+    // Find the model config to get its name
+    const mc = allModelConfigs.find(c => c.id === id);
+    cloneModelConfigId = id;
+
+    const input = document.getElementById('cloneModelConfigName');
+    input.value = mc ? `${mc.name} (Copy)` : '';
+
+    document.getElementById('cloneModelConfigModal').classList.remove('hidden');
+    input.focus();
+    input.select();
+}
+
+function closeModelConfigCloneModal() {
+    document.getElementById('cloneModelConfigModal').classList.add('hidden');
+    cloneModelConfigId = null;
+}
+
+function submitModelConfigClone() {
+    const newName = document.getElementById('cloneModelConfigName').value.trim();
+    if (!newName) {
+        alert('Please enter a name for the cloned config');
+        return;
+    }
+
+    if (!cloneModelConfigId) {
+        alert('No model config selected');
+        return;
+    }
+
+    fetch(`/api/model-configs/${cloneModelConfigId}/clone/`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
             'X-CSRFToken': getCookie('csrftoken')
         },
-        body: JSON.stringify({})
+        body: JSON.stringify({ name: newName })
     })
     .then(r => r.json())
     .then(data => {
         if (data.success) {
+            closeModelConfigCloneModal();
             loadModelConfigs();
             showToast('Model config cloned successfully', 'success');
         } else {
@@ -9289,6 +9805,379 @@ function cloneModelConfigById(id) {
         console.error('Error cloning model config:', err);
         alert('Error cloning model config');
     });
+}
+
+// =============================================================================
+// MODEL CONFIG COMPARE FUNCTIONALITY
+// =============================================================================
+
+function openModelConfigCompareModal() {
+    // Populate dropdowns with all model configs
+    const leftSelect = document.getElementById('mcCompareLeftSelect');
+    const rightSelect = document.getElementById('mcCompareRightSelect');
+
+    // Clear existing options except placeholder
+    leftSelect.innerHTML = '<option value="">Select model config...</option>';
+    rightSelect.innerHTML = '<option value="">Select model config...</option>';
+
+    // Add all configs to both dropdowns
+    allModelConfigs.forEach(config => {
+        const optionLeft = document.createElement('option');
+        optionLeft.value = config.id;
+        optionLeft.textContent = config.name;
+        leftSelect.appendChild(optionLeft);
+
+        const optionRight = document.createElement('option');
+        optionRight.value = config.id;
+        optionRight.textContent = config.name;
+        rightSelect.appendChild(optionRight);
+    });
+
+    // Reset state
+    mcCompareLeftConfig = null;
+    mcCompareRightConfig = null;
+
+    // Reset headers to placeholder state
+    document.getElementById('mcCompareLeftHeader').innerHTML = `
+        <div class="flex items-center justify-center h-full text-gray-400 py-4">
+            <span>Select a model config</span>
+        </div>
+    `;
+    document.getElementById('mcCompareRightHeader').innerHTML = `
+        <div class="flex items-center justify-center h-full text-gray-400 py-4">
+            <span>Select a model config</span>
+        </div>
+    `;
+
+    // Hide data sections
+    document.getElementById('mcCompareBuyerSection').classList.add('hidden');
+    document.getElementById('mcCompareProductSection').classList.add('hidden');
+    document.getElementById('mcCompareSettingsSection').classList.add('hidden');
+
+    // Show modal
+    document.getElementById('compareModelConfigsModal').classList.remove('hidden');
+}
+
+function closeModelConfigCompareModal() {
+    document.getElementById('compareModelConfigsModal').classList.add('hidden');
+    mcCompareLeftConfig = null;
+    mcCompareRightConfig = null;
+}
+
+function resetMcCompareColumn(side) {
+    const prefix = side === 'left' ? 'mcCompareLeft' : 'mcCompareRight';
+
+    document.getElementById(`${prefix}Header`).innerHTML = `
+        <div class="flex items-center justify-center h-full text-gray-400 py-4">
+            <span>Select a model config</span>
+        </div>
+    `;
+
+    // Re-render comparison view
+    renderMcCompareView();
+}
+
+function onMcCompareSelectChange(side) {
+    const selectId = side === 'left' ? 'mcCompareLeftSelect' : 'mcCompareRightSelect';
+    const configId = document.getElementById(selectId).value;
+
+    if (!configId) {
+        // Reset this side
+        if (side === 'left') mcCompareLeftConfig = null;
+        else mcCompareRightConfig = null;
+        resetMcCompareColumn(side);
+        updateMcCompareRowVisibility();
+        return;
+    }
+
+    // Show loading state
+    const prefix = side === 'left' ? 'mcCompareLeft' : 'mcCompareRight';
+    document.getElementById(`${prefix}Header`).innerHTML = `
+        <div class="flex items-center justify-center h-full text-gray-400 py-4">
+            <i class="fas fa-spinner fa-spin mr-2"></i>Loading...
+        </div>
+    `;
+
+    // Fetch config data
+    fetch(`/api/model-configs/${configId}/`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                if (side === 'left') mcCompareLeftConfig = data.data;
+                else mcCompareRightConfig = data.data;
+                renderMcCompareView();
+                updateMcCompareRowVisibility();
+            } else {
+                document.getElementById(`${prefix}Header`).innerHTML = `
+                    <div class="flex items-center justify-center h-full text-red-400 py-4">
+                        <span>Failed to load</span>
+                    </div>
+                `;
+            }
+        })
+        .catch(err => {
+            console.error('Error loading model config:', err);
+            document.getElementById(`${prefix}Header`).innerHTML = `
+                <div class="flex items-center justify-center h-full text-red-400 py-4">
+                    <span>Error loading config</span>
+                </div>
+            `;
+        });
+}
+
+function updateMcCompareRowVisibility() {
+    const hasAny = mcCompareLeftConfig !== null || mcCompareRightConfig !== null;
+
+    document.getElementById('mcCompareBuyerSection').classList.toggle('hidden', !hasAny);
+    document.getElementById('mcCompareProductSection').classList.toggle('hidden', !hasAny);
+    document.getElementById('mcCompareSettingsSection').classList.toggle('hidden', !hasAny);
+}
+
+/**
+ * Main render function for the comparison view
+ * Renders both configs side-by-side with aligned layers
+ */
+function renderMcCompareView() {
+    const leftConfig = mcCompareLeftConfig;
+    const rightConfig = mcCompareRightConfig;
+
+    // Render headers
+    renderMcCompareHeader('mcCompareLeftHeader', leftConfig);
+    renderMcCompareHeader('mcCompareRightHeader', rightConfig);
+
+    // Render tower sections with aligned layers
+    renderMcCompareTowerSection(
+        'buyer',
+        leftConfig?.buyer_tower_layers || [],
+        rightConfig?.buyer_tower_layers || [],
+        leftConfig,
+        rightConfig
+    );
+
+    renderMcCompareTowerSection(
+        'product',
+        leftConfig?.product_tower_layers || [],
+        rightConfig?.product_tower_layers || [],
+        leftConfig,
+        rightConfig
+    );
+
+    // Render settings section
+    renderMcCompareSettings(leftConfig, rightConfig);
+}
+
+/**
+ * Render a single header card
+ */
+function renderMcCompareHeader(elementId, config) {
+    const element = document.getElementById(elementId);
+    if (!config) {
+        element.innerHTML = `
+            <div class="flex items-center justify-center h-full text-gray-400 py-4">
+                <span>Select a model config</span>
+            </div>
+        `;
+        return;
+    }
+
+    const modelTypeBadgeClass = config.model_type || 'retrieval';
+    element.innerHTML = `
+        <div class="flex items-start justify-between">
+            <div>
+                <div class="font-semibold text-gray-900 text-lg">${escapeHtml(config.name)}</div>
+                ${config.description ? `<div class="text-sm text-gray-400 mt-1 max-w-xs truncate">${escapeHtml(config.description)}</div>` : ''}
+            </div>
+            <span class="model-type-badge ${modelTypeBadgeClass}">${config.model_type_display || config.model_type}</span>
+        </div>
+    `;
+}
+
+/**
+ * Render a tower section with aligned layers
+ */
+function renderMcCompareTowerSection(tower, leftLayers, rightLayers, leftConfig, rightConfig) {
+    const layersContainer = document.getElementById(`mcCompare${tower.charAt(0).toUpperCase() + tower.slice(1)}Layers`);
+    const paramsContainer = document.getElementById(`mcCompare${tower.charAt(0).toUpperCase() + tower.slice(1)}Params`);
+
+    // Align layers with output layers at the bottom
+    const alignedRows = alignTowerLayers(leftLayers, rightLayers);
+
+    // Render aligned layer rows
+    layersContainer.innerHTML = alignedRows.map((row, idx) => {
+        const isOutput = idx === alignedRows.length - 1 && (row.left || row.right);
+        const isDifferent = layersAreDifferent(row.left, row.right);
+
+        return `
+            <div class="mc-compare-layer-row">
+                ${renderMcCompareLayerCell(row.left, isOutput, isDifferent && row.left && row.right)}
+                ${renderMcCompareLayerCell(row.right, isOutput, isDifferent && row.left && row.right)}
+            </div>
+        `;
+    }).join('');
+
+    // Render params comparison
+    const leftParams = calculateSingleTowerParams(leftLayers);
+    const rightParams = calculateSingleTowerParams(rightLayers);
+    const paramsDifferent = leftConfig && rightConfig && leftParams !== rightParams;
+
+    paramsContainer.innerHTML = `
+        <div class="mc-compare-params-cell ${paramsDifferent ? 'mc-compare-diff' : ''}">
+            ${leftConfig ? `Params: ${leftParams.toLocaleString()}` : ''}
+        </div>
+        <div class="mc-compare-params-cell ${paramsDifferent ? 'mc-compare-diff' : ''}">
+            ${rightConfig ? `Params: ${rightParams.toLocaleString()}` : ''}
+        </div>
+    `;
+}
+
+/**
+ * Align two tower layer arrays with output layers at bottom
+ * Returns array of {left, right} pairs
+ */
+function alignTowerLayers(leftLayers, rightLayers) {
+    const result = [];
+    const maxLen = Math.max(leftLayers.length, rightLayers.length);
+
+    if (maxLen === 0) {
+        return [{ left: null, right: null }];
+    }
+
+    // Separate output layers (last layer) from regular layers
+    const leftRegular = leftLayers.length > 0 ? leftLayers.slice(0, -1) : [];
+    const leftOutput = leftLayers.length > 0 ? leftLayers[leftLayers.length - 1] : null;
+    const rightRegular = rightLayers.length > 0 ? rightLayers.slice(0, -1) : [];
+    const rightOutput = rightLayers.length > 0 ? rightLayers[rightLayers.length - 1] : null;
+
+    // Calculate placeholders needed before output layer
+    const maxRegular = Math.max(leftRegular.length, rightRegular.length);
+
+    // Add regular layers with placeholders
+    for (let i = 0; i < maxRegular; i++) {
+        result.push({
+            left: i < leftRegular.length ? leftRegular[i] : null,
+            right: i < rightRegular.length ? rightRegular[i] : null
+        });
+    }
+
+    // Add output layer row (always aligned at bottom)
+    if (leftOutput || rightOutput) {
+        result.push({
+            left: leftOutput,
+            right: rightOutput
+        });
+    }
+
+    return result;
+}
+
+/**
+ * Render a single layer cell
+ */
+function renderMcCompareLayerCell(layer, isOutput, isDifferent) {
+    if (!layer) {
+        return `<div class="mc-compare-layer-cell placeholder"></div>`;
+    }
+
+    let badge = '';
+    let params = '';
+
+    if (layer.type === 'dense') {
+        badge = '<span class="layer-badge dense">Dense</span>';
+        params = `${layer.units} units, ${layer.activation || 'relu'}`;
+        const l2 = layer.l2_regularization || layer.l2_reg;
+        if (l2) params += `, L2=${l2}`;
+    } else if (layer.type === 'dropout') {
+        badge = '<span class="layer-badge dropout">Dropout</span>';
+        params = `rate: ${layer.rate}`;
+    } else if (layer.type === 'batch_norm') {
+        badge = '<span class="layer-badge batch_norm">BatchNorm</span>';
+        params = '';
+    }
+
+    const classes = ['mc-compare-layer-cell'];
+    if (isOutput) classes.push('output-layer');
+    if (isDifferent) classes.push('mc-compare-diff');
+
+    return `
+        <div class="${classes.join(' ')}">
+            ${badge}
+            <span class="layer-params">${params}</span>
+        </div>
+    `;
+}
+
+/**
+ * Check if two layers are different
+ */
+function layersAreDifferent(layer1, layer2) {
+    if (!layer1 || !layer2) return true;
+    if (layer1.type !== layer2.type) return true;
+
+    if (layer1.type === 'dense') {
+        if (layer1.units !== layer2.units) return true;
+        if (layer1.activation !== layer2.activation) return true;
+        const l2_1 = layer1.l2_regularization || layer1.l2_reg || 0;
+        const l2_2 = layer2.l2_regularization || layer2.l2_reg || 0;
+        if (l2_1 !== l2_2) return true;
+    } else if (layer1.type === 'dropout') {
+        if (layer1.rate !== layer2.rate) return true;
+    }
+    // batch_norm has no params to compare
+
+    return false;
+}
+
+/**
+ * Render the settings comparison section
+ */
+function renderMcCompareSettings(leftConfig, rightConfig) {
+    const container = document.getElementById('mcCompareSettingsGrid');
+
+    // Build settings rows data
+    const settingsRows = [
+        { label: 'Optimizer', leftValue: leftConfig?.optimizer_display || leftConfig?.optimizer, rightValue: rightConfig?.optimizer_display || rightConfig?.optimizer, leftRaw: leftConfig?.optimizer, rightRaw: rightConfig?.optimizer },
+        { label: 'Learning Rate', leftValue: leftConfig?.learning_rate, rightValue: rightConfig?.learning_rate },
+        { label: 'Batch Size', leftValue: leftConfig?.batch_size, rightValue: rightConfig?.batch_size },
+        { label: 'Output Dim', leftValue: leftConfig ? `${leftConfig.output_embedding_dim}D` : null, rightValue: rightConfig ? `${rightConfig.output_embedding_dim}D` : null, leftRaw: leftConfig?.output_embedding_dim, rightRaw: rightConfig?.output_embedding_dim },
+    ];
+
+    // Add retrieval-specific settings
+    if (leftConfig?.model_type === 'retrieval' || rightConfig?.model_type === 'retrieval') {
+        settingsRows.push(
+            { label: 'Algorithm', leftValue: leftConfig?.retrieval_algorithm_display || leftConfig?.retrieval_algorithm || 'Brute Force', rightValue: rightConfig?.retrieval_algorithm_display || rightConfig?.retrieval_algorithm || 'Brute Force', leftRaw: leftConfig?.retrieval_algorithm, rightRaw: rightConfig?.retrieval_algorithm },
+            { label: 'Top-K', leftValue: leftConfig?.top_k || 100, rightValue: rightConfig?.top_k || 100 }
+        );
+    }
+
+    const renderSettingsCard = (config, rows, side) => {
+        if (!config) {
+            return `<div class="mc-compare-settings-card">
+                <div class="text-center text-gray-400 py-4">No config selected</div>
+            </div>`;
+        }
+
+        return `<div class="mc-compare-settings-card">
+            ${rows.map(row => {
+                const value = side === 'left' ? row.leftValue : row.rightValue;
+                const rawLeft = row.leftRaw !== undefined ? row.leftRaw : row.leftValue;
+                const rawRight = row.rightRaw !== undefined ? row.rightRaw : row.rightValue;
+                const otherConfig = side === 'left' ? rightConfig : leftConfig;
+                const isDiff = otherConfig && rawLeft !== rawRight;
+
+                return `
+                    <div class="setting-row ${isDiff ? 'mc-compare-diff' : ''}">
+                        <span class="label">${row.label}</span>
+                        <span class="value">${value !== null && value !== undefined ? value : '-'}</span>
+                    </div>
+                `;
+            }).join('')}
+        </div>`;
+    };
+
+    container.innerHTML = `
+        ${renderSettingsCard(leftConfig, settingsRows, 'left')}
+        ${renderSettingsCard(rightConfig, settingsRows, 'right')}
+    `;
 }
 
 // Delete Model Config

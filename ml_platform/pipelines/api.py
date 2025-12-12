@@ -13,8 +13,9 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 from django.contrib.auth.decorators import login_required
 
-from ml_platform.models import FeatureConfig, QuickTest
+from ml_platform.models import FeatureConfig, ModelConfig, QuickTest
 from ml_platform.pipelines.services import PipelineService, PipelineServiceError
+from ml_platform.modeling.services import TrainerModuleGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -23,15 +24,16 @@ logger = logging.getLogger(__name__)
 @require_http_methods(["POST"])
 def start_quick_test(request, config_id):
     """
-    Start a Quick Test for a Feature Config.
+    Start a Quick Test for a Feature Config + Model Config combination.
 
     POST /api/feature-configs/{config_id}/quick-test/
 
     Request body:
     {
-        "epochs": 10,
-        "batch_size": 4096,
-        "learning_rate": 0.001
+        "model_config_id": 1,  # REQUIRED - Model Config ID
+        "epochs": 10,          # Optional - overrides ModelConfig
+        "batch_size": 4096,    # Optional - overrides ModelConfig
+        "learning_rate": 0.001 # Optional - overrides ModelConfig
     }
 
     Response:
@@ -52,11 +54,11 @@ def start_quick_test(request, config_id):
             "error": "Feature Config not found"
         }, status=404)
 
-    # Validate generated code exists
-    if not feature_config.generated_transform_code or not feature_config.generated_trainer_code:
+    # Validate generated transform code exists
+    if not feature_config.generated_transform_code:
         return JsonResponse({
             "success": False,
-            "error": "Generated code not found. Please regenerate code first."
+            "error": "Generated transform code not found. Please regenerate code first."
         }, status=400)
 
     # Validate dataset exists
@@ -72,9 +74,29 @@ def start_quick_test(request, config_id):
     except json.JSONDecodeError:
         body = {}
 
-    epochs = body.get("epochs", 10)
-    batch_size = body.get("batch_size", 4096)
-    learning_rate = body.get("learning_rate", 0.001)
+    # REQUIRED: model_config_id
+    model_config_id = body.get("model_config_id")
+    if not model_config_id:
+        return JsonResponse({
+            "success": False,
+            "error": "model_config_id is required. Please select a Model Config."
+        }, status=400)
+
+    # Load Model Config
+    try:
+        model_config = ModelConfig.objects.get(pk=model_config_id)
+    except ModelConfig.DoesNotExist:
+        return JsonResponse({
+            "success": False,
+            "error": f"Model Config with id {model_config_id} not found"
+        }, status=404)
+
+    # Note: ModelConfig is dataset-independent (global) - no dataset validation needed
+
+    # Use ModelConfig values as defaults, allow body to override
+    epochs = body.get("epochs", model_config.epochs)
+    batch_size = body.get("batch_size", model_config.batch_size)
+    learning_rate = body.get("learning_rate", model_config.learning_rate)
 
     # Validate parameters
     if not isinstance(epochs, int) or not (1 <= epochs <= 15):
@@ -95,11 +117,30 @@ def start_quick_test(request, config_id):
             "error": "Learning rate must be between 0.0001 and 0.1"
         }, status=400)
 
+    # Generate trainer code at runtime using both configs
+    try:
+        generator = TrainerModuleGenerator(feature_config, model_config)
+        trainer_code, is_valid, error_msg, error_line = generator.generate_and_validate()
+
+        if not is_valid:
+            return JsonResponse({
+                "success": False,
+                "error": f"Generated trainer code has syntax error: {error_msg} at line {error_line}"
+            }, status=400)
+    except Exception as e:
+        logger.exception(f"Failed to generate trainer code for FC {config_id} + MC {model_config_id}")
+        return JsonResponse({
+            "success": False,
+            "error": f"Failed to generate trainer code: {str(e)}"
+        }, status=500)
+
     # Submit quick test
     try:
         service = PipelineService()
         quick_test = service.submit_quick_test(
             feature_config=feature_config,
+            model_config=model_config,
+            trainer_code=trainer_code,  # Pass generated code
             epochs=epochs,
             batch_size=batch_size,
             learning_rate=float(learning_rate),
@@ -263,6 +304,8 @@ def _serialize_quick_test(quick_test: QuickTest) -> dict:
         "id": quick_test.pk,
         "feature_config_id": quick_test.feature_config_id,
         "feature_config_name": quick_test.feature_config.name,
+        "model_config_id": quick_test.model_config_id,
+        "model_config_name": quick_test.model_config.name if quick_test.model_config else None,
 
         # Configuration
         "epochs": quick_test.epochs,

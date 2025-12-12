@@ -33,6 +33,10 @@ urlpatterns = [
     path('api/feature-configs/<int:config_id>/regenerate-code/',
          api.regenerate_code, name='api_modeling_regenerate_code'),
 
+    # Combined trainer code generation (requires both FeatureConfig + ModelConfig)
+    path('api/modeling/generate-trainer-code/',
+         api.generate_trainer_code, name='api_modeling_generate_trainer_code'),
+
     # Utility endpoints
     path('api/feature-configs/smart-defaults/',
          api.generate_smart_defaults, name='api_modeling_smart_defaults'),

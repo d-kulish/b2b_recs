@@ -4225,11 +4225,26 @@
             </button>
         </div>
         <div class="modal-body">
-            <p class="text-sm text-gray-600 mb-4">
-                Config: <strong id="qtConfigName"></strong>
-            </p>
+            <!-- Configuration Selection -->
+            <div class="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                <h4 class="font-medium text-blue-900 mb-2">Configuration</h4>
+                <div class="space-y-2">
+                    <p class="text-sm text-blue-800">
+                        <span class="font-medium">Feature Config:</span>
+                        <strong id="qtConfigName"></strong>
+                    </p>
+                    <div>
+                        <label class="block text-sm font-medium text-blue-800 mb-1">Model Config</label>
+                        <select id="qtModelConfig" class="w-full border border-blue-300 rounded-lg px-3 py-2 bg-white" onchange="onModelConfigSelect()">
+                            <option value="">-- Select Model Config --</option>
+                        </select>
+                        <p class="text-xs text-blue-600 mt-1">Select a model architecture to train with</p>
+                    </div>
+                </div>
+            </div>
 
             <h4 class="font-medium text-gray-900 mb-3">Training Parameters</h4>
+            <p class="text-xs text-gray-500 mb-3">Values from selected Model Config (can be overridden)</p>
 
             <div class="mb-4">
                 <label class="block text-sm font-medium text-gray-700 mb-1">Epochs</label>
@@ -7611,7 +7626,50 @@ function openQuickTestDialog(configId, configName) {
     document.getElementById('qtBatchSize').value = '4096';
     document.getElementById('qtLearningRate').value = '0.001';
 
+    // Populate ModelConfig dropdown with configs for same dataset
+    populateModelConfigDropdown();
+
     document.getElementById('quickTestDialog').classList.remove('hidden');
+}
+
+function populateModelConfigDropdown() {
+    const dropdown = document.getElementById('qtModelConfig');
+    dropdown.innerHTML = '<option value="">-- Select Model Config --</option>';
+
+    // Get model configs for current dataset (from global state)
+    if (window.modelConfigsCache && window.modelConfigsCache.length > 0) {
+        window.modelConfigsCache.forEach(mc => {
+            const option = document.createElement('option');
+            option.value = mc.id;
+            option.textContent = mc.name;
+            option.dataset.epochs = mc.epochs || 10;
+            option.dataset.batchSize = mc.batch_size || 4096;
+            option.dataset.learningRate = mc.learning_rate || 0.001;
+            dropdown.appendChild(option);
+        });
+    }
+
+    // If only one model config, auto-select it
+    if (window.modelConfigsCache && window.modelConfigsCache.length === 1) {
+        dropdown.value = window.modelConfigsCache[0].id;
+        onModelConfigSelect();
+    }
+}
+
+function onModelConfigSelect() {
+    const dropdown = document.getElementById('qtModelConfig');
+    const selectedOption = dropdown.options[dropdown.selectedIndex];
+
+    if (selectedOption && selectedOption.value) {
+        // Update training params from selected ModelConfig
+        const epochs = selectedOption.dataset.epochs || 10;
+        const batchSize = selectedOption.dataset.batchSize || 4096;
+        const learningRate = selectedOption.dataset.learningRate || 0.001;
+
+        document.getElementById('qtEpochs').value = epochs;
+        document.getElementById('qtBatchSize').value = batchSize;
+        document.getElementById('qtLearningRate').value = learningRate;
+    }
 }
 
 function closeQuickTestDialog() {
@@ -7619,6 +7677,14 @@ function closeQuickTestDialog() {
 }
 
 async function startQuickTest() {
+    const modelConfigId = document.getElementById('qtModelConfig').value;
+
+    // Validate ModelConfig is selected
+    if (!modelConfigId) {
+        showError('Please select a Model Config');
+        return;
+    }
+
     const epochs = parseInt(document.getElementById('qtEpochs').value);
     const batchSize = parseInt(document.getElementById('qtBatchSize').value);
     const learningRate = parseFloat(document.getElementById('qtLearningRate').value);
@@ -7642,6 +7708,7 @@ async function startQuickTest() {
                 'X-CSRFToken': getCookie('csrftoken')
             },
             body: JSON.stringify({
+                model_config_id: parseInt(modelConfigId),  // REQUIRED: ModelConfig ID
                 epochs: epochs,
                 batch_size: batchSize,
                 learning_rate: learningRate
@@ -7954,6 +8021,8 @@ function loadModelConfigs() {
             document.getElementById('modelConfigsLoading').classList.add('hidden');
             if (data.success) {
                 allModelConfigs = data.data;
+                // Cache for QuickTest dropdown
+                window.modelConfigsCache = data.data;
                 renderModelConfigs();
             } else {
                 console.error('Error loading model configs:', data.error);
@@ -8498,13 +8567,10 @@ function renderModelConfigs() {
                 ` : ''}
             </div>
 
-            <!-- Footer: Clone & Code buttons -->
+            <!-- Footer: Clone button (Code is generated at runtime when combined with FeatureConfig) -->
             <div class="flex items-center gap-2 mt-3 pt-3 border-t border-gray-100" onclick="event.stopPropagation()">
                 <button onclick="cloneModelConfigById(${mc.id})" class="btn btn-secondary btn-sm" style="width: 150px;" title="Clone this config">
                     <i class="fas fa-copy"></i>Clone
-                </button>
-                <button onclick="showMcCodeComingSoon()" class="btn btn-secondary btn-sm" style="width: 150px;" title="View generated code">
-                    <i class="fas fa-code"></i>Code
                 </button>
             </div>
         </div>
@@ -8531,11 +8597,6 @@ function renderModelConfigs() {
             }
         });
     }, 0);
-}
-
-// Show "Coming Soon" for Code button
-function showMcCodeComingSoon() {
-    showMcToast('Code generation for Model Configs coming soon!', 'info');
 }
 
 // Edit Model Config by ID (opens wizard in edit mode)

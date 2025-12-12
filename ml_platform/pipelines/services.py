@@ -84,6 +84,8 @@ class PipelineService:
     def submit_quick_test(
         self,
         feature_config,
+        model_config,
+        trainer_code: str,
         epochs: int = 10,
         batch_size: int = 4096,
         learning_rate: float = 0.001,
@@ -93,7 +95,9 @@ class PipelineService:
         Submit a Quick Test pipeline to Vertex AI.
 
         Args:
-            feature_config: The FeatureConfig to test
+            feature_config: The FeatureConfig to test (defines feature transformations)
+            model_config: The ModelConfig to test (defines neural network architecture)
+            trainer_code: Generated trainer code (from TrainerModuleGenerator)
             epochs: Number of training epochs
             batch_size: Training batch size
             learning_rate: Learning rate
@@ -104,9 +108,10 @@ class PipelineService:
         """
         from ml_platform.models import QuickTest
 
-        # Create QuickTest record
+        # Create QuickTest record with both configs
         quick_test = QuickTest.objects.create(
             feature_config=feature_config,
+            model_config=model_config,  # Link to ModelConfig
             created_by=user,
             epochs=epochs,
             batch_size=batch_size,
@@ -115,13 +120,16 @@ class PipelineService:
             stage_details=self._get_initial_stage_details()
         )
 
+        # Store trainer code for upload (not in model anymore)
+        quick_test._trainer_code = trainer_code
+
         try:
             # Update status to submitting
             quick_test.status = QuickTest.STATUS_SUBMITTING
             quick_test.save(update_fields=['status'])
 
             # 1. Upload generated code to GCS
-            gcs_path = self._upload_code_to_gcs(feature_config, quick_test)
+            gcs_path = self._upload_code_to_gcs(feature_config, quick_test, trainer_code)
             quick_test.gcs_artifacts_path = gcs_path
 
             # 2. Build pipeline parameters
@@ -163,9 +171,14 @@ class PipelineService:
             {"name": "Trainer", "status": "pending", "duration_seconds": None},
         ]
 
-    def _upload_code_to_gcs(self, feature_config, quick_test) -> str:
+    def _upload_code_to_gcs(self, feature_config, quick_test, trainer_code: str) -> str:
         """
         Upload Transform and Trainer code to GCS.
+
+        Args:
+            feature_config: FeatureConfig with generated_transform_code
+            quick_test: QuickTest record
+            trainer_code: Generated trainer code (passed explicitly, not from feature_config)
 
         Returns:
             GCS path prefix (e.g., gs://bucket/quicktest-42/)
@@ -173,7 +186,7 @@ class PipelineService:
         bucket = self.storage_client.bucket(self.quicktest_bucket)
         prefix = f"quicktest-{quick_test.pk}"
 
-        # Upload Transform code
+        # Upload Transform code (from FeatureConfig)
         transform_blob = bucket.blob(f"{prefix}/transform_module.py")
         transform_blob.upload_from_string(
             feature_config.generated_transform_code,
@@ -181,10 +194,10 @@ class PipelineService:
         )
         logger.info(f"Uploaded transform_module.py to gs://{self.quicktest_bucket}/{prefix}/")
 
-        # Upload Trainer code
+        # Upload Trainer code (generated at runtime from FeatureConfig + ModelConfig)
         trainer_blob = bucket.blob(f"{prefix}/trainer_module.py")
         trainer_blob.upload_from_string(
-            feature_config.generated_trainer_code,
+            trainer_code,
             content_type='text/x-python'
         )
         logger.info(f"Uploaded trainer_module.py to gs://{self.quicktest_bucket}/{prefix}/")

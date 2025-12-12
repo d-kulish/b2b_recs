@@ -18,7 +18,7 @@ from .services import (
     TensorDimensionCalculator,
     SemanticTypeService,
     PreprocessingFnGenerator,
-    TrainerModuleGenerator,
+    TrainerModuleGenerator,  # Now requires ModelConfig
     serialize_feature_config,
     validate_feature_config,
     validate_python_code,
@@ -154,7 +154,7 @@ def create_feature_config(request, model_id):
         fc.calculate_tensor_dims()
         fc.save()
 
-        # Generate TFX Transform code
+        # Generate TFX Transform code (only depends on FeatureConfig)
         transform_valid = True
         try:
             transform_generator = PreprocessingFnGenerator(fc)
@@ -165,16 +165,8 @@ def create_feature_config(request, model_id):
             logger.warning(f"Failed to generate transform code for config {fc.id}: {gen_error}")
             transform_valid = False
 
-        # Generate TFX Trainer code
-        trainer_valid = True
-        try:
-            trainer_generator = TrainerModuleGenerator(fc)
-            _, trainer_valid, trainer_error = trainer_generator.generate_and_save()
-            if not trainer_valid:
-                logger.warning(f"Trainer code validation failed for config {fc.id}: {trainer_error}")
-        except Exception as gen_error:
-            logger.warning(f"Failed to generate trainer code for config {fc.id}: {gen_error}")
-            trainer_valid = False
+        # Note: Trainer code is now generated at runtime when ModelConfig is selected
+        # Use the /api/modeling/generate-trainer-code/ endpoint with both config IDs
 
         return JsonResponse({
             'success': True,
@@ -182,7 +174,6 @@ def create_feature_config(request, model_id):
             'message': 'Feature config created successfully',
             'code_validation': {
                 'transform_valid': transform_valid,
-                'trainer_valid': trainer_valid,
             }
         })
 
@@ -297,9 +288,8 @@ def update_feature_config(request, config_id):
         fc.calculate_tensor_dims()
         fc.save()
 
-        # Regenerate TFX code if features changed
+        # Regenerate TFX Transform code if features changed
         transform_valid = True
-        trainer_valid = True
         if features_changed:
             try:
                 transform_generator = PreprocessingFnGenerator(fc)
@@ -310,14 +300,7 @@ def update_feature_config(request, config_id):
                 logger.warning(f"Failed to regenerate transform code for config {fc.id}: {gen_error}")
                 transform_valid = False
 
-            try:
-                trainer_generator = TrainerModuleGenerator(fc)
-                _, trainer_valid, trainer_error = trainer_generator.generate_and_save()
-                if not trainer_valid:
-                    logger.warning(f"Trainer code validation failed for config {fc.id}: {trainer_error}")
-            except Exception as gen_error:
-                logger.warning(f"Failed to regenerate trainer code for config {fc.id}: {gen_error}")
-                trainer_valid = False
+            # Note: Trainer code is now generated at runtime when ModelConfig is selected
 
         response = {
             'success': True,
@@ -327,7 +310,6 @@ def update_feature_config(request, config_id):
         if features_changed:
             response['code_validation'] = {
                 'transform_valid': transform_valid,
-                'trainer_valid': trainer_valid,
             }
         return JsonResponse(response)
 
@@ -416,7 +398,7 @@ def clone_feature_config(request, config_id):
         clone.calculate_tensor_dims()
         clone.save()
 
-        # Generate TFX code for clone
+        # Generate TFX Transform code for clone (only depends on FeatureConfig)
         transform_valid = True
         try:
             transform_generator = PreprocessingFnGenerator(clone)
@@ -427,15 +409,7 @@ def clone_feature_config(request, config_id):
             logger.warning(f"Failed to generate transform code for cloned config {clone.id}: {gen_error}")
             transform_valid = False
 
-        trainer_valid = True
-        try:
-            trainer_generator = TrainerModuleGenerator(clone)
-            _, trainer_valid, trainer_error = trainer_generator.generate_and_save()
-            if not trainer_valid:
-                logger.warning(f"Trainer code validation failed for cloned config {clone.id}: {trainer_error}")
-        except Exception as gen_error:
-            logger.warning(f"Failed to generate trainer code for cloned config {clone.id}: {gen_error}")
-            trainer_valid = False
+        # Note: Trainer code is now generated at runtime when ModelConfig is selected
 
         return JsonResponse({
             'success': True,
@@ -443,7 +417,6 @@ def clone_feature_config(request, config_id):
             'message': f'Feature config cloned as "{new_name}"',
             'code_validation': {
                 'transform_valid': transform_valid,
-                'trainer_valid': trainer_valid,
             }
         })
 
@@ -868,35 +841,40 @@ def get_generated_code(request, config_id):
 
         if code_type == 'transform':
             code = fc.generated_transform_code
+
+            # Validate the code
+            is_valid = True
+            error_msg = None
+            error_line = None
+            if code:
+                is_valid, error_msg, error_line = validate_python_code(code, code_type)
+
+            return JsonResponse({
+                'success': True,
+                'data': {
+                    'code': code or '',
+                    'code_type': code_type,
+                    'generated_at': fc.generated_at.isoformat() if fc.generated_at else None,
+                    'config_id': fc.id,
+                    'config_name': fc.name,
+                    'has_code': bool(code),
+                    'is_valid': is_valid,
+                    'validation_error': error_msg,
+                    'error_line': error_line,
+                },
+            })
         elif code_type == 'trainer':
-            code = fc.generated_trainer_code
+            # Trainer code is now generated at runtime with ModelConfig
+            return JsonResponse({
+                'success': False,
+                'error': 'Trainer code is now generated at runtime with ModelConfig. '
+                         'Use POST /api/modeling/generate-trainer-code/ with feature_config_id and model_config_id.',
+            }, status=400)
         else:
             return JsonResponse({
                 'success': False,
-                'error': f'Invalid code type: {code_type}. Use "transform" or "trainer".',
+                'error': f'Invalid code type: {code_type}. Use "transform".',
             }, status=400)
-
-        # Validate the code
-        is_valid = True
-        error_msg = None
-        error_line = None
-        if code:
-            is_valid, error_msg, error_line = validate_python_code(code, code_type)
-
-        return JsonResponse({
-            'success': True,
-            'data': {
-                'code': code or '',
-                'code_type': code_type,
-                'generated_at': fc.generated_at.isoformat() if fc.generated_at else None,
-                'config_id': fc.id,
-                'config_name': fc.name,
-                'has_code': bool(code),
-                'is_valid': is_valid,
-                'validation_error': error_msg,
-                'error_line': error_line,
-            },
-        })
 
     except Exception as e:
         logger.exception(f"Error getting generated code for config {config_id}: {e}")
@@ -910,16 +888,16 @@ def get_generated_code(request, config_id):
 @require_http_methods(["POST"])
 def regenerate_code(request, config_id):
     """
-    Regenerate TFX code for a feature config.
+    Regenerate TFX Transform code for a feature config.
 
     Request body (optional):
-        type: 'transform' | 'trainer' | 'all' (default: 'all')
+        type: 'transform' (default) - Only transform code is regenerated here
 
-    Useful if code generation failed or config was created before
-    the generator was implemented.
+    Note: Trainer code is now generated at runtime via /api/modeling/generate-trainer-code/
+    with both feature_config_id and model_config_id.
 
     Returns:
-        JsonResponse with newly generated code
+        JsonResponse with newly generated transform code
     """
     try:
         fc = get_object_or_404(FeatureConfig, id=config_id)
@@ -930,7 +908,15 @@ def regenerate_code(request, config_id):
         except json.JSONDecodeError:
             data = {}
 
-        code_type = data.get('type', 'all')
+        code_type = data.get('type', 'transform')
+
+        # Trainer code now requires ModelConfig - redirect to new endpoint
+        if code_type in ['trainer', 'all']:
+            return JsonResponse({
+                'success': False,
+                'error': 'Trainer code generation now requires both FeatureConfig and ModelConfig. '
+                         'Use POST /api/modeling/generate-trainer-code/ with feature_config_id and model_config_id.',
+            }, status=400)
 
         result = {
             'config_id': fc.id,
@@ -939,31 +925,19 @@ def regenerate_code(request, config_id):
         }
 
         # Generate Transform code
-        if code_type in ['transform', 'all']:
-            transform_generator = PreprocessingFnGenerator(fc)
-            transform_code, transform_valid, transform_error = transform_generator.generate_and_save()
-            result['transform_code'] = transform_code
-            result['validation']['transform_valid'] = transform_valid
-            if not transform_valid:
-                result['validation']['transform_error'] = transform_error
-
-        # Generate Trainer code
-        if code_type in ['trainer', 'all']:
-            trainer_generator = TrainerModuleGenerator(fc)
-            trainer_code, trainer_valid, trainer_error = trainer_generator.generate_and_save()
-            result['trainer_code'] = trainer_code
-            result['validation']['trainer_valid'] = trainer_valid
-            if not trainer_valid:
-                result['validation']['trainer_error'] = trainer_error
+        transform_generator = PreprocessingFnGenerator(fc)
+        transform_code, transform_valid, transform_error = transform_generator.generate_and_save()
+        result['transform_code'] = transform_code
+        result['validation']['transform_valid'] = transform_valid
+        if not transform_valid:
+            result['validation']['transform_error'] = transform_error
 
         result['generated_at'] = fc.generated_at.isoformat() if fc.generated_at else None
 
-        # Determine overall success message
-        all_valid = result['validation'].get('transform_valid', True) and result['validation'].get('trainer_valid', True)
-        if all_valid:
-            message = f'{code_type.capitalize()} code regenerated successfully'
+        if transform_valid:
+            message = 'Transform code regenerated successfully'
         else:
-            message = f'{code_type.capitalize()} code regenerated with validation errors'
+            message = 'Transform code regenerated with validation errors'
 
         return JsonResponse({
             'success': True,
@@ -973,6 +947,94 @@ def regenerate_code(request, config_id):
 
     except Exception as e:
         logger.exception(f"Error regenerating code for config {config_id}: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e),
+        }, status=500)
+
+
+@login_required
+@require_http_methods(["POST"])
+def generate_trainer_code(request):
+    """
+    Generate TFX Trainer code for a FeatureConfig + ModelConfig combination.
+
+    Trainer code requires both configs because:
+    - FeatureConfig defines WHAT features are transformed and how
+    - ModelConfig defines the neural network architecture, optimizer, hyperparameters
+
+    Request body:
+        feature_config_id: int (required)
+        model_config_id: int (required)
+
+    Returns:
+        JsonResponse with generated trainer code and validation status
+    """
+    try:
+        data = json.loads(request.body)
+
+        feature_config_id = data.get('feature_config_id')
+        model_config_id = data.get('model_config_id')
+
+        if not feature_config_id:
+            return JsonResponse({
+                'success': False,
+                'error': 'feature_config_id is required',
+            }, status=400)
+
+        if not model_config_id:
+            return JsonResponse({
+                'success': False,
+                'error': 'model_config_id is required',
+            }, status=400)
+
+        # Load both configs
+        fc = get_object_or_404(FeatureConfig, id=feature_config_id)
+        mc = get_object_or_404(ModelConfig, id=model_config_id)
+
+        # Note: ModelConfig is dataset-independent (global) - no dataset validation needed
+
+        # Generate trainer code
+        generator = TrainerModuleGenerator(fc, mc)
+        trainer_code, is_valid, error_msg, error_line = generator.generate_and_validate()
+
+        result = {
+            'feature_config_id': fc.id,
+            'feature_config_name': fc.name,
+            'model_config_id': mc.id,
+            'model_config_name': mc.name,
+            'trainer_code': trainer_code,
+            'validation': {
+                'is_valid': is_valid,
+            },
+        }
+
+        if not is_valid:
+            result['validation']['error'] = error_msg
+            result['validation']['error_line'] = error_line
+
+        # Also include transform code from FeatureConfig for convenience
+        if fc.generated_transform_code:
+            result['transform_code'] = fc.generated_transform_code
+
+        if is_valid:
+            message = 'Trainer code generated successfully'
+        else:
+            message = 'Trainer code generated with validation errors'
+
+        return JsonResponse({
+            'success': True,
+            'data': result,
+            'message': message,
+        })
+
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'error': 'Invalid JSON in request body',
+        }, status=400)
+    except Exception as e:
+        logger.exception(f"Error generating trainer code: {e}")
         return JsonResponse({
             'success': False,
             'error': str(e),

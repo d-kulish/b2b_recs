@@ -4,11 +4,50 @@
 ## Document Purpose
 This document provides detailed specifications for implementing the **Modeling** domain in the ML Platform. This domain defines HOW data is transformed for training and enables rapid experimentation via Quick Tests.
 
-**Last Updated**: 2025-12-11
+**Last Updated**: 2025-12-12
 
 ---
 
 ## Recent Updates (December 2025)
+
+### Code Generation Architecture Refactored (2025-12-12)
+
+**Major Change:** Split code generation between Transform (stored) and Trainer (runtime).
+
+**Why This Change:**
+- **Transform code** only depends on FeatureConfig (feature definitions)
+- **Trainer code** depends on BOTH FeatureConfig AND ModelConfig (architecture)
+- Storing trainer code would become stale when ModelConfig changes
+
+**New Architecture:**
+
+| Code Type | Generated From | Storage | When Generated |
+|-----------|----------------|---------|----------------|
+| **Transform** | FeatureConfig only | `FeatureConfig.generated_transform_code` | On create/update/clone |
+| **Trainer** | FeatureConfig + ModelConfig | NOT stored (runtime) | On QuickTest start or preview request |
+
+**Key Changes:**
+- `generated_trainer_code` field **removed** from FeatureConfig model
+- `TrainerModuleGenerator` now **requires both** FeatureConfig and ModelConfig
+- **New API endpoint**: `POST /api/modeling/generate-trainer-code/` accepts both config IDs
+- **QuickTest now requires** `model_config_id` in request body
+- **Code button removed** from Model Structure chapter (nothing to show without FeatureConfig)
+- **ModelConfig is global** - reusable across any dataset/FeatureConfig
+
+**Trainer Code Features:**
+- Configurable tower layers from ModelConfig (Dense, Dropout, BatchNorm)
+- **L1, L2, and L1+L2 (elastic net)** regularization support
+- **6 optimizers**: Adagrad, Adam, SGD, RMSprop, AdamW, FTRL
+- **Retrieval algorithms**: Brute Force or ScaNN
+- Output embedding dimension from ModelConfig
+
+**UI Changes:**
+- QuickTest dialog now has **ModelConfig selector dropdown** (required)
+- Training params pre-filled from selected ModelConfig
+- Features chapter "Code" button shows transform only
+- Model Structure chapter has no "Code" button
+
+See [TFX Code Generation](tfx_code_generation.md) for full technical details.
 
 ### Model Structure Chapter - Enhanced (2025-12-11)
 
@@ -181,19 +220,23 @@ Full Vertex AI Pipeline integration for validating feature configurations:
 FeatureConfig → Dataset → BigQueryService.generate_query() → Vertex AI Pipeline → metrics.json → UI
 ```
 
-### TFX Code Generation (2025-12-10)
+### TFX Code Generation (2025-12-10, Updated 2025-12-12)
 - **Transform code generation** - Feature Configs automatically generate TFX Transform `preprocessing_fn` code
-- **Trainer code generation** - Feature Configs automatically generate TFX Trainer module with:
+  - Stored in `FeatureConfig.generated_transform_code` field
+  - Auto-generated on create, update (if features changed), and clone
+- **Trainer code generation** - Generated at **runtime** combining FeatureConfig + ModelConfig:
   - BuyerModel (Query Tower) and ProductModel (Candidate Tower) classes
-  - RetrievalModel using TFRS with configurable dense layers (default: 128→64→32)
-  - `run_fn()` TFX entry point with training loop
+  - RetrievalModel with configurable tower layers from ModelConfig
+  - Support for Dense, Dropout, BatchNorm layers with L1/L2/L1+L2 regularization
+  - 6 optimizers: Adagrad, Adam, SGD, RMSprop, AdamW, FTRL
+  - `run_fn()` TFX entry point with configured optimizer
   - Serving signature for raw input → recommendations
-- **Database storage** - Generated code stored in `generated_transform_code` and `generated_trainer_code` fields
-- **API endpoints** for viewing and regenerating code:
-  - `GET /api/feature-configs/{id}/generated-code/?type=transform|trainer`
-  - `POST /api/feature-configs/{id}/regenerate-code/` (supports `type: all|transform|trainer`)
-- **Code Viewer UI** - "Code" button on Feature Config cards opens modal with:
-  - Tabbed view (Transform / Trainer)
+- **Database storage** - Only Transform code stored; Trainer code generated at runtime
+- **API endpoints** for viewing and generating code:
+  - `GET /api/feature-configs/{id}/generated-code/?type=transform` - Get stored transform code
+  - `POST /api/feature-configs/{id}/regenerate-code/` - Regenerate transform code only
+  - `POST /api/modeling/generate-trainer-code/` - **NEW** Generate trainer code with both config IDs
+- **Code Viewer UI** - "Code" button on Feature Config cards shows transform code only
   - Python syntax highlighting
   - Copy to clipboard and download functionality
   - Regenerate button
@@ -201,8 +244,6 @@ FeatureConfig → Dataset → BigQueryService.generate_query() → Vertex AI Pip
   - `validate_python_code()` function using Python's `compile()` for syntax checking
   - Validation badges in code viewer (green "Valid" / red "Error" / yellow "Checking")
   - Error banner displays syntax error message and line number
-  - Both Transform and Trainer code validated independently
-- **Auto-triggers** - Code regenerated and validated on create, update (if features changed), and clone
 - See [TFX Code Generation](tfx_code_generation.md) for full details
 
 ### CSRF Bug Fix (2025-12-10)

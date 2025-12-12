@@ -1,19 +1,20 @@
 # TFX Code Generation
 
 ## Document Purpose
-This document describes the automatic TFX code generation system that converts Feature Configs into executable TFX Transform and Trainer modules for Vertex AI Pipelines.
+This document describes the automatic TFX code generation system that converts Feature Configs and Model Configs into executable TFX Transform and Trainer modules for Vertex AI Pipelines.
 
-**Last Updated**: 2025-12-10
+**Last Updated**: 2025-12-12
 
 ---
 
 ## Overview
 
-The ML Platform automatically generates TFX-compatible Python code from Feature Config JSON schemas. This enables:
+The ML Platform automatically generates TFX-compatible Python code from Feature Config and Model Config JSON schemas. This enables:
 
 1. **No-code feature engineering** - Users configure features via the UI wizard
-2. **Reproducible pipelines** - Generated code is stored and versioned with the config
-3. **TFX/Vertex AI compatibility** - Output code works directly with TFX Transform and Trainer components
+2. **No-code model architecture** - Users configure neural network architecture via Model Config
+3. **Reproducible pipelines** - Transform code stored with FeatureConfig, Trainer code generated at runtime
+4. **TFX/Vertex AI compatibility** - Output code works directly with TFX Transform and Trainer components
 
 ### Architecture
 
@@ -58,13 +59,26 @@ The ML Platform automatically generates TFX-compatible Python code from Feature 
                                     │
                                     ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
+│           FEATURE CONFIG + MODEL CONFIG (Combined at Runtime)                │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
 │                      TrainerModuleGenerator                                  │
 │                      (ml_platform/modeling/services.py)                      │
 │                                                                              │
+│  REQUIRES BOTH:                                                             │
+│  - FeatureConfig: defines feature transformations                           │
+│  - ModelConfig: defines neural network architecture                         │
+│                                                                              │
+│  Features:                                                                  │
 │  - Load vocabularies from Transform artifacts                               │
 │  - Create embeddings with configured dimensions                             │
 │  - Build BuyerModel (Query Tower) and ProductModel (Candidate Tower)        │
-│  - Configure TFRS retrieval model with dense layers (default: 128→64→32)   │
+│  - Configure tower layers from ModelConfig (Dense/Dropout/BatchNorm)        │
+│  - Support L1, L2, and L1+L2 (elastic net) regularization                  │
+│  - 6 optimizers: Adagrad, Adam, SGD, RMSprop, AdamW, FTRL                  │
+│  - Retrieval algorithms: Brute Force or ScaNN                              │
 │  - Implement run_fn() for TFX Trainer component                             │
 │  - Provide serving signature for raw input → recommendations                │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -72,15 +86,36 @@ The ML Platform automatically generates TFX-compatible Python code from Feature 
                                     ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                      GENERATED TRAINER CODE                                  │
-│                      (stored in FeatureConfig.generated_trainer_code)        │
+│                      (generated at runtime, NOT stored)                      │
 │                                                                              │
 │  - BuyerModel class (Query Tower)                                           │
 │  - ProductModel class (Candidate Tower)                                     │
-│  - RetrievalModel class (TFRS model)                                        │
-│  - run_fn() TFX entry point                                                 │
+│  - RetrievalModel class (TFRS model with configurable towers)               │
+│  - run_fn() TFX entry point with configured optimizer                       │
 │  - Serving signature with pre-computed candidate embeddings                 │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
+
+---
+
+## Key Design Decision: Split Code Generation
+
+### Transform Code (Stored)
+- **Generated from**: FeatureConfig only
+- **Storage**: `FeatureConfig.generated_transform_code` field
+- **Generated when**: FeatureConfig is created, updated, or cloned
+- **Rationale**: Transform code only depends on feature definitions, not model architecture
+
+### Trainer Code (Runtime)
+- **Generated from**: FeatureConfig + ModelConfig combined
+- **Storage**: NOT stored - generated at runtime
+- **Generated when**: QuickTest is started or code preview is requested
+- **Rationale**: Trainer code depends on both feature definitions AND model architecture
+
+This split allows users to:
+1. Preview transform code immediately after saving a FeatureConfig
+2. Experiment with different ModelConfigs using the same FeatureConfig
+3. Mix and match configurations without storing redundant trainer code
 
 ---
 
@@ -88,38 +123,58 @@ The ML Platform automatically generates TFX-compatible Python code from Feature 
 
 ### Database Schema
 
-Three new fields were added to the `FeatureConfig` model:
-
 ```python
 # ml_platform/models.py
 
 class FeatureConfig(models.Model):
     # ... existing fields ...
 
-    # Generated TFX code (stored as text for Cloud Run compatibility)
+    # Generated TFX Transform code (stored - only depends on FeatureConfig)
     generated_transform_code = models.TextField(
         blank=True,
         help_text="Auto-generated TFX Transform preprocessing_fn code"
     )
-    generated_trainer_code = models.TextField(
-        blank=True,
-        help_text="Auto-generated TFX Trainer module code"
-    )
+    # Note: generated_trainer_code removed - now generated at runtime with ModelConfig
     generated_at = models.DateTimeField(
         null=True,
         blank=True,
-        help_text="When code was last generated"
+        help_text="When transform code was last generated"
     )
+
+
+class ModelConfig(models.Model):
+    """
+    Dataset-independent model architecture configuration.
+    Can be reused across any dataset/FeatureConfig combination.
+    """
+    name = models.CharField(max_length=255)
+    model_type = models.CharField(max_length=50)  # retrieval, ranking, multitask
+
+    # Tower architecture (JSON arrays of layer configs)
+    buyer_tower_layers = models.JSONField(default=list)
+    product_tower_layers = models.JSONField(default=list)
+    output_embedding_dim = models.PositiveIntegerField(default=32)
+
+    # Training hyperparameters
+    optimizer = models.CharField(max_length=50, default='adagrad')
+    learning_rate = models.FloatField(default=0.1)
+    batch_size = models.PositiveIntegerField(default=4096)
+    epochs = models.PositiveIntegerField(default=10)
+
+    # Retrieval settings
+    retrieval_algorithm = models.CharField(max_length=50, default='brute_force')
+    top_k = models.PositiveIntegerField(default=100)
+    # ... ScaNN params ...
 ```
 
-**Design Decision**: Code is stored in the database (not filesystem) because:
-- Cloud Run has ephemeral filesystem
-- PostgreSQL in Cloud SQL handles text storage efficiently
-- Code is versioned with the config for reproducibility
+**Design Decisions**:
+- Transform code stored in database (Cloud Run has ephemeral filesystem)
+- Trainer code generated at runtime (depends on both configs)
+- ModelConfig is dataset-independent (global, reusable)
 
 ### PreprocessingFnGenerator
 
-Located in `ml_platform/modeling/services.py`, this class generates TFX Transform `preprocessing_fn` code.
+Located in `ml_platform/modeling/services.py`, generates TFX Transform `preprocessing_fn` code.
 
 #### Feature Type Mappings
 
@@ -134,36 +189,54 @@ Located in `ml_platform/modeling/services.py`, this class generates TFX Transfor
 | Cross (text × text) | `tft.hash_strings()` | `{col1}_x_{col2}_cross` (dense INT64) |
 | Cross (with numeric) | bucketize + `tft.hash_strings()` | `{col1}_x_{col2}_cross` (dense INT64) |
 
-#### Cyclical Feature Encoding
+### TrainerModuleGenerator
 
-Temporal features can have cyclical patterns encoded as sin/cos pairs:
+Located in `ml_platform/modeling/services.py`, generates TFX Trainer module code.
 
-| Cycle | Approximation | Output |
-|-------|---------------|--------|
-| Yearly | day_of_year / 365.25 | `{col}_yearly_sin`, `{col}_yearly_cos` |
-| Quarterly | day_of_quarter / 91.31 | `{col}_quarterly_sin`, `{col}_quarterly_cos` |
-| Monthly | day_of_month / 30.44 | `{col}_monthly_sin`, `{col}_monthly_cos` |
-| Weekly | day_of_week / 7 (Monday=0) | `{col}_weekly_sin`, `{col}_weekly_cos` |
-| Daily | hour / 24 | `{col}_daily_sin`, `{col}_daily_cos` |
+**Constructor signature:**
+```python
+def __init__(self, feature_config: 'FeatureConfig', model_config: 'ModelConfig'):
+    """
+    Initialize with BOTH FeatureConfig and ModelConfig.
 
-#### Cross Feature Handling
+    Args:
+        feature_config: Defines WHAT features are transformed (buyer/product features, crosses)
+        model_config: Defines HOW the model is built (layers, optimizer, hyperparameters)
+    """
+```
 
-Cross features require special handling for numeric/temporal columns:
+#### Supported Layer Types
 
-1. **Text × Text**: Concatenate strings, then hash via `tft.hash_strings()`
-2. **Numeric × Text**: Bucketize numeric first (using `crossing_buckets`), convert to string, then hash
-3. **Temporal × Anything**: Bucketize temporal first, convert to string, then hash
+| Layer Type | Parameters | Code Generated |
+|------------|------------|----------------|
+| Dense | units, activation, l1_reg, l2_reg | `tf.keras.layers.Dense(units, activation, kernel_regularizer)` |
+| Dropout | rate | `tf.keras.layers.Dropout(rate)` |
+| BatchNorm | - | `tf.keras.layers.BatchNormalization()` |
 
-**Important**: Cross features now output **dense** INT64 tensors (not sparse) via `tft.hash_strings()`. This simplifies the Trainer code since embedding layers expect dense indices.
+#### Regularization Support
 
-The `crossing_buckets` parameter is **separate** from the main tensor's bucketization to allow coarser granularity for crosses (typically 5-20 buckets vs 100 for main tensor).
+| Type | ModelConfig Field | Generated Code |
+|------|-------------------|----------------|
+| L1 only | `l1_reg > 0` | `kernel_regularizer=tf.keras.regularizers.l1(value)` |
+| L2 only | `l2_reg > 0` | `kernel_regularizer=tf.keras.regularizers.l2(value)` |
+| L1+L2 (elastic net) | both > 0 | `kernel_regularizer=tf.keras.regularizers.l1_l2(l1=val, l2=val)` |
+
+#### Supported Optimizers
+
+| Optimizer | ModelConfig Value | Generated Code |
+|-----------|-------------------|----------------|
+| Adagrad | `adagrad` | `tf.keras.optimizers.Adagrad(learning_rate)` |
+| Adam | `adam` | `tf.keras.optimizers.Adam(learning_rate)` |
+| SGD | `sgd` | `tf.keras.optimizers.SGD(learning_rate)` |
+| RMSprop | `rmsprop` | `tf.keras.optimizers.RMSprop(learning_rate)` |
+| AdamW | `adamw` | `tf.keras.optimizers.AdamW(learning_rate)` |
+| FTRL | `ftrl` | `tf.keras.optimizers.Ftrl(learning_rate)` |
 
 ### API Endpoints
 
-#### Get Generated Code
+#### Get Generated Transform Code
 ```
-GET /api/feature-configs/{config_id}/generated-code/
-Query params: type=transform|trainer (default: transform)
+GET /api/feature-configs/{config_id}/generated-code/?type=transform
 
 Response:
 {
@@ -174,348 +247,124 @@ Response:
     "generated_at": "2025-12-10T10:30:00Z",
     "config_id": 5,
     "config_name": "Rich Features v1",
-    "has_code": true
+    "has_code": true,
+    "is_valid": true
   }
 }
 ```
 
-#### Regenerate Code
+Note: `type=trainer` is no longer supported here - use the combined endpoint below.
+
+#### Regenerate Transform Code
 ```
 POST /api/feature-configs/{config_id}/regenerate-code/
-Body (optional): { "type": "transform" | "trainer" | "all" }  // default: "all"
+Body: { "type": "transform" }
 
 Response:
 {
   "success": true,
   "data": {
     "transform_code": "# Auto-generated TFX Transform...",
-    "trainer_code": "# Auto-generated TFX Trainer Module...",
     "generated_at": "2025-12-10T10:35:00Z",
     "config_id": 5,
-    "config_name": "Rich Features v1"
+    "config_name": "Rich Features v1",
+    "validation": {
+      "transform_valid": true
+    }
   },
-  "message": "All code regenerated successfully"
+  "message": "Transform code regenerated successfully"
+}
+```
+
+#### Generate Trainer Code (NEW - Requires Both Configs)
+```
+POST /api/modeling/generate-trainer-code/
+Body: {
+  "feature_config_id": 5,
+  "model_config_id": 3
+}
+
+Response:
+{
+  "success": true,
+  "data": {
+    "feature_config_id": 5,
+    "feature_config_name": "Rich Features v1",
+    "model_config_id": 3,
+    "model_config_name": "Standard Retrieval",
+    "trainer_code": "# Auto-generated TFX Trainer Module...",
+    "transform_code": "# Auto-generated TFX Transform...",
+    "validation": {
+      "is_valid": true
+    }
+  },
+  "message": "Trainer code generated successfully"
 }
 ```
 
 ### Automatic Generation Triggers
 
-Code is automatically generated when:
-
+**Transform code** is automatically generated when:
 1. **Creating** a new feature config
 2. **Updating** a feature config (if features changed)
 3. **Cloning** a feature config
 
-Code generation failures are logged but don't fail the main operation.
+**Trainer code** is generated at runtime when:
+1. **Starting a QuickTest** (with both feature_config_id and model_config_id)
+2. **Requesting code preview** via `/api/modeling/generate-trainer-code/`
 
 ---
 
-## Example Generated Code
-
-For a Feature Config with:
-- **Buyer**: customer_id (text, 64D), city (text, 16D), revenue (numeric, norm+bucket), trans_date (temporal, norm+weekly+monthly)
-- **Product**: product_id (text, 32D), category (text, 16D)
-- **Buyer Crosses**: customer_id × city
-
-```python
-# Auto-generated TFX Transform preprocessing_fn
-# FeatureConfig: "Rich Features v1" (ID: 5)
-# Generated at: 2025-12-10T10:30:00Z
-#
-# BuyerModel features: customer_id, city, revenue, trans_date
-# ProductModel features: product_id, category
-# Buyer crosses: customer_id × city
-# Product crosses: none
-
-import math
-import tensorflow as tf
-import tensorflow_transform as tft
-
-NUM_OOV_BUCKETS = 1
-
-
-def preprocessing_fn(inputs):
-    """
-    TFX Transform preprocessing function.
-
-    Outputs vocabulary indices for text features, normalized values for numeric,
-    cyclical encodings for temporal, and hashed indices for crosses.
-
-    Embeddings are created in the Trainer module, not here.
-    """
-    outputs = {}
-
-    # =========================================================================
-    # TEXT FEATURES → Vocabulary lookup (outputs: vocab indices)
-    # =========================================================================
-
-    # customer_id: STRING → vocab index (embedding_dim=64 in Trainer)
-    outputs['customer_id'] = tft.compute_and_apply_vocabulary(
-        inputs['customer_id'],
-        num_oov_buckets=NUM_OOV_BUCKETS,
-        vocab_filename='customer_id_vocab'
-    )
-
-    # city: STRING → vocab index (embedding_dim=16 in Trainer)
-    outputs['city'] = tft.compute_and_apply_vocabulary(
-        inputs['city'],
-        num_oov_buckets=NUM_OOV_BUCKETS,
-        vocab_filename='city_vocab'
-    )
-
-    # product_id: STRING → vocab index (embedding_dim=32 in Trainer)
-    outputs['product_id'] = tft.compute_and_apply_vocabulary(
-        inputs['product_id'],
-        num_oov_buckets=NUM_OOV_BUCKETS,
-        vocab_filename='product_id_vocab'
-    )
-
-    # category: STRING → vocab index (embedding_dim=16 in Trainer)
-    outputs['category'] = tft.compute_and_apply_vocabulary(
-        inputs['category'],
-        num_oov_buckets=NUM_OOV_BUCKETS,
-        vocab_filename='category_vocab'
-    )
-
-    # =========================================================================
-    # NUMERIC FEATURES → Normalize / Bucketize
-    # =========================================================================
-
-    # revenue: FLOAT64 → normalize + bucketize(100)
-    revenue_float = tf.cast(inputs['revenue'], tf.float32)
-    outputs['revenue_norm'] = tft.scale_to_z_score(revenue_float)
-    outputs['revenue_bucket'] = tft.bucketize(revenue_float, num_buckets=100)
-
-    # =========================================================================
-    # TEMPORAL FEATURES → Normalize / Cyclical / Bucketize
-    # =========================================================================
-
-    # trans_date: TIMESTAMP → normalize + cyclical(weekly, monthly)
-    # Convert timestamp to float seconds since epoch
-    trans_date_seconds = tf.cast(
-        tf.cast(inputs['trans_date'], tf.int64),
-        tf.float32
-    )
-
-    # Normalize
-    outputs['trans_date_norm'] = tft.scale_to_z_score(trans_date_seconds)
-
-    # Cyclical encoding
-    SECONDS_PER_DAY = 86400.0
-    days_since_epoch = trans_date_seconds / SECONDS_PER_DAY
-
-    # Weekly: day of week (Monday=0)
-    # Unix epoch (1970-01-01) was Thursday, so +4 to align Monday=0
-    day_of_week_frac = tf.math.mod(days_since_epoch + 4, 7.0) / 7.0
-    outputs['trans_date_weekly_sin'] = tf.sin(2.0 * math.pi * day_of_week_frac)
-    outputs['trans_date_weekly_cos'] = tf.cos(2.0 * math.pi * day_of_week_frac)
-
-    # Monthly: day of month (approximated via 30.44 days)
-    day_of_month_frac = tf.math.mod(days_since_epoch, 30.44) / 30.44
-    outputs['trans_date_monthly_sin'] = tf.sin(2.0 * math.pi * day_of_month_frac)
-    outputs['trans_date_monthly_cos'] = tf.cos(2.0 * math.pi * day_of_month_frac)
-
-    # =========================================================================
-    # CROSS FEATURES → Bucketize (for numeric/temporal) + Hash
-    # =========================================================================
-
-    # Cross: customer_id × city (buyerModel)
-    outputs['customer_id_x_city_cross'] = tf.sparse.cross_hashed(
-        inputs=[
-            inputs['customer_id'],
-            inputs['city']
-        ],
-        num_buckets=5000
-    )
-
-    return outputs
-```
-
----
-
-## Completed Features
-
-### TrainerModuleGenerator (DONE)
-
-Implemented in `ml_platform/modeling/services.py`. The generator produces TFX Trainer module code with:
-
-1. **Load Transform artifacts**
-   ```python
-   tf_transform_output = tft.TFTransformOutput(fn_args.transform_output)
-   vocab = tf_transform_output.vocabulary_by_name('customer_id_vocab')
-   ```
-
-2. **Create embeddings from vocab indices**
-   ```python
-   embedding = tf.keras.Sequential([
-       tf.keras.layers.StringLookup(vocabulary=vocab_list, mask_token=None),
-       tf.keras.layers.Embedding(len(vocab_list) + 1, embedding_dim)
-   ])
-   ```
-
-3. **Build two-tower architecture**
-   ```python
-   class BuyerModel(tf.keras.Model):
-       # Query tower - concatenates all buyer feature embeddings + cross embeddings
-
-   class ProductModel(tf.keras.Model):
-       # Candidate tower - concatenates all product feature embeddings
-   ```
-
-4. **Configure TFRS model with dense layers**
-   ```python
-   class RetrievalModel(tfrs.Model):
-       # Default: 128 → 64 → 32 dense layers
-       # Configurable via custom_config
-   ```
-
-5. **Serving signature**
-   ```python
-   def _build_serving_fn(model, tf_transform_output, product_ids, product_embeddings):
-       # Takes serialized tf.Examples (raw features)
-       # Returns top-100 product recommendations with scores
-   ```
-
-### Dense Cross Features (DONE)
-
-Changed from `tf.sparse.cross_hashed()` (sparse) to `tft.hash_strings()` (dense) for cross features. This simplifies Trainer embedding lookup since dense indices work directly with `tf.keras.layers.Embedding`.
-
-### UI for Viewing Generated Code (DONE)
-
-Added "View Code" button on Feature Config cards that opens a modal with:
-- **Two tabs**: Transform (`preprocessing_fn.py`) and Trainer (`trainer_module.py`)
-- **Syntax highlighting** for Python code (keywords, strings, comments, functions, decorators, numbers)
-- **Line count badges** on each tab
-- **Copy to clipboard** functionality with visual feedback
-- **Download as .py file** functionality
-- **Regenerate button** to refresh code from current config
-- **Dark theme** code display (Slate color scheme)
-- **Timestamp** showing when code was last generated
-
-### Code Validation (DONE)
-
-Added syntax validation for generated Python code:
-
-1. **Backend validation** (`ml_platform/modeling/services.py`):
-   ```python
-   def validate_python_code(code: str, code_type: str = 'unknown') -> Tuple[bool, Optional[str], Optional[int]]:
-       """
-       Validate that generated Python code is syntactically correct.
-       Uses Python's compile() to check syntax without executing the code.
-       Returns (is_valid, error_message, error_line)
-       """
-       if not code or not code.strip():
-           return False, "Code is empty", None
-       try:
-           compile(code, f'<generated_{code_type}>', 'exec')
-           return True, None, None
-       except SyntaxError as e:
-           return False, e.msg, e.lineno
-   ```
-
-2. **API responses** now include validation status:
-   - `is_valid`: Boolean indicating if code is syntactically correct
-   - `validation_error`: Error message if validation failed
-   - `error_line`: Line number where error occurred
-
-3. **UI indicators** in code viewer modal:
-   - **Green "Valid" badge** - code is syntactically correct
-   - **Red "Error" badge** - code has syntax errors
-   - **Yellow "Checking" badge** - validation in progress
-   - **Error banner** - displays error message and line number for invalid code
-
-4. **Automatic validation**:
-   - Code is validated when generated/regenerated
-   - Validation status logged for debugging
-   - Both Transform and Trainer code validated independently
-
----
-
-## Quick Test Pipeline Integration (COMPLETED)
+## Quick Test Pipeline Integration
 
 ### Overview
 
-Quick Test is a mini TFX pipeline on Vertex AI that validates feature configurations before expensive full training runs. It runs the complete pipeline (ExampleGen → StatisticsGen → SchemaGen → Transform → Trainer) on the full dataset and returns metrics (loss, recall@10/50/100).
+Quick Test is a mini TFX pipeline on Vertex AI that validates feature configurations before expensive full training runs. It now requires **both** a FeatureConfig (features) and a ModelConfig (architecture).
 
-### Implementation Details
+### API Changes
 
-**Backend Components:**
+**Start Quick Test (Updated)**
+```
+POST /api/feature-configs/{config_id}/quick-test/
+Body: {
+  "model_config_id": 3,     // REQUIRED - Model Config to use
+  "epochs": 10,             // Optional - overrides ModelConfig value
+  "batch_size": 4096,       // Optional - overrides ModelConfig value
+  "learning_rate": 0.001    // Optional - overrides ModelConfig value
+}
+```
 
-| Component | File | Description |
-|-----------|------|-------------|
-| `QuickTest` model | `ml_platform/models.py:1472-1736` | Django model for tracking pipeline runs |
-| `PipelineService` | `ml_platform/pipelines/services.py` | Submits pipelines, polls status, extracts results |
-| `pipeline_builder` | `ml_platform/pipelines/pipeline_builder.py` | KFP v2 pipeline definition with 6 components |
-| API endpoints | `ml_platform/pipelines/api.py` | REST API for starting/monitoring/cancelling tests |
-
-**API Endpoints:**
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/feature-configs/{id}/quick-test/` | POST | Start a quick test |
-| `/api/quick-tests/{id}/` | GET | Get status and results |
-| `/api/quick-tests/{id}/cancel/` | POST | Cancel running test |
-| `/api/feature-configs/{id}/quick-tests/` | GET | List tests for config |
-
-**Pipeline Stages:**
-
-1. **ExampleGen** - Extract data from BigQuery using Dataset's generated SQL query
-2. **StatisticsGen** - Compute dataset statistics
-3. **SchemaGen** - Infer schema from statistics
-4. **Transform** - Apply `preprocessing_fn` from generated Transform code
-5. **Trainer** - Train TFRS model using generated Trainer code
-6. **SaveMetrics** - Export metrics.json to GCS for Django extraction
-
-**GCS Buckets (with lifecycle policies):**
-
-| Bucket | Lifecycle | Purpose |
-|--------|-----------|---------|
-| `gs://b2b-recs-quicktest-artifacts` | 7 days | Quick test artifacts |
-| `gs://b2b-recs-training-artifacts` | 30 days | Full training artifacts |
-| `gs://b2b-recs-pipeline-staging` | 3 days | Pipeline working directory |
-
-**UI Components (model_modeling.html):**
-
-- **Quick Test button** on Feature Config cards (requires generated code)
-- **Configuration dialog** - Set epochs, batch size, learning rate
-- **Progress modal** - Real-time stage tracking with animated progress bar
-- **Results modal** - Displays metrics, vocabulary stats, error details
-- **Polling** - Automatic status updates every 10 seconds
+The trainer code is generated at submission time using both configs.
 
 ### Data Flow
 
 ```
-FeatureConfig → Dataset (FK) → BigQueryService.generate_query(dataset) → SQL Query
-                                        ↓
-                              Vertex AI Pipeline
-                                        ↓
-                         GCS (transform_module.py, trainer_module.py)
-                                        ↓
-                    Pipeline: ExampleGen → StatisticsGen → SchemaGen → Transform → Trainer
-                                        ↓
-                              metrics.json → QuickTest model → UI
+FeatureConfig + ModelConfig → TrainerModuleGenerator → trainer_code (runtime)
+                                      ↓
+                              Upload to GCS
+                                      ↓
+                          Vertex AI Pipeline
+                                      ↓
+           Pipeline: ExampleGen → StatisticsGen → SchemaGen → Transform → Trainer
+                                      ↓
+                          metrics.json → QuickTest model → UI
 ```
 
 ---
 
-## Next Steps
+## UI Changes
 
-### 1. Model Configuration Chapter (Priority: Medium)
+### Features Chapter
+- **Code button**: Shows transform code only (stored in FeatureConfig)
+- **Test button**: Opens dialog requiring ModelConfig selection
 
-Add "Model" chapter in the Modeling page UI for configuring:
-- Dense layer architecture (default: 128 → 64 → 32)
-- Learning rate, epochs, batch size
-- L2 regularization
-- The generated Trainer code will use these configurations
-- Save to FeatureConfig or separate Model entity
+### Model Structure Chapter
+- **No Code button**: Removed - trainer code requires FeatureConfig to be selected
+- **Clone button**: Only action available on ModelConfig cards
 
-### 2. Full Training Pipeline (Priority: High)
-
-Extend Quick Test infrastructure for production training:
-- Longer training runs with checkpointing
-- Model artifact export (SavedModel format)
-- Candidate index building for ANN search
-- Model versioning and deployment
+### QuickTest Dialog
+- **ModelConfig selector**: Required dropdown to select model architecture
+- **Training params**: Pre-filled from selected ModelConfig, can be overridden
 
 ---
 
@@ -523,57 +372,18 @@ Extend Quick Test infrastructure for production training:
 
 | File | Changes |
 |------|---------|
-| `ml_platform/models.py` | Added `generated_transform_code`, `generated_trainer_code`, `generated_at` fields; Added `QuickTest` model (lines 1472-1736); Added `update_best_metrics()` method to FeatureConfig |
-| `ml_platform/modeling/services.py` | Added `PreprocessingFnGenerator`, `TrainerModuleGenerator` classes, and `validate_python_code()` function |
-| `ml_platform/modeling/api.py` | Added generator calls to create/update/clone; Added `get_generated_code` and `regenerate_code` endpoints with validation status; Both Transform and Trainer code are generated and validated automatically |
-| `ml_platform/modeling/urls.py` | Added routes for generated code endpoints |
-| `ml_platform/migrations/0024_add_generated_code_fields.py` | Database migration for generated code fields |
-| `ml_platform/migrations/0025_add_quicktest_model.py` | Database migration for QuickTest model |
-| `ml_platform/pipelines/__init__.py` | New pipelines module |
-| `ml_platform/pipelines/services.py` | PipelineService class for Vertex AI pipeline management |
-| `ml_platform/pipelines/pipeline_builder.py` | KFP v2 pipeline definition with 6 components |
-| `ml_platform/pipelines/api.py` | 4 REST API endpoints for quick test management |
-| `ml_platform/pipelines/urls.py` | URL routing for pipelines module |
-| `ml_platform/urls.py` | Registered pipelines module URLs |
-| `config/settings.py` | Added Vertex AI configuration settings |
-| `requirements.txt` | Added google-cloud-aiplatform and kfp dependencies |
-| `scripts/setup_vertex_ai.sh` | GCP infrastructure setup script |
-| `templates/ml_platform/model_modeling.html` | Added "Code" button, code viewer modal with tabs, syntax highlighting, copy/download, validation badges and error banners; Added "Test" button, quick test dialogs, progress modal, results modal |
-
-### Recent Changes (Dec 2025)
-
-1. **TrainerModuleGenerator** - Complete implementation generating:
-   - BuyerModel class (Query Tower)
-   - ProductModel class (Candidate Tower)
-   - RetrievalModel class (TFRS model)
-   - run_fn() TFX entry point
-   - Serving signature with pre-computed candidate embeddings
-
-2. **Dense Cross Features** - Changed from sparse to dense output:
-   - Old: `tf.sparse.cross_hashed()` → SparseTensor
-   - New: `tft.hash_strings()` → Dense INT64 tensor
-
-3. **API Updates** - `regenerate_code` endpoint now supports:
-   - `type: "transform"` - Regenerate only Transform code
-   - `type: "trainer"` - Regenerate only Trainer code
-   - `type: "all"` (default) - Regenerate both
-
-4. **Code Viewer UI** - Added modal for viewing generated code:
-   - "Code" button on each Feature Config card
-   - Tabbed view (Transform / Trainer)
-   - Python syntax highlighting with dark theme
-   - Copy to clipboard and download functionality
-   - Regenerate button to refresh code
-
-5. **Code Validation** (2025-12-10) - Added syntax validation:
-   - `validate_python_code()` function using Python's `compile()`
-   - Validation badges in code viewer (Valid/Error/Checking)
-   - Error banner with message and line number for syntax errors
-   - Automatic validation on code generation and regeneration
+| `ml_platform/models.py` | Removed `generated_trainer_code` from FeatureConfig; Added `model_config` FK to QuickTest |
+| `ml_platform/modeling/services.py` | Updated `TrainerModuleGenerator` to require ModelConfig; Added L1/L2/L1+L2 regularization; Added 6 optimizer support |
+| `ml_platform/modeling/api.py` | Added `generate_trainer_code` endpoint; Updated `regenerate_code` to only support transform; Removed trainer generation from create/update/clone |
+| `ml_platform/modeling/urls.py` | Added route for `generate-trainer-code` |
+| `ml_platform/pipelines/api.py` | Updated `start_quick_test` to require `model_config_id`; Generate trainer code at runtime |
+| `ml_platform/pipelines/services.py` | Updated `submit_quick_test` to accept `model_config` and `trainer_code` |
+| `templates/ml_platform/model_modeling.html` | Added ModelConfig selector to QuickTest dialog; Removed Code button from Model Structure chapter |
 
 ---
 
 ## Related Documentation
 
 - [Phase: Modeling Domain](phase_modeling.md) - Feature engineering UI and workflow
+- [Phase: Model Structure](phase_model_structure.md) - Model architecture configuration
 - [TFX Recommenders Notebook](../past/recommenders.ipynb) - Reference implementation

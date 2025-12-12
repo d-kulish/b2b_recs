@@ -86,8 +86,9 @@ This platform enables businesses to:
 
 ### **Model Structure** ✅
 - 🏗️ **Architecture Configuration:** Define neural network architecture independent from features
+- 🌐 **Global/Reusable:** ModelConfig is dataset-independent, can be used with any FeatureConfig
 - 🗼 **Tower Builder:** Visual layer configuration for Buyer (Query) and Product (Candidate) towers
-- 📊 **Layer Types:** Dense, Dropout, Batch Normalization with configurable parameters
+- 📊 **Layer Types:** Dense, Dropout, Batch Normalization with L1/L2/L1+L2 regularization
 - 🎯 **5 Presets:** Minimal (64→32), Standard (128→64→32), Deep (256→128→64→32), Asymmetric, Regularized
 - ⚙️ **Training Hyperparameters:** Optimizer (Adagrad/Adam/SGD/RMSprop/AdamW/FTRL), learning rate with auto-suggest, batch size
 - 🔄 **Model Types:** Retrieval (Phase 1), Ranking (Phase 2), Multitask (Phase 3)
@@ -95,6 +96,7 @@ This platform enables businesses to:
 - 🔍 **Retrieval Algorithms:** Brute Force (default) or ScaNN for large catalogs (10K+ products)
 - 📈 **Model Summary:** Keras-style parameter display (Total/Trainable/Non-trainable params)
 - ↕️ **Layer Reordering:** Drag-drop layer reordering within towers (output layer locked)
+- 🔧 **Runtime Code Generation:** Trainer code generated when combined with FeatureConfig for QuickTest
 
 ### **Platform Features**
 - 🎨 ETL Wizard UI (5-step data source configuration)
@@ -353,6 +355,17 @@ WHERE source_type='gcs';
 ---
 
 ## 📝 Recent Updates
+
+**December 12, 2025 - Code Generation Architecture Refactored**
+- ✅ **Split code generation** - Transform code stored in FeatureConfig, Trainer code generated at runtime
+- ✅ **TrainerModuleGenerator refactored** - Now requires both FeatureConfig AND ModelConfig
+- ✅ **Trainer code features** - Configurable tower layers (Dense/Dropout/BatchNorm), L1/L2/L1+L2 regularization
+- ✅ **6 optimizers supported** - Adagrad, Adam, SGD, RMSprop, AdamW, FTRL
+- ✅ **ModelConfig is global** - Dataset-independent, reusable across any FeatureConfig
+- ✅ **QuickTest updated** - Now requires model_config_id; generates trainer code at runtime
+- ✅ **New API endpoint** - `POST /api/modeling/generate-trainer-code/` for combined code generation
+- ✅ **UI updates** - ModelConfig selector in QuickTest dialog; Code button removed from Model Structure
+- See [TFX Code Generation docs](docs/tfx_code_generation.md) for details
 
 **December 11, 2025 - Model Structure Chapter Enhanced**
 - ✅ **ModelConfig entity** - Separate model architecture from feature engineering

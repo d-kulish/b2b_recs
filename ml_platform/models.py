@@ -1282,19 +1282,16 @@ class FeatureConfig(models.Model):
         help_text="Total tensor dimensions for ProductModel"
     )
 
-    # Generated TFX code (stored as text for Cloud Run compatibility)
+    # Generated TFX Transform code (stored as text for Cloud Run compatibility)
+    # Note: Trainer code is now generated at runtime with ModelConfig via TrainerModuleGenerator
     generated_transform_code = models.TextField(
         blank=True,
         help_text="Auto-generated TFX Transform preprocessing_fn code"
     )
-    generated_trainer_code = models.TextField(
-        blank=True,
-        help_text="Auto-generated TFX Trainer module code"
-    )
     generated_at = models.DateTimeField(
         null=True,
         blank=True,
-        help_text="When code was last generated"
+        help_text="When transform code was last generated"
     )
 
     # Timestamps
@@ -1510,7 +1507,16 @@ class QuickTest(models.Model):
         FeatureConfig,
         on_delete=models.CASCADE,
         related_name='quick_tests',
-        help_text="Feature Config being tested"
+        help_text="Feature Config being tested (defines feature transformations)"
+    )
+
+    model_config = models.ForeignKey(
+        'ModelConfig',
+        on_delete=models.CASCADE,
+        null=True,  # Nullable for backward compatibility with existing QuickTests
+        blank=True,
+        related_name='quick_tests',
+        help_text="Model Config being tested (defines neural network architecture)"
     )
 
     created_by = models.ForeignKey(

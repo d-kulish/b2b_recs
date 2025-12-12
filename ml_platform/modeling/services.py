@@ -1314,15 +1314,17 @@ def preprocessing_fn(inputs):
 
 class TrainerModuleGenerator:
     """
-    Generates TFX Trainer module from FeatureConfig.
+    Generates TFX Trainer module from FeatureConfig + ModelConfig.
 
     The generated code:
     - Loads vocabularies from Transform artifacts
     - Creates embeddings for text features (StringLookup + Embedding)
     - Uses normalized/cyclical values from Transform for numeric/temporal
     - Creates embeddings for bucket indices and cross features
-    - Builds two-tower TFRS model (BuyerModel, ProductModel)
-    - Includes configurable dense layers (default: 128 → 64 → 32)
+    - Builds two-tower TFRS model with configurable architecture from ModelConfig
+    - Supports multiple layer types: Dense, Dropout, BatchNorm with L2 regularization
+    - Supports multiple optimizers: Adagrad, Adam, SGD, RMSprop, AdamW, FTRL
+    - Supports retrieval algorithms: BruteForce, ScaNN
     - Implements run_fn() for TFX Trainer component
     - Provides serving signature for raw input → recommendations
 
@@ -1333,24 +1335,45 @@ class TrainerModuleGenerator:
     - Cross: {col1}_x_{col2}_cross (hash index)
     """
 
-    # Default architecture configuration
-    DEFAULT_DENSE_LAYERS = [128, 64, 32]
-    DEFAULT_LEARNING_RATE = 0.001
-    DEFAULT_EPOCHS = 10
-    DEFAULT_BATCH_SIZE = 1024
+    # Optimizer mapping for code generation
+    OPTIMIZER_CODE = {
+        'adagrad': 'tf.keras.optimizers.Adagrad',
+        'adam': 'tf.keras.optimizers.Adam',
+        'sgd': 'tf.keras.optimizers.SGD',
+        'rmsprop': 'tf.keras.optimizers.RMSprop',
+        'adamw': 'tf.keras.optimizers.AdamW',
+        'ftrl': 'tf.keras.optimizers.Ftrl',
+    }
 
-    def __init__(self, feature_config: 'FeatureConfig'):
+    def __init__(self, feature_config: 'FeatureConfig', model_config: 'ModelConfig'):
         """
-        Initialize with a FeatureConfig instance.
+        Initialize with FeatureConfig and ModelConfig instances.
 
         Args:
-            feature_config: FeatureConfig model instance
+            feature_config: FeatureConfig model instance (defines feature transformations)
+            model_config: ModelConfig model instance (defines neural network architecture)
         """
-        self.config = feature_config
+        self.feature_config = feature_config
+        self.model_config = model_config
+
+        # Feature config data
         self.buyer_features = feature_config.buyer_model_features or []
         self.product_features = feature_config.product_model_features or []
         self.buyer_crosses = feature_config.buyer_model_crosses or []
         self.product_crosses = feature_config.product_model_crosses or []
+
+        # Model config data
+        self.buyer_tower_layers = model_config.buyer_tower_layers or []
+        self.product_tower_layers = model_config.product_tower_layers or []
+        self.output_embedding_dim = model_config.output_embedding_dim
+        self.optimizer = model_config.optimizer
+        self.learning_rate = model_config.learning_rate
+        self.batch_size = model_config.batch_size
+        self.epochs = model_config.epochs
+        self.retrieval_algorithm = model_config.retrieval_algorithm
+        self.top_k = model_config.top_k
+        self.scann_num_leaves = model_config.scann_num_leaves
+        self.scann_leaves_to_search = model_config.scann_leaves_to_search
 
     def generate(self) -> str:
         """
@@ -1405,22 +1428,60 @@ class TrainerModuleGenerator:
         return result
 
     def _generate_header(self) -> str:
-        """Generate file header with metadata."""
+        """Generate file header with metadata from both configs."""
         buyer_cols = [f.get('column', '?') for f in self.buyer_features]
         product_cols = [f.get('column', '?') for f in self.product_features]
 
+        # Format tower layers for header
+        buyer_layer_summary = self._summarize_layers(self.buyer_tower_layers)
+        product_layer_summary = self._summarize_layers(self.product_tower_layers)
+
         return f'''# Auto-generated TFX Trainer Module
-# FeatureConfig: "{self.config.name}" (ID: {self.config.id})
+# FeatureConfig: "{self.feature_config.name}" (ID: {self.feature_config.id})
+# ModelConfig: "{self.model_config.name}" (ID: {self.model_config.id})
 # Generated at: {datetime.utcnow().isoformat()}Z
 #
-# BuyerModel (Query Tower) features: {', '.join(buyer_cols) if buyer_cols else 'none'}
-# ProductModel (Candidate Tower) features: {', '.join(product_cols) if product_cols else 'none'}
+# === Feature Configuration ===
+# BuyerModel features: {', '.join(buyer_cols) if buyer_cols else 'none'}
+# ProductModel features: {', '.join(product_cols) if product_cols else 'none'}
 # Buyer crosses: {len(self.buyer_crosses)}
 # Product crosses: {len(self.product_crosses)}
+#
+# === Model Architecture ===
+# Buyer tower: {buyer_layer_summary}
+# Product tower: {product_layer_summary}
+# Output embedding dim: {self.output_embedding_dim}
+#
+# === Training Configuration ===
+# Optimizer: {self.optimizer} (lr={self.learning_rate})
+# Batch size: {self.batch_size}
+# Epochs: {self.epochs}
+# Retrieval: {self.retrieval_algorithm} (top_k={self.top_k})
 #
 # This module is designed for TFX Trainer component.
 # It loads Transform artifacts and creates a two-tower TFRS retrieval model.
 '''
+
+    def _summarize_layers(self, layers: List[Dict]) -> str:
+        """Summarize layer configuration for header comment."""
+        if not layers:
+            return 'none'
+
+        parts = []
+        for layer in layers:
+            layer_type = layer.get('type', 'unknown')
+            if layer_type == 'dense':
+                units = layer.get('units', '?')
+                parts.append(f"Dense({units})")
+            elif layer_type == 'dropout':
+                rate = layer.get('rate', '?')
+                parts.append(f"Dropout({rate})")
+            elif layer_type == 'batch_norm':
+                parts.append("BatchNorm")
+            else:
+                parts.append(layer_type)
+
+        return ' → '.join(parts) if parts else 'none'
 
     def _generate_imports(self) -> str:
         """Generate import statements."""
@@ -1440,23 +1501,32 @@ from absl import logging
 '''
 
     def _generate_constants(self) -> str:
-        """Generate module constants and configuration."""
+        """Generate module constants from ModelConfig."""
+        # Extract L2 regularization from layers (use first dense layer's l2_reg or default)
+        l2_reg = 0.0
+        for layer in self.buyer_tower_layers:
+            if layer.get('type') == 'dense' and 'l2_reg' in layer:
+                l2_reg = layer.get('l2_reg', 0.0)
+                break
+
         return f'''
 # =============================================================================
-# CONFIGURATION (can be overridden via custom_config in Trainer component)
+# CONFIGURATION (from ModelConfig: "{self.model_config.name}")
 # =============================================================================
 
-# Model architecture - dense layers after concatenation
-BUYER_DENSE_LAYERS = {self.DEFAULT_DENSE_LAYERS}
-PRODUCT_DENSE_LAYERS = {self.DEFAULT_DENSE_LAYERS}
-
 # Training hyperparameters
-LEARNING_RATE = {self.DEFAULT_LEARNING_RATE}
-EPOCHS = {self.DEFAULT_EPOCHS}
-BATCH_SIZE = {self.DEFAULT_BATCH_SIZE}
+LEARNING_RATE = {self.learning_rate}
+EPOCHS = {self.epochs}
+BATCH_SIZE = {self.batch_size}
+
+# Output embedding dimension (must match between towers)
+OUTPUT_EMBEDDING_DIM = {self.output_embedding_dim}
 
 # Regularization
-L2_REGULARIZATION = 0.01
+L2_REGULARIZATION = {l2_reg}
+
+# Retrieval configuration
+TOP_K = {self.top_k}
 '''
 
     def _generate_input_fn(self) -> str:
@@ -1828,8 +1898,12 @@ def _input_fn(
         return '\n'.join(lines)
 
     def _generate_retrieval_model(self) -> str:
-        """Generate RetrievalModel class (TFRS model)."""
-        return '''
+        """Generate RetrievalModel class with configurable tower architecture."""
+        # Generate layer code for each tower
+        buyer_layers_code = self._generate_tower_layers_code(self.buyer_tower_layers, 'query')
+        product_layers_code = self._generate_tower_layers_code(self.product_tower_layers, 'candidate')
+
+        return f'''
 # =============================================================================
 # RETRIEVAL MODEL (TFRS Two-Tower)
 # =============================================================================
@@ -1840,47 +1914,29 @@ class RetrievalModel(tfrs.Model):
 
     Query tower (BuyerModel) processes buyer/user features.
     Candidate tower (ProductModel) processes product/item features.
-    Dense layers project both to the same embedding space.
+    Configurable dense/dropout/batchnorm layers project both to embedding space.
+    Final output dimension: {self.output_embedding_dim}
     """
 
     def __init__(
         self,
         tf_transform_output: tft.TFTransformOutput,
-        candidates_dataset: tf.data.Dataset,
-        buyer_dense_layers: List[int] = None,
-        product_dense_layers: List[int] = None
+        candidates_dataset: tf.data.Dataset
     ):
         super().__init__()
-
-        buyer_dense_layers = buyer_dense_layers or BUYER_DENSE_LAYERS
-        product_dense_layers = product_dense_layers or PRODUCT_DENSE_LAYERS
 
         # Feature extraction models
         self.buyer_model = BuyerModel(tf_transform_output)
         self.product_model = ProductModel(tf_transform_output)
 
-        # Query tower: BuyerModel → Dense layers
+        # Query tower: BuyerModel → Configurable layers
         query_layers = [self.buyer_model]
-        for i, units in enumerate(buyer_dense_layers):
-            query_layers.append(
-                tf.keras.layers.Dense(
-                    units,
-                    activation='relu' if i < len(buyer_dense_layers) - 1 else None,
-                    kernel_regularizer=tf.keras.regularizers.l2(L2_REGULARIZATION)
-                )
-            )
+{buyer_layers_code}
         self.query_tower = tf.keras.Sequential(query_layers)
 
-        # Candidate tower: ProductModel → Dense layers
+        # Candidate tower: ProductModel → Configurable layers
         candidate_layers = [self.product_model]
-        for i, units in enumerate(product_dense_layers):
-            candidate_layers.append(
-                tf.keras.layers.Dense(
-                    units,
-                    activation='relu' if i < len(product_dense_layers) - 1 else None,
-                    kernel_regularizer=tf.keras.regularizers.l2(L2_REGULARIZATION)
-                )
-            )
+{product_layers_code}
         self.candidate_tower = tf.keras.Sequential(candidate_layers)
 
         # TFRS Retrieval task with top-k metrics
@@ -1896,6 +1952,78 @@ class RetrievalModel(tfrs.Model):
         candidate_embeddings = self.candidate_tower(features)
         return self.task(query_embeddings, candidate_embeddings)
 '''
+
+    def _generate_tower_layers_code(self, layers: List[Dict], tower_name: str) -> str:
+        """
+        Generate code for tower layers from ModelConfig layer specification.
+
+        Args:
+            layers: List of layer configurations from ModelConfig
+            tower_name: 'query' or 'candidate' for variable naming
+
+        Returns:
+            Python code string for layer construction
+        """
+        if not layers:
+            # Default fallback if no layers configured
+            return f'''        # Default layers (no custom layers configured)
+        {tower_name}_layers.append(tf.keras.layers.Dense(64, activation='relu'))
+        {tower_name}_layers.append(tf.keras.layers.Dense(OUTPUT_EMBEDDING_DIM))'''
+
+        lines = []
+        var_name = f"{tower_name}_layers"
+
+        for i, layer in enumerate(layers):
+            layer_type = layer.get('type', 'dense')
+
+            if layer_type == 'dense':
+                units = layer.get('units', 64)
+                activation = layer.get('activation', 'relu')
+                l1_reg = layer.get('l1_reg', 0.0)
+                l2_reg = layer.get('l2_reg', 0.0)
+
+                # Handle activation - last layer may have None
+                if activation and activation.lower() != 'none':
+                    activation_str = f"activation='{activation}'"
+                else:
+                    activation_str = "activation=None"
+
+                # Handle regularization: L1, L2, or L1+L2 (elastic net)
+                has_l1 = l1_reg and l1_reg > 0
+                has_l2 = l2_reg and l2_reg > 0
+
+                if has_l1 and has_l2:
+                    # Combined L1+L2 regularization (elastic net)
+                    reg_str = f", kernel_regularizer=tf.keras.regularizers.l1_l2(l1={l1_reg}, l2={l2_reg})"
+                elif has_l1:
+                    reg_str = f", kernel_regularizer=tf.keras.regularizers.l1({l1_reg})"
+                elif has_l2:
+                    reg_str = f", kernel_regularizer=tf.keras.regularizers.l2({l2_reg})"
+                else:
+                    reg_str = ""
+
+                lines.append(f"        {var_name}.append(tf.keras.layers.Dense({units}, {activation_str}{reg_str}))")
+
+            elif layer_type == 'dropout':
+                rate = layer.get('rate', 0.2)
+                lines.append(f"        {var_name}.append(tf.keras.layers.Dropout({rate}))")
+
+            elif layer_type == 'batch_norm':
+                lines.append(f"        {var_name}.append(tf.keras.layers.BatchNormalization())")
+
+        # Add final projection layer to output_embedding_dim if not already matching
+        # Check if last dense layer already outputs the correct dim
+        last_dense_units = None
+        for layer in reversed(layers):
+            if layer.get('type') == 'dense':
+                last_dense_units = layer.get('units')
+                break
+
+        if last_dense_units != self.output_embedding_dim:
+            lines.append(f"        # Final projection to output embedding dimension")
+            lines.append(f"        {var_name}.append(tf.keras.layers.Dense(OUTPUT_EMBEDDING_DIM))")
+
+        return '\n'.join(lines)
 
     def _generate_serve_fn(self) -> str:
         """Generate serving function for inference."""
@@ -2002,8 +2130,11 @@ def _precompute_candidate_embeddings(model, candidates_dataset, batch_size=128):
 '''
 
     def _generate_run_fn(self) -> str:
-        """Generate run_fn() - the TFX Trainer entry point."""
-        return '''
+        """Generate run_fn() - the TFX Trainer entry point with configurable optimizer."""
+        # Get optimizer code
+        optimizer_class = self.OPTIMIZER_CODE.get(self.optimizer, 'tf.keras.optimizers.Adam')
+
+        return f'''
 # =============================================================================
 # TFX TRAINER ENTRY POINT
 # =============================================================================
@@ -2024,19 +2155,16 @@ def run_fn(fn_args: tfx.components.FnArgs):
 
     # Load Transform output
     tf_transform_output = tft.TFTransformOutput(fn_args.transform_output)
-    logging.info(f"Loaded Transform output from: {fn_args.transform_output}")
+    logging.info(f"Loaded Transform output from: {{fn_args.transform_output}}")
 
-    # Get configuration from custom_config or use defaults
-    custom_config = fn_args.custom_config or {}
+    # Get configuration from custom_config or use module defaults
+    custom_config = fn_args.custom_config or {{}}
     epochs = custom_config.get('epochs', EPOCHS)
     learning_rate = custom_config.get('learning_rate', LEARNING_RATE)
     batch_size = custom_config.get('batch_size', BATCH_SIZE)
-    buyer_dense_layers = custom_config.get('buyer_dense_layers', BUYER_DENSE_LAYERS)
-    product_dense_layers = custom_config.get('product_dense_layers', PRODUCT_DENSE_LAYERS)
 
-    logging.info(f"Training config: epochs={epochs}, lr={learning_rate}, batch={batch_size}")
-    logging.info(f"Buyer dense layers: {buyer_dense_layers}")
-    logging.info(f"Product dense layers: {product_dense_layers}")
+    logging.info(f"Training config: epochs={{epochs}}, lr={{learning_rate}}, batch={{batch_size}}")
+    logging.info(f"Output embedding dim: {{OUTPUT_EMBEDDING_DIM}}")
 
     # Load datasets
     train_dataset = _input_fn(
@@ -2066,15 +2194,13 @@ def run_fn(fn_args: tfx.components.FnArgs):
     logging.info("Building RetrievalModel...")
     model = RetrievalModel(
         tf_transform_output=tf_transform_output,
-        candidates_dataset=candidates_dataset,
-        buyer_dense_layers=buyer_dense_layers,
-        product_dense_layers=product_dense_layers
+        candidates_dataset=candidates_dataset
     )
 
-    # Compile
-    model.compile(
-        optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate)
-    )
+    # Compile with configured optimizer: {self.optimizer}
+    optimizer = {optimizer_class}(learning_rate=learning_rate)
+    model.compile(optimizer=optimizer)
+    logging.info(f"Using optimizer: {self.optimizer} with lr={{learning_rate}}")
 
     # Calculate steps
     train_steps = custom_config.get('train_steps', fn_args.train_steps)
@@ -2092,7 +2218,7 @@ def run_fn(fn_args: tfx.components.FnArgs):
         callbacks.append(tensorboard_callback)
 
     # Train
-    logging.info(f"Starting training for {epochs} epochs...")
+    logging.info(f"Starting training for {{epochs}} epochs...")
     model.fit(
         train_dataset,
         validation_data=eval_dataset,
@@ -2140,15 +2266,16 @@ def run_fn(fn_args: tfx.components.FnArgs):
     logging.info("Model saved successfully!")
 '''
 
-    def generate_and_save(self) -> Tuple[str, bool, Optional[str]]:
+    def generate_and_validate(self) -> Tuple[str, bool, Optional[str], Optional[int]]:
         """
-        Generate code, validate it, and save to the FeatureConfig model.
+        Generate code and validate it (no saving - trainer code is generated at runtime).
 
         Returns:
-            Tuple of (code, is_valid, error_message):
+            Tuple of (code, is_valid, error_message, error_line):
             - code: Generated Python code string
             - is_valid: True if code passes syntax validation
             - error_message: Error description if invalid, None if valid
+            - error_line: Line number where error occurred, None if valid
         """
         code = self.generate()
 
@@ -2157,15 +2284,12 @@ def run_fn(fn_args: tfx.components.FnArgs):
 
         if not is_valid:
             logger.error(
-                f"Generated trainer code for config {self.config.id} has syntax error: "
+                f"Generated trainer code for FeatureConfig {self.feature_config.id} + "
+                f"ModelConfig {self.model_config.id} has syntax error: "
                 f"{error_msg} at line {error_line}"
             )
 
-        self.config.generated_trainer_code = code
-        self.config.generated_at = datetime.utcnow()
-        self.config.save(update_fields=['generated_trainer_code', 'generated_at'])
-
-        return code, is_valid, error_msg
+        return code, is_valid, error_msg, error_line
 
 
 # =============================================================================

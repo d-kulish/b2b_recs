@@ -189,36 +189,15 @@ Added complete Model Structure chapter for configuring neural network architectu
 - Removed from API endpoints, serializer, admin, and all UI components
 - Created migration `0027_remove_feature_config_status.py`
 
-### Quick Test Pipeline Integration (2025-12-10)
+### Quick Test Moved to Experiments Domain (2025-12-13)
 
-Full Vertex AI Pipeline integration for validating feature configurations:
+**Note:** Quick Test functionality has been moved from Modeling to the **Experiments** domain.
 
-**Backend:**
-- `QuickTest` model in `ml_platform/models.py` - Tracks pipeline runs with status, progress, results
-- `ml_platform/pipelines/` module - New sub-app for pipeline management:
-  - `services.py` - PipelineService class for submission, polling, result extraction
-  - `pipeline_builder.py` - KFP v2 pipeline with 6 components (ExampleGen, StatisticsGen, SchemaGen, Transform, Trainer, SaveMetrics)
-  - `api.py` - 4 REST endpoints for start/status/cancel/list operations
-- GCS buckets with lifecycle policies (7/30/3 days)
-- IAM roles configured for `django-app` service account
-
-**API Endpoints:**
-- `POST /api/feature-configs/{id}/quick-test/` - Start quick test with configurable epochs, batch size, learning rate
-- `GET /api/quick-tests/{id}/` - Get status and results (auto-polls Vertex AI)
-- `POST /api/quick-tests/{id}/cancel/` - Cancel running pipeline
-- `GET /api/feature-configs/{id}/quick-tests/` - List all tests for a config
-
-**UI (model_modeling.html):**
-- **"Test" button** on Feature Config cards (enabled when code is generated)
-- **Configuration dialog** - Epochs (1-15), batch size (1024-8192), learning rate
-- **Progress modal** - Real-time stage tracking, animated progress bar, elapsed time
-- **Results modal** - Metrics (loss, recall@10/50/100), vocabulary stats, error details, Vertex AI link
-- **Polling** - Automatic status updates every 10 seconds
-
-**Pipeline Flow:**
-```
-FeatureConfig → Dataset → BigQueryService.generate_query() → Vertex AI Pipeline → metrics.json → UI
-```
+See [Phase: Experiments](phase_experiments.md) for:
+- Quick Test pipeline integration with Vertex AI
+- Quick Test UI (dialog, progress, results modals)
+- Quick Test API endpoints
+- MLflow experiment tracking
 
 ### TFX Code Generation (2025-12-10, Updated 2025-12-12)
 - **Transform code generation** - Feature Configs automatically generate TFX Transform `preprocessing_fn` code
@@ -305,9 +284,10 @@ The Modeling domain allows users to:
 2. Define **BuyerModel** (Query Tower) and **ProductModel** (Candidate Tower) features for TFRS two-tower models
 3. Visually assign columns to either model via drag-and-drop
 4. Preview tensor dimensions in real-time
-5. Run Quick Tests on Vertex AI Pipelines (future scope)
-6. Compare results via MLflow heatmaps (future scope)
-7. Iterate until finding the best configuration
+5. Generate TFX Transform code automatically
+6. Iterate configurations before running experiments
+
+**Note:** Quick Tests and experiment comparison have moved to the **Experiments** domain. See [Phase: Experiments](phase_experiments.md).
 
 ### Key Principle
 **This is the experimentation sandbox.** Users can create multiple Feature Configs per Dataset, configure different feature engineering approaches, and compare results without committing to expensive full training runs.
@@ -745,158 +725,7 @@ The feature configuration modal is a unified interface that adapts based on the 
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Quick Test Dialog
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ Quick Test: config-042                                                       │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│ Quick Test Settings                                                          │
-│                                                                              │
-│ Data sample:    [10% ▼]    (options: 5%, 10%, 25%)                          │
-│ Epochs:         [2 ▼]      (options: 1, 2, 3)                               │
-│ Batch size:     [4096 ▼]   (options: 2048, 4096, 8192)                      │
-│                                                                              │
-│ ─────────────────────────────────────────────────────────────────────────── │
-│                                                                              │
-│ Estimated:                                                                   │
-│   Duration: ~8 minutes                                                       │
-│   Cost: ~$1.50                                                               │
-│                                                                              │
-│ What Quick Test validates:                                                   │
-│   ✓ Transform compiles successfully                                         │
-│   ✓ Features have valid vocabularies                                        │
-│   ✓ Model trains without errors                                             │
-│   ✓ Basic metrics computed (loss, recall@10/50/100)                         │
-│                                                                              │
-│ ⚠️ Quick Test metrics are indicative only. Run Full Training for            │
-│    production-ready results.                                                 │
-│                                                                              │
-│                                              [Cancel]  [▶ Start Quick Test] │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-### Quick Test Progress
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ Quick Test Running: config-042                                               │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│ ┌──────────────────────────────────────────────────────────────────────┐    │
-│ │ ████████████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ 45%       │    │
-│ └──────────────────────────────────────────────────────────────────────┘    │
-│                                                                              │
-│ Current Stage: Transform (generating vocabularies)                           │
-│                                                                              │
-│ ✅ ExampleGen        - Completed (2 min)                                     │
-│ ✅ StatisticsGen     - Completed (1 min)                                     │
-│ ✅ SchemaGen         - Completed (10 sec)                                    │
-│ 🔄 Transform         - Running... (3 min elapsed)                            │
-│ ⏳ Trainer           - Pending                                               │
-│                                                                              │
-│ Elapsed: 6 min 10 sec                                                        │
-│ Estimated remaining: ~5 min                                                  │
-│                                                                              │
-│                                                              [Cancel Test]   │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-### Quick Test Results
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ Quick Test Results: config-042                                               │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│ Status: ✅ Success                                                           │
-│ Duration: 8 min 23 sec                                                       │
-│ Cost: $1.42                                                                  │
-│                                                                              │
-│ ═══════════════════════════════════════════════════════════════════════════ │
-│ METRICS (indicative - 10% sample, 2 epochs)                                  │
-│ ═══════════════════════════════════════════════════════════════════════════ │
-│                                                                              │
-│ ┌────────────────┬────────────┬────────────────────────────────────────┐    │
-│ │ Metric         │ Value      │ vs Previous Best (config-038)          │    │
-│ ├────────────────┼────────────┼────────────────────────────────────────┤    │
-│ │ Loss           │ 0.38       │ ↓ 0.04 (was 0.42)                      │    │
-│ │ Recall@10      │ 18.2%      │ ↑ 0.4% (was 17.8%)                     │    │
-│ │ Recall@50      │ 38.5%      │ ↑ 1.2% (was 37.3%)                     │    │
-│ │ Recall@100     │ 47.3%      │ ↑ 1.2% (was 46.1%)                     │    │
-│ └────────────────┴────────────┴────────────────────────────────────────┘    │
-│                                                                              │
-│ ═══════════════════════════════════════════════════════════════════════════ │
-│ VOCABULARY STATS                                                             │
-│ ═══════════════════════════════════════════════════════════════════════════ │
-│                                                                              │
-│ ┌────────────────┬────────────┬────────────┬───────────────────────────┐    │
-│ │ Feature        │ Vocab Size │ OOV Rate   │ Status                    │    │
-│ ├────────────────┼────────────┼────────────┼───────────────────────────┤    │
-│ │ user_id        │ 9,823      │ 1.2%       │ ✅ Good                   │    │
-│ │ product_id     │ 3,612      │ 0.8%       │ ✅ Good                   │    │
-│ │ city           │ 28         │ 0%         │ ✅ Good                   │    │
-│ │ product_name   │ 3,421      │ 2.1%       │ ✅ Good                   │    │
-│ │ category       │ 12         │ 0%         │ ✅ Good                   │    │
-│ │ subcategory    │ 142        │ 0.3%       │ ✅ Good                   │    │
-│ └────────────────┴────────────┴────────────┴───────────────────────────┘    │
-│                                                                              │
-│ ═══════════════════════════════════════════════════════════════════════════ │
-│ WARNINGS                                                                     │
-│ ═══════════════════════════════════════════════════════════════════════════ │
-│                                                                              │
-│ (none)                                                                       │
-│                                                                              │
-│ ═══════════════════════════════════════════════════════════════════════════ │
-│                                                                              │
-│ 🎉 This config shows improvement over previous best!                         │
-│                                                                              │
-│ [View in MLflow]  [Modify & Re-test]  [▶ Run Full Training]  [Close]        │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-### MLflow Heatmap View
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ Experiment Heatmap: Q4 2024 Training Data                                   │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│ Metric: [Recall@100 ▼]     Group by: [Embedding Dims ▼]                     │
-│                                                                              │
-│ ═══════════════════════════════════════════════════════════════════════════ │
-│                                                                              │
-│ Recall@100 by Configuration                                                  │
-│                                                                              │
-│                    │ user_id │ user_id │ user_id │ user_id │                │
-│                    │ 32d     │ 64d     │ 64d     │ 128d    │                │
-│                    │ prod 32d│ prod 32d│ prod 64d│ prod 64d│                │
-│ ───────────────────┼─────────┼─────────┼─────────┼─────────┤                │
-│ No crosses         │  38.2%  │  41.5%  │  44.1%  │  44.8%  │                │
-│                    │  ██     │  ███    │  ████   │  ████   │                │
-│ ───────────────────┼─────────┼─────────┼─────────┼─────────┤                │
-│ cat × subcat       │  39.1%  │  42.8%  │  45.9%  │  46.2%  │                │
-│                    │  ██     │  ███    │  █████  │  █████  │                │
-│ ───────────────────┼─────────┼─────────┼─────────┼─────────┤                │
-│ + user × city      │  38.5%  │  43.1%  │ ★47.3%  │  46.9%  │                │
-│                    │  ██     │  ███    │  █████  │  █████  │                │
-│                                                                              │
-│ ★ = Best configuration                                                       │
-│                                                                              │
-│ Legend: █████ > 46%  ████ 44-46%  ███ 42-44%  ██ < 42%                       │
-│                                                                              │
-│ ═══════════════════════════════════════════════════════════════════════════ │
-│                                                                              │
-│ Best: config-042 (user 64d, prod 64d, cat×subcat + user×city) = 47.3%       │
-│                                                                              │
-│ [Export CSV]  [View Details]  [▶ Run Full Training with Best]               │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
+**Note:** Quick Test UI mockups (Dialog, Progress, Results) and MLflow Heatmap views have been moved to [Phase: Experiments](phase_experiments.md).
 
 ---
 
@@ -1357,12 +1186,7 @@ For backward compatibility, the system also supports the legacy format with `typ
 
 ### Quick Test
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/feature-configs/{config_id}/quick-test/` | Start quick test |
-| GET | `/api/quick-tests/{test_id}/` | Get quick test status/results |
-| POST | `/api/quick-tests/{test_id}/cancel/` | Cancel running quick test |
-| GET | `/api/feature-configs/{config_id}/quick-tests/` | List all quick tests for a config |
+**Note:** Quick Test API endpoints are documented in [Phase: Experiments](phase_experiments.md).
 
 ### Recommendations
 
@@ -1724,47 +1548,6 @@ class TensorDimensionCalculator:
 
 ---
 
-## Quick Test Pipeline
-
-Quick Test runs a mini TFX pipeline:
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                         QUICK TEST PIPELINE                                  │
-│                                                                              │
-│   BigQuery     ExampleGen     Statistics    Schema      Transform           │
-│   (10% sample) (TFRecords)    Gen          Gen         (vocabularies)       │
-│       │            │             │            │             │               │
-│       └────────────┴─────────────┴────────────┴─────────────┘               │
-│                                        │                                     │
-│                                        ↓                                     │
-│                                    Trainer                                   │
-│                               (2 epochs, no GPU)                             │
-│                                        │                                     │
-│                                        ↓                                     │
-│                                   Metrics                                    │
-│                              (Loss, Recall@k)                                │
-│                                        │                                     │
-│                                        ↓                                     │
-│                                    MLflow                                    │
-│                              (log experiment)                                │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-**Quick Test vs Full Training differences:**
-
-| Aspect | Quick Test | Full Training |
-|--------|------------|---------------|
-| Data | 10% sample query | 100% data |
-| ExampleGen | Sampled BigQuery | Full BigQuery |
-| Transform | Full vocabulary | Full vocabulary |
-| Trainer | CPU, 2 epochs | GPU, 10-50 epochs |
-| Output | Temporary | Permanent artifacts |
-| MLflow | Logged (tagged as quick test) | Logged (production) |
-
----
-
 ## Implementation Checklist
 
 ### Phase 1: Data Model & Backend ✅
@@ -1822,12 +1605,15 @@ Quick Test runs a mini TFX pipeline:
 - [x] Display validation badges (Valid/Error/Checking) in code viewer
 - [x] Show error banner with message and line number for syntax errors
 
-### Phase 7: Quick Test Integration (Future Scope)
-- [ ] Create Quick Test model and API
-- [ ] Integrate with Vertex AI Pipelines trigger
-- [ ] Show Quick Test progress in UI
-- [ ] Display results and update best metrics
-- [ ] MLflow integration for experiment tracking
+### Phase 7: Quick Test Integration ✅ (Moved to Experiments Domain)
+
+**Note:** Quick Test has been implemented and moved to the Experiments domain.
+
+See [Phase: Experiments](phase_experiments.md) for:
+- Quick Test model and API
+- Vertex AI Pipelines integration
+- Quick Test UI (dialog, progress, results)
+- MLflow experiment tracking (future)
 
 ---
 

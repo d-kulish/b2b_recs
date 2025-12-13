@@ -1,10 +1,1129 @@
 {% extends 'base_model.html' %}
+{% load humanize %}
+{% load static %}
 
-{% block title %}{{ model.name }} - PLACEHOLDER{% endblock %}
+{% block title %}{{ model.name }} - Experiments{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/cards.css' %}?v=4">
+<link rel="stylesheet" href="{% static 'css/modals.css' %}?v=2">
+<style>
+    /* Chapter Section Styles */
+    .chapter-section {
+        background: white;
+        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 20px;
+    }
+    .chapter-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 16px;
+    }
+    .chapter-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 18px;
+        color: white;
+    }
+    .chapter-icon.quick-test {
+        background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%);
+    }
+    .chapter-icon.experiments {
+        background: linear-gradient(135deg, #8b5cf6 0%, #a78bfa 100%);
+    }
+    .chapter-title {
+        font-size: 18px;
+        font-weight: 600;
+        color: #111827;
+    }
+    .chapter-empty-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 40px;
+        text-align: center;
+    }
+    .chapter-empty-icon {
+        font-size: 48px;
+        color: #d1d5db;
+        margin-bottom: 16px;
+    }
+    .chapter-empty-text {
+        color: #6b7280;
+        font-size: 14px;
+    }
+
+    /* Quick Test Styles */
+    .quicktest-progress-bar {
+        height: 24px;
+        background: #e5e7eb;
+        border-radius: 12px;
+        overflow: hidden;
+        position: relative;
+    }
+    .quicktest-progress-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #3b82f6, #60a5fa);
+        border-radius: 12px;
+        transition: width 0.3s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .quicktest-progress-fill.animated {
+        background: linear-gradient(90deg, #3b82f6, #60a5fa, #3b82f6);
+        background-size: 200% 100%;
+        animation: progress-shimmer 2s linear infinite;
+    }
+    @keyframes progress-shimmer {
+        0% { background-position: 200% 0; }
+        100% { background-position: -200% 0; }
+    }
+    .quicktest-progress-text {
+        color: white;
+        font-size: 12px;
+        font-weight: 600;
+    }
+    .quicktest-stage {
+        display: flex;
+        align-items: center;
+        padding: 8px 12px;
+        border-radius: 8px;
+        margin-bottom: 8px;
+        background: #f9fafb;
+    }
+    .quicktest-stage.completed {
+        background: #ecfdf5;
+    }
+    .quicktest-stage.running {
+        background: #eff6ff;
+    }
+    .quicktest-stage.failed {
+        background: #fef2f2;
+    }
+    .quicktest-stage-icon {
+        width: 24px;
+        height: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-right: 12px;
+    }
+    .quicktest-stage-icon.completed { color: #10b981; }
+    .quicktest-stage-icon.running { color: #3b82f6; }
+    .quicktest-stage-icon.failed { color: #ef4444; }
+    .quicktest-stage-icon.pending { color: #9ca3af; }
+    .quicktest-stage-name {
+        flex: 1;
+        font-weight: 500;
+        color: #374151;
+    }
+    .quicktest-stage-duration {
+        font-size: 12px;
+        color: #6b7280;
+    }
+    .quicktest-metric {
+        display: flex;
+        justify-content: space-between;
+        padding: 8px 0;
+        border-bottom: 1px solid #e5e7eb;
+    }
+    .quicktest-metric:last-child {
+        border-bottom: none;
+    }
+    .quicktest-metric-label {
+        color: #6b7280;
+    }
+    .quicktest-metric-value {
+        font-weight: 600;
+        color: #111827;
+    }
+    .quicktest-metric-value.improved {
+        color: #10b981;
+    }
+    .quicktest-metric-value.declined {
+        color: #ef4444;
+    }
+
+    /* Config Selector Styles */
+    .config-selector-panel {
+        background: #f9fafb;
+        border: 1px solid #e5e7eb;
+        border-radius: 10px;
+        padding: 16px;
+        margin-bottom: 16px;
+    }
+    .config-selector-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr auto;
+        gap: 16px;
+        align-items: end;
+    }
+    .config-selector-group label {
+        display: block;
+        font-size: 13px;
+        font-weight: 500;
+        color: #374151;
+        margin-bottom: 6px;
+    }
+    .config-selector-group select {
+        width: 100%;
+        padding: 8px 12px;
+        border: 1px solid #d1d5db;
+        border-radius: 8px;
+        font-size: 14px;
+        background: white;
+    }
+    .config-selector-group select:focus {
+        outline: none;
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
+    .config-info-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 8px;
+        background: #e5e7eb;
+        border-radius: 4px;
+        font-size: 11px;
+        color: #6b7280;
+        margin-top: 4px;
+    }
+    .config-info-badge.buyer {
+        background: #dbeafe;
+        color: #1e40af;
+    }
+    .config-info-badge.product {
+        background: #dcfce7;
+        color: #166534;
+    }
+
+    /* Training params collapsible */
+    .training-params-toggle {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        background: #f3f4f6;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 13px;
+        color: #374151;
+        margin-top: 12px;
+    }
+    .training-params-toggle:hover {
+        background: #e5e7eb;
+    }
+    .training-params-content {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+        padding: 12px;
+        background: white;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        margin-top: 8px;
+    }
+    .training-param-group label {
+        display: block;
+        font-size: 12px;
+        color: #6b7280;
+        margin-bottom: 4px;
+    }
+    .training-param-group input,
+    .training-param-group select {
+        width: 100%;
+        padding: 6px 10px;
+        border: 1px solid #d1d5db;
+        border-radius: 6px;
+        font-size: 13px;
+    }
+
+    /* Quick Test History */
+    .quicktest-history-list {
+        max-height: 400px;
+        overflow-y: auto;
+    }
+    .quicktest-history-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        margin-bottom: 8px;
+        background: white;
+    }
+    .quicktest-history-item:hover {
+        border-color: #d1d5db;
+    }
+    .quicktest-history-status {
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 14px;
+    }
+    .quicktest-history-status.completed {
+        background: #dcfce7;
+        color: #16a34a;
+    }
+    .quicktest-history-status.running {
+        background: #dbeafe;
+        color: #2563eb;
+    }
+    .quicktest-history-status.failed {
+        background: #fee2e2;
+        color: #dc2626;
+    }
+    .quicktest-history-status.cancelled {
+        background: #f3f4f6;
+        color: #6b7280;
+    }
+    .quicktest-history-info {
+        flex: 1;
+    }
+    .quicktest-history-name {
+        font-weight: 500;
+        color: #111827;
+        font-size: 14px;
+    }
+    .quicktest-history-meta {
+        font-size: 12px;
+        color: #6b7280;
+    }
+    .quicktest-history-metrics {
+        text-align: right;
+    }
+    .quicktest-history-recall {
+        font-weight: 600;
+        color: #111827;
+    }
+</style>
+{% endblock %}
 
 {% block model_content %}
-<div class="bg-white rounded-lg shadow p-6">
-    <h2 class="text-2xl font-bold text-gray-900 mb-4">PLACEHOLDER_TITLE</h2>
-    <p class="text-gray-600">This page is under development.</p>
+<div class="space-y-6">
+
+    <!-- Quick Test Chapter -->
+    <div class="chapter-section">
+        <div class="chapter-header">
+            <div class="chapter-icon quick-test">
+                <i class="fas fa-bolt"></i>
+            </div>
+            <h2 class="chapter-title">Quick Test</h2>
+        </div>
+
+        <!-- Config Selector Panel -->
+        <div class="config-selector-panel">
+            <div class="config-selector-row">
+                <div class="config-selector-group">
+                    <label>Feature Config</label>
+                    <select id="featureConfigSelect" onchange="onFeatureConfigChange()">
+                        <option value="">-- Select Feature Config --</option>
+                    </select>
+                    <div id="featureConfigInfo" class="hidden">
+                        <span class="config-info-badge buyer"><i class="fas fa-user"></i> <span id="fcBuyerDim">-</span>D</span>
+                        <span class="config-info-badge product"><i class="fas fa-box"></i> <span id="fcProductDim">-</span>D</span>
+                    </div>
+                </div>
+                <div class="config-selector-group">
+                    <label>Model Config</label>
+                    <select id="modelConfigSelect" onchange="onModelConfigChange()">
+                        <option value="">-- Select Model Config --</option>
+                    </select>
+                    <div id="modelConfigInfo" class="hidden">
+                        <span class="config-info-badge"><i class="fas fa-layer-group"></i> <span id="mcLayers">-</span></span>
+                        <span class="config-info-badge"><i class="fas fa-cog"></i> <span id="mcOptimizer">-</span></span>
+                    </div>
+                </div>
+                <div>
+                    <button id="runQuickTestBtn" class="btn btn-primary" onclick="openQuickTestDialog()" disabled>
+                        <i class="fas fa-play mr-2"></i>Run Quick Test
+                    </button>
+                </div>
+            </div>
+
+            <!-- Training Parameters (collapsible) -->
+            <div class="training-params-toggle" onclick="toggleTrainingParams()">
+                <i class="fas fa-sliders-h"></i>
+                <span>Training Parameters</span>
+                <i id="trainingParamsChevron" class="fas fa-chevron-down ml-auto"></i>
+            </div>
+            <div id="trainingParamsContent" class="training-params-content hidden">
+                <div class="training-param-group">
+                    <label>Epochs</label>
+                    <select id="qtEpochs">
+                        <option value="1">1</option>
+                        <option value="2">2</option>
+                        <option value="5">5</option>
+                        <option value="10" selected>10</option>
+                        <option value="15">15</option>
+                    </select>
+                </div>
+                <div class="training-param-group">
+                    <label>Batch Size</label>
+                    <select id="qtBatchSize">
+                        <option value="1024">1024</option>
+                        <option value="2048">2048</option>
+                        <option value="4096" selected>4096</option>
+                        <option value="8192">8192</option>
+                    </select>
+                </div>
+                <div class="training-param-group">
+                    <label>Learning Rate</label>
+                    <input type="number" id="qtLearningRate" value="0.1" step="0.001" min="0.0001" max="1.0">
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Test Content Area -->
+        <div id="quickTestContent">
+            <!-- Loading state -->
+            <div id="quickTestLoading" class="flex items-center justify-center py-8">
+                <i class="fas fa-spinner fa-spin text-xl text-gray-400 mr-3"></i>
+                <span class="text-gray-500">Loading configurations...</span>
+            </div>
+
+            <!-- Empty state (no configs) -->
+            <div id="quickTestEmptyConfigs" class="chapter-empty-state hidden">
+                <i class="fas fa-exclamation-circle chapter-empty-icon"></i>
+                <p class="chapter-empty-text">No feature configs available</p>
+                <p class="text-sm text-gray-400 mt-2">Create feature and model configs on the Modeling page first</p>
+                <a href="{% url 'model_modeling' model.id %}" class="btn btn-primary btn-sm mt-4">
+                    <i class="fas fa-arrow-left mr-1"></i>Go to Modeling
+                </a>
+            </div>
+
+            <!-- Ready state (configs loaded, no history yet) -->
+            <div id="quickTestReady" class="chapter-empty-state hidden">
+                <i class="fas fa-vial chapter-empty-icon"></i>
+                <p class="chapter-empty-text">Ready to run Quick Tests</p>
+                <p class="text-sm text-gray-400 mt-2">Select a Feature Config and Model Config above to start</p>
+            </div>
+
+            <!-- History list (if tests exist) -->
+            <div id="quickTestHistory" class="hidden">
+                <h4 class="font-medium text-gray-700 mb-3">Recent Quick Tests</h4>
+                <div id="quickTestHistoryList" class="quicktest-history-list">
+                    <!-- Populated by JavaScript -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Experiments Chapter (placeholder) -->
+    <div class="chapter-section">
+        <div class="chapter-header">
+            <div class="chapter-icon experiments">
+                <i class="fas fa-flask"></i>
+            </div>
+            <h2 class="chapter-title">Experiments</h2>
+        </div>
+        <div id="experimentsContent">
+            <div class="chapter-empty-state">
+                <i class="fas fa-chart-line chapter-empty-icon"></i>
+                <p class="chapter-empty-text">Experiment history and analysis coming soon</p>
+                <p class="text-sm text-gray-400 mt-2">MLflow integration and heatmap visualization will be available here</p>
+            </div>
+        </div>
+    </div>
+
 </div>
+
+<!-- Quick Test Confirmation Dialog Modal -->
+<div id="quickTestDialog" class="modal-overlay hidden">
+    <div class="modal-container" style="max-width: 500px;">
+        <div class="modal-header">
+            <div class="modal-header-icon info">
+                <i class="fas fa-flask"></i>
+            </div>
+            <h3 class="modal-header-title">Start Quick Test</h3>
+            <button type="button" class="modal-close-btn" onclick="closeQuickTestDialog()">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="modal-body">
+            <!-- Configuration Summary -->
+            <div class="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                <h4 class="font-medium text-blue-900 mb-2">Configuration</h4>
+                <div class="space-y-1 text-sm">
+                    <p class="text-blue-800">
+                        <span class="font-medium">Feature Config:</span>
+                        <strong id="qtDialogFeatureConfig">-</strong>
+                    </p>
+                    <p class="text-blue-800">
+                        <span class="font-medium">Model Config:</span>
+                        <strong id="qtDialogModelConfig">-</strong>
+                    </p>
+                </div>
+            </div>
+
+            <h4 class="font-medium text-gray-900 mb-3">Training Parameters</h4>
+            <div class="space-y-2 text-sm mb-4">
+                <p><span class="text-gray-600">Epochs:</span> <strong id="qtDialogEpochs">10</strong></p>
+                <p><span class="text-gray-600">Batch Size:</span> <strong id="qtDialogBatchSize">4096</strong></p>
+                <p><span class="text-gray-600">Learning Rate:</span> <strong id="qtDialogLearningRate">0.1</strong></p>
+            </div>
+
+            <div class="bg-gray-50 rounded-lg p-3 text-sm text-gray-600">
+                <p><strong>Estimated duration:</strong> 15-25 minutes</p>
+                <p><strong>Machine type:</strong> n1-standard-4 (4 vCPU, 15GB RAM)</p>
+            </div>
+        </div>
+        <div class="modal-footer-wizard-neu">
+            <div class="footer-left"></div>
+            <div class="footer-right">
+                <button type="button" class="btn-neu btn-neu-action btn-neu-secondary" onclick="closeQuickTestDialog()">
+                    <span class="btn-neu-inner">Cancel</span>
+                </button>
+                <button type="button" class="btn-neu btn-neu-action btn-neu-primary" onclick="startQuickTest()">
+                    <span class="btn-neu-inner"><i class="fas fa-play mr-2"></i>Start Quick Test</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Test Progress Modal -->
+<div id="quickTestProgress" class="modal-overlay hidden">
+    <div class="modal-container" style="max-width: 500px;">
+        <div class="modal-header">
+            <div class="modal-header-icon info">
+                <i class="fas fa-cog fa-spin"></i>
+            </div>
+            <h3 class="modal-header-title">Quick Test Running</h3>
+        </div>
+        <div class="modal-body">
+            <p class="text-sm text-gray-600 mb-4">
+                Feature Config: <strong id="qtProgressFeatureConfig"></strong><br>
+                Model Config: <strong id="qtProgressModelConfig"></strong>
+            </p>
+
+            <!-- Progress Bar -->
+            <div class="quicktest-progress-bar mb-4">
+                <div class="quicktest-progress-fill animated" id="qtProgressBar" style="width: 0%">
+                    <span class="quicktest-progress-text" id="qtProgressText">0%</span>
+                </div>
+            </div>
+
+            <!-- Pipeline Stages -->
+            <h4 class="font-medium text-gray-900 mb-3">Pipeline Stages</h4>
+            <div id="qtStages">
+                <!-- Populated by JavaScript -->
+            </div>
+
+            <!-- Elapsed Time -->
+            <div class="mt-4 text-sm text-gray-500">
+                <span>Elapsed: </span>
+                <span id="qtElapsed">0:00</span>
+            </div>
+        </div>
+        <div class="modal-footer-wizard-neu">
+            <div class="footer-left"></div>
+            <div class="footer-right">
+                <button type="button" class="btn-neu btn-neu-action btn-neu-secondary" onclick="cancelQuickTest()" id="qtCancelBtn">
+                    <span class="btn-neu-inner"><i class="fas fa-stop mr-2"></i>Cancel Test</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Test Results Modal -->
+<div id="quickTestResults" class="modal-overlay hidden">
+    <div class="modal-container" style="max-width: 600px;">
+        <div class="modal-header">
+            <div class="modal-header-icon" id="qtrStatusIcon">
+                <i class="fas fa-check"></i>
+            </div>
+            <h3 class="modal-header-title">Quick Test Results</h3>
+            <button type="button" class="modal-close-btn" onclick="closeQuickTestResults()">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="modal-body">
+            <p class="text-sm text-gray-600 mb-4">
+                Feature Config: <strong id="qtrFeatureConfig"></strong><br>
+                Model Config: <strong id="qtrModelConfig"></strong>
+            </p>
+
+            <!-- Status Badge -->
+            <div class="mb-4" id="qtrStatusBadge"></div>
+
+            <!-- Metrics -->
+            <h4 class="font-medium text-gray-900 mb-3">Training Metrics</h4>
+            <div id="qtrMetrics" class="mb-4">
+                <!-- Populated by JavaScript -->
+            </div>
+
+            <!-- Vocabulary Stats (if available) -->
+            <div id="qtrVocabSection" class="hidden">
+                <h4 class="font-medium text-gray-900 mb-3">Vocabulary Statistics</h4>
+                <div id="qtrVocabStats" class="text-sm">
+                    <!-- Populated by JavaScript -->
+                </div>
+            </div>
+
+            <!-- Error Section (if failed) -->
+            <div id="qtrErrorSection" class="hidden bg-red-50 rounded-lg p-4">
+                <h4 class="font-medium text-red-900 mb-2">Error Details</h4>
+                <p class="text-sm text-red-700" id="qtrErrorMessage"></p>
+            </div>
+
+            <!-- Duration -->
+            <div class="mt-4 text-sm text-gray-500">
+                Duration: <span id="qtrDuration">-</span>
+            </div>
+        </div>
+        <div class="modal-footer-wizard-neu">
+            <div class="footer-left">
+                <a href="#" id="qtrVertexLink" target="_blank" class="text-sm text-blue-600 hover:text-blue-800">
+                    <i class="fas fa-external-link-alt mr-1"></i>View in Vertex AI
+                </a>
+            </div>
+            <div class="footer-right">
+                <button type="button" class="btn-neu btn-neu-action btn-neu-secondary" onclick="closeQuickTestResults()">
+                    <span class="btn-neu-inner">Close</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// =============================================================================
+// STATE & CONSTANTS
+// =============================================================================
+const modelId = {{ model.id }};
+
+let allFeatureConfigs = [];
+let allModelConfigs = [];
+let quickTestHistory = [];
+
+let currentQuickTestId = null;
+let selectedFeatureConfigId = null;
+let selectedFeatureConfigName = '';
+let selectedModelConfigId = null;
+let selectedModelConfigName = '';
+let quickTestPollInterval = null;
+
+// =============================================================================
+// INITIALIZATION
+// =============================================================================
+document.addEventListener('DOMContentLoaded', function() {
+    loadConfigurations();
+});
+
+async function loadConfigurations() {
+    try {
+        // Load both Feature Configs and Model Configs in parallel
+        const [fcResponse, mcResponse] = await Promise.all([
+            fetch(`/api/models/${modelId}/feature-configs/`),
+            fetch('/api/model-configs/')
+        ]);
+
+        const fcData = await fcResponse.json();
+        const mcData = await mcResponse.json();
+
+        if (fcData.success) {
+            // Filter to only configs with generated transform code (ready for testing)
+            allFeatureConfigs = fcData.data.filter(c => c.generated_transform_code);
+        }
+
+        if (mcData.success) {
+            allModelConfigs = mcData.data;
+        }
+
+        // Hide loading, show appropriate state
+        document.getElementById('quickTestLoading').classList.add('hidden');
+
+        if (allFeatureConfigs.length === 0 || allModelConfigs.length === 0) {
+            document.getElementById('quickTestEmptyConfigs').classList.remove('hidden');
+        } else {
+            document.getElementById('quickTestReady').classList.remove('hidden');
+            populateDropdowns();
+        }
+
+    } catch (error) {
+        console.error('Failed to load configurations:', error);
+        document.getElementById('quickTestLoading').classList.add('hidden');
+        document.getElementById('quickTestEmptyConfigs').classList.remove('hidden');
+        showError('Failed to load configurations: ' + error.message);
+    }
+}
+
+function populateDropdowns() {
+    // Populate Feature Config dropdown
+    const fcSelect = document.getElementById('featureConfigSelect');
+    fcSelect.innerHTML = '<option value="">-- Select Feature Config --</option>';
+
+    // Group by dataset
+    const byDataset = {};
+    allFeatureConfigs.forEach(fc => {
+        const dsName = fc.dataset_name || 'Unknown Dataset';
+        if (!byDataset[dsName]) {
+            byDataset[dsName] = [];
+        }
+        byDataset[dsName].push(fc);
+    });
+
+    // Add optgroups
+    Object.entries(byDataset).forEach(([dsName, configs]) => {
+        const optgroup = document.createElement('optgroup');
+        optgroup.label = dsName;
+        configs.forEach(fc => {
+            const option = document.createElement('option');
+            option.value = fc.id;
+            option.textContent = fc.name;
+            option.dataset.buyerDim = fc.buyer_tensor_dim || '-';
+            option.dataset.productDim = fc.product_tensor_dim || '-';
+            optgroup.appendChild(option);
+        });
+        fcSelect.appendChild(optgroup);
+    });
+
+    // Populate Model Config dropdown
+    const mcSelect = document.getElementById('modelConfigSelect');
+    mcSelect.innerHTML = '<option value="">-- Select Model Config --</option>';
+
+    allModelConfigs.forEach(mc => {
+        const option = document.createElement('option');
+        option.value = mc.id;
+        option.textContent = mc.name;
+        option.dataset.optimizer = mc.optimizer || 'adagrad';
+        option.dataset.learningRate = mc.learning_rate || 0.1;
+        option.dataset.batchSize = mc.batch_size || 4096;
+        option.dataset.layers = getTotalLayers(mc);
+        mcSelect.appendChild(option);
+    });
+}
+
+function getTotalLayers(mc) {
+    let count = 0;
+    if (mc.buyer_tower_layers) count += mc.buyer_tower_layers.length;
+    if (mc.product_tower_layers) count += mc.product_tower_layers.length;
+    return count;
+}
+
+// =============================================================================
+// DROPDOWN HANDLERS
+// =============================================================================
+function onFeatureConfigChange() {
+    const select = document.getElementById('featureConfigSelect');
+    const option = select.options[select.selectedIndex];
+    const infoDiv = document.getElementById('featureConfigInfo');
+
+    if (option && option.value) {
+        selectedFeatureConfigId = parseInt(option.value);
+        selectedFeatureConfigName = option.textContent;
+        document.getElementById('fcBuyerDim').textContent = option.dataset.buyerDim;
+        document.getElementById('fcProductDim').textContent = option.dataset.productDim;
+        infoDiv.classList.remove('hidden');
+    } else {
+        selectedFeatureConfigId = null;
+        selectedFeatureConfigName = '';
+        infoDiv.classList.add('hidden');
+    }
+
+    updateRunButtonState();
+}
+
+function onModelConfigChange() {
+    const select = document.getElementById('modelConfigSelect');
+    const option = select.options[select.selectedIndex];
+    const infoDiv = document.getElementById('modelConfigInfo');
+
+    if (option && option.value) {
+        selectedModelConfigId = parseInt(option.value);
+        selectedModelConfigName = option.textContent;
+        document.getElementById('mcLayers').textContent = option.dataset.layers + ' layers';
+        document.getElementById('mcOptimizer').textContent = option.dataset.optimizer;
+        infoDiv.classList.remove('hidden');
+
+        // Update training params from selected Model Config
+        document.getElementById('qtLearningRate').value = option.dataset.learningRate;
+        document.getElementById('qtBatchSize').value = option.dataset.batchSize;
+    } else {
+        selectedModelConfigId = null;
+        selectedModelConfigName = '';
+        infoDiv.classList.add('hidden');
+    }
+
+    updateRunButtonState();
+}
+
+function updateRunButtonState() {
+    const btn = document.getElementById('runQuickTestBtn');
+    btn.disabled = !(selectedFeatureConfigId && selectedModelConfigId);
+}
+
+// =============================================================================
+// TRAINING PARAMS
+// =============================================================================
+function toggleTrainingParams() {
+    const content = document.getElementById('trainingParamsContent');
+    const chevron = document.getElementById('trainingParamsChevron');
+
+    if (content.classList.contains('hidden')) {
+        content.classList.remove('hidden');
+        chevron.classList.remove('fa-chevron-down');
+        chevron.classList.add('fa-chevron-up');
+    } else {
+        content.classList.add('hidden');
+        chevron.classList.remove('fa-chevron-up');
+        chevron.classList.add('fa-chevron-down');
+    }
+}
+
+// =============================================================================
+// QUICK TEST DIALOG
+// =============================================================================
+function openQuickTestDialog() {
+    if (!selectedFeatureConfigId || !selectedModelConfigId) {
+        showError('Please select both Feature Config and Model Config');
+        return;
+    }
+
+    // Populate dialog with selected values
+    document.getElementById('qtDialogFeatureConfig').textContent = selectedFeatureConfigName;
+    document.getElementById('qtDialogModelConfig').textContent = selectedModelConfigName;
+    document.getElementById('qtDialogEpochs').textContent = document.getElementById('qtEpochs').value;
+    document.getElementById('qtDialogBatchSize').textContent = document.getElementById('qtBatchSize').value;
+    document.getElementById('qtDialogLearningRate').textContent = document.getElementById('qtLearningRate').value;
+
+    document.getElementById('quickTestDialog').classList.remove('hidden');
+}
+
+function closeQuickTestDialog() {
+    document.getElementById('quickTestDialog').classList.add('hidden');
+}
+
+// =============================================================================
+// QUICK TEST EXECUTION
+// =============================================================================
+async function startQuickTest() {
+    const epochs = parseInt(document.getElementById('qtEpochs').value);
+    const batchSize = parseInt(document.getElementById('qtBatchSize').value);
+    const learningRate = parseFloat(document.getElementById('qtLearningRate').value);
+
+    // Close dialog
+    closeQuickTestDialog();
+
+    // Show progress modal
+    document.getElementById('qtProgressFeatureConfig').textContent = selectedFeatureConfigName;
+    document.getElementById('qtProgressModelConfig').textContent = selectedModelConfigName;
+    document.getElementById('qtProgressBar').style.width = '0%';
+    document.getElementById('qtProgressText').textContent = '0%';
+    document.getElementById('qtElapsed').textContent = '0:00';
+    document.getElementById('qtStages').innerHTML = renderInitialStages();
+    document.getElementById('quickTestProgress').classList.remove('hidden');
+
+    try {
+        const response = await fetch(`/api/feature-configs/${selectedFeatureConfigId}/quick-test/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({
+                model_config_id: selectedModelConfigId,
+                epochs: epochs,
+                batch_size: batchSize,
+                learning_rate: learningRate
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            currentQuickTestId = data.data.id;
+            updateProgressUI(data.data);
+            startPolling();
+        } else {
+            document.getElementById('quickTestProgress').classList.add('hidden');
+            showError(data.error || 'Failed to start Quick Test');
+        }
+    } catch (error) {
+        document.getElementById('quickTestProgress').classList.add('hidden');
+        showError('Failed to start Quick Test: ' + error.message);
+    }
+}
+
+function renderInitialStages() {
+    const stages = ['ExampleGen', 'StatisticsGen', 'SchemaGen', 'Transform', 'Trainer'];
+    return stages.map(name => `
+        <div class="quicktest-stage" data-stage="${name}">
+            <div class="quicktest-stage-icon pending">
+                <i class="fas fa-clock"></i>
+            </div>
+            <span class="quicktest-stage-name">${name}</span>
+            <span class="quicktest-stage-duration"></span>
+        </div>
+    `).join('');
+}
+
+// =============================================================================
+// POLLING & PROGRESS
+// =============================================================================
+function startPolling() {
+    quickTestPollInterval = setInterval(async () => {
+        try {
+            const response = await fetch(`/api/quick-tests/${currentQuickTestId}/`);
+            const data = await response.json();
+
+            if (data.success) {
+                updateProgressUI(data.data);
+
+                if (['completed', 'failed', 'cancelled'].includes(data.data.status)) {
+                    stopPolling();
+                    showResults(data.data);
+                }
+            }
+        } catch (error) {
+            console.error('Polling error:', error);
+        }
+    }, 10000); // Poll every 10 seconds
+}
+
+function stopPolling() {
+    if (quickTestPollInterval) {
+        clearInterval(quickTestPollInterval);
+        quickTestPollInterval = null;
+    }
+}
+
+function updateProgressUI(quickTest) {
+    // Update progress bar
+    const progressPercent = quickTest.progress_percent || 0;
+    document.getElementById('qtProgressBar').style.width = progressPercent + '%';
+    document.getElementById('qtProgressText').textContent = progressPercent + '%';
+
+    // Update stages
+    if (quickTest.stage_details && quickTest.stage_details.length) {
+        const stagesHtml = quickTest.stage_details.map(stage => {
+            let iconClass, statusClass;
+            switch (stage.status) {
+                case 'completed':
+                    iconClass = 'fa-check-circle';
+                    statusClass = 'completed';
+                    break;
+                case 'running':
+                    iconClass = 'fa-spinner fa-spin';
+                    statusClass = 'running';
+                    break;
+                case 'failed':
+                    iconClass = 'fa-times-circle';
+                    statusClass = 'failed';
+                    break;
+                default:
+                    iconClass = 'fa-clock';
+                    statusClass = 'pending';
+            }
+
+            const duration = stage.duration_seconds
+                ? formatDuration(stage.duration_seconds)
+                : '';
+
+            return `
+                <div class="quicktest-stage ${statusClass}">
+                    <div class="quicktest-stage-icon ${statusClass}">
+                        <i class="fas ${iconClass}"></i>
+                    </div>
+                    <span class="quicktest-stage-name">${stage.name}</span>
+                    <span class="quicktest-stage-duration">${duration}</span>
+                </div>
+            `;
+        }).join('');
+
+        document.getElementById('qtStages').innerHTML = stagesHtml;
+    }
+
+    // Update elapsed time
+    if (quickTest.elapsed_seconds) {
+        document.getElementById('qtElapsed').textContent = formatDuration(quickTest.elapsed_seconds);
+    }
+}
+
+// =============================================================================
+// RESULTS
+// =============================================================================
+function showResults(quickTest) {
+    // Hide progress modal
+    document.getElementById('quickTestProgress').classList.add('hidden');
+
+    // Update results modal
+    document.getElementById('qtrFeatureConfig').textContent = selectedFeatureConfigName;
+    document.getElementById('qtrModelConfig').textContent = selectedModelConfigName;
+
+    // Status icon and badge
+    const statusIcon = document.getElementById('qtrStatusIcon');
+    const statusBadge = document.getElementById('qtrStatusBadge');
+
+    if (quickTest.status === 'completed') {
+        statusIcon.className = 'modal-header-icon success';
+        statusIcon.innerHTML = '<i class="fas fa-check"></i>';
+        statusBadge.innerHTML = '<span class="status-badge active"><i class="fas fa-check-circle"></i> Completed</span>';
+    } else if (quickTest.status === 'failed') {
+        statusIcon.className = 'modal-header-icon error';
+        statusIcon.innerHTML = '<i class="fas fa-times"></i>';
+        statusBadge.innerHTML = '<span class="status-badge" style="background: #fef2f2; color: #991b1b;"><i class="fas fa-times-circle"></i> Failed</span>';
+    } else {
+        statusIcon.className = 'modal-header-icon info';
+        statusIcon.innerHTML = '<i class="fas fa-ban"></i>';
+        statusBadge.innerHTML = '<span class="status-badge draft"><i class="fas fa-ban"></i> Cancelled</span>';
+    }
+
+    // Metrics
+    const metricsHtml = quickTest.status === 'completed' ? `
+        <div class="quicktest-metric">
+            <span class="quicktest-metric-label">Loss</span>
+            <span class="quicktest-metric-value">${quickTest.loss?.toFixed(4) || 'N/A'}</span>
+        </div>
+        <div class="quicktest-metric">
+            <span class="quicktest-metric-label">Recall@10</span>
+            <span class="quicktest-metric-value">${quickTest.recall_at_10 ? (quickTest.recall_at_10 * 100).toFixed(2) + '%' : 'N/A'}</span>
+        </div>
+        <div class="quicktest-metric">
+            <span class="quicktest-metric-label">Recall@50</span>
+            <span class="quicktest-metric-value">${quickTest.recall_at_50 ? (quickTest.recall_at_50 * 100).toFixed(2) + '%' : 'N/A'}</span>
+        </div>
+        <div class="quicktest-metric">
+            <span class="quicktest-metric-label">Recall@100</span>
+            <span class="quicktest-metric-value">${quickTest.recall_at_100 ? (quickTest.recall_at_100 * 100).toFixed(2) + '%' : 'N/A'}</span>
+        </div>
+    ` : '<p class="text-gray-500">No metrics available</p>';
+
+    document.getElementById('qtrMetrics').innerHTML = metricsHtml;
+
+    // Vocabulary stats
+    const vocabSection = document.getElementById('qtrVocabSection');
+    if (quickTest.vocabulary_stats && Object.keys(quickTest.vocabulary_stats).length > 0) {
+        vocabSection.classList.remove('hidden');
+        const vocabHtml = Object.entries(quickTest.vocabulary_stats).map(([feature, stats]) => `
+            <div class="quicktest-metric">
+                <span class="quicktest-metric-label">${feature}</span>
+                <span class="quicktest-metric-value">
+                    ${stats.vocab_size?.toLocaleString() || 'N/A'} vocab
+                    ${stats.oov_rate !== undefined ? ` (${(stats.oov_rate * 100).toFixed(2)}% OOV)` : ''}
+                </span>
+            </div>
+        `).join('');
+        document.getElementById('qtrVocabStats').innerHTML = vocabHtml;
+    } else {
+        vocabSection.classList.add('hidden');
+    }
+
+    // Error section
+    const errorSection = document.getElementById('qtrErrorSection');
+    if (quickTest.status === 'failed' && quickTest.error_message) {
+        errorSection.classList.remove('hidden');
+        document.getElementById('qtrErrorMessage').textContent = quickTest.error_message;
+    } else {
+        errorSection.classList.add('hidden');
+    }
+
+    // Duration
+    document.getElementById('qtrDuration').textContent = quickTest.duration_seconds
+        ? formatDuration(quickTest.duration_seconds)
+        : '-';
+
+    // Vertex AI link
+    if (quickTest.vertex_pipeline_job_id) {
+        const link = `https://console.cloud.google.com/vertex-ai/pipelines/runs/${quickTest.vertex_pipeline_job_id}?project=b2b-recs`;
+        document.getElementById('qtrVertexLink').href = link;
+        document.getElementById('qtrVertexLink').style.display = 'inline';
+    } else {
+        document.getElementById('qtrVertexLink').style.display = 'none';
+    }
+
+    // Show results modal
+    document.getElementById('quickTestResults').classList.remove('hidden');
+}
+
+function closeQuickTestResults() {
+    document.getElementById('quickTestResults').classList.add('hidden');
+}
+
+// =============================================================================
+// CANCEL
+// =============================================================================
+async function cancelQuickTest() {
+    if (!currentQuickTestId) return;
+
+    const btn = document.getElementById('qtCancelBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="btn-neu-inner"><i class="fas fa-spinner fa-spin mr-2"></i>Cancelling...</span>';
+
+    try {
+        const response = await fetch(`/api/quick-tests/${currentQuickTestId}/cancel/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken')
+            }
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            stopPolling();
+            document.getElementById('quickTestProgress').classList.add('hidden');
+            showSuccess('Quick Test cancelled');
+        } else {
+            showError(data.error || 'Failed to cancel Quick Test');
+        }
+    } catch (error) {
+        showError('Failed to cancel: ' + error.message);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<span class="btn-neu-inner"><i class="fas fa-stop mr-2"></i>Cancel Test</span>';
+    }
+}
+
+// =============================================================================
+// UTILITIES
+// =============================================================================
+function formatDuration(seconds) {
+    if (!seconds && seconds !== 0) return '0:00';
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+}
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+function showError(message) {
+    alert('Error: ' + message);
+}
+
+function showSuccess(message) {
+    alert(message);
+}
+</script>
 {% endblock %}

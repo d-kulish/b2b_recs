@@ -621,12 +621,12 @@ The platform is organized into distinct domains that represent the end-to-end ML
 │                                                                              │
 │  ┌──────────────┐    ┌──────────────┐    ┌────────────────────┐            │
 │  │     ETL      │    │   DATASETS   │    │     MODELING       │            │
-│  │   (Done ✅)  │    │  (Done ✅)   │    │                    │            │
+│  │   (Done ✅)  │    │  (Done ✅)   │    │    (Done ✅)       │            │
 │  │              │    │              │    │ Feature Config     │            │
 │  │ Source → BQ  │    │ What data?   │    │ Embedding dims     │            │
 │  │              │    │ Which cols?  │    │ Cross features     │            │
-│  │              │    │ Filters?     │    │ Quick Tests        │            │
-│  │              │    │ (Config only)│    │ (TFX minus Pusher) │            │
+│  │              │    │ Filters?     │    │ Model Architecture │            │
+│  │              │    │ (Config only)│    │ Transform code     │            │
 │  └──────────────┘    └──────┬───────┘    └──────────┬─────────┘            │
 │                             │                       │                       │
 │                             └───────────┬───────────┘                       │
@@ -649,9 +649,9 @@ The platform is organized into distinct domains that represent the end-to-end ML
 │         ↓                             ↓                         ↓          │
 │  ┌─────────────┐           ┌─────────────┐           ┌─────────────┐       │
 │  │ EXPERIMENTS │           │ ML METADATA │           │ DEPLOYMENT  │       │
-│  │             │           │             │           │             │       │
-│  │ MLflow      │           │ Artifacts   │           │ Model       │       │
-│  │ Heatmaps    │           │ Lineage     │           │ Serving     │       │
+│  │  (Done ✅)  │           │             │           │             │       │
+│  │ Quick Tests │           │ Artifacts   │           │ Model       │       │
+│  │ MLflow      │           │ Lineage     │           │ Serving     │       │
 │  │ Comparison  │           │ Schemas     │           │ Versioning  │       │
 │  └─────────────┘           └─────────────┘           └─────────────┘       │
 │                                                                              │
@@ -667,12 +667,12 @@ The platform uses the following navigation menu:
 | **Dashboard** | - | Model health, recent runs, performance overview |
 | **ETL** | ETL | Configure data sources, schedule extractions |
 | **Dataset Manager** | Datasets | Define WHAT data (tables, columns, filters) |
-| **Modeling** | Modeling | Configure HOW to transform + Quick Tests |
+| **Modeling** | Modeling | Configure HOW to transform features + model architecture |
+| **Experiments** | Experiments | Run Quick Tests + compare results via MLflow |
 | **Training** | Training | Execute full TFX pipeline |
-| **Experiments** | Experiments | Compare results via MLflow |
 | **Deployment** | Deployment | Deploy and manage model versions |
 
-**Note**: "Pipeline Settings" was removed as it created confusion. Training hyperparameters (epochs, batch size, GPU config) are configured when starting a training run. Feature configuration (embedding dims, crosses) is done in Modeling.
+**Note**: Quick Tests moved from Modeling to Experiments (2025-12-13). Feature configuration (embedding dims, crosses) is done in Modeling. Quick Test execution and comparison is done in Experiments.
 
 ### Domain Responsibilities
 
@@ -680,17 +680,17 @@ The platform uses the following navigation menu:
 |--------|---------|--------|---------------|
 | **ETL** | Extract data from sources → BigQuery | ✅ Done | - |
 | **Datasets** | Define WHAT data goes into training (configuration only) | ✅ Done | [docs/phase_datasets.md](docs/phase_datasets.md) |
-| **Modeling** | Define HOW to transform features + Quick Tests on Vertex AI | Planned | [docs/phase_modeling.md](docs/phase_modeling.md) |
+| **Modeling** | Define HOW to transform features + model architecture | ✅ Done | [docs/phase_modeling.md](docs/phase_modeling.md) |
+| **Experiments** | Run Quick Tests on Vertex AI + compare via MLflow | ✅ Done | [docs/phase_experiments.md](docs/phase_experiments.md) |
 | **Training** | Execute full TFX pipeline (includes train/eval split) | Planned | [docs/phase_training.md](docs/phase_training.md) |
-| **Experiments** | Compare results via MLflow heatmaps | Planned | [docs/phase_experiments.md](docs/phase_experiments.md) |
 | **Deployment** | Deploy and serve models | Planned | [docs/phase_deployment.md](docs/phase_deployment.md) |
 
 ### Quick Test vs Full Training
 
-Both Quick Tests (in Modeling) and Full Training run on **Vertex AI Pipelines** with TFX components:
+Both Quick Tests (in Experiments domain) and Full Training run on **Vertex AI Pipelines** with TFX components:
 
-| Aspect | Quick Test (Modeling) | Full Training |
-|--------|----------------------|---------------|
+| Aspect | Quick Test (Experiments) | Full Training |
+|--------|--------------------------|---------------|
 | **Purpose** | Validate config, iterate quickly | Production model |
 | **Data** | 10% sample | 100% |
 | **TFX Components** | ExampleGen → StatisticsGen → SchemaGen → Transform → Trainer → Evaluator | Same + **Pusher** |
@@ -705,6 +705,8 @@ Quick Tests validate:
 - `preprocessing_fn` compilation and vocabularies (Transform)
 - Model builds and converges (Trainer)
 - Metrics compute correctly (Evaluator)
+
+**Note:** Quick Test UI moved from Modeling page to Experiments page (2025-12-13).
 
 ### Tool Responsibilities
 
@@ -2159,11 +2161,11 @@ ml_platform/
 │   ├── api.py            # Pipeline trigger, status polling
 │   └── services.py       # Vertex AI Pipelines integration
 │
-├── experiments/          # Experiments Domain (planned)
+├── experiments/          # Experiments Domain (Quick Tests + MLflow)
 │   ├── __init__.py
 │   ├── urls.py
-│   ├── views.py          # MLflow heatmap integration
-│   └── api.py            # Experiment comparison data
+│   ├── views.py          # Experiments page (Quick Test + MLflow)
+│   └── api.py            # Quick Test API, experiment comparison
 │
 ├── deployment/           # Deployment Domain (planned)
 │   ├── __init__.py
@@ -2420,6 +2422,7 @@ From `past/` folder, these components are production-tested and will be reused:
 | 2025-11-30 | 1.2 | Added Code Organization & Architecture Guidelines section based on views.py refactoring | Claude Code |
 | 2025-12-01 | 2.0 | Major update: TFX-based ML Pipeline architecture, ML Platform Domains section, updated ML Pipeline Components to TFX approach, added domain documentation links | Claude Code |
 | 2025-12-06 | 2.1 | Dataset Domain Architecture: Removed train/eval split from Dataset (moved to Training domain), added "Dataset as Configuration" concept, updated Dataset wizard to 4 steps, documented SQL generation and versioning approach | Claude Code |
+| 2025-12-13 | 2.2 | Quick Test moved from Modeling to Experiments domain, updated domain diagram and navigation | Claude Code |
 
 ---
 

@@ -78,7 +78,7 @@ This platform enables businesses to:
   - **Code Viewer UI:** Tabbed modal with syntax highlighting, copy/download, regenerate
   - **Code Validation:** Automatic syntax checking with error reporting (line numbers, error messages)
 - 🧪 **Quick Test Pipeline:** Validate feature configs on Vertex AI before full training
-  - **One-click testing:** Start pipeline from Feature Config card
+  - **Note:** Quick Test moved to Experiments page (2025-12-13)
   - **Configurable params:** Epochs, batch size, learning rate
   - **Real-time progress:** Stage tracking with animated progress bar
   - **Results display:** Loss, Recall@10/50/100, vocabulary statistics
@@ -220,6 +220,7 @@ gcloud run jobs execute django-migrate-and-createsuperuser --region europe-centr
 | [`docs/phase_datasets.md`](docs/phase_datasets.md) | Dataset domain specification |
 | [`docs/phase_modeling.md`](docs/phase_modeling.md) | Modeling (Feature Engineering) specification |
 | [`docs/phase_model_structure.md`](docs/phase_model_structure.md) | Model Structure (Architecture) specification |
+| [`docs/phase_experiments.md`](docs/phase_experiments.md) | Experiments (Quick Test + MLflow) specification |
 | This file | Project overview and quick start |
 
 ---
@@ -355,6 +356,14 @@ WHERE source_type='gcs';
 ---
 
 ## 📝 Recent Updates
+
+**December 13, 2025 - Quick Test Moved to Experiments Page**
+- ✅ **Page split** - Quick Test functionality moved from Modeling to dedicated Experiments page
+- ✅ **New Experiments page** (`model_experiments.html`) - 1,129 lines of new code
+- ✅ **Modeling page reduced** - Removed ~714 lines, now focused on Feature + Model Config only
+- ✅ **Clean separation** - Modeling = Configure, Experiments = Run and Compare
+- ✅ **Documentation updated** - `phase_modeling.md`, `phase_experiments.md`, `implementation.md`
+- See [Phase: Experiments docs](docs/phase_experiments.md) for details
 
 **December 12, 2025 - Code Generation Architecture Refactored**
 - ✅ **Split code generation** - Transform code stored in FeatureConfig, Trainer code generated at runtime

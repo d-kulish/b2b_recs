@@ -316,6 +316,7 @@ class ModelConfig(models.Model):
     #   {"type": "dense", "units": 128, "activation": "relu", "l2_reg": 0.0},
     #   {"type": "dropout", "rate": 0.2},
     #   {"type": "batch_norm"},
+    #   {"type": "layer_norm", "epsilon": 1e-6},
     #   {"type": "dense", "units": 64, "activation": "relu", "l2_reg": 0.0},
     #   {"type": "dense", "units": 32, "activation": "relu", "l2_reg": 0.0}
     # ]
@@ -733,6 +734,19 @@ class ModelConfig(models.Model):
       {
         "properties": {
           "type": {"const": "batch_norm"}
+        },
+        "required": ["type"]
+      },
+      {
+        "properties": {
+          "type": {"const": "layer_norm"},
+          "epsilon": {
+            "type": "number",
+            "minimum": 1e-7,
+            "maximum": 0.001,
+            "default": 1e-6,
+            "description": "Small constant for numerical stability"
+          }
         },
         "required": ["type"]
       }

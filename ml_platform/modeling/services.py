@@ -1322,7 +1322,7 @@ class TrainerModuleGenerator:
     - Uses normalized/cyclical values from Transform for numeric/temporal
     - Creates embeddings for bucket indices and cross features
     - Builds two-tower TFRS model with configurable architecture from ModelConfig
-    - Supports multiple layer types: Dense, Dropout, BatchNorm with L2 regularization
+    - Supports multiple layer types: Dense, Dropout, BatchNorm, LayerNorm with L2 regularization
     - Supports multiple optimizers: Adagrad, Adam, SGD, RMSprop, AdamW, FTRL
     - Supports retrieval algorithms: BruteForce, ScaNN
     - Implements run_fn() for TFX Trainer component
@@ -1478,6 +1478,8 @@ class TrainerModuleGenerator:
                 parts.append(f"Dropout({rate})")
             elif layer_type == 'batch_norm':
                 parts.append("BatchNorm")
+            elif layer_type == 'layer_norm':
+                parts.append("LayerNorm")
             else:
                 parts.append(layer_type)
 
@@ -2010,6 +2012,10 @@ class RetrievalModel(tfrs.Model):
 
             elif layer_type == 'batch_norm':
                 lines.append(f"        {var_name}.append(tf.keras.layers.BatchNormalization())")
+
+            elif layer_type == 'layer_norm':
+                epsilon = layer.get('epsilon', 1e-6)
+                lines.append(f"        {var_name}.append(tf.keras.layers.LayerNormalization(epsilon={epsilon}))")
 
         # Add final projection layer to output_embedding_dim if not already matching
         # Check if last dense layer already outputs the correct dim

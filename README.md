@@ -88,7 +88,7 @@ This platform enables businesses to:
 - 🏗️ **Architecture Configuration:** Define neural network architecture independent from features
 - 🌐 **Global/Reusable:** ModelConfig is dataset-independent, can be used with any FeatureConfig
 - 🗼 **Tower Builder:** Visual layer configuration for Buyer (Query) and Product (Candidate) towers
-- 📊 **Layer Types:** Dense, Dropout, Batch Normalization with L1/L2/L1+L2 regularization
+- 📊 **Layer Types:** Dense, Dropout, Batch Normalization, Layer Normalization with L1/L2/L1+L2 regularization
 - 🎯 **5 Presets:** Minimal (64→32), Standard (128→64→32), Deep (256→128→64→32), Asymmetric, Regularized
 - ⚙️ **Training Hyperparameters:** Optimizer (Adagrad/Adam/SGD/RMSprop/AdamW/FTRL), learning rate with auto-suggest, batch size
 - 🔄 **Model Types:** Retrieval (Phase 1), Ranking (Phase 2), Multitask (Phase 3)
@@ -97,6 +97,8 @@ This platform enables businesses to:
 - 📈 **Model Summary:** Keras-style parameter display (Total/Trainable/Non-trainable params)
 - ↕️ **Layer Reordering:** Drag-drop layer reordering within towers (output layer locked)
 - 🔧 **Runtime Code Generation:** Trainer code generated when combined with FeatureConfig for QuickTest
+- 🎯 **Ranking Model Support:** Rating Head builder, loss function selection (MSE/BCE/Huber), drag-drop layer reordering
+- 🔍 **Compare Modal:** Side-by-side model comparison with Rating Head support for Ranking models
 
 ### **Platform Features**
 - 🎨 ETL Wizard UI (5-step data source configuration)
@@ -356,6 +358,14 @@ WHERE source_type='gcs';
 ---
 
 ## 📝 Recent Updates
+
+**December 13, 2025 - Ranking Model Enhancements**
+- ✅ **LayerNormalization** - Added as 4th layer type to all towers (Buyer, Product, Rating Head)
+- ✅ **Rating Head drag-drop** - Layers now draggable/reorderable in Rating Head (output layer locked)
+- ✅ **Compare Modal for Ranking** - Added Rating Head comparison section with purple theme
+- ✅ **Mixed model comparison** - Shows "N/A" for non-applicable settings when comparing Ranking vs Retrieval
+- ✅ **Loss Function comparison** - Added to Training Settings section in Compare modal
+- See [Phase: Model Structure docs](docs/phase_model_structure.md) for details
 
 **December 13, 2025 - Quick Test Moved to Experiments Page**
 - ✅ **Page split** - Quick Test functionality moved from Modeling to dedicated Experiments page

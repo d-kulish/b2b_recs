@@ -24,16 +24,29 @@ While Retrieval models output embeddings for similarity matching (finding candid
    - Three presets: Minimal (64→1), Standard (256→64→1), Deep (512→256→64→1)
    - Final layer always Dense(1) for scalar output
    - Purple/pink color theme to distinguish from tower builders
+   - **Drag-and-drop layer reordering** (output layer locked at bottom)
 
-2. **Loss Function Selector** (Step 3 UI)
+2. **Layer Types** (All 3 towers: Buyer, Product, Rating Head)
+   - **Dense** - Fully connected layer with units, activation, L2 regularization
+   - **Dropout** - Regularization layer with configurable rate
+   - **BatchNormalization** - Normalizes activations (no parameters)
+   - **LayerNormalization** - Normalizes across features with configurable epsilon (added 2025-12-13)
+
+3. **Loss Function Selector** (Step 3 UI)
    - MSE (Mean Squared Error): For continuous ratings (1.0-5.0 scale)
    - Binary Crossentropy: For binary feedback (click/no-click)
    - Huber: Robust to outliers, good for noisy rating data
 
-3. **Rating Column Selection** (QuickTest Dialog)
+4. **Rating Column Selection** (QuickTest Dialog)
    - Rating column selected at test time, NOT stored in ModelConfig
    - Keeps ModelConfig dataset-independent (can be reused across datasets)
    - Only numeric columns from dataset are shown as options
+
+5. **Compare Modal Enhancement** (2025-12-13)
+   - Rating Head comparison section (purple theme) for Ranking models
+   - Side-by-side layer comparison with aligned rows
+   - Loss Function comparison in Training Settings
+   - Mixed model comparison (Ranking vs Retrieval) shows "N/A" for non-applicable settings
 
 **Database Changes:**
 - `ModelConfig.loss_function` - CharField with choices (mse, binary_crossentropy, huber)
@@ -54,6 +67,7 @@ While Retrieval models output embeddings for similarity matching (finding candid
 - Step 3: Loss Function dropdown with help text
 - Model cards: Show all 3 models (Buyer, Product, Rating Head) + loss badge
 - View modal: Rating Head section with layer visualization
+- Compare modal: Rating Head comparison section for Ranking models
 - QuickTest dialog: Rating column selector (only for Ranking models)
 
 **Next Steps (Pending):**

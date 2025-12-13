@@ -900,6 +900,14 @@
         background: linear-gradient(135deg, #f0fdf4 0%, #d1fae5 100%);
         border-color: #10b981;
     }
+    .mc-compare-tower.ranking,
+    .mc-compare-tower-section.ranking {
+        background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%);
+        border-color: #a855f7;
+    }
+    .mc-compare-tower-section.ranking .mc-compare-tower-header {
+        background: linear-gradient(135deg, #a855f7 0%, #9333ea 100%);
+    }
     .mc-compare-table {
         width: 100%;
         border-collapse: collapse;
@@ -1062,6 +1070,10 @@
     .mc-compare-layer-cell .layer-badge.batch_norm {
         background: #d1fae5;
         color: #065f46;
+    }
+    .mc-compare-layer-cell .layer-badge.layer_norm {
+        background: #e0e7ff;
+        color: #3730a3;
     }
     .mc-compare-layer-cell .layer-params {
         flex: 1;
@@ -1321,6 +1333,10 @@
         background: #d1fae5;
         color: #065f46;
     }
+    .card-layer-badge.layer_norm {
+        background: #e0e7ff;
+        color: #3730a3;
+    }
     .card-layer-params {
         flex: 1;
         font-size: 12px;
@@ -1375,6 +1391,9 @@
     }
     .layer-type.batch_norm {
         color: #7c3aed;
+    }
+    .layer-type.layer_norm {
+        color: #4f46e5;
     }
     .layer-params {
         font-size: 11px;
@@ -1546,6 +1565,10 @@
         background: #d1fae5;
         color: #065f46;
     }
+    .compact-layer-type.layer_norm {
+        background: #e0e7ff;
+        color: #3730a3;
+    }
     .layer-arrow {
         color: #9ca3af;
         font-size: 10px;
@@ -1653,6 +1676,9 @@
     }
     .layer-bar-segment.batch_norm {
         background: linear-gradient(135deg, #a78bfa 0%, #8b5cf6 100%);
+    }
+    .layer-bar-segment.layer_norm {
+        background: linear-gradient(135deg, #818cf8 0%, #6366f1 100%);
     }
     .layer-bar-segment .layer-units {
         font-size: 11px;
@@ -2033,6 +2059,10 @@
     .layer-item .layer-type-badge.batch_norm {
         background: #d1fae5;
         color: #065f46;
+    }
+    .layer-item .layer-type-badge.layer_norm {
+        background: #e0e7ff;
+        color: #3730a3;
     }
     .layer-item .layer-params {
         flex: 1;
@@ -3396,6 +3426,7 @@
                     <option value="dense">Dense</option>
                     <option value="dropout">Dropout</option>
                     <option value="batch_norm">Batch Normalization</option>
+                    <option value="layer_norm">Layer Normalization</option>
                 </select>
             </div>
 
@@ -3462,6 +3493,16 @@
             <!-- Batch Norm Fields -->
             <div id="batchNormFieldsModal" class="hidden">
                 <p class="text-sm text-gray-500 py-4">Batch Normalization normalizes layer inputs. No configurable parameters needed.</p>
+            </div>
+
+            <!-- Layer Norm Fields -->
+            <div id="layerNormFieldsModal" class="hidden">
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Epsilon</label>
+                    <input type="number" id="layerNormEpsilon" class="training-param-input w-full" value="0.000001" min="0.0000001" max="0.001" step="0.0000001" />
+                    <p class="text-xs text-gray-400 mt-1">Small constant for numerical stability. Default: 1e-6</p>
+                </div>
+                <p class="text-sm text-gray-500 py-2">Layer Normalization normalizes across features (not batch). Works well with variable batch sizes and during inference.</p>
             </div>
         </div>
         <div class="modal-footer-wizard-neu">
@@ -3763,6 +3804,18 @@
                         <!-- Layer rows will be rendered here -->
                     </div>
                     <div id="mcCompareProductParams" class="mc-compare-params-row">
+                        <!-- Params will be rendered here -->
+                    </div>
+                </div>
+                <!-- Rating Head Section (for Ranking models) -->
+                <div id="mcCompareRatingHeadSection" class="mc-compare-tower-section ranking hidden">
+                    <div class="mc-compare-tower-header">
+                        <span class="mc-compare-tower-title">Rating Head</span>
+                    </div>
+                    <div id="mcCompareRating_headLayers" class="mc-compare-layers-grid">
+                        <!-- Layer rows will be rendered here -->
+                    </div>
+                    <div id="mcCompareRating_headParams" class="mc-compare-params-row">
                         <!-- Params will be rendered here -->
                     </div>
                 </div>
@@ -7751,6 +7804,9 @@ function renderCardTowerLayers(buyerLayers, productLayers) {
         } else if (layer.type === 'batch_norm') {
             badge = '<span class="card-layer-badge batch_norm">BatchNorm</span>';
             params = '';
+        } else if (layer.type === 'layer_norm') {
+            badge = '<span class="card-layer-badge layer_norm">LayerNorm</span>';
+            params = layer.epsilon ? `ε: ${layer.epsilon}` : '';
         }
 
         // View-only mode: drag handle | badge | params (no action buttons)
@@ -7816,6 +7872,9 @@ function renderTowerStack(layers, tower) {
         } else if (layer.type === 'batch_norm') {
             layerLabel = 'BatchNorm';
             params = '';
+        } else if (layer.type === 'layer_norm') {
+            layerLabel = 'LayerNorm';
+            params = layer.epsilon ? `ε=${layer.epsilon}` : '';
         } else {
             layerLabel = layer.type;
             params = '';
@@ -7840,7 +7899,8 @@ function getCompactTowerText(layers) {
     const typeLabels = {
         'dense': 'Dense',
         'dropout': 'Drop',
-        'batch_norm': 'BN'
+        'batch_norm': 'BN',
+        'layer_norm': 'LN'
     };
 
     return layers.map(layer => {
@@ -7861,6 +7921,9 @@ function calculateSingleTowerParams(layers, inputDim = 100) {
         } else if (layer.type === 'batch_norm') {
             // BatchNorm: 4 params per feature (gamma, beta, moving_mean, moving_var)
             params += prevDim * 4;
+        } else if (layer.type === 'layer_norm') {
+            // LayerNorm: 2 params per feature (gamma, beta)
+            params += prevDim * 2;
         }
         // Dropout has no parameters
     }
@@ -7945,6 +8008,11 @@ function renderLayerBar(tower, layers, container, maxTotalUnits = null) {
             segment.style.flex = '0 0 24px';
             segment.title = 'Batch Normalization';
             segment.innerHTML = '<span class="layer-label-small">BN</span>';
+        } else if (layer.type === 'layer_norm') {
+            segment.className = 'layer-bar-segment layer_norm';
+            segment.style.flex = '0 0 24px';
+            segment.title = `Layer Normalization${layer.epsilon ? ', ε=' + layer.epsilon : ''}`;
+            segment.innerHTML = '<span class="layer-label-small">LN</span>';
         }
 
         container.appendChild(segment);
@@ -8012,6 +8080,9 @@ function calculateModelSummary(mc) {
             } else if (layer.type === 'batch_norm') {
                 // BatchNorm: 4 params per feature (gamma, beta, moving_mean, moving_var)
                 params += prevDim * 4;
+            } else if (layer.type === 'layer_norm') {
+                // LayerNorm: 2 params per feature (gamma, beta)
+                params += prevDim * 2;
             }
             // Dropout has no parameters
         }
@@ -8719,6 +8790,9 @@ function renderLayerList(tower, layers) {
         } else if (layer.type === 'batch_norm') {
             badge = '<span class="layer-type-badge batch_norm">BatchNorm</span>';
             params = '';
+        } else if (layer.type === 'layer_norm') {
+            badge = '<span class="layer-type-badge layer_norm">LayerNorm</span>';
+            params = layer.epsilon ? `ε: ${layer.epsilon}` : '';
         }
 
         // For output layer: use editOutputLayer and no delete button
@@ -8764,7 +8838,11 @@ let layerDragData = null;
 
 function layerDragStart(event, tower, index) {
     // Don't allow dragging the output layer
-    const layers = tower === 'buyer' ? mcState.buyerTowerLayers : mcState.productTowerLayers;
+    let layers;
+    if (tower === 'buyer') layers = mcState.buyerTowerLayers;
+    else if (tower === 'product') layers = mcState.productTowerLayers;
+    else if (tower === 'rating_head') layers = mcState.ratingHeadLayers;
+
     const lastDenseIdx = getLastDenseLayerIndex(layers);
     if (index === lastDenseIdx) {
         event.preventDefault();
@@ -8818,7 +8896,12 @@ function layerDrop(event, targetTower, targetIndex) {
         return;
     }
 
-    const layers = sourceTower === 'buyer' ? mcState.buyerTowerLayers : mcState.productTowerLayers;
+    // Get the appropriate layers array
+    let layers;
+    if (sourceTower === 'buyer') layers = mcState.buyerTowerLayers;
+    else if (sourceTower === 'product') layers = mcState.productTowerLayers;
+    else if (sourceTower === 'rating_head') layers = mcState.ratingHeadLayers;
+
     const lastDenseIdx = getLastDenseLayerIndex(layers);
 
     // Can't drop onto or after the output layer
@@ -8849,15 +8932,20 @@ function layerDrop(event, targetTower, targetIndex) {
 
     layers.splice(insertIndex, 0, movedLayer);
 
-    // Update state and re-render
+    // Update state and re-render based on tower type
     if (sourceTower === 'buyer') {
         mcState.buyerTowerLayers = layers;
-    } else {
+        renderTowerLayers();
+        updateTowerSummaries();
+    } else if (sourceTower === 'product') {
         mcState.productTowerLayers = layers;
+        renderTowerLayers();
+        updateTowerSummaries();
+    } else if (sourceTower === 'rating_head') {
+        mcState.ratingHeadLayers = layers;
+        renderRatingHeadLayers();
     }
 
-    renderTowerLayers();
-    updateTowerSummaries();
     layerDragData = null;
 }
 
@@ -8974,6 +9062,8 @@ function openLayerModal(tower, index, mode) {
             }
         } else if (layer.type === 'dropout') {
             document.getElementById('layerDropoutRate').value = layer.rate || 0.2;
+        } else if (layer.type === 'layer_norm') {
+            document.getElementById('layerNormEpsilon').value = layer.epsilon || 1e-6;
         }
 
         // Disable type change in edit mode
@@ -8993,6 +9083,7 @@ function openLayerModal(tower, index, mode) {
         document.getElementById('layerRegType').value = 'none';
         document.getElementById('layerRegStrength').value = 0.001;
         document.getElementById('layerDropoutRate').value = 0.2;
+        document.getElementById('layerNormEpsilon').value = 0.000001;
     }
 
     updateLayerModalFields();
@@ -9005,6 +9096,7 @@ function updateLayerModalFields() {
     document.getElementById('denseFieldsModal').classList.toggle('hidden', type !== 'dense');
     document.getElementById('dropoutFieldsModal').classList.toggle('hidden', type !== 'dropout');
     document.getElementById('batchNormFieldsModal').classList.toggle('hidden', type !== 'batch_norm');
+    document.getElementById('layerNormFieldsModal').classList.toggle('hidden', type !== 'layer_norm');
 }
 
 function updateRegStrengthVisibility() {
@@ -9130,6 +9222,9 @@ function renderRatingHeadLayers() {
         } else if (layer.type === 'batch_norm') {
             badge = '<span class="layer-type-badge batch_norm">BatchNorm</span>';
             params = '';
+        } else if (layer.type === 'layer_norm') {
+            badge = '<span class="layer-type-badge layer_norm">LayerNorm</span>';
+            params = layer.epsilon ? `ε: ${layer.epsilon}` : '';
         }
 
         // Output layer (Dense(1)) cannot be deleted but can be edited
@@ -9141,9 +9236,20 @@ function renderRatingHeadLayers() {
 
         const outputLabel = isOutputLayer ? '<span class="output-layer-label">Output</span>' : '';
 
+        // Draggable for all layers except the output layer
+        const draggable = isOutputLayer ? 'false' : 'true';
+        const dragHandleClass = isOutputLayer ? 'drag-handle disabled' : 'drag-handle';
+
         return `
-            <div class="layer-item${isOutputLayer ? ' output-layer' : ''}" data-index="${idx}">
-                <span class="drag-handle${isOutputLayer ? ' disabled' : ''}"><i class="fas fa-grip-vertical"></i></span>
+            <div class="layer-item${isOutputLayer ? ' output-layer' : ''}"
+                 data-index="${idx}"
+                 data-tower="rating_head"
+                 draggable="${draggable}"
+                 ondragstart="layerDragStart(event, 'rating_head', ${idx})"
+                 ondragend="layerDragEnd(event)"
+                 ondragover="layerDragOver(event)"
+                 ondrop="layerDrop(event, 'rating_head', ${idx})">
+                <span class="${dragHandleClass}"><i class="fas fa-grip-vertical"></i></span>
                 ${badge}
                 <span class="layer-params">${params}</span>
                 ${outputLabel}
@@ -9255,6 +9361,8 @@ function submitLayerModal() {
         }
     } else if (type === 'dropout') {
         layer.rate = parseFloat(document.getElementById('layerDropoutRate').value);
+    } else if (type === 'layer_norm') {
+        layer.epsilon = parseFloat(document.getElementById('layerNormEpsilon').value) || 1e-6;
     }
     // batch_norm has no additional fields
 
@@ -9801,6 +9909,9 @@ function renderRatingHeadLayersForView(layers) {
         } else if (layer.type === 'batch_norm') {
             badge = '<span class="card-layer-badge batch_norm">BatchNorm</span>';
             params = '';
+        } else if (layer.type === 'layer_norm') {
+            badge = '<span class="card-layer-badge layer_norm">LayerNorm</span>';
+            params = layer.epsilon ? `ε: ${layer.epsilon}` : '';
         }
 
         return `
@@ -10100,6 +10211,24 @@ function renderMcCompareView() {
         rightConfig
     );
 
+    // Render Rating Head section (for Ranking models)
+    const leftIsRanking = leftConfig?.model_type === 'ranking';
+    const rightIsRanking = rightConfig?.model_type === 'ranking';
+    const ratingHeadSection = document.getElementById('mcCompareRatingHeadSection');
+
+    if (leftIsRanking || rightIsRanking) {
+        ratingHeadSection.classList.remove('hidden');
+        renderMcCompareTowerSection(
+            'rating_head',
+            leftIsRanking ? (leftConfig?.rating_head_layers || []) : [],
+            rightIsRanking ? (rightConfig?.rating_head_layers || []) : [],
+            leftConfig,
+            rightConfig
+        );
+    } else {
+        ratingHeadSection.classList.add('hidden');
+    }
+
     // Render settings section
     renderMcCompareSettings(leftConfig, rightConfig);
 }
@@ -10230,6 +10359,9 @@ function renderMcCompareLayerCell(layer, isOutput, isDifferent) {
     } else if (layer.type === 'batch_norm') {
         badge = '<span class="layer-badge batch_norm">BatchNorm</span>';
         params = '';
+    } else if (layer.type === 'layer_norm') {
+        badge = '<span class="layer-badge layer_norm">LayerNorm</span>';
+        params = layer.epsilon ? `ε: ${layer.epsilon}` : '';
     }
 
     const classes = ['mc-compare-layer-cell'];
@@ -10259,6 +10391,8 @@ function layersAreDifferent(layer1, layer2) {
         if (l2_1 !== l2_2) return true;
     } else if (layer1.type === 'dropout') {
         if (layer1.rate !== layer2.rate) return true;
+    } else if (layer1.type === 'layer_norm') {
+        if (layer1.epsilon !== layer2.epsilon) return true;
     }
     // batch_norm has no params to compare
 
@@ -10282,8 +10416,33 @@ function renderMcCompareSettings(leftConfig, rightConfig) {
     // Add retrieval-specific settings
     if (leftConfig?.model_type === 'retrieval' || rightConfig?.model_type === 'retrieval') {
         settingsRows.push(
-            { label: 'Algorithm', leftValue: leftConfig?.retrieval_algorithm_display || leftConfig?.retrieval_algorithm || 'Brute Force', rightValue: rightConfig?.retrieval_algorithm_display || rightConfig?.retrieval_algorithm || 'Brute Force', leftRaw: leftConfig?.retrieval_algorithm, rightRaw: rightConfig?.retrieval_algorithm },
-            { label: 'Top-K', leftValue: leftConfig?.top_k || 100, rightValue: rightConfig?.top_k || 100 }
+            {
+                label: 'Algorithm',
+                leftValue: leftConfig?.model_type === 'retrieval' ? (leftConfig?.retrieval_algorithm_display || leftConfig?.retrieval_algorithm || 'Brute Force') : 'N/A',
+                rightValue: rightConfig?.model_type === 'retrieval' ? (rightConfig?.retrieval_algorithm_display || rightConfig?.retrieval_algorithm || 'Brute Force') : 'N/A',
+                leftRaw: leftConfig?.model_type === 'retrieval' ? leftConfig?.retrieval_algorithm : null,
+                rightRaw: rightConfig?.model_type === 'retrieval' ? rightConfig?.retrieval_algorithm : null
+            },
+            {
+                label: 'Top-K',
+                leftValue: leftConfig?.model_type === 'retrieval' ? (leftConfig?.top_k || 100) : 'N/A',
+                rightValue: rightConfig?.model_type === 'retrieval' ? (rightConfig?.top_k || 100) : 'N/A',
+                leftRaw: leftConfig?.model_type === 'retrieval' ? (leftConfig?.top_k || 100) : null,
+                rightRaw: rightConfig?.model_type === 'retrieval' ? (rightConfig?.top_k || 100) : null
+            }
+        );
+    }
+
+    // Add ranking-specific settings
+    if (leftConfig?.model_type === 'ranking' || rightConfig?.model_type === 'ranking') {
+        settingsRows.push(
+            {
+                label: 'Loss Function',
+                leftValue: leftConfig?.model_type === 'ranking' ? (leftConfig?.loss_function_display || leftConfig?.loss_function || 'MSE') : 'N/A',
+                rightValue: rightConfig?.model_type === 'ranking' ? (rightConfig?.loss_function_display || rightConfig?.loss_function || 'MSE') : 'N/A',
+                leftRaw: leftConfig?.model_type === 'ranking' ? leftConfig?.loss_function : null,
+                rightRaw: rightConfig?.model_type === 'ranking' ? rightConfig?.loss_function : null
+            }
         );
     }
 

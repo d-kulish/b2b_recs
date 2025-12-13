@@ -477,6 +477,23 @@
                 <p><span class="text-gray-600">Learning Rate:</span> <strong id="qtDialogLearningRate">0.1</strong></p>
             </div>
 
+            <!-- Rating Column Selector (for Ranking models only) -->
+            <div id="qtRatingColumnSection" class="mb-4 p-3 bg-purple-50 rounded-lg border border-purple-200 hidden">
+                <h4 class="font-medium text-purple-900 mb-2">
+                    <i class="fas fa-star mr-1"></i>Rating Column
+                </h4>
+                <p class="text-xs text-purple-700 mb-2">
+                    Ranking models require a numeric column containing ratings/scores to predict.
+                </p>
+                <select id="qtRatingColumnSelect" class="w-full px-3 py-2 border border-purple-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-sm">
+                    <option value="">Select rating column...</option>
+                </select>
+                <p id="qtRatingColumnWarning" class="text-xs text-amber-600 mt-2 hidden">
+                    <i class="fas fa-exclamation-triangle mr-1"></i>
+                    No numeric columns found in this dataset. Ranking models require a rating column.
+                </p>
+            </div>
+
             <div class="bg-gray-50 rounded-lg p-3 text-sm text-gray-600">
                 <p><strong>Estimated duration:</strong> 15-25 minutes</p>
                 <p><strong>Machine type:</strong> n1-standard-4 (4 vCPU, 15GB RAM)</p>
@@ -619,6 +636,7 @@ let selectedFeatureConfigId = null;
 let selectedFeatureConfigName = '';
 let selectedModelConfigId = null;
 let selectedModelConfigName = '';
+let selectedModelConfigType = null;  // 'retrieval' or 'ranking'
 let quickTestPollInterval = null;
 
 // =============================================================================
@@ -708,6 +726,7 @@ function populateDropdowns() {
         option.dataset.learningRate = mc.learning_rate || 0.1;
         option.dataset.batchSize = mc.batch_size || 4096;
         option.dataset.layers = getTotalLayers(mc);
+        option.dataset.modelType = mc.model_type || 'retrieval';
         mcSelect.appendChild(option);
     });
 }
@@ -750,6 +769,7 @@ function onModelConfigChange() {
     if (option && option.value) {
         selectedModelConfigId = parseInt(option.value);
         selectedModelConfigName = option.textContent;
+        selectedModelConfigType = option.dataset.modelType || 'retrieval';
         document.getElementById('mcLayers').textContent = option.dataset.layers + ' layers';
         document.getElementById('mcOptimizer').textContent = option.dataset.optimizer;
         infoDiv.classList.remove('hidden');
@@ -760,6 +780,7 @@ function onModelConfigChange() {
     } else {
         selectedModelConfigId = null;
         selectedModelConfigName = '';
+        selectedModelConfigType = null;
         infoDiv.classList.add('hidden');
     }
 
@@ -805,7 +826,78 @@ function openQuickTestDialog() {
     document.getElementById('qtDialogBatchSize').textContent = document.getElementById('qtBatchSize').value;
     document.getElementById('qtDialogLearningRate').textContent = document.getElementById('qtLearningRate').value;
 
+    // Show/hide rating column section based on model type
+    const ratingColumnSection = document.getElementById('qtRatingColumnSection');
+    const ratingColumnSelect = document.getElementById('qtRatingColumnSelect');
+    const ratingColumnWarning = document.getElementById('qtRatingColumnWarning');
+
+    if (selectedModelConfigType === 'ranking') {
+        ratingColumnSection.classList.remove('hidden');
+        // Populate numeric columns from the selected Feature Config's dataset
+        populateRatingColumnOptions();
+    } else {
+        ratingColumnSection.classList.add('hidden');
+        ratingColumnSelect.innerHTML = '<option value="">Select rating column...</option>';
+        ratingColumnWarning.classList.add('hidden');
+    }
+
     document.getElementById('quickTestDialog').classList.remove('hidden');
+}
+
+// Populate rating column dropdown with numeric columns from the dataset
+async function populateRatingColumnOptions() {
+    const ratingColumnSelect = document.getElementById('qtRatingColumnSelect');
+    const ratingColumnWarning = document.getElementById('qtRatingColumnWarning');
+
+    ratingColumnSelect.innerHTML = '<option value="">Loading columns...</option>';
+    ratingColumnWarning.classList.add('hidden');
+
+    try {
+        // Find the selected Feature Config to get its dataset
+        const featureConfig = allFeatureConfigs.find(fc => fc.id === selectedFeatureConfigId);
+        if (!featureConfig || !featureConfig.dataset_id) {
+            ratingColumnSelect.innerHTML = '<option value="">Select rating column...</option>';
+            ratingColumnWarning.textContent = 'Could not find dataset for this Feature Config.';
+            ratingColumnWarning.classList.remove('hidden');
+            return;
+        }
+
+        // Fetch dataset columns
+        const response = await fetch(`/api/datasets/${featureConfig.dataset_id}/columns/`);
+        const data = await response.json();
+
+        if (data.success && data.data && data.data.columns) {
+            // Filter to numeric columns
+            const numericColumns = data.data.columns.filter(col =>
+                col.dtype === 'int64' || col.dtype === 'float64' ||
+                col.dtype === 'int32' || col.dtype === 'float32' ||
+                col.dtype === 'Int64' || col.dtype === 'Float64' ||
+                col.dtype.includes('int') || col.dtype.includes('float')
+            );
+
+            ratingColumnSelect.innerHTML = '<option value="">Select rating column...</option>';
+
+            if (numericColumns.length === 0) {
+                ratingColumnWarning.classList.remove('hidden');
+            } else {
+                numericColumns.forEach(col => {
+                    const option = document.createElement('option');
+                    option.value = col.name;
+                    option.textContent = `${col.name} (${col.dtype})`;
+                    ratingColumnSelect.appendChild(option);
+                });
+            }
+        } else {
+            ratingColumnSelect.innerHTML = '<option value="">Select rating column...</option>';
+            ratingColumnWarning.textContent = 'Could not load columns from dataset.';
+            ratingColumnWarning.classList.remove('hidden');
+        }
+    } catch (error) {
+        console.error('Error fetching columns:', error);
+        ratingColumnSelect.innerHTML = '<option value="">Select rating column...</option>';
+        ratingColumnWarning.textContent = 'Error loading columns.';
+        ratingColumnWarning.classList.remove('hidden');
+    }
 }
 
 function closeQuickTestDialog() {
@@ -820,6 +912,17 @@ async function startQuickTest() {
     const batchSize = parseInt(document.getElementById('qtBatchSize').value);
     const learningRate = parseFloat(document.getElementById('qtLearningRate').value);
 
+    // For ranking models, validate and get rating column
+    let ratingColumn = null;
+    if (selectedModelConfigType === 'ranking') {
+        const ratingColumnSelect = document.getElementById('qtRatingColumnSelect');
+        ratingColumn = ratingColumnSelect.value;
+        if (!ratingColumn) {
+            showError('Please select a rating column for ranking models');
+            return;
+        }
+    }
+
     // Close dialog
     closeQuickTestDialog();
 
@@ -832,6 +935,19 @@ async function startQuickTest() {
     document.getElementById('qtStages').innerHTML = renderInitialStages();
     document.getElementById('quickTestProgress').classList.remove('hidden');
 
+    // Build request payload
+    const payload = {
+        model_config_id: selectedModelConfigId,
+        epochs: epochs,
+        batch_size: batchSize,
+        learning_rate: learningRate
+    };
+
+    // Add rating column for ranking models
+    if (ratingColumn) {
+        payload.rating_column = ratingColumn;
+    }
+
     try {
         const response = await fetch(`/api/feature-configs/${selectedFeatureConfigId}/quick-test/`, {
             method: 'POST',
@@ -839,12 +955,7 @@ async function startQuickTest() {
                 'Content-Type': 'application/json',
                 'X-CSRFToken': getCookie('csrftoken')
             },
-            body: JSON.stringify({
-                model_config_id: selectedModelConfigId,
-                epochs: epochs,
-                batch_size: batchSize,
-                learning_rate: learningRate
-            })
+            body: JSON.stringify(payload)
         });
 
         const data = await response.json();

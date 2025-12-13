@@ -4,11 +4,63 @@
 ## Document Purpose
 This document provides detailed specifications for implementing the **Modeling** domain in the ML Platform. This domain defines HOW data is transformed for training and enables rapid experimentation via Quick Tests.
 
-**Last Updated**: 2025-12-12
+**Last Updated**: 2025-12-13
 
 ---
 
 ## Recent Updates (December 2025)
+
+### Ranking Model Config Support (2025-12-13)
+
+**Phase 2 Complete:** Ranking model configuration is now fully implemented.
+
+**What is a Ranking Model?**
+While Retrieval models output embeddings for similarity matching (finding candidates), Ranking models predict a scalar rating. They concatenate buyer and product embeddings and pass them through a "Rating Head" (additional dense layers) to output a single rating value.
+
+**Key Components Added:**
+
+1. **Rating Head Builder** (Step 2 UI)
+   - Visual layer builder similar to tower builders
+   - Three presets: Minimal (64→1), Standard (256→64→1), Deep (512→256→64→1)
+   - Final layer always Dense(1) for scalar output
+   - Purple/pink color theme to distinguish from tower builders
+
+2. **Loss Function Selector** (Step 3 UI)
+   - MSE (Mean Squared Error): For continuous ratings (1.0-5.0 scale)
+   - Binary Crossentropy: For binary feedback (click/no-click)
+   - Huber: Robust to outliers, good for noisy rating data
+
+3. **Rating Column Selection** (QuickTest Dialog)
+   - Rating column selected at test time, NOT stored in ModelConfig
+   - Keeps ModelConfig dataset-independent (can be reused across datasets)
+   - Only numeric columns from dataset are shown as options
+
+**Database Changes:**
+- `ModelConfig.loss_function` - CharField with choices (mse, binary_crossentropy, huber)
+- `ModelConfig.rating_head_layers` - JSONField for Rating Head architecture
+- `QuickTest.rating_column` - CharField for rating column name
+
+**Migrations:**
+- `0031_add_loss_function_to_modelconfig.py`
+- `0032_add_rating_column_to_quicktest.py`
+
+**API Endpoints Added:**
+- `GET /api/model-configs/rating-head-presets/` - Returns preset configurations
+- `GET /api/model-configs/loss-functions/` - Returns loss function options with descriptions
+
+**UI Updates:**
+- Step 1: Ranking button enabled (no longer grayed out)
+- Step 2: Rating Head section appears for Ranking models
+- Step 3: Loss Function dropdown with help text
+- Model cards: Show all 3 models (Buyer, Product, Rating Head) + loss badge
+- View modal: Rating Head section with layer visualization
+- QuickTest dialog: Rating column selector (only for Ranking models)
+
+**Next Steps (Pending):**
+- TrainerModuleGenerator for Ranking models (code generation)
+- Ranking model serving signature
+
+See [Phase: Model Structure](phase_model_structure.md) for full specifications.
 
 ### Code Generation Architecture Refactored (2025-12-12)
 
@@ -81,7 +133,7 @@ Added complete Model Structure chapter for configuring neural network architectu
 | Phase | Type | Status |
 |-------|------|--------|
 | 1 | Retrieval (Two-Tower) | ✅ Implemented |
-| 2 | Ranking | ⏳ Pending |
+| 2 | Ranking | ✅ Implemented (2025-12-13) |
 | 3 | Multitask | ⏳ Pending |
 
 **API Endpoints:**
@@ -90,12 +142,16 @@ Added complete Model Structure chapter for configuring neural network architectu
 - `GET/PUT/DELETE /api/model-configs/{id}/` - CRUD operations
 - `POST /api/model-configs/{id}/clone/` - Clone config
 - `GET /api/model-configs/presets/` - Get preset configurations
+- `GET /api/model-configs/rating-head-presets/` - Get Rating Head presets (Ranking models)
+- `GET /api/model-configs/loss-functions/` - Get loss function options (Ranking models)
 
 **Database Fields Added:**
 - `retrieval_algorithm` - 'brute_force' (default) or 'scann'
 - `top_k` - Number of candidates to retrieve (default: 100)
 - `scann_num_leaves` - ScaNN partitions (default: 100)
 - `scann_leaves_to_search` - Partitions to search (default: 10)
+- `loss_function` - 'mse' (default), 'binary_crossentropy', or 'huber' (for Ranking models)
+- `rating_head_layers` - JSONField for Rating Head architecture (Ranking models)
 
 **Files Modified:**
 - `ml_platform/models.py` - Added `ModelConfig` model with retrieval algorithm fields

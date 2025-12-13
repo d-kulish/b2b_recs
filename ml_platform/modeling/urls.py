@@ -79,6 +79,12 @@ urlpatterns = [
     path('api/model-configs/check-name/',
          api.check_model_config_name, name='api_model_configs_check_name'),
 
+    # Ranking model specific endpoints
+    path('api/model-configs/rating-head-presets/',
+         api.get_rating_head_presets, name='api_model_configs_rating_head_presets'),
+    path('api/model-configs/loss-functions/',
+         api.get_loss_function_info, name='api_model_configs_loss_functions'),
+
     # Feature Config name check
     path('api/feature-configs/check-name/',
          api.check_feature_config_name, name='api_feature_configs_check_name'),

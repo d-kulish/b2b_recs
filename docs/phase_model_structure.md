@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides detailed specifications for implementing the **Model Structure** chapter in the ML Platform Modeling page. This feature enables users to configure neural network architecture independently from feature engineering, allowing flexible experimentation with different model architectures.
 
-**Last Updated**: 2025-12-11
+**Last Updated**: 2025-12-13
 
 ---
 
@@ -34,20 +34,42 @@ This document provides detailed specifications for implementing the **Model Stru
 | Layer drag-drop reordering | ✅ Done | Layers movable except output layer (locked at bottom) |
 | Unified layer edit modals | ✅ Done | Consistent styling with dimension button selectors |
 
+### Completed (Phase 2 - Ranking) - 2025-12-13
+
+| Component | Status | Notes |
+|-----------|--------|-------|
+| **Backend** | | |
+| `loss_function` field on ModelConfig | ✅ Done | `ml_platform/models.py` - MSE, Binary CE, Huber |
+| `rating_column` field on QuickTest | ✅ Done | Stored per test, not per ModelConfig (dataset-independent) |
+| Migration 0031 (loss_function) | ✅ Done | `ml_platform/migrations/0031_add_loss_function_to_modelconfig.py` |
+| Migration 0032 (rating_column) | ✅ Done | `ml_platform/migrations/0032_add_rating_column_to_quicktest.py` |
+| Rating Head presets API | ✅ Done | `/api/model-configs/rating-head-presets/` - Minimal, Standard, Deep |
+| Loss function info API | ✅ Done | `/api/model-configs/loss-functions/` |
+| Updated serialization | ✅ Done | `serialize_model_config()` includes `loss_function`, `loss_function_display` |
+| Updated create/update/clone | ✅ Done | Handle `loss_function` and `rating_head_layers` |
+| **Frontend - Wizard** | | |
+| Step 1: Enable Ranking button | ✅ Done | Ranking model type now selectable |
+| Step 2: Rating Head builder | ✅ Done | Purple/pink themed section below towers |
+| Step 2: Rating Head presets | ✅ Done | Minimal (64→1), Standard (256→64→1), Deep (512→256→64→1) |
+| Step 3: Loss Function selector | ✅ Done | MSE, Binary CE, Huber with help text |
+| **Frontend - Display** | | |
+| Model cards: 3-model display | ✅ Done | Buyer, Product, Rating Head all shown for Ranking |
+| Model cards: Loss function badge | ✅ Done | Shows loss function on Ranking cards |
+| View modal: Rating Head section | ✅ Done | Shows layers and loss function |
+| **QuickTest Integration** | | |
+| Rating column selector UI | ✅ Done | In QuickTest dialog, only for Ranking models |
+| Dynamic column population | ✅ Done | Fetches numeric columns from dataset |
+| Validation | ✅ Done | Requires rating column for Ranking models |
+| API payload update | ✅ Done | `rating_column` included in QuickTest request |
+
 ### Pending
 
 | Component | Status | Notes |
 |-----------|--------|-------|
-| **Integration with Quick Test** | | |
-| Update QuickTest model | ⏳ Pending | Add `model_config` FK, override fields |
-| Quick Test UI updates | ⏳ Pending | Model config selector dropdown |
 | **Code Generation** | | |
-| Update TrainerModuleGenerator | ⏳ Pending | Use ModelConfig for tower architecture |
-| Generate trainer code from ModelConfig | ⏳ Pending | Combine FeatureConfig + ModelConfig |
-| **Phase 2 - Ranking** | | |
-| Enable Ranking model type | ⏳ Pending | UI + backend support |
-| Rating head builder | ⏳ Pending | Additional tower for rating prediction |
-| Rating column selector | ⏳ Pending | Select column from dataset |
+| TrainerModuleGenerator for Ranking | ⏳ Pending | Generate RankingModel with Rating Head |
+| Generate MSE/BCE/Huber loss code | ⏳ Pending | Based on `loss_function` selection |
+| Ranking model serving signature | ⏳ Pending | Input → rating prediction |
 | **Phase 3 - Multitask** | | |
 | Enable Multitask model type | ⏳ Pending | Combined retrieval + ranking |
 | Loss weight slider | ⏳ Pending | Balance retrieval vs ranking loss |
@@ -65,8 +87,70 @@ This document provides detailed specifications for implementing the **Model Stru
 | `GET` | `/api/model-configs/presets/` | ✅ |
 | `GET` | `/api/model-configs/presets/{name}/` | ✅ |
 | `POST` | `/api/model-configs/validate/` | ✅ |
+| `GET` | `/api/model-configs/rating-head-presets/` | ✅ |
+| `GET` | `/api/model-configs/loss-functions/` | ✅ |
 
 ### Recent Updates (December 2025)
+
+#### Ranking Model Support (2025-12-13)
+
+**Phase 2 Complete:** Full Ranking model configuration is now available.
+
+**Architecture:**
+Ranking models differ from Retrieval models by concatenating buyer and product embeddings, then passing them through a Rating Head to predict a scalar rating:
+
+```
+Ranking Model Architecture:
+┌───────────┐   ┌───────────┐
+│   Buyer   │   │  Product  │
+│   Tower   │   │   Tower   │
+└─────┬─────┘   └─────┬─────┘
+      │               │
+      └───────┬───────┘
+          [concat]
+              ↓
+      ┌─────────────┐
+      │ Rating Head │
+      │ Dense(256)  │
+      │ Dense(64)   │
+      │ Dense(1)    │
+      └──────┬──────┘
+             ↓
+         rating (scalar)
+```
+
+**Rating Head Presets:**
+| Preset | Architecture | Use Case |
+|--------|--------------|----------|
+| Minimal | 64→1 | Fast iteration, simple datasets |
+| Standard | 256→64→1 | Balanced performance (recommended) |
+| Deep | 512→256→64→1 | Complex patterns, large datasets |
+
+**Loss Functions:**
+| Loss | Field Value | Use Case |
+|------|-------------|----------|
+| Mean Squared Error | `mse` | Continuous ratings (1.0-5.0) |
+| Binary Crossentropy | `binary_crossentropy` | Binary feedback (click/no-click) |
+| Huber | `huber` | Ratings with outliers (robust) |
+
+**Rating Column Selection:**
+- Rating column is selected at QuickTest time, NOT stored in ModelConfig
+- This keeps ModelConfig dataset-independent (reusable across datasets)
+- Only numeric columns from the dataset are shown as options
+
+**UI Changes:**
+- Step 1: Ranking button enabled
+- Step 2: Rating Head builder section (purple/pink theme) appears below towers for Ranking models
+- Step 3: Loss Function dropdown with help text
+- Model cards: Show all 3 components (Buyer, Product, Rating Head) + loss function badge
+- View modal: Rating Head section with layer details
+
+**Files Modified:**
+- `ml_platform/models.py` - Added `loss_function` field, rating head presets
+- `ml_platform/modeling/api.py` - New endpoints, updated serialization
+- `ml_platform/modeling/urls.py` - Added rating head presets and loss function routes
+- `templates/ml_platform/model_modeling.html` - Wizard and display updates
+- `templates/ml_platform/model_experiments.html` - Rating column selector in QuickTest
 
 #### Step 3 Training UI Redesign (2025-12-11)
 

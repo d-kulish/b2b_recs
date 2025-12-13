@@ -1454,6 +1454,67 @@
         color: #92400e;
     }
 
+    /* Rating Head Preview (for Ranking model cards) */
+    .rating-head-preview {
+        margin-top: 8px;
+        padding: 8px 12px;
+        background: linear-gradient(135deg, #fdf4ff 0%, #fae8ff 100%);
+        border: 1px solid #f0abfc;
+        border-radius: 8px;
+    }
+    .rating-head-label {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 11px;
+        font-weight: 600;
+        color: #86198f;
+    }
+    .rating-head-label i {
+        color: #d946ef;
+    }
+
+    /* View Modal Rating Head Container */
+    .view-rating-head-container {
+        max-width: 300px;
+    }
+    .tower-column.rating-head {
+        background: linear-gradient(135deg, #fdf4ff 0%, #fae8ff 100%);
+        border: 1px solid #f0abfc;
+        border-radius: 8px;
+        padding: 12px;
+    }
+    .tower-header.rating {
+        background: linear-gradient(135deg, #d946ef 0%, #a855f7 100%);
+        padding: 8px 12px;
+        border-radius: 6px;
+        margin-bottom: 12px;
+    }
+    .tower-header.rating .tower-label {
+        color: white;
+        font-weight: 600;
+        font-size: 12px;
+    }
+    .tower-header.rating .tower-label i {
+        margin-right: 6px;
+    }
+    .tower-stack.rating-head {
+        background: white;
+        border-radius: 6px;
+        padding: 8px;
+        margin-bottom: 12px;
+    }
+    .view-layer-output-tag {
+        font-size: 9px;
+        padding: 2px 6px;
+        background: #dcfce7;
+        color: #166534;
+        border-radius: 4px;
+        font-weight: 600;
+        text-transform: uppercase;
+        margin-left: auto;
+    }
+
     /* Compact Tower Display for Cards */
     .compact-tower-row {
         display: flex;
@@ -2293,6 +2354,115 @@
         line-height: 1.4;
     }
 
+    /* Rating Head Section (for Ranking models) */
+    .rating-head-section {
+        margin-top: 24px;
+        padding: 20px;
+        background: linear-gradient(135deg, #fdf4ff 0%, #fae8ff 100%);
+        border: 2px dashed #d946ef;
+        border-radius: 16px;
+    }
+    .rating-head-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 16px;
+    }
+    .rating-head-header .header-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, #d946ef 0%, #a855f7 100%);
+        box-shadow: 0 2px 6px rgba(217, 70, 239, 0.3);
+    }
+    .rating-head-header .header-icon i {
+        color: white;
+        font-size: 14px;
+    }
+    .rating-head-header h4 {
+        font-size: 14px;
+        font-weight: 600;
+        color: #86198f;
+        margin: 0;
+    }
+    .rating-head-header p {
+        font-size: 11px;
+        color: #a21caf;
+        margin: 0;
+    }
+    .rating-head-presets {
+        margin-bottom: 16px;
+    }
+    .rating-head-preset-options {
+        display: flex;
+        gap: 10px;
+    }
+    .rating-head-preset-option {
+        flex: 1;
+        padding: 10px 14px;
+        border-radius: 8px;
+        border: 2px solid transparent;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        background: white;
+        text-align: center;
+    }
+    .rating-head-preset-option:hover {
+        border-color: #e879f9;
+        box-shadow: 0 2px 8px rgba(217, 70, 239, 0.2);
+    }
+    .rating-head-preset-option.selected {
+        border-color: #d946ef;
+        background: linear-gradient(135deg, #fdf4ff 0%, #f5d0fe 100%);
+        box-shadow: 0 2px 8px rgba(217, 70, 239, 0.25);
+    }
+    .rating-head-preset-option .preset-name {
+        display: block;
+        font-size: 12px;
+        font-weight: 600;
+        color: #1f2937;
+    }
+    .rating-head-preset-option .preset-layers {
+        display: block;
+        font-size: 10px;
+        color: #a21caf;
+        margin-top: 2px;
+    }
+    .tower-builder-panel.rating-head {
+        background: rgba(255, 255, 255, 0.9);
+        border: 1px solid #f0abfc;
+    }
+    .tower-builder-panel.rating-head .tower-builder-header {
+        background: linear-gradient(135deg, #fae8ff 0%, #f5d0fe 100%);
+        border-bottom: 1px solid #f0abfc;
+    }
+    .tower-icon.rating {
+        background: linear-gradient(135deg, #d946ef 0%, #a855f7 100%);
+    }
+    .rating-head-info-banner {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        padding: 10px 12px;
+        background: linear-gradient(135deg, #fdf4ff 0%, #fae8ff 100%);
+        border-radius: 8px;
+        border: 1px solid #f0abfc;
+        margin-top: 12px;
+    }
+    .rating-head-info-banner i {
+        color: #a855f7;
+        margin-top: 2px;
+    }
+    .rating-head-info-banner p {
+        font-size: 11px;
+        color: #86198f;
+        margin: 0;
+        line-height: 1.4;
+    }
+
     /* Training Params Form */
     .training-params-grid {
         display: grid;
@@ -2342,6 +2512,110 @@
     .training-panel.hyperparams {
         border-color: #f59e0b;
         background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+    }
+    .training-panel.loss-function {
+        border-color: #ec4899;
+        background: linear-gradient(135deg, #fdf2f8 0%, #fce7f3 100%);
+        grid-column: span 2;
+    }
+    .panel-icon.loss {
+        background: linear-gradient(135deg, #ec4899 0%, #db2777 100%);
+    }
+    .loss-function-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 10px;
+    }
+    .loss-option {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px;
+        border-radius: 10px;
+        border: 2px solid transparent;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        background: white;
+        position: relative;
+    }
+    .loss-option:hover {
+        border-color: #f9a8d4;
+        box-shadow: 0 2px 8px rgba(236, 72, 153, 0.15);
+    }
+    .loss-option.selected {
+        border-color: #ec4899;
+        background: linear-gradient(135deg, #fdf2f8 0%, #fce7f3 100%);
+        box-shadow: 0 2px 8px rgba(236, 72, 153, 0.2);
+    }
+    .loss-option input[type="radio"] {
+        display: none;
+    }
+    .loss-radio {
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        border: 2px solid #d1d5db;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        transition: all 0.2s ease;
+    }
+    .loss-option.selected .loss-radio {
+        border-color: #ec4899;
+        background: #ec4899;
+    }
+    .loss-option.selected .loss-radio::after {
+        content: '';
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: white;
+    }
+    .loss-info {
+        flex: 1;
+        min-width: 0;
+    }
+    .loss-name {
+        font-size: 13px;
+        font-weight: 600;
+        color: #1f2937;
+    }
+    .loss-desc {
+        font-size: 10px;
+        color: #6b7280;
+    }
+    .loss-badge {
+        position: absolute;
+        top: 6px;
+        right: 8px;
+        font-size: 8px;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-weight: 600;
+        text-transform: uppercase;
+        background: #fce7f3;
+        color: #be185d;
+    }
+    .loss-info-text {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        margin-top: 12px;
+        padding: 10px 12px;
+        background: rgba(255, 255, 255, 0.7);
+        border-radius: 8px;
+        border: 1px solid #fbcfe8;
+    }
+    .loss-info-text i {
+        color: #ec4899;
+        margin-top: 2px;
+    }
+    .loss-info-text p {
+        font-size: 11px;
+        color: #9d174d;
+        margin: 0;
+        line-height: 1.4;
     }
     .training-panel-header {
         display: flex;
@@ -2689,13 +2963,12 @@
                             <div class="wizard-model-type-name">Retrieval</div>
                             <div class="wizard-model-type-desc">Two-tower model for candidate retrieval</div>
                         </div>
-                        <div class="wizard-model-type-option disabled" data-type="ranking">
+                        <div class="wizard-model-type-option" data-type="ranking" onclick="selectModelType('ranking')">
                             <div class="wizard-model-type-icon ranking">
                                 <i class="fas fa-sort-amount-down"></i>
                             </div>
                             <div class="wizard-model-type-name">Ranking</div>
                             <div class="wizard-model-type-desc">Score and rank retrieved candidates</div>
-                            <div class="wizard-model-type-phase">(Phase 2)</div>
                         </div>
                         <div class="wizard-model-type-option disabled" data-type="multitask">
                             <div class="wizard-model-type-icon multitask">
@@ -2872,6 +3145,69 @@
                     </div>
                 </div>
 
+                <!-- Rating Head Section (for Ranking models) -->
+                <div id="ratingHeadSection" class="rating-head-section hidden">
+                    <div class="rating-head-header">
+                        <div class="header-icon">
+                            <i class="fas fa-star"></i>
+                        </div>
+                        <div>
+                            <h4>Rating Head</h4>
+                            <p>Predicts rating from concatenated buyer and product embeddings</p>
+                        </div>
+                    </div>
+
+                    <!-- Rating Head Preset Selector -->
+                    <div class="rating-head-presets">
+                        <label class="text-xs font-medium text-gray-600 mb-1 block">Preset:</label>
+                        <div class="rating-head-preset-options">
+                            <div class="rating-head-preset-option" data-preset="minimal" onclick="selectRatingHeadPreset('minimal')">
+                                <span class="preset-name">Minimal</span>
+                                <span class="preset-layers">64→1</span>
+                            </div>
+                            <div class="rating-head-preset-option selected" data-preset="standard" onclick="selectRatingHeadPreset('standard')">
+                                <span class="preset-name">Standard</span>
+                                <span class="preset-layers">256→64→1</span>
+                            </div>
+                            <div class="rating-head-preset-option" data-preset="deep" onclick="selectRatingHeadPreset('deep')">
+                                <span class="preset-name">Deep</span>
+                                <span class="preset-layers">512→256→64→1</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Rating Head Tower Builder -->
+                    <div class="tower-builder-panel rating-head">
+                        <div class="tower-builder-header">
+                            <div class="tower-builder-title">
+                                <div class="tower-icon rating">
+                                    <i class="fas fa-star"></i>
+                                </div>
+                                Rating Prediction Network
+                            </div>
+                            <span id="ratingHeadSummary" class="tower-builder-summary">256→64→1</span>
+                        </div>
+                        <div class="p-2">
+                            <button class="add-layer-btn" onclick="addLayer('rating_head')">
+                                <i class="fas fa-plus"></i> Add Layer
+                            </button>
+                        </div>
+                        <div class="layer-list" id="ratingHeadLayerList">
+                            <!-- Layers will be rendered here -->
+                        </div>
+                        <div class="tower-params-summary" id="ratingHeadParamsSummary">
+                            <div class="params-row"><span>Total params:</span><span id="ratingHeadTotalParams">0</span></div>
+                            <div class="params-row"><span>Trainable params:</span><span id="ratingHeadTrainableParams">0</span></div>
+                            <div class="params-row"><span>Non-trainable params:</span><span>0</span></div>
+                        </div>
+                    </div>
+
+                    <div class="rating-head-info-banner">
+                        <i class="fas fa-info-circle"></i>
+                        <p>The rating head receives concatenated embeddings from both towers and outputs a single scalar prediction. The last layer must be Dense(1) for scalar output. You'll select the rating column when running a Quick Test.</p>
+                    </div>
+                </div>
+
             </div>
 
             <!-- Step 3: Training Parameters -->
@@ -2989,6 +3325,51 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- Loss Function Panel (for Ranking models) -->
+                    <div id="lossFunctionPanel" class="training-panel loss-function hidden">
+                        <div class="training-panel-header">
+                            <div class="training-panel-title">
+                                <div class="panel-icon loss">
+                                    <i class="fas fa-bullseye"></i>
+                                </div>
+                                Loss Function
+                            </div>
+                        </div>
+                        <div class="training-panel-body">
+                            <div class="loss-function-grid">
+                                <label class="loss-option selected" onclick="selectLossFunction('mse')">
+                                    <input type="radio" name="mcLossFunction" value="mse" checked>
+                                    <div class="loss-radio"></div>
+                                    <div class="loss-info">
+                                        <div class="loss-name">MSE</div>
+                                        <div class="loss-desc">Mean Squared Error</div>
+                                    </div>
+                                    <span class="loss-badge">Recommended</span>
+                                </label>
+                                <label class="loss-option" onclick="selectLossFunction('binary_crossentropy')">
+                                    <input type="radio" name="mcLossFunction" value="binary_crossentropy">
+                                    <div class="loss-radio"></div>
+                                    <div class="loss-info">
+                                        <div class="loss-name">Binary CE</div>
+                                        <div class="loss-desc">Binary Crossentropy</div>
+                                    </div>
+                                </label>
+                                <label class="loss-option" onclick="selectLossFunction('huber')">
+                                    <input type="radio" name="mcLossFunction" value="huber">
+                                    <div class="loss-radio"></div>
+                                    <div class="loss-info">
+                                        <div class="loss-name">Huber</div>
+                                        <div class="loss-desc">Robust to outliers</div>
+                                    </div>
+                                </label>
+                            </div>
+                            <div class="loss-info-text" id="lossInfoText">
+                                <i class="fas fa-info-circle"></i>
+                                <p>Best for continuous ratings (e.g., 1.0-5.0). Penalizes large prediction errors more heavily.</p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Summary Panel -->
@@ -3011,9 +3392,17 @@
                             <span class="text-purple-700">Output Dim:</span>
                             <span id="mcSummaryOutputDim" class="font-medium text-purple-900">32</span>
                         </div>
-                        <div>
+                        <div id="mcSummaryRetrievalRow">
                             <span class="text-purple-700">Retrieval:</span>
                             <span id="mcSummaryRetrieval" class="font-medium text-purple-900">Brute Force (Top 100)</span>
+                        </div>
+                        <div id="mcSummaryRatingHeadRow" class="hidden">
+                            <span class="text-purple-700">Rating Head:</span>
+                            <span id="mcSummaryRatingHead" class="font-medium text-purple-900">256→64→1</span>
+                        </div>
+                        <div id="mcSummaryLossRow" class="hidden">
+                            <span class="text-purple-700">Loss:</span>
+                            <span id="mcSummaryLoss" class="font-medium text-purple-900">MSE</span>
                         </div>
                         <div>
                             <span class="text-purple-700">Est. Parameters:</span>
@@ -3304,6 +3693,29 @@
             <div id="viewMcRetrievalSection" class="mb-4 hidden">
                 <h4 class="text-sm font-medium text-gray-700 mb-3">Retrieval Algorithm</h4>
                 <div class="training-params-preview" id="viewMcRetrievalParams">
+                    <!-- Will be populated dynamically -->
+                </div>
+            </div>
+
+            <!-- Rating Head (for ranking models) -->
+            <div id="viewMcRatingHeadSection" class="mb-6 hidden">
+                <h4 class="text-sm font-medium text-gray-700 mb-3">Rating Head</h4>
+                <div class="view-rating-head-container">
+                    <div class="tower-column rating-head">
+                        <div class="tower-header rating">
+                            <span class="tower-label"><i class="fas fa-star"></i> Rating Prediction</span>
+                        </div>
+                        <div id="viewMcRatingHeadStack" class="tower-stack rating-head">
+                            <!-- Layers will be inserted here -->
+                        </div>
+                        <div class="tower-params-summary view-modal" id="viewMcRatingHeadParamsSummary">
+                            <div class="params-row"><span>Total params:</span><span id="viewMcRatingHeadTotalParams">0</span></div>
+                            <div class="params-row"><span>Trainable params:</span><span id="viewMcRatingHeadTrainableParams">0</span></div>
+                            <div class="params-row"><span>Non-trainable params:</span><span>0</span></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="training-params-preview mt-3" id="viewMcLossParams">
                     <!-- Will be populated dynamically -->
                 </div>
             </div>
@@ -7281,16 +7693,52 @@ let mcState = {
     description: '',
     selectedPreset: 'standard',
     buyerTowerLayers: [],
-    // Retrieval Algorithm Settings
+    productTowerLayers: [],
+    // Retrieval Algorithm Settings (for retrieval models)
     retrievalAlgorithm: 'brute_force',
     topK: 100,
     scannNumLeaves: 100,
     scannLeavesToSearch: 10,
-    productTowerLayers: [],
+    // Rating Head Settings (for ranking models)
+    ratingHeadLayers: [],
+    ratingHeadPreset: 'standard',
+    lossFunction: 'mse',
+    // Common settings
     outputEmbeddingDim: 32,
     optimizer: 'adagrad',
     learningRate: 0.1,
     batchSize: 4096
+};
+
+// Rating head presets data
+const ratingHeadPresetsData = {
+    'minimal': {
+        name: 'Minimal',
+        description: 'Simple 2-layer rating head, fast training',
+        layers: [
+            {"type": "dense", "units": 64, "activation": "relu", "l2_reg": 0.0},
+            {"type": "dense", "units": 1, "activation": null}
+        ]
+    },
+    'standard': {
+        name: 'Standard',
+        description: 'Balanced 3-layer rating head (recommended)',
+        layers: [
+            {"type": "dense", "units": 256, "activation": "relu", "l2_reg": 0.0},
+            {"type": "dense", "units": 64, "activation": "relu", "l2_reg": 0.0},
+            {"type": "dense", "units": 1, "activation": null}
+        ]
+    },
+    'deep': {
+        name: 'Deep',
+        description: 'High capacity 4-layer rating head for complex patterns',
+        layers: [
+            {"type": "dense", "units": 512, "activation": "relu", "l2_reg": 0.001},
+            {"type": "dense", "units": 256, "activation": "relu", "l2_reg": 0.0},
+            {"type": "dense", "units": 64, "activation": "relu", "l2_reg": 0.0},
+            {"type": "dense", "units": 1, "activation": null}
+        ]
+    }
 };
 
 // Load Model Configs
@@ -7824,6 +8272,16 @@ function renderModelConfigs() {
                 ${productViz.html}
             </div>
 
+            <!-- Rating Head (for Ranking models) -->
+            ${mc.model_type === 'ranking' && mc.rating_head_layers && mc.rating_head_layers.length > 0 ? `
+            <div class="rating-head-preview">
+                <div class="rating-head-label">
+                    <i class="fas fa-star"></i>
+                    Rating Head: ${getRatingHeadSummaryFromLayers(mc.rating_head_layers)}
+                </div>
+            </div>
+            ` : ''}
+
             <!-- Model Type & Training Params -->
             <div class="training-params-preview">
                 <div class="param-chip model-type-chip ${mc.model_type}">
@@ -7849,6 +8307,12 @@ function renderModelConfigs() {
                 <div class="param-chip">
                     <span class="param-chip-label">Algorithm:</span>
                     <span class="param-chip-value">${mc.retrieval_algorithm_display || 'Brute Force'}</span>
+                </div>
+                ` : ''}
+                ${mc.model_type === 'ranking' ? `
+                <div class="param-chip">
+                    <span class="param-chip-label">Loss:</span>
+                    <span class="param-chip-value">${mc.loss_function_display || 'MSE'}</span>
                 </div>
                 ` : ''}
             </div>
@@ -8086,12 +8550,29 @@ function loadPresets() {
 
 // Select Model Type
 function selectModelType(type) {
-    if (type !== 'retrieval') return; // Only retrieval enabled for Phase 1
+    if (type !== 'retrieval' && type !== 'ranking') return; // retrieval and ranking enabled
 
     mcState.modelType = type;
     document.querySelectorAll('.wizard-model-type-option').forEach(opt => {
         opt.classList.toggle('selected', opt.dataset.type === type);
     });
+
+    // Show/hide sections based on model type
+    const retrievalSection = document.querySelector('.retrieval-algorithm-section');
+    const ratingHeadSection = document.getElementById('ratingHeadSection');
+
+    if (type === 'retrieval') {
+        if (retrievalSection) retrievalSection.classList.remove('hidden');
+        if (ratingHeadSection) ratingHeadSection.classList.add('hidden');
+    } else if (type === 'ranking') {
+        if (retrievalSection) retrievalSection.classList.add('hidden');
+        if (ratingHeadSection) ratingHeadSection.classList.remove('hidden');
+        // Initialize rating head layers if empty
+        if (mcState.ratingHeadLayers.length === 0) {
+            initializeRatingHeadLayers();
+        }
+        renderRatingHeadLayers();
+    }
 }
 
 // Select Preset
@@ -8143,6 +8624,37 @@ function selectOptimizer(optimizer) {
 
     if (lrSuggestions[optimizer]) {
         setLearningRate(lrSuggestions[optimizer]);
+    }
+}
+
+// Select Loss Function (Step 3, for Ranking models)
+function selectLossFunction(loss) {
+    mcState.lossFunction = loss;
+
+    // Update radio buttons
+    document.querySelectorAll('input[name="mcLossFunction"]').forEach(radio => {
+        radio.checked = radio.value === loss;
+    });
+
+    // Update visual selection
+    document.querySelectorAll('.loss-option').forEach(opt => {
+        const radio = opt.querySelector('input[type="radio"]');
+        opt.classList.toggle('selected', radio && radio.value === loss);
+    });
+
+    // Update info text
+    const infoTexts = {
+        'mse': 'Best for continuous ratings (e.g., 1.0-5.0). Penalizes large prediction errors more heavily.',
+        'binary_crossentropy': 'For binary outcomes (like/dislike, click/no-click). Use when rating is 0 or 1.',
+        'huber': 'Robust to outliers. Combines MSE for small errors and MAE for large errors. Good when ratings have noise.'
+    };
+
+    const infoTextEl = document.getElementById('lossInfoText');
+    if (infoTextEl) {
+        const pEl = infoTextEl.querySelector('p');
+        if (pEl) {
+            pEl.textContent = infoTexts[loss] || infoTexts['mse'];
+        }
     }
 }
 
@@ -8419,7 +8931,7 @@ function openLayerModal(tower, index, mode) {
     const subtitleEl = document.getElementById('layerModalSubtitle');
     const submitBtn = document.getElementById('layerModalSubmitBtn');
     const typeSelect = document.getElementById('layerType');
-    const towerName = tower === 'buyer' ? 'Buyer Tower' : 'Product Tower';
+    let towerName = tower === 'buyer' ? 'Buyer Tower' : (tower === 'product' ? 'Product Tower' : 'Rating Head');
 
     if (mode === 'edit') {
         titleEl.textContent = 'Edit Layer';
@@ -8427,7 +8939,10 @@ function openLayerModal(tower, index, mode) {
         submitBtn.innerHTML = '<span class="btn-neu-inner">Save</span>';
 
         // Get the layer data
-        const layers = tower === 'buyer' ? mcState.buyerTowerLayers : mcState.productTowerLayers;
+        let layers;
+        if (tower === 'buyer') layers = mcState.buyerTowerLayers;
+        else if (tower === 'product') layers = mcState.productTowerLayers;
+        else if (tower === 'rating_head') layers = mcState.ratingHeadLayers;
         const layer = layers[index];
 
         // Populate fields from existing layer
@@ -8570,6 +9085,165 @@ function updateRetrievalAlgorithmState() {
     }
 }
 
+// =============================================================================
+// Rating Head Functions (for Ranking models)
+// =============================================================================
+
+// Initialize rating head with default standard preset
+function initializeRatingHeadLayers() {
+    const preset = ratingHeadPresetsData['standard'];
+    mcState.ratingHeadLayers = JSON.parse(JSON.stringify(preset.layers));
+    mcState.ratingHeadPreset = 'standard';
+}
+
+// Select rating head preset
+function selectRatingHeadPreset(presetName) {
+    const preset = ratingHeadPresetsData[presetName];
+    if (!preset) return;
+
+    mcState.ratingHeadPreset = presetName;
+    mcState.ratingHeadLayers = JSON.parse(JSON.stringify(preset.layers));
+
+    // Update UI
+    document.querySelectorAll('.rating-head-preset-option').forEach(opt => {
+        opt.classList.toggle('selected', opt.dataset.preset === presetName);
+    });
+
+    renderRatingHeadLayers();
+    updateRatingHeadSummary();
+}
+
+// Render rating head layers
+function renderRatingHeadLayers() {
+    const list = document.getElementById('ratingHeadLayerList');
+    if (!list) return;
+
+    const layers = mcState.ratingHeadLayers;
+
+    // Find the last Dense layer (output layer - must be Dense(1))
+    let lastDenseIdx = -1;
+    for (let i = layers.length - 1; i >= 0; i--) {
+        if (layers[i].type === 'dense') {
+            lastDenseIdx = i;
+            break;
+        }
+    }
+
+    list.innerHTML = layers.map((layer, idx) => {
+        let badge = '';
+        let params = '';
+        const isOutputLayer = (layer.type === 'dense' && idx === lastDenseIdx);
+
+        if (layer.type === 'dense') {
+            badge = '<span class="layer-type-badge dense">Dense</span>';
+            let regInfo = '';
+            if (layer.l2_reg) regInfo = `, L2=${layer.l2_reg}`;
+            else if (layer.l1_reg) regInfo = `, L1=${layer.l1_reg}`;
+            const activation = layer.activation || 'linear';
+            params = `${layer.units} units, ${activation}${regInfo}`;
+        } else if (layer.type === 'dropout') {
+            badge = '<span class="layer-type-badge dropout">Dropout</span>';
+            params = `rate: ${layer.rate}`;
+        } else if (layer.type === 'batch_norm') {
+            badge = '<span class="layer-type-badge batch_norm">BatchNorm</span>';
+            params = '';
+        }
+
+        // Output layer (Dense(1)) cannot be deleted but can be edited
+        const deleteBtn = isOutputLayer
+            ? ''
+            : `<button class="layer-action-btn delete" onclick="removeRatingHeadLayer(${idx})" title="Delete">
+                   <i class="fas fa-trash"></i>
+               </button>`;
+
+        const outputLabel = isOutputLayer ? '<span class="output-layer-label">Output</span>' : '';
+
+        return `
+            <div class="layer-item${isOutputLayer ? ' output-layer' : ''}" data-index="${idx}">
+                <span class="drag-handle${isOutputLayer ? ' disabled' : ''}"><i class="fas fa-grip-vertical"></i></span>
+                ${badge}
+                <span class="layer-params">${params}</span>
+                ${outputLabel}
+                <div class="layer-actions">
+                    <button class="layer-action-btn" onclick="editRatingHeadLayer(${idx})" title="Edit">
+                        <i class="fas fa-external-link-alt"></i>
+                    </button>
+                    ${deleteBtn}
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    updateRatingHeadSummary();
+    updateRatingHeadParams();
+}
+
+// Update rating head summary (e.g., "256→64→1")
+function updateRatingHeadSummary() {
+    const summaryEl = document.getElementById('ratingHeadSummary');
+    if (!summaryEl) return;
+
+    const units = mcState.ratingHeadLayers
+        .filter(l => l.type === 'dense')
+        .map(l => l.units);
+
+    summaryEl.textContent = units.length > 0 ? units.join('→') : 'Empty';
+}
+
+// Update rating head parameter count estimation
+function updateRatingHeadParams() {
+    const totalParamsEl = document.getElementById('ratingHeadTotalParams');
+    const trainableParamsEl = document.getElementById('ratingHeadTrainableParams');
+    if (!totalParamsEl) return;
+
+    // Input is concatenated embeddings from both towers
+    let prevDim = mcState.outputEmbeddingDim * 2;
+    let totalParams = 0;
+
+    mcState.ratingHeadLayers.forEach(layer => {
+        if (layer.type === 'dense') {
+            totalParams += prevDim * layer.units + layer.units; // weights + bias
+            prevDim = layer.units;
+        }
+    });
+
+    totalParamsEl.textContent = formatParamCount(totalParams);
+    trainableParamsEl.textContent = formatParamCount(totalParams);
+}
+
+// Add layer to rating head
+function addRatingHeadLayer() {
+    openLayerModal('rating_head', -1, 'add');
+}
+
+// Edit rating head layer
+function editRatingHeadLayer(index) {
+    openLayerModal('rating_head', index, 'edit');
+}
+
+// Remove rating head layer
+function removeRatingHeadLayer(index) {
+    mcState.ratingHeadLayers.splice(index, 1);
+    renderRatingHeadLayers();
+}
+
+// Get rating head summary for display
+function getRatingHeadSummary() {
+    const units = mcState.ratingHeadLayers
+        .filter(l => l.type === 'dense')
+        .map(l => l.units);
+    return units.length > 0 ? units.join('→') : 'None';
+}
+
+// Get rating head summary from layers array (for card rendering)
+function getRatingHeadSummaryFromLayers(layers) {
+    if (!layers || layers.length === 0) return 'None';
+    const units = layers
+        .filter(l => l.type === 'dense')
+        .map(l => l.units);
+    return units.length > 0 ? units.join('→') : 'None';
+}
+
 function closeLayerModal(event) {
     if (event && event.target !== event.currentTarget) return;
     document.getElementById('layerModal').classList.add('hidden');
@@ -8601,7 +9275,10 @@ function submitLayerModal() {
     }
     // batch_norm has no additional fields
 
-    const layers = tower === 'buyer' ? mcState.buyerTowerLayers : mcState.productTowerLayers;
+    let layers;
+    if (tower === 'buyer') layers = mcState.buyerTowerLayers;
+    else if (tower === 'product') layers = mcState.productTowerLayers;
+    else if (tower === 'rating_head') layers = mcState.ratingHeadLayers;
 
     if (mode === 'edit') {
         // Replace existing layer
@@ -8618,8 +9295,13 @@ function submitLayerModal() {
         }
     }
 
-    renderTowerLayers();
-    updateTowerSummaries();
+    // Re-render the appropriate tower/section
+    if (tower === 'rating_head') {
+        renderRatingHeadLayers();
+    } else {
+        renderTowerLayers();
+        updateTowerSummaries();
+    }
     closeLayerModal();
 }
 
@@ -8800,36 +9482,97 @@ function updateMcStep() {
     // Update summary on step 3
     if (mcCurrentStep === 3) {
         updateMcSummary();
+        // Show/hide loss function panel based on model type
+        const lossFunctionPanel = document.getElementById('lossFunctionPanel');
+        if (lossFunctionPanel) {
+            lossFunctionPanel.classList.toggle('hidden', mcState.modelType !== 'ranking');
+        }
     }
 
     // Render layers when entering step 2
     if (mcCurrentStep === 2) {
         renderTowerLayers();
         updateTowerSummaries();
+        // Render rating head layers if ranking model
+        if (mcState.modelType === 'ranking') {
+            renderRatingHeadLayers();
+        }
     }
 }
 
 function updateMcSummary() {
-    document.getElementById('mcSummaryType').textContent = 'Retrieval';
+    // Set model type display
+    const modelTypeDisplay = mcState.modelType === 'ranking' ? 'Ranking' : 'Retrieval';
+    document.getElementById('mcSummaryType').textContent = modelTypeDisplay;
+
     document.getElementById('mcSummaryBuyer').textContent = getTowerSummary(mcState.buyerTowerLayers);
     document.getElementById('mcSummaryProduct').textContent = getTowerSummary(mcState.productTowerLayers);
     document.getElementById('mcSummaryOutputDim').textContent = mcState.outputEmbeddingDim || 32;
 
-    // Update retrieval algorithm state from inputs before summary
-    updateRetrievalAlgorithmState();
+    // Handle retrieval vs ranking specific info
+    const retrievalRow = document.getElementById('mcSummaryRetrievalRow');
+    const ratingHeadRow = document.getElementById('mcSummaryRatingHeadRow');
+    const lossRow = document.getElementById('mcSummaryLossRow');
 
-    // Display retrieval algorithm info
-    if (mcState.retrievalAlgorithm === 'brute_force') {
-        document.getElementById('mcSummaryRetrieval').textContent = `Brute Force (Top ${mcState.topK})`;
+    if (mcState.modelType === 'ranking') {
+        // Hide retrieval, show rating head
+        if (retrievalRow) retrievalRow.classList.add('hidden');
+        if (ratingHeadRow) ratingHeadRow.classList.remove('hidden');
+        if (lossRow) lossRow.classList.remove('hidden');
+
+        // Update rating head summary
+        const ratingHeadSummaryEl = document.getElementById('mcSummaryRatingHead');
+        if (ratingHeadSummaryEl) {
+            ratingHeadSummaryEl.textContent = getRatingHeadSummary();
+        }
+
+        // Update loss function summary
+        const lossSummaryEl = document.getElementById('mcSummaryLoss');
+        if (lossSummaryEl) {
+            const lossLabels = { 'mse': 'MSE', 'binary_crossentropy': 'Binary CE', 'huber': 'Huber' };
+            lossSummaryEl.textContent = lossLabels[mcState.lossFunction] || 'MSE';
+        }
     } else {
-        document.getElementById('mcSummaryRetrieval').textContent = `ScaNN (Top ${mcState.topK})`;
+        // Show retrieval, hide rating head
+        if (retrievalRow) retrievalRow.classList.remove('hidden');
+        if (ratingHeadRow) ratingHeadRow.classList.add('hidden');
+        if (lossRow) lossRow.classList.add('hidden');
+
+        // Update retrieval algorithm state from inputs before summary
+        updateRetrievalAlgorithmState();
+
+        // Display retrieval algorithm info
+        if (mcState.retrievalAlgorithm === 'brute_force') {
+            document.getElementById('mcSummaryRetrieval').textContent = `Brute Force (Top ${mcState.topK})`;
+        } else {
+            document.getElementById('mcSummaryRetrieval').textContent = `ScaNN (Top ${mcState.topK})`;
+        }
     }
 
     // Estimate params (rough calculation)
     const buyerParams = estimateTowerParams(mcState.buyerTowerLayers);
     const productParams = estimateTowerParams(mcState.productTowerLayers);
-    const totalParams = buyerParams + productParams;
+    let totalParams = buyerParams + productParams;
+
+    // Add rating head params for ranking models
+    if (mcState.modelType === 'ranking') {
+        const ratingHeadParams = estimateRatingHeadParams();
+        totalParams += ratingHeadParams;
+    }
+
     document.getElementById('mcSummaryParams').textContent = formatParams(totalParams);
+}
+
+function estimateRatingHeadParams() {
+    let params = 0;
+    let prevDim = (mcState.outputEmbeddingDim || 32) * 2; // Concatenated embeddings
+    for (const layer of mcState.ratingHeadLayers) {
+        if (layer.type === 'dense') {
+            params += prevDim * layer.units + layer.units;
+            prevDim = layer.units;
+        }
+    }
+    return params;
 }
 
 function estimateTowerParams(layers) {
@@ -8862,11 +9605,14 @@ function createModelConfig() {
         buyer_tower_layers: mcState.buyerTowerLayers,
         product_tower_layers: mcState.productTowerLayers,
         output_embedding_dim: mcState.outputEmbeddingDim || 32,
-        // Retrieval algorithm settings
+        // Retrieval algorithm settings (for retrieval models)
         retrieval_algorithm: mcState.retrievalAlgorithm,
         top_k: mcState.topK,
         scann_num_leaves: mcState.scannNumLeaves,
         scann_leaves_to_search: mcState.scannLeavesToSearch,
+        // Rating head settings (for ranking models)
+        rating_head_layers: mcState.ratingHeadLayers,
+        loss_function: mcState.lossFunction,
         // Training params
         optimizer: getSelectedOptimizer(),
         learning_rate: parseFloat(document.getElementById('mcLearningRate').value),
@@ -9020,6 +9766,73 @@ function populateViewModal(mc) {
     } else {
         retrievalSection.classList.add('hidden');
     }
+
+    // Rating Head section (for ranking models)
+    const ratingHeadSection = document.getElementById('viewMcRatingHeadSection');
+    if (ratingHeadSection) {
+        if (mc.model_type === 'ranking') {
+            ratingHeadSection.classList.remove('hidden');
+            const ratingHeadLayers = mc.rating_head_layers || [];
+            const ratingHeadSummary = getRatingHeadSummaryFromLayers(ratingHeadLayers);
+            const ratingHeadParams = calculateSingleTowerParams(ratingHeadLayers, (mc.output_embedding_dim || 32) * 2);
+
+            document.getElementById('viewMcRatingHeadStack').innerHTML = renderRatingHeadLayersForView(ratingHeadLayers);
+            document.getElementById('viewMcRatingHeadTotalParams').textContent = ratingHeadParams.toLocaleString();
+            document.getElementById('viewMcRatingHeadTrainableParams').textContent = ratingHeadParams.toLocaleString();
+
+            // Update loss function display
+            const lossParams = document.getElementById('viewMcLossParams');
+            if (lossParams) {
+                lossParams.innerHTML = `
+                    <div class="param-chip">
+                        <span class="param-chip-label">Loss Function:</span>
+                        <span class="param-chip-value">${mc.loss_function_display || 'MSE'}</span>
+                    </div>
+                `;
+            }
+        } else {
+            ratingHeadSection.classList.add('hidden');
+        }
+    }
+}
+
+// Helper to render rating head layers for view modal
+function renderRatingHeadLayersForView(layers) {
+    if (!layers || layers.length === 0) {
+        return '<div class="text-gray-400 text-sm">No layers defined</div>';
+    }
+
+    return layers.map((layer, idx) => {
+        let layerHtml = '';
+        const isOutput = idx === layers.length - 1 && layer.type === 'dense' && layer.units === 1;
+
+        if (layer.type === 'dense') {
+            const activation = layer.activation || 'linear';
+            const regInfo = layer.l2_reg ? ` (L2=${layer.l2_reg})` : '';
+            layerHtml = `
+                <div class="view-layer-item ${isOutput ? 'output' : ''}">
+                    <span class="view-layer-badge dense">Dense</span>
+                    <span class="view-layer-params">${layer.units} units, ${activation}${regInfo}</span>
+                    ${isOutput ? '<span class="view-layer-output-tag">Output</span>' : ''}
+                </div>
+            `;
+        } else if (layer.type === 'dropout') {
+            layerHtml = `
+                <div class="view-layer-item">
+                    <span class="view-layer-badge dropout">Dropout</span>
+                    <span class="view-layer-params">rate: ${layer.rate}</span>
+                </div>
+            `;
+        } else if (layer.type === 'batch_norm') {
+            layerHtml = `
+                <div class="view-layer-item">
+                    <span class="view-layer-badge batch_norm">BatchNorm</span>
+                </div>
+            `;
+        }
+
+        return layerHtml;
+    }).join('');
 }
 
 // Populate View Modal with basic info only (fallback)

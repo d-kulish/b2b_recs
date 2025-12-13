@@ -1084,6 +1084,8 @@ def serialize_model_config(mc, include_details=False):
         'learning_rate': mc.learning_rate,
         'batch_size': mc.batch_size,
         'epochs': mc.epochs,
+        'loss_function': mc.loss_function,
+        'loss_function_display': mc.get_loss_function_display(),
 
         # Multitask params
         'retrieval_weight': mc.retrieval_weight,
@@ -1235,6 +1237,7 @@ def create_model_config(request):
             learning_rate=data.get('learning_rate', 0.1),
             batch_size=data.get('batch_size', 4096),
             epochs=data.get('epochs', 5),
+            loss_function=data.get('loss_function', ModelConfig.LOSS_MSE),
             retrieval_weight=data.get('retrieval_weight', 1.0),
             ranking_weight=data.get('ranking_weight', 0.0),
             created_by=request.user,
@@ -1350,6 +1353,8 @@ def update_model_config(request, config_id):
             mc.batch_size = data['batch_size']
         if 'epochs' in data:
             mc.epochs = data['epochs']
+        if 'loss_function' in data:
+            mc.loss_function = data['loss_function']
         if 'retrieval_weight' in data:
             mc.retrieval_weight = data['retrieval_weight']
         if 'ranking_weight' in data:
@@ -1448,10 +1453,17 @@ def clone_model_config(request, config_id):
             rating_head_layers=source.rating_head_layers.copy() if source.rating_head_layers else [],
             output_embedding_dim=source.output_embedding_dim,
             share_tower_weights=source.share_tower_weights,
+            # Retrieval algorithm settings
+            retrieval_algorithm=source.retrieval_algorithm,
+            top_k=source.top_k,
+            scann_num_leaves=source.scann_num_leaves,
+            scann_leaves_to_search=source.scann_leaves_to_search,
+            # Training params
             optimizer=source.optimizer,
             learning_rate=source.learning_rate,
             batch_size=source.batch_size,
             epochs=source.epochs,
+            loss_function=source.loss_function,
             retrieval_weight=source.retrieval_weight,
             ranking_weight=source.ranking_weight,
             created_by=request.user,
@@ -1526,6 +1538,56 @@ def get_model_config_preset(request, preset_name):
 
     except Exception as e:
         logger.exception(f"Error getting model config preset: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e),
+        }, status=500)
+
+
+@login_required
+@require_http_methods(["GET"])
+def get_rating_head_presets(request):
+    """
+    Get all available rating head presets for ranking models.
+
+    Returns:
+        JsonResponse with rating head preset configurations
+    """
+    try:
+        presets = ModelConfig.get_all_rating_head_presets()
+
+        return JsonResponse({
+            'success': True,
+            'data': presets,
+        })
+
+    except Exception as e:
+        logger.exception(f"Error getting rating head presets: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e),
+        }, status=500)
+
+
+@login_required
+@require_http_methods(["GET"])
+def get_loss_function_info(request):
+    """
+    Get information about available loss functions for ranking models.
+
+    Returns:
+        JsonResponse with loss function descriptions and use cases
+    """
+    try:
+        loss_info = ModelConfig.get_loss_function_info()
+
+        return JsonResponse({
+            'success': True,
+            'data': loss_info,
+        })
+
+    except Exception as e:
+        logger.exception(f"Error getting loss function info: {e}")
         return JsonResponse({
             'success': False,
             'error': str(e),

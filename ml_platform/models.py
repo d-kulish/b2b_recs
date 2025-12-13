@@ -1552,6 +1552,14 @@ class QuickTest(models.Model):
         help_text="Learning rate for optimizer"
     )
 
+    # Rating column for ranking models
+    rating_column = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        help_text="Column name containing ratings/scores (required for ranking models)"
+    )
+
     # =========================================================================
     # Pipeline Tracking
     # =========================================================================
@@ -1793,6 +1801,20 @@ class ModelConfig(models.Model):
     ]
 
     # =========================================================================
+    # Loss Function Choices (for Ranking/Multitask)
+    # =========================================================================
+
+    LOSS_MSE = 'mse'
+    LOSS_BINARY_CROSSENTROPY = 'binary_crossentropy'
+    LOSS_HUBER = 'huber'
+
+    LOSS_FUNCTION_CHOICES = [
+        (LOSS_MSE, 'Mean Squared Error'),
+        (LOSS_BINARY_CROSSENTROPY, 'Binary Crossentropy'),
+        (LOSS_HUBER, 'Huber'),
+    ]
+
+    # =========================================================================
     # Basic Info
     # =========================================================================
 
@@ -1888,6 +1910,14 @@ class ModelConfig(models.Model):
     epochs = models.IntegerField(
         default=5,
         help_text="Number of training epochs"
+    )
+
+    # Loss function for ranking/multitask models
+    loss_function = models.CharField(
+        max_length=30,
+        choices=LOSS_FUNCTION_CHOICES,
+        default=LOSS_MSE,
+        help_text="Loss function for ranking models (MSE for continuous ratings, BCE for binary)"
     )
 
     # =========================================================================
@@ -2189,3 +2219,75 @@ class ModelConfig(models.Model):
             {"type": "dense", "units": 64, "activation": "relu", "l2_reg": 0.0},
             {"type": "dense", "units": 1, "activation": None},
         ]
+
+    @classmethod
+    def get_rating_head_preset(cls, preset_name):
+        """
+        Return rating head preset configuration.
+
+        Args:
+            preset_name: One of 'minimal', 'standard', 'deep'
+
+        Returns:
+            Dictionary with preset values
+        """
+        presets = {
+            'minimal': {
+                'name': 'Minimal',
+                'description': 'Simple 2-layer rating head, fast training',
+                'layers': [
+                    {"type": "dense", "units": 64, "activation": "relu", "l2_reg": 0.0},
+                    {"type": "dense", "units": 1, "activation": None},
+                ],
+            },
+            'standard': {
+                'name': 'Standard',
+                'description': 'Balanced 3-layer rating head (recommended)',
+                'layers': [
+                    {"type": "dense", "units": 256, "activation": "relu", "l2_reg": 0.0},
+                    {"type": "dense", "units": 64, "activation": "relu", "l2_reg": 0.0},
+                    {"type": "dense", "units": 1, "activation": None},
+                ],
+            },
+            'deep': {
+                'name': 'Deep',
+                'description': 'High capacity 4-layer rating head for complex patterns',
+                'layers': [
+                    {"type": "dense", "units": 512, "activation": "relu", "l2_reg": 0.001},
+                    {"type": "dense", "units": 256, "activation": "relu", "l2_reg": 0.0},
+                    {"type": "dense", "units": 64, "activation": "relu", "l2_reg": 0.0},
+                    {"type": "dense", "units": 1, "activation": None},
+                ],
+            },
+        }
+        return presets.get(preset_name, presets['standard'])
+
+    @classmethod
+    def get_all_rating_head_presets(cls):
+        """Return all available rating head presets"""
+        preset_names = ['minimal', 'standard', 'deep']
+        return {name: cls.get_rating_head_preset(name) for name in preset_names}
+
+    @classmethod
+    def get_loss_function_info(cls):
+        """Return descriptions for each loss function"""
+        return {
+            cls.LOSS_MSE: {
+                'name': 'Mean Squared Error',
+                'short_name': 'MSE',
+                'description': 'Best for continuous ratings (e.g., 1.0-5.0). Penalizes large prediction errors more heavily.',
+                'use_case': 'Continuous ratings',
+            },
+            cls.LOSS_BINARY_CROSSENTROPY: {
+                'name': 'Binary Crossentropy',
+                'short_name': 'BCE',
+                'description': 'For binary outcomes (like/dislike, click/no-click). Use when rating is 0 or 1.',
+                'use_case': 'Binary feedback',
+            },
+            cls.LOSS_HUBER: {
+                'name': 'Huber Loss',
+                'short_name': 'Huber',
+                'description': 'Robust to outliers. Combines MSE for small errors and MAE for large errors. Good when ratings have noise.',
+                'use_case': 'Noisy ratings',
+            },
+        }

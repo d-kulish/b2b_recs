@@ -1248,6 +1248,10 @@
         background: linear-gradient(135deg, #f0fdf4 0%, #d1fae5 100%);
         border-color: #10b981;
     }
+    .tower-stack.ranking {
+        background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%);
+        border-color: #8b5cf6;
+    }
     .tower-stack::-webkit-scrollbar {
         width: 4px;
     }
@@ -1278,6 +1282,9 @@
     }
     .tower-stack.product .card-layer-item {
         border-color: rgba(16, 185, 129, 0.2);
+    }
+    .tower-stack.ranking .card-layer-item {
+        border-color: rgba(139, 92, 246, 0.2);
     }
     .card-layer-item.output-layer {
         border: 2px solid #f87171 !important;
@@ -1454,65 +1461,37 @@
         color: #92400e;
     }
 
-    /* Rating Head Preview (for Ranking model cards) */
-    .rating-head-preview {
+    /* Ranking Row Grid (Row 2: Hyperparams | Ranking bar) */
+    .ranking-row-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
         margin-top: 8px;
-        padding: 8px 12px;
-        background: linear-gradient(135deg, #fdf4ff 0%, #fae8ff 100%);
-        border: 1px solid #f0abfc;
-        border-radius: 8px;
+        align-items: start;
     }
-    .rating-head-label {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        font-size: 11px;
-        font-weight: 600;
-        color: #86198f;
+    .ranking-tower-cell {
+        /* Ranking bar takes right column, aligned with Product tower above */
     }
-    .rating-head-label i {
-        color: #d946ef;
+    .ranking-tower-cell .tower-visualization {
+        margin-bottom: 0;
+    }
+    .training-params-preview.ranking-layout {
+        /* Left column for hyperparams in ranking row */
+        margin-top: 0;
+        padding: 8px 0;
     }
 
     /* View Modal Rating Head Container */
-    .view-rating-head-container {
-        max-width: 300px;
+    #viewMcRatingHeadSection .tower-visual {
+        /* Override 2-column grid for ranking section - it has only one tower */
+        display: block;
     }
-    .tower-column.rating-head {
-        background: linear-gradient(135deg, #fdf4ff 0%, #fae8ff 100%);
-        border: 1px solid #f0abfc;
-        border-radius: 8px;
-        padding: 12px;
+    #viewMcRatingHeadSection .tower-column.ranking {
+        /* Ranking tower takes 50% of the modal width (same as one tower in the 2-column grid) */
+        width: 50%;
     }
-    .tower-header.rating {
-        background: linear-gradient(135deg, #d946ef 0%, #a855f7 100%);
-        padding: 8px 12px;
-        border-radius: 6px;
-        margin-bottom: 12px;
-    }
-    .tower-header.rating .tower-label {
-        color: white;
-        font-weight: 600;
-        font-size: 12px;
-    }
-    .tower-header.rating .tower-label i {
-        margin-right: 6px;
-    }
-    .tower-stack.rating-head {
-        background: white;
-        border-radius: 6px;
-        padding: 8px;
-        margin-bottom: 12px;
-    }
-    .view-layer-output-tag {
-        font-size: 9px;
-        padding: 2px 6px;
-        background: #dcfce7;
-        color: #166534;
-        border-radius: 4px;
-        font-weight: 600;
-        text-transform: uppercase;
-        margin-left: auto;
+    .tower-header.ranking .tower-label {
+        color: #7c3aed;
     }
 
     /* Compact Tower Display for Cards */
@@ -1616,6 +1595,9 @@
     .tower-visualization-label.product {
         color: #10b981;
     }
+    .tower-visualization-label.ranking {
+        color: #7c3aed;
+    }
     .tower-params-badge {
         font-size: 10px;
         font-weight: 600;
@@ -1632,6 +1614,10 @@
     .tower-params-badge.product {
         background: #d1fae5;
         color: #047857;
+    }
+    .tower-params-badge.ranking {
+        background: #ede9fe;
+        color: #5b21b6;
     }
     .layer-bar-container {
         display: flex;
@@ -1658,6 +1644,9 @@
     }
     .layer-bar-segment.dense.product {
         background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    }
+    .layer-bar-segment.dense.ranking {
+        background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%);
     }
     .layer-bar-segment.dropout {
         background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
@@ -2150,6 +2139,10 @@
         background: linear-gradient(135deg, #f0fdf4 0%, #d1fae5 100%);
         border-color: #10b981;
     }
+    .tower-column.ranking .tower-params-summary.view-modal {
+        background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%);
+        border-color: #8b5cf6;
+    }
 
     /* Retrieval Algorithm Section */
     .retrieval-algorithm-section {
@@ -2392,44 +2385,6 @@
         font-size: 11px;
         color: #a21caf;
         margin: 0;
-    }
-    .rating-head-presets {
-        margin-bottom: 16px;
-    }
-    .rating-head-preset-options {
-        display: flex;
-        gap: 10px;
-    }
-    .rating-head-preset-option {
-        flex: 1;
-        padding: 10px 14px;
-        border-radius: 8px;
-        border: 2px solid transparent;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        background: white;
-        text-align: center;
-    }
-    .rating-head-preset-option:hover {
-        border-color: #e879f9;
-        box-shadow: 0 2px 8px rgba(217, 70, 239, 0.2);
-    }
-    .rating-head-preset-option.selected {
-        border-color: #d946ef;
-        background: linear-gradient(135deg, #fdf4ff 0%, #f5d0fe 100%);
-        box-shadow: 0 2px 8px rgba(217, 70, 239, 0.25);
-    }
-    .rating-head-preset-option .preset-name {
-        display: block;
-        font-size: 12px;
-        font-weight: 600;
-        color: #1f2937;
-    }
-    .rating-head-preset-option .preset-layers {
-        display: block;
-        font-size: 10px;
-        color: #a21caf;
-        margin-top: 2px;
     }
     .tower-builder-panel.rating-head {
         background: rgba(255, 255, 255, 0.9);
@@ -3157,25 +3112,6 @@
                         </div>
                     </div>
 
-                    <!-- Rating Head Preset Selector -->
-                    <div class="rating-head-presets">
-                        <label class="text-xs font-medium text-gray-600 mb-1 block">Preset:</label>
-                        <div class="rating-head-preset-options">
-                            <div class="rating-head-preset-option" data-preset="minimal" onclick="selectRatingHeadPreset('minimal')">
-                                <span class="preset-name">Minimal</span>
-                                <span class="preset-layers">64→1</span>
-                            </div>
-                            <div class="rating-head-preset-option selected" data-preset="standard" onclick="selectRatingHeadPreset('standard')">
-                                <span class="preset-name">Standard</span>
-                                <span class="preset-layers">256→64→1</span>
-                            </div>
-                            <div class="rating-head-preset-option" data-preset="deep" onclick="selectRatingHeadPreset('deep')">
-                                <span class="preset-name">Deep</span>
-                                <span class="preset-layers">512→256→64→1</span>
-                            </div>
-                        </div>
-                    </div>
-
                     <!-- Rating Head Tower Builder -->
                     <div class="tower-builder-panel rating-head">
                         <div class="tower-builder-header">
@@ -3185,7 +3121,7 @@
                                 </div>
                                 Rating Prediction Network
                             </div>
-                            <span id="ratingHeadSummary" class="tower-builder-summary">256→64→1</span>
+                            <span id="ratingHeadSummary" class="tower-builder-summary">128→64→32→1</span>
                         </div>
                         <div class="p-2">
                             <button class="add-layer-btn" onclick="addLayer('rating_head')">
@@ -3204,7 +3140,7 @@
 
                     <div class="rating-head-info-banner">
                         <i class="fas fa-info-circle"></i>
-                        <p>The rating head receives concatenated embeddings from both towers and outputs a single scalar prediction. The last layer must be Dense(1) for scalar output. You'll select the rating column when running a Quick Test.</p>
+                        <p>The Rating Head structure is derived from the tower preset selected in Step 1. It receives concatenated embeddings from both towers and outputs a single scalar prediction. You can manually edit the layers below, and you'll select the rating column when running a Quick Test.</p>
                     </div>
                 </div>
 
@@ -3700,12 +3636,12 @@
             <!-- Rating Head (for ranking models) -->
             <div id="viewMcRatingHeadSection" class="mb-6 hidden">
                 <h4 class="text-sm font-medium text-gray-700 mb-3">Rating Head</h4>
-                <div class="view-rating-head-container">
-                    <div class="tower-column rating-head">
-                        <div class="tower-header rating">
-                            <span class="tower-label"><i class="fas fa-star"></i> Rating Prediction</span>
+                <div class="tower-visual">
+                    <div class="tower-column ranking">
+                        <div class="tower-header ranking">
+                            <span class="tower-label">Ranking Tower</span>
                         </div>
-                        <div id="viewMcRatingHeadStack" class="tower-stack rating-head">
+                        <div id="viewMcRatingHeadStack" class="tower-stack ranking">
                             <!-- Layers will be inserted here -->
                         </div>
                         <div class="tower-params-summary view-modal" id="viewMcRatingHeadParamsSummary">
@@ -7710,37 +7646,6 @@ let mcState = {
     batchSize: 4096
 };
 
-// Rating head presets data
-const ratingHeadPresetsData = {
-    'minimal': {
-        name: 'Minimal',
-        description: 'Simple 2-layer rating head, fast training',
-        layers: [
-            {"type": "dense", "units": 64, "activation": "relu", "l2_reg": 0.0},
-            {"type": "dense", "units": 1, "activation": null}
-        ]
-    },
-    'standard': {
-        name: 'Standard',
-        description: 'Balanced 3-layer rating head (recommended)',
-        layers: [
-            {"type": "dense", "units": 256, "activation": "relu", "l2_reg": 0.0},
-            {"type": "dense", "units": 64, "activation": "relu", "l2_reg": 0.0},
-            {"type": "dense", "units": 1, "activation": null}
-        ]
-    },
-    'deep': {
-        name: 'Deep',
-        description: 'High capacity 4-layer rating head for complex patterns',
-        layers: [
-            {"type": "dense", "units": 512, "activation": "relu", "l2_reg": 0.001},
-            {"type": "dense", "units": 256, "activation": "relu", "l2_reg": 0.0},
-            {"type": "dense", "units": 64, "activation": "relu", "l2_reg": 0.0},
-            {"type": "dense", "units": 1, "activation": null}
-        ]
-    }
-};
-
 // Load Model Configs
 function loadModelConfigs() {
     document.getElementById('modelConfigsLoading').classList.remove('hidden');
@@ -7994,7 +7899,11 @@ function renderLayerBar(tower, layers, container, maxTotalUnits = null) {
     // Color palettes for vanishing gradient effect (matching tensor breakdown bars)
     const buyerColors = ['#3b82f6', '#60a5fa', '#93c5fd', '#bfdbfe', '#dbeafe'];
     const productColors = ['#10b981', '#34d399', '#6ee7b7', '#a7f3d0', '#d1fae5'];
-    const colors = tower === 'buyer' ? buyerColors : productColors;
+    const rankingColors = ['#8b5cf6', '#a78bfa', '#c4b5fd', '#ddd6fe', '#ede9fe'];
+    let colors;
+    if (tower === 'buyer') colors = buyerColors;
+    else if (tower === 'product') colors = productColors;
+    else colors = rankingColors;
 
     // Find last dense layer index (output layer)
     let lastDenseIdx = -1;
@@ -8063,11 +7972,16 @@ function generateTowerVisualizationHtml(tower, layers, featureSetDim = 100) {
     const formattedParams = formatParamCount(params);
     const containerId = `tower-bar-${tower}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
+    // Determine label based on tower type
+    let label = 'BUYER';
+    if (tower === 'product') label = 'PRODUCT';
+    else if (tower === 'ranking') label = 'RANKING';
+
     return {
         html: `
             <div class="tower-visualization">
                 <div class="tower-visualization-header">
-                    <span class="tower-visualization-label ${tower}">${tower === 'buyer' ? 'BUYER' : 'PRODUCT'}</span>
+                    <span class="tower-visualization-label ${tower}">${label}</span>
                     <span class="tower-params-badge ${tower}">~${formattedParams} params</span>
                 </div>
                 <div class="layer-bar-container" id="${containerId}"></div>
@@ -8226,24 +8140,39 @@ function renderModelConfigs() {
             ? mc.product_tower_layers
             : parseTowerSummary(mc.product_tower_summary);
 
-        // Calculate max total units across both towers for proportional bar widths
+        // Get ranking layers if this is a ranking model
+        const rankingLayers = mc.model_type === 'ranking' && mc.rating_head_layers && mc.rating_head_layers.length > 0
+            ? mc.rating_head_layers
+            : [];
+
+        // Calculate max total units across all towers for proportional bar widths
         const maxTotalUnits = calculateMaxTotalUnits(buyerLayers, productLayers);
+        // For ranking model, also consider ranking layers for max units
+        const rankingTotalUnits = rankingLayers.length > 0 ? calculateTotalDenseUnits(rankingLayers) : 0;
+        const overallMaxUnits = Math.max(maxTotalUnits, rankingTotalUnits);
 
         // Use same input dimension (100) for both towers for consistent parameter estimation
         // In reality, input dim depends on feature set, but we use 100 as default estimate
         const inputDim = 100;
+        // For ranking head, input is concatenated embeddings (output_embedding_dim * 2)
+        const rankingInputDim = (mc.output_embedding_dim || 32) * 2;
 
         // Generate tower visualization with unique IDs
         const buyerViz = generateTowerVisualizationHtml('buyer', buyerLayers, inputDim);
         const productViz = generateTowerVisualizationHtml('product', productLayers, inputDim);
+        const rankingViz = rankingLayers.length > 0
+            ? generateTowerVisualizationHtml('ranking', rankingLayers, rankingInputDim)
+            : null;
 
         return `
         <div class="model-config-card" onclick="viewModelConfig(${mc.id})"
              data-buyer-bar-id="${buyerViz.containerId}"
              data-product-bar-id="${productViz.containerId}"
+             ${rankingViz ? `data-ranking-bar-id="${rankingViz.containerId}"` : ''}
              data-buyer-layers='${JSON.stringify(buyerLayers)}'
              data-product-layers='${JSON.stringify(productLayers)}'
-             data-max-total-units="${maxTotalUnits}">
+             ${rankingLayers.length > 0 ? `data-ranking-layers='${JSON.stringify(rankingLayers)}'` : ''}
+             data-max-total-units="${overallMaxUnits}">
             <!-- Header: Name & Actions -->
             <div class="model-config-card-header">
                 <div style="flex: 1; min-width: 0;">
@@ -8266,23 +8195,44 @@ function renderModelConfigs() {
                 </div>
             </div>
 
-            <!-- Tower Layer Bar Visualizations (side by side) -->
+            <!-- Row 1: Tower Layer Bar Visualizations (Buyer | Product) -->
             <div class="towers-grid">
                 ${buyerViz.html}
                 ${productViz.html}
             </div>
 
-            <!-- Rating Head (for Ranking models) -->
-            ${mc.model_type === 'ranking' && mc.rating_head_layers && mc.rating_head_layers.length > 0 ? `
-            <div class="rating-head-preview">
-                <div class="rating-head-label">
-                    <i class="fas fa-star"></i>
-                    Rating Head: ${getRatingHeadSummaryFromLayers(mc.rating_head_layers)}
+            <!-- Row 2: For Ranking models - Hyperparams | Ranking bar -->
+            ${rankingViz ? `
+            <div class="ranking-row-grid">
+                <!-- Left: Model Type & Training Params -->
+                <div class="training-params-preview ranking-layout">
+                    <div class="param-chip model-type-chip ${mc.model_type}">
+                        <span class="param-chip-value">${mc.model_type_display}</span>
+                    </div>
+                    <div class="param-chip">
+                        <span class="param-chip-label">Opt:</span>
+                        <span class="param-chip-value">${mc.optimizer_display}</span>
+                    </div>
+                    <div class="param-chip">
+                        <span class="param-chip-label">LR:</span>
+                        <span class="param-chip-value">${mc.learning_rate}</span>
+                    </div>
+                    <div class="param-chip">
+                        <span class="param-chip-label">Batch:</span>
+                        <span class="param-chip-value">${mc.batch_size}</span>
+                    </div>
+                    <div class="param-chip">
+                        <span class="param-chip-label">Loss:</span>
+                        <span class="param-chip-value">${mc.loss_function_display || 'MSE'}</span>
+                    </div>
+                </div>
+                <!-- Right: Ranking bar -->
+                <div class="ranking-tower-cell">
+                    ${rankingViz.html}
                 </div>
             </div>
-            ` : ''}
-
-            <!-- Model Type & Training Params -->
+            ` : `
+            <!-- For Retrieval models - just hyperparams row -->
             <div class="training-params-preview">
                 <div class="param-chip model-type-chip ${mc.model_type}">
                     <span class="param-chip-value">${mc.model_type_display}</span>
@@ -8299,7 +8249,6 @@ function renderModelConfigs() {
                     <span class="param-chip-label">Batch:</span>
                     <span class="param-chip-value">${mc.batch_size}</span>
                 </div>
-                ${mc.model_type === 'retrieval' ? `
                 <div class="param-chip">
                     <span class="param-chip-label">Top N:</span>
                     <span class="param-chip-value">${mc.top_k || 100}</span>
@@ -8308,14 +8257,8 @@ function renderModelConfigs() {
                     <span class="param-chip-label">Algorithm:</span>
                     <span class="param-chip-value">${mc.retrieval_algorithm_display || 'Brute Force'}</span>
                 </div>
-                ` : ''}
-                ${mc.model_type === 'ranking' ? `
-                <div class="param-chip">
-                    <span class="param-chip-label">Loss:</span>
-                    <span class="param-chip-value">${mc.loss_function_display || 'MSE'}</span>
-                </div>
-                ` : ''}
             </div>
+            `}
 
             <!-- Footer: Clone button (Code is generated at runtime when combined with FeatureConfig) -->
             <div class="flex items-center gap-2 mt-3 pt-3 border-t border-gray-100" onclick="event.stopPropagation()">
@@ -8332,18 +8275,25 @@ function renderModelConfigs() {
         document.querySelectorAll('.model-config-card').forEach(card => {
             const buyerBarId = card.dataset.buyerBarId;
             const productBarId = card.dataset.productBarId;
+            const rankingBarId = card.dataset.rankingBarId;
             const buyerLayers = JSON.parse(card.dataset.buyerLayers || '[]');
             const productLayers = JSON.parse(card.dataset.productLayers || '[]');
+            const rankingLayers = card.dataset.rankingLayers ? JSON.parse(card.dataset.rankingLayers) : [];
             const maxTotalUnits = parseInt(card.dataset.maxTotalUnits) || 416;
 
             const buyerContainer = document.getElementById(buyerBarId);
             const productContainer = document.getElementById(productBarId);
+            const rankingContainer = rankingBarId ? document.getElementById(rankingBarId) : null;
 
             if (buyerContainer) {
                 renderLayerBar('buyer', buyerLayers, buyerContainer, maxTotalUnits);
             }
             if (productContainer) {
                 renderLayerBar('product', productLayers, productContainer, maxTotalUnits);
+            }
+            if (rankingContainer && rankingLayers.length > 0) {
+                // Ranking bar: use same maxTotalUnits for proportional width relative to other bars
+                renderLayerBar('ranking', rankingLayers, rankingContainer, maxTotalUnits);
             }
         });
     }, 0);
@@ -8374,6 +8324,9 @@ function editModelConfigById(id) {
                 mcState.optimizer = mc.optimizer || 'adagrad';
                 mcState.learningRate = mc.learning_rate || 0.1;
                 mcState.batchSize = mc.batch_size || 4096;
+                // Rating head settings (for ranking models)
+                mcState.ratingHeadLayers = mc.rating_head_layers || [];
+                mcState.lossFunction = mc.loss_function || 'mse';
 
                 // Update wizard UI
                 document.getElementById('mcName').value = mc.name;
@@ -8388,8 +8341,19 @@ function editModelConfigById(id) {
                 setLearningRate(mcState.learningRate);
                 document.getElementById('mcBatchSize').value = mcState.batchSize;
 
+                // For ranking models, also select the loss function
+                if (mc.model_type === 'ranking') {
+                    selectLossFunction(mcState.lossFunction);
+                }
+
                 renderTowerLayers();
                 updateTowerSummaries();
+
+                // For ranking models, render the rating head layers
+                if (mc.model_type === 'ranking' && mcState.ratingHeadLayers.length > 0) {
+                    renderRatingHeadLayers();
+                    updateRatingHeadSummary();
+                }
 
                 // Mark name as valid since we're editing an existing config
                 mcNameIsValid = true;
@@ -8433,6 +8397,10 @@ function resetMcState() {
         topK: 100,
         scannNumLeaves: 100,
         scannLeavesToSearch: 10,
+        // Rating Head Settings (for ranking models)
+        ratingHeadLayers: [],
+        ratingHeadPreset: 'standard',
+        lossFunction: 'mse',
         // Training params
         optimizer: 'adagrad',
         learningRate: 0.1,
@@ -8567,11 +8535,12 @@ function selectModelType(type) {
     } else if (type === 'ranking') {
         if (retrievalSection) retrievalSection.classList.add('hidden');
         if (ratingHeadSection) ratingHeadSection.classList.remove('hidden');
-        // Initialize rating head layers if empty
+        // Generate rating head from current tower preset if empty
         if (mcState.ratingHeadLayers.length === 0) {
-            initializeRatingHeadLayers();
+            mcState.ratingHeadLayers = generateRatingHeadFromTower(mcState.buyerTowerLayers);
         }
         renderRatingHeadLayers();
+        updateRatingHeadSummary();
     }
 }
 
@@ -8593,8 +8562,46 @@ function applyPreset(presetName) {
     mcState.productTowerLayers = JSON.parse(JSON.stringify(preset.product_tower_layers || []));
     mcState.outputEmbeddingDim = preset.output_embedding_dim || 32;
 
+    // Generate Rating Head layers from tower preset (for ranking models)
+    mcState.ratingHeadLayers = generateRatingHeadFromTower(preset.buyer_tower_layers || []);
+    mcState.ratingHeadPreset = presetName;
+
     renderTowerLayers();
     updateTowerSummaries();
+
+    // If ranking model is selected, also render rating head
+    if (mcState.modelType === 'ranking') {
+        renderRatingHeadLayers();
+        updateRatingHeadSummary();
+    }
+}
+
+// Generate Rating Head layers from tower layers
+// Takes tower Dense layers, copies their structure with relu activation,
+// and appends a final Dense(1) output layer with linear activation
+function generateRatingHeadFromTower(towerLayers) {
+    const ratingHeadLayers = [];
+
+    // Extract Dense layers from tower (ignore dropout, batch_norm)
+    for (const layer of towerLayers) {
+        if (layer.type === 'dense') {
+            ratingHeadLayers.push({
+                type: 'dense',
+                units: layer.units,
+                activation: 'relu',
+                l2_reg: 0.0  // No regularization by default
+            });
+        }
+    }
+
+    // Append final Dense(1) output layer with linear activation
+    ratingHeadLayers.push({
+        type: 'dense',
+        units: 1,
+        activation: null  // Linear activation for scalar output
+    });
+
+    return ratingHeadLayers;
 }
 
 // Select Optimizer (Step 3)
@@ -9088,30 +9095,6 @@ function updateRetrievalAlgorithmState() {
 // =============================================================================
 // Rating Head Functions (for Ranking models)
 // =============================================================================
-
-// Initialize rating head with default standard preset
-function initializeRatingHeadLayers() {
-    const preset = ratingHeadPresetsData['standard'];
-    mcState.ratingHeadLayers = JSON.parse(JSON.stringify(preset.layers));
-    mcState.ratingHeadPreset = 'standard';
-}
-
-// Select rating head preset
-function selectRatingHeadPreset(presetName) {
-    const preset = ratingHeadPresetsData[presetName];
-    if (!preset) return;
-
-    mcState.ratingHeadPreset = presetName;
-    mcState.ratingHeadLayers = JSON.parse(JSON.stringify(preset.layers));
-
-    // Update UI
-    document.querySelectorAll('.rating-head-preset-option').forEach(opt => {
-        opt.classList.toggle('selected', opt.dataset.preset === presetName);
-    });
-
-    renderRatingHeadLayers();
-    updateRatingHeadSummary();
-}
 
 // Render rating head layers
 function renderRatingHeadLayers() {
@@ -9796,42 +9779,37 @@ function populateViewModal(mc) {
     }
 }
 
-// Helper to render rating head layers for view modal
+// Helper to render rating head layers for view modal (same style as Buyer/Product towers)
 function renderRatingHeadLayersForView(layers) {
     if (!layers || layers.length === 0) {
-        return '<div class="text-gray-400 text-sm">No layers defined</div>';
+        return '<div class="text-xs text-gray-400 italic p-2">No layers defined</div>';
     }
 
     return layers.map((layer, idx) => {
-        let layerHtml = '';
         const isOutput = idx === layers.length - 1 && layer.type === 'dense' && layer.units === 1;
+        let badge = '';
+        let params = '';
 
         if (layer.type === 'dense') {
-            const activation = layer.activation || 'linear';
-            const regInfo = layer.l2_reg ? ` (L2=${layer.l2_reg})` : '';
-            layerHtml = `
-                <div class="view-layer-item ${isOutput ? 'output' : ''}">
-                    <span class="view-layer-badge dense">Dense</span>
-                    <span class="view-layer-params">${layer.units} units, ${activation}${regInfo}</span>
-                    ${isOutput ? '<span class="view-layer-output-tag">Output</span>' : ''}
-                </div>
-            `;
+            badge = '<span class="card-layer-badge dense">Dense</span>';
+            params = `${layer.units} units`;
+            if (layer.activation) params += `, ${layer.activation}`;
+            if (layer.l2_reg) params += `, L2=${layer.l2_reg}`;
         } else if (layer.type === 'dropout') {
-            layerHtml = `
-                <div class="view-layer-item">
-                    <span class="view-layer-badge dropout">Dropout</span>
-                    <span class="view-layer-params">rate: ${layer.rate}</span>
-                </div>
-            `;
+            badge = '<span class="card-layer-badge dropout">Dropout</span>';
+            params = `rate: ${layer.rate}`;
         } else if (layer.type === 'batch_norm') {
-            layerHtml = `
-                <div class="view-layer-item">
-                    <span class="view-layer-badge batch_norm">BatchNorm</span>
-                </div>
-            `;
+            badge = '<span class="card-layer-badge batch_norm">BatchNorm</span>';
+            params = '';
         }
 
-        return layerHtml;
+        return `
+            <div class="card-layer-item${isOutput ? ' output-layer' : ''}">
+                <span class="card-drag-handle"><i class="fas fa-grip-vertical"></i></span>
+                ${badge}
+                <span class="card-layer-params">${params}</span>
+            </div>
+        `;
     }).join('');
 }
 

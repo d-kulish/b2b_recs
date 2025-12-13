@@ -34,7 +34,7 @@ This document provides detailed specifications for implementing the **Model Stru
 | Layer drag-drop reordering | ✅ Done | Layers movable except output layer (locked at bottom) |
 | Unified layer edit modals | ✅ Done | Consistent styling with dimension button selectors |
 
-### Completed (Phase 2 - Ranking) - 2025-12-13
+### Completed (Phase 2 - Ranking) - 2025-12-13 (Updated)
 
 | Component | Status | Notes |
 |-----------|--------|-------|
@@ -49,13 +49,14 @@ This document provides detailed specifications for implementing the **Model Stru
 | Updated create/update/clone | ✅ Done | Handle `loss_function` and `rating_head_layers` |
 | **Frontend - Wizard** | | |
 | Step 1: Enable Ranking button | ✅ Done | Ranking model type now selectable |
-| Step 2: Rating Head builder | ✅ Done | Purple/pink themed section below towers |
-| Step 2: Rating Head presets | ✅ Done | Minimal (64→1), Standard (256→64→1), Deep (512→256→64→1) |
+| Step 2: Rating Head builder | ✅ Done | Violet themed section below towers |
+| Step 2: Rating Head auto-population | ✅ Done | Layers derived from tower preset (no separate presets) |
 | Step 3: Loss Function selector | ✅ Done | MSE, Binary CE, Huber with help text |
 | **Frontend - Display** | | |
-| Model cards: 3-model display | ✅ Done | Buyer, Product, Rating Head all shown for Ranking |
+| Model cards: 3-row layout | ✅ Done | Row 1: Buyer/Product bars, Row 2: Params/Ranking bar |
+| Model cards: Ranking bar visualization | ✅ Done | Same proportional bar style as Buyer/Product (violet) |
 | Model cards: Loss function badge | ✅ Done | Shows loss function on Ranking cards |
-| View modal: Rating Head section | ✅ Done | Shows layers and loss function |
+| View modal: Rating Head section | ✅ Done | Same card-layer style as Buyer/Product towers (violet) |
 | **QuickTest Integration** | | |
 | Rating column selector UI | ✅ Done | In QuickTest dialog, only for Ranking models |
 | Dynamic column population | ✅ Done | Fetches numeric columns from dataset |
@@ -92,9 +93,16 @@ This document provides detailed specifications for implementing the **Model Stru
 
 ### Recent Updates (December 2025)
 
-#### Ranking Model Support (2025-12-13)
+#### Ranking Model Support (2025-12-13, Updated)
 
 **Phase 2 Complete:** Full Ranking model configuration is now available.
+
+**Update (2025-12-13):** Simplified Rating Head configuration:
+- Removed separate Rating Head preset selector from Step 2
+- Rating Head layers now auto-derived from tower preset selected in Step 1
+- Updated color scheme from pink to violet for better business appearance
+- Model cards now show Ranking bar with same proportional visualization as Buyer/Product
+- View modal uses consistent card-layer styling across all 3 towers
 
 **Architecture:**
 Ranking models differ from Retrieval models by concatenating buyer and product embeddings, then passing them through a Rating Head to predict a scalar rating:
@@ -119,12 +127,21 @@ Ranking Model Architecture:
          rating (scalar)
 ```
 
-**Rating Head Presets:**
-| Preset | Architecture | Use Case |
-|--------|--------------|----------|
-| Minimal | 64→1 | Fast iteration, simple datasets |
-| Standard | 256→64→1 | Balanced performance (recommended) |
-| Deep | 512→256→64→1 | Complex patterns, large datasets |
+**Rating Head Architecture:**
+The Rating Head layers are automatically derived from the tower preset selected in Step 1:
+
+| Tower Preset | Tower Structure | Rating Head Structure |
+|--------------|-----------------|----------------------|
+| Minimal | 64→32 | 64→32→1 |
+| Standard | 128→64→32 | 128→64→32→1 |
+| Deep | 256→128→64→32 | 256→128→64→32→1 |
+| Regularized | 128→64→32 (with dropout) | 128→64→32→1 (no dropout) |
+
+**Key Design Decisions:**
+- Rating Head follows the same Dense layer structure as the towers
+- No regularization (L2, dropout) in Rating Head by default
+- Final Dense(1) layer with linear activation for scalar output
+- Users can manually edit layers in Step 2 if needed
 
 **Loss Functions:**
 | Loss | Field Value | Use Case |
@@ -139,11 +156,17 @@ Ranking Model Architecture:
 - Only numeric columns from the dataset are shown as options
 
 **UI Changes:**
-- Step 1: Ranking button enabled
-- Step 2: Rating Head builder section (purple/pink theme) appears below towers for Ranking models
-- Step 3: Loss Function dropdown with help text
-- Model cards: Show all 3 components (Buyer, Product, Rating Head) + loss function badge
-- View modal: Rating Head section with layer details
+- Step 1: Ranking button enabled; preset selection applies to all 3 models (Buyer, Product, Rating Head)
+- Step 2: Rating Head builder section (violet theme) appears below towers for Ranking models
+  - No separate preset selector for Rating Head (removed)
+  - Layers auto-populated from tower preset + Dense(1) output
+  - Users can manually edit layers if needed
+- Step 3: Loss Function selector with help text (MSE recommended for continuous ratings)
+- Model cards layout for Ranking:
+  - Row 1: Buyer bar (blue) | Product bar (green)
+  - Row 2: Hyperparameters | Ranking bar (violet)
+  - All bars use proportional width based on total neurons
+- View modal: Rating Head section with same card-layer style as Buyer/Product (violet theme)
 
 **Files Modified:**
 - `ml_platform/models.py` - Added `loss_function` field, rating head presets

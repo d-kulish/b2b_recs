@@ -4,11 +4,53 @@
 ## Document Purpose
 This document provides detailed specifications for implementing the **Modeling** domain in the ML Platform. This domain defines HOW data is transformed for training and enables rapid experimentation via Quick Tests.
 
-**Last Updated**: 2025-12-13
+**Last Updated**: 2025-12-14
 
 ---
 
 ## Recent Updates (December 2025)
+
+### Multitask Model Config Support (2025-12-14)
+
+**Phase 3 Complete:** Multitask model configuration is now fully implemented.
+
+**What is a Multitask Model?**
+Multitask models combine both Retrieval and Ranking objectives in a single model. They share the same Buyer and Product towers but train with a weighted combination of both loss functions. This enables transfer learning between tasks - knowledge from abundant implicit feedback (clicks) can help predict sparse explicit feedback (ratings).
+
+**Key Components Added:**
+
+1. **Loss Weight Sliders** (Step 3 UI)
+   - Retrieval Weight slider (0.0-1.0, blue gradient thumb)
+   - Ranking Weight slider (0.0-1.0, amber gradient thumb)
+   - Independent weights (not normalized to sum to 1.0)
+   - Real-time validation: At least one weight must be > 0
+   - Default: 1.0 / 1.0 (balanced start)
+
+2. **Multitask Architecture Diagram** (Step 2 UI)
+   - Visual representation showing both task paths
+   - Displays: Towers → Embeddings → Split into Retrieval (dot-product) and Ranking (Rating Head)
+   - Combined loss formula at bottom
+   - Updates dynamically based on tower/weight configuration
+
+3. **UI Behavior for Multitask**
+   - Step 1: Multitask button enabled (no longer grayed out)
+   - Step 2: Shows both Retrieval Algorithm AND Rating Head sections
+   - Step 3: Shows both Loss Function AND Loss Weighting panels
+   - Model cards: Pink "Multitask" badge + weights display
+
+4. **State Management**
+   - `mcState.retrievalWeight` and `mcState.rankingWeight` added
+   - Save/Load/Edit/Clone/Reset all handle multitask weights
+   - Validation prevents saving with both weights = 0
+
+**Files Modified:**
+- `templates/ml_platform/model_modeling.html` - All wizard and display updates
+
+**Next Steps (Pending):**
+- TrainerModuleGenerator for Multitask models (code generation)
+- Multitask model serving signature
+
+See [Phase: Model Structure](phase_model_structure.md) for full specifications.
 
 ### Ranking Model Config Support (2025-12-13)
 
@@ -143,12 +185,12 @@ Added complete Model Structure chapter for configuring neural network architectu
 - **Unified Layer Edit Modals** - Consistent UI with dimension button selectors (32, 64, 128, 256, 512 + custom)
 - **Output Layer Alignment** - Output layers and param summaries always align between towers
 
-**Model Types (Phased):**
+**Model Types (All Implemented):**
 | Phase | Type | Status |
 |-------|------|--------|
 | 1 | Retrieval (Two-Tower) | ✅ Implemented |
 | 2 | Ranking | ✅ Implemented (2025-12-13) |
-| 3 | Multitask | ⏳ Pending |
+| 3 | Multitask | ✅ Implemented (2025-12-14) |
 
 **API Endpoints:**
 - `GET /api/model-configs/` - List all configs

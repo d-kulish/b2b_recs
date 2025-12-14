@@ -91,7 +91,7 @@ This platform enables businesses to:
 - 📊 **Layer Types:** Dense, Dropout, Batch Normalization, Layer Normalization with L1/L2/L1+L2 regularization
 - 🎯 **5 Presets:** Minimal (64→32), Standard (128→64→32), Deep (256→128→64→32), Asymmetric, Regularized
 - ⚙️ **Training Hyperparameters:** Optimizer (Adagrad/Adam/SGD/RMSprop/AdamW/FTRL), learning rate with auto-suggest, batch size
-- 🔄 **Model Types:** Retrieval (Phase 1), Ranking (Phase 2), Multitask (Phase 3)
+- 🔄 **Model Types:** Retrieval ✅, Ranking ✅, Multitask ✅ (all phases complete)
 - 📋 **CRUD Operations:** Create, view, edit, clone, delete model configs
 - 🔍 **Retrieval Algorithms:** Brute Force (default) or ScaNN for large catalogs (10K+ products)
 - 📈 **Model Summary:** Keras-style parameter display (Total/Trainable/Non-trainable params)
@@ -359,6 +359,17 @@ WHERE source_type='gcs';
 
 ## 📝 Recent Updates
 
+**December 14, 2025 - Multitask Model Support (Phase 3 Complete)**
+- ✅ **Multitask model type** - Combined Retrieval + Ranking with configurable loss weights
+- ✅ **Loss Weight sliders** - Retrieval Weight and Ranking Weight (0.0-1.0 each)
+- ✅ **Independent weights** - Not normalized, allows flexible task emphasis
+- ✅ **Multitask Architecture Diagram** - Visual representation in Step 2 showing both task paths
+- ✅ **Validation** - At least one weight must be > 0
+- ✅ **Balanced start default** - 1.0 / 1.0 for initial experiments
+- ✅ **Model cards** - Pink "Multitask" badge with weights display
+- ✅ **Full CRUD** - Save/Load/Edit/Clone/Reset all handle multitask configs
+- See [Phase: Model Structure docs](docs/phase_model_structure.md) for details
+
 **December 13, 2025 - Ranking Model Enhancements**
 - ✅ **LayerNormalization** - Added as 4th layer type to all towers (Buyer, Product, Rating Head)
 - ✅ **Rating Head drag-drop** - Layers now draggable/reorderable in Rating Head (output layer locked)
@@ -399,7 +410,7 @@ WHERE source_type='gcs';
 - ✅ **Layer Drag-Drop Reordering** - Layers movable within towers (output layer locked)
 - ✅ **Keras-style Model Summary** - Total/Trainable/Non-trainable params per tower
 - ✅ **Unified Layer Edit Modals** - Consistent UI with dimension button selectors
-- ✅ **Phase 1 (Retrieval)** implemented; Ranking/Multitask planned for Phase 2/3
+- ✅ **All 3 phases complete** - Retrieval, Ranking, and Multitask model types fully implemented
 - ✅ API endpoints: `/api/model-configs/` (full CRUD + clone + presets)
 - See [Phase: Model Structure docs](docs/phase_model_structure.md) for details
 

@@ -1479,6 +1479,25 @@
     .param-chip.model-type-chip.ranking .param-chip-value {
         color: #92400e;
     }
+    .param-chip.model-type-chip.multitask {
+        background: #fce7f3;
+        color: #be185d;
+        border: 1px solid #fbcfe8;
+    }
+    .param-chip.model-type-chip.multitask .param-chip-value {
+        color: #be185d;
+    }
+    .param-chip.multitask-weights {
+        background: #fdf2f8;
+        border: 1px solid #fbcfe8;
+    }
+    .param-chip.multitask-weights .param-chip-label {
+        color: #9d174d;
+    }
+    .param-chip.multitask-weights .param-chip-value {
+        color: #be185d;
+        font-weight: 600;
+    }
 
     /* Ranking Row Grid (Row 2: Hyperparams | Ranking bar) */
     .ranking-row-grid {
@@ -2602,6 +2621,401 @@
         margin: 0;
         line-height: 1.4;
     }
+
+    /* Multitask Loss Weighting Styles */
+    .training-panel.multitask-weights {
+        border-color: #ec4899;
+        background: linear-gradient(135deg, #fdf2f8 0%, #fce7f3 100%);
+        grid-column: span 2;
+    }
+    .panel-icon.multitask {
+        background: linear-gradient(135deg, #ec4899 0%, #f472b6 100%);
+        box-shadow: 0 2px 4px rgba(236, 72, 153, 0.3);
+    }
+    .weight-slider-container {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 20px;
+    }
+    .weight-slider-item {
+        background: white;
+        border-radius: 12px;
+        padding: 16px;
+        border: 1px solid #fbcfe8;
+    }
+    .weight-slider-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 12px;
+    }
+    .weight-slider-label {
+        font-size: 13px;
+        font-weight: 600;
+        color: #374151;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .weight-slider-label i {
+        color: #ec4899;
+    }
+    .weight-value {
+        font-size: 18px;
+        font-weight: 700;
+        color: #be185d;
+        min-width: 36px;
+        text-align: right;
+    }
+    .weight-slider {
+        width: 100%;
+        height: 8px;
+        border-radius: 4px;
+        background: #fce7f3;
+        outline: none;
+        -webkit-appearance: none;
+        appearance: none;
+        cursor: pointer;
+    }
+    .weight-slider::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #ec4899 0%, #db2777 100%);
+        cursor: pointer;
+        box-shadow: 0 2px 6px rgba(236, 72, 153, 0.4);
+        transition: transform 0.2s ease;
+    }
+    .weight-slider::-webkit-slider-thumb:hover {
+        transform: scale(1.1);
+    }
+    .weight-slider::-moz-range-thumb {
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #ec4899 0%, #db2777 100%);
+        cursor: pointer;
+        border: none;
+        box-shadow: 0 2px 6px rgba(236, 72, 153, 0.4);
+    }
+    .weight-slider.retrieval::-webkit-slider-thumb {
+        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+        box-shadow: 0 2px 6px rgba(59, 130, 246, 0.4);
+    }
+    .weight-slider.retrieval::-moz-range-thumb {
+        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+        box-shadow: 0 2px 6px rgba(59, 130, 246, 0.4);
+    }
+    .weight-slider.ranking::-webkit-slider-thumb {
+        background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+        box-shadow: 0 2px 6px rgba(245, 158, 11, 0.4);
+    }
+    .weight-slider.ranking::-moz-range-thumb {
+        background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+        box-shadow: 0 2px 6px rgba(245, 158, 11, 0.4);
+    }
+    .weight-slider-hint {
+        font-size: 10px;
+        color: #9ca3af;
+        margin-top: 8px;
+        margin-bottom: 0;
+    }
+    .weight-validation-warning {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 12px;
+        padding: 10px 12px;
+        background: #fef2f2;
+        border-radius: 8px;
+        border: 1px solid #fecaca;
+    }
+    .weight-validation-warning i {
+        color: #ef4444;
+    }
+    .weight-validation-warning p {
+        font-size: 11px;
+        color: #b91c1c;
+        margin: 0;
+        font-weight: 500;
+    }
+    .weight-info-banner {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        margin-top: 16px;
+        padding: 10px 12px;
+        background: rgba(255, 255, 255, 0.7);
+        border-radius: 8px;
+        border: 1px solid #fbcfe8;
+    }
+    .weight-info-banner i {
+        color: #ec4899;
+        margin-top: 2px;
+    }
+    .weight-info-banner p {
+        font-size: 11px;
+        color: #9d174d;
+        margin: 0;
+        line-height: 1.4;
+    }
+
+    /* Multitask Architecture Diagram Styles */
+    .multitask-arch-section {
+        margin-top: 20px;
+        border-radius: 12px;
+        border: 2px solid #f472b6;
+        background: linear-gradient(135deg, #fdf2f8 0%, #fce7f3 100%);
+        overflow: hidden;
+    }
+    .multitask-arch-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 14px 16px;
+        background: rgba(255, 255, 255, 0.5);
+        border-bottom: 1px solid rgba(244, 114, 182, 0.2);
+    }
+    .multitask-arch-header .header-icon {
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, #ec4899 0%, #f472b6 100%);
+        color: white;
+        font-size: 14px;
+    }
+    .multitask-arch-header h4 {
+        margin: 0;
+        font-size: 14px;
+        font-weight: 600;
+        color: #be185d;
+    }
+    .multitask-arch-header p {
+        margin: 0;
+        font-size: 11px;
+        color: #9d174d;
+    }
+    .multitask-arch-diagram {
+        padding: 20px;
+    }
+    .arch-row {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 40px;
+    }
+    .arch-row.towers-row {
+        gap: 60px;
+    }
+    .arch-tower {
+        padding: 12px 20px;
+        border-radius: 10px;
+        text-align: center;
+        min-width: 140px;
+    }
+    .arch-tower.buyer {
+        background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+        border: 2px solid #3b82f6;
+    }
+    .arch-tower.product {
+        background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
+        border: 2px solid #22c55e;
+    }
+    .arch-tower-label {
+        font-size: 12px;
+        font-weight: 600;
+        color: #374151;
+    }
+    .arch-tower-summary {
+        font-size: 11px;
+        color: #6b7280;
+        font-family: monospace;
+    }
+    .arch-row.arrows-row {
+        padding: 8px 0;
+    }
+    .arch-arrow {
+        font-size: 18px;
+        color: #9ca3af;
+    }
+    .arch-row.embeddings-row {
+        gap: 60px;
+    }
+    .arch-embedding {
+        padding: 8px 16px;
+        border-radius: 8px;
+        font-size: 11px;
+        font-weight: 500;
+    }
+    .arch-embedding.buyer {
+        background: #3b82f6;
+        color: white;
+    }
+    .arch-embedding.product {
+        background: #22c55e;
+        color: white;
+    }
+    .arch-row.split-row {
+        padding: 12px 0;
+    }
+    .arch-split-line {
+        width: 200px;
+        height: 2px;
+        background: linear-gradient(90deg, #3b82f6, #ec4899, #f59e0b);
+        border-radius: 2px;
+        position: relative;
+    }
+    .arch-split-line::before,
+    .arch-split-line::after {
+        content: '↓';
+        position: absolute;
+        top: 8px;
+        font-size: 14px;
+        color: #9ca3af;
+    }
+    .arch-split-line::before {
+        left: 30px;
+    }
+    .arch-split-line::after {
+        right: 30px;
+    }
+    .arch-row.paths-row {
+        gap: 30px;
+        align-items: stretch;
+    }
+    .arch-path {
+        flex: 1;
+        max-width: 200px;
+        border-radius: 12px;
+        padding: 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+    .arch-path.retrieval {
+        background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+        border: 2px solid #3b82f6;
+    }
+    .arch-path.ranking {
+        background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+        border: 2px solid #f59e0b;
+    }
+    .arch-path-header {
+        font-size: 12px;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .arch-path.retrieval .arch-path-header {
+        color: #1d4ed8;
+    }
+    .arch-path.ranking .arch-path-header {
+        color: #b45309;
+    }
+    .arch-path-content {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+    }
+    .arch-operation {
+        font-size: 10px;
+        padding: 4px 10px;
+        border-radius: 6px;
+        background: rgba(255, 255, 255, 0.7);
+        color: #374151;
+    }
+    .arch-arrow-small {
+        font-size: 12px;
+        color: #9ca3af;
+    }
+    .arch-rating-head {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        font-size: 10px;
+        padding: 6px 10px;
+        border-radius: 6px;
+        background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+        border: 1px solid #f59e0b;
+    }
+    .arch-rating-head span:first-child {
+        font-weight: 600;
+        color: #92400e;
+    }
+    .arch-rating-head span:last-child {
+        font-family: monospace;
+        color: #b45309;
+    }
+    .arch-output {
+        font-size: 10px;
+        font-weight: 600;
+        padding: 4px 10px;
+        border-radius: 6px;
+    }
+    .arch-path.retrieval .arch-output {
+        background: #3b82f6;
+        color: white;
+    }
+    .arch-path.ranking .arch-output {
+        background: #f59e0b;
+        color: white;
+    }
+    .arch-path-metric {
+        font-size: 9px;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        justify-content: center;
+        padding-top: 6px;
+        border-top: 1px solid rgba(0, 0, 0, 0.1);
+    }
+    .arch-path.retrieval .arch-path-metric {
+        color: #1d4ed8;
+    }
+    .arch-path.ranking .arch-path-metric {
+        color: #b45309;
+    }
+    .arch-row.loss-row {
+        margin-top: 16px;
+    }
+    .arch-combined-loss {
+        background: linear-gradient(135deg, #fdf2f8 0%, #fce7f3 100%);
+        border: 2px solid #ec4899;
+        border-radius: 10px;
+        padding: 12px 20px;
+    }
+    .arch-loss-formula {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 12px;
+        font-weight: 500;
+    }
+    .loss-term {
+        padding: 4px 10px;
+        border-radius: 6px;
+    }
+    .loss-term.retrieval {
+        background: #dbeafe;
+        color: #1d4ed8;
+    }
+    .loss-term.ranking {
+        background: #fef3c7;
+        color: #b45309;
+    }
+    .loss-plus {
+        font-size: 14px;
+        font-weight: 700;
+        color: #ec4899;
+    }
+
     .training-panel-header {
         display: flex;
         align-items: center;
@@ -2955,13 +3369,12 @@
                             <div class="wizard-model-type-name">Ranking</div>
                             <div class="wizard-model-type-desc">Score and rank retrieved candidates</div>
                         </div>
-                        <div class="wizard-model-type-option disabled" data-type="multitask">
+                        <div class="wizard-model-type-option" data-type="multitask" onclick="selectModelType('multitask')">
                             <div class="wizard-model-type-icon multitask">
                                 <i class="fas fa-project-diagram"></i>
                             </div>
                             <div class="wizard-model-type-name">Multitask</div>
                             <div class="wizard-model-type-desc">Combined retrieval + ranking</div>
-                            <div class="wizard-model-type-phase">(Phase 3)</div>
                         </div>
                     </div>
                 </div>
@@ -3174,6 +3587,111 @@
                     </div>
                 </div>
 
+                <!-- Multitask Architecture Diagram (for Multitask models) -->
+                <div id="multitaskArchSection" class="multitask-arch-section hidden">
+                    <div class="multitask-arch-header">
+                        <div class="header-icon">
+                            <i class="fas fa-project-diagram"></i>
+                        </div>
+                        <div>
+                            <h4>Multitask Architecture</h4>
+                            <p>Combined retrieval and ranking in a single model</p>
+                        </div>
+                    </div>
+
+                    <div class="multitask-arch-diagram">
+                        <!-- Tower Inputs -->
+                        <div class="arch-row towers-row">
+                            <div class="arch-tower buyer">
+                                <div class="arch-tower-label">Buyer Tower</div>
+                                <div class="arch-tower-summary" id="archBuyerSummary">128→64→32</div>
+                            </div>
+                            <div class="arch-tower product">
+                                <div class="arch-tower-label">Product Tower</div>
+                                <div class="arch-tower-summary" id="archProductSummary">128→64→32</div>
+                            </div>
+                        </div>
+
+                        <!-- Arrows down -->
+                        <div class="arch-row arrows-row">
+                            <div class="arch-arrow">↓</div>
+                            <div class="arch-arrow">↓</div>
+                        </div>
+
+                        <!-- Embeddings -->
+                        <div class="arch-row embeddings-row">
+                            <div class="arch-embedding buyer">
+                                <span id="archBuyerDim">32D</span> embed
+                            </div>
+                            <div class="arch-embedding product">
+                                <span id="archProductDim">32D</span> embed
+                            </div>
+                        </div>
+
+                        <!-- Split arrows -->
+                        <div class="arch-row split-row">
+                            <div class="arch-split-line"></div>
+                        </div>
+
+                        <!-- Two paths -->
+                        <div class="arch-row paths-row">
+                            <!-- Retrieval Path -->
+                            <div class="arch-path retrieval">
+                                <div class="arch-path-header">
+                                    <i class="fas fa-search"></i>
+                                    Retrieval Task
+                                </div>
+                                <div class="arch-path-content">
+                                    <div class="arch-operation">Dot Product</div>
+                                    <div class="arch-arrow-small">↓</div>
+                                    <div class="arch-output">Similarity Score</div>
+                                </div>
+                                <div class="arch-path-metric">
+                                    <i class="fas fa-chart-line"></i>
+                                    FactorizedTopK
+                                </div>
+                            </div>
+
+                            <!-- Ranking Path -->
+                            <div class="arch-path ranking">
+                                <div class="arch-path-header">
+                                    <i class="fas fa-star"></i>
+                                    Ranking Task
+                                </div>
+                                <div class="arch-path-content">
+                                    <div class="arch-operation">Concatenate [<span id="archConcatDim">64D</span>]</div>
+                                    <div class="arch-arrow-small">↓</div>
+                                    <div class="arch-rating-head">
+                                        <span>Rating Head</span>
+                                        <span id="archRatingHeadSummary">128→64→32→1</span>
+                                    </div>
+                                    <div class="arch-arrow-small">↓</div>
+                                    <div class="arch-output">Rating Prediction</div>
+                                </div>
+                                <div class="arch-path-metric">
+                                    <i class="fas fa-bullseye"></i>
+                                    <span id="archLossFunction">MSE</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Combined Loss -->
+                        <div class="arch-row loss-row">
+                            <div class="arch-combined-loss">
+                                <div class="arch-loss-formula">
+                                    <span class="loss-term retrieval">
+                                        <span id="archRetrievalWeight">1.0</span> × Retrieval Loss
+                                    </span>
+                                    <span class="loss-plus">+</span>
+                                    <span class="loss-term ranking">
+                                        <span id="archRankingWeight">1.0</span> × Ranking Loss
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
             </div>
 
             <!-- Step 3: Training Parameters -->
@@ -3336,6 +3854,62 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- Multitask Loss Weighting Panel (for Multitask models) -->
+                    <div id="multitaskWeightSection" class="training-panel multitask-weights hidden">
+                        <div class="training-panel-header">
+                            <div class="training-panel-title">
+                                <div class="panel-icon multitask">
+                                    <i class="fas fa-balance-scale"></i>
+                                </div>
+                                Loss Weighting
+                            </div>
+                        </div>
+                        <div class="training-panel-body">
+                            <div class="weight-slider-container">
+                                <!-- Retrieval Weight Slider -->
+                                <div class="weight-slider-item">
+                                    <div class="weight-slider-header">
+                                        <label class="weight-slider-label">
+                                            <i class="fas fa-search"></i>
+                                            Retrieval Weight
+                                        </label>
+                                        <span class="weight-value" id="retrievalWeightValue">1.0</span>
+                                    </div>
+                                    <input type="range" id="mcRetrievalWeight" class="weight-slider retrieval"
+                                           min="0" max="1" step="0.1" value="1.0"
+                                           oninput="updateRetrievalWeight(this.value)" />
+                                    <p class="weight-slider-hint">Higher = Optimize for candidate selection (Recall@K)</p>
+                                </div>
+
+                                <!-- Ranking Weight Slider -->
+                                <div class="weight-slider-item">
+                                    <div class="weight-slider-header">
+                                        <label class="weight-slider-label">
+                                            <i class="fas fa-star"></i>
+                                            Ranking Weight
+                                        </label>
+                                        <span class="weight-value" id="rankingWeightValue">1.0</span>
+                                    </div>
+                                    <input type="range" id="mcRankingWeight" class="weight-slider ranking"
+                                           min="0" max="1" step="0.1" value="1.0"
+                                           oninput="updateRankingWeight(this.value)" />
+                                    <p class="weight-slider-hint">Higher = Optimize for rating prediction (RMSE)</p>
+                                </div>
+                            </div>
+
+                            <!-- Weight Validation Warning -->
+                            <div id="weightValidationWarning" class="weight-validation-warning hidden">
+                                <i class="fas fa-exclamation-triangle"></i>
+                                <p>At least one weight must be greater than 0</p>
+                            </div>
+
+                            <div class="weight-info-banner">
+                                <i class="fas fa-info-circle"></i>
+                                <p>Both tasks share the same embedding towers. Weights control how much each loss contributes to training. A balanced start (1.0 / 1.0) is recommended for initial experiments.</p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Summary Panel -->
@@ -3369,6 +3943,10 @@
                         <div id="mcSummaryLossRow" class="hidden">
                             <span class="text-purple-700">Loss:</span>
                             <span id="mcSummaryLoss" class="font-medium text-purple-900">MSE</span>
+                        </div>
+                        <div id="mcSummaryWeightsRow" class="hidden">
+                            <span class="text-purple-700">Weights:</span>
+                            <span id="mcSummaryWeights" class="font-medium text-purple-900">Ret: 1.0 / Rank: 1.0</span>
                         </div>
                         <div>
                             <span class="text-purple-700">Est. Parameters:</span>
@@ -7692,6 +8270,9 @@ let mcState = {
     ratingHeadLayers: [],
     ratingHeadPreset: 'standard',
     lossFunction: 'mse',
+    // Multitask Settings (for multitask models)
+    retrievalWeight: 1.0,
+    rankingWeight: 1.0,
     // Common settings
     outputEmbeddingDim: 32,
     optimizer: 'adagrad',
@@ -8211,8 +8792,8 @@ function renderModelConfigs() {
             ? mc.product_tower_layers
             : parseTowerSummary(mc.product_tower_summary);
 
-        // Get ranking layers if this is a ranking model
-        const rankingLayers = mc.model_type === 'ranking' && mc.rating_head_layers && mc.rating_head_layers.length > 0
+        // Get ranking layers if this is a ranking or multitask model
+        const rankingLayers = (mc.model_type === 'ranking' || mc.model_type === 'multitask') && mc.rating_head_layers && mc.rating_head_layers.length > 0
             ? mc.rating_head_layers
             : [];
 
@@ -8272,7 +8853,7 @@ function renderModelConfigs() {
                 ${productViz.html}
             </div>
 
-            <!-- Row 2: For Ranking models - Hyperparams | Ranking bar -->
+            <!-- Row 2: For Ranking/Multitask models - Hyperparams | Ranking bar -->
             ${rankingViz ? `
             <div class="ranking-row-grid">
                 <!-- Left: Model Type & Training Params -->
@@ -8296,6 +8877,16 @@ function renderModelConfigs() {
                         <span class="param-chip-label">Loss:</span>
                         <span class="param-chip-value">${mc.loss_function_display || 'MSE'}</span>
                     </div>
+                    ${mc.model_type === 'multitask' ? `
+                    <div class="param-chip multitask-weights">
+                        <span class="param-chip-label">Weights:</span>
+                        <span class="param-chip-value">Ret ${mc.retrieval_weight || 1.0} / Rank ${mc.ranking_weight || 1.0}</span>
+                    </div>
+                    <div class="param-chip">
+                        <span class="param-chip-label">Top N:</span>
+                        <span class="param-chip-value">${mc.top_k || 100}</span>
+                    </div>
+                    ` : ''}
                 </div>
                 <!-- Right: Ranking bar -->
                 <div class="ranking-tower-cell">
@@ -8395,9 +8986,12 @@ function editModelConfigById(id) {
                 mcState.optimizer = mc.optimizer || 'adagrad';
                 mcState.learningRate = mc.learning_rate || 0.1;
                 mcState.batchSize = mc.batch_size || 4096;
-                // Rating head settings (for ranking models)
+                // Rating head settings (for ranking/multitask models)
                 mcState.ratingHeadLayers = mc.rating_head_layers || [];
                 mcState.lossFunction = mc.loss_function || 'mse';
+                // Multitask settings
+                mcState.retrievalWeight = mc.retrieval_weight !== undefined ? mc.retrieval_weight : 1.0;
+                mcState.rankingWeight = mc.ranking_weight !== undefined ? mc.ranking_weight : 1.0;
 
                 // Update wizard UI
                 document.getElementById('mcName').value = mc.name;
@@ -8412,16 +9006,32 @@ function editModelConfigById(id) {
                 setLearningRate(mcState.learningRate);
                 document.getElementById('mcBatchSize').value = mcState.batchSize;
 
-                // For ranking models, also select the loss function
-                if (mc.model_type === 'ranking') {
+                // For ranking/multitask models, also select the loss function
+                if (mc.model_type === 'ranking' || mc.model_type === 'multitask') {
                     selectLossFunction(mcState.lossFunction);
+                }
+
+                // For multitask models, populate weight sliders
+                if (mc.model_type === 'multitask') {
+                    const retSlider = document.getElementById('mcRetrievalWeight');
+                    const rankSlider = document.getElementById('mcRankingWeight');
+                    if (retSlider) {
+                        retSlider.value = mcState.retrievalWeight;
+                        document.getElementById('retrievalWeightValue').textContent = mcState.retrievalWeight.toFixed(1);
+                    }
+                    if (rankSlider) {
+                        rankSlider.value = mcState.rankingWeight;
+                        document.getElementById('rankingWeightValue').textContent = mcState.rankingWeight.toFixed(1);
+                    }
+                    updateMultitaskSummary();
+                    updateMultitaskArchDiagram();
                 }
 
                 renderTowerLayers();
                 updateTowerSummaries();
 
-                // For ranking models, render the rating head layers
-                if (mc.model_type === 'ranking' && mcState.ratingHeadLayers.length > 0) {
+                // For ranking/multitask models, render the rating head layers
+                if ((mc.model_type === 'ranking' || mc.model_type === 'multitask') && mcState.ratingHeadLayers.length > 0) {
                     renderRatingHeadLayers();
                     updateRatingHeadSummary();
                 }
@@ -8468,10 +9078,13 @@ function resetMcState() {
         topK: 100,
         scannNumLeaves: 100,
         scannLeavesToSearch: 10,
-        // Rating Head Settings (for ranking models)
+        // Rating Head Settings (for ranking/multitask models)
         ratingHeadLayers: [],
         ratingHeadPreset: 'standard',
         lossFunction: 'mse',
+        // Multitask Settings (balanced start as default)
+        retrievalWeight: 1.0,
+        rankingWeight: 1.0,
         // Training params
         optimizer: 'adagrad',
         learningRate: 0.1,
@@ -8491,6 +9104,17 @@ function resetMcState() {
     selectOptimizer('adagrad');
     setLearningRate(0.1);
     document.getElementById('mcBatchSize').value = 4096;
+    // Reset multitask weight sliders UI
+    const retSlider = document.getElementById('mcRetrievalWeight');
+    const rankSlider = document.getElementById('mcRankingWeight');
+    if (retSlider) {
+        retSlider.value = 1.0;
+        document.getElementById('retrievalWeightValue').textContent = '1.0';
+    }
+    if (rankSlider) {
+        rankSlider.value = 1.0;
+        document.getElementById('rankingWeightValue').textContent = '1.0';
+    }
     // Reset name validation state
     mcNameIsValid = false;
     resetMcNameValidation();
@@ -8589,7 +9213,7 @@ function loadPresets() {
 
 // Select Model Type
 function selectModelType(type) {
-    if (type !== 'retrieval' && type !== 'ranking') return; // retrieval and ranking enabled
+    if (type !== 'retrieval' && type !== 'ranking' && type !== 'multitask') return;
 
     mcState.modelType = type;
     document.querySelectorAll('.wizard-model-type-option').forEach(opt => {
@@ -8599,19 +9223,38 @@ function selectModelType(type) {
     // Show/hide sections based on model type
     const retrievalSection = document.querySelector('.retrieval-algorithm-section');
     const ratingHeadSection = document.getElementById('ratingHeadSection');
+    const multitaskArchSection = document.getElementById('multitaskArchSection');
+    const multitaskWeightSection = document.getElementById('multitaskWeightSection');
 
     if (type === 'retrieval') {
         if (retrievalSection) retrievalSection.classList.remove('hidden');
         if (ratingHeadSection) ratingHeadSection.classList.add('hidden');
+        if (multitaskArchSection) multitaskArchSection.classList.add('hidden');
+        if (multitaskWeightSection) multitaskWeightSection.classList.add('hidden');
     } else if (type === 'ranking') {
         if (retrievalSection) retrievalSection.classList.add('hidden');
         if (ratingHeadSection) ratingHeadSection.classList.remove('hidden');
+        if (multitaskArchSection) multitaskArchSection.classList.add('hidden');
+        if (multitaskWeightSection) multitaskWeightSection.classList.add('hidden');
         // Generate rating head from current tower preset if empty
         if (mcState.ratingHeadLayers.length === 0) {
             mcState.ratingHeadLayers = generateRatingHeadFromTower(mcState.buyerTowerLayers);
         }
         renderRatingHeadLayers();
         updateRatingHeadSummary();
+    } else if (type === 'multitask') {
+        // Multitask shows BOTH retrieval algorithm AND rating head
+        if (retrievalSection) retrievalSection.classList.remove('hidden');
+        if (ratingHeadSection) ratingHeadSection.classList.remove('hidden');
+        if (multitaskArchSection) multitaskArchSection.classList.remove('hidden');
+        if (multitaskWeightSection) multitaskWeightSection.classList.remove('hidden');
+        // Generate rating head from current tower preset if empty
+        if (mcState.ratingHeadLayers.length === 0) {
+            mcState.ratingHeadLayers = generateRatingHeadFromTower(mcState.buyerTowerLayers);
+        }
+        renderRatingHeadLayers();
+        updateRatingHeadSummary();
+        updateMultitaskArchDiagram();
     }
 }
 
@@ -8640,10 +9283,15 @@ function applyPreset(presetName) {
     renderTowerLayers();
     updateTowerSummaries();
 
-    // If ranking model is selected, also render rating head
-    if (mcState.modelType === 'ranking') {
+    // If ranking or multitask model is selected, also render rating head
+    if (mcState.modelType === 'ranking' || mcState.modelType === 'multitask') {
         renderRatingHeadLayers();
         updateRatingHeadSummary();
+    }
+
+    // If multitask, also update the architecture diagram
+    if (mcState.modelType === 'multitask') {
+        updateMultitaskArchDiagram();
     }
 }
 
@@ -8746,6 +9394,93 @@ function setLearningRate(value) {
         const btnValue = parseFloat(btn.textContent);
         btn.classList.toggle('active', btnValue === value);
     });
+}
+
+// Update Retrieval Weight (Multitask)
+function updateRetrievalWeight(value) {
+    const weight = parseFloat(value);
+    mcState.retrievalWeight = weight;
+    document.getElementById('retrievalWeightValue').textContent = weight.toFixed(1);
+    validateMultitaskWeights();
+    updateMultitaskSummary();
+}
+
+// Update Ranking Weight (Multitask)
+function updateRankingWeight(value) {
+    const weight = parseFloat(value);
+    mcState.rankingWeight = weight;
+    document.getElementById('rankingWeightValue').textContent = weight.toFixed(1);
+    validateMultitaskWeights();
+    updateMultitaskSummary();
+}
+
+// Validate Multitask Weights (at least one > 0)
+function validateMultitaskWeights() {
+    const warning = document.getElementById('weightValidationWarning');
+    if (!warning) return true;
+
+    if (mcState.retrievalWeight === 0 && mcState.rankingWeight === 0) {
+        warning.classList.remove('hidden');
+        return false;
+    } else {
+        warning.classList.add('hidden');
+        return true;
+    }
+}
+
+// Update Multitask Summary in Step 3
+function updateMultitaskSummary() {
+    const summaryWeights = document.getElementById('mcSummaryWeights');
+    if (summaryWeights) {
+        summaryWeights.textContent = `Ret: ${mcState.retrievalWeight.toFixed(1)} / Rank: ${mcState.rankingWeight.toFixed(1)}`;
+    }
+}
+
+// Update Multitask Architecture Diagram
+function updateMultitaskArchDiagram() {
+    // Update tower summaries
+    const buyerSummary = getTowerSummary(mcState.buyerTowerLayers);
+    const productSummary = getTowerSummary(mcState.productTowerLayers);
+    const ratingHeadSummary = getTowerSummary(mcState.ratingHeadLayers);
+
+    const archBuyerSummary = document.getElementById('archBuyerSummary');
+    const archProductSummary = document.getElementById('archProductSummary');
+    const archRatingHeadSummary = document.getElementById('archRatingHeadSummary');
+
+    if (archBuyerSummary) archBuyerSummary.textContent = buyerSummary;
+    if (archProductSummary) archProductSummary.textContent = productSummary;
+    if (archRatingHeadSummary) archRatingHeadSummary.textContent = ratingHeadSummary;
+
+    // Update embedding dimensions
+    const outputDim = mcState.outputEmbeddingDim || 32;
+    const archBuyerDim = document.getElementById('archBuyerDim');
+    const archProductDim = document.getElementById('archProductDim');
+    const archConcatDim = document.getElementById('archConcatDim');
+
+    if (archBuyerDim) archBuyerDim.textContent = `${outputDim}D`;
+    if (archProductDim) archProductDim.textContent = `${outputDim}D`;
+    if (archConcatDim) archConcatDim.textContent = `${outputDim * 2}D`;
+
+    // Update loss function
+    const archLossFunction = document.getElementById('archLossFunction');
+    if (archLossFunction) {
+        const lossLabels = { 'mse': 'MSE', 'binary_crossentropy': 'Binary CE', 'huber': 'Huber' };
+        archLossFunction.textContent = lossLabels[mcState.lossFunction] || 'MSE';
+    }
+
+    // Update weights
+    const archRetrievalWeight = document.getElementById('archRetrievalWeight');
+    const archRankingWeight = document.getElementById('archRankingWeight');
+
+    if (archRetrievalWeight) archRetrievalWeight.textContent = mcState.retrievalWeight.toFixed(1);
+    if (archRankingWeight) archRankingWeight.textContent = mcState.rankingWeight.toFixed(1);
+}
+
+// Helper function to get tower summary string
+function getTowerSummary(layers) {
+    if (!layers || layers.length === 0) return 'Empty';
+    const units = layers.filter(l => l.type === 'dense').map(l => l.units);
+    return units.join('→') || 'Empty';
 }
 
 // Get selected optimizer value
@@ -9573,10 +10308,15 @@ function updateMcStep() {
     // Update summary on step 3
     if (mcCurrentStep === 3) {
         updateMcSummary();
-        // Show/hide loss function panel based on model type
+        // Show/hide loss function panel based on model type (ranking or multitask)
         const lossFunctionPanel = document.getElementById('lossFunctionPanel');
         if (lossFunctionPanel) {
-            lossFunctionPanel.classList.toggle('hidden', mcState.modelType !== 'ranking');
+            lossFunctionPanel.classList.toggle('hidden', mcState.modelType !== 'ranking' && mcState.modelType !== 'multitask');
+        }
+        // Show/hide multitask weight section
+        const multitaskWeightSection = document.getElementById('multitaskWeightSection');
+        if (multitaskWeightSection) {
+            multitaskWeightSection.classList.toggle('hidden', mcState.modelType !== 'multitask');
         }
     }
 
@@ -9584,32 +10324,38 @@ function updateMcStep() {
     if (mcCurrentStep === 2) {
         renderTowerLayers();
         updateTowerSummaries();
-        // Render rating head layers if ranking model
-        if (mcState.modelType === 'ranking') {
+        // Render rating head layers if ranking or multitask model
+        if (mcState.modelType === 'ranking' || mcState.modelType === 'multitask') {
             renderRatingHeadLayers();
+        }
+        // Update multitask architecture diagram if multitask model
+        if (mcState.modelType === 'multitask') {
+            updateMultitaskArchDiagram();
         }
     }
 }
 
 function updateMcSummary() {
     // Set model type display
-    const modelTypeDisplay = mcState.modelType === 'ranking' ? 'Ranking' : 'Retrieval';
-    document.getElementById('mcSummaryType').textContent = modelTypeDisplay;
+    const modelTypeLabels = { 'retrieval': 'Retrieval', 'ranking': 'Ranking', 'multitask': 'Multitask' };
+    document.getElementById('mcSummaryType').textContent = modelTypeLabels[mcState.modelType] || 'Retrieval';
 
     document.getElementById('mcSummaryBuyer').textContent = getTowerSummary(mcState.buyerTowerLayers);
     document.getElementById('mcSummaryProduct').textContent = getTowerSummary(mcState.productTowerLayers);
     document.getElementById('mcSummaryOutputDim').textContent = mcState.outputEmbeddingDim || 32;
 
-    // Handle retrieval vs ranking specific info
+    // Handle retrieval vs ranking vs multitask specific info
     const retrievalRow = document.getElementById('mcSummaryRetrievalRow');
     const ratingHeadRow = document.getElementById('mcSummaryRatingHeadRow');
     const lossRow = document.getElementById('mcSummaryLossRow');
+    const weightsRow = document.getElementById('mcSummaryWeightsRow');
 
     if (mcState.modelType === 'ranking') {
         // Hide retrieval, show rating head
         if (retrievalRow) retrievalRow.classList.add('hidden');
         if (ratingHeadRow) ratingHeadRow.classList.remove('hidden');
         if (lossRow) lossRow.classList.remove('hidden');
+        if (weightsRow) weightsRow.classList.add('hidden');
 
         // Update rating head summary
         const ratingHeadSummaryEl = document.getElementById('mcSummaryRatingHead');
@@ -9623,11 +10369,44 @@ function updateMcSummary() {
             const lossLabels = { 'mse': 'MSE', 'binary_crossentropy': 'Binary CE', 'huber': 'Huber' };
             lossSummaryEl.textContent = lossLabels[mcState.lossFunction] || 'MSE';
         }
+    } else if (mcState.modelType === 'multitask') {
+        // Show both retrieval and rating head for multitask
+        if (retrievalRow) retrievalRow.classList.remove('hidden');
+        if (ratingHeadRow) ratingHeadRow.classList.remove('hidden');
+        if (lossRow) lossRow.classList.remove('hidden');
+        if (weightsRow) weightsRow.classList.remove('hidden');
+
+        // Update retrieval algorithm state from inputs
+        updateRetrievalAlgorithmState();
+
+        // Display retrieval algorithm info
+        if (mcState.retrievalAlgorithm === 'brute_force') {
+            document.getElementById('mcSummaryRetrieval').textContent = `Brute Force (Top ${mcState.topK})`;
+        } else {
+            document.getElementById('mcSummaryRetrieval').textContent = `ScaNN (Top ${mcState.topK})`;
+        }
+
+        // Update rating head summary
+        const ratingHeadSummaryEl = document.getElementById('mcSummaryRatingHead');
+        if (ratingHeadSummaryEl) {
+            ratingHeadSummaryEl.textContent = getRatingHeadSummary();
+        }
+
+        // Update loss function summary
+        const lossSummaryEl = document.getElementById('mcSummaryLoss');
+        if (lossSummaryEl) {
+            const lossLabels = { 'mse': 'MSE', 'binary_crossentropy': 'Binary CE', 'huber': 'Huber' };
+            lossSummaryEl.textContent = lossLabels[mcState.lossFunction] || 'MSE';
+        }
+
+        // Update weights summary
+        updateMultitaskSummary();
     } else {
-        // Show retrieval, hide rating head
+        // Show retrieval, hide rating head (retrieval mode)
         if (retrievalRow) retrievalRow.classList.remove('hidden');
         if (ratingHeadRow) ratingHeadRow.classList.add('hidden');
         if (lossRow) lossRow.classList.add('hidden');
+        if (weightsRow) weightsRow.classList.add('hidden');
 
         // Update retrieval algorithm state from inputs before summary
         updateRetrievalAlgorithmState();
@@ -9645,8 +10424,8 @@ function updateMcSummary() {
     const productParams = estimateTowerParams(mcState.productTowerLayers);
     let totalParams = buyerParams + productParams;
 
-    // Add rating head params for ranking models
-    if (mcState.modelType === 'ranking') {
+    // Add rating head params for ranking/multitask models
+    if (mcState.modelType === 'ranking' || mcState.modelType === 'multitask') {
         const ratingHeadParams = estimateRatingHeadParams();
         totalParams += ratingHeadParams;
     }
@@ -9689,6 +10468,14 @@ function createModelConfig() {
     // Update retrieval algorithm state from inputs
     updateRetrievalAlgorithmState();
 
+    // Validate multitask weights
+    if (mcState.modelType === 'multitask') {
+        if (mcState.retrievalWeight === 0 && mcState.rankingWeight === 0) {
+            alert('At least one weight must be greater than 0 for multitask models.');
+            return;
+        }
+    }
+
     const payload = {
         name: mcState.name,
         description: mcState.description,
@@ -9696,14 +10483,17 @@ function createModelConfig() {
         buyer_tower_layers: mcState.buyerTowerLayers,
         product_tower_layers: mcState.productTowerLayers,
         output_embedding_dim: mcState.outputEmbeddingDim || 32,
-        // Retrieval algorithm settings (for retrieval models)
+        // Retrieval algorithm settings (for retrieval/multitask models)
         retrieval_algorithm: mcState.retrievalAlgorithm,
         top_k: mcState.topK,
         scann_num_leaves: mcState.scannNumLeaves,
         scann_leaves_to_search: mcState.scannLeavesToSearch,
-        // Rating head settings (for ranking models)
+        // Rating head settings (for ranking/multitask models)
         rating_head_layers: mcState.ratingHeadLayers,
         loss_function: mcState.lossFunction,
+        // Multitask settings
+        retrieval_weight: mcState.retrievalWeight,
+        ranking_weight: mcState.rankingWeight,
         // Training params
         optimizer: getSelectedOptimizer(),
         learning_rate: parseFloat(document.getElementById('mcLearningRate').value),

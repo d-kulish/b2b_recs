@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides detailed specifications for implementing the **Model Structure** chapter in the ML Platform Modeling page. This feature enables users to configure neural network architecture independently from feature engineering, allowing flexible experimentation with different model architectures.
 
-**Last Updated**: 2025-12-13
+**Last Updated**: 2025-12-14
 
 ---
 
@@ -63,17 +63,35 @@ This document provides detailed specifications for implementing the **Model Stru
 | Validation | ✅ Done | Requires rating column for Ranking models |
 | API payload update | ✅ Done | `rating_column` included in QuickTest request |
 
+### Completed (Phase 3 - Multitask) - 2025-12-14
+
+| Component | Status | Notes |
+|-----------|--------|-------|
+| **Frontend - Wizard** | | |
+| Step 1: Enable Multitask button | ✅ Done | Multitask model type now selectable |
+| Step 2: Show Rating Head + Retrieval Algorithm | ✅ Done | Both sections visible for Multitask |
+| Step 2: Multitask Architecture Diagram | ✅ Done | Visual diagram showing both paths (retrieval + ranking) |
+| Step 3: Loss Function selector | ✅ Done | Same as Ranking models (MSE, BCE, Huber) |
+| Step 3: Loss Weight sliders | ✅ Done | Retrieval Weight + Ranking Weight (0.0-1.0 each) |
+| Step 3: Weight validation | ✅ Done | At least one weight must be > 0 |
+| **Frontend - Display** | | |
+| Model cards: Multitask badge | ✅ Done | Pink gradient badge for Multitask models |
+| Model cards: Weights display | ✅ Done | Shows "Ret 1.0 / Rank 1.0" on Multitask cards |
+| Summary panel: Weights row | ✅ Done | Shows both retrieval and ranking info |
+| **State & API** | | |
+| mcState: retrievalWeight/rankingWeight | ✅ Done | Default: 1.0 / 1.0 (balanced start) |
+| Save/Load/Edit/Reset for weights | ✅ Done | Full CRUD support for Multitask configs |
+
 ### Pending
 
 | Component | Status | Notes |
 |-----------|--------|-------|
 | **Code Generation** | | |
 | TrainerModuleGenerator for Ranking | ⏳ Pending | Generate RankingModel with Rating Head |
+| TrainerModuleGenerator for Multitask | ⏳ Pending | Generate MultitaskModel with both tasks |
 | Generate MSE/BCE/Huber loss code | ⏳ Pending | Based on `loss_function` selection |
 | Ranking model serving signature | ⏳ Pending | Input → rating prediction |
-| **Phase 3 - Multitask** | | |
-| Enable Multitask model type | ⏳ Pending | Combined retrieval + ranking |
-| Loss weight slider | ⏳ Pending | Balance retrieval vs ranking loss |
+| Multitask model serving signature | ⏳ Pending | Input → (similarity, rating) outputs |
 
 ### API Endpoints Implemented
 
@@ -175,6 +193,80 @@ The Rating Head layers are automatically derived from the tower preset selected 
 - `templates/ml_platform/model_modeling.html` - Wizard and display updates
 - `templates/ml_platform/model_experiments.html` - Rating column selector in QuickTest
 
+#### Multitask Model Support (2025-12-14)
+
+**Phase 3 Complete:** Full Multitask model configuration is now available.
+
+**Architecture:**
+Multitask models combine both Retrieval and Ranking tasks, training both objectives simultaneously with configurable loss weights:
+
+```
+Multitask Model Architecture:
+┌───────────┐   ┌───────────┐
+│   Buyer   │   │  Product  │
+│   Tower   │   │   Tower   │
+└─────┬─────┘   └─────┬─────┘
+      │               │
+      ▼               ▼
+ [32D embed]    [32D embed]
+      │               │
+      ├───────┬───────┤
+      │       │       │
+      ▼       ▼       ▼
+┌──────────┐  ┌────────────────────┐
+│Dot Product│  │   Concatenate     │
+│(Retrieval)│  │      [64D]        │
+└────┬─────┘  └─────────┬──────────┘
+     │                  │
+     ▼                  ▼
+[Similarity]     ┌─────────────┐
+                 │ Rating Head │
+                 │ 128→64→32→1 │
+                 └──────┬──────┘
+                        │
+                        ▼
+                   [Rating]
+
+Combined Loss = retrieval_weight × Retrieval Loss + ranking_weight × Ranking Loss
+```
+
+**Loss Weighting Strategy:**
+- **Independent weights** (not normalized to sum to 1.0)
+- Allows users to emphasize one task without diminishing the other
+- Example: retrieval_weight=1.0, ranking_weight=0.5 emphasizes retrieval
+- Validation: At least one weight must be > 0
+- Default: 1.0 / 1.0 (balanced start for initial experiments)
+
+**Weight Guidelines:**
+| Scenario | Retrieval Weight | Ranking Weight | Use Case |
+|----------|-----------------|----------------|----------|
+| Balanced | 1.0 | 1.0 | Default starting point |
+| Retrieval-focused | 1.0 | 0.3 | When finding candidates is priority |
+| Ranking-focused | 0.3 | 1.0 | When accurate rating prediction is critical |
+| Retrieval-only | 1.0 | 0.0 | Same as pure Retrieval model |
+
+**UI Changes:**
+- Step 1: Multitask button enabled (no longer grayed out)
+- Step 2: Shows both Retrieval Algorithm section AND Rating Head builder
+- Step 2: Multitask Architecture Diagram - Visual representation of combined model
+- Step 3: Loss Function selector (same as Ranking)
+- Step 3: Loss Weighting panel with dual sliders:
+  - Retrieval Weight slider (0.0-1.0, blue gradient)
+  - Ranking Weight slider (0.0-1.0, amber gradient)
+  - Real-time validation warning if both weights are 0
+  - Info banner explaining transfer learning benefits
+- Model cards: Pink badge with "Multitask" label
+- Model cards: Shows weights in hyperparameters section
+
+**Files Modified:**
+- `templates/ml_platform/model_modeling.html`:
+  - Step 1: Enabled multitask option with onclick handler
+  - Step 2: Added `multitaskArchSection` with visual architecture diagram
+  - Step 3: Added `multitaskWeightSection` with weight sliders
+  - JavaScript: Added weight slider functions and validation
+  - CSS: Added styles for weight sliders and architecture diagram
+  - Updated save/load/reset functions to handle weights
+
 #### Step 3 Training UI Redesign (2025-12-11)
 
 **UI Changes:**
@@ -241,13 +333,13 @@ Introduce **ModelConfig** as a separate entity from **FeatureConfig**, enabling:
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Model Types (Phased Implementation)
+### Model Types (All Implemented)
 
-| Phase | Model Type | Description | Use Case |
-|-------|------------|-------------|----------|
-| **1** | Retrieval | Two-tower model with dot-product similarity | Large catalog, fast ANN serving, Recall@K optimization |
-| **2** | Ranking | Concatenated embeddings → rating prediction | Re-ranking shortlist, explicit rating prediction, RMSE optimization |
-| **3** | Multitask | Combined retrieval + ranking with loss weights | Sparse data, transfer learning, balanced optimization |
+| Phase | Model Type | Description | Use Case | Status |
+|-------|------------|-------------|----------|--------|
+| **1** | Retrieval | Two-tower model with dot-product similarity | Large catalog, fast ANN serving, Recall@K optimization | ✅ Done |
+| **2** | Ranking | Concatenated embeddings → rating prediction | Re-ranking shortlist, explicit rating prediction, RMSE optimization | ✅ Done |
+| **3** | Multitask | Combined retrieval + ranking with loss weights | Sparse data, transfer learning, balanced optimization | ✅ Done |
 
 ### Reference Implementations
 

@@ -1,8 +1,8 @@
 
-# Phase: Modeling Domain
+# Phase: Configs Domain
 
 ## Document Purpose
-This document provides detailed specifications for implementing the **Modeling** domain in the ML Platform. This domain defines HOW data is transformed for training and enables rapid experimentation via Quick Tests.
+This document provides detailed specifications for implementing the **Configs** domain in the ML Platform. This domain defines HOW data is transformed for training (Feature Configs) and the neural network architecture (Model Configs).
 
 **Last Updated**: 2025-12-14
 

@@ -1,7 +1,7 @@
 """
-Modeling Domain API Endpoints
+Configs Domain API Endpoints
 
-REST API for Feature Config CRUD operations.
+REST API for Feature Config and Model Config CRUD operations.
 """
 
 import json

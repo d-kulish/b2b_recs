@@ -667,12 +667,12 @@ The platform uses the following navigation menu:
 | **Dashboard** | - | Model health, recent runs, performance overview |
 | **ETL** | ETL | Configure data sources, schedule extractions |
 | **Dataset Manager** | Datasets | Define WHAT data (tables, columns, filters) |
-| **Modeling** | Modeling | Configure HOW to transform features + model architecture |
+| **Configs** | Configs | Configure HOW to transform features + model architecture |
 | **Experiments** | Experiments | Run Quick Tests + compare results via MLflow |
 | **Training** | Training | Execute full TFX pipeline |
 | **Deployment** | Deployment | Deploy and manage model versions |
 
-**Note**: Quick Tests moved from Modeling to Experiments (2025-12-13). Feature configuration (embedding dims, crosses) is done in Modeling. Quick Test execution and comparison is done in Experiments.
+**Note**: Quick Tests moved from Configs to Experiments (2025-12-13). Feature configuration (embedding dims, crosses) is done in Configs. Quick Test execution and comparison is done in Experiments.
 
 ### Domain Responsibilities
 
@@ -680,7 +680,7 @@ The platform uses the following navigation menu:
 |--------|---------|--------|---------------|
 | **ETL** | Extract data from sources → BigQuery | ✅ Done | - |
 | **Datasets** | Define WHAT data goes into training (configuration only) | ✅ Done | [docs/phase_datasets.md](docs/phase_datasets.md) |
-| **Modeling** | Define HOW to transform features + model architecture | ✅ Done | [docs/phase_modeling.md](docs/phase_modeling.md) |
+| **Configs** | Define HOW to transform features + model architecture | ✅ Done | [docs/phase_configs.md](docs/phase_configs.md) |
 | **Experiments** | Run Quick Tests on Vertex AI + compare via MLflow | ✅ Done | [docs/phase_experiments.md](docs/phase_experiments.md) |
 | **Training** | Execute full TFX pipeline (includes train/eval split) | Planned | [docs/phase_training.md](docs/phase_training.md) |
 | **Deployment** | Deploy and serve models | Planned | [docs/phase_deployment.md](docs/phase_deployment.md) |
@@ -706,7 +706,7 @@ Quick Tests validate:
 - Model builds and converges (Trainer)
 - Metrics compute correctly (Evaluator)
 
-**Note:** Quick Test UI moved from Modeling page to Experiments page (2025-12-13).
+**Note:** Quick Test UI moved from Configs page to Experiments page (2025-12-13).
 
 ### Tool Responsibilities
 
@@ -2422,7 +2422,7 @@ From `past/` folder, these components are production-tested and will be reused:
 | 2025-11-30 | 1.2 | Added Code Organization & Architecture Guidelines section based on views.py refactoring | Claude Code |
 | 2025-12-01 | 2.0 | Major update: TFX-based ML Pipeline architecture, ML Platform Domains section, updated ML Pipeline Components to TFX approach, added domain documentation links | Claude Code |
 | 2025-12-06 | 2.1 | Dataset Domain Architecture: Removed train/eval split from Dataset (moved to Training domain), added "Dataset as Configuration" concept, updated Dataset wizard to 4 steps, documented SQL generation and versioning approach | Claude Code |
-| 2025-12-13 | 2.2 | Quick Test moved from Modeling to Experiments domain, updated domain diagram and navigation | Claude Code |
+| 2025-12-13 | 2.2 | Quick Test moved from Configs to Experiments domain, updated domain diagram and navigation | Claude Code |
 
 ---
 

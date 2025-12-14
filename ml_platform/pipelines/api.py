@@ -15,7 +15,7 @@ from django.contrib.auth.decorators import login_required
 
 from ml_platform.models import FeatureConfig, ModelConfig, QuickTest
 from ml_platform.pipelines.services import PipelineService, PipelineServiceError
-from ml_platform.modeling.services import TrainerModuleGenerator
+from ml_platform.configs.services import TrainerModuleGenerator
 
 logger = logging.getLogger(__name__)
 

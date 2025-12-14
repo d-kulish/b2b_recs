@@ -2,7 +2,7 @@
 {% load humanize %}
 {% load static %}
 
-{% block title %}{{ model.name }} - Modeling{% endblock %}
+{% block title %}{{ model.name }} - Configs{% endblock %}
 
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'css/cards.css' %}?v=4">
@@ -4252,7 +4252,7 @@
                 </div>
             </div>
 
-            <!-- Rating Head (for ranking models) -->
+            <!-- Rating Head (for ranking and multitask models) -->
             <div id="viewMcRatingHeadSection" class="mb-6 hidden">
                 <h4 class="text-sm font-medium text-gray-700 mb-3">Rating Head</h4>
                 <div class="tower-visual">
@@ -4271,6 +4271,14 @@
                     </div>
                 </div>
                 <div class="training-params-preview mt-3" id="viewMcLossParams">
+                    <!-- Will be populated dynamically -->
+                </div>
+            </div>
+
+            <!-- Multitask Weights (for multitask models) -->
+            <div id="viewMcMultitaskSection" class="mb-4 hidden">
+                <h4 class="text-sm font-medium text-gray-700 mb-3">Multitask Weights</h4>
+                <div class="training-params-preview" id="viewMcMultitaskParams">
                     <!-- Will be populated dynamically -->
                 </div>
             </div>
@@ -10620,9 +10628,9 @@ function populateViewModal(mc) {
         </div>
     `;
 
-    // Retrieval algorithm section (for retrieval models)
+    // Retrieval algorithm section (for retrieval and multitask models)
     const retrievalSection = document.getElementById('viewMcRetrievalSection');
-    if (mc.model_type === 'retrieval') {
+    if (['retrieval', 'multitask'].includes(mc.model_type)) {
         retrievalSection.classList.remove('hidden');
         document.getElementById('viewMcRetrievalParams').innerHTML = `
             <div class="param-chip retrieval-algo">
@@ -10648,10 +10656,10 @@ function populateViewModal(mc) {
         retrievalSection.classList.add('hidden');
     }
 
-    // Rating Head section (for ranking models)
+    // Rating Head section (for ranking and multitask models)
     const ratingHeadSection = document.getElementById('viewMcRatingHeadSection');
     if (ratingHeadSection) {
-        if (mc.model_type === 'ranking') {
+        if (['ranking', 'multitask'].includes(mc.model_type)) {
             ratingHeadSection.classList.remove('hidden');
             const ratingHeadLayers = mc.rating_head_layers || [];
             const ratingHeadSummary = getRatingHeadSummaryFromLayers(ratingHeadLayers);
@@ -10673,6 +10681,26 @@ function populateViewModal(mc) {
             }
         } else {
             ratingHeadSection.classList.add('hidden');
+        }
+    }
+
+    // Multitask weights section (for multitask models only)
+    const multitaskSection = document.getElementById('viewMcMultitaskSection');
+    if (multitaskSection) {
+        if (mc.model_type === 'multitask') {
+            multitaskSection.classList.remove('hidden');
+            document.getElementById('viewMcMultitaskParams').innerHTML = `
+                <div class="param-chip">
+                    <span class="param-chip-label">Retrieval Weight:</span>
+                    <span class="param-chip-value">${Math.round((mc.retrieval_weight !== undefined ? mc.retrieval_weight : 1) * 100)}%</span>
+                </div>
+                <div class="param-chip">
+                    <span class="param-chip-label">Ranking Weight:</span>
+                    <span class="param-chip-value">${Math.round((mc.ranking_weight !== undefined ? mc.ranking_weight : 1) * 100)}%</span>
+                </div>
+            `;
+        } else {
+            multitaskSection.classList.add('hidden');
         }
     }
 }
@@ -10758,9 +10786,9 @@ function populateViewModalBasic(mc) {
         </div>
     `;
 
-    // Retrieval section
+    // Retrieval section (for retrieval and multitask models)
     const retrievalSection = document.getElementById('viewMcRetrievalSection');
-    if (mc.model_type === 'retrieval') {
+    if (['retrieval', 'multitask'].includes(mc.model_type)) {
         retrievalSection.classList.remove('hidden');
         document.getElementById('viewMcRetrievalParams').innerHTML = `
             <div class="param-chip retrieval-algo">
@@ -10774,6 +10802,36 @@ function populateViewModalBasic(mc) {
         `;
     } else {
         retrievalSection.classList.add('hidden');
+    }
+
+    // Rating Head section (for ranking and multitask models) - hide in basic mode
+    const ratingHeadSection = document.getElementById('viewMcRatingHeadSection');
+    if (ratingHeadSection) {
+        // In basic mode, we don't have detailed layer info, so hide Rating Head
+        // The full populateViewModal will handle this when details are loaded
+        if (!['ranking', 'multitask'].includes(mc.model_type)) {
+            ratingHeadSection.classList.add('hidden');
+        }
+    }
+
+    // Multitask weights section (for multitask models)
+    const multitaskSection = document.getElementById('viewMcMultitaskSection');
+    if (multitaskSection) {
+        if (mc.model_type === 'multitask') {
+            multitaskSection.classList.remove('hidden');
+            document.getElementById('viewMcMultitaskParams').innerHTML = `
+                <div class="param-chip">
+                    <span class="param-chip-label">Retrieval Weight:</span>
+                    <span class="param-chip-value">${Math.round((mc.retrieval_weight !== undefined ? mc.retrieval_weight : 1) * 100)}%</span>
+                </div>
+                <div class="param-chip">
+                    <span class="param-chip-label">Ranking Weight:</span>
+                    <span class="param-chip-value">${Math.round((mc.ranking_weight !== undefined ? mc.ranking_weight : 1) * 100)}%</span>
+                </div>
+            `;
+        } else {
+            multitaskSection.classList.add('hidden');
+        }
     }
 }
 
@@ -11001,19 +11059,21 @@ function renderMcCompareView() {
         rightConfig
     );
 
-    // Render Rating Head section (for Ranking models)
-    const leftIsRanking = leftConfig?.model_type === 'ranking';
-    const rightIsRanking = rightConfig?.model_type === 'ranking';
+    // Render Rating Head section (for Ranking and Multitask models)
+    const leftHasRatingHead = ['ranking', 'multitask'].includes(leftConfig?.model_type);
+    const rightHasRatingHead = ['ranking', 'multitask'].includes(rightConfig?.model_type);
     const ratingHeadSection = document.getElementById('mcCompareRatingHeadSection');
 
-    if (leftIsRanking || rightIsRanking) {
+    if (leftHasRatingHead || rightHasRatingHead) {
         ratingHeadSection.classList.remove('hidden');
         renderMcCompareTowerSection(
             'rating_head',
-            leftIsRanking ? (leftConfig?.rating_head_layers || []) : [],
-            rightIsRanking ? (rightConfig?.rating_head_layers || []) : [],
+            leftHasRatingHead ? (leftConfig?.rating_head_layers || []) : [],
+            rightHasRatingHead ? (rightConfig?.rating_head_layers || []) : [],
             leftConfig,
-            rightConfig
+            rightConfig,
+            leftHasRatingHead,  // leftSupported - true if model has rating head
+            rightHasRatingHead  // rightSupported - true if model has rating head
         );
     } else {
         ratingHeadSection.classList.add('hidden');
@@ -11052,9 +11112,13 @@ function renderMcCompareHeader(elementId, config) {
 /**
  * Render a tower section with aligned layers
  */
-function renderMcCompareTowerSection(tower, leftLayers, rightLayers, leftConfig, rightConfig) {
+function renderMcCompareTowerSection(tower, leftLayers, rightLayers, leftConfig, rightConfig, leftSupported = true, rightSupported = true) {
     const layersContainer = document.getElementById(`mcCompare${tower.charAt(0).toUpperCase() + tower.slice(1)}Layers`);
     const paramsContainer = document.getElementById(`mcCompare${tower.charAt(0).toUpperCase() + tower.slice(1)}Params`);
+
+    // Check if we need to show N/A for either side (model doesn't support this component)
+    const leftShowNA = leftConfig && !leftSupported;
+    const rightShowNA = rightConfig && !rightSupported;
 
     // Align layers with output layers at the bottom
     const alignedRows = alignTowerLayers(leftLayers, rightLayers);
@@ -11066,8 +11130,8 @@ function renderMcCompareTowerSection(tower, leftLayers, rightLayers, leftConfig,
 
         return `
             <div class="mc-compare-layer-row">
-                ${renderMcCompareLayerCell(row.left, isOutput, isDifferent && row.left && row.right)}
-                ${renderMcCompareLayerCell(row.right, isOutput, isDifferent && row.left && row.right)}
+                ${renderMcCompareLayerCell(row.left, isOutput, isDifferent && row.left && row.right, leftShowNA)}
+                ${renderMcCompareLayerCell(row.right, isOutput, isDifferent && row.left && row.right, rightShowNA)}
             </div>
         `;
     }).join('');
@@ -11079,10 +11143,10 @@ function renderMcCompareTowerSection(tower, leftLayers, rightLayers, leftConfig,
 
     paramsContainer.innerHTML = `
         <div class="mc-compare-params-cell ${paramsDifferent ? 'mc-compare-diff' : ''}">
-            ${leftConfig ? `Params: ${leftParams.toLocaleString()}` : ''}
+            ${leftShowNA ? 'N/A' : (leftConfig ? `Params: ${leftParams.toLocaleString()}` : '')}
         </div>
         <div class="mc-compare-params-cell ${paramsDifferent ? 'mc-compare-diff' : ''}">
-            ${rightConfig ? `Params: ${rightParams.toLocaleString()}` : ''}
+            ${rightShowNA ? 'N/A' : (rightConfig ? `Params: ${rightParams.toLocaleString()}` : '')}
         </div>
     `;
 }
@@ -11130,8 +11194,11 @@ function alignTowerLayers(leftLayers, rightLayers) {
 /**
  * Render a single layer cell
  */
-function renderMcCompareLayerCell(layer, isOutput, isDifferent) {
+function renderMcCompareLayerCell(layer, isOutput, isDifferent, showNA = false) {
     if (!layer) {
+        if (showNA) {
+            return `<div class="mc-compare-layer-cell placeholder na-cell"><span class="text-gray-400 text-sm">N/A</span></div>`;
+        }
         return `<div class="mc-compare-layer-cell placeholder"></div>`;
     }
 
@@ -11203,35 +11270,61 @@ function renderMcCompareSettings(leftConfig, rightConfig) {
         { label: 'Output Dim', leftValue: leftConfig ? `${leftConfig.output_embedding_dim}D` : null, rightValue: rightConfig ? `${rightConfig.output_embedding_dim}D` : null, leftRaw: leftConfig?.output_embedding_dim, rightRaw: rightConfig?.output_embedding_dim },
     ];
 
-    // Add retrieval-specific settings
-    if (leftConfig?.model_type === 'retrieval' || rightConfig?.model_type === 'retrieval') {
+    // Helper functions to check model capabilities
+    const hasRetrievalSettings = (modelType) => ['retrieval', 'multitask'].includes(modelType);
+    const hasRankingSettings = (modelType) => ['ranking', 'multitask'].includes(modelType);
+    const isMultitask = (modelType) => modelType === 'multitask';
+
+    // Add retrieval-specific settings (for retrieval and multitask models)
+    if (hasRetrievalSettings(leftConfig?.model_type) || hasRetrievalSettings(rightConfig?.model_type)) {
         settingsRows.push(
             {
                 label: 'Algorithm',
-                leftValue: leftConfig?.model_type === 'retrieval' ? (leftConfig?.retrieval_algorithm_display || leftConfig?.retrieval_algorithm || 'Brute Force') : 'N/A',
-                rightValue: rightConfig?.model_type === 'retrieval' ? (rightConfig?.retrieval_algorithm_display || rightConfig?.retrieval_algorithm || 'Brute Force') : 'N/A',
-                leftRaw: leftConfig?.model_type === 'retrieval' ? leftConfig?.retrieval_algorithm : null,
-                rightRaw: rightConfig?.model_type === 'retrieval' ? rightConfig?.retrieval_algorithm : null
+                leftValue: hasRetrievalSettings(leftConfig?.model_type) ? (leftConfig?.retrieval_algorithm_display || leftConfig?.retrieval_algorithm || 'Brute Force') : 'N/A',
+                rightValue: hasRetrievalSettings(rightConfig?.model_type) ? (rightConfig?.retrieval_algorithm_display || rightConfig?.retrieval_algorithm || 'Brute Force') : 'N/A',
+                leftRaw: hasRetrievalSettings(leftConfig?.model_type) ? leftConfig?.retrieval_algorithm : null,
+                rightRaw: hasRetrievalSettings(rightConfig?.model_type) ? rightConfig?.retrieval_algorithm : null
             },
             {
                 label: 'Top-K',
-                leftValue: leftConfig?.model_type === 'retrieval' ? (leftConfig?.top_k || 100) : 'N/A',
-                rightValue: rightConfig?.model_type === 'retrieval' ? (rightConfig?.top_k || 100) : 'N/A',
-                leftRaw: leftConfig?.model_type === 'retrieval' ? (leftConfig?.top_k || 100) : null,
-                rightRaw: rightConfig?.model_type === 'retrieval' ? (rightConfig?.top_k || 100) : null
+                leftValue: hasRetrievalSettings(leftConfig?.model_type) ? (leftConfig?.top_k || 100) : 'N/A',
+                rightValue: hasRetrievalSettings(rightConfig?.model_type) ? (rightConfig?.top_k || 100) : 'N/A',
+                leftRaw: hasRetrievalSettings(leftConfig?.model_type) ? (leftConfig?.top_k || 100) : null,
+                rightRaw: hasRetrievalSettings(rightConfig?.model_type) ? (rightConfig?.top_k || 100) : null
             }
         );
     }
 
-    // Add ranking-specific settings
-    if (leftConfig?.model_type === 'ranking' || rightConfig?.model_type === 'ranking') {
+    // Add ranking-specific settings (for ranking and multitask models)
+    if (hasRankingSettings(leftConfig?.model_type) || hasRankingSettings(rightConfig?.model_type)) {
         settingsRows.push(
             {
                 label: 'Loss Function',
-                leftValue: leftConfig?.model_type === 'ranking' ? (leftConfig?.loss_function_display || leftConfig?.loss_function || 'MSE') : 'N/A',
-                rightValue: rightConfig?.model_type === 'ranking' ? (rightConfig?.loss_function_display || rightConfig?.loss_function || 'MSE') : 'N/A',
-                leftRaw: leftConfig?.model_type === 'ranking' ? leftConfig?.loss_function : null,
-                rightRaw: rightConfig?.model_type === 'ranking' ? rightConfig?.loss_function : null
+                leftValue: hasRankingSettings(leftConfig?.model_type) ? (leftConfig?.loss_function_display || leftConfig?.loss_function || 'MSE') : 'N/A',
+                rightValue: hasRankingSettings(rightConfig?.model_type) ? (rightConfig?.loss_function_display || rightConfig?.loss_function || 'MSE') : 'N/A',
+                leftRaw: hasRankingSettings(leftConfig?.model_type) ? leftConfig?.loss_function : null,
+                rightRaw: hasRankingSettings(rightConfig?.model_type) ? rightConfig?.loss_function : null
+            }
+        );
+    }
+
+    // Add multitask-specific settings (loss weights as percentages)
+    if (isMultitask(leftConfig?.model_type) || isMultitask(rightConfig?.model_type)) {
+        const formatWeight = (weight) => weight !== null && weight !== undefined ? `${Math.round(weight * 100)}%` : 'N/A';
+        settingsRows.push(
+            {
+                label: 'Retrieval Weight',
+                leftValue: isMultitask(leftConfig?.model_type) ? formatWeight(leftConfig?.retrieval_weight) : 'N/A',
+                rightValue: isMultitask(rightConfig?.model_type) ? formatWeight(rightConfig?.retrieval_weight) : 'N/A',
+                leftRaw: isMultitask(leftConfig?.model_type) ? leftConfig?.retrieval_weight : null,
+                rightRaw: isMultitask(rightConfig?.model_type) ? rightConfig?.retrieval_weight : null
+            },
+            {
+                label: 'Ranking Weight',
+                leftValue: isMultitask(leftConfig?.model_type) ? formatWeight(leftConfig?.ranking_weight) : 'N/A',
+                rightValue: isMultitask(rightConfig?.model_type) ? formatWeight(rightConfig?.ranking_weight) : 'N/A',
+                leftRaw: isMultitask(leftConfig?.model_type) ? leftConfig?.ranking_weight : null,
+                rightRaw: isMultitask(rightConfig?.model_type) ? rightConfig?.ranking_weight : null
             }
         );
     }

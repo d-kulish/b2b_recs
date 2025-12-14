@@ -9,14 +9,14 @@ This document provides detailed specifications for implementing the **Experiment
 
 ## Recent Updates (December 2025)
 
-### Page Split from Modeling Domain (2025-12-13)
+### Page Split from Configs Domain (2025-12-13)
 
-**Major Change:** Quick Test functionality moved from Modeling page to dedicated Experiments page.
+**Major Change:** Quick Test functionality moved from Configs page to dedicated Experiments page.
 
 **Why This Change:**
-- `model_modeling.html` exceeded 10,000 lines
+- `model_configs.html` exceeded 10,000 lines
 - Running experiments and analyzing experiments deserve dedicated space
-- Clear separation: Modeling = Configure features/architecture, Experiments = Run and compare
+- Clear separation: Configs = Configure features/architecture, Experiments = Run and compare
 
 **New UI Structure:**
 - **Experiments Page** (`model_experiments.html`) now handles:
@@ -54,8 +54,8 @@ The Experiments domain allows users to:
 |------|------------|
 | **Quick Test** | A lightweight training run (10% data, 2-3 epochs) for rapid validation |
 | **Full Training** | Complete training run with all data and more epochs |
-| **Feature Config** | Configuration of how columns are transformed (from Modeling domain) |
-| **Model Config** | Neural network architecture configuration (from Modeling domain) |
+| **Feature Config** | Configuration of how columns are transformed (from Configs domain) |
+| **Model Config** | Neural network architecture configuration (from Configs domain) |
 
 ### Tool Responsibilities
 
@@ -902,8 +902,7 @@ MLFLOW_TRACKING_URI = os.environ.get('MLFLOW_TRACKING_URI', 'http://mlflow-serve
 ## Dependencies on Other Domains
 
 ### Depends On
-- **Modeling Domain**: Feature Configs (feature engineering specifications)
-- **Model Structure Domain**: Model Configs (neural network architecture)
+- **Configs Domain**: Feature Configs (feature engineering specifications) and Model Configs (neural network architecture)
 - **Datasets Domain**: Dataset definitions for training data
 - **Training Domain**: Full Training results (future)
 
@@ -915,6 +914,6 @@ MLFLOW_TRACKING_URI = os.environ.get('MLFLOW_TRACKING_URI', 'http://mlflow-serve
 ## Related Documentation
 
 - [Implementation Overview](../implementation.md)
-- [Modeling Phase](phase_modeling.md)
+- [Configs Phase](phase_configs.md)
 - [Training Phase](phase_training.md)
 - [Deployment Phase](phase_deployment.md)

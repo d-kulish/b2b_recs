@@ -141,7 +141,7 @@ def model_dashboard(request, model_id):
 
 
 # Note: model_dataset view has been moved to ml_platform/datasets/views.py
-# Note: model_modeling view has been moved to ml_platform/modeling/views.py
+# Note: model_configs view has been moved to ml_platform/configs/views.py
 
 
 @login_required

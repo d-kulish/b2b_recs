@@ -1,7 +1,7 @@
 """
-Modeling Domain Services
+Configs Domain Services
 
-Contains business logic for Feature Engineering:
+Contains business logic for Feature & Model Configuration:
 - SmartDefaultsService: Auto-configures features based on column mapping and statistics
 - TensorDimensionCalculator: Calculates tensor dimensions for preview
 - PreprocessingFnGenerator: Generates TFX Transform preprocessing_fn code

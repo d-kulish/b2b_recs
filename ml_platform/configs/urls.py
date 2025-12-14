@@ -1,7 +1,7 @@
 """
-Modeling Domain URL Configuration
+Configs Domain URL Configuration
 
-Routes for Feature Engineering (Modeling) domain.
+Routes for Feature & Model Configuration (Configs) domain.
 """
 
 from django.urls import path
@@ -9,47 +9,47 @@ from . import views, api
 
 urlpatterns = [
     # Page views
-    path('models/<int:model_id>/modeling/', views.model_modeling, name='model_modeling'),
+    path('models/<int:model_id>/configs/', views.model_configs, name='model_configs'),
 
     # Feature Config CRUD API
     path('api/models/<int:model_id>/feature-configs/',
-         api.list_feature_configs, name='api_modeling_list_configs'),
+         api.list_feature_configs, name='api_configs_list'),
     path('api/models/<int:model_id>/feature-configs/create/',
-         api.create_feature_config, name='api_modeling_create_config'),
+         api.create_feature_config, name='api_configs_create'),
     path('api/feature-configs/<int:config_id>/',
-         api.get_feature_config, name='api_modeling_get_config'),
+         api.get_feature_config, name='api_configs_get'),
     path('api/feature-configs/<int:config_id>/update/',
-         api.update_feature_config, name='api_modeling_update_config'),
+         api.update_feature_config, name='api_configs_update'),
     path('api/feature-configs/<int:config_id>/delete/',
-         api.delete_feature_config, name='api_modeling_delete_config'),
+         api.delete_feature_config, name='api_configs_delete'),
     path('api/feature-configs/<int:config_id>/clone/',
-         api.clone_feature_config, name='api_modeling_clone_config'),
+         api.clone_feature_config, name='api_configs_clone'),
     path('api/feature-configs/<int:config_id>/versions/',
-         api.list_versions, name='api_modeling_list_versions'),
+         api.list_versions, name='api_configs_list_versions'),
 
     # Generated code endpoints
     path('api/feature-configs/<int:config_id>/generated-code/',
-         api.get_generated_code, name='api_modeling_get_generated_code'),
+         api.get_generated_code, name='api_configs_get_generated_code'),
     path('api/feature-configs/<int:config_id>/regenerate-code/',
-         api.regenerate_code, name='api_modeling_regenerate_code'),
+         api.regenerate_code, name='api_configs_regenerate_code'),
 
     # Combined trainer code generation (requires both FeatureConfig + ModelConfig)
-    path('api/modeling/generate-trainer-code/',
-         api.generate_trainer_code, name='api_modeling_generate_trainer_code'),
+    path('api/configs/generate-trainer-code/',
+         api.generate_trainer_code, name='api_configs_generate_trainer_code'),
 
     # Utility endpoints
     path('api/feature-configs/smart-defaults/',
-         api.generate_smart_defaults, name='api_modeling_smart_defaults'),
+         api.generate_smart_defaults, name='api_configs_smart_defaults'),
     path('api/feature-configs/calculate-dims/',
-         api.calculate_dimensions, name='api_modeling_calculate_dims'),
+         api.calculate_dimensions, name='api_configs_calculate_dims'),
 
-    # Dataset endpoints for modeling
-    path('api/models/<int:model_id>/modeling/datasets/',
-         api.list_datasets_for_model, name='api_modeling_list_datasets'),
+    # Dataset endpoints for configs
+    path('api/models/<int:model_id>/configs/datasets/',
+         api.list_datasets_for_model, name='api_configs_list_datasets'),
     path('api/datasets/<int:dataset_id>/columns/',
-         api.get_dataset_columns, name='api_modeling_dataset_columns'),
+         api.get_dataset_columns, name='api_configs_dataset_columns'),
     path('api/datasets/<int:dataset_id>/schema-with-sample/',
-         api.get_schema_with_sample, name='api_modeling_schema_with_sample'),
+         api.get_schema_with_sample, name='api_configs_schema_with_sample'),
 
     # ==========================================================================
     # Model Config API (Model Structure Domain)

@@ -1,9 +1,37 @@
 # Phase: Experiments Domain
 
 ## Document Purpose
-This document provides detailed specifications for implementing the **Experiments** domain in the ML Platform. The Experiments domain handles Quick Tests for rapid validation and MLflow-based experiment comparison.
+This document provides **high-level specifications** for the Experiments domain. For detailed implementation instructions, see:
 
-**Last Updated**: 2025-12-13
+👉 **[phase_experiments_implementation.md](phase_experiments_implementation.md)** - Complete implementation guide with code examples
+
+**Last Updated**: 2024-12-14
+
+---
+
+## ⚠️ IMPORTANT: Implementation Guide
+
+**Before implementing, read the detailed implementation guide:**
+
+| Document | Purpose |
+|----------|---------|
+| **[phase_experiments_implementation.md](phase_experiments_implementation.md)** | Step-by-step implementation with code |
+| This document | High-level concepts and UI mockups |
+
+---
+
+## Key Technical Decisions (2024-12-14)
+
+| Decision | Choice |
+|----------|--------|
+| Pipeline Framework | **Native TFX SDK** (NOT KFP v2 placeholder) |
+| Data Flow | BigQuery → TFRecords → TFX |
+| Container Image | `gcr.io/tfx-oss-public/tfx:latest` |
+| TensorBoard | **NOT USED** (too expensive) - custom visualizations |
+| Pipeline Compilation | On-demand at submission time |
+| Sampling | TFX-level (ExampleGen/Transform) |
+| Train/Val Split | All 3 options: random, time-based, custom |
+| Model Type (Phase 1) | Retrieval only |
 
 ---
 
@@ -855,47 +883,92 @@ MLFLOW_TRACKING_URI = os.environ.get('MLFLOW_TRACKING_URI', 'http://mlflow-serve
 
 ## Implementation Checklist
 
-### Phase 1: Quick Test UI (Experiments Page) ✅
-- [x] Create `model_experiments.html` page
-- [x] Feature Config dropdown (loads from API)
-- [x] Model Config dropdown (loads from API)
-- [x] Training parameters panel (epochs, batch size, learning rate)
-- [x] Auto-fill parameters from selected Model Config
-- [x] Start Quick Test button
-- [x] Quick Test Dialog modal (confirmation)
-- [x] Quick Test Progress modal (real-time status)
-- [x] Quick Test Results modal (metrics, vocabulary stats)
+> **Note:** Detailed implementation steps are in [phase_experiments_implementation.md](phase_experiments_implementation.md)
 
-### Phase 2: Quick Test Backend ✅
-- [x] `QuickTest` Django model for tracking pipeline runs
+### Phase 1: TFX Pipeline Infrastructure 🔴 TODO
+- [ ] Install TFX dependencies (`tfx>=1.14.0`)
+- [ ] Create `ml_platform/pipelines/tfx_pipeline.py` - Native TFX pipeline
+- [ ] Implement `create_quicktest_pipeline()` function
+- [ ] Implement `compile_pipeline_for_vertex()` function
+- [ ] Update `pipeline_builder.py` to use TFX (remove KFP v2 placeholders)
+- [ ] Update `services.py` for TFX pipeline submission
+- [ ] Test pipeline compilation
+- [ ] Test pipeline execution on Vertex AI
+
+### Phase 2: Trainer Module Generator Rebuild 🔴 TODO
+- [ ] Rebuild `TrainerModuleGenerator` in `configs/services.py`
+- [ ] Generate proper `run_fn()` entry point
+- [ ] Generate BuyerModel class from FeatureConfig
+- [ ] Generate ProductModel class from FeatureConfig
+- [ ] Apply tower layers from ModelConfig
+- [ ] Implement metrics export to GCS
+- [ ] Validate generated code compiles
+
+### Phase 3: Experiment Parameters & Submission 🔴 TODO
+- [ ] Add new fields to `QuickTest` model:
+  - `sample_percent` (5, 10, 25, 100)
+  - `split_strategy` (random, time_based, custom)
+  - `train_ratio` (0.5-0.95)
+  - `time_split_column`
+- [ ] Update API endpoint to accept new parameters
+- [ ] Update UI to show parameter configuration
+- [ ] Implement sampling in SQL query
+- [ ] Implement split configuration in ExampleGen
+
+### Phase 4: Pipeline Visualization UI 🔴 TODO
+- [ ] Create pipeline DAG component (like Vertex AI console)
+- [ ] Add real-time stage status updates
+- [ ] Show stage icons (✅ completed, 🔄 running, ⏳ pending)
+- [ ] Add artifact boxes between stages
+- [ ] Style to match screenshot reference
+
+### Phase 5: Metrics Collection & Display 🔴 TODO
+- [ ] Collect all available metrics per epoch
+- [ ] Export `epoch_metrics.json` from Trainer
+- [ ] Build epoch metrics chart (Chart.js)
+- [ ] Build comparison table (sortable, filterable)
+
+### Phase 6: MLflow Integration 🔴 TODO
+- [ ] Deploy MLflow server to Cloud Run
+  - [ ] Create `mlflow-server/Dockerfile`
+  - [ ] Create `mlflow-server/cloudbuild.yaml`
+  - [ ] Deploy and verify server accessible
+- [ ] Set up Cloud SQL for MLflow backend store
+  - [ ] Create PostgreSQL database
+  - [ ] Configure connection from Cloud Run
+- [ ] Create GCS bucket for MLflow artifacts
+- [ ] Django MLflow integration:
+  - [ ] Add `MLFLOW_TRACKING_URI` to settings
+  - [ ] Create `ml_platform/experiments/services.py` (MLflowService)
+  - [ ] Create `ml_platform/experiments/api.py` (endpoints)
+  - [ ] Add `mlflow_run_id` field to QuickTest model
+- [ ] Update pipeline completion to log to MLflow
+- [ ] API endpoints:
+  - [ ] GET `/api/experiments/{model_endpoint_id}/{dataset_id}/runs/`
+  - [ ] GET `/api/experiments/{model_endpoint_id}/{dataset_id}/heatmap/`
+  - [ ] POST `/api/experiments/compare/`
+  - [ ] GET `/api/experiments/mlflow-url/`
+- [ ] UI integration:
+  - [ ] Add "Open MLflow UI" button
+  - [ ] Runs table with sorting/filtering
+  - [ ] Heatmap visualization
+  - [ ] Run comparison view
+
+### Previously Completed ✅
+- [x] Create `model_experiments.html` page (placeholder)
+- [x] Feature Config dropdown
+- [x] Model Config dropdown
+- [x] Training parameters panel
+- [x] QuickTest Django model
 - [x] `ml_platform/pipelines/` sub-app structure
-- [x] PipelineService for Vertex AI integration
-- [x] KFP v2 pipeline with 6 components
-- [x] API endpoints (start/status/cancel/list)
+- [x] PipelineService class (needs update for TFX)
+- [x] API endpoints (need parameter updates)
 - [x] GCS bucket lifecycle policies
 
-### Phase 3: MLflow Integration
-- [ ] Deploy MLflow server to Cloud Run
-- [ ] Create MLflowService class
-- [ ] Implement log_quick_test method
-- [ ] Implement log_training_run method
-
-### Phase 4: Experiments Dashboard
-- [ ] Implement summary statistics cards
-- [ ] Create recent experiments list
-- [ ] Connect to MLflow for historical data
-
-### Phase 5: Heatmap Visualization
-- [ ] Implement HeatmapService
-- [ ] Create heatmap API endpoint
-- [ ] Build frontend heatmap component
-- [ ] Add axis selection controls
-
-### Phase 6: Comparison Tools
-- [ ] Implement run comparison API
-- [ ] Create comparison view UI
-- [ ] Show configuration diffs
-- [ ] Add recommendations based on comparison
+### Future Phases (Not in Scope)
+- [ ] Ranking Models
+- [ ] Multitask Models
+- [ ] Hyperparameter Tuning (Vertex AI Vizier)
 
 ---
 

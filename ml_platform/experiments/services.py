@@ -256,7 +256,10 @@ class ExperimentService:
         run_id: str,
     ):
         """
-        Submit the TFX pipeline to Vertex AI.
+        Submit the TFX pipeline to Vertex AI via Cloud Build.
+
+        Cloud Build is used to compile the TFX pipeline (requires Python 3.10)
+        and submit it to Vertex AI. The result is written to GCS for retrieval.
 
         Args:
             quick_test: QuickTest instance
@@ -267,46 +270,343 @@ class ExperimentService:
             run_id: Unique identifier for this run
 
         Returns:
-            PipelineJob instance
+            Object with resource_name and name attributes (pipeline job info)
         """
-        self._init_aiplatform()
+        import time
 
-        from google.cloud import aiplatform
-        from .tfx_pipeline import compile_tfx_pipeline
+        logger.info(f"Triggering Cloud Build for TFX pipeline compilation: {run_id}")
 
-        # Compile the pipeline to JSON
-        pipeline_spec_path = compile_tfx_pipeline(
+        # Trigger Cloud Build
+        build_id = self._trigger_cloud_build(
             run_id=run_id,
-            staging_bucket=self.STAGING_BUCKET
+            bigquery_query=bigquery_query,
+            transform_module_path=transform_module_path,
+            trainer_module_path=trainer_module_path,
+            output_path=gcs_output_path,
+            epochs=quick_test.epochs,
+            batch_size=quick_test.batch_size,
+            learning_rate=quick_test.learning_rate,
         )
 
-        # Pipeline parameters
-        pipeline_parameters = {
-            'bigquery_query': bigquery_query,
-            'transform_module_path': transform_module_path,
-            'trainer_module_path': trainer_module_path,
-            'output_path': gcs_output_path,
-            'pipeline_root': f"gs://{self.STAGING_BUCKET}/pipeline_root/{run_id}",
-            'project_id': self.project_id,
-            'epochs': quick_test.epochs,
-            'batch_size': quick_test.batch_size,
-            'learning_rate': quick_test.learning_rate,
+        logger.info(f"Cloud Build triggered: {build_id}")
+
+        # Wait for Cloud Build to complete and read result from GCS
+        result = self._wait_for_build_result(run_id, timeout_seconds=1800)
+
+        if not result.get('success'):
+            raise ExperimentServiceError(
+                f"Cloud Build failed: {result.get('error', 'Unknown error')}"
+            )
+
+        # Return a simple object with the pipeline job info
+        class PipelineJobInfo:
+            def __init__(self, resource_name):
+                self.resource_name = resource_name
+                self.name = resource_name
+
+        return PipelineJobInfo(result['vertex_pipeline_job_name'])
+
+    def _trigger_cloud_build(
+        self,
+        run_id: str,
+        bigquery_query: str,
+        transform_module_path: str,
+        trainer_module_path: str,
+        output_path: str,
+        epochs: int,
+        batch_size: int,
+        learning_rate: float,
+    ) -> str:
+        """
+        Trigger Cloud Build to compile and submit TFX pipeline.
+
+        Args:
+            run_id: Unique run identifier
+            bigquery_query: BigQuery SQL query
+            transform_module_path: GCS path to transform module
+            trainer_module_path: GCS path to trainer module
+            output_path: GCS path for outputs
+            epochs: Training epochs
+            batch_size: Batch size
+            learning_rate: Learning rate
+
+        Returns:
+            Cloud Build build ID
+        """
+        import base64
+        from google.cloud.devtools import cloudbuild_v1
+
+        client = cloudbuild_v1.CloudBuildClient()
+
+        # Base64 encode the query to avoid shell escaping issues
+        query_b64 = base64.b64encode(bigquery_query.encode()).decode()
+
+        # Upload the compile script to GCS (avoid Cloud Build arg length limit)
+        script_path = f"build_scripts/{run_id}/compile_and_submit.py"
+        bucket = self.storage_client.bucket(self.STAGING_BUCKET)
+        blob = bucket.blob(script_path)
+        blob.upload_from_string(self._get_compile_script(), content_type='text/plain')
+        script_gcs_path = f"gs://{self.STAGING_BUCKET}/{script_path}"
+        logger.info(f"Uploaded compile script to {script_gcs_path}")
+
+        # Build configuration - downloads script from GCS using Python (gsutil not available in python:3.10)
+        # Parse bucket and blob path from script_gcs_path
+        script_bucket = self.STAGING_BUCKET
+        script_blob = script_path
+
+        build = cloudbuild_v1.Build(
+            steps=[
+                cloudbuild_v1.BuildStep(
+                    name='python:3.10',
+                    entrypoint='bash',
+                    args=[
+                        '-c',
+                        f'''
+set -e
+pip install --quiet tfx>=1.15.0 google-cloud-aiplatform>=1.38.0 google-cloud-storage dill kfp>=2.0.0
+python -c "from google.cloud import storage; storage.Client().bucket('{script_bucket}').blob('{script_blob}').download_to_filename('/tmp/compile_and_submit.py')"
+python /tmp/compile_and_submit.py \
+    --run-id="{run_id}" \
+    --staging-bucket="{self.STAGING_BUCKET}" \
+    --bigquery-query-b64="{query_b64}" \
+    --transform-module-path="{transform_module_path}" \
+    --trainer-module-path="{trainer_module_path}" \
+    --output-path="{output_path}" \
+    --epochs="{epochs}" \
+    --batch-size="{batch_size}" \
+    --learning-rate="{learning_rate}" \
+    --project-id="{self.project_id}" \
+    --region="{self.REGION}"
+'''
+                    ],
+                )
+            ],
+            timeout={'seconds': 1800},
+            options=cloudbuild_v1.BuildOptions(
+                logging=cloudbuild_v1.BuildOptions.LoggingMode.CLOUD_LOGGING_ONLY,
+                machine_type=cloudbuild_v1.BuildOptions.MachineType.E2_HIGHCPU_8,
+            ),
+        )
+
+        # Trigger build
+        operation = client.create_build(project_id=self.project_id, build=build)
+
+        # Get build ID from operation metadata
+        build_id = operation.metadata.build.id
+        logger.info(f"Cloud Build started: {build_id}")
+
+        return build_id
+
+    def _get_compile_script(self) -> str:
+        """Return the TFX compile and submit script content."""
+        return '''
+import argparse
+import json
+import logging
+import os
+import tempfile
+from typing import Optional
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logger = logging.getLogger(__name__)
+
+
+def create_tfx_pipeline(
+    pipeline_name: str,
+    pipeline_root: str,
+    bigquery_query: str,
+    transform_module_path: str,
+    trainer_module_path: str,
+    output_path: str,
+    epochs: int = 10,
+    batch_size: int = 4096,
+    learning_rate: float = 0.001,
+    train_steps: Optional[int] = None,
+    eval_steps: Optional[int] = None,
+):
+    from tfx.extensions.google_cloud_big_query.example_gen.component import BigQueryExampleGen
+    from tfx.components import StatisticsGen, SchemaGen, Transform, Trainer
+    from tfx.proto import example_gen_pb2, trainer_pb2
+    from tfx.orchestration import pipeline as tfx_pipeline
+
+    logger.info(f"Creating TFX pipeline: {pipeline_name}")
+
+    output_config = example_gen_pb2.Output(
+        split_config=example_gen_pb2.SplitConfig(
+            splits=[
+                example_gen_pb2.SplitConfig.Split(name="train", hash_buckets=8),
+                example_gen_pb2.SplitConfig.Split(name="eval", hash_buckets=2),
+            ]
+        )
+    )
+
+    example_gen = BigQueryExampleGen(query=bigquery_query, output_config=output_config)
+    statistics_gen = StatisticsGen(examples=example_gen.outputs["examples"])
+    schema_gen = SchemaGen(statistics=statistics_gen.outputs["statistics"])
+    transform = Transform(
+        examples=example_gen.outputs["examples"],
+        schema=schema_gen.outputs["schema"],
+        module_file=transform_module_path,
+    )
+
+    train_args = trainer_pb2.TrainArgs(num_steps=train_steps)
+    eval_args = trainer_pb2.EvalArgs(num_steps=eval_steps)
+    custom_config = {"epochs": epochs, "batch_size": batch_size, "learning_rate": learning_rate}
+
+    trainer = Trainer(
+        module_file=trainer_module_path,
+        examples=transform.outputs["transformed_examples"],
+        transform_graph=transform.outputs["transform_graph"],
+        schema=schema_gen.outputs["schema"],
+        train_args=train_args,
+        eval_args=eval_args,
+        custom_config=custom_config,
+    )
+
+    components = [example_gen, statistics_gen, schema_gen, transform, trainer]
+    pipeline = tfx_pipeline.Pipeline(
+        pipeline_name=pipeline_name,
+        pipeline_root=pipeline_root,
+        components=components,
+        enable_cache=False,
+    )
+    logger.info(f"TFX pipeline created with {len(components)} components")
+    return pipeline
+
+
+def compile_pipeline(pipeline, output_file: str) -> str:
+    from tfx.orchestration.kubeflow.v2 import kubeflow_v2_dag_runner
+    logger.info(f"Compiling pipeline to: {output_file}")
+    runner = kubeflow_v2_dag_runner.KubeflowV2DagRunner(
+        config=kubeflow_v2_dag_runner.KubeflowV2DagRunnerConfig(),
+        output_filename=output_file
+    )
+    runner.run(pipeline)
+    logger.info("Pipeline compiled successfully")
+    return output_file
+
+
+def submit_to_vertex_ai(template_path: str, display_name: str, project_id: str, region: str) -> str:
+    from google.cloud import aiplatform
+    logger.info(f"Initializing Vertex AI: project={project_id}, region={region}")
+    aiplatform.init(project=project_id, location=region)
+    logger.info(f"Creating pipeline job: {display_name}")
+    pipeline_job = aiplatform.PipelineJob(
+        display_name=display_name[:128],
+        template_path=template_path,
+        enable_caching=False,
+    )
+    logger.info("Submitting pipeline job to Vertex AI...")
+    pipeline_job.submit()
+    resource_name = pipeline_job.resource_name
+    logger.info(f"Pipeline submitted: {resource_name}")
+    return resource_name
+
+
+def write_result_to_gcs(bucket_name: str, blob_path: str, result: dict):
+    from google.cloud import storage
+    client = storage.Client()
+    bucket = client.bucket(bucket_name)
+    blob = bucket.blob(blob_path)
+    content = json.dumps(result, indent=2)
+    blob.upload_from_string(content, content_type="application/json")
+    logger.info(f"Result written to gs://{bucket_name}/{blob_path}")
+
+
+def main():
+    import base64
+    parser = argparse.ArgumentParser(description="Compile and submit TFX pipeline")
+    parser.add_argument("--run-id", required=True)
+    parser.add_argument("--staging-bucket", required=True)
+    parser.add_argument("--bigquery-query-b64", required=True, help="Base64 encoded BigQuery SQL")
+    parser.add_argument("--transform-module-path", required=True)
+    parser.add_argument("--trainer-module-path", required=True)
+    parser.add_argument("--output-path", required=True)
+    parser.add_argument("--epochs", type=int, default=10)
+    parser.add_argument("--batch-size", type=int, default=4096)
+    parser.add_argument("--learning-rate", type=float, default=0.001)
+    parser.add_argument("--project-id", required=True)
+    parser.add_argument("--region", default="europe-central2")
+    args = parser.parse_args()
+
+    # Decode the base64 query
+    bigquery_query = base64.b64decode(args.bigquery_query_b64).decode("utf-8")
+    logger.info(f"Decoded BigQuery query: {bigquery_query[:100]}...")
+
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            pipeline_file = os.path.join(temp_dir, f"pipeline_{args.run_id}.json")
+            pipeline = create_tfx_pipeline(
+                pipeline_name=f"quicktest-{args.run_id}",
+                pipeline_root=f"gs://{args.staging_bucket}/pipeline_root/{args.run_id}",
+                bigquery_query=bigquery_query,
+                transform_module_path=args.transform_module_path,
+                trainer_module_path=args.trainer_module_path,
+                output_path=args.output_path,
+                epochs=args.epochs,
+                batch_size=args.batch_size,
+                learning_rate=args.learning_rate,
+            )
+            compile_pipeline(pipeline, pipeline_file)
+            display_name = f"quicktest-{args.run_id}"
+            resource_name = submit_to_vertex_ai(pipeline_file, display_name, args.project_id, args.region)
+            result = {"success": True, "run_id": args.run_id, "vertex_pipeline_job_name": resource_name, "display_name": display_name}
+            write_result_to_gcs(args.staging_bucket, f"build_results/{args.run_id}.json", result)
+            logger.info("Pipeline compilation and submission completed successfully")
+            print(f"PIPELINE_JOB_NAME={resource_name}")
+    except Exception as e:
+        logger.error(f"Pipeline compilation/submission failed: {e}")
+        error_result = {"success": False, "run_id": args.run_id, "error": str(e)}
+        try:
+            write_result_to_gcs(args.staging_bucket, f"build_results/{args.run_id}.json", error_result)
+        except Exception as gcs_error:
+            logger.error(f"Failed to write error to GCS: {gcs_error}")
+        raise
+
+
+if __name__ == "__main__":
+    main()
+'''
+
+    def _wait_for_build_result(self, run_id: str, timeout_seconds: int = 1800) -> dict:
+        """
+        Wait for Cloud Build to complete and read result from GCS.
+
+        The compile_and_submit.py script writes result to:
+        gs://{STAGING_BUCKET}/build_results/{run_id}.json
+
+        Args:
+            run_id: Unique run identifier
+            timeout_seconds: Maximum time to wait
+
+        Returns:
+            Result dictionary with success, vertex_pipeline_job_name, or error
+        """
+        import time
+
+        result_blob_path = f"build_results/{run_id}.json"
+        bucket = self.storage_client.bucket(self.STAGING_BUCKET)
+        blob = bucket.blob(result_blob_path)
+
+        start_time = time.time()
+        poll_interval = 10  # seconds
+
+        logger.info(f"Waiting for build result: gs://{self.STAGING_BUCKET}/{result_blob_path}")
+
+        while (time.time() - start_time) < timeout_seconds:
+            if blob.exists():
+                content = blob.download_as_string().decode('utf-8')
+                result = json.loads(content)
+                logger.info(f"Build result received: {result}")
+                return result
+
+            time.sleep(poll_interval)
+
+        # Timeout
+        return {
+            'success': False,
+            'error': f'Build timeout after {timeout_seconds} seconds'
         }
-
-        # Create and run pipeline job
-        display_name = f"{self.PIPELINE_DISPLAY_NAME_PREFIX}_{quick_test.feature_config.name}_{run_id}"
-
-        pipeline_job = aiplatform.PipelineJob(
-            display_name=display_name[:128],  # Max 128 chars
-            template_path=pipeline_spec_path,
-            parameter_values=pipeline_parameters,
-            enable_caching=False,  # Disable caching for experiments
-        )
-
-        # Submit asynchronously (non-blocking)
-        pipeline_job.submit()
-
-        return pipeline_job
 
     def refresh_status(self, quick_test) -> 'QuickTest':
         """

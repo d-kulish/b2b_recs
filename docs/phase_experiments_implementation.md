@@ -20,9 +20,10 @@ This document provides a **complete implementation guide** for building the Expe
 9. [Phase 4: Pipeline Visualization UI](#phase-4-pipeline-visualization-ui)
 10. [Phase 5: Metrics Collection & Display](#phase-5-metrics-collection--display)
 11. [Phase 6: MLflow Integration](#phase-6-mlflow-integration)
-12. [File Reference](#file-reference)
-13. [API Reference](#api-reference)
-14. [Testing Guide](#testing-guide)
+12. [Phase 7: Pre-built Docker Image](#phase-7-pre-built-docker-image-for-fast-cloud-build)
+13. [File Reference](#file-reference)
+14. [API Reference](#api-reference)
+15. [Testing Guide](#testing-guide)
 
 ---
 
@@ -60,26 +61,81 @@ Experiments Page = Analyze Quick Test results to find optimal parameters
 
 ## Implementation Status
 
-**Current Status**: Core pipeline functionality implemented and tested
+**Current Status**: Cloud Build infrastructure implemented; awaiting pre-built Docker image for performance optimization
 
 ### Completed Phases
 
 | Phase | Status | Description |
 |-------|--------|-------------|
 | **Phase 0** | ✅ Complete | GCP Infrastructure verification (buckets, IAM, region) |
-| **Phase 1** | ✅ Complete | TFX Pipeline Infrastructure (KFP v2 pipeline, code generation, submission) |
+| **Phase 1** | ✅ Complete | TFX Pipeline Infrastructure (native TFX, Cloud Build compilation, Vertex AI submission) |
 | **Phase 2** | ✅ Complete | Trainer Module Generator (existing code works, minor f-string bug fixes) |
 | **Phase 3** | ✅ Complete | Experiment Parameters & Submission (API endpoints, split strategies, sampling) |
 | **Phase 4** | ✅ Complete | Pipeline Visualization UI (Quick Test dialog, status polling, results display) |
 | **Phase 5** | 🔲 Pending | Metrics Collection & Display (per-epoch charts, comparison table) |
 | **Phase 6** | 🔲 Pending | MLflow Integration (experiment tracking, heatmaps, comparison) |
+| **Phase 7** | 🔲 Pending | Pre-built Docker Image for fast Cloud Build execution |
+
+### Cloud Build Implementation (December 2025)
+
+#### Why Cloud Build?
+
+**Problem**: TFX requires Python 3.9-3.10, but the Django application runs on Python 3.13 (to maintain long-term support). TFX cannot be installed in the Django venv.
+
+**Solution**: Use Google Cloud Build to compile TFX pipelines in a Python 3.10 container, then submit the compiled JSON spec to Vertex AI Pipelines.
+
+#### Current Architecture
+
+```
+Django (Python 3.13)
+    │
+    ├── 1. Generate transform_module.py and trainer_module.py
+    ├── 2. Upload modules to GCS
+    ├── 3. Trigger Cloud Build with parameters
+    │
+    └── Cloud Build (python:3.10)
+            │
+            ├── 4. Install TFX, kfp, google-cloud-aiplatform
+            ├── 5. Download compile script from GCS
+            ├── 6. Create TFX pipeline (BigQueryExampleGen → StatisticsGen → SchemaGen → Transform → Trainer)
+            ├── 7. Compile to JSON using kubeflow_v2_dag_runner
+            ├── 8. Submit to Vertex AI Pipelines
+            └── 9. Write result to GCS for Django to read
+```
+
+#### Files for Cloud Build
+
+| File | Description |
+|------|-------------|
+| `ml_platform/experiments/services.py` | `_trigger_cloud_build()` - triggers build, `_get_compile_script()` - embedded Python script |
+| `cloudbuild/compile_and_submit.py` | Standalone script (reference, embedded version used) |
+| `cloudbuild/tfx-compile.yaml` | Cloud Build config (reference, programmatic API used) |
+
+#### Key Implementation Details
+
+1. **BigQuery Query Encoding**: Base64-encoded to avoid shell escaping issues with backticks and special characters
+2. **Script Upload**: Compile script uploaded to GCS first (Cloud Build arg limit is 10,000 chars)
+3. **Script Download**: Uses Python `google-cloud-storage` (not gsutil, which isn't in python:3.10 image)
+4. **Result Communication**: Build writes JSON to `gs://b2b-recs-pipeline-staging/build_results/{run_id}.json`
+5. **Service Account**: `django-app@b2b-recs.iam.gserviceaccount.com` with `cloudbuild.builds.editor` role
+
+### Known Issue: Slow Cloud Build Execution
+
+**Problem**: Cloud Build takes **12+ minutes** just for environment setup before pipeline compilation starts:
+- Downloading `python:3.10` Docker image (~30 seconds)
+- Installing TFX, kfp, tensorflow, and dependencies (~10-12 minutes)
+- Actual pipeline compilation (~30 seconds)
+
+This defeats the purpose of "Quick Tests".
+
+**Planned Solution**: Pre-built Docker image with all dependencies (Phase 7)
 
 ### Successfully Tested
 
-- **Pipeline Submission**: Quick Test ID: 2 submitted successfully to Vertex AI
-- **Vertex Pipeline Job ID**: `quicktest-tfx-pipeline-qt-2-20251215-122053-20251215122057`
-- **GCS Artifacts**: `gs://b2b-recs-quicktest-artifacts/qt_2_20251215_122053`
-- Region: `europe-central2` (Warsaw)
+- **Cloud Build Trigger**: Successfully triggers TFX pipeline compilation
+- **GCS Artifacts**: `gs://b2b-recs-quicktest-artifacts/qt_{id}_{timestamp}`
+- **Build Results**: Written to `gs://b2b-recs-pipeline-staging/build_results/{run_id}.json`
+- **Region**: `europe-central2` (Warsaw)
 
 ### Files Created
 
@@ -88,50 +144,60 @@ Experiments Page = Analyze Quick Test results to find optimal parameters
 | `ml_platform/experiments/__init__.py` | Experiments sub-app initialization |
 | `ml_platform/experiments/urls.py` | API route definitions |
 | `ml_platform/experiments/api.py` | REST endpoints for Quick Tests |
-| `ml_platform/experiments/services.py` | ExperimentService for pipeline orchestration |
-| `ml_platform/experiments/tfx_pipeline.py` | KFP v2 pipeline with 4 components |
+| `ml_platform/experiments/services.py` | ExperimentService with Cloud Build integration |
+| `ml_platform/experiments/tfx_pipeline.py` | TFX pipeline definition (reference) |
+| `cloudbuild/compile_and_submit.py` | TFX compile script (reference) |
+| `cloudbuild/tfx-compile.yaml` | Cloud Build config (reference) |
 
 ### Files Modified
 
 | File | Changes |
 |------|---------|
-| `requirements.txt` | Added TFX, TensorFlow, TFRS dependencies |
+| `requirements.txt` | Added `google-cloud-aiplatform`, `google-cloud-build` (TFX runs in Cloud Build, not locally) |
 | `ml_platform/models.py` | Added split strategy fields to QuickTest model |
 | `ml_platform/datasets/services.py` | Added `generate_training_query()` with holdout/sampling |
-| `ml_platform/configs/services.py` | Fixed f-string escaping bugs in TrainerModuleGenerator |
+| `ml_platform/configs/services.py` | Fixed f-string escaping, added `has_transform_code` to serializer |
 | `ml_platform/urls.py` | Registered experiments sub-app |
-| `templates/ml_platform/model_experiments.html` | Added split strategy UI, API response handling |
+| `ml_platform/pipelines/urls.py` | Cleared old KFP routes (moved to experiments) |
+| `templates/ml_platform/model_experiments.html` | Added split strategy UI, fixed filter for `has_transform_code` |
 
 ### Key Technical Decisions Made
 
-1. **Split Strategies**:
+1. **Cloud Build for TFX Compilation**: Required because TFX needs Python 3.10, Django runs on 3.13
+
+2. **Split Strategies**:
    - `random` (default): Hash-based split for fastest iteration
    - `time_holdout`: Days 0-29 train/val (random), day 30 test
    - `strict_time`: Full temporal ordering (train < val < test)
 
-2. **Sampling**: Applied after holdout filter to preserve test set integrity
+3. **Sampling**: Applied after holdout filter to preserve test set integrity
 
-3. **Sub-App Structure**: Created `ml_platform/experiments/` instead of using existing pipelines directory
+4. **Sub-App Structure**: Created `ml_platform/experiments/` instead of using existing pipelines directory
 
-4. **Pipeline Architecture**: KFP v2 with 4 components (example_gen, transform, trainer, save_metrics)
+5. **Pure TFX Pipeline**: Native TFX components (BigQueryExampleGen, StatisticsGen, SchemaGen, Transform, Trainer) - NO KFP v2 custom components
 
 ### Bug Fixes Applied
 
-1. **f-string escaping** in TrainerModuleGenerator:
+1. **Feature configs not appearing in dropdown**: `generated_transform_code` not in serializer → Added `has_transform_code` boolean field
+
+2. **"No model endpoint selected" error**: Session-based lookup failed → Get from FeatureConfig relationship chain
+
+3. **f-string escaping** in TrainerModuleGenerator:
    - `{len(product_ids)}` → `{{len(product_ids)}}`
    - `signatures = {` → `signatures = {{`
-   - `{fn_args.serving_model_dir}` → `{{fn_args.serving_model_dir}}`
 
-2. **Field name mismatch**: `gcs_output_path` → `gcs_artifacts_path`
+4. **Cloud Build shell escaping**: BigQuery queries with backticks → Base64 encoding
 
-3. **API response format**: `data.data.id` → `data.quick_test.id`
+5. **Cloud Build arg too long**: Embedded script exceeded 10,000 char limit → Upload script to GCS first
+
+6. **gsutil not found**: `python:3.10` image doesn't have gsutil → Use Python `google-cloud-storage` to download
 
 ### Next Steps
 
-1. **Phase 5**: Implement per-epoch metrics charts and comparison table
-2. **Phase 6**: Deploy MLflow server to Cloud Run, integrate tracking
-3. **Monitor Pipeline**: Check Vertex AI console for pipeline completion
-4. **Verify Metrics**: Once pipeline completes, verify metrics.json extraction
+1. **Phase 7**: Build and push pre-built Docker image with TFX dependencies
+2. **Phase 5**: Implement per-epoch metrics charts and comparison table
+3. **Phase 6**: Deploy MLflow server to Cloud Run, integrate tracking
+4. **Monitor Pipeline**: Check Vertex AI console for pipeline completion
 
 ---
 
@@ -2466,6 +2532,186 @@ def get_mlflow_ui_url(request):
 4. **Run Comparison** - Side-by-side diff of params and metrics
 5. **REST API** - Query experiments programmatically
 6. **Web UI** - Full-featured experiment browser
+
+---
+
+## Phase 7: Pre-built Docker Image for Fast Cloud Build
+
+### Objective
+Eliminate the 12+ minute Cloud Build setup time by creating a pre-built Docker image with all TFX dependencies pre-installed.
+
+### Current Problem
+
+```
+Cloud Build Execution Timeline (Current):
+├── Download python:3.10 image      ~30 seconds
+├── pip install tfx>=1.15.0         ~3-4 minutes
+├── pip install kfp>=2.0.0          ~2-3 minutes
+├── pip install tensorflow          ~3-4 minutes (pulled as TFX dependency)
+├── pip install other deps          ~1-2 minutes
+├── Download compile script         ~1 second
+├── Compile TFX pipeline            ~30 seconds
+└── Submit to Vertex AI             ~5 seconds
+                                    ─────────────
+                          Total:    ~12-15 minutes
+```
+
+### Solution: Pre-built Image
+
+```
+Cloud Build Execution Timeline (With Pre-built Image):
+├── Pull pre-built image (cached)   ~5 seconds
+├── Download compile script         ~1 second
+├── Compile TFX pipeline            ~30 seconds
+└── Submit to Vertex AI             ~5 seconds
+                                    ─────────────
+                          Total:    ~1-2 minutes
+```
+
+### Step 7.1: Create Dockerfile for TFX Builder
+
+**File: `cloudbuild/tfx-builder/Dockerfile`**
+
+```dockerfile
+FROM python:3.10-slim
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies
+# Pin versions for reproducibility
+RUN pip install --no-cache-dir \
+    tfx==1.15.0 \
+    kfp==2.4.0 \
+    google-cloud-aiplatform==1.38.0 \
+    google-cloud-storage==2.14.0 \
+    dill==0.3.7
+
+# Verify installations
+RUN python -c "import tfx; print(f'TFX version: {tfx.__version__}')"
+RUN python -c "import kfp; print(f'KFP version: {kfp.__version__}')"
+RUN python -c "from tfx.orchestration.kubeflow.v2 import kubeflow_v2_dag_runner; print('Runner OK')"
+
+# Set working directory
+WORKDIR /workspace
+
+# Default command (can be overridden)
+CMD ["python", "--version"]
+```
+
+### Step 7.2: Build and Push to Artifact Registry
+
+```bash
+# Create Artifact Registry repository (one-time)
+gcloud artifacts repositories create tfx-builder \
+    --repository-format=docker \
+    --location=europe-central2 \
+    --description="TFX Pipeline Builder images"
+
+# Authenticate Docker
+gcloud auth configure-docker europe-central2-docker.pkg.dev
+
+# Build the image
+cd cloudbuild/tfx-builder
+docker build -t europe-central2-docker.pkg.dev/b2b-recs/tfx-builder/tfx-compiler:latest .
+
+# Push to Artifact Registry
+docker push europe-central2-docker.pkg.dev/b2b-recs/tfx-builder/tfx-compiler:latest
+
+# Tag with version for rollback capability
+docker tag europe-central2-docker.pkg.dev/b2b-recs/tfx-builder/tfx-compiler:latest \
+           europe-central2-docker.pkg.dev/b2b-recs/tfx-builder/tfx-compiler:v1.0.0
+docker push europe-central2-docker.pkg.dev/b2b-recs/tfx-builder/tfx-compiler:v1.0.0
+```
+
+### Step 7.3: Update services.py to Use Pre-built Image
+
+**Changes to `ml_platform/experiments/services.py`**:
+
+```python
+# Before (slow):
+cloudbuild_v1.BuildStep(
+    name='python:3.10',
+    entrypoint='bash',
+    args=['-c', '''
+        pip install --quiet tfx>=1.15.0 google-cloud-aiplatform>=1.38.0 ...
+        python -c "from google.cloud import storage; ..."
+        python /tmp/compile_and_submit.py ...
+    ''']
+)
+
+# After (fast):
+cloudbuild_v1.BuildStep(
+    name='europe-central2-docker.pkg.dev/b2b-recs/tfx-builder/tfx-compiler:latest',
+    entrypoint='bash',
+    args=['-c', '''
+        python -c "from google.cloud import storage; ..."
+        python /tmp/compile_and_submit.py ...
+    ''']
+)
+```
+
+### Step 7.4: Cloud Build Config for Image Updates
+
+**File: `cloudbuild/tfx-builder/cloudbuild.yaml`**
+
+```yaml
+# Use this to rebuild the TFX compiler image when dependencies change
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'europe-central2-docker.pkg.dev/$PROJECT_ID/tfx-builder/tfx-compiler:latest'
+      - '-t'
+      - 'europe-central2-docker.pkg.dev/$PROJECT_ID/tfx-builder/tfx-compiler:$SHORT_SHA'
+      - '.'
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'europe-central2-docker.pkg.dev/$PROJECT_ID/tfx-builder/tfx-compiler:latest'
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'europe-central2-docker.pkg.dev/$PROJECT_ID/tfx-builder/tfx-compiler:$SHORT_SHA'
+
+images:
+  - 'europe-central2-docker.pkg.dev/$PROJECT_ID/tfx-builder/tfx-compiler:latest'
+  - 'europe-central2-docker.pkg.dev/$PROJECT_ID/tfx-builder/tfx-compiler:$SHORT_SHA'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+```
+
+### Expected Results After Implementation
+
+| Metric | Before (python:3.10) | After (pre-built) |
+|--------|---------------------|-------------------|
+| Image pull time | ~30s | ~5s (cached) |
+| Dependency install | ~10-12 min | 0 (pre-installed) |
+| Total build time | ~12-15 min | ~1-2 min |
+| "Quick Test" worthy | No | Yes |
+
+### Maintenance Notes
+
+1. **When to rebuild the image**:
+   - TFX version upgrade
+   - New dependencies needed
+   - Security patches for base image
+
+2. **Version strategy**:
+   - Use `latest` for active development
+   - Tag stable versions (v1.0.0, v1.1.0) for production
+   - Keep last 3 versions for rollback
+
+3. **Cost**:
+   - Artifact Registry storage: ~$0.10/GB/month
+   - Image size: ~2-3 GB
+   - Monthly cost: ~$0.30
 
 ---
 

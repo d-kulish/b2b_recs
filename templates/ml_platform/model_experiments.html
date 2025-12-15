@@ -704,7 +704,7 @@ async function loadConfigurations() {
 
         if (fcData.success) {
             // Filter to only configs with generated transform code (ready for testing)
-            allFeatureConfigs = fcData.data.filter(c => c.generated_transform_code);
+            allFeatureConfigs = fcData.data.filter(c => c.has_transform_code);
         }
 
         if (mcData.success) {

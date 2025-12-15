@@ -455,6 +455,7 @@ def serialize_feature_config(fc, include_details: bool = False) -> Dict[str, Any
         'created_at': fc.created_at.isoformat() if fc.created_at else None,
         'updated_at': fc.updated_at.isoformat() if fc.updated_at else None,
         'created_by': fc.created_by.username if fc.created_by else None,
+        'has_transform_code': bool(fc.generated_transform_code),
     }
 
     if include_details:

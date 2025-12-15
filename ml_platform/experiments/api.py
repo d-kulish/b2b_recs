@@ -60,25 +60,19 @@ def start_quick_test(request, feature_config_id):
     }
     """
     try:
-        # Get model endpoint
-        model_endpoint = _get_model_endpoint(request)
-        if not model_endpoint:
-            return JsonResponse({
-                'success': False,
-                'error': 'No model endpoint selected'
-            }, status=400)
-
-        # Get FeatureConfig
+        # Get FeatureConfig first (to derive model_endpoint from it)
         try:
-            feature_config = FeatureConfig.objects.get(
-                id=feature_config_id,
-                dataset__model_endpoint=model_endpoint
-            )
+            feature_config = FeatureConfig.objects.select_related(
+                'dataset__model_endpoint'
+            ).get(id=feature_config_id)
         except FeatureConfig.DoesNotExist:
             return JsonResponse({
                 'success': False,
                 'error': f'FeatureConfig {feature_config_id} not found'
             }, status=404)
+
+        # Get model endpoint from FeatureConfig's dataset
+        model_endpoint = feature_config.dataset.model_endpoint
 
         # Parse request body
         try:
@@ -89,7 +83,7 @@ def start_quick_test(request, feature_config_id):
                 'error': 'Invalid JSON in request body'
             }, status=400)
 
-        # Get ModelConfig
+        # Get ModelConfig (global, not tied to model_endpoint)
         model_config_id = data.get('model_config_id')
         if not model_config_id:
             return JsonResponse({
@@ -98,10 +92,7 @@ def start_quick_test(request, feature_config_id):
             }, status=400)
 
         try:
-            model_config = ModelConfig.objects.get(
-                id=model_config_id,
-                model_endpoint=model_endpoint
-            )
+            model_config = ModelConfig.objects.get(id=model_config_id)
         except ModelConfig.DoesNotExist:
             return JsonResponse({
                 'success': False,

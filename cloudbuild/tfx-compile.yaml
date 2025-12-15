@@ -1,0 +1,38 @@
+steps:
+  # Step 1: Compile TFX pipeline and submit to Vertex AI
+  - name: 'python:3.10'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        pip install --quiet tfx>=1.15.0 google-cloud-aiplatform>=1.38.0 google-cloud-storage
+        python /workspace/cloudbuild/compile_and_submit.py \
+          --run-id="${_RUN_ID}" \
+          --staging-bucket="${_STAGING_BUCKET}" \
+          --bigquery-query="${_BIGQUERY_QUERY}" \
+          --transform-module-path="${_TRANSFORM_MODULE_PATH}" \
+          --trainer-module-path="${_TRAINER_MODULE_PATH}" \
+          --output-path="${_OUTPUT_PATH}" \
+          --epochs="${_EPOCHS}" \
+          --batch-size="${_BATCH_SIZE}" \
+          --learning-rate="${_LEARNING_RATE}" \
+          --project-id="${PROJECT_ID}" \
+          --region="${_REGION}"
+
+substitutions:
+  _RUN_ID: ''
+  _STAGING_BUCKET: 'b2b-recs-pipeline-staging'
+  _BIGQUERY_QUERY: ''
+  _TRANSFORM_MODULE_PATH: ''
+  _TRAINER_MODULE_PATH: ''
+  _OUTPUT_PATH: ''
+  _EPOCHS: '10'
+  _BATCH_SIZE: '4096'
+  _LEARNING_RATE: '0.001'
+  _REGION: 'europe-central2'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: 'E2_HIGHCPU_8'
+
+timeout: '1800s'  # 30 minutes max

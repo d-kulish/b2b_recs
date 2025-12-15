@@ -354,16 +354,25 @@ class ExperimentService:
         script_bucket = self.STAGING_BUCKET
         script_blob = script_path
 
+        # Use pre-built TFX compiler image for fast compilation (1-2 min vs 12-15 min)
+        # The image is hosted in the central platform project and contains all TFX dependencies
+        tfx_compiler_image = getattr(
+            settings, 'TFX_COMPILER_IMAGE',
+            'europe-central2-docker.pkg.dev/b2b-recs/tfx-builder/tfx-compiler:latest'
+        )
+        logger.info(f"Using TFX compiler image: {tfx_compiler_image}")
+
         build = cloudbuild_v1.Build(
             steps=[
                 cloudbuild_v1.BuildStep(
-                    name='python:3.10',
+                    name=tfx_compiler_image,
                     entrypoint='bash',
                     args=[
                         '-c',
                         f'''
 set -e
-pip install --quiet tfx>=1.15.0 google-cloud-aiplatform>=1.38.0 google-cloud-storage dill kfp>=2.0.0
+echo "TFX Compiler Image - dependencies pre-installed"
+python -c "import tfx; print(f'TFX version: {{tfx.__version__}}')"
 python -c "from google.cloud import storage; storage.Client().bucket('{script_bucket}').blob('{script_blob}').download_to_filename('/tmp/compile_and_submit.py')"
 python /tmp/compile_and_submit.py \
     --run-id="{run_id}" \
@@ -381,7 +390,7 @@ python /tmp/compile_and_submit.py \
                     ],
                 )
             ],
-            timeout={'seconds': 1800},
+            timeout={'seconds': 600},  # Reduced from 1800s - pre-built image is much faster
             options=cloudbuild_v1.BuildOptions(
                 logging=cloudbuild_v1.BuildOptions.LoggingMode.CLOUD_LOGGING_ONLY,
                 machine_type=cloudbuild_v1.BuildOptions.MachineType.E2_HIGHCPU_8,

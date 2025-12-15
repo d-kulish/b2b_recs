@@ -954,6 +954,24 @@ MLFLOW_TRACKING_URI = os.environ.get('MLFLOW_TRACKING_URI', 'http://mlflow-serve
   - [ ] Heatmap visualization
   - [ ] Run comparison view
 
+### Phase 7: Pre-built TFX Compiler Image ✅ DONE (2025-12-15)
+> **Critical for Quick Test performance** - Reduces compilation from 12-15 min to 1-2 min
+
+- [x] Create Dockerfile for TFX compiler (`cloudbuild/tfx-builder/Dockerfile`)
+- [x] Build and push to Artifact Registry:
+  - `europe-central2-docker.pkg.dev/b2b-recs/tfx-builder/tfx-compiler:latest`
+  - `europe-central2-docker.pkg.dev/b2b-recs/tfx-builder/tfx-compiler:v1.0.0`
+- [x] Update `services.py` to use pre-built image instead of `python:3.10`
+- [x] Add `TFX_COMPILER_IMAGE` to Django settings (configurable)
+- [x] Create `cloudbuild/tfx-builder/cloudbuild.yaml` for rebuilding image
+- [x] Create `cloudbuild/tfx-builder/README.md` with setup documentation
+- [x] Verify image works (TFX 1.15.0, KFP 2.15.2)
+
+**Current Setup (Development):**
+- Image hosted in `b2b-recs` project (same as dev environment)
+- For production multi-tenant: migrate to `b2b-recs-platform` project
+- See [Phase 7 in implementation guide](phase_experiments_implementation.md#phase-7-pre-built-docker-image-for-fast-cloud-build)
+
 ### Previously Completed ✅
 - [x] Create `model_experiments.html` page (placeholder)
 - [x] Feature Config dropdown

@@ -1,0 +1,60 @@
+# Cloud Build configuration for TFX Compiler Image
+#
+# This config builds and pushes the TFX compiler image to Artifact Registry.
+# Run this when you need to update TFX version or add new dependencies.
+#
+# Usage:
+#   cd cloudbuild/tfx-builder
+#   gcloud builds submit --config=cloudbuild.yaml --project=b2b-recs
+#
+# Or trigger manually from console/API.
+# Note: For production multi-tenant, migrate to b2b-recs-platform project.
+
+steps:
+  # Build the Docker image with multiple tags
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'europe-central2-docker.pkg.dev/$PROJECT_ID/tfx-builder/tfx-compiler:latest'
+      - '-t'
+      - 'europe-central2-docker.pkg.dev/$PROJECT_ID/tfx-builder/tfx-compiler:v1.0.0'
+      - '.'
+
+  # Push the 'latest' tag
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'europe-central2-docker.pkg.dev/$PROJECT_ID/tfx-builder/tfx-compiler:latest'
+
+  # Push the version tag
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'europe-central2-docker.pkg.dev/$PROJECT_ID/tfx-builder/tfx-compiler:v1.0.0'
+
+  # Verify the image works by running a quick test
+  - name: 'europe-central2-docker.pkg.dev/$PROJECT_ID/tfx-builder/tfx-compiler:latest'
+    entrypoint: 'python'
+    args:
+      - '-c'
+      - |
+        import tfx
+        import kfp
+        from google.cloud import aiplatform
+        print(f"TFX: {tfx.__version__}")
+        print(f"KFP: {kfp.__version__}")
+        print("All imports successful!")
+
+# Images to be pushed to Artifact Registry
+images:
+  - 'europe-central2-docker.pkg.dev/$PROJECT_ID/tfx-builder/tfx-compiler:latest'
+  - 'europe-central2-docker.pkg.dev/$PROJECT_ID/tfx-builder/tfx-compiler:v1.0.0'
+
+# Build options
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: 'E2_HIGHCPU_8'
+
+# Timeout for the entire build (image build can take 10-15 min due to TensorFlow)
+timeout: '1800s'

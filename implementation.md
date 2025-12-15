@@ -131,6 +131,7 @@ Build a SaaS platform where business users can build, train, and deploy producti
 
 **What's Actually Shared:**
 - Docker image templates (same images deployed per client)
+- **TFX Compiler Image** (centralized in platform project, pulled by client Cloud Build)
 - Terraform modules (when we get there)
 - Configuration patterns and best practices
 - Your operational knowledge and support
@@ -288,6 +289,95 @@ gcloud compute routers nats create nat-config \
 - **Cost-effective**: $40/month is minimal compared to alternative solutions
 - **Scalable**: Terraform-automated, works for unlimited clients
 
+#### 7. Centralized TFX Compiler Image
+
+**Challenge:**
+- TFX requires Python 3.9-3.10 for pipeline compilation
+- Django application runs on Python 3.13 (for LTS and modern features)
+- TFX cannot be installed in the Django environment
+- Cloud Build with `python:3.10` image takes 12+ minutes (pip install every time)
+
+**Solution: Pre-built TFX Compiler Image in Platform Project**
+
+The TFX compiler image is built once and hosted in a central "platform" project, then shared across all client projects via IAM.
+
+**Architecture:**
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│                         b2b-recs-platform                                │
+│                      (SaaS Management Project)                           │
+│                                                                          │
+│  ┌────────────────────────────────────────────────────────────────────┐  │
+│  │  Artifact Registry: europe-central2-docker.pkg.dev                 │  │
+│  │                                                                    │  │
+│  │  tfx-builder/                                                      │  │
+│  │  └── tfx-compiler:latest    ← Built ONCE, used by ALL clients     │  │
+│  │      └── tfx-compiler:v1.0.0  (pinned for production)              │  │
+│  │                                                                    │  │
+│  │  IAM: Each client's Cloud Build SA gets artifactregistry.reader   │  │
+│  └────────────────────────────────────────────────────────────────────┘  │
+│                                                                          │
+└──────────────────────────────────────────────────────────────────────────┘
+                                    │
+            ┌───────────────────────┼───────────────────────┐
+            │                       │                       │
+            ▼                       ▼                       ▼
+     ┌─────────────┐         ┌─────────────┐         ┌─────────────┐
+     │  client-a   │         │  client-b   │         │  client-c   │
+     │             │         │             │         │             │
+     │ Django App  │         │ Django App  │         │ Django App  │
+     │     ↓       │         │     ↓       │         │     ↓       │
+     │ Cloud Build │         │ Cloud Build │         │ Cloud Build │
+     │ (pulls      │         │ (pulls      │         │ (pulls      │
+     │  shared     │         │  shared     │         │  shared     │
+     │  image)     │         │  image)     │         │  image)     │
+     │     ↓       │         │     ↓       │         │     ↓       │
+     │ Vertex AI   │         │ Vertex AI   │         │ Vertex AI   │
+     └─────────────┘         └─────────────┘         └─────────────┘
+```
+
+**Image Location:**
+```
+europe-central2-docker.pkg.dev/b2b-recs-platform/tfx-builder/tfx-compiler:latest
+```
+
+**Key Points:**
+1. **Two Different Images**:
+   - **TFX Compiler** (shared): Used by Cloud Build to COMPILE pipelines (~1-2 min)
+   - **TFX Runtime** (Google's): Used by Vertex AI to RUN pipelines (`gcr.io/tfx-oss-public/tfx`)
+
+2. **No Client Data in Compiler**: The image contains only libraries (TFX, KFP, etc.). Client data flows through their own GCS/Vertex AI.
+
+3. **Performance**: Reduces Quick Test compilation from 12-15 min to 1-2 min.
+
+**Client Onboarding Step:**
+```bash
+# Grant client's Cloud Build access to shared TFX compiler image
+CLIENT_PROJECT="client-acme-prod"
+CB_SA=$(gcloud projects describe $CLIENT_PROJECT --format='value(projectNumber)')@cloudbuild.gserviceaccount.com
+
+gcloud artifacts repositories add-iam-policy-binding tfx-builder \
+    --project=b2b-recs-platform \
+    --location=europe-central2 \
+    --member="serviceAccount:$CB_SA" \
+    --role="roles/artifactregistry.reader"
+```
+
+**Django Configuration:**
+```python
+# settings.py
+TFX_COMPILER_IMAGE = os.environ.get(
+    'TFX_COMPILER_IMAGE',
+    'europe-central2-docker.pkg.dev/b2b-recs-platform/tfx-builder/tfx-compiler:latest'
+)
+```
+
+**Cost:**
+- Artifact Registry storage: ~$0.30/month total (one image for all clients)
+- No per-client image storage costs
+
+**See Also:** [Phase 7: Pre-built Docker Image](docs/phase_experiments_implementation.md#phase-7-pre-built-docker-image-for-fast-cloud-build)
+
 ---
 
 ## GCP Organization Structure
@@ -298,22 +388,30 @@ gcloud compute routers nats create nat-config \
 Your Company GCP Organization
 │
 ├── Folder: Management
-│   └── Project: control-plane-prod
-│       - Master client portal
-│       - Billing aggregation (BigQuery billing export)
-│       - Cross-project monitoring
-│       - Terraform state (when implemented)
-│       - Admin tools
+│   ├── Project: control-plane-prod
+│   │   - Master client portal
+│   │   - Billing aggregation (BigQuery billing export)
+│   │   - Cross-project monitoring
+│   │   - Terraform state (when implemented)
+│   │   - Admin tools
+│   │
+│   └── Project: b2b-recs-platform        ← SHARED INFRASTRUCTURE
+│       - Artifact Registry: tfx-builder/tfx-compiler (shared TFX compiler image)
+│       - Accessed by all client Cloud Build service accounts
+│       - Centralized image updates benefit all clients
 │
 ├── Folder: Clients
 │   ├── Project: client-acme-prod
 │   │   - Complete isolated stack
+│   │   - Cloud Build pulls shared tfx-compiler image
 │   │
 │   ├── Project: client-beta-prod
 │   │   - Complete isolated stack
+│   │   - Cloud Build pulls shared tfx-compiler image
 │   │
 │   └── Project: client-{name}-prod
 │       - Complete isolated stack per client
+│       - Cloud Build pulls shared tfx-compiler image
 │
 └── Folder: Development
     ├── Project: template-dev

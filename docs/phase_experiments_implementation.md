@@ -2537,6 +2537,12 @@ def get_mlflow_ui_url(request):
 
 ## Phase 7: Pre-built Docker Image for Fast Cloud Build
 
+> **Status: COMPLETED** (2025-12-15)
+> - Artifact Registry: `europe-central2-docker.pkg.dev/b2b-recs/tfx-builder`
+> - Image: `tfx-compiler:latest` (TFX 1.15.0, KFP 2.15.2)
+> - Django setting: `TFX_COMPILER_IMAGE` in `config/settings.py`
+> - Services updated: `ml_platform/experiments/services.py` uses pre-built image
+
 ### Objective
 Eliminate the 12+ minute Cloud Build setup time by creating a pre-built Docker image with all TFX dependencies pre-installed.
 
@@ -2568,9 +2574,9 @@ Cloud Build Execution Timeline (With Pre-built Image):
                           Total:    ~1-2 minutes
 ```
 
-### Step 7.1: Create Dockerfile for TFX Builder
+### Step 7.1: Create Dockerfile for TFX Builder ✅
 
-**File: `cloudbuild/tfx-builder/Dockerfile`**
+**File: `cloudbuild/tfx-builder/Dockerfile`** (IMPLEMENTED)
 
 ```dockerfile
 FROM python:3.10-slim
@@ -2578,79 +2584,92 @@ FROM python:3.10-slim
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
 
-# Install Python dependencies
-# Pin versions for reproducibility
+# Install TFX first - it pulls compatible versions of tensorflow, apache-beam, etc.
+RUN pip install --no-cache-dir tfx==1.15.0
+
+# Install KFP for Kubeflow pipeline compilation (kubeflow_v2_dag_runner)
+RUN pip install --no-cache-dir kfp>=2.0.0
+
+# Install dill (required by tfx_bsl/beam, must be compatible with apache-beam)
+RUN pip install --no-cache-dir "dill>=0.3.1.1,<0.3.2"
+
+# Install additional Google Cloud SDKs
 RUN pip install --no-cache-dir \
-    tfx==1.15.0 \
-    kfp==2.4.0 \
-    google-cloud-aiplatform==1.38.0 \
-    google-cloud-storage==2.14.0 \
-    dill==0.3.7
+    google-cloud-aiplatform>=1.38.0 \
+    google-cloud-storage>=2.14.0 \
+    google-cloud-bigquery>=3.14.0
 
 # Verify installations
 RUN python -c "import tfx; print(f'TFX version: {tfx.__version__}')"
 RUN python -c "import kfp; print(f'KFP version: {kfp.__version__}')"
 RUN python -c "from tfx.orchestration.kubeflow.v2 import kubeflow_v2_dag_runner; print('Runner OK')"
 
-# Set working directory
 WORKDIR /workspace
-
-# Default command (can be overridden)
 CMD ["python", "--version"]
 ```
 
-### Step 7.2: Build and Push to Artifact Registry
+**Key learnings from implementation:**
+- TFX must be installed first to get compatible dependency versions
+- KFP is not bundled with TFX 1.15.0, must install separately
+- dill version must be `<0.3.2` to be compatible with apache-beam
+
+### Step 7.2: Build and Push to Artifact Registry ✅
 
 ```bash
-# Create Artifact Registry repository (one-time)
+# Create Artifact Registry repository (one-time) - DONE
 gcloud artifacts repositories create tfx-builder \
     --repository-format=docker \
     --location=europe-central2 \
-    --description="TFX Pipeline Builder images"
+    --description="TFX Pipeline Builder images" \
+    --project=b2b-recs
 
-# Authenticate Docker
-gcloud auth configure-docker europe-central2-docker.pkg.dev
-
-# Build the image
+# Build using Cloud Build (recommended) - DONE
 cd cloudbuild/tfx-builder
+gcloud builds submit --config=cloudbuild.yaml --project=b2b-recs
+
+# Alternative: Build locally
+gcloud auth configure-docker europe-central2-docker.pkg.dev
 docker build -t europe-central2-docker.pkg.dev/b2b-recs/tfx-builder/tfx-compiler:latest .
-
-# Push to Artifact Registry
 docker push europe-central2-docker.pkg.dev/b2b-recs/tfx-builder/tfx-compiler:latest
-
-# Tag with version for rollback capability
-docker tag europe-central2-docker.pkg.dev/b2b-recs/tfx-builder/tfx-compiler:latest \
-           europe-central2-docker.pkg.dev/b2b-recs/tfx-builder/tfx-compiler:v1.0.0
-docker push europe-central2-docker.pkg.dev/b2b-recs/tfx-builder/tfx-compiler:v1.0.0
 ```
 
-### Step 7.3: Update services.py to Use Pre-built Image
+**Current image location:**
+```
+europe-central2-docker.pkg.dev/b2b-recs/tfx-builder/tfx-compiler:latest
+europe-central2-docker.pkg.dev/b2b-recs/tfx-builder/tfx-compiler:v1.0.0
+```
 
-**Changes to `ml_platform/experiments/services.py`**:
+> **Note:** Currently using `b2b-recs` project for development. For production multi-tenant deployment, migrate to dedicated `b2b-recs-platform` project.
+
+### Step 7.3: Update services.py to Use Pre-built Image ✅
+
+**Changes to `ml_platform/experiments/services.py`** (IMPLEMENTED):
 
 ```python
-# Before (slow):
-cloudbuild_v1.BuildStep(
-    name='python:3.10',
-    entrypoint='bash',
-    args=['-c', '''
-        pip install --quiet tfx>=1.15.0 google-cloud-aiplatform>=1.38.0 ...
-        python -c "from google.cloud import storage; ..."
-        python /tmp/compile_and_submit.py ...
-    ''']
+# Django setting added to config/settings.py:
+TFX_COMPILER_IMAGE = os.environ.get(
+    'TFX_COMPILER_IMAGE',
+    'europe-central2-docker.pkg.dev/b2b-recs/tfx-builder/tfx-compiler:latest'
 )
 
-# After (fast):
+# In services.py - now uses setting:
+tfx_compiler_image = getattr(
+    settings, 'TFX_COMPILER_IMAGE',
+    'europe-central2-docker.pkg.dev/b2b-recs/tfx-builder/tfx-compiler:latest'
+)
+
 cloudbuild_v1.BuildStep(
-    name='europe-central2-docker.pkg.dev/b2b-recs/tfx-builder/tfx-compiler:latest',
+    name=tfx_compiler_image,  # Pre-built image with all dependencies
     entrypoint='bash',
     args=['-c', '''
         python -c "from google.cloud import storage; ..."
         python /tmp/compile_and_submit.py ...
     ''']
 )
+# Timeout reduced from 1800s to 600s since build is now much faster
 ```
 
 ### Step 7.4: Cloud Build Config for Image Updates
@@ -2712,6 +2731,156 @@ options:
    - Artifact Registry storage: ~$0.10/GB/month
    - Image size: ~2-3 GB
    - Monthly cost: ~$0.30
+
+### Multi-Tenant SaaS Architecture
+
+The TFX compiler image is a **shared resource** hosted in a central platform project and used by all client projects. This is critical for the SaaS architecture where each client has their own isolated GCP project.
+
+#### Architecture Overview
+
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│                         b2b-recs-platform                                │
+│                      (SaaS Management Project)                           │
+│                                                                          │
+│  ┌────────────────────────────────────────────────────────────────────┐  │
+│  │  Artifact Registry: europe-central2-docker.pkg.dev                 │  │
+│  │                                                                    │  │
+│  │  tfx-builder/                                                      │  │
+│  │  └── tfx-compiler:latest    ← Built ONCE, used by ALL clients     │  │
+│  │      └── tfx-compiler:v1.0.0                                       │  │
+│  │                                                                    │  │
+│  │  IAM Policy:                                                       │  │
+│  │  ├── client-a-cb@cloudbuild.gsa → artifactregistry.reader         │  │
+│  │  ├── client-b-cb@cloudbuild.gsa → artifactregistry.reader         │  │
+│  │  └── client-c-cb@cloudbuild.gsa → artifactregistry.reader         │  │
+│  └────────────────────────────────────────────────────────────────────┘  │
+│                                                                          │
+└──────────────────────────────────────────────────────────────────────────┘
+                                    │
+            ┌───────────────────────┼───────────────────────┐
+            │                       │                       │
+            ▼                       ▼                       ▼
+     ┌─────────────┐         ┌─────────────┐         ┌─────────────┐
+     │  client-a   │         │  client-b   │         │  client-c   │
+     │             │         │             │         │             │
+     │ Django App  │         │ Django App  │         │ Django App  │
+     │     │       │         │     │       │         │     │       │
+     │     ▼       │         │     ▼       │         │     ▼       │
+     │ Cloud Build │         │ Cloud Build │         │ Cloud Build │
+     │  (pulls     │         │  (pulls     │         │  (pulls     │
+     │   shared    │         │   shared    │         │   shared    │
+     │   image)    │         │   image)    │         │   image)    │
+     │     │       │         │     │       │         │     │       │
+     │     ▼       │         │     ▼       │         │     ▼       │
+     │ Vertex AI   │         │ Vertex AI   │         │ Vertex AI   │
+     └─────────────┘         └─────────────┘         └─────────────┘
+```
+
+#### Image Location
+
+The TFX compiler image is hosted at:
+```
+europe-central2-docker.pkg.dev/b2b-recs-platform/tfx-builder/tfx-compiler:latest
+```
+
+**Note**: The image is in the `b2b-recs-platform` project (SaaS management), NOT in individual client projects.
+
+#### Why Centralized Image?
+
+| Approach | Pros | Cons |
+|----------|------|------|
+| **Centralized (chosen)** | Single image to maintain, consistent versions, update once for all clients | Requires cross-project IAM |
+| Per-client image | Full isolation | N copies, N updates needed, wasteful |
+| Public image | No IAM needed | Anyone can pull (minor security concern) |
+
+#### Step 7.5: Grant Client Projects Access
+
+For each new client project, grant Cloud Build permission to pull the shared image:
+
+```bash
+#!/bin/bash
+# provision_client_image_access.sh
+
+CLIENT_PROJECT=$1
+PLATFORM_PROJECT="b2b-recs-platform"
+REGION="europe-central2"
+
+# Get Cloud Build service account for client project
+CB_SA_NUMBER=$(gcloud projects describe $CLIENT_PROJECT --format='value(projectNumber)')
+CB_SA="${CB_SA_NUMBER}@cloudbuild.gserviceaccount.com"
+
+# Grant access to shared TFX compiler image
+gcloud artifacts repositories add-iam-policy-binding tfx-builder \
+    --project=$PLATFORM_PROJECT \
+    --location=$REGION \
+    --member="serviceAccount:$CB_SA" \
+    --role="roles/artifactregistry.reader"
+
+echo "✅ Client $CLIENT_PROJECT can now use shared TFX compiler image"
+```
+
+#### Step 7.6: Configure Django to Use Centralized Image
+
+Make the image path configurable in Django settings:
+
+**File: `b2b_recs/settings.py`**
+
+```python
+# TFX Pipeline Compilation
+# The TFX compiler image is hosted in the central platform project
+# and shared across all client projects
+TFX_COMPILER_IMAGE = os.environ.get(
+    'TFX_COMPILER_IMAGE',
+    'europe-central2-docker.pkg.dev/b2b-recs-platform/tfx-builder/tfx-compiler:latest'
+)
+```
+
+**File: `ml_platform/experiments/services.py`**
+
+```python
+from django.conf import settings
+
+def _trigger_cloud_build(self, ...):
+    # Use the centralized TFX compiler image
+    build = cloudbuild_v1.Build(
+        steps=[
+            cloudbuild_v1.BuildStep(
+                name=settings.TFX_COMPILER_IMAGE,  # Centralized image
+                entrypoint='bash',
+                args=['-c', '''
+                    python -c "from google.cloud import storage; ..."
+                    python /tmp/compile_and_submit.py ...
+                ''']
+            )
+        ],
+        # ...
+    )
+```
+
+#### Client Onboarding Checklist
+
+When provisioning a new client project, add this step to the onboarding process:
+
+- [ ] Create client GCP project
+- [ ] Set up Cloud SQL, BigQuery, GCS buckets
+- [ ] Deploy Django app to Cloud Run
+- [ ] **Grant Cloud Build access to shared TFX compiler image** ← NEW
+- [ ] Configure static IP and Cloud NAT
+- [ ] Test Quick Test pipeline submission
+
+#### Important Notes
+
+1. **Two Different Images**:
+   - **TFX Compiler Image** (shared): Used by Cloud Build to COMPILE pipelines (this image)
+   - **TFX Runtime Image** (Google's): Used by Vertex AI to RUN pipelines (`gcr.io/tfx-oss-public/tfx`)
+
+2. **No Client Data in Compiler Image**: The compiler image contains only TFX libraries. Client data flows through their own project's GCS and Vertex AI.
+
+3. **Version Pinning**: For production stability, consider pinning to a specific version:
+   ```python
+   TFX_COMPILER_IMAGE = 'europe-central2-docker.pkg.dev/b2b-recs-platform/tfx-builder/tfx-compiler:v1.0.0'
+   ```
 
 ---
 

@@ -114,9 +114,29 @@ This platform enables businesses to:
 
 **Platform:** Google Cloud Platform
 **Region:** europe-central2 (Warsaw, Poland)
-**Project:** b2b-recs (555035914949)
+**Architecture:** Multi-tenant SaaS (one GCP project per client)
 
-### **Components**
+### **Multi-Tenant Architecture**
+
+Each client gets a fully isolated GCP project with their own Django app, databases, and ML pipelines. The only shared resource is the **TFX Compiler Image** hosted in a central platform project.
+
+```
+b2b-recs-platform (Central)          Client Projects (Isolated)
+┌────────────────────────────┐      ┌─────────────┐ ┌─────────────┐
+│ Artifact Registry          │      │ client-a    │ │ client-b    │
+│ └── tfx-compiler:latest ◄──┼──────┤ Cloud Build │ │ Cloud Build │
+│     (shared image)         │      │ Vertex AI   │ │ Vertex AI   │
+└────────────────────────────┘      └─────────────┘ └─────────────┘
+```
+
+**TFX Compiler Image**: `europe-central2-docker.pkg.dev/b2b-recs-platform/tfx-builder/tfx-compiler:latest`
+- Pre-built with TFX, KFP, and dependencies (Python 3.10)
+- Reduces Quick Test compilation from 12-15 min to 1-2 min
+- Built once, shared across all clients via IAM
+
+See [`implementation.md`](implementation.md) for full architecture details.
+
+### **Per-Client Components**
 
 | Component | Type | Resources | Purpose |
 |-----------|------|-----------|---------|
@@ -127,6 +147,7 @@ This platform enables businesses to:
 | **Data Warehouse** | BigQuery | `raw_data` dataset | Analytics storage |
 | **Scheduler** | Cloud Scheduler | - | Automated triggers |
 | **Secrets** | Secret Manager | - | Credentials storage |
+| **ML Pipelines** | Vertex AI Pipelines | - | TFX pipeline execution |
 
 ### **Architecture**
 
@@ -216,13 +237,15 @@ gcloud run jobs execute django-migrate-and-createsuperuser --region europe-centr
 
 | Document | Description |
 |----------|-------------|
+| [`implementation.md`](implementation.md) | **SaaS architecture, multi-tenant design, shared infrastructure** |
 | [`next_steps.md`](next_steps.md) | Current status, priorities, and roadmap |
 | [`etl_runner/etl_runner.md`](etl_runner/etl_runner.md) | ETL Runner technical documentation |
 | [`ml_platform/datasets/datasets.md`](ml_platform/datasets/datasets.md) | Dataset Manager documentation |
 | [`docs/phase_datasets.md`](docs/phase_datasets.md) | Dataset domain specification |
-| [`docs/phase_modeling.md`](docs/phase_modeling.md) | Modeling (Feature Engineering) specification |
+| [`docs/phase_configs.md`](docs/phase_configs.md) | Feature + Model Config specification |
 | [`docs/phase_model_structure.md`](docs/phase_model_structure.md) | Model Structure (Architecture) specification |
 | [`docs/phase_experiments.md`](docs/phase_experiments.md) | Experiments (Quick Test + MLflow) specification |
+| [`docs/phase_experiments_implementation.md`](docs/phase_experiments_implementation.md) | **Experiments implementation guide (TFX, Cloud Build)** |
 | This file | Project overview and quick start |
 
 ---

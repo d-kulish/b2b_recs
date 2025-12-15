@@ -190,6 +190,16 @@ QUICKTEST_DEFAULT_LEARNING_RATE = float(os.environ.get('QUICKTEST_DEFAULT_LEARNI
 # Polling interval for pipeline status checks (seconds)
 PIPELINE_POLL_INTERVAL = int(os.environ.get('PIPELINE_POLL_INTERVAL', '10'))
 
+# TFX Compiler Image (Pre-built Docker image for pipeline compilation)
+# This image is hosted in the central platform project and shared across all client projects.
+# It contains TFX, KFP, and all dependencies needed to compile pipelines for Vertex AI.
+# Using a pre-built image reduces compilation time from 12-15 min to 1-2 min.
+# Note: Currently using b2b-recs project; migrate to b2b-recs-platform for production multi-tenant
+TFX_COMPILER_IMAGE = os.environ.get(
+    'TFX_COMPILER_IMAGE',
+    'europe-central2-docker.pkg.dev/b2b-recs/tfx-builder/tfx-compiler:latest'
+)
+
 # Logging Configuration
 # Ensures exceptions are logged to stdout/stderr for Cloud Run visibility
 LOGGING = {

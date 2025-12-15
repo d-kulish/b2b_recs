@@ -61,7 +61,7 @@ Experiments Page = Analyze Quick Test results to find optimal parameters
 
 ## Implementation Status
 
-**Current Status**: Cloud Build infrastructure implemented; awaiting pre-built Docker image for performance optimization
+**Current Status**: TFX pipelines successfully submitting to Vertex AI via Cloud Build with pre-built Docker image (~1-2 min compilation)
 
 ### Completed Phases
 
@@ -74,7 +74,7 @@ Experiments Page = Analyze Quick Test results to find optimal parameters
 | **Phase 4** | ✅ Complete | Pipeline Visualization UI (Quick Test dialog, status polling, results display) |
 | **Phase 5** | 🔲 Pending | Metrics Collection & Display (per-epoch charts, comparison table) |
 | **Phase 6** | 🔲 Pending | MLflow Integration (experiment tracking, heatmaps, comparison) |
-| **Phase 7** | 🔲 Pending | Pre-built Docker Image for fast Cloud Build execution |
+| **Phase 7** | ✅ Complete | Pre-built Docker Image for fast Cloud Build execution |
 
 ### Cloud Build Implementation (December 2025)
 
@@ -93,15 +93,21 @@ Django (Python 3.13)
     ├── 2. Upload modules to GCS
     ├── 3. Trigger Cloud Build with parameters
     │
-    └── Cloud Build (python:3.10)
+    └── Cloud Build (pre-built TFX image)
             │
-            ├── 4. Install TFX, kfp, google-cloud-aiplatform
-            ├── 5. Download compile script from GCS
-            ├── 6. Create TFX pipeline (BigQueryExampleGen → StatisticsGen → SchemaGen → Transform → Trainer)
-            ├── 7. Compile to JSON using kubeflow_v2_dag_runner
-            ├── 8. Submit to Vertex AI Pipelines
-            └── 9. Write result to GCS for Django to read
+            ├── 4. Download compile script from GCS (dependencies pre-installed)
+            ├── 5. Create TFX pipeline (BigQueryExampleGen → StatisticsGen → SchemaGen → Transform → Trainer)
+            ├── 6. Compile to JSON using kubeflow_v2_dag_runner
+            ├── 7. Submit to Vertex AI Pipelines
+            └── 8. Write result to GCS for Django to read
 ```
+
+#### Pre-built Docker Image
+
+- **Image**: `europe-central2-docker.pkg.dev/b2b-recs/tfx-builder/tfx-compiler:latest`
+- **Location**: Artifact Registry (europe-central2)
+- **Contents**: Python 3.10 + TFX 1.15.0 + KFP 2.4.0 + google-cloud-aiplatform + google-cloud-storage
+- **Build Time**: ~1-2 minutes (down from 12-15 minutes with vanilla python:3.10)
 
 #### Files for Cloud Build
 
@@ -119,16 +125,14 @@ Django (Python 3.13)
 4. **Result Communication**: Build writes JSON to `gs://b2b-recs-pipeline-staging/build_results/{run_id}.json`
 5. **Service Account**: `django-app@b2b-recs.iam.gserviceaccount.com` with `cloudbuild.builds.editor` role
 
-### Known Issue: Slow Cloud Build Execution
+### Resolved: Cloud Build Performance (Phase 7)
 
-**Problem**: Cloud Build takes **12+ minutes** just for environment setup before pipeline compilation starts:
-- Downloading `python:3.10` Docker image (~30 seconds)
-- Installing TFX, kfp, tensorflow, and dependencies (~10-12 minutes)
-- Actual pipeline compilation (~30 seconds)
+**Previous Problem**: Cloud Build took **12+ minutes** with vanilla `python:3.10` image due to dependency installation.
 
-This defeats the purpose of "Quick Tests".
-
-**Planned Solution**: Pre-built Docker image with all dependencies (Phase 7)
+**Solution Implemented**: Pre-built Docker image with all TFX dependencies:
+- Image: `europe-central2-docker.pkg.dev/b2b-recs/tfx-builder/tfx-compiler:latest`
+- Build time reduced to **~1-2 minutes**
+- Dependencies pre-installed: TFX 1.15.0, KFP 2.4.0, google-cloud-aiplatform, google-cloud-storage
 
 ### Successfully Tested
 
@@ -192,11 +196,19 @@ This defeats the purpose of "Quick Tests".
 
 6. **gsutil not found**: `python:3.10` image doesn't have gsutil → Use Python `google-cloud-storage` to download
 
+7. **Pre-built Docker image not being used**: `services.py` still referenced `python:3.10` → Updated to use `europe-central2-docker.pkg.dev/b2b-recs/tfx-builder/tfx-compiler:latest`
+
+8. **Pipeline name validation error**: Vertex AI requires `[a-z0-9-]` pattern → Changed `run_id` format from `qt_14_20251215_184911` to `qt-14-20251215-184911` (hyphens instead of underscores)
+
+9. **GCS bucket permissions**: Compute Engine service account lacked access → Granted `objectAdmin` to `555035914949-compute@developer.gserviceaccount.com` on `b2b-recs-pipeline-staging` and `b2b-recs-quicktest-artifacts` buckets
+
+10. **BigQuery project mismatch**: BigQueryExampleGen running jobs in wrong project (`se4d1ef3f85b1926b-tp`) → Added `beam_pipeline_args` with `--project=b2b-recs` to TFX pipeline configuration
+
 ### Next Steps
 
-1. **Phase 7**: Build and push pre-built Docker image with TFX dependencies
-2. **Phase 5**: Implement per-epoch metrics charts and comparison table
-3. **Phase 6**: Deploy MLflow server to Cloud Run, integrate tracking
+1. **Phase 5**: Implement per-epoch metrics charts and comparison table
+2. **Phase 6**: Deploy MLflow server to Cloud Run, integrate tracking
+3. **Debug BigQueryExampleGen**: Pipeline currently fails at BigQuery step - investigate remaining project/permissions issues
 4. **Monitor Pipeline**: Check Vertex AI console for pipeline completion
 
 ---

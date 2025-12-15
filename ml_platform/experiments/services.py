@@ -193,7 +193,8 @@ class ExperimentService:
         )
 
         # 4. Create unique paths for this run
-        run_id = f"qt_{quick_test.id}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
+        # Use hyphens (not underscores) - Vertex AI pipeline names require [a-z0-9-]
+        run_id = f"qt-{quick_test.id}-{datetime.utcnow().strftime('%Y%m%d-%H%M%S')}"
         gcs_base_path = f"gs://{self.ARTIFACTS_BUCKET}/{run_id}"
 
         # 5. Upload code to GCS
@@ -427,6 +428,7 @@ def create_tfx_pipeline(
     transform_module_path: str,
     trainer_module_path: str,
     output_path: str,
+    project_id: str,
     epochs: int = 10,
     batch_size: int = 4096,
     learning_rate: float = 0.001,
@@ -449,6 +451,7 @@ def create_tfx_pipeline(
         )
     )
 
+    logger.info(f"BigQueryExampleGen will use project={project_id} via beam_pipeline_args")
     example_gen = BigQueryExampleGen(query=bigquery_query, output_config=output_config)
     statistics_gen = StatisticsGen(examples=example_gen.outputs["examples"])
     schema_gen = SchemaGen(statistics=statistics_gen.outputs["statistics"])
@@ -473,13 +476,21 @@ def create_tfx_pipeline(
     )
 
     components = [example_gen, statistics_gen, schema_gen, transform, trainer]
+
+    # Set beam_pipeline_args to configure GCP project for BigQuery operations
+    beam_pipeline_args = [
+        f'--project={project_id}',
+        f'--temp_location=gs://{project_id}-pipeline-staging/beam_temp',
+    ]
+
     pipeline = tfx_pipeline.Pipeline(
         pipeline_name=pipeline_name,
         pipeline_root=pipeline_root,
         components=components,
         enable_cache=False,
+        beam_pipeline_args=beam_pipeline_args,
     )
-    logger.info(f"TFX pipeline created with {len(components)} components")
+    logger.info(f"TFX pipeline created with {len(components)} components, beam_pipeline_args={beam_pipeline_args}")
     return pipeline
 
 
@@ -552,6 +563,7 @@ def main():
                 transform_module_path=args.transform_module_path,
                 trainer_module_path=args.trainer_module_path,
                 output_path=args.output_path,
+                project_id=args.project_id,
                 epochs=args.epochs,
                 batch_size=args.batch_size,
                 learning_rate=args.learning_rate,

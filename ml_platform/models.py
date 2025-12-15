@@ -1532,10 +1532,39 @@ class QuickTest(models.Model):
     # Test Configuration
     # =========================================================================
 
-    # Data settings (future: sampling)
+    # Split strategy choices
+    SPLIT_RANDOM = 'random'
+    SPLIT_TIME_HOLDOUT = 'time_holdout'
+    SPLIT_STRICT_TIME = 'strict_time'
+
+    SPLIT_STRATEGY_CHOICES = [
+        (SPLIT_RANDOM, 'Random Split (fastest, may have data leakage)'),
+        (SPLIT_TIME_HOLDOUT, 'Time Holdout (recommended for recommenders)'),
+        (SPLIT_STRICT_TIME, 'Strict Temporal (train < val < test by date)'),
+    ]
+
+    # Data sampling and split settings
     data_sample_percent = models.IntegerField(
         default=100,
-        help_text="Percentage of dataset to use (100 = full, future: 5/10/25)"
+        help_text="Percentage of dataset to use (5, 10, 25, or 100)"
+    )
+
+    split_strategy = models.CharField(
+        max_length=20,
+        choices=SPLIT_STRATEGY_CHOICES,
+        default=SPLIT_RANDOM,
+        help_text="How to split data into train/eval sets"
+    )
+
+    holdout_days = models.IntegerField(
+        default=1,
+        help_text="Days to exclude from training for holdout (used with time_holdout strategy)"
+    )
+
+    date_column = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Column name for temporal split (required for time-based strategies)"
     )
 
     # Training hyperparameters

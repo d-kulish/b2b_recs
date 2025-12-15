@@ -470,6 +470,51 @@
                 </div>
             </div>
 
+            <!-- Split Strategy & Sampling -->
+            <div class="mb-4 p-3 bg-amber-50 rounded-lg border border-amber-200">
+                <h4 class="font-medium text-amber-900 mb-2">
+                    <i class="fas fa-random mr-1"></i>Data Split & Sampling
+                </h4>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs text-amber-700 mb-1">Split Strategy</label>
+                        <select id="qtSplitStrategy" class="w-full px-2 py-1.5 border border-amber-300 rounded text-sm" onchange="onSplitStrategyChange()">
+                            <option value="random">Random (fastest)</option>
+                            <option value="time_holdout">Time Holdout</option>
+                            <option value="strict_time">Strict Temporal</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs text-amber-700 mb-1">Sample %</label>
+                        <select id="qtSamplePercent" class="w-full px-2 py-1.5 border border-amber-300 rounded text-sm">
+                            <option value="5">5% (fastest)</option>
+                            <option value="10">10%</option>
+                            <option value="25">25%</option>
+                            <option value="100" selected>100% (full)</option>
+                        </select>
+                    </div>
+                </div>
+                <!-- Time-based split options (shown when time_holdout or strict_time selected) -->
+                <div id="qtTimeOptions" class="mt-3 pt-3 border-t border-amber-200 hidden">
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs text-amber-700 mb-1">Holdout Days</label>
+                            <input type="number" id="qtHoldoutDays" value="1" min="1" max="30" class="w-full px-2 py-1.5 border border-amber-300 rounded text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-amber-700 mb-1">Date Column</label>
+                            <select id="qtDateColumn" class="w-full px-2 py-1.5 border border-amber-300 rounded text-sm">
+                                <option value="">Loading...</option>
+                            </select>
+                        </div>
+                    </div>
+                    <p class="text-xs text-amber-600 mt-2">
+                        <i class="fas fa-info-circle mr-1"></i>
+                        Excludes last N days from training to prevent data leakage.
+                    </p>
+                </div>
+            </div>
+
             <h4 class="font-medium text-gray-900 mb-3">Training Parameters</h4>
             <div class="space-y-2 text-sm mb-4">
                 <p><span class="text-gray-600">Epochs:</span> <strong id="qtDialogEpochs">10</strong></p>
@@ -905,12 +950,71 @@ function closeQuickTestDialog() {
 }
 
 // =============================================================================
+// SPLIT STRATEGY HANDLERS
+// =============================================================================
+function onSplitStrategyChange() {
+    const strategy = document.getElementById('qtSplitStrategy').value;
+    const timeOptions = document.getElementById('qtTimeOptions');
+
+    if (strategy === 'time_holdout' || strategy === 'strict_time') {
+        timeOptions.classList.remove('hidden');
+        loadDateColumns();
+    } else {
+        timeOptions.classList.add('hidden');
+    }
+}
+
+async function loadDateColumns() {
+    const dateColumnSelect = document.getElementById('qtDateColumn');
+    dateColumnSelect.innerHTML = '<option value="">Loading...</option>';
+
+    // Find the selected Feature Config to get its dataset
+    const featureConfig = allFeatureConfigs.find(fc => fc.id === selectedFeatureConfigId);
+    if (!featureConfig || !featureConfig.dataset_id) {
+        dateColumnSelect.innerHTML = '<option value="">No dataset found</option>';
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/datasets/${featureConfig.dataset_id}/date-columns/`);
+        const data = await response.json();
+
+        if (data.success && data.date_columns && data.date_columns.length > 0) {
+            dateColumnSelect.innerHTML = '<option value="">Select date column...</option>';
+            data.date_columns.forEach(col => {
+                const option = document.createElement('option');
+                option.value = col.name;
+                option.textContent = `${col.name} (${col.type})`;
+                dateColumnSelect.appendChild(option);
+            });
+        } else {
+            dateColumnSelect.innerHTML = '<option value="">No date columns found</option>';
+        }
+    } catch (error) {
+        console.error('Error loading date columns:', error);
+        dateColumnSelect.innerHTML = '<option value="">Error loading columns</option>';
+    }
+}
+
+// =============================================================================
 // QUICK TEST EXECUTION
 // =============================================================================
 async function startQuickTest() {
     const epochs = parseInt(document.getElementById('qtEpochs').value);
     const batchSize = parseInt(document.getElementById('qtBatchSize').value);
     const learningRate = parseFloat(document.getElementById('qtLearningRate').value);
+
+    // Get split strategy and sampling options
+    const splitStrategy = document.getElementById('qtSplitStrategy').value;
+    const samplePercent = parseInt(document.getElementById('qtSamplePercent').value);
+    const holdoutDays = parseInt(document.getElementById('qtHoldoutDays').value) || 1;
+    const dateColumn = document.getElementById('qtDateColumn').value;
+
+    // Validate date column for time-based strategies
+    if ((splitStrategy === 'time_holdout' || splitStrategy === 'strict_time') && !dateColumn) {
+        showError('Please select a date column for time-based split strategies');
+        return;
+    }
 
     // For ranking models, validate and get rating column
     let ratingColumn = null;
@@ -938,6 +1042,10 @@ async function startQuickTest() {
     // Build request payload
     const payload = {
         model_config_id: selectedModelConfigId,
+        split_strategy: splitStrategy,
+        data_sample_percent: samplePercent,
+        holdout_days: holdoutDays,
+        date_column: dateColumn,
         epochs: epochs,
         batch_size: batchSize,
         learning_rate: learningRate
@@ -961,8 +1069,8 @@ async function startQuickTest() {
         const data = await response.json();
 
         if (data.success) {
-            currentQuickTestId = data.data.id;
-            updateProgressUI(data.data);
+            currentQuickTestId = data.quick_test.id;
+            updateProgressUI(data.quick_test);
             startPolling();
         } else {
             document.getElementById('quickTestProgress').classList.add('hidden');
@@ -997,11 +1105,12 @@ function startPolling() {
             const data = await response.json();
 
             if (data.success) {
-                updateProgressUI(data.data);
+                const quickTest = data.quick_test;
+                updateProgressUI(quickTest);
 
-                if (['completed', 'failed', 'cancelled'].includes(data.data.status)) {
+                if (['completed', 'failed', 'cancelled'].includes(quickTest.status)) {
                     stopPolling();
-                    showResults(data.data);
+                    showResults(quickTest);
                 }
             }
         } catch (error) {
@@ -1098,23 +1207,24 @@ function showResults(quickTest) {
         statusBadge.innerHTML = '<span class="status-badge draft"><i class="fas fa-ban"></i> Cancelled</span>';
     }
 
-    // Metrics
+    // Metrics (nested under 'metrics' object from API)
+    const metrics = quickTest.metrics || {};
     const metricsHtml = quickTest.status === 'completed' ? `
         <div class="quicktest-metric">
             <span class="quicktest-metric-label">Loss</span>
-            <span class="quicktest-metric-value">${quickTest.loss?.toFixed(4) || 'N/A'}</span>
+            <span class="quicktest-metric-value">${metrics.loss != null ? metrics.loss.toFixed(4) : 'N/A'}</span>
         </div>
         <div class="quicktest-metric">
             <span class="quicktest-metric-label">Recall@10</span>
-            <span class="quicktest-metric-value">${quickTest.recall_at_10 ? (quickTest.recall_at_10 * 100).toFixed(2) + '%' : 'N/A'}</span>
+            <span class="quicktest-metric-value">${metrics.recall_at_10 != null ? (metrics.recall_at_10 * 100).toFixed(2) + '%' : 'N/A'}</span>
         </div>
         <div class="quicktest-metric">
             <span class="quicktest-metric-label">Recall@50</span>
-            <span class="quicktest-metric-value">${quickTest.recall_at_50 ? (quickTest.recall_at_50 * 100).toFixed(2) + '%' : 'N/A'}</span>
+            <span class="quicktest-metric-value">${metrics.recall_at_50 != null ? (metrics.recall_at_50 * 100).toFixed(2) + '%' : 'N/A'}</span>
         </div>
         <div class="quicktest-metric">
             <span class="quicktest-metric-label">Recall@100</span>
-            <span class="quicktest-metric-value">${quickTest.recall_at_100 ? (quickTest.recall_at_100 * 100).toFixed(2) + '%' : 'N/A'}</span>
+            <span class="quicktest-metric-value">${metrics.recall_at_100 != null ? (metrics.recall_at_100 * 100).toFixed(2) + '%' : 'N/A'}</span>
         </div>
     ` : '<p class="text-gray-500">No metrics available</p>';
 

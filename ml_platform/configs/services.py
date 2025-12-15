@@ -2247,7 +2247,7 @@ def run_fn(fn_args: tfx.components.FnArgs):
     product_ids, product_embeddings = _precompute_candidate_embeddings(
         model, candidates_for_serving
     )
-    logging.info(f"Pre-computed embeddings for {len(product_ids)} products")
+    logging.info(f"Pre-computed embeddings for {{len(product_ids)}} products")
 
     # Build serving signature
     logging.info("Building serving signature...")
@@ -2259,11 +2259,11 @@ def run_fn(fn_args: tfx.components.FnArgs):
     )
 
     # Save model with serving signature
-    signatures = {
+    signatures = {{
         'serving_default': serve_fn
-    }
+    }}
 
-    logging.info(f"Saving model to: {fn_args.serving_model_dir}")
+    logging.info(f"Saving model to: {{fn_args.serving_model_dir}}")
     tf.saved_model.save(
         model,
         fn_args.serving_model_dir,

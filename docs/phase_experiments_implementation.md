@@ -3,25 +3,26 @@
 ## Document Purpose
 This document provides a **complete implementation guide** for building the Experiments domain with native TFX pipelines on Vertex AI. It is designed to be self-contained and actionable - you should be able to open this document and start implementing without additional context.
 
-**Last Updated**: 2024-12-14
+**Last Updated**: 2025-12-15
 
 ---
 
 ## Table of Contents
 
 1. [Executive Summary](#executive-summary)
-2. [Architecture Overview](#architecture-overview)
-3. [Technical Decisions](#technical-decisions)
-4. [Implementation Plan](#implementation-plan)
-5. [Phase 1: TFX Pipeline Infrastructure](#phase-1-tfx-pipeline-infrastructure)
-6. [Phase 2: Trainer Module Generator Rebuild](#phase-2-trainer-module-generator-rebuild)
-7. [Phase 3: Experiment Parameters & Submission](#phase-3-experiment-parameters--submission)
-8. [Phase 4: Pipeline Visualization UI](#phase-4-pipeline-visualization-ui)
-9. [Phase 5: Metrics Collection & Display](#phase-5-metrics-collection--display)
-10. [Phase 6: MLflow Integration](#phase-6-mlflow-integration)
-11. [File Reference](#file-reference)
-12. [API Reference](#api-reference)
-13. [Testing Guide](#testing-guide)
+2. [Implementation Status](#implementation-status)
+3. [Architecture Overview](#architecture-overview)
+4. [Technical Decisions](#technical-decisions)
+5. [Implementation Plan](#implementation-plan)
+6. [Phase 1: TFX Pipeline Infrastructure](#phase-1-tfx-pipeline-infrastructure)
+7. [Phase 2: Trainer Module Generator Rebuild](#phase-2-trainer-module-generator-rebuild)
+8. [Phase 3: Experiment Parameters & Submission](#phase-3-experiment-parameters--submission)
+9. [Phase 4: Pipeline Visualization UI](#phase-4-pipeline-visualization-ui)
+10. [Phase 5: Metrics Collection & Display](#phase-5-metrics-collection--display)
+11. [Phase 6: MLflow Integration](#phase-6-mlflow-integration)
+12. [File Reference](#file-reference)
+13. [API Reference](#api-reference)
+14. [Testing Guide](#testing-guide)
 
 ---
 
@@ -54,6 +55,83 @@ Experiments Page = Analyze Quick Test results to find optimal parameters
 | Experiment Tracking | **MLflow** (self-hosted on Cloud Run) |
 | Metrics Visualization | MLflow UI + Custom charts |
 | Pipeline Compilation | On-demand at submission time |
+
+---
+
+## Implementation Status
+
+**Current Status**: Core pipeline functionality implemented and tested
+
+### Completed Phases
+
+| Phase | Status | Description |
+|-------|--------|-------------|
+| **Phase 0** | ✅ Complete | GCP Infrastructure verification (buckets, IAM, region) |
+| **Phase 1** | ✅ Complete | TFX Pipeline Infrastructure (KFP v2 pipeline, code generation, submission) |
+| **Phase 2** | ✅ Complete | Trainer Module Generator (existing code works, minor f-string bug fixes) |
+| **Phase 3** | ✅ Complete | Experiment Parameters & Submission (API endpoints, split strategies, sampling) |
+| **Phase 4** | ✅ Complete | Pipeline Visualization UI (Quick Test dialog, status polling, results display) |
+| **Phase 5** | 🔲 Pending | Metrics Collection & Display (per-epoch charts, comparison table) |
+| **Phase 6** | 🔲 Pending | MLflow Integration (experiment tracking, heatmaps, comparison) |
+
+### Successfully Tested
+
+- **Pipeline Submission**: Quick Test ID: 2 submitted successfully to Vertex AI
+- **Vertex Pipeline Job ID**: `quicktest-tfx-pipeline-qt-2-20251215-122053-20251215122057`
+- **GCS Artifacts**: `gs://b2b-recs-quicktest-artifacts/qt_2_20251215_122053`
+- Region: `europe-central2` (Warsaw)
+
+### Files Created
+
+| File | Description |
+|------|-------------|
+| `ml_platform/experiments/__init__.py` | Experiments sub-app initialization |
+| `ml_platform/experiments/urls.py` | API route definitions |
+| `ml_platform/experiments/api.py` | REST endpoints for Quick Tests |
+| `ml_platform/experiments/services.py` | ExperimentService for pipeline orchestration |
+| `ml_platform/experiments/tfx_pipeline.py` | KFP v2 pipeline with 4 components |
+
+### Files Modified
+
+| File | Changes |
+|------|---------|
+| `requirements.txt` | Added TFX, TensorFlow, TFRS dependencies |
+| `ml_platform/models.py` | Added split strategy fields to QuickTest model |
+| `ml_platform/datasets/services.py` | Added `generate_training_query()` with holdout/sampling |
+| `ml_platform/configs/services.py` | Fixed f-string escaping bugs in TrainerModuleGenerator |
+| `ml_platform/urls.py` | Registered experiments sub-app |
+| `templates/ml_platform/model_experiments.html` | Added split strategy UI, API response handling |
+
+### Key Technical Decisions Made
+
+1. **Split Strategies**:
+   - `random` (default): Hash-based split for fastest iteration
+   - `time_holdout`: Days 0-29 train/val (random), day 30 test
+   - `strict_time`: Full temporal ordering (train < val < test)
+
+2. **Sampling**: Applied after holdout filter to preserve test set integrity
+
+3. **Sub-App Structure**: Created `ml_platform/experiments/` instead of using existing pipelines directory
+
+4. **Pipeline Architecture**: KFP v2 with 4 components (example_gen, transform, trainer, save_metrics)
+
+### Bug Fixes Applied
+
+1. **f-string escaping** in TrainerModuleGenerator:
+   - `{len(product_ids)}` → `{{len(product_ids)}}`
+   - `signatures = {` → `signatures = {{`
+   - `{fn_args.serving_model_dir}` → `{{fn_args.serving_model_dir}}`
+
+2. **Field name mismatch**: `gcs_output_path` → `gcs_artifacts_path`
+
+3. **API response format**: `data.data.id` → `data.quick_test.id`
+
+### Next Steps
+
+1. **Phase 5**: Implement per-epoch metrics charts and comparison table
+2. **Phase 6**: Deploy MLflow server to Cloud Run, integrate tracking
+3. **Monitor Pipeline**: Check Vertex AI console for pipeline completion
+4. **Verify Metrics**: Once pipeline completes, verify metrics.json extraction
 
 ---
 

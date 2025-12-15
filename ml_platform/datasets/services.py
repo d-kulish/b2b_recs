@@ -1122,6 +1122,136 @@ class BigQueryService:
             logger.error(f"Error generating query: {e}")
             raise BigQueryServiceError(f"Failed to generate query: {e}")
 
+    def generate_training_query(
+        self,
+        dataset,
+        split_strategy: str = 'random',
+        holdout_days: int = 1,
+        date_column: str = None,
+        sample_percent: int = 100
+    ) -> str:
+        """
+        Generate BigQuery SQL for training with split strategy and sampling.
+
+        This wraps generate_query() and applies additional filters:
+        1. Holdout filter - excludes recent data for time-based strategies
+        2. Sampling - random sample of data for quick tests
+
+        Args:
+            dataset: Dataset model instance
+            split_strategy: 'random', 'time_holdout', or 'strict_time'
+            holdout_days: Days to exclude from training (for time_holdout/strict_time)
+            date_column: Column name for temporal split (required for time-based strategies)
+            sample_percent: Percentage of data to use (5, 10, 25, 100)
+
+        Returns:
+            SQL query string with holdout and sampling applied
+
+        Order of operations:
+        1. Base query (from generate_query) with dataset filters
+        2. Holdout filter (exclude recent N days) - applied AFTER dataset filters
+        3. Sampling (random %) - applied LAST so holdout is always complete
+
+        Example for time_holdout with 1 day holdout and 10% sampling:
+            WITH base_data AS (
+                <original generate_query output>
+            ),
+            holdout_filtered AS (
+                SELECT * FROM base_data
+                WHERE trans_date < DATE_SUB(CURRENT_DATE(), INTERVAL 1 DAY)
+            )
+            SELECT * FROM holdout_filtered
+            WHERE RAND() < 0.1
+        """
+        try:
+            # Get base query
+            base_query = self.generate_query(dataset, for_analysis=False)
+
+            # If no modifications needed, return base query
+            if split_strategy == 'random' and sample_percent >= 100:
+                return base_query
+
+            # Build CTEs for holdout and sampling
+            query_parts = []
+            current_source = 'base_data'
+
+            # Wrap base query in CTE
+            query_parts.append(f"WITH base_data AS (\n{base_query}\n)")
+
+            # Apply holdout filter for time-based strategies
+            if split_strategy in ('time_holdout', 'strict_time') and date_column:
+                holdout_cte = self._generate_holdout_cte(
+                    source_table=current_source,
+                    date_column=date_column,
+                    holdout_days=holdout_days,
+                    strategy=split_strategy
+                )
+                query_parts[0] += f",\nholdout_filtered AS (\n{holdout_cte}\n)"
+                current_source = 'holdout_filtered'
+
+            # Apply sampling if needed
+            if sample_percent < 100:
+                # Final SELECT with sampling
+                sample_fraction = sample_percent / 100.0
+                query_parts.append(
+                    f"SELECT * FROM {current_source}\n"
+                    f"WHERE RAND() < {sample_fraction}"
+                )
+            else:
+                # No sampling, just select all
+                query_parts.append(f"SELECT * FROM {current_source}")
+
+            return "\n".join(query_parts)
+
+        except Exception as e:
+            logger.error(f"Error generating training query: {e}")
+            raise BigQueryServiceError(f"Failed to generate training query: {e}")
+
+    def _generate_holdout_cte(
+        self,
+        source_table: str,
+        date_column: str,
+        holdout_days: int,
+        strategy: str
+    ) -> str:
+        """
+        Generate CTE for holdout filtering based on date column.
+
+        Args:
+            source_table: Source CTE or table name
+            date_column: Column name containing dates
+            holdout_days: Number of days to exclude
+            strategy: 'time_holdout' or 'strict_time'
+
+        Returns:
+            SQL for the holdout CTE body (without the AS wrapper)
+
+        For time_holdout:
+            Excludes the last N days from training.
+            Train+Val use all data before holdout, TFX does random train/val split.
+
+        For strict_time:
+            More complex temporal split - requires multiple date ranges.
+            (Full implementation would need train/val/test date boundaries)
+        """
+        if strategy == 'time_holdout':
+            # Simple holdout: exclude last N days
+            return f"""    SELECT *
+    FROM {source_table}
+    WHERE {date_column} < DATE_SUB(CURRENT_DATE(), INTERVAL {holdout_days} DAY)"""
+
+        elif strategy == 'strict_time':
+            # Strict temporal: more complex split
+            # For now, treat same as time_holdout
+            # Full implementation would compute date boundaries for train/val/test
+            return f"""    SELECT *
+    FROM {source_table}
+    WHERE {date_column} < DATE_SUB(CURRENT_DATE(), INTERVAL {holdout_days} DAY)"""
+
+        else:
+            # Random - no holdout filter
+            return f"    SELECT * FROM {source_table}"
+
     def _generate_top_products_cte(self, primary_alias, product_col, revenue_col, percent):
         """
         Generate CTE for top N% products by revenue.

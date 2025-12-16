@@ -298,14 +298,14 @@ gcloud run jobs execute django-migrate-and-createsuperuser --region europe-centr
 - Dataflow for large datasets (> 1M rows)
 - **Dataset Management** - Full UI with 4-step wizard and Visual Schema Builder (27 endpoints)
 - **Modeling (Feature Engineering)** - Feature config wizard with drag-drop UI, tensor dimension preview (11 endpoints)
-- **Quick Test Pipeline** - Vertex AI pipeline integration for validating feature configs (4 endpoints)
+- **Quick Test Pipeline** - ✅ **Fully working!** TFX pipeline on Vertex AI with TFRS model training and SavedModel export
 - **Model Structure** - Tower architecture builder with presets, layer configuration, training params (9 endpoints)
 
 ### **🔮 Next Up**
-1. Full Training Pipeline - Extended training with checkpointing, model export
-2. Model Deployment - SavedModel export, candidate index building
-3. Real-time streaming ETL (Pub/Sub)
-4. Data quality validation rules
+1. **Metrics Display** - Per-epoch training charts, comparison tables
+2. **MLflow Integration** - Experiment tracking, heatmaps, model comparison
+3. Full Training Pipeline - Extended training with checkpointing
+4. Model Deployment - Candidate index building, serving endpoints
 
 See [`next_steps.md`](next_steps.md) for detailed roadmap.
 
@@ -381,6 +381,18 @@ WHERE source_type='gcs';
 ---
 
 ## 📝 Recent Updates
+
+**December 16, 2025 - TFX Pipeline Fully Working! 🎉**
+- ✅ **End-to-end pipeline execution** - BigQueryExampleGen → StatisticsGen → SchemaGen → Transform → Trainer → Model Saved
+- ✅ **TFRS Two-Tower model training** - Retrieval model trains successfully on Vertex AI
+- ✅ **SavedModel export** - Model saved with serving signature for inference
+- ✅ **5 critical bug fixes in TrainerModuleGenerator**:
+  - Fixed embedding flatten shape issue (static shapes preserved)
+  - Fixed infinite dataset error (added `num_epochs=1`)
+  - Removed redundant StringLookup (Transform provides vocab indices)
+  - Removed FactorizedTopK (caused serialization issues)
+  - Created ServingModel wrapper (tracks TFT resources properly)
+- See [Phase: Experiments Implementation](docs/phase_experiments_implementation.md) for technical details
 
 **December 14, 2025 - Multitask Model Support (Phase 3 Complete)**
 - ✅ **Multitask model type** - Combined Retrieval + Ranking with configurable loss weights

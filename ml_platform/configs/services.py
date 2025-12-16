@@ -1319,7 +1319,7 @@ class TrainerModuleGenerator:
 
     The generated code:
     - Loads vocabularies from Transform artifacts
-    - Creates embeddings for text features (StringLookup + Embedding)
+    - Creates embeddings for text features (Embedding on vocab indices from Transform)
     - Uses normalized/cyclical values from Transform for numeric/temporal
     - Creates embeddings for bucket indices and cross features
     - Builds two-tower TFRS model with configurable architecture from ModelConfig
@@ -1530,6 +1530,9 @@ L2_REGULARIZATION = {l2_reg}
 
 # Retrieval configuration
 TOP_K = {self.top_k}
+
+# OOV buckets (must match Transform preprocessing)
+NUM_OOV_BUCKETS = 1
 '''
 
     def _generate_input_fn(self) -> str:
@@ -1559,7 +1562,7 @@ def _input_fn(
     """
     return data_accessor.tf_dataset_factory(
         file_pattern,
-        tfxio.TensorFlowDatasetOptions(batch_size=batch_size),
+        tfxio.TensorFlowDatasetOptions(batch_size=batch_size, num_epochs=1),
         tf_transform_output.transformed_metadata.schema
     )
 '''
@@ -1603,13 +1606,10 @@ def _input_fn(
             else:
                 embed_dim = feature.get('embedding_dim', 32)
 
-            lines.append(f"        # {col}: text → embedding ({embed_dim}D)")
-            lines.append(f"        {col}_vocab = tf_transform_output.vocabulary_by_name('{col}_vocab')")
-            lines.append(f"        {col}_vocab_list = [b.decode() if isinstance(b, bytes) else b for b in {col}_vocab]")
-            lines.append(f"        self.{col}_embedding = tf.keras.Sequential([")
-            lines.append(f"            tf.keras.layers.StringLookup(vocabulary={col}_vocab_list, mask_token=None),")
-            lines.append(f"            tf.keras.layers.Embedding(len({col}_vocab_list) + 1, {embed_dim})")
-            lines.append(f"        ])")
+            lines.append(f"        # {col}: vocab index → embedding ({embed_dim}D)")
+            lines.append(f"        # Transform already converted text to indices via tft.compute_and_apply_vocabulary")
+            lines.append(f"        {col}_vocab_size = tf_transform_output.vocabulary_size_by_name('{col}_vocab')")
+            lines.append(f"        self.{col}_embedding = tf.keras.layers.Embedding({col}_vocab_size + NUM_OOV_BUCKETS, {embed_dim})")
             lines.append('')
 
         # Generate embedding layers for numeric bucket features
@@ -1621,7 +1621,7 @@ def _input_fn(
             if bucketize.get('enabled'):
                 buckets = bucketize.get('buckets', 100)
                 embed_dim = bucketize.get('embedding_dim', 32)
-                lines.append(f"        # {col}: numeric bucket → embedding ({embed_dim}D)")
+                lines.append(f"        # {col}: bucket index → embedding ({embed_dim}D)")
                 lines.append(f"        self.{col}_bucket_embedding = tf.keras.layers.Embedding({buckets + 1}, {embed_dim})")
                 lines.append('')
 
@@ -1634,7 +1634,7 @@ def _input_fn(
             if bucketize.get('enabled'):
                 buckets = bucketize.get('buckets', 100)
                 embed_dim = bucketize.get('embedding_dim', 32)
-                lines.append(f"        # {col}: temporal bucket → embedding ({embed_dim}D)")
+                lines.append(f"        # {col}: bucket index → embedding ({embed_dim}D)")
                 lines.append(f"        self.{col}_bucket_embedding = tf.keras.layers.Embedding({buckets + 1}, {embed_dim})")
                 lines.append('')
 
@@ -1730,7 +1730,8 @@ def _input_fn(
 
         # Flatten embeddings from [batch, 1, dim] to [batch, dim] before concatenating
         lines.append('        # Flatten embeddings to [batch, dim] for concatenation')
-        lines.append('        flattened = [tf.reshape(f, [tf.shape(f)[0], -1]) for f in features]')
+        lines.append('        # Use squeeze for 3D tensors to preserve static shape (required for tf.data.Dataset.map)')
+        lines.append('        flattened = [tf.squeeze(f, axis=1) if len(f.shape) == 3 else f for f in features]')
         lines.append('        return tf.concat(flattened, axis=1)')
         lines.append('')
 
@@ -1775,13 +1776,10 @@ def _input_fn(
             else:
                 embed_dim = feature.get('embedding_dim', 32)
 
-            lines.append(f"        # {col}: text → embedding ({embed_dim}D)")
-            lines.append(f"        {col}_vocab = tf_transform_output.vocabulary_by_name('{col}_vocab')")
-            lines.append(f"        {col}_vocab_list = [b.decode() if isinstance(b, bytes) else b for b in {col}_vocab]")
-            lines.append(f"        self.{col}_embedding = tf.keras.Sequential([")
-            lines.append(f"            tf.keras.layers.StringLookup(vocabulary={col}_vocab_list, mask_token=None),")
-            lines.append(f"            tf.keras.layers.Embedding(len({col}_vocab_list) + 1, {embed_dim})")
-            lines.append(f"        ])")
+            lines.append(f"        # {col}: vocab index → embedding ({embed_dim}D)")
+            lines.append(f"        # Transform already converted text to indices via tft.compute_and_apply_vocabulary")
+            lines.append(f"        {col}_vocab_size = tf_transform_output.vocabulary_size_by_name('{col}_vocab')")
+            lines.append(f"        self.{col}_embedding = tf.keras.layers.Embedding({col}_vocab_size + NUM_OOV_BUCKETS, {embed_dim})")
             lines.append('')
 
         # Generate embedding layers for numeric bucket features
@@ -1793,7 +1791,7 @@ def _input_fn(
             if bucketize.get('enabled'):
                 buckets = bucketize.get('buckets', 100)
                 embed_dim = bucketize.get('embedding_dim', 32)
-                lines.append(f"        # {col}: numeric bucket → embedding ({embed_dim}D)")
+                lines.append(f"        # {col}: bucket index → embedding ({embed_dim}D)")
                 lines.append(f"        self.{col}_bucket_embedding = tf.keras.layers.Embedding({buckets + 1}, {embed_dim})")
                 lines.append('')
 
@@ -1806,7 +1804,7 @@ def _input_fn(
             if bucketize.get('enabled'):
                 buckets = bucketize.get('buckets', 100)
                 embed_dim = bucketize.get('embedding_dim', 32)
-                lines.append(f"        # {col}: temporal bucket → embedding ({embed_dim}D)")
+                lines.append(f"        # {col}: bucket index → embedding ({embed_dim}D)")
                 lines.append(f"        self.{col}_bucket_embedding = tf.keras.layers.Embedding({buckets + 1}, {embed_dim})")
                 lines.append('')
 
@@ -1900,7 +1898,8 @@ def _input_fn(
 
         # Flatten embeddings from [batch, 1, dim] to [batch, dim] before concatenating
         lines.append('        # Flatten embeddings to [batch, dim] for concatenation')
-        lines.append('        flattened = [tf.reshape(f, [tf.shape(f)[0], -1]) for f in features]')
+        lines.append('        # Use squeeze for 3D tensors to preserve static shape (required for tf.data.Dataset.map)')
+        lines.append('        flattened = [tf.squeeze(f, axis=1) if len(f.shape) == 3 else f for f in features]')
         lines.append('        return tf.concat(flattened, axis=1)')
         lines.append('')
 
@@ -1929,8 +1928,7 @@ class RetrievalModel(tfrs.Model):
 
     def __init__(
         self,
-        tf_transform_output: tft.TFTransformOutput,
-        candidates_dataset: tf.data.Dataset
+        tf_transform_output: tft.TFTransformOutput
     ):
         super().__init__()
 
@@ -1948,12 +1946,10 @@ class RetrievalModel(tfrs.Model):
 {product_layers_code}
         self.candidate_tower = tf.keras.Sequential(candidate_layers)
 
-        # TFRS Retrieval task with top-k metrics
-        self.task = tfrs.tasks.Retrieval(
-            metrics=tfrs.metrics.FactorizedTopK(
-                candidates=candidates_dataset.batch(128).map(self.candidate_tower)
-            )
-        )
+        # TFRS Retrieval task (without FactorizedTopK metrics during training)
+        # FactorizedTopK requires pre-computed embeddings which causes serialization issues
+        # with tf.data.Dataset.map() due to stateful Embedding layers
+        self.task = tfrs.tasks.Retrieval()
 
     def compute_loss(self, features: Dict[Text, tf.Tensor], training: bool = False) -> tf.Tensor:
         """Compute retrieval loss."""
@@ -2056,45 +2052,51 @@ class RetrievalModel(tfrs.Model):
 # SERVING FUNCTION
 # =============================================================================
 
-def _build_serving_fn(model, tf_transform_output, product_ids, product_embeddings):
+class ServingModel(tf.keras.Model):
     """
-    Build serving function that takes raw inputs and returns recommendations.
+    Wrapper model for serving that properly tracks all TFX Transform resources.
 
-    Args:
-        model: Trained RetrievalModel
-        tf_transform_output: Transform output for preprocessing
-        product_ids: List of all product IDs
-        product_embeddings: Pre-computed candidate embeddings
-
-    Returns:
-        Serving function
+    This class ensures that vocabulary hash tables and other TFT resources
+    are tracked by the model and saved correctly.
     """
-    tft_layer = tf_transform_output.transform_features_layer()
-    product_ids_tensor = tf.constant(product_ids)
+
+    def __init__(self, retrieval_model, tf_transform_output, product_ids, product_embeddings):
+        super().__init__()
+        # Track the retrieval model
+        self.retrieval_model = retrieval_model
+
+        # Track the TFT layer (contains vocabulary hash tables)
+        self.tft_layer = tf_transform_output.transform_features_layer()
+
+        # Store feature spec for parsing
+        self._raw_feature_spec = tf_transform_output.raw_feature_spec()
+
+        # Track product data as model variables
+        self.product_ids = tf.Variable(product_ids, trainable=False, name='product_ids')
+        self.product_embeddings = tf.Variable(product_embeddings, trainable=False, name='product_embeddings')
 
     @tf.function(input_signature=[
         tf.TensorSpec(shape=[None], dtype=tf.string, name='examples')
     ])
-    def serve_fn(serialized_examples):
+    def serve(self, serialized_examples):
         """
         Serving function that accepts serialized tf.Examples.
 
         Returns top-100 product recommendations with scores.
         """
         # Parse raw features
-        feature_spec = tf_transform_output.raw_feature_spec()
-        parsed_features = tf.io.parse_example(serialized_examples, feature_spec)
+        parsed_features = tf.io.parse_example(serialized_examples, self._raw_feature_spec)
 
         # Apply transform preprocessing
-        transformed_features = tft_layer(parsed_features)
+        transformed_features = self.tft_layer(parsed_features)
 
         # Get query embeddings
-        query_embeddings = model.query_tower(transformed_features)
+        query_embeddings = self.retrieval_model.query_tower(transformed_features)
 
         # Compute similarities with all candidates
         similarities = tf.linalg.matmul(
             query_embeddings,
-            product_embeddings,
+            self.product_embeddings,
             transpose_b=True
         )
 
@@ -2102,14 +2104,12 @@ def _build_serving_fn(model, tf_transform_output, product_ids, product_embedding
         top_scores, top_indices = tf.nn.top_k(similarities, k=100)
 
         # Map indices to product IDs
-        recommended_products = tf.gather(product_ids_tensor, top_indices)
+        recommended_products = tf.gather(self.product_ids, top_indices)
 
         return {{
             'product_ids': recommended_products,
             'scores': top_scores
         }}
-
-    return serve_fn
 
 
 def _precompute_candidate_embeddings(model, candidates_dataset, batch_size=128):
@@ -2194,20 +2194,10 @@ def run_fn(fn_args: tfx.components.FnArgs):
         batch_size
     )
 
-    # Create candidates dataset for retrieval metrics
-    # Uses eval split to build candidate index
-    candidates_dataset = _input_fn(
-        fn_args.eval_files,
-        fn_args.data_accessor,
-        tf_transform_output,
-        batch_size
-    ).unbatch()
-
     # Build model
     logging.info("Building RetrievalModel...")
     model = RetrievalModel(
-        tf_transform_output=tf_transform_output,
-        candidates_dataset=candidates_dataset
+        tf_transform_output=tf_transform_output
     )
 
     # Compile with configured optimizer: {self.optimizer}
@@ -2256,25 +2246,21 @@ def run_fn(fn_args: tfx.components.FnArgs):
     )
     logging.info(f"Pre-computed embeddings for {{len(product_ids)}} products")
 
-    # Build serving signature
-    logging.info("Building serving signature...")
-    serve_fn = _build_serving_fn(
-        model,
-        tf_transform_output,
-        product_ids,
-        product_embeddings
+    # Build serving model that properly tracks all resources
+    logging.info("Building serving model...")
+    serving_model = ServingModel(
+        retrieval_model=model,
+        tf_transform_output=tf_transform_output,
+        product_ids=product_ids,
+        product_embeddings=product_embeddings
     )
 
-    # Save model with serving signature
-    signatures = {{
-        'serving_default': serve_fn
-    }}
-
+    # Save serving model with signature
     logging.info(f"Saving model to: {{fn_args.serving_model_dir}}")
     tf.saved_model.save(
-        model,
+        serving_model,
         fn_args.serving_model_dir,
-        signatures=signatures
+        signatures={{'serving_default': serving_model.serve}}
     )
     logging.info("Model saved successfully!")
 '''

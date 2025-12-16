@@ -5,7 +5,7 @@ This document provides **high-level specifications** for the Experiments domain.
 
 👉 **[phase_experiments_implementation.md](phase_experiments_implementation.md)** - Complete implementation guide with code examples
 
-**Last Updated**: 2024-12-14
+**Last Updated**: 2025-12-16
 
 ---
 
@@ -885,42 +885,42 @@ MLFLOW_TRACKING_URI = os.environ.get('MLFLOW_TRACKING_URI', 'http://mlflow-serve
 
 > **Note:** Detailed implementation steps are in [phase_experiments_implementation.md](phase_experiments_implementation.md)
 
-### Phase 1: TFX Pipeline Infrastructure 🔴 TODO
-- [ ] Install TFX dependencies (`tfx>=1.14.0`)
-- [ ] Create `ml_platform/pipelines/tfx_pipeline.py` - Native TFX pipeline
-- [ ] Implement `create_quicktest_pipeline()` function
-- [ ] Implement `compile_pipeline_for_vertex()` function
-- [ ] Update `pipeline_builder.py` to use TFX (remove KFP v2 placeholders)
-- [ ] Update `services.py` for TFX pipeline submission
-- [ ] Test pipeline compilation
-- [ ] Test pipeline execution on Vertex AI
+### Phase 1: TFX Pipeline Infrastructure ✅ DONE
+- [x] Install TFX dependencies (`tfx>=1.14.0`)
+- [x] Create `ml_platform/pipelines/tfx_pipeline.py` - Native TFX pipeline
+- [x] Implement `create_quicktest_pipeline()` function
+- [x] Implement `compile_pipeline_for_vertex()` function
+- [x] Update `pipeline_builder.py` to use TFX (remove KFP v2 placeholders)
+- [x] Update `services.py` for TFX pipeline submission
+- [x] Test pipeline compilation
+- [x] Test pipeline execution on Vertex AI
 
-### Phase 2: Trainer Module Generator Rebuild 🔴 TODO
-- [ ] Rebuild `TrainerModuleGenerator` in `configs/services.py`
-- [ ] Generate proper `run_fn()` entry point
-- [ ] Generate BuyerModel class from FeatureConfig
-- [ ] Generate ProductModel class from FeatureConfig
-- [ ] Apply tower layers from ModelConfig
-- [ ] Implement metrics export to GCS
-- [ ] Validate generated code compiles
+### Phase 2: Trainer Module Generator Rebuild ✅ DONE
+- [x] Rebuild `TrainerModuleGenerator` in `configs/services.py`
+- [x] Generate proper `run_fn()` entry point
+- [x] Generate BuyerModel class from FeatureConfig
+- [x] Generate ProductModel class from FeatureConfig
+- [x] Apply tower layers from ModelConfig
+- [x] Implement metrics export to GCS
+- [x] Validate generated code compiles
 
-### Phase 3: Experiment Parameters & Submission 🔴 TODO
-- [ ] Add new fields to `QuickTest` model:
+### Phase 3: Experiment Parameters & Submission ✅ DONE
+- [x] Add new fields to `QuickTest` model:
   - `sample_percent` (5, 10, 25, 100)
   - `split_strategy` (random, time_based, custom)
   - `train_ratio` (0.5-0.95)
   - `time_split_column`
-- [ ] Update API endpoint to accept new parameters
-- [ ] Update UI to show parameter configuration
-- [ ] Implement sampling in SQL query
-- [ ] Implement split configuration in ExampleGen
+- [x] Update API endpoint to accept new parameters
+- [x] Update UI to show parameter configuration
+- [x] Implement sampling in SQL query
+- [x] Implement split configuration in ExampleGen
 
-### Phase 4: Pipeline Visualization UI 🔴 TODO
-- [ ] Create pipeline DAG component (like Vertex AI console)
-- [ ] Add real-time stage status updates
-- [ ] Show stage icons (✅ completed, 🔄 running, ⏳ pending)
-- [ ] Add artifact boxes between stages
-- [ ] Style to match screenshot reference
+### Phase 4: Pipeline Visualization UI ✅ DONE
+- [x] Create pipeline DAG component (like Vertex AI console)
+- [x] Add real-time stage status updates
+- [x] Show stage icons (✅ completed, 🔄 running, ⏳ pending)
+- [x] Add artifact boxes between stages
+- [x] Style to match screenshot reference
 
 ### Phase 5: Metrics Collection & Display 🔴 TODO
 - [ ] Collect all available metrics per epoch
@@ -971,6 +971,18 @@ MLFLOW_TRACKING_URI = os.environ.get('MLFLOW_TRACKING_URI', 'http://mlflow-serve
 - Image hosted in `b2b-recs` project (same as dev environment)
 - For production multi-tenant: migrate to `b2b-recs-platform` project
 - See [Phase 7 in implementation guide](phase_experiments_implementation.md#phase-7-pre-built-docker-image-for-fast-cloud-build)
+
+### Phase 8: TFX Trainer Bug Fixes ✅ DONE (2025-12-16)
+> **Critical bug fixes** - Fixed 5 issues preventing successful Trainer execution and model saving
+
+- [x] **Embedding shape fix**: Changed `tf.reshape(f, [tf.shape(f)[0], -1])` to `tf.squeeze(f, axis=1)` to preserve static shapes
+- [x] **Infinite dataset fix**: Added `num_epochs=1` to `TensorFlowDatasetOptions` in `_input_fn`
+- [x] **StringLookup removal**: Removed redundant `StringLookup` layer (Transform already provides vocab indices)
+- [x] **FactorizedTopK removal**: Removed stateful metrics that caused serialization issues during training
+- [x] **ServingModel class**: Created proper wrapper class to track TFT resources for model saving
+- [x] **NUM_OOV_BUCKETS constant**: Added to trainer module to match Transform preprocessing
+
+**Result:** Pipeline now completes successfully: BigQueryExampleGen → StatisticsGen → SchemaGen → Transform → Trainer → Model Saved
 
 ### Previously Completed ✅
 - [x] Create `model_experiments.html` page (placeholder)

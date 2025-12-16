@@ -62,7 +62,7 @@ Experiments Page = Analyze Quick Test results to find optimal parameters
 
 ## Implementation Status
 
-**Current Status**: TFX pipelines running on Vertex AI with custom training image (tensorflow-recommenders). Pipeline progresses through all stages: BigQueryExampleGen → StatisticsGen → SchemaGen → Transform → Trainer.
+**Current Status**: ✅ **TFX pipelines fully working on Vertex AI!** Complete end-to-end execution: BigQueryExampleGen → StatisticsGen → SchemaGen → Transform → Trainer → Model Saved. Pipeline trains TFRS two-tower retrieval model and exports SavedModel with serving signature.
 
 ### Completed Phases
 
@@ -76,7 +76,7 @@ Experiments Page = Analyze Quick Test results to find optimal parameters
 | **Phase 5** | 🔲 Pending | Metrics Collection & Display (per-epoch charts, comparison table) |
 | **Phase 6** | 🔲 Pending | MLflow Integration (experiment tracking, heatmaps, comparison) |
 | **Phase 7** | ✅ Complete | Pre-built Docker Image for fast Cloud Build execution |
-| **Phase 8** | ✅ Complete | TFX Pipeline Bug Fixes (BigQuery project, TIMESTAMP types, TFRS container, embedding concat) |
+| **Phase 8** | ✅ Complete | TFX Pipeline Bug Fixes (embedding shapes, dataset serialization, model saving) |
 
 ### Cloud Build Implementation (December 2025)
 
@@ -206,12 +206,22 @@ Django (Python 3.13)
 
 10. **BigQuery project mismatch**: BigQueryExampleGen running jobs in wrong project (`se4d1ef3f85b1926b-tp`) → Added `beam_pipeline_args` with `--project=b2b-recs` to TFX pipeline configuration
 
+11. **Embedding flatten shape issue (December 16, 2025)**: Dense layer received `(None, None)` input shape in `BuyerModel.call()` and `ProductModel.call()`. Cause: `tf.reshape(f, [tf.shape(f)[0], -1])` loses static shape info during graph tracing. Fix: Changed to `tf.squeeze(f, axis=1) if len(f.shape) == 3 else f` which preserves static dimensions.
+
+12. **Infinite dataset error (December 16, 2025)**: `model.fit()` failed with "infinite dataset" error. Cause: `TensorFlowDatasetOptions` defaults `num_epochs=None` (infinite). Fix: Added `num_epochs=1` to `_input_fn` so epochs are controlled by `model.fit()` parameter.
+
+13. **StringLookup type mismatch (December 16, 2025)**: `StringLookup` layer expected strings but received integer indices. Cause: TFX Transform already converts text to vocab indices via `tft.compute_and_apply_vocabulary()`. Fix: Removed `StringLookup` wrapper, use `Embedding` layer directly on vocab indices. Added `NUM_OOV_BUCKETS = 1` constant to trainer module.
+
+14. **FactorizedTopK serialization error (December 16, 2025)**: `ResourceGather is stateful` error during dataset serialization. Cause: `candidates_dataset.batch(128).map(self.candidate_tower)` tried to serialize `Embedding` layers into dataset pipeline. Fix: Removed `FactorizedTopK` metrics from training (not required for loss computation, only for evaluation).
+
+15. **Untracked resource error during model save (December 16, 2025)**: `tf.saved_model.save()` failed with "untracked resource" for TFT vocabulary hash tables. Cause: Standalone `@tf.function` captured TFT resources not tracked by model. Fix: Created `ServingModel` class (inherits `tf.keras.Model`) that properly tracks all resources as attributes: `tft_layer`, `product_ids`, `product_embeddings`, `retrieval_model`.
+
 ### Next Steps
 
 1. **Phase 5**: Implement per-epoch metrics charts and comparison table
 2. **Phase 6**: Deploy MLflow server to Cloud Run, integrate tracking
-3. **Debug BigQueryExampleGen**: Pipeline currently fails at BigQuery step - investigate remaining project/permissions issues
-4. **Monitor Pipeline**: Check Vertex AI console for pipeline completion
+3. **Metrics extraction**: Parse training metrics from Vertex AI logs or Trainer output
+4. **Quick Test results display**: Show training metrics in UI after pipeline completion
 
 ---
 

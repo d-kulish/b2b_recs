@@ -881,13 +881,15 @@ class BigQueryService:
     # QUERY GENERATION
     # =========================================================================
 
-    def generate_query(self, dataset, for_analysis=False):
+    def generate_query(self, dataset, for_analysis=False, for_tfx=False):
         """
         Generate BigQuery SQL from dataset configuration.
 
         Args:
             dataset: Dataset model instance
             for_analysis: If True, use mapped column names (user_id, product_id, etc.)
+            for_tfx: If True, convert TIMESTAMP/DATE/DATETIME columns to INT64 (Unix epoch)
+                     for TFX BigQueryExampleGen compatibility
 
         Returns:
             SQL query string
@@ -919,6 +921,14 @@ class BigQueryService:
             # Get table alias (last part of table name)
             primary_alias = primary_table.split('.')[-1]
 
+            # Build column type lookup for TFX TIMESTAMP conversion
+            # TFX BigQueryExampleGen doesn't support TIMESTAMP/DATE/DATETIME types
+            column_types = {}
+            if for_tfx and dataset.summary_snapshot:
+                column_stats = dataset.summary_snapshot.get('column_stats', {})
+                for col_key, stats in column_stats.items():
+                    column_types[col_key] = stats.get('type', 'STRING')
+
             # Build SELECT clause with full table.column references
             select_cols = []
             reverse_mapping = {v: k for k, v in column_mapping.items()}
@@ -926,11 +936,23 @@ class BigQueryService:
             for table, columns in selected_columns.items():
                 table_alias = table.split('.')[-1]
                 for col in columns:
+                    # Check if this column needs TIMESTAMP conversion for TFX
+                    col_key = f"{table_alias}.{col}"
+                    col_type = column_types.get(col_key, 'STRING')
+                    needs_conversion = for_tfx and col_type in ('TIMESTAMP', 'DATE', 'DATETIME')
+
                     if for_analysis and col in reverse_mapping:
                         mapped_name = reverse_mapping[col]
-                        select_cols.append(f"{table_alias}.{col} AS {mapped_name}")
+                        if needs_conversion:
+                            select_cols.append(f"UNIX_SECONDS(CAST({table_alias}.{col} AS TIMESTAMP)) AS {mapped_name}")
+                        else:
+                            select_cols.append(f"{table_alias}.{col} AS {mapped_name}")
                     else:
-                        select_cols.append(f"{table_alias}.{col}")
+                        if needs_conversion:
+                            # Convert TIMESTAMP to Unix epoch seconds (INT64) and keep original column name
+                            select_cols.append(f"UNIX_SECONDS(CAST({table_alias}.{col} AS TIMESTAMP)) AS {col}")
+                        else:
+                            select_cols.append(f"{table_alias}.{col}")
 
             if not select_cols:
                 select_cols = ['*']
@@ -960,11 +982,22 @@ class BigQueryService:
                 for table, columns in selected_columns.items():
                     table_alias = table.split('.')[-1]
                     for col in columns:
+                        # Check if this column needs TIMESTAMP conversion for TFX
+                        col_key = f"{table_alias}.{col}"
+                        col_type = column_types.get(col_key, 'STRING')
+                        needs_conversion = for_tfx and col_type in ('TIMESTAMP', 'DATE', 'DATETIME')
+
                         # Use table_col as alias if column name is duplicated
                         if col in seen_cols:
-                            filtered_select_cols.append(f"{table_alias}.{col} AS {table_alias}_{col}")
+                            if needs_conversion:
+                                filtered_select_cols.append(f"UNIX_SECONDS(CAST({table_alias}.{col} AS TIMESTAMP)) AS {table_alias}_{col}")
+                            else:
+                                filtered_select_cols.append(f"{table_alias}.{col} AS {table_alias}_{col}")
                         else:
-                            filtered_select_cols.append(f"{table_alias}.{col}")
+                            if needs_conversion:
+                                filtered_select_cols.append(f"UNIX_SECONDS(CAST({table_alias}.{col} AS TIMESTAMP)) AS {col}")
+                            else:
+                                filtered_select_cols.append(f"{table_alias}.{col}")
                             seen_cols.add(col)
 
                 if not filtered_select_cols:
@@ -1164,8 +1197,8 @@ class BigQueryService:
             WHERE RAND() < 0.1
         """
         try:
-            # Get base query
-            base_query = self.generate_query(dataset, for_analysis=False)
+            # Get base query with TFX-compatible type conversions (TIMESTAMP -> INT64)
+            base_query = self.generate_query(dataset, for_analysis=False, for_tfx=True)
 
             # If no modifications needed, return base query
             if split_strategy == 'random' and sample_percent >= 100:

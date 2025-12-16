@@ -1,0 +1,22 @@
+# Cloud Build configuration for TFX Trainer image
+#
+# Build command:
+#   cd cloudbuild/tfx-trainer
+#   gcloud builds submit --config=cloudbuild.yaml --project=b2b-recs
+
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'europe-central2-docker.pkg.dev/b2b-recs/tfx-builder/tfx-trainer:latest'
+      - '-t'
+      - 'europe-central2-docker.pkg.dev/b2b-recs/tfx-builder/tfx-trainer:1.15.0'
+      - '.'
+
+images:
+  - 'europe-central2-docker.pkg.dev/b2b-recs/tfx-builder/tfx-trainer:latest'
+  - 'europe-central2-docker.pkg.dev/b2b-recs/tfx-builder/tfx-trainer:1.15.0'
+
+options:
+  logging: CLOUD_LOGGING_ONLY

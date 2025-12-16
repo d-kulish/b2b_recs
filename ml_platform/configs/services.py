@@ -1728,7 +1728,10 @@ def _input_fn(
             lines.append(f"        features.append(self.{cross_name}_embedding(inputs['{cross_name}']))")
             lines.append('')
 
-        lines.append('        return tf.concat(features, axis=1)')
+        # Flatten embeddings from [batch, 1, dim] to [batch, dim] before concatenating
+        lines.append('        # Flatten embeddings to [batch, dim] for concatenation')
+        lines.append('        flattened = [tf.reshape(f, [tf.shape(f)[0], -1]) for f in features]')
+        lines.append('        return tf.concat(flattened, axis=1)')
         lines.append('')
 
         return '\n'.join(lines)
@@ -1895,7 +1898,10 @@ def _input_fn(
             lines.append(f"        features.append(self.{cross_name}_embedding(inputs['{cross_name}']))")
             lines.append('')
 
-        lines.append('        return tf.concat(features, axis=1)')
+        # Flatten embeddings from [batch, 1, dim] to [batch, dim] before concatenating
+        lines.append('        # Flatten embeddings to [batch, dim] for concatenation')
+        lines.append('        flattened = [tf.reshape(f, [tf.shape(f)[0], -1]) for f in features]')
+        lines.append('        return tf.concat(flattened, axis=1)')
         lines.append('')
 
         return '\n'.join(lines)

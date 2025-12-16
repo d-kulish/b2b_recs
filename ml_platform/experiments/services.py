@@ -451,8 +451,13 @@ def create_tfx_pipeline(
         )
     )
 
-    logger.info(f"BigQueryExampleGen will use project={project_id} via beam_pipeline_args")
-    example_gen = BigQueryExampleGen(query=bigquery_query, output_config=output_config)
+    # Configure BigQueryExampleGen with explicit project to avoid using Vertex AI's internal ADC project
+    logger.info(f"BigQueryExampleGen configured with project={project_id}")
+    example_gen = BigQueryExampleGen(
+        query=bigquery_query,
+        output_config=output_config,
+        custom_config={'project': project_id}
+    )
     statistics_gen = StatisticsGen(examples=example_gen.outputs["examples"])
     schema_gen = SchemaGen(statistics=statistics_gen.outputs["statistics"])
     transform = Transform(
@@ -494,11 +499,19 @@ def create_tfx_pipeline(
     return pipeline
 
 
-def compile_pipeline(pipeline, output_file: str) -> str:
+def compile_pipeline(pipeline, output_file: str, project_id: str = 'b2b-recs') -> str:
     from tfx.orchestration.kubeflow.v2 import kubeflow_v2_dag_runner
     logger.info(f"Compiling pipeline to: {output_file}")
+
+    # Use custom TFX image with tensorflow-recommenders pre-installed
+    # This image extends gcr.io/tfx-oss-public/tfx:1.15.0 with TFRS
+    custom_image = f'europe-central2-docker.pkg.dev/{project_id}/tfx-builder/tfx-trainer:latest'
+    logger.info(f"Using custom TFX image: {custom_image}")
+
     runner = kubeflow_v2_dag_runner.KubeflowV2DagRunner(
-        config=kubeflow_v2_dag_runner.KubeflowV2DagRunnerConfig(),
+        config=kubeflow_v2_dag_runner.KubeflowV2DagRunnerConfig(
+            default_image=custom_image
+        ),
         output_filename=output_file
     )
     runner.run(pipeline)
@@ -568,7 +581,7 @@ def main():
                 batch_size=args.batch_size,
                 learning_rate=args.learning_rate,
             )
-            compile_pipeline(pipeline, pipeline_file)
+            compile_pipeline(pipeline, pipeline_file, project_id=args.project_id)
             display_name = f"quicktest-{args.run_id}"
             resource_name = submit_to_vertex_ai(pipeline_file, display_name, args.project_id, args.region)
             result = {"success": True, "run_id": args.run_id, "vertex_pipeline_job_name": resource_name, "display_name": display_name}

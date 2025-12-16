@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides a **complete implementation guide** for building the Experiments domain with native TFX pipelines on Vertex AI. It is designed to be self-contained and actionable - you should be able to open this document and start implementing without additional context.
 
-**Last Updated**: 2025-12-15
+**Last Updated**: 2025-12-16
 
 ---
 
@@ -21,9 +21,10 @@ This document provides a **complete implementation guide** for building the Expe
 10. [Phase 5: Metrics Collection & Display](#phase-5-metrics-collection--display)
 11. [Phase 6: MLflow Integration](#phase-6-mlflow-integration)
 12. [Phase 7: Pre-built Docker Image](#phase-7-pre-built-docker-image-for-fast-cloud-build)
-13. [File Reference](#file-reference)
-14. [API Reference](#api-reference)
-15. [Testing Guide](#testing-guide)
+13. [Phase 8: TFX Pipeline Bug Fixes](#phase-8-tfx-pipeline-bug-fixes-december-2025)
+14. [File Reference](#file-reference)
+15. [API Reference](#api-reference)
+16. [Testing Guide](#testing-guide)
 
 ---
 
@@ -61,7 +62,7 @@ Experiments Page = Analyze Quick Test results to find optimal parameters
 
 ## Implementation Status
 
-**Current Status**: TFX pipelines successfully submitting to Vertex AI via Cloud Build with pre-built Docker image (~1-2 min compilation)
+**Current Status**: TFX pipelines running on Vertex AI with custom training image (tensorflow-recommenders). Pipeline progresses through all stages: BigQueryExampleGen → StatisticsGen → SchemaGen → Transform → Trainer.
 
 ### Completed Phases
 
@@ -75,6 +76,7 @@ Experiments Page = Analyze Quick Test results to find optimal parameters
 | **Phase 5** | 🔲 Pending | Metrics Collection & Display (per-epoch charts, comparison table) |
 | **Phase 6** | 🔲 Pending | MLflow Integration (experiment tracking, heatmaps, comparison) |
 | **Phase 7** | ✅ Complete | Pre-built Docker Image for fast Cloud Build execution |
+| **Phase 8** | ✅ Complete | TFX Pipeline Bug Fixes (BigQuery project, TIMESTAMP types, TFRS container, embedding concat) |
 
 ### Cloud Build Implementation (December 2025)
 
@@ -2896,6 +2898,121 @@ When provisioning a new client project, add this step to the onboarding process:
 
 ---
 
+## Phase 8: TFX Pipeline Bug Fixes (December 2025)
+
+This phase documents critical bug fixes discovered during pipeline execution testing.
+
+### Issue 1: BigQuery Project Mismatch (403 Forbidden)
+
+**Problem**: BigQueryExampleGen was trying to run jobs in Vertex AI's internal project (`se4d1ef3f85b1926b-tp`) instead of `b2b-recs`.
+
+**Root Cause**: `BigQueryExampleGen` uses the BigQuery Python client directly, which defaults to Application Default Credentials (ADC). In Vertex AI workers, ADC points to an internal infrastructure project.
+
+**Solution**: Added `custom_config={'project': project_id}` to `BigQueryExampleGen`:
+
+```python
+# File: ml_platform/experiments/services.py (line 456-460)
+example_gen = BigQueryExampleGen(
+    query=bigquery_query,
+    output_config=output_config,
+    custom_config={'project': project_id}  # Explicit project
+)
+```
+
+### Issue 2: TIMESTAMP Column Type Not Supported
+
+**Problem**: TFX BigQueryExampleGen failed with `RuntimeError: BigQuery column "first_purchase_date" has non-supported type TIMESTAMP`.
+
+**Root Cause**: TFX only supports basic types (STRING, INT64, FLOAT64, BOOL). TIMESTAMP/DATE/DATETIME are not supported.
+
+**Solution**: Added automatic TIMESTAMP → INT64 conversion in query generation:
+
+```python
+# File: ml_platform/datasets/services.py
+def generate_query(self, dataset, for_analysis=False, for_tfx=False):
+    # When for_tfx=True, TIMESTAMP columns are converted:
+    # UNIX_SECONDS(CAST(col AS TIMESTAMP)) AS col
+```
+
+**Affected columns are now converted**:
+- `first_purchase_date` → Unix epoch seconds (INT64)
+- `last_purchase_date` → Unix epoch seconds (INT64)
+- `transaction_date` → Unix epoch seconds (INT64)
+
+### Issue 3: Missing tensorflow-recommenders in TFX Container
+
+**Problem**: Trainer failed with `ModuleNotFoundError: No module named 'tensorflow_recommenders'`.
+
+**Root Cause**: The standard TFX container (`gcr.io/tfx-oss-public/tfx:1.15.0`) doesn't include tensorflow-recommenders.
+
+**Solution**: Created custom training image with TFRS pre-installed:
+
+```dockerfile
+# File: cloudbuild/tfx-trainer/Dockerfile
+FROM gcr.io/tfx-oss-public/tfx:1.15.0
+RUN pip install --no-cache-dir tensorflow-recommenders>=0.7.3
+```
+
+Updated pipeline compilation to use custom image:
+
+```python
+# File: ml_platform/experiments/services.py (line 508-513)
+custom_image = f'europe-central2-docker.pkg.dev/{project_id}/tfx-builder/tfx-trainer:latest'
+runner = kubeflow_v2_dag_runner.KubeflowV2DagRunner(
+    config=kubeflow_v2_dag_runner.KubeflowV2DagRunnerConfig(
+        default_image=custom_image
+    ),
+    output_filename=output_file
+)
+```
+
+### Issue 4: Embedding Dimension Mismatch in Model Towers
+
+**Problem**: Trainer failed with `ValueError: Dimension 0 in both shapes must be equal, but are 16 and 8`.
+
+**Root Cause**: Different features have different embedding dimensions (e.g., 16 vs 8). The `tf.concat(features, axis=1)` failed because embeddings have shape `[batch, 1, dim]` with varying `dim`.
+
+**Solution**: Flatten embeddings before concatenation:
+
+```python
+# File: ml_platform/configs/services.py (BuyerModel and ProductModel)
+# Before:
+return tf.concat(features, axis=1)
+
+# After:
+flattened = [tf.reshape(f, [tf.shape(f)[0], -1]) for f in features]
+return tf.concat(flattened, axis=1)
+```
+
+### Files Modified in Phase 8
+
+| File | Changes |
+|------|---------|
+| `ml_platform/experiments/services.py` | BigQuery project fix, custom training image |
+| `ml_platform/datasets/services.py` | TIMESTAMP → INT64 conversion for TFX |
+| `ml_platform/configs/services.py` | Embedding flattening before concat |
+| `cloudbuild/tfx-trainer/Dockerfile` | New custom training image with TFRS |
+| `cloudbuild/tfx-trainer/cloudbuild.yaml` | Build configuration for trainer image |
+
+### Build the Custom Training Image
+
+```bash
+cd cloudbuild/tfx-trainer
+gcloud builds submit --config=cloudbuild.yaml --project=b2b-recs
+```
+
+### Current Pipeline Status
+
+After Phase 8 fixes, the pipeline successfully progresses through:
+
+1. ✅ **BigQueryExampleGen** - Extracts data from BigQuery with correct project
+2. ✅ **StatisticsGen** - Generates data statistics
+3. ✅ **SchemaGen** - Infers data schema
+4. ✅ **Transform** - Applies feature preprocessing
+5. 🔄 **Trainer** - Training with TFRS (in progress)
+
+---
+
 ## File Reference
 
 ### Files to Create
@@ -3116,6 +3233,10 @@ Use a small test dataset for development:
 | Transform fails | Invalid preprocessing_fn | Check generated code syntax |
 | Trainer fails | Mismatched feature names | Verify FeatureConfig matches schema |
 | Metrics not found | Wrong GCS path | Check `metrics_output_path` |
+| 403 Forbidden on BigQuery | Wrong project in ADC | Add `custom_config={'project': project_id}` to BigQueryExampleGen |
+| TIMESTAMP type not supported | TFX doesn't support TIMESTAMP | Use `for_tfx=True` in `generate_training_query()` to convert to INT64 |
+| ModuleNotFoundError: tensorflow_recommenders | Standard TFX image missing TFRS | Use custom image `tfx-trainer:latest` with TFRS |
+| ValueError: Dimension mismatch in concat | Embeddings have shape `[batch,1,dim]` with varying dim | Flatten embeddings before concat with `tf.reshape` |
 
 ### Debug Commands
 

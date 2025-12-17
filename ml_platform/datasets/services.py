@@ -1297,17 +1297,17 @@ class BigQueryService:
             #   |<-- train_days -->|<-- val_days -->|<-- test_days -->| TODAY
             #   ^                  ^                ^                 ^
             #   total_window    val+test          test_days          0
-            #   (train start)  (eval start)     (excluded)
+            #   (train start)  (eval start)     (test start)
             total_window = train_days + val_days + test_days
             val_start = val_days + test_days
             return f"""    SELECT *,
         CASE
             WHEN {date_column} < DATE_SUB(CURRENT_DATE(), INTERVAL {val_start} DAY) THEN 'train'
-            ELSE 'eval'
+            WHEN {date_column} < DATE_SUB(CURRENT_DATE(), INTERVAL {test_days} DAY) THEN 'eval'
+            ELSE 'test'
         END AS split
     FROM {source_table}
-    WHERE {date_column} >= DATE_SUB(CURRENT_DATE(), INTERVAL {total_window} DAY)
-      AND {date_column} < DATE_SUB(CURRENT_DATE(), INTERVAL {test_days} DAY)"""
+    WHERE {date_column} >= DATE_SUB(CURRENT_DATE(), INTERVAL {total_window} DAY)"""
 
         else:
             # Random - no holdout filter

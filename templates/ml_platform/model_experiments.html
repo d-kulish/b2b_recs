@@ -601,25 +601,252 @@
         box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.2);
     }
 
-    /* Summary Section */
-    .exp-summary-section {
-        background: #f9fafb;
-        border: 1px solid #e5e7eb;
+    /* Training Parameter Buttons (blue theme) */
+    .param-btn {
+        padding: 6px 8px;
+        font-size: 12px;
+        font-weight: 500;
+        border: 1px solid #93c5fd;
+        background: white;
+        color: #1e40af;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        flex: 1;
+        text-align: center;
+    }
+    .param-btn:hover {
+        background: #dbeafe;
+        border-color: #3b82f6;
+    }
+    .param-btn.active {
+        background: #3b82f6;
+        border-color: #2563eb;
+        color: white;
+    }
+    .param-input {
+        flex: 1;
+        padding: 6px 8px;
+        font-size: 12px;
+        border: 1px solid #93c5fd;
+        border-radius: 4px;
+        text-align: center;
+        background: white;
+    }
+    .param-input:focus {
+        outline: none;
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+    }
+
+    /* Hardware Selection Section */
+    .hardware-section {
+        background: linear-gradient(135deg, #fdf4ff 0%, #faf5ff 100%);
+        border: 1px solid #e9d5ff;
         border-radius: 10px;
-        padding: 16px;
+        padding: 16px 20px;
+        margin-bottom: 16px;
     }
-    .exp-summary-row {
-        display: flex;
-        justify-content: space-between;
-        padding: 6px 0;
+    .hardware-section h4 {
         font-size: 13px;
+        font-weight: 600;
+        color: #7c3aed;
+        margin: 0 0 4px 0;
+        display: flex;
+        align-items: center;
+        gap: 8px;
     }
-    .exp-summary-label {
+    .hardware-recommendation {
+        font-size: 11px;
+        color: #9333ea;
+        margin-bottom: 12px;
+    }
+    .hardware-recommendation strong {
+        color: #7c3aed;
+    }
+    .hardware-options {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+    }
+    .hardware-card {
+        flex: 1;
+        min-width: 140px;
+        max-width: 180px;
+        background: white;
+        border: 2px solid #e9d5ff;
+        border-radius: 8px;
+        padding: 12px;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        position: relative;
+    }
+    .hardware-card:hover:not(.disabled) {
+        border-color: #c084fc;
+        box-shadow: 0 2px 8px rgba(147, 51, 234, 0.15);
+    }
+    .hardware-card.selected {
+        border-color: #9333ea;
+        background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%);
+    }
+    .hardware-card.selected::after {
+        content: '\f00c';
+        font-family: 'Font Awesome 5 Free';
+        font-weight: 900;
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        color: #9333ea;
+        font-size: 12px;
+    }
+    .hardware-card.recommended::before {
+        content: '\f005';
+        font-family: 'Font Awesome 5 Free';
+        font-weight: 900;
+        position: absolute;
+        top: 8px;
+        left: 8px;
+        color: #f59e0b;
+        font-size: 10px;
+    }
+    .hardware-card.disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        background: #f9fafb;
+    }
+    .hardware-card-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: #1f2937;
+        margin-bottom: 2px;
+    }
+    .hardware-card-type {
+        font-size: 10px;
+        color: #6b7280;
+        font-family: monospace;
+        margin-bottom: 6px;
+    }
+    .hardware-card-specs {
+        font-size: 11px;
+        color: #4b5563;
+        line-height: 1.4;
+    }
+    .hardware-card-lock {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        color: #9ca3af;
+        font-size: 12px;
+    }
+    .hardware-gpu-section {
+        margin-top: 12px;
+        padding-top: 12px;
+        border-top: 1px solid #e9d5ff;
+    }
+    .hardware-gpu-label {
+        font-size: 11px;
+        color: #9333ea;
+        margin-bottom: 8px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .hardware-gpu-options {
+        display: flex;
+        gap: 8px;
+    }
+    .hardware-gpu-card {
+        flex: 1;
+        max-width: 120px;
+        background: #f9fafb;
+        border: 1px dashed #d1d5db;
+        border-radius: 6px;
+        padding: 8px 12px;
+        text-align: center;
+        opacity: 0.6;
+        cursor: not-allowed;
+        position: relative;
+    }
+    .hardware-gpu-card-name {
+        font-size: 12px;
+        font-weight: 600;
         color: #6b7280;
     }
-    .exp-summary-value {
+    .hardware-gpu-card-lock {
+        font-size: 10px;
+        color: #9ca3af;
+        margin-top: 2px;
+    }
+
+    /* Summary Section - Modern Card Layout */
+    .exp-summary-section {
+        background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%);
+        border: 1px solid #a7f3d0;
+        border-radius: 10px;
+        padding: 16px 20px;
+    }
+    .exp-summary-title {
+        font-size: 12px;
         font-weight: 600;
-        color: #374151;
+        color: #64748b;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 12px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .exp-summary-title i {
+        color: #6366f1;
+    }
+    .exp-summary-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 16px 24px;
+    }
+    .exp-summary-item {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+    .exp-summary-label {
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+        color: #94a3b8;
+    }
+    .exp-summary-value {
+        font-size: 13px;
+        font-weight: 600;
+        color: #1e293b;
+    }
+    .exp-summary-value.accent {
+        color: #6366f1;
+    }
+    .exp-summary-params {
+        grid-column: span 4;
+        display: flex;
+        gap: 20px;
+        padding-top: 12px;
+        border-top: 1px solid #f1f5f9;
+        margin-top: 4px;
+    }
+    .exp-summary-param {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        background: #f8fafc;
+        border-radius: 6px;
+    }
+    .exp-summary-param-label {
+        font-size: 11px;
+        color: #64748b;
+    }
+    .exp-summary-param-value {
+        font-size: 12px;
+        font-weight: 600;
+        color: #334155;
     }
 
     /* =========================================================================
@@ -957,24 +1184,26 @@
 
             <!-- Step 2: Training Parameters -->
             <div id="wizardStep2" class="wizard-step">
-                <!-- Data Sampling - Compact inline layout -->
-                <div class="flex items-center gap-4 p-3 bg-amber-50 border border-amber-200 rounded-lg mb-4">
-                    <div class="flex items-center gap-2">
-                        <i class="fas fa-database text-amber-600"></i>
-                        <span class="text-sm font-medium text-amber-800">Sample:</span>
-                    </div>
-                    <div class="flex items-center gap-1">
-                        <button type="button" class="sample-btn" data-value="5" onclick="setSamplePercent(5)">5%</button>
-                        <button type="button" class="sample-btn" data-value="10" onclick="setSamplePercent(10)">10%</button>
-                        <button type="button" class="sample-btn" data-value="25" onclick="setSamplePercent(25)">25%</button>
-                        <button type="button" class="sample-btn active" data-value="100" onclick="setSamplePercent(100)">100%</button>
-                        <span class="text-gray-400 mx-1">or</span>
-                        <input type="number" id="wizardSamplePercentInput" class="w-16 px-2 py-1 text-sm border border-amber-300 rounded text-center" value="100" min="1" max="100" onchange="onSampleInputChange()">
-                        <span class="text-sm text-gray-500">%</span>
-                    </div>
-                    <div class="flex items-center gap-1 ml-auto">
-                        <span class="text-amber-700 font-semibold" id="wizardExampleCountValue">--</span>
-                        <span class="text-sm text-gray-500">examples</span>
+                <!-- Data Sampling - Full width proportional layout -->
+                <div class="p-3 bg-amber-50 border border-amber-200 rounded-lg mb-4">
+                    <div class="flex items-center gap-3">
+                        <div class="flex items-center gap-2 flex-shrink-0">
+                            <i class="fas fa-database text-amber-600"></i>
+                            <span class="text-sm font-medium text-amber-800">Sample:</span>
+                        </div>
+                        <div class="flex-1 flex items-center gap-2" style="max-width: 480px;">
+                            <button type="button" class="sample-btn flex-1" data-value="5" onclick="setSamplePercent(5)">5%</button>
+                            <button type="button" class="sample-btn flex-1" data-value="10" onclick="setSamplePercent(10)">10%</button>
+                            <button type="button" class="sample-btn flex-1" data-value="25" onclick="setSamplePercent(25)">25%</button>
+                            <button type="button" class="sample-btn flex-1 active" data-value="100" onclick="setSamplePercent(100)">100%</button>
+                            <span class="text-gray-400 text-sm px-1">or</span>
+                            <input type="number" id="wizardSamplePercentInput" class="sample-input flex-1 px-2 py-1 text-sm border border-amber-300 rounded text-center" value="100" min="1" max="100" onchange="onSampleInputChange()">
+                            <span class="text-sm text-gray-500">%</span>
+                        </div>
+                        <div class="flex items-center gap-1 ml-auto flex-shrink-0" style="min-width: 140px; justify-content: flex-end;">
+                            <span class="text-amber-700 font-semibold" id="wizardExampleCountValue">--</span>
+                            <span class="text-sm text-gray-500">examples</span>
+                        </div>
                     </div>
                 </div>
 
@@ -1037,29 +1266,43 @@
                 <!-- Training Parameters -->
                 <div class="training-params-section" style="background: #eff6ff; border-color: #93c5fd;">
                     <h4 style="color: #1e40af;"><i class="fas fa-sliders-h"></i> Training Parameters</h4>
-                    <div class="training-params-grid">
-                        <div class="training-param-group">
-                            <label style="color: #1e40af;">Epochs</label>
-                            <select id="wizardEpochs" style="border-color: #93c5fd;">
-                                <option value="1">1</option>
-                                <option value="2">2</option>
-                                <option value="5">5</option>
-                                <option value="10" selected>10</option>
-                                <option value="15">15</option>
-                            </select>
+                    <div style="display: flex; flex-direction: column; gap: 12px;">
+                        <!-- Epochs -->
+                        <div>
+                            <label style="color: #1e40af; font-size: 12px; display: block; margin-bottom: 6px;">Epochs</label>
+                            <div class="flex items-center gap-2">
+                                <button type="button" class="param-btn" data-param="epochs" data-value="5" onclick="setParam('epochs', 5)">5</button>
+                                <button type="button" class="param-btn active" data-param="epochs" data-value="10" onclick="setParam('epochs', 10)">10</button>
+                                <button type="button" class="param-btn" data-param="epochs" data-value="25" onclick="setParam('epochs', 25)">25</button>
+                                <button type="button" class="param-btn" data-param="epochs" data-value="50" onclick="setParam('epochs', 50)">50</button>
+                                <button type="button" class="param-btn" data-param="epochs" data-value="100" onclick="setParam('epochs', 100)">100</button>
+                                <span class="text-gray-400 text-sm px-1">or</span>
+                                <input type="number" id="wizardEpochs" class="param-input" value="10" min="1" max="500" onchange="onParamInputChange('epochs')">
+                            </div>
                         </div>
-                        <div class="training-param-group">
-                            <label style="color: #1e40af;">Batch Size</label>
-                            <select id="wizardBatchSize" style="border-color: #93c5fd;">
-                                <option value="1024">1024</option>
-                                <option value="2048">2048</option>
-                                <option value="4096" selected>4096</option>
-                                <option value="8192">8192</option>
-                            </select>
+                        <!-- Batch Size -->
+                        <div>
+                            <label style="color: #1e40af; font-size: 12px; display: block; margin-bottom: 6px;">Batch Size</label>
+                            <div class="flex items-center gap-2">
+                                <button type="button" class="param-btn" data-param="batchSize" data-value="1024" onclick="setParam('batchSize', 1024)">1024</button>
+                                <button type="button" class="param-btn" data-param="batchSize" data-value="2048" onclick="setParam('batchSize', 2048)">2048</button>
+                                <button type="button" class="param-btn active" data-param="batchSize" data-value="4096" onclick="setParam('batchSize', 4096)">4096</button>
+                                <button type="button" class="param-btn" data-param="batchSize" data-value="8192" onclick="setParam('batchSize', 8192)">8192</button>
+                                <span class="text-gray-400 text-sm px-1">or</span>
+                                <input type="number" id="wizardBatchSize" class="param-input" value="4096" min="128" max="65536" step="128" onchange="onParamInputChange('batchSize')">
+                            </div>
                         </div>
-                        <div class="training-param-group">
-                            <label style="color: #1e40af;">Learning Rate</label>
-                            <input type="number" id="wizardLearningRate" value="0.1" step="0.001" min="0.0001" max="1.0" style="border-color: #93c5fd;">
+                        <!-- Learning Rate -->
+                        <div>
+                            <label style="color: #1e40af; font-size: 12px; display: block; margin-bottom: 6px;">Learning Rate</label>
+                            <div class="flex items-center gap-2">
+                                <button type="button" class="param-btn" data-param="learningRate" data-value="0.001" onclick="setParam('learningRate', 0.001)">0.001</button>
+                                <button type="button" class="param-btn" data-param="learningRate" data-value="0.01" onclick="setParam('learningRate', 0.01)">0.01</button>
+                                <button type="button" class="param-btn" data-param="learningRate" data-value="0.05" onclick="setParam('learningRate', 0.05)">0.05</button>
+                                <button type="button" class="param-btn active" data-param="learningRate" data-value="0.1" onclick="setParam('learningRate', 0.1)">0.1</button>
+                                <span class="text-gray-400 text-sm px-1">or</span>
+                                <input type="number" id="wizardLearningRate" class="param-input" value="0.1" min="0.0001" max="1.0" step="0.001" onchange="onParamInputChange('learningRate')">
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1075,24 +1318,88 @@
                     </div>
                 </div>
 
+                <!-- Hardware Selection -->
+                <div class="hardware-section">
+                    <h4><i class="fas fa-microchip"></i> Hardware Configuration</h4>
+                    <div class="hardware-recommendation" id="hardwareRecommendation">
+                        Recommended: <strong>Small</strong> based on dataset size
+                    </div>
+                    <input type="hidden" id="wizardMachineType" value="n1-standard-4">
+                    <div class="hardware-options">
+                        <div class="hardware-card selected recommended" data-machine="n1-standard-4" onclick="selectHardware('n1-standard-4')">
+                            <div class="hardware-card-title">Small</div>
+                            <div class="hardware-card-type">n1-standard-4</div>
+                            <div class="hardware-card-specs">4 vCPU<br>15 GB RAM</div>
+                        </div>
+                        <div class="hardware-card" data-machine="n1-standard-8" onclick="selectHardware('n1-standard-8')">
+                            <div class="hardware-card-title">Medium</div>
+                            <div class="hardware-card-type">n1-standard-8</div>
+                            <div class="hardware-card-specs">8 vCPU<br>30 GB RAM</div>
+                        </div>
+                        <div class="hardware-card" data-machine="n1-standard-16" onclick="selectHardware('n1-standard-16')">
+                            <div class="hardware-card-title">Large</div>
+                            <div class="hardware-card-type">n1-standard-16</div>
+                            <div class="hardware-card-specs">16 vCPU<br>60 GB RAM</div>
+                        </div>
+                    </div>
+                    <div class="hardware-gpu-section">
+                        <div class="hardware-gpu-label">
+                            <i class="fas fa-bolt"></i> GPU Acceleration <span style="font-size: 10px; color: #9ca3af;">(coming soon)</span>
+                        </div>
+                        <div class="hardware-gpu-options">
+                            <div class="hardware-gpu-card" title="GPU acceleration coming soon">
+                                <div class="hardware-gpu-card-name">NVIDIA T4</div>
+                                <div class="hardware-gpu-card-lock"><i class="fas fa-lock"></i></div>
+                            </div>
+                            <div class="hardware-gpu-card" title="GPU acceleration coming soon">
+                                <div class="hardware-gpu-card-name">NVIDIA V100</div>
+                                <div class="hardware-gpu-card-lock"><i class="fas fa-lock"></i></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Summary -->
                 <div class="exp-summary-section">
-                    <h4 class="font-medium text-gray-700 mb-3">Summary</h4>
-                    <div class="exp-summary-row">
-                        <span class="exp-summary-label">Feature Config:</span>
-                        <span class="exp-summary-value" id="wizardSummaryFeature">-</span>
+                    <div class="exp-summary-title">
+                        <i class="fas fa-clipboard-check"></i>
+                        Experiment Summary
                     </div>
-                    <div class="exp-summary-row">
-                        <span class="exp-summary-label">Model Config:</span>
-                        <span class="exp-summary-value" id="wizardSummaryModel">-</span>
-                    </div>
-                    <div class="exp-summary-row">
-                        <span class="exp-summary-label">Estimated duration:</span>
-                        <span class="exp-summary-value">15-25 minutes</span>
-                    </div>
-                    <div class="exp-summary-row">
-                        <span class="exp-summary-label">Machine type:</span>
-                        <span class="exp-summary-value">n1-standard-4 (4 vCPU, 15GB RAM)</span>
+                    <div class="exp-summary-grid">
+                        <div class="exp-summary-item">
+                            <span class="exp-summary-label">Feature Config</span>
+                            <span class="exp-summary-value accent" id="wizardSummaryFeature">-</span>
+                        </div>
+                        <div class="exp-summary-item">
+                            <span class="exp-summary-label">Model Config</span>
+                            <span class="exp-summary-value accent" id="wizardSummaryModel">-</span>
+                        </div>
+                        <div class="exp-summary-item">
+                            <span class="exp-summary-label">Data Sample</span>
+                            <span class="exp-summary-value" id="wizardSummarySample">100%</span>
+                        </div>
+                        <div class="exp-summary-item">
+                            <span class="exp-summary-label">Split Strategy</span>
+                            <span class="exp-summary-value" id="wizardSummarySplit">Random</span>
+                        </div>
+                        <div class="exp-summary-params">
+                            <div class="exp-summary-param">
+                                <span class="exp-summary-param-label">Epochs</span>
+                                <span class="exp-summary-param-value" id="wizardSummaryEpochs">10</span>
+                            </div>
+                            <div class="exp-summary-param">
+                                <span class="exp-summary-param-label">Batch Size</span>
+                                <span class="exp-summary-param-value" id="wizardSummaryBatch">4096</span>
+                            </div>
+                            <div class="exp-summary-param">
+                                <span class="exp-summary-param-label">Learning Rate</span>
+                                <span class="exp-summary-param-value" id="wizardSummaryLR">0.1</span>
+                            </div>
+                            <div class="exp-summary-param" style="background: #faf5ff; border: 1px solid #e9d5ff;">
+                                <span class="exp-summary-param-label" style="color: #7c3aed;">Hardware</span>
+                                <span class="exp-summary-param-value" id="wizardSummaryHardware" style="color: #7c3aed;">Small</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1853,9 +2160,10 @@ function openNewExpWizard() {
     document.querySelectorAll('.sample-btn').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.value === '100');
     });
-    document.getElementById('wizardEpochs').value = '10';
-    document.getElementById('wizardBatchSize').value = '4096';
-    document.getElementById('wizardLearningRate').value = '0.1';
+    // Reset training parameters with button states
+    setParam('epochs', 10);
+    setParam('batchSize', 4096);
+    setParam('learningRate', 0.1);
     // Reset split strategy UI (use style.display for inline-styled elements)
     document.getElementById('wizardRandomInfo').style.display = 'flex';
     document.getElementById('wizardTimeOptions').style.display = 'none';
@@ -2010,6 +2318,7 @@ function renderWizardFeaturePreview(config) {
     // Store date days for split strategy calculations
     datasetDateDays = config.dataset_info?.date_days || null;
     updateExampleCount();
+    updateHardwareRecommendation();
 }
 
 function updateExampleCount() {
@@ -2034,6 +2343,7 @@ function setSamplePercent(value) {
     });
 
     updateExampleCount();
+    updateWizardSummary();
 }
 
 function onSampleInputChange() {
@@ -2050,6 +2360,112 @@ function onSampleInputChange() {
     });
 
     updateExampleCount();
+    updateWizardSummary();
+}
+
+// Training parameter button handlers
+const paramInputMap = {
+    epochs: 'wizardEpochs',
+    batchSize: 'wizardBatchSize',
+    learningRate: 'wizardLearningRate'
+};
+
+const paramPresets = {
+    epochs: [5, 10, 25, 50, 100],
+    batchSize: [1024, 2048, 4096, 8192],
+    learningRate: [0.001, 0.01, 0.05, 0.1]
+};
+
+function setParam(param, value) {
+    // Update input
+    const inputId = paramInputMap[param];
+    document.getElementById(inputId).value = value;
+
+    // Update button states
+    document.querySelectorAll(`.param-btn[data-param="${param}"]`).forEach(btn => {
+        const btnValue = parseFloat(btn.dataset.value);
+        btn.classList.toggle('active', btnValue === value);
+    });
+
+    // Update summary
+    updateWizardSummary();
+}
+
+// Hardware selection functions
+const hardwareTiers = {
+    'n1-standard-4': { name: 'Small', vcpu: 4, ram: 15 },
+    'n1-standard-8': { name: 'Medium', vcpu: 8, ram: 30 },
+    'n1-standard-16': { name: 'Large', vcpu: 16, ram: 60 },
+};
+
+function selectHardware(machineType) {
+    // Update hidden input
+    document.getElementById('wizardMachineType').value = machineType;
+
+    // Update card selection states
+    document.querySelectorAll('.hardware-card').forEach(card => {
+        card.classList.toggle('selected', card.dataset.machine === machineType);
+    });
+
+    // Update summary
+    updateWizardSummary();
+}
+
+function updateHardwareRecommendation() {
+    // Get dataset row count and model params
+    const rowCount = datasetEstimatedRows || 0;
+    const modelParams = selectedModelConfig ? (
+        (selectedModelConfig.buyer_tensor_dim || 0) + (selectedModelConfig.product_tensor_dim || 0)
+    ) : 0;
+
+    // Determine recommendation
+    let recommended = 'n1-standard-4';
+    let reason = 'dataset size';
+
+    if (rowCount > 500000 || modelParams > 5000000) {
+        recommended = 'n1-standard-16';
+        reason = rowCount > 500000 ? 'large dataset (>500K rows)' : 'complex model (>5M params)';
+    } else if (rowCount > 100000 || modelParams > 1000000) {
+        recommended = 'n1-standard-8';
+        reason = rowCount > 100000 ? 'medium dataset (>100K rows)' : 'model complexity';
+    }
+
+    // Update recommendation text
+    const tier = hardwareTiers[recommended];
+    document.getElementById('hardwareRecommendation').innerHTML =
+        `Recommended: <strong>${tier.name}</strong> based on ${reason}`;
+
+    // Update recommended badge on cards
+    document.querySelectorAll('.hardware-card').forEach(card => {
+        card.classList.toggle('recommended', card.dataset.machine === recommended);
+    });
+
+    // Auto-select if nothing selected yet or if this is initial load
+    const currentSelection = document.getElementById('wizardMachineType').value;
+    if (!currentSelection || currentSelection === 'n1-standard-4') {
+        selectHardware(recommended);
+    }
+}
+
+function onParamInputChange(param) {
+    const inputId = paramInputMap[param];
+    const input = document.getElementById(inputId);
+    let value = parseFloat(input.value);
+
+    // Handle NaN
+    if (isNaN(value)) {
+        value = param === 'learningRate' ? 0.1 : (param === 'epochs' ? 10 : 4096);
+        input.value = value;
+    }
+
+    // Update button states (deactivate all if custom value)
+    const presets = paramPresets[param];
+    document.querySelectorAll(`.param-btn[data-param="${param}"]`).forEach(btn => {
+        const btnValue = parseFloat(btn.dataset.value);
+        btn.classList.toggle('active', btnValue === value && presets.includes(value));
+    });
+
+    updateWizardSummary();
 }
 
 function onWizardModelChange() {
@@ -2079,9 +2495,10 @@ function onWizardModelChange() {
                 document.getElementById('wizardModelContent').classList.remove('hidden');
             });
 
-        // Update training params from model config
-        document.getElementById('wizardLearningRate').value = selectedModelConfig.learning_rate;
-        document.getElementById('wizardBatchSize').value = selectedModelConfig.batch_size;
+        // Update training params from model config and sync button states
+        setParam('learningRate', selectedModelConfig.learning_rate);
+        setParam('batchSize', selectedModelConfig.batch_size);
+        // Epochs not in model config, keep default
 
         // Show rating column section for ranking models
         if (selectedModelConfig.model_type === 'ranking' || selectedModelConfig.model_type === 'multitask') {
@@ -2098,6 +2515,7 @@ function onWizardModelChange() {
     }
 
     updateWizardSummary();
+    updateHardwareRecommendation();
 }
 
 function renderWizardModelPreview(mc) {
@@ -2196,6 +2614,8 @@ function onWizardSplitChange() {
         document.getElementById('wizardValDays').value = valDays;
         document.getElementById('wizardTestDays').value = testDays;
     }
+
+    updateWizardSummary();
 }
 
 async function loadWizardDateColumns(datasetId) {
@@ -2285,10 +2705,37 @@ function updateWizardUI() {
 }
 
 function updateWizardSummary() {
+    // Config names
     document.getElementById('wizardSummaryFeature').textContent =
         selectedFeatureConfig ? selectedFeatureConfig.name : '-';
     document.getElementById('wizardSummaryModel').textContent =
         selectedModelConfig ? selectedModelConfig.name : '-';
+
+    // Data settings
+    const samplePercent = document.getElementById('wizardSamplePercentInput').value || '100';
+    document.getElementById('wizardSummarySample').textContent = samplePercent + '%';
+
+    // Split strategy
+    const splitStrategy = document.getElementById('wizardSplitStrategy').value;
+    const splitLabels = {
+        'random': 'Random 80/20',
+        'time_holdout': 'Time Holdout',
+        'strict_time': 'Strict Temporal'
+    };
+    document.getElementById('wizardSummarySplit').textContent = splitLabels[splitStrategy] || splitStrategy;
+
+    // Training parameters
+    document.getElementById('wizardSummaryEpochs').textContent =
+        document.getElementById('wizardEpochs').value || '10';
+    document.getElementById('wizardSummaryBatch').textContent =
+        document.getElementById('wizardBatchSize').value || '4096';
+    document.getElementById('wizardSummaryLR').textContent =
+        document.getElementById('wizardLearningRate').value || '0.1';
+
+    // Hardware
+    const machineType = document.getElementById('wizardMachineType').value || 'n1-standard-4';
+    const tier = hardwareTiers[machineType];
+    document.getElementById('wizardSummaryHardware').textContent = tier ? tier.name : 'Small';
 }
 
 function wizardNext() {
@@ -2343,7 +2790,9 @@ async function submitExperiment() {
         // Rolling window parameters for strict_time
         train_days: parseInt(document.getElementById('wizardTrainDays').value) || 60,
         val_days: parseInt(document.getElementById('wizardValDays').value) || 7,
-        test_days: parseInt(document.getElementById('wizardTestDays').value) || 7
+        test_days: parseInt(document.getElementById('wizardTestDays').value) || 7,
+        // Hardware configuration
+        machine_type: document.getElementById('wizardMachineType').value || 'n1-standard-4'
     };
 
     // Add rating column for ranking models

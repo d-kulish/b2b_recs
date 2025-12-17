@@ -115,6 +115,8 @@ def start_quick_test(request, feature_config_id):
             'train_days': data.get('train_days', 60),
             'val_days': data.get('val_days', 7),
             'test_days': data.get('test_days', 7),
+            # Hardware configuration
+            'machine_type': data.get('machine_type', QuickTest.MACHINE_TYPE_SMALL),
         }
 
         # Validate split strategy requires date column
@@ -500,6 +502,7 @@ def _serialize_quick_test(quick_test, include_details=False):
         'epochs': quick_test.epochs,
         'batch_size': quick_test.batch_size,
         'learning_rate': quick_test.learning_rate,
+        'machine_type': quick_test.machine_type,
 
         # Key metrics for card display
         'recall_at_100': quick_test.recall_at_100,

@@ -1595,6 +1595,24 @@ class QuickTest(models.Model):
         help_text="Learning rate for optimizer"
     )
 
+    # Hardware configuration
+    MACHINE_TYPE_SMALL = 'n1-standard-4'
+    MACHINE_TYPE_MEDIUM = 'n1-standard-8'
+    MACHINE_TYPE_LARGE = 'n1-standard-16'
+
+    MACHINE_TYPE_CHOICES = [
+        (MACHINE_TYPE_SMALL, 'Small (n1-standard-4: 4 vCPU, 15 GB)'),
+        (MACHINE_TYPE_MEDIUM, 'Medium (n1-standard-8: 8 vCPU, 30 GB)'),
+        (MACHINE_TYPE_LARGE, 'Large (n1-standard-16: 16 vCPU, 60 GB)'),
+    ]
+
+    machine_type = models.CharField(
+        max_length=50,
+        choices=MACHINE_TYPE_CHOICES,
+        default=MACHINE_TYPE_SMALL,
+        help_text="Compute machine type for Trainer and Dataflow workers"
+    )
+
     # Rating column for ranking models
     rating_column = models.CharField(
         max_length=255,

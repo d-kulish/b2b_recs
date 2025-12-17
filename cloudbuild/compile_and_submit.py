@@ -41,10 +41,13 @@ def create_tfx_pipeline(
     transform_module_path: str,
     trainer_module_path: str,
     output_path: str,
+    project_id: str,
+    region: str = 'europe-central2',
     epochs: int = 10,
     batch_size: int = 4096,
     learning_rate: float = 0.001,
     split_strategy: str = 'random',
+    machine_type: str = 'n1-standard-4',
     train_steps: Optional[int] = None,
     eval_steps: Optional[int] = None,
 ):
@@ -54,18 +57,19 @@ def create_tfx_pipeline(
     from tfx.proto import example_gen_pb2, trainer_pb2
     from tfx.orchestration import pipeline as tfx_pipeline
 
-    logger.info(f"Creating TFX pipeline: {pipeline_name}, split_strategy={split_strategy}")
+    logger.info(f"Creating TFX pipeline: {pipeline_name}, split_strategy={split_strategy}, machine_type={machine_type}")
 
     # Configure split based on strategy
     if split_strategy == 'strict_time':
         # Use partition_feature_name to split by the 'split' column generated in SQL
-        # The SQL query adds a 'split' column with values 'train' or 'eval' based on date
-        logger.info("Using temporal split with partition_feature_name='split'")
+        # The SQL query adds a 'split' column with values 'train', 'eval', or 'test' based on date
+        logger.info("Using temporal split with partition_feature_name='split' (train/eval/test)")
         output_config = example_gen_pb2.Output(
             split_config=example_gen_pb2.SplitConfig(
                 splits=[
                     example_gen_pb2.SplitConfig.Split(name='train'),
                     example_gen_pb2.SplitConfig.Split(name='eval'),
+                    example_gen_pb2.SplitConfig.Split(name='test'),
                 ],
                 partition_feature_name='split'
             )
@@ -134,14 +138,32 @@ def create_tfx_pipeline(
         trainer,
     ]
 
+    # Configure Dataflow for StatisticsGen and Transform components
+    # This ensures scalable processing for large datasets
+    staging_bucket = f'{project_id}-pipeline-staging'
+    beam_pipeline_args = [
+        '--runner=DataflowRunner',
+        f'--project={project_id}',
+        f'--region={region}',
+        f'--temp_location=gs://{staging_bucket}/dataflow_temp',
+        f'--staging_location=gs://{staging_bucket}/dataflow_staging',
+        f'--machine_type={machine_type}',
+        '--disk_size_gb=50',
+        '--experiments=use_runner_v2',
+        '--max_num_workers=10',
+        '--autoscaling_algorithm=THROUGHPUT_BASED',
+    ]
+    logger.info(f"Dataflow configured with machine_type={machine_type}, region={region}")
+
     pipeline = tfx_pipeline.Pipeline(
         pipeline_name=pipeline_name,
         pipeline_root=pipeline_root,
         components=components,
         enable_cache=False,
+        beam_pipeline_args=beam_pipeline_args,
     )
 
-    logger.info(f"TFX pipeline created with {len(components)} components")
+    logger.info(f"TFX pipeline created with {len(components)} components using DataflowRunner")
     return pipeline
 
 
@@ -215,6 +237,7 @@ def main():
     parser.add_argument('--batch-size', type=int, default=4096, help='Batch size')
     parser.add_argument('--learning-rate', type=float, default=0.001, help='Learning rate')
     parser.add_argument('--split-strategy', default='random', help='Split strategy: random, time_holdout, strict_time')
+    parser.add_argument('--machine-type', default='n1-standard-4', help='Machine type for Trainer and Dataflow workers')
     parser.add_argument('--project-id', required=True, help='GCP project ID')
     parser.add_argument('--region', default='europe-central2', help='GCP region')
 
@@ -233,10 +256,13 @@ def main():
                 transform_module_path=args.transform_module_path,
                 trainer_module_path=args.trainer_module_path,
                 output_path=args.output_path,
+                project_id=args.project_id,
+                region=args.region,
                 epochs=args.epochs,
                 batch_size=args.batch_size,
                 learning_rate=args.learning_rate,
                 split_strategy=args.split_strategy,
+                machine_type=args.machine_type,
             )
 
             # Compile to JSON

@@ -79,7 +79,9 @@ This platform enables businesses to:
   - **Code Validation:** Automatic syntax checking with error reporting (line numbers, error messages)
 - 🧪 **Quick Test Pipeline:** Validate feature configs on Vertex AI before full training
   - **Note:** Quick Test moved to Experiments page (2025-12-13)
-  - **Configurable params:** Epochs, batch size, learning rate
+  - **Configurable params:** Epochs, batch size, learning rate, data sample %
+  - **Hardware selection:** CPU tiers (Small/Medium/Large) with auto-recommendation
+  - **Dataflow processing:** StatisticsGen and Transform use Dataflow for scalable data processing
   - **Real-time progress:** Stage tracking with animated progress bar
   - **Results display:** Loss, Recall@10/50/100, vocabulary statistics
   - **Pipeline stages:** ExampleGen → StatisticsGen → SchemaGen → Transform → Trainer
@@ -381,6 +383,14 @@ WHERE source_type='gcs';
 ---
 
 ## 📝 Recent Updates
+
+**December 17, 2025 - Hardware Configuration & Dataflow Integration**
+- ✅ **Hardware selection UI** - Choose CPU tiers (Small/Medium/Large) for experiments
+- ✅ **Auto-recommendation** - System suggests hardware based on dataset size and model complexity
+- ✅ **Dataflow integration** - StatisticsGen and Transform always use Dataflow for scalable processing
+- ✅ **Machine type persistence** - `machine_type` field added to QuickTest model
+- ✅ **GPU options preview** - GPU cards shown as "coming soon" in the wizard
+- See [Phase 11: Hardware Configuration](docs/phase_experiments_implementation.md#phase-11-hardware-configuration--dataflow-december-2025) for details
 
 **December 16, 2025 - TFX Pipeline Fully Working! 🎉**
 - ✅ **End-to-end pipeline execution** - BigQueryExampleGen → StatisticsGen → SchemaGen → Transform → Trainer → Model Saved

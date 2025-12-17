@@ -102,6 +102,7 @@ class ExperimentService:
         train_days: int = 60,
         val_days: int = 7,
         test_days: int = 7,
+        machine_type: str = 'n1-standard-4',
     ):
         """
         Submit a new Quick Test pipeline to Vertex AI.
@@ -120,6 +121,7 @@ class ExperimentService:
             train_days: Number of days for training data (strict_time)
             val_days: Number of days for validation data (strict_time)
             test_days: Number of days for test data - held out (strict_time)
+            machine_type: Compute machine type for Trainer and Dataflow workers
 
         Returns:
             QuickTest instance
@@ -141,6 +143,7 @@ class ExperimentService:
             train_days=train_days,
             val_days=val_days,
             test_days=test_days,
+            machine_type=machine_type,
             status=QuickTest.STATUS_SUBMITTING,
         )
         # Assign sequential experiment number before saving
@@ -235,7 +238,8 @@ class ExperimentService:
             transform_module_path=transform_module_path,
             trainer_module_path=trainer_module_path,
             gcs_output_path=gcs_base_path,
-            run_id=run_id
+            run_id=run_id,
+            machine_type=quick_test.machine_type,
         )
 
         # Save Vertex AI job info
@@ -270,6 +274,7 @@ class ExperimentService:
         trainer_module_path: str,
         gcs_output_path: str,
         run_id: str,
+        machine_type: str = 'n1-standard-4',
     ):
         """
         Submit the TFX pipeline to Vertex AI via Cloud Build.
@@ -284,6 +289,7 @@ class ExperimentService:
             trainer_module_path: GCS path to trainer_module.py
             gcs_output_path: GCS path for output artifacts
             run_id: Unique identifier for this run
+            machine_type: Compute machine type for Trainer and Dataflow workers
 
         Returns:
             Object with resource_name and name attributes (pipeline job info)
@@ -303,6 +309,7 @@ class ExperimentService:
             batch_size=quick_test.batch_size,
             learning_rate=quick_test.learning_rate,
             split_strategy=quick_test.split_strategy,
+            machine_type=machine_type,
         )
 
         logger.info(f"Cloud Build triggered: {build_id}")
@@ -334,6 +341,7 @@ class ExperimentService:
         batch_size: int,
         learning_rate: float,
         split_strategy: str = 'random',
+        machine_type: str = 'n1-standard-4',
     ) -> str:
         """
         Trigger Cloud Build to compile and submit TFX pipeline.
@@ -348,6 +356,7 @@ class ExperimentService:
             batch_size: Batch size
             learning_rate: Learning rate
             split_strategy: Split strategy ('random', 'time_holdout', 'strict_time')
+            machine_type: Compute machine type for Trainer and Dataflow workers
 
         Returns:
             Cloud Build build ID
@@ -404,6 +413,7 @@ python /tmp/compile_and_submit.py \
     --batch-size="{batch_size}" \
     --learning-rate="{learning_rate}" \
     --split-strategy="{split_strategy}" \
+    --machine-type="{machine_type}" \
     --project-id="{self.project_id}" \
     --region="{self.REGION}"
 '''
@@ -448,10 +458,12 @@ def create_tfx_pipeline(
     trainer_module_path: str,
     output_path: str,
     project_id: str,
+    region: str = 'europe-central2',
     epochs: int = 10,
     batch_size: int = 4096,
     learning_rate: float = 0.001,
     split_strategy: str = 'random',
+    machine_type: str = 'n1-standard-4',
     train_steps: Optional[int] = None,
     eval_steps: Optional[int] = None,
 ):
@@ -465,13 +477,14 @@ def create_tfx_pipeline(
     # Configure split based on strategy
     if split_strategy == 'strict_time':
         # Use partition_feature_name to split by the 'split' column generated in SQL
-        # The SQL query adds a 'split' column with values 'train' or 'eval' based on date
-        logger.info("Using temporal split with partition_feature_name='split'")
+        # The SQL query adds a 'split' column with values 'train', 'eval', or 'test' based on date
+        logger.info("Using temporal split with partition_feature_name='split' (train/eval/test)")
         output_config = example_gen_pb2.Output(
             split_config=example_gen_pb2.SplitConfig(
                 splits=[
                     example_gen_pb2.SplitConfig.Split(name="train"),
                     example_gen_pb2.SplitConfig.Split(name="eval"),
+                    example_gen_pb2.SplitConfig.Split(name="test"),
                 ],
                 partition_feature_name="split"
             )
@@ -519,11 +532,22 @@ def create_tfx_pipeline(
 
     components = [example_gen, statistics_gen, schema_gen, transform, trainer]
 
-    # Set beam_pipeline_args to configure GCP project for BigQuery operations
+    # Configure Dataflow for StatisticsGen and Transform components
+    # This ensures scalable processing for large datasets
+    staging_bucket = f'{project_id}-pipeline-staging'
     beam_pipeline_args = [
+        '--runner=DataflowRunner',
         f'--project={project_id}',
-        f'--temp_location=gs://{project_id}-pipeline-staging/beam_temp',
+        f'--region={region}',
+        f'--temp_location=gs://{staging_bucket}/dataflow_temp',
+        f'--staging_location=gs://{staging_bucket}/dataflow_staging',
+        f'--machine_type={machine_type}',
+        '--disk_size_gb=50',
+        '--experiments=use_runner_v2',
+        '--max_num_workers=10',
+        '--autoscaling_algorithm=THROUGHPUT_BASED',
     ]
+    logger.info(f"Dataflow configured with machine_type={machine_type}, region={region}")
 
     pipeline = tfx_pipeline.Pipeline(
         pipeline_name=pipeline_name,
@@ -532,7 +556,7 @@ def create_tfx_pipeline(
         enable_cache=False,
         beam_pipeline_args=beam_pipeline_args,
     )
-    logger.info(f"TFX pipeline created with {len(components)} components, beam_pipeline_args={beam_pipeline_args}")
+    logger.info(f"TFX pipeline created with {len(components)} components using DataflowRunner")
     return pipeline
 
 
@@ -596,6 +620,7 @@ def main():
     parser.add_argument("--batch-size", type=int, default=4096)
     parser.add_argument("--learning-rate", type=float, default=0.001)
     parser.add_argument("--split-strategy", default="random", help="Split strategy: random, time_holdout, strict_time")
+    parser.add_argument("--machine-type", default="n1-standard-4", help="Machine type for Trainer and Dataflow workers")
     parser.add_argument("--project-id", required=True)
     parser.add_argument("--region", default="europe-central2")
     args = parser.parse_args()
@@ -615,10 +640,12 @@ def main():
                 trainer_module_path=args.trainer_module_path,
                 output_path=args.output_path,
                 project_id=args.project_id,
+                region=args.region,
                 epochs=args.epochs,
                 batch_size=args.batch_size,
                 learning_rate=args.learning_rate,
                 split_strategy=args.split_strategy,
+                machine_type=args.machine_type,
             )
             compile_pipeline(pipeline, pipeline_file, project_id=args.project_id)
             display_name = f"quicktest-{args.run_id}"

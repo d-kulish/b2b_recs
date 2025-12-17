@@ -2222,7 +2222,7 @@ def run_fn(fn_args: tfx.components.FnArgs):
 
     # Train
     logging.info(f"Starting training for {{epochs}} epochs...")
-    model.fit(
+    history = model.fit(
         train_dataset,
         validation_data=eval_dataset,
         epochs=epochs,
@@ -2231,6 +2231,35 @@ def run_fn(fn_args: tfx.components.FnArgs):
         callbacks=callbacks
     )
     logging.info("Training completed.")
+
+    # Evaluate on test set if available (strict_time split strategy)
+    try:
+        # Check for test split in transformed examples
+        # The test split is only present when using strict_time split strategy
+        transformed_examples_dir = os.path.dirname(fn_args.train_files[0])
+        test_split_dir = os.path.join(os.path.dirname(transformed_examples_dir), 'Split-test')
+
+        if tf.io.gfile.exists(test_split_dir):
+            test_files = tf.io.gfile.glob(os.path.join(test_split_dir, '*'))
+            if test_files:
+                logging.info(f"Test split found at {{test_split_dir}} - running final evaluation...")
+                test_dataset = _input_fn(
+                    test_files,
+                    fn_args.data_accessor,
+                    tf_transform_output,
+                    batch_size
+                )
+                test_results = model.evaluate(test_dataset, return_dict=True)
+                logging.info(f"=== TEST SET EVALUATION ===")
+                for metric_name, metric_value in test_results.items():
+                    logging.info(f"  test_{{metric_name}}: {{metric_value:.6f}}")
+                logging.info(f"===========================")
+            else:
+                logging.info("Test split directory exists but is empty - skipping test evaluation")
+        else:
+            logging.info("No test split found (not using strict_time strategy) - skipping test evaluation")
+    except Exception as e:
+        logging.warning(f"Could not evaluate on test set: {{e}}")
 
     # Pre-compute candidate embeddings for serving
     logging.info("Pre-computing candidate embeddings...")

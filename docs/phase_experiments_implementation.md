@@ -24,9 +24,10 @@ This document provides a **complete implementation guide** for building the Expe
 13. [Phase 8: TFX Pipeline Bug Fixes](#phase-8-tfx-pipeline-bug-fixes-december-2025)
 14. [Phase 9: Experiments UI Refactor](#phase-9-experiments-ui-refactor-december-2025)
 15. [Phase 10: Wizard Config Previews](#phase-10-wizard-config-previews-december-2025)
-16. [File Reference](#file-reference)
-17. [API Reference](#api-reference)
-18. [Testing Guide](#testing-guide)
+16. [Phase 11: Hardware Configuration & Dataflow](#phase-11-hardware-configuration--dataflow-december-2025)
+17. [File Reference](#file-reference)
+18. [API Reference](#api-reference)
+19. [Testing Guide](#testing-guide)
 
 ---
 
@@ -81,6 +82,7 @@ Experiments Page = Analyze Quick Test results to find optimal parameters
 | **Phase 8** | ✅ Complete | TFX Pipeline Bug Fixes (embedding shapes, dataset serialization, model saving) |
 | **Phase 9** | ✅ Complete | Experiments UI Refactor (new chapter layout, wizard modal, experiment cards, pagination) |
 | **Phase 10** | ✅ Complete | Wizard Config Previews (rich Feature/Model config previews, compact data sampling UI) |
+| **Phase 11** | ✅ Complete | Hardware Configuration & Dataflow (machine type selection, Dataflow for StatisticsGen/Transform) |
 
 ### Cloud Build Implementation (December 2025)
 
@@ -3224,6 +3226,221 @@ When a model config is selected:
 ### Bug Fixes
 
 1. **Dataset loading error in model_configs.html**: Changed URL from `/api/models/${modelId}/modeling/datasets/` to `/api/models/${modelId}/configs/datasets/` (the correct endpoint)
+
+---
+
+## Phase 11: Hardware Configuration & Dataflow (December 2025)
+
+This phase adds hardware configuration for experiments and makes Dataflow mandatory for data processing components (StatisticsGen, Transform) to handle large-scale datasets.
+
+### Overview
+
+**Problems Addressed:**
+1. No way for users to select compute resources for experiments
+2. DirectRunner was being used for StatisticsGen/Transform, which doesn't scale for large datasets
+3. Machine type selection wasn't persisted in the database
+
+**Solutions:**
+1. Add machine type selection UI with recommended tiers based on dataset size
+2. Make Dataflow mandatory for beam-based components (no DirectRunner option)
+3. Add `machine_type` field to QuickTest model for persistence
+4. GPU options shown as disabled (coming soon)
+
+### Database Changes
+
+**New Field on QuickTest Model:**
+
+```python
+# ml_platform/models.py
+
+# Hardware configuration constants
+MACHINE_TYPE_SMALL = 'n1-standard-4'
+MACHINE_TYPE_MEDIUM = 'n1-standard-8'
+MACHINE_TYPE_LARGE = 'n1-standard-16'
+
+MACHINE_TYPE_CHOICES = [
+    (MACHINE_TYPE_SMALL, 'Small (n1-standard-4: 4 vCPU, 15 GB)'),
+    (MACHINE_TYPE_MEDIUM, 'Medium (n1-standard-8: 8 vCPU, 30 GB)'),
+    (MACHINE_TYPE_LARGE, 'Large (n1-standard-16: 16 vCPU, 60 GB)'),
+]
+
+machine_type = models.CharField(
+    max_length=50,
+    choices=MACHINE_TYPE_CHOICES,
+    default=MACHINE_TYPE_SMALL,
+    help_text="Compute machine type for Trainer and Dataflow workers"
+)
+```
+
+**Migration:** `0036_add_machine_type_to_quicktest.py`
+
+### Dataflow Configuration
+
+**Key Decision:** Dataflow is mandatory for StatisticsGen and Transform components. DirectRunner was removed as an option because:
+- Quick Tests may run on full datasets (100% sample)
+- Large datasets (millions of rows) would fail with DirectRunner
+- Dataflow auto-scales based on data volume
+
+**Beam Pipeline Args (configured in services.py and compile_and_submit.py):**
+
+```python
+beam_pipeline_args = [
+    '--runner=DataflowRunner',
+    f'--project={project_id}',
+    f'--region={region}',
+    f'--temp_location=gs://{staging_bucket}/dataflow_temp',
+    f'--staging_location=gs://{staging_bucket}/dataflow_staging',
+    f'--machine_type={machine_type}',
+    '--disk_size_gb=50',
+    '--experiments=use_runner_v2',
+    '--max_num_workers=10',
+    '--autoscaling_algorithm=THROUGHPUT_BASED',
+]
+```
+
+**Key Parameters:**
+| Parameter | Value | Purpose |
+|-----------|-------|---------|
+| `runner` | `DataflowRunner` | Use Dataflow for distributed processing |
+| `machine_type` | User-selected | Matches the hardware tier selected in UI |
+| `disk_size_gb` | `50` | Sufficient for intermediate data |
+| `experiments` | `use_runner_v2` | Use Dataflow Runner v2 for better performance |
+| `max_num_workers` | `10` | Cap worker count for cost control |
+| `autoscaling_algorithm` | `THROUGHPUT_BASED` | Scale based on processing throughput |
+
+### Hardware Selection UI
+
+**UI Location:** Chapter 3 of the New Experiment wizard (after Training Parameters)
+
+**Layout:**
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│ ⚡ Hardware Configuration                                           │
+│                                                                     │
+│ CPU Options (click to select):                                      │
+│ ┌──────────────┐ ┌──────────────┐ ┌──────────────┐                 │
+│ │ Small   ✓    │ │ Medium       │ │ Large        │                 │
+│ │ 4 vCPU       │ │ 8 vCPU       │ │ 16 vCPU      │                 │
+│ │ 15 GB RAM    │ │ 30 GB RAM    │ │ 60 GB RAM    │                 │
+│ │ Recommended  │ │              │ │              │                 │
+│ └──────────────┘ └──────────────┘ └──────────────┘                 │
+│                                                                     │
+│ GPU Options (coming soon):                                          │
+│ ┌──────────────┐ ┌──────────────┐                                  │
+│ │ 🔒 T4        │ │ 🔒 A100      │                                  │
+│ │ Coming Soon  │ │ Coming Soon  │                                  │
+│ └──────────────┘ └──────────────┘                                  │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+**Machine Type Tiers:**
+
+| Tier | Machine Type | vCPU | Memory | Use Case |
+|------|--------------|------|--------|----------|
+| Small | `n1-standard-4` | 4 | 15 GB | Default, small datasets (<100K rows) |
+| Medium | `n1-standard-8` | 8 | 30 GB | Medium datasets (100K-1M rows) |
+| Large | `n1-standard-16` | 16 | 60 GB | Large datasets (>1M rows) |
+
+### Auto-Recommendation Logic
+
+**JavaScript Function:** `updateHardwareRecommendation()`
+
+The system automatically recommends hardware based on:
+1. **Dataset size** (from `datasetEstimatedRows`)
+2. **Model complexity** (from `selectedModelConfig.estimated_params`)
+
+**Recommendation Rules:**
+```javascript
+function updateHardwareRecommendation() {
+    const rows = datasetEstimatedRows || 0;
+    const params = selectedModelConfig?.estimated_params || 0;
+
+    let recommended = 'n1-standard-4';  // Default: Small
+
+    // Upgrade based on dataset size
+    if (rows > 1000000) {
+        recommended = 'n1-standard-16';  // Large
+    } else if (rows > 100000) {
+        recommended = 'n1-standard-8';   // Medium
+    }
+
+    // Upgrade based on model complexity
+    if (params > 10000000) {
+        recommended = 'n1-standard-16';  // Large
+    } else if (params > 1000000 && recommended === 'n1-standard-4') {
+        recommended = 'n1-standard-8';   // Medium
+    }
+
+    // Update UI to show recommendation badge
+}
+```
+
+### Backend Wiring
+
+**Data Flow:**
+```
+UI (selectHardware) → API endpoint → Services → Cloud Build → TFX Pipeline
+```
+
+**Files Modified:**
+
+| File | Changes |
+|------|---------|
+| `ml_platform/models.py` | Added `machine_type` field with choices |
+| `ml_platform/migrations/0036_...py` | Migration for new field |
+| `ml_platform/experiments/api.py` | Added `machine_type` to params dict |
+| `ml_platform/experiments/services.py` | Wired through submit → _submit_vertex_pipeline → _trigger_cloud_build |
+| `cloudbuild/compile_and_submit.py` | Added `--machine-type` arg, configured Dataflow |
+| `templates/.../model_experiments.html` | Hardware selection UI, recommendation logic |
+
+### Summary Section Update
+
+Hardware is now displayed in the experiment Summary section with purple styling:
+```
+Summary:
+┌──────────────────────────────────────────────────────────────────┐
+│ Feature Config: My Features    Model: Standard Tower            │
+│ Split: Random (80/20)          Hardware: Medium (8 vCPU, 30 GB) │
+│ Sample: 25% (~50,000 examples)                                  │
+│ Training: 10 epochs, batch 4096, lr 0.001                       │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+### CSS Added
+
+```css
+.hardware-section { margin-bottom: 24px; }
+.hardware-grid { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+.hardware-card {
+    border: 2px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 16px;
+    cursor: pointer;
+    min-width: 140px;
+    transition: all 0.2s;
+}
+.hardware-card:hover:not(.disabled) { border-color: #3b82f6; background: #eff6ff; }
+.hardware-card.selected { border-color: #3b82f6; background: #eff6ff; }
+.hardware-card.disabled { opacity: 0.5; cursor: not-allowed; background: #f9fafb; }
+.hardware-badge { font-size: 10px; background: #dbeafe; color: #1d4ed8; padding: 2px 6px; border-radius: 4px; }
+```
+
+### JavaScript Functions
+
+| Function | Purpose |
+|----------|---------|
+| `selectHardware(machineType)` | Handle hardware card selection |
+| `updateHardwareRecommendation()` | Calculate and display recommended tier |
+| `updateSummary()` | Include hardware in summary display |
+
+### Testing Checklist
+
+- [ ] Verify machine_type is persisted in QuickTest model
+- [ ] Verify Dataflow jobs are created for StatisticsGen and Transform
+- [ ] Verify machine_type is passed through to Dataflow worker config
+- [ ] Test auto-recommendation with different dataset sizes
+- [ ] Verify GPU cards are disabled but visible
+- [ ] Verify hardware is shown in Summary section
 
 ---
 

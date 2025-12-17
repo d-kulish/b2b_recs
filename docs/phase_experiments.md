@@ -128,10 +128,11 @@ Quick Test runs a mini TFX pipeline on Vertex AI to validate feature configurati
 
 | Aspect | Quick Test | Full Training |
 |--------|------------|---------------|
-| Data | 10% sample query | 100% data |
+| Data | 5-100% sample (configurable) | 100% data |
 | ExampleGen | Sampled BigQuery | Full BigQuery |
-| Transform | Full vocabulary | Full vocabulary |
-| Trainer | CPU, 2 epochs | GPU, 10-50 epochs |
+| StatisticsGen/Transform | Dataflow (auto-scaling) | Dataflow (auto-scaling) |
+| Trainer | CPU (configurable tiers) | GPU, 10-50 epochs |
+| Hardware | Small/Medium/Large CPU tiers | GPU-enabled instances |
 | Output | Temporary | Permanent artifacts |
 | MLflow | Logged (tagged as quick test) | Logged (production) |
 
@@ -242,6 +243,42 @@ The Experiments page has two main chapters:
 │                                                                              │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
+
+### Hardware Configuration
+
+The wizard includes hardware selection for configuring compute resources:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ ⚡ Hardware Configuration                                                    │
+│                                                                              │
+│ CPU Options:                                                                 │
+│ ┌──────────────┐  ┌──────────────┐  ┌──────────────┐                        │
+│ │ Small    ✓   │  │ Medium       │  │ Large        │                        │
+│ │ 4 vCPU       │  │ 8 vCPU       │  │ 16 vCPU      │                        │
+│ │ 15 GB RAM    │  │ 30 GB RAM    │  │ 60 GB RAM    │                        │
+│ │ Recommended  │  │              │  │              │                        │
+│ └──────────────┘  └──────────────┘  └──────────────┘                        │
+│                                                                              │
+│ GPU Options (coming soon):                                                   │
+│ ┌──────────────┐  ┌──────────────┐                                          │
+│ │ 🔒 T4        │  │ 🔒 A100      │                                          │
+│ │ Coming Soon  │  │ Coming Soon  │                                          │
+│ └──────────────┘  └──────────────┘                                          │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Machine Type Tiers:**
+
+| Tier | Machine Type | vCPU | Memory | Recommended For |
+|------|--------------|------|--------|-----------------|
+| Small | n1-standard-4 | 4 | 15 GB | Datasets < 100K rows |
+| Medium | n1-standard-8 | 8 | 30 GB | Datasets 100K - 1M rows |
+| Large | n1-standard-16 | 16 | 60 GB | Datasets > 1M rows |
+
+**Auto-Recommendation:** The system automatically suggests hardware based on dataset size and model complexity.
+
+**Dataflow Integration:** StatisticsGen and Transform components always use Dataflow with the selected machine type for worker nodes. This ensures scalable processing for large datasets.
 
 ### Quick Test Progress
 

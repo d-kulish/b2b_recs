@@ -348,54 +348,168 @@
         padding: 2px 0;
     }
 
-    /* Tower Preview in Wizard */
-    .tower-preview-grid {
+    /* Tensor Breakdown Bar */
+    .tensor-breakdown-bar {
+        display: flex;
+        height: 24px;
+        border-radius: 6px;
+        overflow: hidden;
+        background: #e5e7eb;
+        margin-bottom: 8px;
+    }
+    .tensor-breakdown-segment {
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 10px;
+        font-weight: 500;
+        color: white;
+        transition: width 0.3s ease;
+        overflow: hidden;
+        white-space: nowrap;
+    }
+
+    /* Tower Preview in Wizard - Rich Visualization */
+    .tower-visual {
         display: grid;
         grid-template-columns: 1fr 1fr;
         gap: 12px;
-        margin-bottom: 12px;
     }
-    .tower-preview-item {
-        padding: 12px;
-        background: white;
-        border-radius: 8px;
-        border: 1px solid #e5e7eb;
+    .tower-visual-aligned .tower-stack {
+        display: flex;
+        flex-direction: column;
     }
-    .tower-preview-item.buyer {
-        border-left: 3px solid #3b82f6;
+    .tower-visual-aligned .tower-column {
+        display: flex;
+        flex-direction: column;
     }
-    .tower-preview-item.product {
-        border-left: 3px solid #10b981;
+    .tower-visual-aligned .tower-stack {
+        flex: 1;
     }
-    .tower-preview-title {
-        font-size: 12px;
-        font-weight: 600;
-        color: #6b7280;
-        margin-bottom: 8px;
-        text-transform: uppercase;
+    .tower-column {
+        min-width: 0;
     }
-    .tower-preview-layers {
-        font-size: 13px;
-        color: #374151;
-    }
-    .tower-preview-layers div {
-        padding: 3px 0;
+    .tower-header {
         display: flex;
         align-items: center;
-        gap: 6px;
+        justify-content: space-between;
+        margin-bottom: 6px;
     }
-    .tower-preview-layers .layer-units {
-        font-weight: 600;
-        color: #111827;
+    .tower-label {
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: #6b7280;
     }
-    .model-params-preview {
+    .tower-stack {
         display: flex;
-        flex-wrap: wrap;
+        flex-direction: column;
         gap: 8px;
+        border-radius: 10px;
         padding: 12px;
+        border: 2px dashed;
+    }
+    .tower-stack.buyer {
+        background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+        border-color: #3b82f6;
+    }
+    .tower-stack.product {
+        background: linear-gradient(135deg, #f0fdf4 0%, #d1fae5 100%);
+        border-color: #10b981;
+    }
+    .tower-stack.ranking {
+        background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%);
+        border-color: #8b5cf6;
+    }
+    .card-layer-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 12px;
         background: white;
         border-radius: 8px;
-        border: 1px solid #e5e7eb;
+        border: 1px solid rgba(0, 0, 0, 0.08);
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+    }
+    .tower-stack.buyer .card-layer-item {
+        border-color: rgba(59, 130, 246, 0.2);
+    }
+    .tower-stack.product .card-layer-item {
+        border-color: rgba(16, 185, 129, 0.2);
+    }
+    .tower-stack.ranking .card-layer-item {
+        border-color: rgba(139, 92, 246, 0.2);
+    }
+    .card-layer-item.output-layer {
+        border: 2px solid #f87171 !important;
+    }
+    .card-layer-item.empty-placeholder {
+        background: transparent;
+        border: 1px dashed rgba(0, 0, 0, 0.1);
+        visibility: hidden;
+    }
+    .card-layer-item .card-drag-handle {
+        color: #c4c4c4;
+        font-size: 12px;
+    }
+    .card-layer-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 3px 8px;
+        border-radius: 4px;
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+        flex-shrink: 0;
+    }
+    .card-layer-badge.dense {
+        background: #e5e7eb;
+        color: #374151;
+    }
+    .card-layer-badge.dropout {
+        background: #fef3c7;
+        color: #92400e;
+    }
+    .card-layer-badge.batch_norm {
+        background: #d1fae5;
+        color: #065f46;
+    }
+    .card-layer-badge.layer_norm {
+        background: #e0e7ff;
+        color: #3730a3;
+    }
+    .card-layer-params {
+        flex: 1;
+        font-size: 12px;
+        color: #4b5563;
+    }
+    .tower-params-summary {
+        margin: 8px 0 0 0;
+        padding: 10px 12px;
+        background: rgba(255, 255, 255, 0.7);
+        border-radius: 8px;
+        border-top: 2px solid rgba(0, 0, 0, 0.1);
+        font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+        font-size: 11px;
+    }
+    .tower-params-summary .params-row {
+        display: flex;
+        justify-content: space-between;
+        color: #6b7280;
+    }
+    .tower-params-summary .params-row span:last-child {
+        font-weight: 600;
+        color: #374151;
+    }
+
+    /* Training Params Preview */
+    .training-params-preview {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
     }
     .param-chip {
         display: inline-flex;
@@ -412,6 +526,35 @@
     .param-chip-value {
         font-weight: 600;
         color: #374151;
+    }
+    .param-chip.retrieval-algo {
+        background: #f5f3ff;
+        border: 1px solid #e9d5ff;
+    }
+    .param-chip.retrieval-algo .param-chip-value {
+        color: #7c3aed;
+    }
+
+    /* Sample Percent Buttons */
+    .sample-btn {
+        padding: 4px 10px;
+        font-size: 12px;
+        font-weight: 500;
+        border: 1px solid #fcd34d;
+        background: white;
+        color: #92400e;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: all 0.15s ease;
+    }
+    .sample-btn:hover {
+        background: #fef3c7;
+        border-color: #f59e0b;
+    }
+    .sample-btn.active {
+        background: #f59e0b;
+        border-color: #d97706;
+        color: white;
     }
 
     /* Training Params in Wizard Step 2 */
@@ -687,30 +830,46 @@
                 <!-- Feature Config Selection -->
                 <div class="mb-4">
                     <label class="block text-sm font-medium text-gray-700 mb-2">Feature Config</label>
-                    <select id="wizardFeatureSelect" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500" onchange="onWizardFeatureChange()">
+                    <select id="wizardFeatureSelect" class="w-64 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500" onchange="onWizardFeatureChange()">
                         <option value="">-- Select Feature Config --</option>
                     </select>
                 </div>
 
                 <!-- Feature Config Preview -->
                 <div id="wizardFeaturePreview" class="config-preview-panel feature hidden">
-                    <div class="config-preview-header">
-                        <span class="config-preview-name" id="wizardFeatureName">-</span>
-                        <span class="text-sm text-gray-500" id="wizardFeatureDataset">-</span>
+                    <!-- Loading indicator -->
+                    <div id="wizardFeatureLoading" class="text-center py-4 hidden">
+                        <i class="fas fa-spinner fa-spin text-blue-500 text-xl"></i>
+                        <p class="text-sm text-gray-500 mt-2">Loading feature config details...</p>
                     </div>
-                    <div class="tensor-preview-grid">
-                        <div class="tensor-preview-item buyer">
-                            <div class="tensor-preview-title">Buyer Tensor</div>
-                            <div class="tensor-preview-dim buyer" id="wizardBuyerDim">0D</div>
-                            <div class="tensor-preview-features" id="wizardBuyerFeatures">
-                                <!-- Features listed here -->
-                            </div>
+                    <!-- Content container -->
+                    <div id="wizardFeatureContent">
+                        <div class="mb-3">
+                            <div class="text-sm text-gray-500">Dataset: <span class="font-medium text-gray-700" id="wizardFeatureDataset">-</span></div>
                         </div>
-                        <div class="tensor-preview-item product">
-                            <div class="tensor-preview-title">Product Tensor</div>
-                            <div class="tensor-preview-dim product" id="wizardProductDim">0D</div>
-                            <div class="tensor-preview-features" id="wizardProductFeatures">
-                                <!-- Features listed here -->
+                        <!-- Dataset Source Info -->
+                        <div id="wizardDatasetInfo"></div>
+                        <!-- Tensor Breakdown Grid -->
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="p-4 bg-blue-50 rounded-lg">
+                                <div class="flex items-center justify-between mb-3">
+                                    <h4 class="font-semibold text-blue-800">Buyer Tensor</h4>
+                                    <span class="font-semibold text-blue-600" id="wizardBuyerDim">0D</span>
+                                </div>
+                                <div id="wizardBuyerBar" class="tensor-breakdown-bar mb-3"></div>
+                                <div id="wizardBuyerFeatures" class="space-y-1">
+                                    <!-- Features listed here -->
+                                </div>
+                            </div>
+                            <div class="p-4 bg-green-50 rounded-lg">
+                                <div class="flex items-center justify-between mb-3">
+                                    <h4 class="font-semibold text-green-800">Product Tensor</h4>
+                                    <span class="font-semibold text-green-600" id="wizardProductDim">0D</span>
+                                </div>
+                                <div id="wizardProductBar" class="tensor-breakdown-bar mb-3"></div>
+                                <div id="wizardProductFeatures" class="space-y-1">
+                                    <!-- Features listed here -->
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -725,33 +884,67 @@
                 <!-- Model Config Selection -->
                 <div class="mb-4 mt-6">
                     <label class="block text-sm font-medium text-gray-700 mb-2">Model Config</label>
-                    <select id="wizardModelSelect" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500" onchange="onWizardModelChange()">
+                    <select id="wizardModelSelect" class="w-64 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500" onchange="onWizardModelChange()">
                         <option value="">-- Select Model Config --</option>
                     </select>
                 </div>
 
                 <!-- Model Config Preview -->
                 <div id="wizardModelPreview" class="config-preview-panel model hidden">
-                    <div class="config-preview-header">
-                        <span class="config-preview-name" id="wizardModelName">-</span>
-                        <span class="text-sm text-purple-600" id="wizardModelType">-</span>
+                    <!-- Loading indicator -->
+                    <div id="wizardModelLoading" class="text-center py-4 hidden">
+                        <i class="fas fa-spinner fa-spin text-purple-500 text-xl"></i>
+                        <p class="text-sm text-gray-500 mt-2">Loading model config details...</p>
                     </div>
-                    <div class="tower-preview-grid">
-                        <div class="tower-preview-item buyer">
-                            <div class="tower-preview-title">Buyer Tower</div>
-                            <div class="tower-preview-layers" id="wizardBuyerTower">
-                                <!-- Layers listed here -->
+                    <!-- Content container -->
+                    <div id="wizardModelContent">
+                        <!-- Tower Architecture -->
+                        <div class="mb-3">
+                            <div class="tower-visual tower-visual-aligned">
+                                <div class="tower-column">
+                                    <div class="tower-header">
+                                        <span class="tower-label">Buyer Tower</span>
+                                    </div>
+                                    <div id="wizardBuyerStack" class="tower-stack buyer">
+                                        <!-- Layers will be inserted here -->
+                                    </div>
+                                    <div class="tower-params-summary" id="wizardBuyerParamsSummary">
+                                        <div class="params-row"><span>Total params:</span><span id="wizardBuyerTotalParams">0</span></div>
+                                        <div class="params-row"><span>Trainable params:</span><span id="wizardBuyerTrainableParams">0</span></div>
+                                        <div class="params-row"><span>Non-trainable params:</span><span>0</span></div>
+                                    </div>
+                                </div>
+                                <div class="tower-column">
+                                    <div class="tower-header">
+                                        <span class="tower-label">Product Tower</span>
+                                    </div>
+                                    <div id="wizardProductStack" class="tower-stack product">
+                                        <!-- Layers will be inserted here -->
+                                    </div>
+                                    <div class="tower-params-summary" id="wizardProductParamsSummary">
+                                        <div class="params-row"><span>Total params:</span><span id="wizardProductTotalParams">0</span></div>
+                                        <div class="params-row"><span>Trainable params:</span><span id="wizardProductTrainableParams">0</span></div>
+                                        <div class="params-row"><span>Non-trainable params:</span><span>0</span></div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                        <div class="tower-preview-item product">
-                            <div class="tower-preview-title">Product Tower</div>
-                            <div class="tower-preview-layers" id="wizardProductTower">
-                                <!-- Layers listed here -->
+
+                        <!-- Training Parameters -->
+                        <div class="mb-2">
+                            <h4 class="text-sm font-medium text-gray-700 mb-2">Training Parameters</h4>
+                            <div class="training-params-preview" id="wizardModelParams">
+                                <!-- Will be populated dynamically -->
                             </div>
                         </div>
-                    </div>
-                    <div class="model-params-preview" id="wizardModelParams">
-                        <!-- Param chips -->
+
+                        <!-- Retrieval Algorithm (for retrieval/multitask models) -->
+                        <div id="wizardRetrievalSection" class="hidden">
+                            <h4 class="text-sm font-medium text-gray-700 mb-2">Retrieval Algorithm</h4>
+                            <div class="training-params-preview" id="wizardRetrievalParams">
+                                <!-- Will be populated dynamically -->
+                            </div>
+                        </div>
                     </div>
                 </div>
                 <div id="wizardModelEmpty" class="config-preview-panel model">
@@ -764,37 +957,49 @@
 
             <!-- Step 2: Training Parameters -->
             <div id="wizardStep2" class="wizard-step">
-                <!-- Data Split & Sampling -->
-                <div class="training-params-section">
-                    <h4><i class="fas fa-random"></i> Data Split & Sampling</h4>
+                <!-- Data Sampling - Compact inline layout -->
+                <div class="flex items-center gap-4 p-3 bg-amber-50 border border-amber-200 rounded-lg mb-4">
+                    <div class="flex items-center gap-2">
+                        <i class="fas fa-database text-amber-600"></i>
+                        <span class="text-sm font-medium text-amber-800">Sample:</span>
+                    </div>
+                    <div class="flex items-center gap-1">
+                        <button type="button" class="sample-btn" data-value="5" onclick="setSamplePercent(5)">5%</button>
+                        <button type="button" class="sample-btn" data-value="10" onclick="setSamplePercent(10)">10%</button>
+                        <button type="button" class="sample-btn" data-value="25" onclick="setSamplePercent(25)">25%</button>
+                        <button type="button" class="sample-btn active" data-value="100" onclick="setSamplePercent(100)">100%</button>
+                        <span class="text-gray-400 mx-1">or</span>
+                        <input type="number" id="wizardSamplePercentInput" class="w-16 px-2 py-1 text-sm border border-amber-300 rounded text-center" value="100" min="1" max="100" onchange="onSampleInputChange()">
+                        <span class="text-sm text-gray-500">%</span>
+                    </div>
+                    <div class="flex items-center gap-1 ml-auto">
+                        <span class="text-amber-700 font-semibold" id="wizardExampleCountValue">--</span>
+                        <span class="text-sm text-gray-500">examples</span>
+                    </div>
+                </div>
+
+                <!-- Split Strategy -->
+                <div class="training-params-section" style="background: #f5f3ff; border-color: #c4b5fd;">
+                    <h4 style="color: #6d28d9;"><i class="fas fa-random"></i> Split Strategy</h4>
                     <div class="training-params-grid">
                         <div class="training-param-group">
-                            <label>Split Strategy</label>
-                            <select id="wizardSplitStrategy" onchange="onWizardSplitChange()">
+                            <label style="color: #6d28d9;">Strategy</label>
+                            <select id="wizardSplitStrategy" onchange="onWizardSplitChange()" style="border-color: #c4b5fd;">
                                 <option value="random">Random (fastest)</option>
                                 <option value="time_holdout">Time Holdout</option>
                                 <option value="strict_time">Strict Temporal</option>
                             </select>
                         </div>
-                        <div class="training-param-group">
-                            <label>Sample %</label>
-                            <select id="wizardSamplePercent">
-                                <option value="5">5% (fastest)</option>
-                                <option value="10">10%</option>
-                                <option value="25">25%</option>
-                                <option value="100" selected>100% (full)</option>
-                            </select>
+                        <div id="wizardTimeOptions" class="training-param-group hidden">
+                            <label style="color: #6d28d9;">Holdout Days</label>
+                            <input type="number" id="wizardHoldoutDays" value="1" min="1" max="30" style="border-color: #c4b5fd;">
                         </div>
                     </div>
-                    <!-- Time-based options (shown conditionally) -->
-                    <div id="wizardTimeOptions" class="training-params-grid mt-3 hidden">
+                    <!-- Date column (shown conditionally for time-based splits) -->
+                    <div id="wizardDateColumnSection" class="mt-3 hidden">
                         <div class="training-param-group">
-                            <label>Holdout Days</label>
-                            <input type="number" id="wizardHoldoutDays" value="1" min="1" max="30">
-                        </div>
-                        <div class="training-param-group">
-                            <label>Date Column</label>
-                            <select id="wizardDateColumn">
+                            <label style="color: #6d28d9;">Date Column</label>
+                            <select id="wizardDateColumn" style="border-color: #c4b5fd;">
                                 <option value="">Select date column...</option>
                             </select>
                         </div>
@@ -1042,11 +1247,285 @@ let pagination = { page: 1, page_size: 10, total_count: 0, total_pages: 1 };
 let wizardStep = 1;
 let selectedFeatureConfig = null;
 let selectedModelConfig = null;
+let datasetEstimatedRows = null;  // Estimated rows from selected feature config's dataset
 
 // Polling
 let currentExpId = null;
 let pollInterval = null;
 let searchDebounceTimer = null;
+
+// Data type constants
+const DATA_TYPES = {
+    numeric: { label: 'Numeric', icon: 'hashtag' },
+    text: { label: 'Text', icon: 'font' },
+    temporal: { label: 'Temporal', icon: 'calendar' }
+};
+
+// =============================================================================
+// FEATURE CONFIG HELPER FUNCTIONS
+// =============================================================================
+
+function getDataTypeLabel(dataType) {
+    return DATA_TYPES[dataType]?.label || dataType;
+}
+
+function getDataTypeFromBqType(bqType) {
+    const type = (bqType || 'STRING').toUpperCase();
+    if (['INTEGER', 'INT64', 'FLOAT', 'FLOAT64', 'NUMERIC', 'BIGNUMERIC'].includes(type)) {
+        return 'numeric';
+    } else if (['TIMESTAMP', 'DATETIME', 'DATE', 'TIME'].includes(type)) {
+        return 'temporal';
+    } else {
+        return 'text';
+    }
+}
+
+function getFeatureDisplayInfo(feature) {
+    const dataType = feature.data_type || getDataTypeFromBqType(feature.bq_type);
+    const transforms = feature.transforms || {};
+    let outputParts = [];
+    let totalDim = 0;
+
+    if (dataType === 'numeric') {
+        if (transforms.normalize?.enabled) {
+            outputParts.push('Norm: 1D');
+            totalDim += 1;
+        }
+        if (transforms.bucketize?.enabled) {
+            const dim = transforms.bucketize.embedding_dim || 32;
+            outputParts.push(`Bucket: ${dim}D`);
+            totalDim += dim;
+        }
+    } else if (dataType === 'text') {
+        if (transforms.embedding?.enabled) {
+            const dim = transforms.embedding.embedding_dim || 32;
+            outputParts.push(`Embed: ${dim}D`);
+            totalDim += dim;
+        }
+    } else if (dataType === 'temporal') {
+        if (transforms.normalize?.enabled) {
+            outputParts.push('Norm: 1D');
+            totalDim += 1;
+        }
+        if (transforms.cyclical?.enabled) {
+            const cyclical = transforms.cyclical;
+            let cyclicalDim = 0;
+            if (cyclical.yearly || cyclical.annual) cyclicalDim += 2;
+            if (cyclical.quarterly) cyclicalDim += 2;
+            if (cyclical.monthly) cyclicalDim += 2;
+            if (cyclical.weekly) cyclicalDim += 2;
+            if (cyclical.daily) cyclicalDim += 2;
+            if (cyclicalDim > 0) {
+                outputParts.push(`Cyclical: ${cyclicalDim}D`);
+                totalDim += cyclicalDim;
+            }
+        }
+        if (transforms.bucketize?.enabled) {
+            const dim = transforms.bucketize.embedding_dim || 32;
+            outputParts.push(`Bucket: ${dim}D`);
+            totalDim += dim;
+        }
+    }
+
+    return {
+        dataTypeLabel: getDataTypeLabel(dataType),
+        transformStr: outputParts.length > 0 ? outputParts.join(' + ') : 'No transform',
+        totalDim,
+        hasTransforms: outputParts.length > 0
+    };
+}
+
+function getCrossFeatureNames(cross) {
+    if (!cross.features || cross.features.length === 0) return [];
+    if (typeof cross.features[0] === 'string') {
+        return cross.features;
+    }
+    return cross.features.map(f => f.column);
+}
+
+function calculateTensorBreakdown(features, crosses) {
+    const breakdown = [];
+    let total = 0;
+
+    (features || []).forEach(feature => {
+        const info = getFeatureDisplayInfo(feature);
+        if (info.totalDim > 0) {
+            breakdown.push({ name: feature.column, dim: info.totalDim });
+            total += info.totalDim;
+        }
+    });
+
+    (crosses || []).forEach(cross => {
+        const dim = cross.embedding_dim || 16;
+        const featureNames = getCrossFeatureNames(cross);
+        const name = featureNames.join(' × ');
+        breakdown.push({ name: name, dim: dim, is_cross: true });
+        total += dim;
+    });
+
+    return { total, breakdown };
+}
+
+function buildDatasetInfoHtml(info, datasetName) {
+    if (!info || !info.primary_table) {
+        return '';
+    }
+
+    const tables = [info.primary_table + ' (primary)'];
+    (info.secondary_tables || []).forEach(t => {
+        if (t) tables.push(t);
+    });
+    const tablesLine = tables.join(' &bull; ');
+
+    const filterBadges = [];
+    if (info.filters?.dates) filterBadges.push(info.filters.dates);
+    if (info.filters?.customers) filterBadges.push(info.filters.customers);
+    if (info.filters?.products) filterBadges.push(info.filters.products);
+    const filtersLine = filterBadges.length > 0
+        ? filterBadges.join(' &bull; ')
+        : '<span class="text-gray-400 italic">No filters</span>';
+
+    const rowsBadge = info.estimated_rows
+        ? `${info.estimated_rows.toLocaleString()} rows`
+        : '';
+
+    return `
+        <div class="mb-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+            <div class="flex items-center justify-between mb-3">
+                <h4 class="font-semibold text-gray-700">
+                    <i class="fas fa-database mr-2 text-gray-400"></i>Dataset Source
+                </h4>
+                ${rowsBadge ? `<span class="text-sm font-medium text-gray-500 bg-white px-2 py-1 rounded border border-gray-200">${rowsBadge}</span>` : ''}
+            </div>
+            <div class="space-y-2 text-sm">
+                <div class="flex">
+                    <span class="text-gray-500 w-16 flex-shrink-0">Tables:</span>
+                    <span class="text-gray-700">${tablesLine}</span>
+                </div>
+                <div class="flex">
+                    <span class="text-gray-500 w-16 flex-shrink-0">Filters:</span>
+                    <span class="text-gray-700">${filtersLine}</span>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function renderWizardTensorPreview(model, total, breakdown, barContainer, maxTotal = null) {
+    barContainer.innerHTML = '';
+    if (!breakdown || breakdown.length === 0) return;
+
+    if (maxTotal && maxTotal > 0) {
+        const widthPercent = (total / maxTotal) * 100;
+        barContainer.style.width = `${widthPercent}%`;
+    } else {
+        barContainer.style.width = '100%';
+    }
+
+    const colors = model === 'buyer'
+        ? ['#3b82f6', '#60a5fa', '#93c5fd', '#bfdbfe', '#dbeafe']
+        : ['#10b981', '#34d399', '#6ee7b7', '#a7f3d0', '#d1fae5'];
+
+    breakdown.forEach((item, idx) => {
+        const pct = (item.dim / total) * 100;
+        const color = colors[idx % colors.length];
+
+        const segment = document.createElement('div');
+        segment.className = 'tensor-breakdown-segment';
+        segment.style.width = `${pct}%`;
+        segment.style.backgroundColor = color;
+        segment.title = `${item.name}: ${item.dim}D`;
+        if (pct > 10) {
+            segment.textContent = item.dim;
+        }
+        barContainer.appendChild(segment);
+    });
+}
+
+// =============================================================================
+// MODEL CONFIG HELPER FUNCTIONS
+// =============================================================================
+
+function renderCardTowerLayers(buyerLayers, productLayers) {
+    const maxLen = Math.max(buyerLayers.length, productLayers.length);
+    if (maxLen === 0) {
+        return {
+            buyer: '<div class="text-xs text-gray-400 italic p-2">No layers</div>',
+            product: '<div class="text-xs text-gray-400 italic p-2">No layers</div>'
+        };
+    }
+
+    const renderLayer = (layer, isOutput) => {
+        let badge = '';
+        let params = '';
+
+        if (layer.type === 'dense') {
+            badge = '<span class="card-layer-badge dense">Dense</span>';
+            params = `${layer.units} units`;
+            if (layer.activation) params += `, ${layer.activation}`;
+            if (layer.l2_regularization) params += `, L2=${layer.l2_regularization}`;
+            else if (layer.l2_reg) params += `, L2=${layer.l2_reg}`;
+        } else if (layer.type === 'dropout') {
+            badge = '<span class="card-layer-badge dropout">Dropout</span>';
+            params = `rate: ${layer.rate}`;
+        } else if (layer.type === 'batch_norm') {
+            badge = '<span class="card-layer-badge batch_norm">BatchNorm</span>';
+            params = '';
+        } else if (layer.type === 'layer_norm') {
+            badge = '<span class="card-layer-badge layer_norm">LayerNorm</span>';
+            params = layer.epsilon ? `ε: ${layer.epsilon}` : '';
+        }
+
+        return `
+            <div class="card-layer-item${isOutput ? ' output-layer' : ''}">
+                <span class="card-drag-handle"><i class="fas fa-grip-vertical"></i></span>
+                ${badge}
+                <span class="card-layer-params">${params}</span>
+            </div>
+        `;
+    };
+
+    const renderPlaceholder = () => '<div class="card-layer-item empty-placeholder">&nbsp;</div>';
+
+    const buildTowerHtml = (layers, placeholderCount) => {
+        if (layers.length === 0) return '';
+
+        const result = [];
+        for (let i = 0; i < layers.length - 1; i++) {
+            result.push(renderLayer(layers[i], false));
+        }
+        for (let i = 0; i < placeholderCount; i++) {
+            result.push(renderPlaceholder());
+        }
+        result.push(renderLayer(layers[layers.length - 1], true));
+
+        return result.join('');
+    };
+
+    const buyerPlaceholders = maxLen - buyerLayers.length;
+    const productPlaceholders = maxLen - productLayers.length;
+
+    return {
+        buyer: buildTowerHtml(buyerLayers, buyerPlaceholders),
+        product: buildTowerHtml(productLayers, productPlaceholders)
+    };
+}
+
+function calculateSingleTowerParams(layers, inputDim = 100) {
+    let params = 0;
+    let prevDim = inputDim;
+    for (const layer of layers) {
+        if (layer.type === 'dense') {
+            params += prevDim * layer.units + layer.units;
+            prevDim = layer.units;
+        } else if (layer.type === 'batch_norm') {
+            params += prevDim * 4;
+        } else if (layer.type === 'layer_norm') {
+            params += prevDim * 2;
+        }
+    }
+    return params;
+}
 
 // =============================================================================
 // INITIALIZATION
@@ -1341,12 +1820,20 @@ function openNewExpWizard() {
 
     // Reset training params
     document.getElementById('wizardSplitStrategy').value = 'random';
-    document.getElementById('wizardSamplePercent').value = '100';
+    document.getElementById('wizardSamplePercentInput').value = '100';
+    document.querySelectorAll('.sample-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.value === '100');
+    });
     document.getElementById('wizardEpochs').value = '10';
     document.getElementById('wizardBatchSize').value = '4096';
     document.getElementById('wizardLearningRate').value = '0.1';
     document.getElementById('wizardTimeOptions').classList.add('hidden');
+    document.getElementById('wizardDateColumnSection').classList.add('hidden');
     document.getElementById('wizardRatingSection').classList.add('hidden');
+
+    // Reset example count
+    datasetEstimatedRows = null;
+    document.getElementById('wizardExampleCountValue').textContent = '--';
 
     document.getElementById('newExpWizardModal').classList.remove('hidden');
 }
@@ -1397,20 +1884,27 @@ function onWizardFeatureChange() {
     selectedFeatureConfig = allFeatureConfigs.find(fc => fc.id === fcId) || null;
 
     if (selectedFeatureConfig) {
-        // Show preview
+        // Show preview panel with loading state
         document.getElementById('wizardFeatureEmpty').classList.add('hidden');
         document.getElementById('wizardFeaturePreview').classList.remove('hidden');
+        document.getElementById('wizardFeatureLoading').classList.remove('hidden');
+        document.getElementById('wizardFeatureContent').classList.add('hidden');
 
-        document.getElementById('wizardFeatureName').textContent = selectedFeatureConfig.name;
-        document.getElementById('wizardFeatureDataset').textContent = `Dataset: ${selectedFeatureConfig.dataset_name || '-'}`;
-        document.getElementById('wizardBuyerDim').textContent = `${selectedFeatureConfig.buyer_tensor_dim || 0}D`;
-        document.getElementById('wizardProductDim').textContent = `${selectedFeatureConfig.product_tensor_dim || 0}D`;
-
-        // Feature lists (simplified - just show count)
-        const buyerCount = (selectedFeatureConfig.buyer_model_features || []).length;
-        const productCount = (selectedFeatureConfig.product_model_features || []).length;
-        document.getElementById('wizardBuyerFeatures').innerHTML = `<div>${buyerCount} feature(s)</div>`;
-        document.getElementById('wizardProductFeatures').innerHTML = `<div>${productCount} feature(s)</div>`;
+        // Fetch full feature config details
+        fetch(`/api/feature-configs/${fcId}/`)
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    renderWizardFeaturePreview(data.data);
+                }
+            })
+            .catch(err => {
+                console.error('Error loading feature config:', err);
+            })
+            .finally(() => {
+                document.getElementById('wizardFeatureLoading').classList.add('hidden');
+                document.getElementById('wizardFeatureContent').classList.remove('hidden');
+            });
 
         // Load date columns for time-based split
         loadWizardDateColumns(selectedFeatureConfig.dataset_id);
@@ -1422,49 +1916,130 @@ function onWizardFeatureChange() {
     updateWizardSummary();
 }
 
+function renderWizardFeaturePreview(config) {
+    // Update dataset name
+    document.getElementById('wizardFeatureDataset').textContent = config.dataset_name || '-';
+
+    // Build and insert dataset info HTML
+    const datasetInfoHtml = buildDatasetInfoHtml(config.dataset_info, config.dataset_name);
+    document.getElementById('wizardDatasetInfo').innerHTML = datasetInfoHtml;
+
+    // Calculate tensor breakdowns
+    const buyerResult = calculateTensorBreakdown(
+        config.buyer_model_features || [],
+        config.buyer_model_crosses || []
+    );
+    const productResult = calculateTensorBreakdown(
+        config.product_model_features || [],
+        config.product_model_crosses || []
+    );
+
+    // Update tensor dimensions
+    document.getElementById('wizardBuyerDim').textContent = `${buyerResult.total}D`;
+    document.getElementById('wizardProductDim').textContent = `${productResult.total}D`;
+
+    // Render feature lists
+    const buyerFeaturesHtml = buyerResult.breakdown.map(item => `
+        <div class="flex items-center justify-between text-sm">
+            <span class="${item.is_cross ? 'text-blue-600 italic' : 'text-blue-700'}">${item.name}</span>
+            <span class="text-blue-500 font-medium">${item.dim}D</span>
+        </div>
+    `).join('');
+    document.getElementById('wizardBuyerFeatures').innerHTML = buyerFeaturesHtml || '<div class="text-sm text-gray-400">No features</div>';
+
+    const productFeaturesHtml = productResult.breakdown.map(item => `
+        <div class="flex items-center justify-between text-sm">
+            <span class="${item.is_cross ? 'text-green-600 italic' : 'text-green-700'}">${item.name}</span>
+            <span class="text-green-500 font-medium">${item.dim}D</span>
+        </div>
+    `).join('');
+    document.getElementById('wizardProductFeatures').innerHTML = productFeaturesHtml || '<div class="text-sm text-gray-400">No features</div>';
+
+    // Render tensor bars with proportional widths
+    const maxTotal = Math.max(buyerResult.total || 0, productResult.total || 0);
+
+    setTimeout(() => {
+        const buyerBar = document.getElementById('wizardBuyerBar');
+        const productBar = document.getElementById('wizardProductBar');
+        if (buyerBar && buyerResult.breakdown.length > 0) {
+            renderWizardTensorPreview('buyer', buyerResult.total, buyerResult.breakdown, buyerBar, maxTotal);
+        }
+        if (productBar && productResult.breakdown.length > 0) {
+            renderWizardTensorPreview('product', productResult.total, productResult.breakdown, productBar, maxTotal);
+        }
+    }, 0);
+
+    // Store estimated rows for example count calculation
+    datasetEstimatedRows = config.dataset_info?.estimated_rows || null;
+    updateExampleCount();
+}
+
+function updateExampleCount() {
+    const samplePercent = parseInt(document.getElementById('wizardSamplePercentInput').value) || 100;
+    const countEl = document.getElementById('wizardExampleCountValue');
+
+    if (datasetEstimatedRows && datasetEstimatedRows > 0) {
+        const estimatedExamples = Math.round(datasetEstimatedRows * samplePercent / 100);
+        countEl.textContent = `~${estimatedExamples.toLocaleString()}`;
+    } else {
+        countEl.textContent = '--';
+    }
+}
+
+function setSamplePercent(value) {
+    // Update input
+    document.getElementById('wizardSamplePercentInput').value = value;
+
+    // Update button states
+    document.querySelectorAll('.sample-btn').forEach(btn => {
+        btn.classList.toggle('active', parseInt(btn.dataset.value) === value);
+    });
+
+    updateExampleCount();
+}
+
+function onSampleInputChange() {
+    let value = parseInt(document.getElementById('wizardSamplePercentInput').value) || 100;
+
+    // Clamp to valid range
+    value = Math.max(1, Math.min(100, value));
+    document.getElementById('wizardSamplePercentInput').value = value;
+
+    // Update button states (deactivate all if custom value)
+    const presetValues = [5, 10, 25, 100];
+    document.querySelectorAll('.sample-btn').forEach(btn => {
+        btn.classList.toggle('active', parseInt(btn.dataset.value) === value && presetValues.includes(value));
+    });
+
+    updateExampleCount();
+}
+
 function onWizardModelChange() {
     const mcId = parseInt(document.getElementById('wizardModelSelect').value);
     selectedModelConfig = allModelConfigs.find(mc => mc.id === mcId) || null;
 
     if (selectedModelConfig) {
-        // Show preview
+        // Show preview panel with loading state
         document.getElementById('wizardModelEmpty').classList.add('hidden');
         document.getElementById('wizardModelPreview').classList.remove('hidden');
+        document.getElementById('wizardModelLoading').classList.remove('hidden');
+        document.getElementById('wizardModelContent').classList.add('hidden');
 
-        document.getElementById('wizardModelName').textContent = selectedModelConfig.name;
-        document.getElementById('wizardModelType').textContent = selectedModelConfig.model_type_display || selectedModelConfig.model_type;
-
-        // Tower layers
-        const buyerLayers = selectedModelConfig.buyer_tower_layers || [];
-        const productLayers = selectedModelConfig.product_tower_layers || [];
-
-        document.getElementById('wizardBuyerTower').innerHTML = buyerLayers.map(l => `
-            <div><span class="layer-units">${l.units}</span> units · ${l.activation}</div>
-        `).join('') || '<div class="text-gray-400">No layers</div>';
-
-        document.getElementById('wizardProductTower').innerHTML = productLayers.map(l => `
-            <div><span class="layer-units">${l.units}</span> units · ${l.activation}</div>
-        `).join('') || '<div class="text-gray-400">No layers</div>';
-
-        // Params
-        document.getElementById('wizardModelParams').innerHTML = `
-            <div class="param-chip">
-                <span class="param-chip-label">Optimizer:</span>
-                <span class="param-chip-value">${selectedModelConfig.optimizer_display || selectedModelConfig.optimizer}</span>
-            </div>
-            <div class="param-chip">
-                <span class="param-chip-label">LR:</span>
-                <span class="param-chip-value">${selectedModelConfig.learning_rate}</span>
-            </div>
-            <div class="param-chip">
-                <span class="param-chip-label">Batch:</span>
-                <span class="param-chip-value">${selectedModelConfig.batch_size}</span>
-            </div>
-            <div class="param-chip">
-                <span class="param-chip-label">Output:</span>
-                <span class="param-chip-value">${selectedModelConfig.output_embedding_dim || 32}D</span>
-            </div>
-        `;
+        // Fetch full model config details
+        fetch(`/api/model-configs/${mcId}/`)
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    renderWizardModelPreview(data.data);
+                }
+            })
+            .catch(err => {
+                console.error('Error loading model config:', err);
+            })
+            .finally(() => {
+                document.getElementById('wizardModelLoading').classList.add('hidden');
+                document.getElementById('wizardModelContent').classList.remove('hidden');
+            });
 
         // Update training params from model config
         document.getElementById('wizardLearningRate').value = selectedModelConfig.learning_rate;
@@ -1487,13 +2062,78 @@ function onWizardModelChange() {
     updateWizardSummary();
 }
 
+function renderWizardModelPreview(mc) {
+    // Tower stacks - use detailed visualization with aligned layers
+    const buyerLayers = mc.buyer_tower_layers || [];
+    const productLayers = mc.product_tower_layers || [];
+    const towerHtml = renderCardTowerLayers(buyerLayers, productLayers);
+
+    document.getElementById('wizardBuyerStack').innerHTML = towerHtml.buyer;
+    document.getElementById('wizardProductStack').innerHTML = towerHtml.product;
+
+    // Per-tower parameter summaries
+    const buyerParams = calculateSingleTowerParams(buyerLayers);
+    const productParams = calculateSingleTowerParams(productLayers);
+    document.getElementById('wizardBuyerTotalParams').textContent = buyerParams.toLocaleString();
+    document.getElementById('wizardBuyerTrainableParams').textContent = buyerParams.toLocaleString();
+    document.getElementById('wizardProductTotalParams').textContent = productParams.toLocaleString();
+    document.getElementById('wizardProductTrainableParams').textContent = productParams.toLocaleString();
+
+    // Training parameters
+    document.getElementById('wizardModelParams').innerHTML = `
+        <div class="param-chip">
+            <span class="param-chip-label">Optimizer:</span>
+            <span class="param-chip-value">${mc.optimizer_display || mc.optimizer}</span>
+        </div>
+        <div class="param-chip">
+            <span class="param-chip-label">Learning Rate:</span>
+            <span class="param-chip-value">${mc.learning_rate}</span>
+        </div>
+        <div class="param-chip">
+            <span class="param-chip-label">Batch Size:</span>
+            <span class="param-chip-value">${mc.batch_size}</span>
+        </div>
+        <div class="param-chip">
+            <span class="param-chip-label">Output Dim:</span>
+            <span class="param-chip-value">${mc.output_embedding_dim || 32}D</span>
+        </div>
+    `;
+
+    // Retrieval algorithm section (for retrieval and multitask models)
+    const retrievalSection = document.getElementById('wizardRetrievalSection');
+    if (['retrieval', 'multitask'].includes(mc.model_type)) {
+        retrievalSection.classList.remove('hidden');
+        document.getElementById('wizardRetrievalParams').innerHTML = `
+            <div class="param-chip retrieval-algo">
+                <span class="param-chip-label">Algorithm:</span>
+                <span class="param-chip-value">${mc.retrieval_algorithm_display || 'Brute Force'}</span>
+            </div>
+            <div class="param-chip">
+                <span class="param-chip-label">Top-K:</span>
+                <span class="param-chip-value">${mc.top_k || 100}</span>
+            </div>
+            ${mc.retrieval_algorithm === 'scann' ? `
+            <div class="param-chip">
+                <span class="param-chip-label">Num Leaves:</span>
+                <span class="param-chip-value">${mc.scann_num_leaves || 100}</span>
+            </div>
+            <div class="param-chip">
+                <span class="param-chip-label">Leaves to Search:</span>
+                <span class="param-chip-value">${mc.scann_leaves_to_search || 10}</span>
+            </div>
+            ` : ''}
+        `;
+    } else {
+        retrievalSection.classList.add('hidden');
+    }
+}
+
 function onWizardSplitChange() {
     const strategy = document.getElementById('wizardSplitStrategy').value;
-    if (strategy === 'time_holdout' || strategy === 'strict_time') {
-        document.getElementById('wizardTimeOptions').classList.remove('hidden');
-    } else {
-        document.getElementById('wizardTimeOptions').classList.add('hidden');
-    }
+    const isTimeBased = strategy === 'time_holdout' || strategy === 'strict_time';
+
+    document.getElementById('wizardTimeOptions').classList.toggle('hidden', !isTimeBased);
+    document.getElementById('wizardDateColumnSection').classList.toggle('hidden', !isTimeBased);
 }
 
 async function loadWizardDateColumns(datasetId) {
@@ -1617,7 +2257,7 @@ async function submitExperiment() {
     const payload = {
         model_config_id: selectedModelConfig.id,
         split_strategy: splitStrategy,
-        data_sample_percent: parseInt(document.getElementById('wizardSamplePercent').value),
+        data_sample_percent: parseInt(document.getElementById('wizardSamplePercentInput').value) || 100,
         holdout_days: parseInt(document.getElementById('wizardHoldoutDays').value) || 1,
         date_column: dateColumn,
         epochs: parseInt(document.getElementById('wizardEpochs').value),

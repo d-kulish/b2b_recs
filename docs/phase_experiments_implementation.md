@@ -23,9 +23,10 @@ This document provides a **complete implementation guide** for building the Expe
 12. [Phase 7: Pre-built Docker Image](#phase-7-pre-built-docker-image-for-fast-cloud-build)
 13. [Phase 8: TFX Pipeline Bug Fixes](#phase-8-tfx-pipeline-bug-fixes-december-2025)
 14. [Phase 9: Experiments UI Refactor](#phase-9-experiments-ui-refactor-december-2025)
-15. [File Reference](#file-reference)
-16. [API Reference](#api-reference)
-17. [Testing Guide](#testing-guide)
+15. [Phase 10: Wizard Config Previews](#phase-10-wizard-config-previews-december-2025)
+16. [File Reference](#file-reference)
+17. [API Reference](#api-reference)
+18. [Testing Guide](#testing-guide)
 
 ---
 
@@ -79,6 +80,7 @@ Experiments Page = Analyze Quick Test results to find optimal parameters
 | **Phase 7** | ✅ Complete | Pre-built Docker Image for fast Cloud Build execution |
 | **Phase 8** | ✅ Complete | TFX Pipeline Bug Fixes (embedding shapes, dataset serialization, model saving) |
 | **Phase 9** | ✅ Complete | Experiments UI Refactor (new chapter layout, wizard modal, experiment cards, pagination) |
+| **Phase 10** | ✅ Complete | Wizard Config Previews (rich Feature/Model config previews, compact data sampling UI) |
 
 ### Cloud Build Implementation (December 2025)
 
@@ -222,8 +224,9 @@ Django (Python 3.13)
 
 1. **Phase 5**: Implement per-epoch metrics charts and comparison table
 2. **Phase 6**: Deploy MLflow server to Cloud Run, integrate tracking
-3. **Metrics extraction**: Parse training metrics from Vertex AI logs or Trainer output
-4. **Quick Test results display**: Show training metrics in UI after pipeline completion
+3. **Split Strategy Review**: Simplify or enhance time-based split UI (currently confusing)
+4. **Metrics extraction**: Parse training metrics from Vertex AI logs or Trainer output
+5. **Quick Test results display**: Show training metrics in UI after pipeline completion
 
 ---
 
@@ -3168,6 +3171,104 @@ def model_experiments(request, model_id):
 **Footer Buttons:**
 - Blue square navigation buttons (`btn-neu-nav`) in footer-left
 - Green "Run" button (`btn-neu-save`) and red "Cancel" button (`btn-neu-cancel`) in footer-right
+
+---
+
+## Phase 10: Wizard Config Previews (December 2025)
+
+This phase enhances the New Experiment wizard with rich config previews, reusing the View modal functionality from the Model Configs page.
+
+### Overview
+
+**Problem:** The wizard showed minimal information when selecting Feature Config and Model Config, making it hard for users to understand what they're selecting.
+
+**Solution:**
+1. Fetch full config details via API when selection changes
+2. Render rich previews matching the "View" modal from Model Configs page
+3. Redesign Data Sampling section to be compact and informative
+
+### Feature Config Preview
+
+When a feature config is selected:
+- Fetches full details from `/api/feature-configs/{id}/`
+- Displays:
+  - Dataset name + Dataset Source panel (tables, filters, row count)
+  - Buyer Tensor breakdown with colored bar and feature list
+  - Product Tensor breakdown with colored bar and feature list
+
+**Reused Functions from model_configs.html:**
+- `buildDatasetInfoHtml()` - Dataset source panel
+- `calculateTensorBreakdown()` - Tensor dimension calculation
+- `getFeatureDisplayInfo()` - Feature dimension info
+- `getCrossFeatureNames()` - Cross feature names
+
+### Model Config Preview
+
+When a model config is selected:
+- Fetches full details from `/api/model-configs/{id}/`
+- Displays:
+  - Tower Architecture (Buyer Tower + Product Tower side by side)
+  - Layer badges (DENSE, DROPOUT, BATCHNORM, LAYERNORM)
+  - Per-tower parameter summaries (Total params, Trainable, Non-trainable)
+  - Training Parameters (Optimizer, LR, Batch Size, Output Dim)
+  - Retrieval Algorithm section (for retrieval/multitask models)
+
+**Reused Functions:**
+- `renderCardTowerLayers()` - Render tower layers with badges
+- `calculateSingleTowerParams()` - Calculate per-tower params
+
+### Data Sampling Redesign
+
+**Before:** Full-width section with wasteful grid layout
+
+**After:** Compact single-line layout:
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│ 🗄 Sample:  [5%] [10%] [25%] [100%]  or  [___]%      ~3,246 examples    │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+**Features:**
+- Quick-select buttons (5%, 10%, 25%, 100%)
+- Manual input field (1-100%)
+- Real-time example count based on dataset's `estimated_rows`
+- Label changed from "rows" to "examples"
+
+### Files Modified
+
+| File | Changes |
+|------|---------|
+| `model_configs.html` | Fixed datasets API URL (`/api/models/.../configs/datasets/`) |
+| `model_experiments.html` | Added rich config previews, compact data sampling UI |
+
+### CSS Added (model_experiments.html)
+
+- `.tower-visual`, `.tower-visual-aligned` - Tower grid layout
+- `.tower-stack.buyer/.product/.ranking` - Tower containers with dashed borders
+- `.card-layer-item`, `.card-layer-badge` - Layer styling
+- `.tower-params-summary`, `.params-row` - Keras-style param summary
+- `.tensor-breakdown-bar`, `.tensor-breakdown-segment` - Colored tensor bars
+- `.sample-btn`, `.sample-btn.active` - Sample percent buttons
+
+### JavaScript Functions Added
+
+**Feature Config:**
+- `renderWizardFeaturePreview(config)` - Main render function
+- `renderWizardTensorPreview()` - Render tensor bars
+
+**Model Config:**
+- `renderWizardModelPreview(mc)` - Main render function
+- `renderCardTowerLayers()` - Render tower layers with badges
+- `calculateSingleTowerParams()` - Calculate per-tower params
+
+**Data Sampling:**
+- `setSamplePercent(value)` - Set from quick-select buttons
+- `onSampleInputChange()` - Handle manual input
+- `updateExampleCount()` - Calculate and display example count
+
+### Bug Fixes
+
+1. **Dataset loading error in model_configs.html**: Changed URL from `/api/models/${modelId}/modeling/datasets/` to `/api/models/${modelId}/configs/datasets/` (the correct endpoint)
 
 ---
 

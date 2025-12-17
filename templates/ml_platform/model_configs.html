@@ -5139,7 +5139,7 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function loadDatasets() {
-    fetch(`/api/models/${modelId}/modeling/datasets/`)
+    fetch(`/api/models/${modelId}/configs/datasets/`)
         .then(r => r.json())
         .then(data => {
             if (data.success) {

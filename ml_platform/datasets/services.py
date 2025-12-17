@@ -1292,22 +1292,21 @@ class BigQueryService:
     WHERE {date_column} < DATE_SUB(CURRENT_DATE(), INTERVAL {holdout_days} DAY)"""
 
         elif strategy == 'strict_time':
-            # True temporal split with 'split' column based on date ranges
+            # True temporal split - exclude test period completely
             # Timeline (days ago from today):
             #   |<-- train_days -->|<-- val_days -->|<-- test_days -->| TODAY
             #   ^                  ^                ^                 ^
             #   total_window    val+test          test_days          0
-            #   (train start)  (eval start)     (test start)
+            #   (window start)  (excluded)       (excluded)
+            #
+            # SQL returns only the train+val window (oldest data)
+            # Test period is completely excluded from training
+            # TFX does hash-based 80/20 split within this window for train/eval
             total_window = train_days + val_days + test_days
-            val_start = val_days + test_days
-            return f"""    SELECT *,
-        CASE
-            WHEN {date_column} < DATE_SUB(CURRENT_DATE(), INTERVAL {val_start} DAY) THEN 'train'
-            WHEN {date_column} < DATE_SUB(CURRENT_DATE(), INTERVAL {test_days} DAY) THEN 'eval'
-            ELSE 'test'
-        END AS split
+            return f"""    SELECT *
     FROM {source_table}
-    WHERE {date_column} >= DATE_SUB(CURRENT_DATE(), INTERVAL {total_window} DAY)"""
+    WHERE {date_column} >= DATE_SUB(CURRENT_DATE(), INTERVAL {total_window} DAY)
+      AND {date_column} < DATE_SUB(CURRENT_DATE(), INTERVAL {test_days} DAY)"""
 
         else:
             # Random - no holdout filter

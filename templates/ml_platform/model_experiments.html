@@ -928,10 +928,119 @@
         font-weight: 600;
         color: #111827;
     }
+
+    /* =========================================================================
+       Toast Notification Styles
+       ========================================================================= */
+    .toast-container {
+        position: fixed;
+        top: 24px;
+        right: 24px;
+        z-index: 9999;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        pointer-events: none;
+    }
+    .toast {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 16px 20px;
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15), 0 2px 10px rgba(0, 0, 0, 0.1);
+        pointer-events: auto;
+        animation: toastSlideIn 0.3s ease-out;
+        max-width: 400px;
+        border-left: 4px solid;
+    }
+    .toast.success {
+        border-left-color: #10b981;
+    }
+    .toast.error {
+        border-left-color: #ef4444;
+    }
+    .toast-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+    .toast.success .toast-icon {
+        background: linear-gradient(135deg, #10b981 0%, #34d399 100%);
+        color: white;
+    }
+    .toast.error .toast-icon {
+        background: linear-gradient(135deg, #ef4444 0%, #f87171 100%);
+        color: white;
+    }
+    .toast-content {
+        flex: 1;
+        min-width: 0;
+    }
+    .toast-title {
+        font-size: 14px;
+        font-weight: 600;
+        color: #111827;
+        margin-bottom: 2px;
+    }
+    .toast-message {
+        font-size: 13px;
+        color: #6b7280;
+        line-height: 1.4;
+    }
+    .toast-close {
+        width: 28px;
+        height: 28px;
+        border-radius: 6px;
+        border: none;
+        background: transparent;
+        color: #9ca3af;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        transition: all 0.15s ease;
+    }
+    .toast-close:hover {
+        background: #f3f4f6;
+        color: #374151;
+    }
+    @keyframes toastSlideIn {
+        from {
+            opacity: 0;
+            transform: translateX(100%);
+        }
+        to {
+            opacity: 1;
+            transform: translateX(0);
+        }
+    }
+    @keyframes toastSlideOut {
+        from {
+            opacity: 1;
+            transform: translateX(0);
+        }
+        to {
+            opacity: 0;
+            transform: translateX(100%);
+        }
+    }
+    .toast.hiding {
+        animation: toastSlideOut 0.2s ease-in forwards;
+    }
 </style>
 {% endblock %}
 
 {% block model_content %}
+<!-- Toast Notification Container -->
+<div id="toastContainer" class="toast-container"></div>
+
 <div class="space-y-6">
 
     <!-- Quick Test Chapter -->
@@ -3162,12 +3271,49 @@ function getCookie(name) {
     return cookieValue;
 }
 
+function showToast(type, title, message) {
+    const container = document.getElementById('toastContainer');
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+
+    const icon = type === 'success' ? 'fa-check' : 'fa-exclamation-triangle';
+
+    toast.innerHTML = `
+        <div class="toast-icon">
+            <i class="fas ${icon}"></i>
+        </div>
+        <div class="toast-content">
+            <div class="toast-title">${title}</div>
+            <div class="toast-message">${message}</div>
+        </div>
+        <button class="toast-close" onclick="closeToast(this)">
+            <i class="fas fa-times"></i>
+        </button>
+    `;
+
+    container.appendChild(toast);
+
+    // Auto-remove after 5 seconds
+    setTimeout(() => {
+        if (toast.parentNode) {
+            toast.classList.add('hiding');
+            setTimeout(() => toast.remove(), 200);
+        }
+    }, 5000);
+}
+
+function closeToast(btn) {
+    const toast = btn.closest('.toast');
+    toast.classList.add('hiding');
+    setTimeout(() => toast.remove(), 200);
+}
+
 function showError(message) {
-    alert('Error: ' + message);
+    showToast('error', 'Error', message);
 }
 
 function showSuccess(message) {
-    alert(message);
+    showToast('success', 'Success', message);
 }
 </script>
 {% endblock %}

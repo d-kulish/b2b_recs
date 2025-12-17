@@ -1161,7 +1161,10 @@ class BigQueryService:
         split_strategy: str = 'random',
         holdout_days: int = 1,
         date_column: str = None,
-        sample_percent: int = 100
+        sample_percent: int = 100,
+        train_days: int = 60,
+        val_days: int = 7,
+        test_days: int = 7,
     ) -> str:
         """
         Generate BigQuery SQL for training with split strategy and sampling.
@@ -1173,9 +1176,12 @@ class BigQueryService:
         Args:
             dataset: Dataset model instance
             split_strategy: 'random', 'time_holdout', or 'strict_time'
-            holdout_days: Days to exclude from training (for time_holdout/strict_time)
+            holdout_days: Days to exclude from training (for time_holdout)
             date_column: Column name for temporal split (required for time-based strategies)
             sample_percent: Percentage of data to use (5, 10, 25, 100)
+            train_days: Number of days for training data (strict_time only)
+            val_days: Number of days for validation data (strict_time only)
+            test_days: Number of days for test data - held out (strict_time only)
 
         Returns:
             SQL query string with holdout and sampling applied
@@ -1217,7 +1223,10 @@ class BigQueryService:
                     source_table=current_source,
                     date_column=date_column,
                     holdout_days=holdout_days,
-                    strategy=split_strategy
+                    strategy=split_strategy,
+                    train_days=train_days,
+                    val_days=val_days,
+                    test_days=test_days,
                 )
                 query_parts[0] += f",\nholdout_filtered AS (\n{holdout_cte}\n)"
                 current_source = 'holdout_filtered'
@@ -1245,7 +1254,10 @@ class BigQueryService:
         source_table: str,
         date_column: str,
         holdout_days: int,
-        strategy: str
+        strategy: str,
+        train_days: int = 60,
+        val_days: int = 7,
+        test_days: int = 7,
     ) -> str:
         """
         Generate CTE for holdout filtering based on date column.
@@ -1253,8 +1265,11 @@ class BigQueryService:
         Args:
             source_table: Source CTE or table name
             date_column: Column name containing dates
-            holdout_days: Number of days to exclude
+            holdout_days: Number of days to exclude (for time_holdout)
             strategy: 'time_holdout' or 'strict_time'
+            train_days: Number of days for training data (strict_time only)
+            val_days: Number of days for validation data (strict_time only)
+            test_days: Number of days for test data - held out (strict_time only)
 
         Returns:
             SQL for the holdout CTE body (without the AS wrapper)
@@ -1264,8 +1279,11 @@ class BigQueryService:
             Train+Val use all data before holdout, TFX does random train/val split.
 
         For strict_time:
-            More complex temporal split - requires multiple date ranges.
-            (Full implementation would need train/val/test date boundaries)
+            True temporal split with data ordered by time:
+            - Train: from (train_days + val_days + test_days) ago to (val_days + test_days) ago
+            - Eval: from (val_days + test_days) ago to (test_days) ago
+            - Test: last test_days (completely excluded from query)
+            Adds a 'split' column for TFX to use with partition_feature_name.
         """
         if strategy == 'time_holdout':
             # Simple holdout: exclude last N days
@@ -1274,12 +1292,22 @@ class BigQueryService:
     WHERE {date_column} < DATE_SUB(CURRENT_DATE(), INTERVAL {holdout_days} DAY)"""
 
         elif strategy == 'strict_time':
-            # Strict temporal: more complex split
-            # For now, treat same as time_holdout
-            # Full implementation would compute date boundaries for train/val/test
-            return f"""    SELECT *
+            # True temporal split with 'split' column based on date ranges
+            # Timeline (days ago from today):
+            #   |<-- train_days -->|<-- val_days -->|<-- test_days -->| TODAY
+            #   ^                  ^                ^                 ^
+            #   total_window    val+test          test_days          0
+            #   (train start)  (eval start)     (excluded)
+            total_window = train_days + val_days + test_days
+            val_start = val_days + test_days
+            return f"""    SELECT *,
+        CASE
+            WHEN {date_column} < DATE_SUB(CURRENT_DATE(), INTERVAL {val_start} DAY) THEN 'train'
+            ELSE 'eval'
+        END AS split
     FROM {source_table}
-    WHERE {date_column} < DATE_SUB(CURRENT_DATE(), INTERVAL {holdout_days} DAY)"""
+    WHERE {date_column} >= DATE_SUB(CURRENT_DATE(), INTERVAL {total_window} DAY)
+      AND {date_column} < DATE_SUB(CURRENT_DATE(), INTERVAL {test_days} DAY)"""
 
         else:
             # Random - no holdout filter

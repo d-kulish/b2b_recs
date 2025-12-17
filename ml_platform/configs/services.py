@@ -2353,6 +2353,27 @@ def _format_date_filter_summary(date_filter: dict) -> Optional[str]:
     return None
 
 
+def _get_date_filter_days(date_filter: dict) -> Optional[int]:
+    """
+    Extract the number of days from a date filter for split strategy calculations.
+
+    Args:
+        date_filter: Date filter from summary_snapshot.filters_applied.dates
+
+    Returns:
+        Number of days in the dataset, or None if not determinable
+    """
+    if not date_filter:
+        return None
+
+    filter_type = date_filter.get('type')
+
+    if filter_type == 'rolling':
+        return date_filter.get('days')
+
+    return None
+
+
 def _format_customer_filter_summary(customer_filter: dict) -> Optional[str]:
     """
     Format customer filters as summary text for View modal display.
@@ -2490,6 +2511,9 @@ def get_dataset_info_for_view(dataset) -> Dict[str, Any]:
             'customers': _format_customer_filter_summary(filters_applied.get('customers')),
             'products': _format_product_filter_summary(filters_applied.get('products')),
         },
+
+        # Raw date days for split strategy calculations
+        'date_days': _get_date_filter_days(filters_applied.get('dates')),
 
         # Estimates
         'estimated_rows': snapshot.get('total_rows'),

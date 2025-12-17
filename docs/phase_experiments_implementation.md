@@ -176,9 +176,14 @@ Django (Python 3.13)
 1. **Cloud Build for TFX Compilation**: Required because TFX needs Python 3.10, Django runs on 3.13
 
 2. **Split Strategies**:
-   - `random` (default): Hash-based split for fastest iteration
-   - `time_holdout`: Days 0-29 train/val (random), day 30 test
-   - `strict_time`: Full temporal ordering (train < val < test)
+   - `random` (default): Hash-based 80/20 split for fastest iteration
+   - `time_holdout`: Excludes last N days from training, remaining data uses hash-based 80/20 split
+   - `strict_time`: **True temporal split** - Train/Val/Test periods determined by date ranges:
+     - Train: oldest data (configurable days, default 80% of dataset)
+     - Validation: middle data (configurable days, default 15% of dataset)
+     - Test: newest data (held out completely, default 5% of dataset)
+     - SQL generates a `split` column based on date ranges
+     - TFX uses `partition_feature_name="split"` to route data (no random mixing)
 
 3. **Sampling**: Applied after holdout filter to preserve test set integrity
 
@@ -224,9 +229,8 @@ Django (Python 3.13)
 
 1. **Phase 5**: Implement per-epoch metrics charts and comparison table
 2. **Phase 6**: Deploy MLflow server to Cloud Run, integrate tracking
-3. **Split Strategy Review**: Simplify or enhance time-based split UI (currently confusing)
-4. **Metrics extraction**: Parse training metrics from Vertex AI logs or Trainer output
-5. **Quick Test results display**: Show training metrics in UI after pipeline completion
+3. **Metrics extraction**: Parse training metrics from Vertex AI logs or Trainer output
+4. **Quick Test results display**: Show training metrics in UI after pipeline completion
 
 ---
 
@@ -675,95 +679,46 @@ def _apply_sampling_to_query(query: str, sample_percent: int) -> str:
     return sampled_query
 
 
-def _build_split_config(
-    split_strategy: str,
-    train_ratio: float,
-    time_split_column: Optional[str] = None
-) -> example_gen_pb2.Output:
+def _build_split_config(split_strategy: str) -> example_gen_pb2.Output:
     """
     Build ExampleGen output configuration for train/eval split.
 
     Supports three strategies:
-    - random: Hash-based random split (default TFX behavior)
-    - time_based: Split by time column (requires time_split_column)
-    - custom: User-defined ratio
+    - random: Hash-based 80/20 split (default TFX behavior)
+    - time_holdout: Date-filtered data with hash-based 80/20 split
+    - strict_time: True temporal split using partition_feature_name
 
     Args:
-        split_strategy: 'random', 'time_based', or 'custom'
-        train_ratio: Fraction for training (e.g., 0.8)
-        time_split_column: Column name for time-based split
+        split_strategy: 'random', 'time_holdout', or 'strict_time'
 
     Returns:
         example_gen_pb2.Output configuration
     """
 
-    if split_strategy == 'random':
-        # Hash-based split using TFX default
-        # Calculate hash buckets based on ratio
-        # e.g., 80/20 split = 8 train buckets, 2 eval buckets
-        total_buckets = 10
-        train_buckets = int(train_ratio * total_buckets)
-        eval_buckets = total_buckets - train_buckets
-
+    if split_strategy == 'strict_time':
+        # True temporal split: SQL query adds a 'split' column with values
+        # 'train' or 'eval' based on date ranges. TFX uses this column
+        # to route data to the correct split (no random mixing).
         return example_gen_pb2.Output(
             split_config=example_gen_pb2.SplitConfig(
                 splits=[
-                    example_gen_pb2.SplitConfig.Split(
-                        name='train',
-                        hash_buckets=train_buckets
-                    ),
-                    example_gen_pb2.SplitConfig.Split(
-                        name='eval',
-                        hash_buckets=eval_buckets
-                    ),
-                ]
+                    example_gen_pb2.SplitConfig.Split(name='train'),
+                    example_gen_pb2.SplitConfig.Split(name='eval'),
+                ],
+                partition_feature_name='split'  # Use SQL-computed column
             )
         )
-
-    elif split_strategy == 'time_based':
-        # Time-based split requires custom handling
-        # TFX doesn't have built-in time-based split, so we handle this
-        # in the query itself or use a custom ExampleGen
-        # For now, use partition_feature_name if available
-        if time_split_column:
-            return example_gen_pb2.Output(
-                split_config=example_gen_pb2.SplitConfig(
-                    splits=[
-                        example_gen_pb2.SplitConfig.Split(name='train', hash_buckets=8),
-                        example_gen_pb2.SplitConfig.Split(name='eval', hash_buckets=2),
-                    ],
-                    # Note: For true time-based split, modify the SQL query
-                    # to add a partition column based on date
-                )
-            )
-        else:
-            # Fallback to random if no time column specified
-            return _build_split_config('random', train_ratio, None)
-
-    elif split_strategy == 'custom':
-        # Custom ratio - use hash buckets to approximate
-        # Calculate closest integer ratio
-        total_buckets = 100  # Higher precision
-        train_buckets = int(train_ratio * total_buckets)
-        eval_buckets = total_buckets - train_buckets
-
-        return example_gen_pb2.Output(
-            split_config=example_gen_pb2.SplitConfig(
-                splits=[
-                    example_gen_pb2.SplitConfig.Split(
-                        name='train',
-                        hash_buckets=train_buckets
-                    ),
-                    example_gen_pb2.SplitConfig.Split(
-                        name='eval',
-                        hash_buckets=eval_buckets
-                    ),
-                ]
-            )
-        )
-
     else:
-        raise ValueError(f"Unknown split_strategy: {split_strategy}")
+        # Hash-based 80/20 split for 'random' and 'time_holdout' strategies
+        # For time_holdout, the SQL query already filters out holdout days
+        return example_gen_pb2.Output(
+            split_config=example_gen_pb2.SplitConfig(
+                splits=[
+                    example_gen_pb2.SplitConfig.Split(name='train', hash_buckets=8),
+                    example_gen_pb2.SplitConfig.Split(name='eval', hash_buckets=2),
+                ]
+            )
+        )
 
 
 def compile_pipeline_for_vertex(

@@ -30,7 +30,7 @@ This document provides **high-level specifications** for the Experiments domain.
 | TensorBoard | **NOT USED** (too expensive) - custom visualizations |
 | Pipeline Compilation | On-demand at submission time |
 | Sampling | TFX-level (ExampleGen/Transform) |
-| Train/Val Split | All 3 options: random, time-based, custom |
+| Train/Val Split | 3 options: random (hash-based), time_holdout (date-filtered + hash), strict_time (true temporal) |
 | Model Type (Phase 1) | Retrieval only |
 
 ---
@@ -907,13 +907,17 @@ MLFLOW_TRACKING_URI = os.environ.get('MLFLOW_TRACKING_URI', 'http://mlflow-serve
 ### Phase 3: Experiment Parameters & Submission ✅ DONE
 - [x] Add new fields to `QuickTest` model:
   - `sample_percent` (5, 10, 25, 100)
-  - `split_strategy` (random, time_based, custom)
-  - `train_ratio` (0.5-0.95)
-  - `time_split_column`
+  - `split_strategy` (random, time_holdout, strict_time)
+  - `date_column` (for time-based strategies)
+  - `holdout_days` (for time_holdout)
+  - `train_days`, `val_days`, `test_days` (for strict_time)
 - [x] Update API endpoint to accept new parameters
-- [x] Update UI to show parameter configuration
+- [x] Update UI to show parameter configuration with dynamic defaults
 - [x] Implement sampling in SQL query
-- [x] Implement split configuration in ExampleGen
+- [x] Implement split configuration in ExampleGen:
+  - `random`: Hash-based 80/20 split
+  - `time_holdout`: Date-filtered + hash-based 80/20 split
+  - `strict_time`: True temporal split using SQL `split` column + `partition_feature_name`
 
 ### Phase 4: Pipeline Visualization UI ✅ DONE
 - [x] Create pipeline DAG component (like Vertex AI console)

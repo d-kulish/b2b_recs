@@ -1567,6 +1567,20 @@ class QuickTest(models.Model):
         help_text="Column name for temporal split (required for time-based strategies)"
     )
 
+    # For strict_time rolling window
+    train_days = models.IntegerField(
+        default=60,
+        help_text="Number of days for training data (strict_time strategy)"
+    )
+    val_days = models.IntegerField(
+        default=7,
+        help_text="Number of days for validation data (strict_time strategy)"
+    )
+    test_days = models.IntegerField(
+        default=7,
+        help_text="Number of days for test data (strict_time strategy)"
+    )
+
     # Training hyperparameters
     epochs = models.IntegerField(
         default=10,

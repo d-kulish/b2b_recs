@@ -99,6 +99,9 @@ class ExperimentService:
         epochs: int = None,
         batch_size: int = None,
         learning_rate: float = None,
+        train_days: int = 60,
+        val_days: int = 7,
+        test_days: int = 7,
     ):
         """
         Submit a new Quick Test pipeline to Vertex AI.
@@ -114,6 +117,9 @@ class ExperimentService:
             epochs: Override ModelConfig epochs
             batch_size: Override ModelConfig batch_size
             learning_rate: Override ModelConfig learning_rate
+            train_days: Number of days for training data (strict_time)
+            val_days: Number of days for validation data (strict_time)
+            test_days: Number of days for test data - held out (strict_time)
 
         Returns:
             QuickTest instance
@@ -132,6 +138,9 @@ class ExperimentService:
             epochs=epochs or model_config.epochs,
             batch_size=batch_size or model_config.batch_size,
             learning_rate=learning_rate or model_config.learning_rate,
+            train_days=train_days,
+            val_days=val_days,
+            test_days=test_days,
             status=QuickTest.STATUS_SUBMITTING,
         )
         # Assign sequential experiment number before saving
@@ -192,7 +201,10 @@ class ExperimentService:
             split_strategy=quick_test.split_strategy,
             holdout_days=quick_test.holdout_days,
             date_column=quick_test.date_column,
-            sample_percent=quick_test.data_sample_percent
+            sample_percent=quick_test.data_sample_percent,
+            train_days=quick_test.train_days,
+            val_days=quick_test.val_days,
+            test_days=quick_test.test_days,
         )
 
         # 4. Create unique paths for this run
@@ -290,6 +302,7 @@ class ExperimentService:
             epochs=quick_test.epochs,
             batch_size=quick_test.batch_size,
             learning_rate=quick_test.learning_rate,
+            split_strategy=quick_test.split_strategy,
         )
 
         logger.info(f"Cloud Build triggered: {build_id}")
@@ -320,6 +333,7 @@ class ExperimentService:
         epochs: int,
         batch_size: int,
         learning_rate: float,
+        split_strategy: str = 'random',
     ) -> str:
         """
         Trigger Cloud Build to compile and submit TFX pipeline.
@@ -333,6 +347,7 @@ class ExperimentService:
             epochs: Training epochs
             batch_size: Batch size
             learning_rate: Learning rate
+            split_strategy: Split strategy ('random', 'time_holdout', 'strict_time')
 
         Returns:
             Cloud Build build ID
@@ -388,6 +403,7 @@ python /tmp/compile_and_submit.py \
     --epochs="{epochs}" \
     --batch-size="{batch_size}" \
     --learning-rate="{learning_rate}" \
+    --split-strategy="{split_strategy}" \
     --project-id="{self.project_id}" \
     --region="{self.REGION}"
 '''
@@ -435,6 +451,7 @@ def create_tfx_pipeline(
     epochs: int = 10,
     batch_size: int = 4096,
     learning_rate: float = 0.001,
+    split_strategy: str = 'random',
     train_steps: Optional[int] = None,
     eval_steps: Optional[int] = None,
 ):
@@ -443,16 +460,33 @@ def create_tfx_pipeline(
     from tfx.proto import example_gen_pb2, trainer_pb2
     from tfx.orchestration import pipeline as tfx_pipeline
 
-    logger.info(f"Creating TFX pipeline: {pipeline_name}")
+    logger.info(f"Creating TFX pipeline: {pipeline_name}, split_strategy={split_strategy}")
 
-    output_config = example_gen_pb2.Output(
-        split_config=example_gen_pb2.SplitConfig(
-            splits=[
-                example_gen_pb2.SplitConfig.Split(name="train", hash_buckets=8),
-                example_gen_pb2.SplitConfig.Split(name="eval", hash_buckets=2),
-            ]
+    # Configure split based on strategy
+    if split_strategy == 'strict_time':
+        # Use partition_feature_name to split by the 'split' column generated in SQL
+        # The SQL query adds a 'split' column with values 'train' or 'eval' based on date
+        logger.info("Using temporal split with partition_feature_name='split'")
+        output_config = example_gen_pb2.Output(
+            split_config=example_gen_pb2.SplitConfig(
+                splits=[
+                    example_gen_pb2.SplitConfig.Split(name="train"),
+                    example_gen_pb2.SplitConfig.Split(name="eval"),
+                ],
+                partition_feature_name="split"
+            )
         )
-    )
+    else:
+        # Random hash-based split (80/20) for 'random' and 'time_holdout' strategies
+        logger.info("Using hash-based 80/20 split")
+        output_config = example_gen_pb2.Output(
+            split_config=example_gen_pb2.SplitConfig(
+                splits=[
+                    example_gen_pb2.SplitConfig.Split(name="train", hash_buckets=8),
+                    example_gen_pb2.SplitConfig.Split(name="eval", hash_buckets=2),
+                ]
+            )
+        )
 
     # Configure BigQueryExampleGen with explicit project to avoid using Vertex AI's internal ADC project
     logger.info(f"BigQueryExampleGen configured with project={project_id}")
@@ -561,6 +595,7 @@ def main():
     parser.add_argument("--epochs", type=int, default=10)
     parser.add_argument("--batch-size", type=int, default=4096)
     parser.add_argument("--learning-rate", type=float, default=0.001)
+    parser.add_argument("--split-strategy", default="random", help="Split strategy: random, time_holdout, strict_time")
     parser.add_argument("--project-id", required=True)
     parser.add_argument("--region", default="europe-central2")
     args = parser.parse_args()
@@ -583,6 +618,7 @@ def main():
                 epochs=args.epochs,
                 batch_size=args.batch_size,
                 learning_rate=args.learning_rate,
+                split_strategy=args.split_strategy,
             )
             compile_pipeline(pipeline, pipeline_file, project_id=args.project_id)
             display_name = f"quicktest-{args.run_id}"

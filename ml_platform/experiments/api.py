@@ -111,6 +111,10 @@ def start_quick_test(request, feature_config_id):
             'epochs': data.get('epochs', model_config.epochs),
             'batch_size': data.get('batch_size', model_config.batch_size),
             'learning_rate': data.get('learning_rate', model_config.learning_rate),
+            # Rolling window parameters for strict_time
+            'train_days': data.get('train_days', 60),
+            'val_days': data.get('val_days', 7),
+            'test_days': data.get('test_days', 7),
         }
 
         # Validate split strategy requires date column
@@ -386,11 +390,15 @@ def get_date_columns(request, dataset_id):
     {
         "success": true,
         "date_columns": [
-            {"name": "trans_date", "type": "TIMESTAMP"},
-            {"name": "event_date", "type": "DATE"},
+            {"name": "trans_date", "type": "DATE", "primary": true},
+            {"name": "event_date", "type": "TIMESTAMP", "primary": false},
             ...
         ]
     }
+
+    The primary date column is determined from the dataset's filter configuration
+    (summary_snapshot.filters_applied.dates.column). Additional date columns are
+    found from the summary_snapshot.column_stats.
     """
     try:
         model_endpoint = _get_model_endpoint(request)
@@ -411,27 +419,49 @@ def get_date_columns(request, dataset_id):
                 'error': f'Dataset {dataset_id} not found'
             }, status=404)
 
-        # Get date/timestamp columns from dataset's selected columns and stats
         date_columns = []
-        column_stats = dataset.column_stats or {}
-        selected_columns = dataset.selected_columns or {}
-
-        # Date types in BigQuery
         date_types = {'TIMESTAMP', 'DATETIME', 'DATE'}
+        seen_columns = set()
 
-        for table, columns in selected_columns.items():
-            for col in columns:
-                # Check column type from stats
-                stats_key = f"{table}.{col}" if '.' not in col else col
-                col_stats = column_stats.get(stats_key, {})
-                col_type = col_stats.get('type', '').upper()
+        # 1. Primary source: dataset.filters['history']['timestamp_column']
+        # This is the actual configuration used to generate the dataset query
+        filters = dataset.filters or {}
+        history_config = filters.get('history', {})
+        timestamp_column = history_config.get('timestamp_column', '')
 
-                if col_type in date_types:
+        # Extract just the column name (remove table prefix if present)
+        if timestamp_column:
+            primary_date_column = timestamp_column.split('.')[-1] if '.' in timestamp_column else timestamp_column
+
+            # Try to get type from column_stats
+            col_type = 'DATE'  # default
+            column_stats = dataset.column_stats or {}
+            for key, stats in column_stats.items():
+                col_name = key.split('.')[-1] if '.' in key else key
+                if col_name == primary_date_column:
+                    col_type = stats.get('type', 'DATE').upper()
+                    break
+
+            date_columns.append({
+                'name': primary_date_column,
+                'type': col_type,
+                'primary': True
+            })
+            seen_columns.add(primary_date_column)
+
+        # 2. Also check column_stats for other date/timestamp columns
+        column_stats = dataset.column_stats or {}
+        for key, stats in column_stats.items():
+            col_type = stats.get('type', '').upper()
+            if col_type in date_types:
+                col_name = key.split('.')[-1] if '.' in key else key
+                if col_name not in seen_columns:
                     date_columns.append({
-                        'name': col,
+                        'name': col_name,
                         'type': col_type,
-                        'table': table
+                        'primary': False
                     })
+                    seen_columns.add(col_name)
 
         return JsonResponse({
             'success': True,

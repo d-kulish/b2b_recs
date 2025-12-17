@@ -44,6 +44,7 @@ def create_tfx_pipeline(
     epochs: int = 10,
     batch_size: int = 4096,
     learning_rate: float = 0.001,
+    split_strategy: str = 'random',
     train_steps: Optional[int] = None,
     eval_steps: Optional[int] = None,
 ):
@@ -53,17 +54,33 @@ def create_tfx_pipeline(
     from tfx.proto import example_gen_pb2, trainer_pb2
     from tfx.orchestration import pipeline as tfx_pipeline
 
-    logger.info(f"Creating TFX pipeline: {pipeline_name}")
+    logger.info(f"Creating TFX pipeline: {pipeline_name}, split_strategy={split_strategy}")
 
-    # Configure train/eval split (80/20 random split)
-    output_config = example_gen_pb2.Output(
-        split_config=example_gen_pb2.SplitConfig(
-            splits=[
-                example_gen_pb2.SplitConfig.Split(name='train', hash_buckets=8),
-                example_gen_pb2.SplitConfig.Split(name='eval', hash_buckets=2),
-            ]
+    # Configure split based on strategy
+    if split_strategy == 'strict_time':
+        # Use partition_feature_name to split by the 'split' column generated in SQL
+        # The SQL query adds a 'split' column with values 'train' or 'eval' based on date
+        logger.info("Using temporal split with partition_feature_name='split'")
+        output_config = example_gen_pb2.Output(
+            split_config=example_gen_pb2.SplitConfig(
+                splits=[
+                    example_gen_pb2.SplitConfig.Split(name='train'),
+                    example_gen_pb2.SplitConfig.Split(name='eval'),
+                ],
+                partition_feature_name='split'
+            )
         )
-    )
+    else:
+        # Random hash-based split (80/20) for 'random' and 'time_holdout' strategies
+        logger.info("Using hash-based 80/20 split")
+        output_config = example_gen_pb2.Output(
+            split_config=example_gen_pb2.SplitConfig(
+                splits=[
+                    example_gen_pb2.SplitConfig.Split(name='train', hash_buckets=8),
+                    example_gen_pb2.SplitConfig.Split(name='eval', hash_buckets=2),
+                ]
+            )
+        )
 
     # Component 1: BigQueryExampleGen
     example_gen = BigQueryExampleGen(
@@ -197,6 +214,7 @@ def main():
     parser.add_argument('--epochs', type=int, default=10, help='Training epochs')
     parser.add_argument('--batch-size', type=int, default=4096, help='Batch size')
     parser.add_argument('--learning-rate', type=float, default=0.001, help='Learning rate')
+    parser.add_argument('--split-strategy', default='random', help='Split strategy: random, time_holdout, strict_time')
     parser.add_argument('--project-id', required=True, help='GCP project ID')
     parser.add_argument('--region', default='europe-central2', help='GCP region')
 
@@ -218,6 +236,7 @@ def main():
                 epochs=args.epochs,
                 batch_size=args.batch_size,
                 learning_rate=args.learning_rate,
+                split_strategy=args.split_strategy,
             )
 
             # Compile to JSON

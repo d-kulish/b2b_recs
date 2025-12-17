@@ -981,27 +981,55 @@
                 <!-- Split Strategy -->
                 <div class="training-params-section" style="background: #f5f3ff; border-color: #c4b5fd;">
                     <h4 style="color: #6d28d9;"><i class="fas fa-random"></i> Split Strategy</h4>
-                    <div class="training-params-grid">
-                        <div class="training-param-group">
-                            <label style="color: #6d28d9;">Strategy</label>
-                            <select id="wizardSplitStrategy" onchange="onWizardSplitChange()" style="border-color: #c4b5fd;">
-                                <option value="random">Random (fastest)</option>
-                                <option value="time_holdout">Time Holdout</option>
-                                <option value="strict_time">Strict Temporal</option>
-                            </select>
+                    <!-- Main row: Strategy + conditional options -->
+                    <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
+                        <select id="wizardSplitStrategy" onchange="onWizardSplitChange()" style="border-color: #c4b5fd; padding: 8px 12px; border-radius: 6px; font-size: 13px; min-width: 160px;">
+                            <option value="random">Random (fastest)</option>
+                            <option value="time_holdout">Time Holdout</option>
+                            <option value="strict_time">Strict Temporal</option>
+                        </select>
+                        <!-- Random split info -->
+                        <div id="wizardRandomInfo" style="display: flex; align-items: center; gap: 6px;">
+                            <span style="color: #7c3aed; font-size: 12px;"><i class="fas fa-info-circle mr-1"></i>Training 80% / Validation 20%</span>
                         </div>
-                        <div id="wizardTimeOptions" class="training-param-group hidden">
-                            <label style="color: #6d28d9;">Holdout Days</label>
-                            <input type="number" id="wizardHoldoutDays" value="1" min="1" max="30" style="border-color: #c4b5fd;">
-                        </div>
-                    </div>
-                    <!-- Date column (shown conditionally for time-based splits) -->
-                    <div id="wizardDateColumnSection" class="mt-3 hidden">
-                        <div class="training-param-group">
-                            <label style="color: #6d28d9;">Date Column</label>
-                            <select id="wizardDateColumn" style="border-color: #c4b5fd;">
+                        <!-- Date column (inline, shown for time-based) -->
+                        <div id="wizardDateColumnSection" style="display: none; align-items: center; gap: 8px;">
+                            <span style="color: #6d28d9; font-size: 12px; white-space: nowrap;">on</span>
+                            <select id="wizardDateColumn" style="border-color: #c4b5fd; padding: 8px 12px; border-radius: 6px; font-size: 13px; min-width: 200px;">
                                 <option value="">Select date column...</option>
                             </select>
+                        </div>
+                        <!-- Holdout days (inline, shown for time_holdout) -->
+                        <div id="wizardTimeOptions" style="display: none; align-items: center; gap: 6px;">
+                            <span style="color: #6d28d9; font-size: 12px;">exclude last</span>
+                            <input type="number" id="wizardHoldoutDays" value="1" min="1" max="30" style="border-color: #c4b5fd; width: 60px; padding: 6px 8px; border-radius: 6px; font-size: 13px; text-align: center;">
+                            <span style="color: #6d28d9; font-size: 12px;">days</span>
+                        </div>
+                    </div>
+                    <!-- Rolling window (second row, shown for strict_time) -->
+                    <div id="wizardRollingWindowSection" style="display: none; margin-top: 10px; width: 100%;">
+                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; width: 100%;">
+                            <div style="background: white; padding: 8px 12px; border-radius: 6px; border: 1px solid #ede9fe; display: flex; align-items: center; justify-content: space-between;">
+                                <span style="color: #9ca3af; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px;">Train</span>
+                                <div style="display: flex; align-items: baseline; gap: 3px;">
+                                    <input type="number" id="wizardTrainDays" value="60" min="7" max="365" style="border: none; width: 40px; font-size: 16px; background: transparent; font-weight: 600; color: #6d28d9; padding: 0; text-align: right;">
+                                    <span style="color: #9ca3af; font-size: 11px;">days</span>
+                                </div>
+                            </div>
+                            <div style="background: white; padding: 8px 12px; border-radius: 6px; border: 1px solid #ede9fe; display: flex; align-items: center; justify-content: space-between;">
+                                <span style="color: #9ca3af; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px;">Validation</span>
+                                <div style="display: flex; align-items: baseline; gap: 3px;">
+                                    <input type="number" id="wizardValDays" value="7" min="1" max="30" style="border: none; width: 28px; font-size: 16px; background: transparent; font-weight: 600; color: #6d28d9; padding: 0; text-align: right;">
+                                    <span style="color: #9ca3af; font-size: 11px;">days</span>
+                                </div>
+                            </div>
+                            <div style="background: white; padding: 8px 12px; border-radius: 6px; border: 1px solid #ede9fe; display: flex; align-items: center; justify-content: space-between;">
+                                <span style="color: #9ca3af; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px;">Test</span>
+                                <div style="display: flex; align-items: baseline; gap: 3px;">
+                                    <input type="number" id="wizardTestDays" value="7" min="1" max="30" style="border: none; width: 28px; font-size: 16px; background: transparent; font-weight: 600; color: #6d28d9; padding: 0; text-align: right;">
+                                    <span style="color: #9ca3af; font-size: 11px;">days</span>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1248,6 +1276,7 @@ let wizardStep = 1;
 let selectedFeatureConfig = null;
 let selectedModelConfig = null;
 let datasetEstimatedRows = null;  // Estimated rows from selected feature config's dataset
+let datasetDateDays = null;  // Number of days in dataset for split strategy calculations
 
 // Polling
 let currentExpId = null;
@@ -1827,9 +1856,16 @@ function openNewExpWizard() {
     document.getElementById('wizardEpochs').value = '10';
     document.getElementById('wizardBatchSize').value = '4096';
     document.getElementById('wizardLearningRate').value = '0.1';
-    document.getElementById('wizardTimeOptions').classList.add('hidden');
-    document.getElementById('wizardDateColumnSection').classList.add('hidden');
+    // Reset split strategy UI (use style.display for inline-styled elements)
+    document.getElementById('wizardRandomInfo').style.display = 'flex';
+    document.getElementById('wizardTimeOptions').style.display = 'none';
+    document.getElementById('wizardDateColumnSection').style.display = 'none';
+    document.getElementById('wizardRollingWindowSection').style.display = 'none';
     document.getElementById('wizardRatingSection').classList.add('hidden');
+    // Reset rolling window values
+    document.getElementById('wizardTrainDays').value = '60';
+    document.getElementById('wizardValDays').value = '7';
+    document.getElementById('wizardTestDays').value = '7';
 
     // Reset example count
     datasetEstimatedRows = null;
@@ -1971,6 +2007,8 @@ function renderWizardFeaturePreview(config) {
 
     // Store estimated rows for example count calculation
     datasetEstimatedRows = config.dataset_info?.estimated_rows || null;
+    // Store date days for split strategy calculations
+    datasetDateDays = config.dataset_info?.date_days || null;
     updateExampleCount();
 }
 
@@ -2131,9 +2169,33 @@ function renderWizardModelPreview(mc) {
 function onWizardSplitChange() {
     const strategy = document.getElementById('wizardSplitStrategy').value;
     const isTimeBased = strategy === 'time_holdout' || strategy === 'strict_time';
+    const isStrictTime = strategy === 'strict_time';
+    const isTimeHoldout = strategy === 'time_holdout';
+    const isRandom = strategy === 'random';
 
-    document.getElementById('wizardTimeOptions').classList.toggle('hidden', !isTimeBased);
-    document.getElementById('wizardDateColumnSection').classList.toggle('hidden', !isTimeBased);
+    // Random info - only for random
+    document.getElementById('wizardRandomInfo').style.display = isRandom ? 'flex' : 'none';
+
+    // Date column - required for both time-based strategies
+    document.getElementById('wizardDateColumnSection').style.display = isTimeBased ? 'flex' : 'none';
+
+    // Holdout days - only for time_holdout
+    document.getElementById('wizardTimeOptions').style.display = isTimeHoldout ? 'flex' : 'none';
+
+    // Rolling window - only for strict_time
+    document.getElementById('wizardRollingWindowSection').style.display = isStrictTime ? 'block' : 'none';
+
+    // Set dynamic defaults for strict temporal split based on dataset date range
+    if (isStrictTime && datasetDateDays && datasetDateDays > 0) {
+        // Split ratios: Train 80%, Validation 15%, Test 5%
+        const trainDays = Math.max(1, Math.floor(datasetDateDays * 0.80));
+        const valDays = Math.max(1, Math.floor(datasetDateDays * 0.15));
+        const testDays = Math.max(1, datasetDateDays - trainDays - valDays);
+
+        document.getElementById('wizardTrainDays').value = trainDays;
+        document.getElementById('wizardValDays').value = valDays;
+        document.getElementById('wizardTestDays').value = testDays;
+    }
 }
 
 async function loadWizardDateColumns(datasetId) {
@@ -2147,12 +2209,27 @@ async function loadWizardDateColumns(datasetId) {
         select.innerHTML = '<option value="">Select date column...</option>';
 
         if (data.success && data.date_columns) {
+            let primaryColumn = null;
             data.date_columns.forEach(col => {
                 const option = document.createElement('option');
                 option.value = col.name;
-                option.textContent = `${col.name} (${col.type})`;
+                // Show (recommended) for primary date column from dataset config
+                const label = col.primary
+                    ? `${col.name} (${col.type}) - recommended`
+                    : `${col.name} (${col.type})`;
+                option.textContent = label;
                 select.appendChild(option);
+
+                // Track primary for auto-selection
+                if (col.primary) {
+                    primaryColumn = col.name;
+                }
             });
+
+            // Auto-select the primary date column if available
+            if (primaryColumn) {
+                select.value = primaryColumn;
+            }
         }
     } catch (error) {
         console.error('Error loading date columns:', error);
@@ -2262,7 +2339,11 @@ async function submitExperiment() {
         date_column: dateColumn,
         epochs: parseInt(document.getElementById('wizardEpochs').value),
         batch_size: parseInt(document.getElementById('wizardBatchSize').value),
-        learning_rate: parseFloat(document.getElementById('wizardLearningRate').value)
+        learning_rate: parseFloat(document.getElementById('wizardLearningRate').value),
+        // Rolling window parameters for strict_time
+        train_days: parseInt(document.getElementById('wizardTrainDays').value) || 60,
+        val_days: parseInt(document.getElementById('wizardValDays').value) || 7,
+        test_days: parseInt(document.getElementById('wizardTestDays').value) || 7
     };
 
     // Add rating column for ranking models

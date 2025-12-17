@@ -168,6 +168,9 @@ def model_experiments(request, model_id):
     """
     model = get_object_or_404(ModelEndpoint, id=model_id)
 
+    # Set session for API calls
+    request.session['model_endpoint_id'] = model_id
+
     experiments = model.experiments.all()
     trained_models = model.trained_models.all()
 

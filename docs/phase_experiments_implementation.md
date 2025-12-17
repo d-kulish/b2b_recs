@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides a **complete implementation guide** for building the Experiments domain with native TFX pipelines on Vertex AI. It is designed to be self-contained and actionable - you should be able to open this document and start implementing without additional context.
 
-**Last Updated**: 2025-12-16
+**Last Updated**: 2025-12-17
 
 ---
 
@@ -22,9 +22,10 @@ This document provides a **complete implementation guide** for building the Expe
 11. [Phase 6: MLflow Integration](#phase-6-mlflow-integration)
 12. [Phase 7: Pre-built Docker Image](#phase-7-pre-built-docker-image-for-fast-cloud-build)
 13. [Phase 8: TFX Pipeline Bug Fixes](#phase-8-tfx-pipeline-bug-fixes-december-2025)
-14. [File Reference](#file-reference)
-15. [API Reference](#api-reference)
-16. [Testing Guide](#testing-guide)
+14. [Phase 9: Experiments UI Refactor](#phase-9-experiments-ui-refactor-december-2025)
+15. [File Reference](#file-reference)
+16. [API Reference](#api-reference)
+17. [Testing Guide](#testing-guide)
 
 ---
 
@@ -77,6 +78,7 @@ Experiments Page = Analyze Quick Test results to find optimal parameters
 | **Phase 6** | 🔲 Pending | MLflow Integration (experiment tracking, heatmaps, comparison) |
 | **Phase 7** | ✅ Complete | Pre-built Docker Image for fast Cloud Build execution |
 | **Phase 8** | ✅ Complete | TFX Pipeline Bug Fixes (embedding shapes, dataset serialization, model saving) |
+| **Phase 9** | ✅ Complete | Experiments UI Refactor (new chapter layout, wizard modal, experiment cards, pagination) |
 
 ### Cloud Build Implementation (December 2025)
 
@@ -3019,7 +3021,153 @@ After Phase 8 fixes, the pipeline successfully progresses through:
 2. ✅ **StatisticsGen** - Generates data statistics
 3. ✅ **SchemaGen** - Infers data schema
 4. ✅ **Transform** - Applies feature preprocessing
-5. 🔄 **Trainer** - Training with TFRS (in progress)
+5. ✅ **Trainer** - Training with TFRS completed
+
+---
+
+## Phase 9: Experiments UI Refactor (December 2025)
+
+This phase implements a complete redesign of the Quick Test chapter UI to match the design patterns used in the Model Configs page.
+
+### Changes Overview
+
+**Old Design:**
+- Two dropdowns (Feature Config, Model Config) + "Run Quick Test" button in header
+- Training parameters in collapsible section
+- Simple dialog for split strategy/sampling
+- Basic experiment history list
+
+**New Design:**
+- Chapter header with "Compare" and "New Exp" buttons
+- Filter bar (Status, Feature Config, Model Config, Search)
+- Experiment cards with status, configs, metrics, progress
+- Pagination (3 visible, scroll for 10, footer navigation)
+- 2-step wizard modal for creating experiments
+
+### New Chapter Layout
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ ⚡ Quick Test                                     [Compare] [+ New Exp]     │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ Status: [All ▼]  Feature: [All ▼]  Model: [All ▼]  [🔍 Search...]          │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │ 🔄 Exp #3 · feats_v3 + model_v3 · Running 45%                       │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │ ✅ Exp #2 · feats_v3 + model_v2 · Recall@100: 47.3%                 │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ Showing 1-3 of 15                     [← Prev] [1] [2] [3] [4] [5] [Next →] │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### New Experiment Wizard (2 Steps)
+
+**Step 1: Select Configs**
+- Feature Config dropdown with preview panel (tensor dimensions, feature list)
+- Model Config dropdown with preview panel (tower layers, parameters)
+- Preview panels styled like View modals in model_configs.html
+
+**Step 2: Training Parameters**
+- Data Split & Sampling (strategy, sample %, holdout days, date column)
+- Training Parameters (epochs, batch size, learning rate)
+- Rating Column (for ranking models)
+- Summary section
+
+### Database Changes
+
+Added `experiment_number` field to `QuickTest` model:
+
+```python
+# ml_platform/models.py
+experiment_number = models.PositiveIntegerField(
+    null=True,
+    blank=True,
+    help_text="Sequential experiment number within the Model Endpoint"
+)
+
+@property
+def display_name(self):
+    """Return display name like 'Exp #1', 'Exp #2', etc."""
+    return f"Exp #{self.experiment_number or self.pk}"
+
+def assign_experiment_number(self):
+    """Assign next sequential number for this Model Endpoint."""
+    # Auto-increments per Model Endpoint
+```
+
+### API Changes
+
+Updated `GET /api/quick-tests/` endpoint:
+
+**New Parameters:**
+- `page` - Page number (default: 1)
+- `page_size` - Items per page (default: 10, max: 50)
+- `search` - Search by experiment number or config names
+
+**New Response Fields:**
+```json
+{
+  "success": true,
+  "quick_tests": [...],
+  "pagination": {
+    "page": 1,
+    "page_size": 10,
+    "total_count": 25,
+    "total_pages": 3,
+    "has_next": true,
+    "has_prev": false
+  }
+}
+```
+
+**Updated Serializer:**
+- Added `experiment_number`, `display_name`
+- Added `elapsed_seconds`, `duration_seconds`
+- Added `recall_at_100` for card metric display
+
+### View Changes
+
+Updated `model_experiments` view to set session:
+
+```python
+# ml_platform/views.py
+def model_experiments(request, model_id):
+    model = get_object_or_404(ModelEndpoint, id=model_id)
+    request.session['model_endpoint_id'] = model_id  # Required for API
+    ...
+```
+
+### Files Modified in Phase 9
+
+| File | Changes |
+|------|---------|
+| `ml_platform/models.py` | Added `experiment_number` field, `display_name` property, `assign_experiment_number()` method |
+| `ml_platform/migrations/0034_*.py` | Migration for experiment_number field |
+| `ml_platform/experiments/api.py` | Added pagination, search, updated serializer |
+| `ml_platform/experiments/services.py` | Call `assign_experiment_number()` before save |
+| `ml_platform/views.py` | Set `model_endpoint_id` in session |
+| `templates/ml_platform/model_experiments.html` | Complete rewrite with new chapter layout, wizard, cards |
+
+### UI Components
+
+**Experiment Card States:**
+- `submitting` - Yellow icon, progress bar
+- `running` - Blue spinning icon, progress bar
+- `completed` - Green checkmark, Recall@100 metric
+- `failed` - Red X, error stage
+- `cancelled` - Gray icon
+
+**Wizard Progress Pills:**
+- Uses green (`#16a34a`) for current step (matches model_configs.html)
+- Uses white for future steps
+- Uses green border for completed steps
+
+**Footer Buttons:**
+- Blue square navigation buttons (`btn-neu-nav`) in footer-left
+- Green "Run" button (`btn-neu-save`) and red "Cancel" button (`btn-neu-cancel`) in footer-right
 
 ---
 

@@ -149,16 +149,26 @@ def start_quick_test(request, feature_config_id):
 @require_http_methods(["GET"])
 def quick_test_list(request):
     """
-    List Quick Tests, optionally filtered by feature_config_id or model_config_id.
+    List Quick Tests with pagination and filters.
 
+    GET /api/quick-tests/?page=1&page_size=10
     GET /api/quick-tests/?feature_config_id=123
     GET /api/quick-tests/?model_config_id=456
     GET /api/quick-tests/?status=running
+    GET /api/quick-tests/?search=exp
 
     Returns:
     {
         "success": true,
-        "quick_tests": [...]
+        "quick_tests": [...],
+        "pagination": {
+            "page": 1,
+            "page_size": 10,
+            "total_count": 25,
+            "total_pages": 3,
+            "has_next": true,
+            "has_prev": false
+        }
     }
     """
     try:
@@ -187,12 +197,53 @@ def quick_test_list(request):
         if status:
             queryset = queryset.filter(status=status)
 
+        # Search filter (searches experiment number, feature config name, model config name)
+        search = request.GET.get('search', '').strip()
+        if search:
+            from django.db.models import Q
+            queryset = queryset.filter(
+                Q(feature_config__name__icontains=search) |
+                Q(model_config__name__icontains=search) |
+                Q(experiment_number__icontains=search)
+            )
+
         # Order by most recent first
-        queryset = queryset.order_by('-created_at')[:50]
+        queryset = queryset.order_by('-created_at')
+
+        # Get total count before pagination
+        total_count = queryset.count()
+
+        # Pagination
+        try:
+            page = int(request.GET.get('page', 1))
+            page_size = int(request.GET.get('page_size', 10))
+        except ValueError:
+            page = 1
+            page_size = 10
+
+        # Clamp values
+        page = max(1, page)
+        page_size = max(1, min(50, page_size))  # Max 50 per page
+
+        total_pages = (total_count + page_size - 1) // page_size if total_count > 0 else 1
+        page = min(page, total_pages)  # Don't exceed total pages
+
+        start_idx = (page - 1) * page_size
+        end_idx = start_idx + page_size
+
+        quick_tests = list(queryset[start_idx:end_idx])
 
         return JsonResponse({
             'success': True,
-            'quick_tests': [_serialize_quick_test(qt) for qt in queryset]
+            'quick_tests': [_serialize_quick_test(qt) for qt in quick_tests],
+            'pagination': {
+                'page': page,
+                'page_size': page_size,
+                'total_count': total_count,
+                'total_pages': total_pages,
+                'has_next': page < total_pages,
+                'has_prev': page > 1
+            }
         })
 
     except Exception as e:
@@ -399,6 +450,8 @@ def _serialize_quick_test(quick_test, include_details=False):
     """Serialize a QuickTest model to dict."""
     data = {
         'id': quick_test.id,
+        'experiment_number': quick_test.experiment_number,
+        'display_name': quick_test.display_name,
         'feature_config_id': quick_test.feature_config_id,
         'feature_config_name': quick_test.feature_config.name,
         'model_config_id': quick_test.model_config_id,
@@ -406,6 +459,8 @@ def _serialize_quick_test(quick_test, include_details=False):
         'status': quick_test.status,
         'current_stage': quick_test.current_stage,
         'progress_percent': quick_test.progress_percent,
+        'elapsed_seconds': quick_test.elapsed_seconds,
+        'duration_seconds': quick_test.duration_seconds,
 
         # Configuration
         'split_strategy': quick_test.split_strategy,
@@ -415,6 +470,9 @@ def _serialize_quick_test(quick_test, include_details=False):
         'epochs': quick_test.epochs,
         'batch_size': quick_test.batch_size,
         'learning_rate': quick_test.learning_rate,
+
+        # Key metrics for card display
+        'recall_at_100': quick_test.recall_at_100,
 
         # Vertex AI info
         'vertex_pipeline_job_id': quick_test.vertex_pipeline_job_id,

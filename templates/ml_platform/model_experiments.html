@@ -8,12 +8,14 @@
 <link rel="stylesheet" href="{% static 'css/cards.css' %}?v=4">
 <link rel="stylesheet" href="{% static 'css/modals.css' %}?v=2">
 <style>
-    /* Chapter Section Styles */
+    /* =========================================================================
+       Chapter Section Styles
+       ========================================================================= */
     .chapter-section {
         background: white;
         border: 1px solid #e5e7eb;
         border-radius: 12px;
-        padding: 20px;
+        padding: 24px;
         margin-bottom: 20px;
     }
     .chapter-header {
@@ -35,12 +37,9 @@
     .chapter-icon.quick-test {
         background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%);
     }
-    .chapter-icon.experiments {
-        background: linear-gradient(135deg, #8b5cf6 0%, #a78bfa 100%);
-    }
     .chapter-title {
-        font-size: 18px;
-        font-weight: 600;
+        font-size: 20px;
+        font-weight: 700;
         color: #111827;
     }
     .chapter-empty-state {
@@ -48,20 +47,441 @@
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        padding: 40px;
+        padding: 48px 24px;
+        color: #9ca3af;
         text-align: center;
     }
     .chapter-empty-icon {
         font-size: 48px;
-        color: #d1d5db;
         margin-bottom: 16px;
+        opacity: 0.5;
     }
     .chapter-empty-text {
-        color: #6b7280;
         font-size: 14px;
+        max-width: 300px;
     }
 
-    /* Quick Test Styles */
+    /* =========================================================================
+       Filter Bar Styles
+       ========================================================================= */
+    .exp-filter-bar {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 16px;
+        flex-wrap: wrap;
+    }
+    .exp-filter-group {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .exp-filter-label {
+        font-size: 13px;
+        font-weight: 500;
+        color: #6b7280;
+    }
+    .exp-filter-select {
+        padding: 6px 12px;
+        border: 1px solid #e5e7eb;
+        border-radius: 6px;
+        font-size: 13px;
+        background: white;
+        min-width: 140px;
+    }
+    .exp-filter-select:focus {
+        outline: none;
+        border-color: #f59e0b;
+        box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.1);
+    }
+    .exp-search-input {
+        flex: 1;
+        min-width: 200px;
+        padding: 6px 12px;
+        border: 1px solid #e5e7eb;
+        border-radius: 6px;
+        font-size: 13px;
+        background: white;
+    }
+    .exp-search-input:focus {
+        outline: none;
+        border-color: #f59e0b;
+        box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.1);
+    }
+    .exp-search-input::placeholder {
+        color: #9ca3af;
+    }
+
+    /* =========================================================================
+       Experiment Card Styles
+       ========================================================================= */
+    .exp-cards-container {
+        max-height: 360px;
+        overflow-y: auto;
+        margin-bottom: 16px;
+    }
+    .exp-card {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 16px;
+        border: 1px solid #e5e7eb;
+        border-radius: 10px;
+        margin-bottom: 10px;
+        background: white;
+        transition: all 0.2s ease;
+        cursor: pointer;
+    }
+    .exp-card:hover {
+        border-color: #d1d5db;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    }
+    .exp-card:last-child {
+        margin-bottom: 0;
+    }
+    .exp-card-status {
+        width: 40px;
+        height: 40px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 16px;
+        flex-shrink: 0;
+    }
+    .exp-card-status.running {
+        background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+        color: #2563eb;
+    }
+    .exp-card-status.completed {
+        background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
+        color: #16a34a;
+    }
+    .exp-card-status.failed {
+        background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+        color: #dc2626;
+    }
+    .exp-card-status.cancelled {
+        background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+        color: #6b7280;
+    }
+    .exp-card-status.submitting {
+        background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+        color: #d97706;
+    }
+    .exp-card-info {
+        flex: 1;
+        min-width: 0;
+    }
+    .exp-card-name {
+        font-weight: 600;
+        font-size: 15px;
+        color: #111827;
+        margin-bottom: 4px;
+    }
+    .exp-card-configs {
+        font-size: 13px;
+        color: #4b5563;
+        margin-bottom: 2px;
+    }
+    .exp-card-meta {
+        font-size: 12px;
+        color: #9ca3af;
+    }
+    .exp-card-metric {
+        text-align: right;
+        flex-shrink: 0;
+    }
+    .exp-card-metric-value {
+        font-size: 18px;
+        font-weight: 700;
+        color: #111827;
+    }
+    .exp-card-metric-label {
+        font-size: 11px;
+        color: #6b7280;
+        text-transform: uppercase;
+    }
+    .exp-card-progress {
+        text-align: right;
+        flex-shrink: 0;
+        min-width: 80px;
+    }
+    .exp-card-progress-bar {
+        height: 6px;
+        width: 80px;
+        background: #e5e7eb;
+        border-radius: 3px;
+        overflow: hidden;
+        margin-bottom: 4px;
+    }
+    .exp-card-progress-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #3b82f6, #60a5fa);
+        border-radius: 3px;
+        transition: width 0.3s ease;
+    }
+    .exp-card-progress-text {
+        font-size: 12px;
+        color: #6b7280;
+    }
+
+    /* =========================================================================
+       Pagination Styles
+       ========================================================================= */
+    .exp-pagination {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding-top: 12px;
+        border-top: 1px solid #e5e7eb;
+    }
+    .exp-pagination-info {
+        font-size: 13px;
+        color: #6b7280;
+    }
+    .exp-pagination-buttons {
+        display: flex;
+        gap: 4px;
+    }
+    .exp-pagination-btn {
+        padding: 6px 12px;
+        border: 1px solid #e5e7eb;
+        border-radius: 6px;
+        font-size: 13px;
+        background: white;
+        color: #374151;
+        cursor: pointer;
+        transition: all 0.15s ease;
+    }
+    .exp-pagination-btn:hover:not(:disabled) {
+        border-color: #d1d5db;
+        background: #f9fafb;
+    }
+    .exp-pagination-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+    .exp-pagination-btn.active {
+        background: #f59e0b;
+        border-color: #f59e0b;
+        color: white;
+    }
+
+    /* =========================================================================
+       Wizard Modal Styles (extending modals.css)
+       ========================================================================= */
+
+    /* Config Preview Panels */
+    .config-preview-panel {
+        border: 1px solid #e5e7eb;
+        border-radius: 10px;
+        padding: 16px;
+        margin-top: 12px;
+        background: #f9fafb;
+    }
+    .config-preview-panel.feature {
+        background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+        border-color: #bae6fd;
+    }
+    .config-preview-panel.model {
+        background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%);
+        border-color: #e9d5ff;
+    }
+    .config-preview-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 12px;
+    }
+    .config-preview-name {
+        font-weight: 600;
+        font-size: 15px;
+        color: #111827;
+    }
+    .config-preview-empty {
+        text-align: center;
+        padding: 24px;
+        color: #9ca3af;
+        font-size: 13px;
+    }
+
+    /* Tensor Preview in Wizard */
+    .tensor-preview-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+    }
+    .tensor-preview-item {
+        padding: 12px;
+        background: white;
+        border-radius: 8px;
+        border: 1px solid #e5e7eb;
+    }
+    .tensor-preview-item.buyer {
+        border-left: 3px solid #3b82f6;
+    }
+    .tensor-preview-item.product {
+        border-left: 3px solid #10b981;
+    }
+    .tensor-preview-title {
+        font-size: 12px;
+        font-weight: 600;
+        color: #6b7280;
+        margin-bottom: 8px;
+        text-transform: uppercase;
+    }
+    .tensor-preview-dim {
+        font-size: 20px;
+        font-weight: 700;
+        margin-bottom: 8px;
+    }
+    .tensor-preview-dim.buyer { color: #3b82f6; }
+    .tensor-preview-dim.product { color: #10b981; }
+    .tensor-preview-features {
+        font-size: 12px;
+        color: #6b7280;
+        max-height: 80px;
+        overflow-y: auto;
+    }
+    .tensor-preview-features div {
+        padding: 2px 0;
+    }
+
+    /* Tower Preview in Wizard */
+    .tower-preview-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        margin-bottom: 12px;
+    }
+    .tower-preview-item {
+        padding: 12px;
+        background: white;
+        border-radius: 8px;
+        border: 1px solid #e5e7eb;
+    }
+    .tower-preview-item.buyer {
+        border-left: 3px solid #3b82f6;
+    }
+    .tower-preview-item.product {
+        border-left: 3px solid #10b981;
+    }
+    .tower-preview-title {
+        font-size: 12px;
+        font-weight: 600;
+        color: #6b7280;
+        margin-bottom: 8px;
+        text-transform: uppercase;
+    }
+    .tower-preview-layers {
+        font-size: 13px;
+        color: #374151;
+    }
+    .tower-preview-layers div {
+        padding: 3px 0;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .tower-preview-layers .layer-units {
+        font-weight: 600;
+        color: #111827;
+    }
+    .model-params-preview {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 12px;
+        background: white;
+        border-radius: 8px;
+        border: 1px solid #e5e7eb;
+    }
+    .param-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 4px 10px;
+        background: #f3f4f6;
+        border-radius: 6px;
+        font-size: 12px;
+    }
+    .param-chip-label {
+        color: #6b7280;
+    }
+    .param-chip-value {
+        font-weight: 600;
+        color: #374151;
+    }
+
+    /* Training Params in Wizard Step 2 */
+    .training-params-section {
+        background: #fef3c7;
+        border: 1px solid #fcd34d;
+        border-radius: 10px;
+        padding: 16px;
+        margin-bottom: 16px;
+    }
+    .training-params-section h4 {
+        font-size: 14px;
+        font-weight: 600;
+        color: #92400e;
+        margin-bottom: 12px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .training-params-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+    }
+    .training-param-group label {
+        display: block;
+        font-size: 12px;
+        color: #92400e;
+        margin-bottom: 4px;
+    }
+    .training-param-group select,
+    .training-param-group input {
+        width: 100%;
+        padding: 8px 12px;
+        border: 1px solid #fcd34d;
+        border-radius: 6px;
+        font-size: 13px;
+        background: white;
+    }
+    .training-param-group select:focus,
+    .training-param-group input:focus {
+        outline: none;
+        border-color: #f59e0b;
+        box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.2);
+    }
+
+    /* Summary Section */
+    .exp-summary-section {
+        background: #f9fafb;
+        border: 1px solid #e5e7eb;
+        border-radius: 10px;
+        padding: 16px;
+    }
+    .exp-summary-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 6px 0;
+        font-size: 13px;
+    }
+    .exp-summary-label {
+        color: #6b7280;
+    }
+    .exp-summary-value {
+        font-weight: 600;
+        color: #374151;
+    }
+
+    /* =========================================================================
+       Progress Modal Styles
+       ========================================================================= */
     .quicktest-progress-bar {
         height: 24px;
         background: #e5e7eb;
@@ -100,15 +520,9 @@
         margin-bottom: 8px;
         background: #f9fafb;
     }
-    .quicktest-stage.completed {
-        background: #ecfdf5;
-    }
-    .quicktest-stage.running {
-        background: #eff6ff;
-    }
-    .quicktest-stage.failed {
-        background: #fef2f2;
-    }
+    .quicktest-stage.completed { background: #ecfdf5; }
+    .quicktest-stage.running { background: #eff6ff; }
+    .quicktest-stage.failed { background: #fef2f2; }
     .quicktest-stage-icon {
         width: 24px;
         height: 24px;
@@ -130,183 +544,17 @@
         font-size: 12px;
         color: #6b7280;
     }
+
+    /* Results Modal Metrics */
     .quicktest-metric {
         display: flex;
         justify-content: space-between;
         padding: 8px 0;
         border-bottom: 1px solid #e5e7eb;
     }
-    .quicktest-metric:last-child {
-        border-bottom: none;
-    }
-    .quicktest-metric-label {
-        color: #6b7280;
-    }
+    .quicktest-metric:last-child { border-bottom: none; }
+    .quicktest-metric-label { color: #6b7280; }
     .quicktest-metric-value {
-        font-weight: 600;
-        color: #111827;
-    }
-    .quicktest-metric-value.improved {
-        color: #10b981;
-    }
-    .quicktest-metric-value.declined {
-        color: #ef4444;
-    }
-
-    /* Config Selector Styles */
-    .config-selector-panel {
-        background: #f9fafb;
-        border: 1px solid #e5e7eb;
-        border-radius: 10px;
-        padding: 16px;
-        margin-bottom: 16px;
-    }
-    .config-selector-row {
-        display: grid;
-        grid-template-columns: 1fr 1fr auto;
-        gap: 16px;
-        align-items: end;
-    }
-    .config-selector-group label {
-        display: block;
-        font-size: 13px;
-        font-weight: 500;
-        color: #374151;
-        margin-bottom: 6px;
-    }
-    .config-selector-group select {
-        width: 100%;
-        padding: 8px 12px;
-        border: 1px solid #d1d5db;
-        border-radius: 8px;
-        font-size: 14px;
-        background: white;
-    }
-    .config-selector-group select:focus {
-        outline: none;
-        border-color: #3b82f6;
-        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-    }
-    .config-info-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        padding: 2px 8px;
-        background: #e5e7eb;
-        border-radius: 4px;
-        font-size: 11px;
-        color: #6b7280;
-        margin-top: 4px;
-    }
-    .config-info-badge.buyer {
-        background: #dbeafe;
-        color: #1e40af;
-    }
-    .config-info-badge.product {
-        background: #dcfce7;
-        color: #166534;
-    }
-
-    /* Training params collapsible */
-    .training-params-toggle {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        padding: 8px 12px;
-        background: #f3f4f6;
-        border-radius: 6px;
-        cursor: pointer;
-        font-size: 13px;
-        color: #374151;
-        margin-top: 12px;
-    }
-    .training-params-toggle:hover {
-        background: #e5e7eb;
-    }
-    .training-params-content {
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 12px;
-        padding: 12px;
-        background: white;
-        border: 1px solid #e5e7eb;
-        border-radius: 8px;
-        margin-top: 8px;
-    }
-    .training-param-group label {
-        display: block;
-        font-size: 12px;
-        color: #6b7280;
-        margin-bottom: 4px;
-    }
-    .training-param-group input,
-    .training-param-group select {
-        width: 100%;
-        padding: 6px 10px;
-        border: 1px solid #d1d5db;
-        border-radius: 6px;
-        font-size: 13px;
-    }
-
-    /* Quick Test History */
-    .quicktest-history-list {
-        max-height: 400px;
-        overflow-y: auto;
-    }
-    .quicktest-history-item {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        padding: 12px;
-        border: 1px solid #e5e7eb;
-        border-radius: 8px;
-        margin-bottom: 8px;
-        background: white;
-    }
-    .quicktest-history-item:hover {
-        border-color: #d1d5db;
-    }
-    .quicktest-history-status {
-        width: 32px;
-        height: 32px;
-        border-radius: 8px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 14px;
-    }
-    .quicktest-history-status.completed {
-        background: #dcfce7;
-        color: #16a34a;
-    }
-    .quicktest-history-status.running {
-        background: #dbeafe;
-        color: #2563eb;
-    }
-    .quicktest-history-status.failed {
-        background: #fee2e2;
-        color: #dc2626;
-    }
-    .quicktest-history-status.cancelled {
-        background: #f3f4f6;
-        color: #6b7280;
-    }
-    .quicktest-history-info {
-        flex: 1;
-    }
-    .quicktest-history-name {
-        font-weight: 500;
-        color: #111827;
-        font-size: 14px;
-    }
-    .quicktest-history-meta {
-        font-size: 12px;
-        color: #6b7280;
-    }
-    .quicktest-history-metrics {
-        text-align: right;
-    }
-    .quicktest-history-recall {
         font-weight: 600;
         color: #111827;
     }
@@ -323,340 +571,452 @@
                 <i class="fas fa-bolt"></i>
             </div>
             <h2 class="chapter-title">Quick Test</h2>
-        </div>
-
-        <!-- Config Selector Panel -->
-        <div class="config-selector-panel">
-            <div class="config-selector-row">
-                <div class="config-selector-group">
-                    <label>Feature Config</label>
-                    <select id="featureConfigSelect" onchange="onFeatureConfigChange()">
-                        <option value="">-- Select Feature Config --</option>
-                    </select>
-                    <div id="featureConfigInfo" class="hidden">
-                        <span class="config-info-badge buyer"><i class="fas fa-user"></i> <span id="fcBuyerDim">-</span>D</span>
-                        <span class="config-info-badge product"><i class="fas fa-box"></i> <span id="fcProductDim">-</span>D</span>
-                    </div>
-                </div>
-                <div class="config-selector-group">
-                    <label>Model Config</label>
-                    <select id="modelConfigSelect" onchange="onModelConfigChange()">
-                        <option value="">-- Select Model Config --</option>
-                    </select>
-                    <div id="modelConfigInfo" class="hidden">
-                        <span class="config-info-badge"><i class="fas fa-layer-group"></i> <span id="mcLayers">-</span></span>
-                        <span class="config-info-badge"><i class="fas fa-cog"></i> <span id="mcOptimizer">-</span></span>
-                    </div>
-                </div>
-                <div>
-                    <button id="runQuickTestBtn" class="btn btn-primary" onclick="openQuickTestDialog()" disabled>
-                        <i class="fas fa-play mr-2"></i>Run Quick Test
-                    </button>
-                </div>
-            </div>
-
-            <!-- Training Parameters (collapsible) -->
-            <div class="training-params-toggle" onclick="toggleTrainingParams()">
-                <i class="fas fa-sliders-h"></i>
-                <span>Training Parameters</span>
-                <i id="trainingParamsChevron" class="fas fa-chevron-down ml-auto"></i>
-            </div>
-            <div id="trainingParamsContent" class="training-params-content hidden">
-                <div class="training-param-group">
-                    <label>Epochs</label>
-                    <select id="qtEpochs">
-                        <option value="1">1</option>
-                        <option value="2">2</option>
-                        <option value="5">5</option>
-                        <option value="10" selected>10</option>
-                        <option value="15">15</option>
-                    </select>
-                </div>
-                <div class="training-param-group">
-                    <label>Batch Size</label>
-                    <select id="qtBatchSize">
-                        <option value="1024">1024</option>
-                        <option value="2048">2048</option>
-                        <option value="4096" selected>4096</option>
-                        <option value="8192">8192</option>
-                    </select>
-                </div>
-                <div class="training-param-group">
-                    <label>Learning Rate</label>
-                    <input type="number" id="qtLearningRate" value="0.1" step="0.001" min="0.0001" max="1.0">
-                </div>
+            <div class="ml-auto flex gap-2">
+                <button onclick="openCompareModal()" class="btn btn-secondary btn-sm" style="width: 120px;">
+                    <i class="fas fa-columns mr-1"></i>Compare
+                </button>
+                <button onclick="openNewExpWizard()" class="btn btn-primary btn-sm" style="width: 120px;">
+                    <i class="fas fa-plus mr-1"></i>New Exp
+                </button>
             </div>
         </div>
 
-        <!-- Quick Test Content Area -->
+        <!-- Filter Bar -->
+        <div id="expFilterBar" class="exp-filter-bar hidden">
+            <div class="exp-filter-group">
+                <label class="exp-filter-label">Status:</label>
+                <select id="expStatusFilter" class="exp-filter-select" onchange="filterExperiments()">
+                    <option value="">All</option>
+                    <option value="running">Running</option>
+                    <option value="completed">Completed</option>
+                    <option value="failed">Failed</option>
+                    <option value="cancelled">Cancelled</option>
+                </select>
+            </div>
+            <div class="exp-filter-group">
+                <label class="exp-filter-label">Feature:</label>
+                <select id="expFeatureFilter" class="exp-filter-select" onchange="filterExperiments()">
+                    <option value="">All Features</option>
+                </select>
+            </div>
+            <div class="exp-filter-group">
+                <label class="exp-filter-label">Model:</label>
+                <select id="expModelFilter" class="exp-filter-select" onchange="filterExperiments()">
+                    <option value="">All Models</option>
+                </select>
+            </div>
+            <input type="text" id="expSearchInput" class="exp-search-input"
+                   placeholder="Search experiments..." onkeyup="debounceExpSearch()">
+        </div>
+
+        <!-- Content Area -->
         <div id="quickTestContent">
             <!-- Loading state -->
-            <div id="quickTestLoading" class="flex items-center justify-center py-8">
+            <div id="expLoading" class="flex items-center justify-center py-8">
                 <i class="fas fa-spinner fa-spin text-xl text-gray-400 mr-3"></i>
-                <span class="text-gray-500">Loading configurations...</span>
+                <span class="text-gray-500">Loading experiments...</span>
             </div>
 
-            <!-- Empty state (no configs) -->
-            <div id="quickTestEmptyConfigs" class="chapter-empty-state hidden">
+            <!-- Empty state (no experiments) -->
+            <div id="expEmpty" class="chapter-empty-state hidden">
+                <i class="fas fa-flask chapter-empty-icon"></i>
+                <p class="chapter-empty-text">No experiments yet</p>
+                <p class="text-sm text-gray-400 mt-2">Run your first experiment to test feature and model configurations</p>
+                <button onclick="openNewExpWizard()" class="btn btn-primary btn-sm mt-4">
+                    <i class="fas fa-plus mr-1"></i>New Experiment
+                </button>
+            </div>
+
+            <!-- No configs state -->
+            <div id="expNoConfigs" class="chapter-empty-state hidden">
                 <i class="fas fa-exclamation-circle chapter-empty-icon"></i>
-                <p class="chapter-empty-text">No feature configs available</p>
+                <p class="chapter-empty-text">No configurations available</p>
                 <p class="text-sm text-gray-400 mt-2">Create feature and model configs on the Configs page first</p>
                 <a href="{% url 'model_configs' model.id %}" class="btn btn-primary btn-sm mt-4">
                     <i class="fas fa-arrow-left mr-1"></i>Go to Configs
                 </a>
             </div>
 
-            <!-- Ready state (configs loaded, no history yet) -->
-            <div id="quickTestReady" class="chapter-empty-state hidden">
-                <i class="fas fa-vial chapter-empty-icon"></i>
-                <p class="chapter-empty-text">Ready to run Quick Tests</p>
-                <p class="text-sm text-gray-400 mt-2">Select a Feature Config and Model Config above to start</p>
-            </div>
-
-            <!-- History list (if tests exist) -->
-            <div id="quickTestHistory" class="hidden">
-                <h4 class="font-medium text-gray-700 mb-3">Recent Quick Tests</h4>
-                <div id="quickTestHistoryList" class="quicktest-history-list">
-                    <!-- Populated by JavaScript -->
+            <!-- Experiments List -->
+            <div id="expList" class="hidden">
+                <div id="expCardsContainer" class="exp-cards-container">
+                    <!-- Experiment cards rendered here by JavaScript -->
                 </div>
-            </div>
-        </div>
-    </div>
 
-    <!-- Experiments Chapter (placeholder) -->
-    <div class="chapter-section">
-        <div class="chapter-header">
-            <div class="chapter-icon experiments">
-                <i class="fas fa-flask"></i>
-            </div>
-            <h2 class="chapter-title">Experiments</h2>
-        </div>
-        <div id="experimentsContent">
-            <div class="chapter-empty-state">
-                <i class="fas fa-chart-line chapter-empty-icon"></i>
-                <p class="chapter-empty-text">Experiment history and analysis coming soon</p>
-                <p class="text-sm text-gray-400 mt-2">MLflow integration and heatmap visualization will be available here</p>
+                <!-- Pagination -->
+                <div id="expPagination" class="exp-pagination hidden">
+                    <div class="exp-pagination-info">
+                        Showing <span id="expShowingStart">1</span>-<span id="expShowingEnd">10</span> of <span id="expTotalCount">0</span>
+                    </div>
+                    <div class="exp-pagination-buttons" id="expPaginationButtons">
+                        <!-- Pagination buttons rendered by JavaScript -->
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 
 </div>
 
-<!-- Quick Test Confirmation Dialog Modal -->
-<div id="quickTestDialog" class="modal-overlay hidden">
-    <div class="modal-container" style="max-width: 500px;">
-        <div class="modal-header">
-            <div class="modal-header-icon info">
-                <i class="fas fa-flask"></i>
+<!-- ============================================================================
+     NEW EXPERIMENT WIZARD MODAL
+     ============================================================================ -->
+<div id="newExpWizardModal" class="modal-overlay hidden">
+    <div class="modal-container modal-container-wizard" style="max-width: 800px;">
+        <!-- Modal Header -->
+        <div class="modal-header-wizard">
+            <div class="modal-header-content">
+                <div class="modal-header-icon" style="background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%);">
+                    <i class="fas fa-flask text-lg text-white"></i>
+                </div>
+                <div class="modal-header-info">
+                    <h3 class="modal-header-title">New Experiment</h3>
+                    <p class="modal-step-counter">Step <span id="wizardCurrentStep">1</span> of 2</p>
+                </div>
             </div>
-            <h3 class="modal-header-title">Start Quick Test</h3>
-            <button type="button" class="modal-close-btn" onclick="closeQuickTestDialog()">
-                <i class="fas fa-times"></i>
-            </button>
+            <div class="progress-bar-pills">
+                <div id="wizardProgress1" class="progress-step-pill current">Select Configs</div>
+                <div id="wizardProgress2" class="progress-step-pill future">Training Params</div>
+            </div>
         </div>
-        <div class="modal-body">
-            <!-- Configuration Summary -->
-            <div class="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                <h4 class="font-medium text-blue-900 mb-2">Configuration</h4>
-                <div class="space-y-1 text-sm">
-                    <p class="text-blue-800">
-                        <span class="font-medium">Feature Config:</span>
-                        <strong id="qtDialogFeatureConfig">-</strong>
-                    </p>
-                    <p class="text-blue-800">
-                        <span class="font-medium">Model Config:</span>
-                        <strong id="qtDialogModelConfig">-</strong>
-                    </p>
+
+        <!-- Modal Body -->
+        <div class="modal-body-wizard" style="max-height: calc(90vh - 200px); overflow-y: auto;">
+            <!-- Step 1: Select Configurations -->
+            <div id="wizardStep1" class="wizard-step active">
+                <!-- Feature Config Selection -->
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Feature Config</label>
+                    <select id="wizardFeatureSelect" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500" onchange="onWizardFeatureChange()">
+                        <option value="">-- Select Feature Config --</option>
+                    </select>
+                </div>
+
+                <!-- Feature Config Preview -->
+                <div id="wizardFeaturePreview" class="config-preview-panel feature hidden">
+                    <div class="config-preview-header">
+                        <span class="config-preview-name" id="wizardFeatureName">-</span>
+                        <span class="text-sm text-gray-500" id="wizardFeatureDataset">-</span>
+                    </div>
+                    <div class="tensor-preview-grid">
+                        <div class="tensor-preview-item buyer">
+                            <div class="tensor-preview-title">Buyer Tensor</div>
+                            <div class="tensor-preview-dim buyer" id="wizardBuyerDim">0D</div>
+                            <div class="tensor-preview-features" id="wizardBuyerFeatures">
+                                <!-- Features listed here -->
+                            </div>
+                        </div>
+                        <div class="tensor-preview-item product">
+                            <div class="tensor-preview-title">Product Tensor</div>
+                            <div class="tensor-preview-dim product" id="wizardProductDim">0D</div>
+                            <div class="tensor-preview-features" id="wizardProductFeatures">
+                                <!-- Features listed here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div id="wizardFeatureEmpty" class="config-preview-panel feature">
+                    <div class="config-preview-empty">
+                        <i class="fas fa-cube text-2xl mb-2"></i>
+                        <p>Select a Feature Config to see details</p>
+                    </div>
+                </div>
+
+                <!-- Model Config Selection -->
+                <div class="mb-4 mt-6">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Model Config</label>
+                    <select id="wizardModelSelect" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500" onchange="onWizardModelChange()">
+                        <option value="">-- Select Model Config --</option>
+                    </select>
+                </div>
+
+                <!-- Model Config Preview -->
+                <div id="wizardModelPreview" class="config-preview-panel model hidden">
+                    <div class="config-preview-header">
+                        <span class="config-preview-name" id="wizardModelName">-</span>
+                        <span class="text-sm text-purple-600" id="wizardModelType">-</span>
+                    </div>
+                    <div class="tower-preview-grid">
+                        <div class="tower-preview-item buyer">
+                            <div class="tower-preview-title">Buyer Tower</div>
+                            <div class="tower-preview-layers" id="wizardBuyerTower">
+                                <!-- Layers listed here -->
+                            </div>
+                        </div>
+                        <div class="tower-preview-item product">
+                            <div class="tower-preview-title">Product Tower</div>
+                            <div class="tower-preview-layers" id="wizardProductTower">
+                                <!-- Layers listed here -->
+                            </div>
+                        </div>
+                    </div>
+                    <div class="model-params-preview" id="wizardModelParams">
+                        <!-- Param chips -->
+                    </div>
+                </div>
+                <div id="wizardModelEmpty" class="config-preview-panel model">
+                    <div class="config-preview-empty">
+                        <i class="fas fa-layer-group text-2xl mb-2"></i>
+                        <p>Select a Model Config to see details</p>
+                    </div>
                 </div>
             </div>
 
-            <!-- Split Strategy & Sampling -->
-            <div class="mb-4 p-3 bg-amber-50 rounded-lg border border-amber-200">
-                <h4 class="font-medium text-amber-900 mb-2">
-                    <i class="fas fa-random mr-1"></i>Data Split & Sampling
-                </h4>
-                <div class="grid grid-cols-2 gap-3">
-                    <div>
-                        <label class="block text-xs text-amber-700 mb-1">Split Strategy</label>
-                        <select id="qtSplitStrategy" class="w-full px-2 py-1.5 border border-amber-300 rounded text-sm" onchange="onSplitStrategyChange()">
-                            <option value="random">Random (fastest)</option>
-                            <option value="time_holdout">Time Holdout</option>
-                            <option value="strict_time">Strict Temporal</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-xs text-amber-700 mb-1">Sample %</label>
-                        <select id="qtSamplePercent" class="w-full px-2 py-1.5 border border-amber-300 rounded text-sm">
-                            <option value="5">5% (fastest)</option>
-                            <option value="10">10%</option>
-                            <option value="25">25%</option>
-                            <option value="100" selected>100% (full)</option>
-                        </select>
-                    </div>
-                </div>
-                <!-- Time-based split options (shown when time_holdout or strict_time selected) -->
-                <div id="qtTimeOptions" class="mt-3 pt-3 border-t border-amber-200 hidden">
-                    <div class="grid grid-cols-2 gap-3">
-                        <div>
-                            <label class="block text-xs text-amber-700 mb-1">Holdout Days</label>
-                            <input type="number" id="qtHoldoutDays" value="1" min="1" max="30" class="w-full px-2 py-1.5 border border-amber-300 rounded text-sm">
+            <!-- Step 2: Training Parameters -->
+            <div id="wizardStep2" class="wizard-step">
+                <!-- Data Split & Sampling -->
+                <div class="training-params-section">
+                    <h4><i class="fas fa-random"></i> Data Split & Sampling</h4>
+                    <div class="training-params-grid">
+                        <div class="training-param-group">
+                            <label>Split Strategy</label>
+                            <select id="wizardSplitStrategy" onchange="onWizardSplitChange()">
+                                <option value="random">Random (fastest)</option>
+                                <option value="time_holdout">Time Holdout</option>
+                                <option value="strict_time">Strict Temporal</option>
+                            </select>
                         </div>
-                        <div>
-                            <label class="block text-xs text-amber-700 mb-1">Date Column</label>
-                            <select id="qtDateColumn" class="w-full px-2 py-1.5 border border-amber-300 rounded text-sm">
-                                <option value="">Loading...</option>
+                        <div class="training-param-group">
+                            <label>Sample %</label>
+                            <select id="wizardSamplePercent">
+                                <option value="5">5% (fastest)</option>
+                                <option value="10">10%</option>
+                                <option value="25">25%</option>
+                                <option value="100" selected>100% (full)</option>
                             </select>
                         </div>
                     </div>
-                    <p class="text-xs text-amber-600 mt-2">
-                        <i class="fas fa-info-circle mr-1"></i>
-                        Excludes last N days from training to prevent data leakage.
-                    </p>
+                    <!-- Time-based options (shown conditionally) -->
+                    <div id="wizardTimeOptions" class="training-params-grid mt-3 hidden">
+                        <div class="training-param-group">
+                            <label>Holdout Days</label>
+                            <input type="number" id="wizardHoldoutDays" value="1" min="1" max="30">
+                        </div>
+                        <div class="training-param-group">
+                            <label>Date Column</label>
+                            <select id="wizardDateColumn">
+                                <option value="">Select date column...</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Training Parameters -->
+                <div class="training-params-section" style="background: #eff6ff; border-color: #93c5fd;">
+                    <h4 style="color: #1e40af;"><i class="fas fa-sliders-h"></i> Training Parameters</h4>
+                    <div class="training-params-grid">
+                        <div class="training-param-group">
+                            <label style="color: #1e40af;">Epochs</label>
+                            <select id="wizardEpochs" style="border-color: #93c5fd;">
+                                <option value="1">1</option>
+                                <option value="2">2</option>
+                                <option value="5">5</option>
+                                <option value="10" selected>10</option>
+                                <option value="15">15</option>
+                            </select>
+                        </div>
+                        <div class="training-param-group">
+                            <label style="color: #1e40af;">Batch Size</label>
+                            <select id="wizardBatchSize" style="border-color: #93c5fd;">
+                                <option value="1024">1024</option>
+                                <option value="2048">2048</option>
+                                <option value="4096" selected>4096</option>
+                                <option value="8192">8192</option>
+                            </select>
+                        </div>
+                        <div class="training-param-group">
+                            <label style="color: #1e40af;">Learning Rate</label>
+                            <input type="number" id="wizardLearningRate" value="0.1" step="0.001" min="0.0001" max="1.0" style="border-color: #93c5fd;">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Rating Column (for Ranking models) -->
+                <div id="wizardRatingSection" class="training-params-section hidden" style="background: #faf5ff; border-color: #d8b4fe;">
+                    <h4 style="color: #7c3aed;"><i class="fas fa-star"></i> Rating Column</h4>
+                    <p class="text-sm text-purple-600 mb-3">Ranking models require a numeric column containing ratings/scores.</p>
+                    <div class="training-param-group">
+                        <select id="wizardRatingColumn" style="border-color: #d8b4fe;">
+                            <option value="">Select rating column...</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Summary -->
+                <div class="exp-summary-section">
+                    <h4 class="font-medium text-gray-700 mb-3">Summary</h4>
+                    <div class="exp-summary-row">
+                        <span class="exp-summary-label">Feature Config:</span>
+                        <span class="exp-summary-value" id="wizardSummaryFeature">-</span>
+                    </div>
+                    <div class="exp-summary-row">
+                        <span class="exp-summary-label">Model Config:</span>
+                        <span class="exp-summary-value" id="wizardSummaryModel">-</span>
+                    </div>
+                    <div class="exp-summary-row">
+                        <span class="exp-summary-label">Estimated duration:</span>
+                        <span class="exp-summary-value">15-25 minutes</span>
+                    </div>
+                    <div class="exp-summary-row">
+                        <span class="exp-summary-label">Machine type:</span>
+                        <span class="exp-summary-value">n1-standard-4 (4 vCPU, 15GB RAM)</span>
+                    </div>
                 </div>
             </div>
-
-            <h4 class="font-medium text-gray-900 mb-3">Training Parameters</h4>
-            <div class="space-y-2 text-sm mb-4">
-                <p><span class="text-gray-600">Epochs:</span> <strong id="qtDialogEpochs">10</strong></p>
-                <p><span class="text-gray-600">Batch Size:</span> <strong id="qtDialogBatchSize">4096</strong></p>
-                <p><span class="text-gray-600">Learning Rate:</span> <strong id="qtDialogLearningRate">0.1</strong></p>
-            </div>
-
-            <!-- Rating Column Selector (for Ranking models only) -->
-            <div id="qtRatingColumnSection" class="mb-4 p-3 bg-purple-50 rounded-lg border border-purple-200 hidden">
-                <h4 class="font-medium text-purple-900 mb-2">
-                    <i class="fas fa-star mr-1"></i>Rating Column
-                </h4>
-                <p class="text-xs text-purple-700 mb-2">
-                    Ranking models require a numeric column containing ratings/scores to predict.
-                </p>
-                <select id="qtRatingColumnSelect" class="w-full px-3 py-2 border border-purple-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-sm">
-                    <option value="">Select rating column...</option>
-                </select>
-                <p id="qtRatingColumnWarning" class="text-xs text-amber-600 mt-2 hidden">
-                    <i class="fas fa-exclamation-triangle mr-1"></i>
-                    No numeric columns found in this dataset. Ranking models require a rating column.
-                </p>
-            </div>
-
-            <div class="bg-gray-50 rounded-lg p-3 text-sm text-gray-600">
-                <p><strong>Estimated duration:</strong> 15-25 minutes</p>
-                <p><strong>Machine type:</strong> n1-standard-4 (4 vCPU, 15GB RAM)</p>
-            </div>
         </div>
+
+        <!-- Modal Footer -->
         <div class="modal-footer-wizard-neu">
-            <div class="footer-left"></div>
-            <div class="footer-right">
-                <button type="button" class="btn-neu btn-neu-action btn-neu-secondary" onclick="closeQuickTestDialog()">
-                    <span class="btn-neu-inner">Cancel</span>
+            <div class="footer-left">
+                <button type="button" id="wizardBackBtn" class="btn-neu btn-neu-nav hidden" onclick="wizardBack()">
+                    <span class="btn-neu-inner"><i class="fas fa-chevron-left"></i></span>
                 </button>
-                <button type="button" class="btn-neu btn-neu-action btn-neu-primary" onclick="startQuickTest()">
-                    <span class="btn-neu-inner"><i class="fas fa-play mr-2"></i>Start Quick Test</span>
+                <button type="button" id="wizardNextBtn" class="btn-neu btn-neu-nav" onclick="wizardNext()">
+                    <span class="btn-neu-inner"><i class="fas fa-chevron-right"></i></span>
+                </button>
+            </div>
+            <div class="footer-right">
+                <button type="button" id="wizardRunBtn" class="btn-neu btn-neu-action btn-neu-save hidden" onclick="submitExperiment()">
+                    <span class="btn-neu-inner">Run</span>
+                </button>
+                <button type="button" class="btn-neu btn-neu-action btn-neu-cancel" onclick="closeNewExpWizard()">
+                    <span class="btn-neu-inner">Cancel</span>
                 </button>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Quick Test Progress Modal -->
-<div id="quickTestProgress" class="modal-overlay hidden">
+<!-- ============================================================================
+     PROGRESS MODAL
+     ============================================================================ -->
+<div id="expProgressModal" class="modal-overlay hidden">
     <div class="modal-container" style="max-width: 500px;">
         <div class="modal-header">
             <div class="modal-header-icon info">
                 <i class="fas fa-cog fa-spin"></i>
             </div>
-            <h3 class="modal-header-title">Quick Test Running</h3>
+            <h3 class="modal-header-title">Experiment Running</h3>
         </div>
         <div class="modal-body">
             <p class="text-sm text-gray-600 mb-4">
-                Feature Config: <strong id="qtProgressFeatureConfig"></strong><br>
-                Model Config: <strong id="qtProgressModelConfig"></strong>
+                <span id="progressExpName" class="font-semibold"></span><br>
+                <span class="text-gray-500" id="progressConfigs"></span>
             </p>
 
             <!-- Progress Bar -->
             <div class="quicktest-progress-bar mb-4">
-                <div class="quicktest-progress-fill animated" id="qtProgressBar" style="width: 0%">
-                    <span class="quicktest-progress-text" id="qtProgressText">0%</span>
+                <div class="quicktest-progress-fill animated" id="progressBar" style="width: 0%">
+                    <span class="quicktest-progress-text" id="progressText">0%</span>
                 </div>
             </div>
 
             <!-- Pipeline Stages -->
             <h4 class="font-medium text-gray-900 mb-3">Pipeline Stages</h4>
-            <div id="qtStages">
+            <div id="progressStages">
                 <!-- Populated by JavaScript -->
             </div>
 
             <!-- Elapsed Time -->
             <div class="mt-4 text-sm text-gray-500">
                 <span>Elapsed: </span>
-                <span id="qtElapsed">0:00</span>
+                <span id="progressElapsed">0:00</span>
             </div>
         </div>
         <div class="modal-footer-wizard-neu">
             <div class="footer-left"></div>
             <div class="footer-right">
-                <button type="button" class="btn-neu btn-neu-action btn-neu-secondary" onclick="cancelQuickTest()" id="qtCancelBtn">
-                    <span class="btn-neu-inner"><i class="fas fa-stop mr-2"></i>Cancel Test</span>
+                <button type="button" class="btn-neu btn-neu-action btn-neu-secondary" onclick="cancelExperiment()" id="progressCancelBtn">
+                    <span class="btn-neu-inner"><i class="fas fa-stop mr-2"></i>Cancel</span>
+                </button>
+                <button type="button" class="btn-neu btn-neu-action btn-neu-cancel" onclick="closeProgressModal()">
+                    <span class="btn-neu-inner">Close</span>
                 </button>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Quick Test Results Modal -->
-<div id="quickTestResults" class="modal-overlay hidden">
+<!-- ============================================================================
+     RESULTS MODAL
+     ============================================================================ -->
+<div id="expResultsModal" class="modal-overlay hidden">
     <div class="modal-container" style="max-width: 600px;">
         <div class="modal-header">
-            <div class="modal-header-icon" id="qtrStatusIcon">
+            <div class="modal-header-icon" id="resultsStatusIcon">
                 <i class="fas fa-check"></i>
             </div>
-            <h3 class="modal-header-title">Quick Test Results</h3>
-            <button type="button" class="modal-close-btn" onclick="closeQuickTestResults()">
+            <h3 class="modal-header-title">Experiment Results</h3>
+            <button type="button" class="modal-close-btn" onclick="closeResultsModal()">
                 <i class="fas fa-times"></i>
             </button>
         </div>
         <div class="modal-body">
             <p class="text-sm text-gray-600 mb-4">
-                Feature Config: <strong id="qtrFeatureConfig"></strong><br>
-                Model Config: <strong id="qtrModelConfig"></strong>
+                <span id="resultsExpName" class="font-semibold"></span><br>
+                <span class="text-gray-500" id="resultsConfigs"></span>
             </p>
 
             <!-- Status Badge -->
-            <div class="mb-4" id="qtrStatusBadge"></div>
+            <div class="mb-4" id="resultsStatusBadge"></div>
 
             <!-- Metrics -->
             <h4 class="font-medium text-gray-900 mb-3">Training Metrics</h4>
-            <div id="qtrMetrics" class="mb-4">
+            <div id="resultsMetrics" class="mb-4">
                 <!-- Populated by JavaScript -->
             </div>
 
-            <!-- Vocabulary Stats (if available) -->
-            <div id="qtrVocabSection" class="hidden">
-                <h4 class="font-medium text-gray-900 mb-3">Vocabulary Statistics</h4>
-                <div id="qtrVocabStats" class="text-sm">
-                    <!-- Populated by JavaScript -->
-                </div>
-            </div>
-
             <!-- Error Section (if failed) -->
-            <div id="qtrErrorSection" class="hidden bg-red-50 rounded-lg p-4">
+            <div id="resultsErrorSection" class="hidden bg-red-50 rounded-lg p-4">
                 <h4 class="font-medium text-red-900 mb-2">Error Details</h4>
-                <p class="text-sm text-red-700" id="qtrErrorMessage"></p>
+                <p class="text-sm text-red-700" id="resultsErrorMessage"></p>
             </div>
 
             <!-- Duration -->
             <div class="mt-4 text-sm text-gray-500">
-                Duration: <span id="qtrDuration">-</span>
+                Duration: <span id="resultsDuration">-</span>
             </div>
         </div>
         <div class="modal-footer-wizard-neu">
             <div class="footer-left">
-                <a href="#" id="qtrVertexLink" target="_blank" class="text-sm text-blue-600 hover:text-blue-800">
+                <a href="#" id="resultsVertexLink" target="_blank" class="text-sm text-blue-600 hover:text-blue-800">
                     <i class="fas fa-external-link-alt mr-1"></i>View in Vertex AI
                 </a>
             </div>
             <div class="footer-right">
-                <button type="button" class="btn-neu btn-neu-action btn-neu-secondary" onclick="closeQuickTestResults()">
+                <button type="button" class="btn-neu btn-neu-action btn-neu-cancel" onclick="closeResultsModal()">
+                    <span class="btn-neu-inner">Close</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================================
+     COMPARE MODAL (Placeholder)
+     ============================================================================ -->
+<div id="compareModal" class="modal-overlay hidden">
+    <div class="modal-container" style="max-width: 500px;">
+        <div class="modal-header">
+            <div class="modal-header-icon info">
+                <i class="fas fa-columns"></i>
+            </div>
+            <h3 class="modal-header-title">Compare Experiments</h3>
+            <button type="button" class="modal-close-btn" onclick="closeCompareModal()">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="modal-body">
+            <div class="chapter-empty-state">
+                <i class="fas fa-chart-bar chapter-empty-icon"></i>
+                <p class="chapter-empty-text">Comparison feature coming soon</p>
+                <p class="text-sm text-gray-400 mt-2">Side-by-side experiment comparison will be available here</p>
+            </div>
+        </div>
+        <div class="modal-footer-wizard-neu">
+            <div class="footer-left"></div>
+            <div class="footer-right">
+                <button type="button" class="btn-neu btn-neu-action btn-neu-cancel" onclick="closeCompareModal()">
                     <span class="btn-neu-inner">Close</span>
                 </button>
             </div>
@@ -672,79 +1032,342 @@
 // =============================================================================
 const modelId = {{ model.id }};
 
+// Data
 let allFeatureConfigs = [];
 let allModelConfigs = [];
-let quickTestHistory = [];
+let experiments = [];
+let pagination = { page: 1, page_size: 10, total_count: 0, total_pages: 1 };
 
-let currentQuickTestId = null;
-let selectedFeatureConfigId = null;
-let selectedFeatureConfigName = '';
-let selectedModelConfigId = null;
-let selectedModelConfigName = '';
-let selectedModelConfigType = null;  // 'retrieval' or 'ranking'
-let quickTestPollInterval = null;
+// Wizard state
+let wizardStep = 1;
+let selectedFeatureConfig = null;
+let selectedModelConfig = null;
+
+// Polling
+let currentExpId = null;
+let pollInterval = null;
+let searchDebounceTimer = null;
 
 // =============================================================================
 // INITIALIZATION
 // =============================================================================
 document.addEventListener('DOMContentLoaded', function() {
-    loadConfigurations();
+    loadInitialData();
 });
 
-async function loadConfigurations() {
+async function loadInitialData() {
     try {
-        // Load both Feature Configs and Model Configs in parallel
-        const [fcResponse, mcResponse] = await Promise.all([
+        // Load Feature Configs, Model Configs, and Experiments in parallel
+        const [fcResponse, mcResponse, expResponse] = await Promise.all([
             fetch(`/api/models/${modelId}/feature-configs/`),
-            fetch('/api/model-configs/')
+            fetch('/api/model-configs/'),
+            fetch('/api/quick-tests/?page=1&page_size=10')
         ]);
 
         const fcData = await fcResponse.json();
         const mcData = await mcResponse.json();
+        const expData = await expResponse.json();
 
         if (fcData.success) {
-            // Filter to only configs with generated transform code (ready for testing)
             allFeatureConfigs = fcData.data.filter(c => c.has_transform_code);
         }
-
         if (mcData.success) {
             allModelConfigs = mcData.data;
         }
 
-        // Hide loading, show appropriate state
-        document.getElementById('quickTestLoading').classList.add('hidden');
+        // Hide loading
+        document.getElementById('expLoading').classList.add('hidden');
 
+        // Check if we have configs
         if (allFeatureConfigs.length === 0 || allModelConfigs.length === 0) {
-            document.getElementById('quickTestEmptyConfigs').classList.remove('hidden');
+            document.getElementById('expNoConfigs').classList.remove('hidden');
+            return;
+        }
+
+        // Populate filter dropdowns
+        populateFilterDropdowns();
+
+        // Show experiments or empty state
+        if (expData.success) {
+            experiments = expData.quick_tests;
+            pagination = expData.pagination;
+
+            if (experiments.length === 0) {
+                document.getElementById('expEmpty').classList.remove('hidden');
+            } else {
+                document.getElementById('expFilterBar').classList.remove('hidden');
+                document.getElementById('expList').classList.remove('hidden');
+                renderExperiments();
+                startBackgroundPolling();
+            }
         } else {
-            document.getElementById('quickTestReady').classList.remove('hidden');
-            populateDropdowns();
+            // API failed (e.g., no model endpoint) - show empty state
+            console.warn('Experiments API error:', expData.error);
+            document.getElementById('expEmpty').classList.remove('hidden');
         }
 
     } catch (error) {
-        console.error('Failed to load configurations:', error);
-        document.getElementById('quickTestLoading').classList.add('hidden');
-        document.getElementById('quickTestEmptyConfigs').classList.remove('hidden');
-        showError('Failed to load configurations: ' + error.message);
+        console.error('Failed to load initial data:', error);
+        document.getElementById('expLoading').classList.add('hidden');
+        showError('Failed to load data: ' + error.message);
     }
 }
 
-function populateDropdowns() {
-    // Populate Feature Config dropdown
-    const fcSelect = document.getElementById('featureConfigSelect');
+function populateFilterDropdowns() {
+    // Feature Config filter
+    const featureFilter = document.getElementById('expFeatureFilter');
+    allFeatureConfigs.forEach(fc => {
+        const option = document.createElement('option');
+        option.value = fc.id;
+        option.textContent = fc.name;
+        featureFilter.appendChild(option);
+    });
+
+    // Model Config filter
+    const modelFilter = document.getElementById('expModelFilter');
+    allModelConfigs.forEach(mc => {
+        const option = document.createElement('option');
+        option.value = mc.id;
+        option.textContent = mc.name;
+        modelFilter.appendChild(option);
+    });
+}
+
+// =============================================================================
+// EXPERIMENTS LIST
+// =============================================================================
+function renderExperiments() {
+    const container = document.getElementById('expCardsContainer');
+
+    if (experiments.length === 0) {
+        container.innerHTML = `
+            <div class="text-center py-8 text-gray-500">
+                <i class="fas fa-search text-2xl mb-2"></i>
+                <p>No experiments match your filters</p>
+            </div>
+        `;
+        document.getElementById('expPagination').classList.add('hidden');
+        return;
+    }
+
+    container.innerHTML = experiments.map(exp => renderExpCard(exp)).join('');
+    renderPagination();
+}
+
+function renderExpCard(exp) {
+    const statusIcons = {
+        'submitting': 'fa-clock',
+        'running': 'fa-spinner fa-spin',
+        'completed': 'fa-check',
+        'failed': 'fa-times',
+        'cancelled': 'fa-ban'
+    };
+
+    const statusClass = exp.status === 'submitting' ? 'submitting' : exp.status;
+    const icon = statusIcons[exp.status] || 'fa-clock';
+
+    // Format time
+    const createdAt = new Date(exp.created_at);
+    const timeAgo = formatTimeAgo(createdAt);
+
+    // Build metric or progress display
+    let metricHtml = '';
+    if (exp.status === 'completed' && exp.recall_at_100 != null) {
+        metricHtml = `
+            <div class="exp-card-metric">
+                <div class="exp-card-metric-value">${(exp.recall_at_100 * 100).toFixed(1)}%</div>
+                <div class="exp-card-metric-label">Recall@100</div>
+            </div>
+        `;
+    } else if (exp.status === 'running' || exp.status === 'submitting') {
+        metricHtml = `
+            <div class="exp-card-progress">
+                <div class="exp-card-progress-bar">
+                    <div class="exp-card-progress-fill" style="width: ${exp.progress_percent || 0}%"></div>
+                </div>
+                <div class="exp-card-progress-text">${exp.progress_percent || 0}%</div>
+            </div>
+        `;
+    } else if (exp.status === 'failed') {
+        metricHtml = `
+            <div class="exp-card-metric">
+                <div class="exp-card-metric-value text-red-600">Failed</div>
+                <div class="exp-card-metric-label">${exp.current_stage || ''}</div>
+            </div>
+        `;
+    } else {
+        metricHtml = `
+            <div class="exp-card-metric">
+                <div class="exp-card-metric-value text-gray-400">-</div>
+            </div>
+        `;
+    }
+
+    // Duration or elapsed
+    let durationText = timeAgo;
+    if (exp.status === 'completed' && exp.duration_seconds) {
+        durationText = `Completed ${timeAgo} · ${formatDuration(exp.duration_seconds)}`;
+    } else if (exp.status === 'running' && exp.elapsed_seconds) {
+        durationText = `Started ${timeAgo} · Running ${formatDuration(exp.elapsed_seconds)}`;
+    } else if (exp.status === 'failed') {
+        durationText = `Failed ${timeAgo}`;
+    }
+
+    return `
+        <div class="exp-card" onclick="openExpDetails(${exp.id})" data-exp-id="${exp.id}">
+            <div class="exp-card-status ${statusClass}">
+                <i class="fas ${icon}"></i>
+            </div>
+            <div class="exp-card-info">
+                <div class="exp-card-name">${exp.display_name}</div>
+                <div class="exp-card-configs">${exp.feature_config_name} + ${exp.model_config_name}</div>
+                <div class="exp-card-meta">${durationText}</div>
+            </div>
+            ${metricHtml}
+        </div>
+    `;
+}
+
+function renderPagination() {
+    if (pagination.total_pages <= 1) {
+        document.getElementById('expPagination').classList.add('hidden');
+        return;
+    }
+
+    document.getElementById('expPagination').classList.remove('hidden');
+
+    const start = (pagination.page - 1) * pagination.page_size + 1;
+    const end = Math.min(pagination.page * pagination.page_size, pagination.total_count);
+
+    document.getElementById('expShowingStart').textContent = start;
+    document.getElementById('expShowingEnd').textContent = end;
+    document.getElementById('expTotalCount').textContent = pagination.total_count;
+
+    // Generate page buttons
+    const buttonsContainer = document.getElementById('expPaginationButtons');
+    let buttonsHtml = '';
+
+    // Prev button
+    buttonsHtml += `
+        <button class="exp-pagination-btn" onclick="goToPage(${pagination.page - 1})" ${!pagination.has_prev ? 'disabled' : ''}>
+            <i class="fas fa-chevron-left"></i>
+        </button>
+    `;
+
+    // Page numbers (show max 5)
+    const maxButtons = 5;
+    let startPage = Math.max(1, pagination.page - Math.floor(maxButtons / 2));
+    let endPage = Math.min(pagination.total_pages, startPage + maxButtons - 1);
+    startPage = Math.max(1, endPage - maxButtons + 1);
+
+    for (let i = startPage; i <= endPage; i++) {
+        buttonsHtml += `
+            <button class="exp-pagination-btn ${i === pagination.page ? 'active' : ''}" onclick="goToPage(${i})">
+                ${i}
+            </button>
+        `;
+    }
+
+    // Next button
+    buttonsHtml += `
+        <button class="exp-pagination-btn" onclick="goToPage(${pagination.page + 1})" ${!pagination.has_next ? 'disabled' : ''}>
+            <i class="fas fa-chevron-right"></i>
+        </button>
+    `;
+
+    buttonsContainer.innerHTML = buttonsHtml;
+}
+
+async function goToPage(page) {
+    if (page < 1 || page > pagination.total_pages) return;
+    await loadExperiments(page);
+}
+
+async function loadExperiments(page = 1) {
+    const status = document.getElementById('expStatusFilter').value;
+    const featureConfigId = document.getElementById('expFeatureFilter').value;
+    const modelConfigId = document.getElementById('expModelFilter').value;
+    const search = document.getElementById('expSearchInput').value.trim();
+
+    let url = `/api/quick-tests/?page=${page}&page_size=${pagination.page_size}`;
+    if (status) url += `&status=${status}`;
+    if (featureConfigId) url += `&feature_config_id=${featureConfigId}`;
+    if (modelConfigId) url += `&model_config_id=${modelConfigId}`;
+    if (search) url += `&search=${encodeURIComponent(search)}`;
+
+    try {
+        const response = await fetch(url);
+        const data = await response.json();
+
+        if (data.success) {
+            experiments = data.quick_tests;
+            pagination = data.pagination;
+            renderExperiments();
+        }
+    } catch (error) {
+        console.error('Error loading experiments:', error);
+    }
+}
+
+function filterExperiments() {
+    loadExperiments(1);
+}
+
+function debounceExpSearch() {
+    clearTimeout(searchDebounceTimer);
+    searchDebounceTimer = setTimeout(() => filterExperiments(), 300);
+}
+
+// =============================================================================
+// WIZARD MODAL
+// =============================================================================
+function openNewExpWizard() {
+    // Reset wizard state
+    wizardStep = 1;
+    selectedFeatureConfig = null;
+    selectedModelConfig = null;
+
+    // Populate dropdowns
+    populateWizardDropdowns();
+
+    // Reset UI
+    updateWizardUI();
+    document.getElementById('wizardFeatureSelect').value = '';
+    document.getElementById('wizardModelSelect').value = '';
+    document.getElementById('wizardFeaturePreview').classList.add('hidden');
+    document.getElementById('wizardFeatureEmpty').classList.remove('hidden');
+    document.getElementById('wizardModelPreview').classList.add('hidden');
+    document.getElementById('wizardModelEmpty').classList.remove('hidden');
+
+    // Reset training params
+    document.getElementById('wizardSplitStrategy').value = 'random';
+    document.getElementById('wizardSamplePercent').value = '100';
+    document.getElementById('wizardEpochs').value = '10';
+    document.getElementById('wizardBatchSize').value = '4096';
+    document.getElementById('wizardLearningRate').value = '0.1';
+    document.getElementById('wizardTimeOptions').classList.add('hidden');
+    document.getElementById('wizardRatingSection').classList.add('hidden');
+
+    document.getElementById('newExpWizardModal').classList.remove('hidden');
+}
+
+function closeNewExpWizard() {
+    document.getElementById('newExpWizardModal').classList.add('hidden');
+}
+
+function populateWizardDropdowns() {
+    // Feature Config dropdown
+    const fcSelect = document.getElementById('wizardFeatureSelect');
     fcSelect.innerHTML = '<option value="">-- Select Feature Config --</option>';
 
     // Group by dataset
     const byDataset = {};
     allFeatureConfigs.forEach(fc => {
         const dsName = fc.dataset_name || 'Unknown Dataset';
-        if (!byDataset[dsName]) {
-            byDataset[dsName] = [];
-        }
+        if (!byDataset[dsName]) byDataset[dsName] = [];
         byDataset[dsName].push(fc);
     });
 
-    // Add optgroups
     Object.entries(byDataset).forEach(([dsName, configs]) => {
         const optgroup = document.createElement('optgroup');
         optgroup.label = dsName;
@@ -752,312 +1375,268 @@ function populateDropdowns() {
             const option = document.createElement('option');
             option.value = fc.id;
             option.textContent = fc.name;
-            option.dataset.buyerDim = fc.buyer_tensor_dim || '-';
-            option.dataset.productDim = fc.product_tensor_dim || '-';
             optgroup.appendChild(option);
         });
         fcSelect.appendChild(optgroup);
     });
 
-    // Populate Model Config dropdown
-    const mcSelect = document.getElementById('modelConfigSelect');
+    // Model Config dropdown
+    const mcSelect = document.getElementById('wizardModelSelect');
     mcSelect.innerHTML = '<option value="">-- Select Model Config --</option>';
 
     allModelConfigs.forEach(mc => {
         const option = document.createElement('option');
         option.value = mc.id;
         option.textContent = mc.name;
-        option.dataset.optimizer = mc.optimizer || 'adagrad';
-        option.dataset.learningRate = mc.learning_rate || 0.1;
-        option.dataset.batchSize = mc.batch_size || 4096;
-        option.dataset.layers = getTotalLayers(mc);
-        option.dataset.modelType = mc.model_type || 'retrieval';
         mcSelect.appendChild(option);
     });
 }
 
-function getTotalLayers(mc) {
-    let count = 0;
-    if (mc.buyer_tower_layers) count += mc.buyer_tower_layers.length;
-    if (mc.product_tower_layers) count += mc.product_tower_layers.length;
-    return count;
-}
+function onWizardFeatureChange() {
+    const fcId = parseInt(document.getElementById('wizardFeatureSelect').value);
+    selectedFeatureConfig = allFeatureConfigs.find(fc => fc.id === fcId) || null;
 
-// =============================================================================
-// DROPDOWN HANDLERS
-// =============================================================================
-function onFeatureConfigChange() {
-    const select = document.getElementById('featureConfigSelect');
-    const option = select.options[select.selectedIndex];
-    const infoDiv = document.getElementById('featureConfigInfo');
+    if (selectedFeatureConfig) {
+        // Show preview
+        document.getElementById('wizardFeatureEmpty').classList.add('hidden');
+        document.getElementById('wizardFeaturePreview').classList.remove('hidden');
 
-    if (option && option.value) {
-        selectedFeatureConfigId = parseInt(option.value);
-        selectedFeatureConfigName = option.textContent;
-        document.getElementById('fcBuyerDim').textContent = option.dataset.buyerDim;
-        document.getElementById('fcProductDim').textContent = option.dataset.productDim;
-        infoDiv.classList.remove('hidden');
+        document.getElementById('wizardFeatureName').textContent = selectedFeatureConfig.name;
+        document.getElementById('wizardFeatureDataset').textContent = `Dataset: ${selectedFeatureConfig.dataset_name || '-'}`;
+        document.getElementById('wizardBuyerDim').textContent = `${selectedFeatureConfig.buyer_tensor_dim || 0}D`;
+        document.getElementById('wizardProductDim').textContent = `${selectedFeatureConfig.product_tensor_dim || 0}D`;
+
+        // Feature lists (simplified - just show count)
+        const buyerCount = (selectedFeatureConfig.buyer_model_features || []).length;
+        const productCount = (selectedFeatureConfig.product_model_features || []).length;
+        document.getElementById('wizardBuyerFeatures').innerHTML = `<div>${buyerCount} feature(s)</div>`;
+        document.getElementById('wizardProductFeatures').innerHTML = `<div>${productCount} feature(s)</div>`;
+
+        // Load date columns for time-based split
+        loadWizardDateColumns(selectedFeatureConfig.dataset_id);
     } else {
-        selectedFeatureConfigId = null;
-        selectedFeatureConfigName = '';
-        infoDiv.classList.add('hidden');
+        document.getElementById('wizardFeaturePreview').classList.add('hidden');
+        document.getElementById('wizardFeatureEmpty').classList.remove('hidden');
     }
 
-    updateRunButtonState();
+    updateWizardSummary();
 }
 
-function onModelConfigChange() {
-    const select = document.getElementById('modelConfigSelect');
-    const option = select.options[select.selectedIndex];
-    const infoDiv = document.getElementById('modelConfigInfo');
+function onWizardModelChange() {
+    const mcId = parseInt(document.getElementById('wizardModelSelect').value);
+    selectedModelConfig = allModelConfigs.find(mc => mc.id === mcId) || null;
 
-    if (option && option.value) {
-        selectedModelConfigId = parseInt(option.value);
-        selectedModelConfigName = option.textContent;
-        selectedModelConfigType = option.dataset.modelType || 'retrieval';
-        document.getElementById('mcLayers').textContent = option.dataset.layers + ' layers';
-        document.getElementById('mcOptimizer').textContent = option.dataset.optimizer;
-        infoDiv.classList.remove('hidden');
+    if (selectedModelConfig) {
+        // Show preview
+        document.getElementById('wizardModelEmpty').classList.add('hidden');
+        document.getElementById('wizardModelPreview').classList.remove('hidden');
 
-        // Update training params from selected Model Config
-        document.getElementById('qtLearningRate').value = option.dataset.learningRate;
-        document.getElementById('qtBatchSize').value = option.dataset.batchSize;
-    } else {
-        selectedModelConfigId = null;
-        selectedModelConfigName = '';
-        selectedModelConfigType = null;
-        infoDiv.classList.add('hidden');
-    }
+        document.getElementById('wizardModelName').textContent = selectedModelConfig.name;
+        document.getElementById('wizardModelType').textContent = selectedModelConfig.model_type_display || selectedModelConfig.model_type;
 
-    updateRunButtonState();
-}
+        // Tower layers
+        const buyerLayers = selectedModelConfig.buyer_tower_layers || [];
+        const productLayers = selectedModelConfig.product_tower_layers || [];
 
-function updateRunButtonState() {
-    const btn = document.getElementById('runQuickTestBtn');
-    btn.disabled = !(selectedFeatureConfigId && selectedModelConfigId);
-}
+        document.getElementById('wizardBuyerTower').innerHTML = buyerLayers.map(l => `
+            <div><span class="layer-units">${l.units}</span> units · ${l.activation}</div>
+        `).join('') || '<div class="text-gray-400">No layers</div>';
 
-// =============================================================================
-// TRAINING PARAMS
-// =============================================================================
-function toggleTrainingParams() {
-    const content = document.getElementById('trainingParamsContent');
-    const chevron = document.getElementById('trainingParamsChevron');
+        document.getElementById('wizardProductTower').innerHTML = productLayers.map(l => `
+            <div><span class="layer-units">${l.units}</span> units · ${l.activation}</div>
+        `).join('') || '<div class="text-gray-400">No layers</div>';
 
-    if (content.classList.contains('hidden')) {
-        content.classList.remove('hidden');
-        chevron.classList.remove('fa-chevron-down');
-        chevron.classList.add('fa-chevron-up');
-    } else {
-        content.classList.add('hidden');
-        chevron.classList.remove('fa-chevron-up');
-        chevron.classList.add('fa-chevron-down');
-    }
-}
+        // Params
+        document.getElementById('wizardModelParams').innerHTML = `
+            <div class="param-chip">
+                <span class="param-chip-label">Optimizer:</span>
+                <span class="param-chip-value">${selectedModelConfig.optimizer_display || selectedModelConfig.optimizer}</span>
+            </div>
+            <div class="param-chip">
+                <span class="param-chip-label">LR:</span>
+                <span class="param-chip-value">${selectedModelConfig.learning_rate}</span>
+            </div>
+            <div class="param-chip">
+                <span class="param-chip-label">Batch:</span>
+                <span class="param-chip-value">${selectedModelConfig.batch_size}</span>
+            </div>
+            <div class="param-chip">
+                <span class="param-chip-label">Output:</span>
+                <span class="param-chip-value">${selectedModelConfig.output_embedding_dim || 32}D</span>
+            </div>
+        `;
 
-// =============================================================================
-// QUICK TEST DIALOG
-// =============================================================================
-function openQuickTestDialog() {
-    if (!selectedFeatureConfigId || !selectedModelConfigId) {
-        showError('Please select both Feature Config and Model Config');
-        return;
-    }
+        // Update training params from model config
+        document.getElementById('wizardLearningRate').value = selectedModelConfig.learning_rate;
+        document.getElementById('wizardBatchSize').value = selectedModelConfig.batch_size;
 
-    // Populate dialog with selected values
-    document.getElementById('qtDialogFeatureConfig').textContent = selectedFeatureConfigName;
-    document.getElementById('qtDialogModelConfig').textContent = selectedModelConfigName;
-    document.getElementById('qtDialogEpochs').textContent = document.getElementById('qtEpochs').value;
-    document.getElementById('qtDialogBatchSize').textContent = document.getElementById('qtBatchSize').value;
-    document.getElementById('qtDialogLearningRate').textContent = document.getElementById('qtLearningRate').value;
-
-    // Show/hide rating column section based on model type
-    const ratingColumnSection = document.getElementById('qtRatingColumnSection');
-    const ratingColumnSelect = document.getElementById('qtRatingColumnSelect');
-    const ratingColumnWarning = document.getElementById('qtRatingColumnWarning');
-
-    if (selectedModelConfigType === 'ranking') {
-        ratingColumnSection.classList.remove('hidden');
-        // Populate numeric columns from the selected Feature Config's dataset
-        populateRatingColumnOptions();
-    } else {
-        ratingColumnSection.classList.add('hidden');
-        ratingColumnSelect.innerHTML = '<option value="">Select rating column...</option>';
-        ratingColumnWarning.classList.add('hidden');
-    }
-
-    document.getElementById('quickTestDialog').classList.remove('hidden');
-}
-
-// Populate rating column dropdown with numeric columns from the dataset
-async function populateRatingColumnOptions() {
-    const ratingColumnSelect = document.getElementById('qtRatingColumnSelect');
-    const ratingColumnWarning = document.getElementById('qtRatingColumnWarning');
-
-    ratingColumnSelect.innerHTML = '<option value="">Loading columns...</option>';
-    ratingColumnWarning.classList.add('hidden');
-
-    try {
-        // Find the selected Feature Config to get its dataset
-        const featureConfig = allFeatureConfigs.find(fc => fc.id === selectedFeatureConfigId);
-        if (!featureConfig || !featureConfig.dataset_id) {
-            ratingColumnSelect.innerHTML = '<option value="">Select rating column...</option>';
-            ratingColumnWarning.textContent = 'Could not find dataset for this Feature Config.';
-            ratingColumnWarning.classList.remove('hidden');
-            return;
-        }
-
-        // Fetch dataset columns
-        const response = await fetch(`/api/datasets/${featureConfig.dataset_id}/columns/`);
-        const data = await response.json();
-
-        if (data.success && data.data && data.data.columns) {
-            // Filter to numeric columns
-            const numericColumns = data.data.columns.filter(col =>
-                col.dtype === 'int64' || col.dtype === 'float64' ||
-                col.dtype === 'int32' || col.dtype === 'float32' ||
-                col.dtype === 'Int64' || col.dtype === 'Float64' ||
-                col.dtype.includes('int') || col.dtype.includes('float')
-            );
-
-            ratingColumnSelect.innerHTML = '<option value="">Select rating column...</option>';
-
-            if (numericColumns.length === 0) {
-                ratingColumnWarning.classList.remove('hidden');
-            } else {
-                numericColumns.forEach(col => {
-                    const option = document.createElement('option');
-                    option.value = col.name;
-                    option.textContent = `${col.name} (${col.dtype})`;
-                    ratingColumnSelect.appendChild(option);
-                });
+        // Show rating column section for ranking models
+        if (selectedModelConfig.model_type === 'ranking' || selectedModelConfig.model_type === 'multitask') {
+            document.getElementById('wizardRatingSection').classList.remove('hidden');
+            if (selectedFeatureConfig) {
+                loadWizardRatingColumns(selectedFeatureConfig.dataset_id);
             }
         } else {
-            ratingColumnSelect.innerHTML = '<option value="">Select rating column...</option>';
-            ratingColumnWarning.textContent = 'Could not load columns from dataset.';
-            ratingColumnWarning.classList.remove('hidden');
+            document.getElementById('wizardRatingSection').classList.add('hidden');
         }
-    } catch (error) {
-        console.error('Error fetching columns:', error);
-        ratingColumnSelect.innerHTML = '<option value="">Select rating column...</option>';
-        ratingColumnWarning.textContent = 'Error loading columns.';
-        ratingColumnWarning.classList.remove('hidden');
-    }
-}
-
-function closeQuickTestDialog() {
-    document.getElementById('quickTestDialog').classList.add('hidden');
-}
-
-// =============================================================================
-// SPLIT STRATEGY HANDLERS
-// =============================================================================
-function onSplitStrategyChange() {
-    const strategy = document.getElementById('qtSplitStrategy').value;
-    const timeOptions = document.getElementById('qtTimeOptions');
-
-    if (strategy === 'time_holdout' || strategy === 'strict_time') {
-        timeOptions.classList.remove('hidden');
-        loadDateColumns();
     } else {
-        timeOptions.classList.add('hidden');
+        document.getElementById('wizardModelPreview').classList.add('hidden');
+        document.getElementById('wizardModelEmpty').classList.remove('hidden');
+    }
+
+    updateWizardSummary();
+}
+
+function onWizardSplitChange() {
+    const strategy = document.getElementById('wizardSplitStrategy').value;
+    if (strategy === 'time_holdout' || strategy === 'strict_time') {
+        document.getElementById('wizardTimeOptions').classList.remove('hidden');
+    } else {
+        document.getElementById('wizardTimeOptions').classList.add('hidden');
     }
 }
 
-async function loadDateColumns() {
-    const dateColumnSelect = document.getElementById('qtDateColumn');
-    dateColumnSelect.innerHTML = '<option value="">Loading...</option>';
-
-    // Find the selected Feature Config to get its dataset
-    const featureConfig = allFeatureConfigs.find(fc => fc.id === selectedFeatureConfigId);
-    if (!featureConfig || !featureConfig.dataset_id) {
-        dateColumnSelect.innerHTML = '<option value="">No dataset found</option>';
-        return;
-    }
+async function loadWizardDateColumns(datasetId) {
+    if (!datasetId) return;
 
     try {
-        const response = await fetch(`/api/datasets/${featureConfig.dataset_id}/date-columns/`);
+        const response = await fetch(`/api/datasets/${datasetId}/date-columns/`);
         const data = await response.json();
 
-        if (data.success && data.date_columns && data.date_columns.length > 0) {
-            dateColumnSelect.innerHTML = '<option value="">Select date column...</option>';
+        const select = document.getElementById('wizardDateColumn');
+        select.innerHTML = '<option value="">Select date column...</option>';
+
+        if (data.success && data.date_columns) {
             data.date_columns.forEach(col => {
                 const option = document.createElement('option');
                 option.value = col.name;
                 option.textContent = `${col.name} (${col.type})`;
-                dateColumnSelect.appendChild(option);
+                select.appendChild(option);
             });
-        } else {
-            dateColumnSelect.innerHTML = '<option value="">No date columns found</option>';
         }
     } catch (error) {
         console.error('Error loading date columns:', error);
-        dateColumnSelect.innerHTML = '<option value="">Error loading columns</option>';
     }
 }
 
-// =============================================================================
-// QUICK TEST EXECUTION
-// =============================================================================
-async function startQuickTest() {
-    const epochs = parseInt(document.getElementById('qtEpochs').value);
-    const batchSize = parseInt(document.getElementById('qtBatchSize').value);
-    const learningRate = parseFloat(document.getElementById('qtLearningRate').value);
+async function loadWizardRatingColumns(datasetId) {
+    if (!datasetId) return;
 
-    // Get split strategy and sampling options
-    const splitStrategy = document.getElementById('qtSplitStrategy').value;
-    const samplePercent = parseInt(document.getElementById('qtSamplePercent').value);
-    const holdoutDays = parseInt(document.getElementById('qtHoldoutDays').value) || 1;
-    const dateColumn = document.getElementById('qtDateColumn').value;
+    try {
+        const response = await fetch(`/api/datasets/${datasetId}/columns/`);
+        const data = await response.json();
 
-    // Validate date column for time-based strategies
-    if ((splitStrategy === 'time_holdout' || splitStrategy === 'strict_time') && !dateColumn) {
-        showError('Please select a date column for time-based split strategies');
+        const select = document.getElementById('wizardRatingColumn');
+        select.innerHTML = '<option value="">Select rating column...</option>';
+
+        if (data.success && data.data && data.data.columns) {
+            const numericCols = data.data.columns.filter(col =>
+                col.dtype.includes('int') || col.dtype.includes('float')
+            );
+            numericCols.forEach(col => {
+                const option = document.createElement('option');
+                option.value = col.name;
+                option.textContent = `${col.name} (${col.dtype})`;
+                select.appendChild(option);
+            });
+        }
+    } catch (error) {
+        console.error('Error loading rating columns:', error);
+    }
+}
+
+function updateWizardUI() {
+    // Update step indicators
+    document.getElementById('wizardCurrentStep').textContent = wizardStep;
+
+    // Update progress pills - matches model_configs.html pattern
+    document.getElementById('wizardProgress1').className = 'progress-step-pill ' +
+        (wizardStep === 1 ? 'current' : 'completed');
+    document.getElementById('wizardProgress2').className = 'progress-step-pill ' +
+        (wizardStep === 2 ? 'current' : 'future');
+
+    // Show/hide steps
+    document.getElementById('wizardStep1').classList.toggle('active', wizardStep === 1);
+    document.getElementById('wizardStep2').classList.toggle('active', wizardStep === 2);
+
+    // Show/hide navigation buttons
+    document.getElementById('wizardBackBtn').classList.toggle('hidden', wizardStep === 1);
+    document.getElementById('wizardNextBtn').classList.toggle('hidden', wizardStep === 2);
+
+    // Show/hide action buttons
+    document.getElementById('wizardRunBtn').classList.toggle('hidden', wizardStep !== 2);
+}
+
+function updateWizardSummary() {
+    document.getElementById('wizardSummaryFeature').textContent =
+        selectedFeatureConfig ? selectedFeatureConfig.name : '-';
+    document.getElementById('wizardSummaryModel').textContent =
+        selectedModelConfig ? selectedModelConfig.name : '-';
+}
+
+function wizardNext() {
+    if (wizardStep === 1) {
+        // Validate step 1
+        if (!selectedFeatureConfig) {
+            showError('Please select a Feature Config');
+            return;
+        }
+        if (!selectedModelConfig) {
+            showError('Please select a Model Config');
+            return;
+        }
+
+        wizardStep = 2;
+        updateWizardUI();
+    }
+}
+
+function wizardBack() {
+    if (wizardStep === 2) {
+        wizardStep = 1;
+        updateWizardUI();
+    }
+}
+
+async function submitExperiment() {
+    // Validate
+    if (!selectedFeatureConfig || !selectedModelConfig) {
+        showError('Please select both Feature Config and Model Config');
         return;
     }
 
-    // For ranking models, validate and get rating column
-    let ratingColumn = null;
-    if (selectedModelConfigType === 'ranking') {
-        const ratingColumnSelect = document.getElementById('qtRatingColumnSelect');
-        ratingColumn = ratingColumnSelect.value;
-        if (!ratingColumn) {
-            showError('Please select a rating column for ranking models');
-            return;
-        }
+    const splitStrategy = document.getElementById('wizardSplitStrategy').value;
+    const dateColumn = document.getElementById('wizardDateColumn').value;
+
+    if ((splitStrategy === 'time_holdout' || splitStrategy === 'strict_time') && !dateColumn) {
+        showError('Please select a date column for time-based split');
+        return;
     }
 
-    // Close dialog
-    closeQuickTestDialog();
-
-    // Show progress modal
-    document.getElementById('qtProgressFeatureConfig').textContent = selectedFeatureConfigName;
-    document.getElementById('qtProgressModelConfig').textContent = selectedModelConfigName;
-    document.getElementById('qtProgressBar').style.width = '0%';
-    document.getElementById('qtProgressText').textContent = '0%';
-    document.getElementById('qtElapsed').textContent = '0:00';
-    document.getElementById('qtStages').innerHTML = renderInitialStages();
-    document.getElementById('quickTestProgress').classList.remove('hidden');
-
-    // Build request payload
+    // Build payload
     const payload = {
-        model_config_id: selectedModelConfigId,
+        model_config_id: selectedModelConfig.id,
         split_strategy: splitStrategy,
-        data_sample_percent: samplePercent,
-        holdout_days: holdoutDays,
+        data_sample_percent: parseInt(document.getElementById('wizardSamplePercent').value),
+        holdout_days: parseInt(document.getElementById('wizardHoldoutDays').value) || 1,
         date_column: dateColumn,
-        epochs: epochs,
-        batch_size: batchSize,
-        learning_rate: learningRate
+        epochs: parseInt(document.getElementById('wizardEpochs').value),
+        batch_size: parseInt(document.getElementById('wizardBatchSize').value),
+        learning_rate: parseFloat(document.getElementById('wizardLearningRate').value)
     };
 
     // Add rating column for ranking models
-    if (ratingColumn) {
-        payload.rating_column = ratingColumn;
+    if (selectedModelConfig.model_type === 'ranking' || selectedModelConfig.model_type === 'multitask') {
+        payload.rating_column = document.getElementById('wizardRatingColumn').value;
     }
 
+    // Disable run button
+    const runBtn = document.getElementById('wizardRunBtn');
+    runBtn.disabled = true;
+    runBtn.querySelector('.btn-neu-inner').innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Submitting...';
+
     try {
-        const response = await fetch(`/api/feature-configs/${selectedFeatureConfigId}/quick-test/`, {
+        const response = await fetch(`/api/feature-configs/${selectedFeatureConfig.id}/quick-test/`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -1069,135 +1648,149 @@ async function startQuickTest() {
         const data = await response.json();
 
         if (data.success) {
-            currentQuickTestId = data.quick_test.id;
-            updateProgressUI(data.quick_test);
-            startPolling();
+            // Close wizard
+            closeNewExpWizard();
+
+            // Refresh experiments list
+            await loadExperiments(1);
+
+            // Show experiments list if it was hidden
+            document.getElementById('expEmpty').classList.add('hidden');
+            document.getElementById('expFilterBar').classList.remove('hidden');
+            document.getElementById('expList').classList.remove('hidden');
+
+            // Start polling
+            startBackgroundPolling();
+
+            showSuccess(`${data.quick_test.display_name} submitted successfully`);
         } else {
-            document.getElementById('quickTestProgress').classList.add('hidden');
-            showError(data.error || 'Failed to start Quick Test');
+            showError(data.error || 'Failed to submit experiment');
         }
     } catch (error) {
-        document.getElementById('quickTestProgress').classList.add('hidden');
-        showError('Failed to start Quick Test: ' + error.message);
+        console.error('Error submitting experiment:', error);
+        showError('Failed to submit experiment: ' + error.message);
+    } finally {
+        runBtn.disabled = false;
+        runBtn.querySelector('.btn-neu-inner').innerHTML = '<i class="fas fa-play mr-2"></i>Run Experiment';
     }
 }
 
-function renderInitialStages() {
-    const stages = ['ExampleGen', 'StatisticsGen', 'SchemaGen', 'Transform', 'Trainer'];
-    return stages.map(name => `
-        <div class="quicktest-stage" data-stage="${name}">
-            <div class="quicktest-stage-icon pending">
-                <i class="fas fa-clock"></i>
-            </div>
-            <span class="quicktest-stage-name">${name}</span>
-            <span class="quicktest-stage-duration"></span>
-        </div>
-    `).join('');
-}
-
 // =============================================================================
-// POLLING & PROGRESS
+// EXPERIMENT DETAILS & MODALS
 // =============================================================================
-function startPolling() {
-    quickTestPollInterval = setInterval(async () => {
-        try {
-            const response = await fetch(`/api/quick-tests/${currentQuickTestId}/`);
-            const data = await response.json();
+async function openExpDetails(expId) {
+    try {
+        const response = await fetch(`/api/quick-tests/${expId}/`);
+        const data = await response.json();
 
-            if (data.success) {
-                const quickTest = data.quick_test;
-                updateProgressUI(quickTest);
-
-                if (['completed', 'failed', 'cancelled'].includes(quickTest.status)) {
-                    stopPolling();
-                    showResults(quickTest);
-                }
-            }
-        } catch (error) {
-            console.error('Polling error:', error);
+        if (!data.success) {
+            showError(data.error || 'Failed to load experiment details');
+            return;
         }
-    }, 10000); // Poll every 10 seconds
-}
 
-function stopPolling() {
-    if (quickTestPollInterval) {
-        clearInterval(quickTestPollInterval);
-        quickTestPollInterval = null;
+        const exp = data.quick_test;
+
+        if (exp.status === 'running' || exp.status === 'submitting') {
+            // Show progress modal
+            openProgressModal(exp);
+        } else {
+            // Show results modal
+            openResultsModal(exp);
+        }
+    } catch (error) {
+        console.error('Error loading experiment details:', error);
+        showError('Failed to load experiment details');
     }
 }
 
-function updateProgressUI(quickTest) {
+function openProgressModal(exp) {
+    currentExpId = exp.id;
+
+    document.getElementById('progressExpName').textContent = exp.display_name;
+    document.getElementById('progressConfigs').textContent = `${exp.feature_config_name} + ${exp.model_config_name}`;
+
+    updateProgressUI(exp);
+    document.getElementById('expProgressModal').classList.remove('hidden');
+
+    // Start polling for this specific experiment
+    startExpPolling(exp.id);
+}
+
+function closeProgressModal() {
+    document.getElementById('expProgressModal').classList.add('hidden');
+    stopExpPolling();
+}
+
+function updateProgressUI(exp) {
     // Update progress bar
-    const progressPercent = quickTest.progress_percent || 0;
-    document.getElementById('qtProgressBar').style.width = progressPercent + '%';
-    document.getElementById('qtProgressText').textContent = progressPercent + '%';
+    const percent = exp.progress_percent || 0;
+    document.getElementById('progressBar').style.width = percent + '%';
+    document.getElementById('progressText').textContent = percent + '%';
 
     // Update stages
-    if (quickTest.stage_details && quickTest.stage_details.length) {
-        const stagesHtml = quickTest.stage_details.map(stage => {
-            let iconClass, statusClass;
-            switch (stage.status) {
-                case 'completed':
-                    iconClass = 'fa-check-circle';
-                    statusClass = 'completed';
-                    break;
-                case 'running':
-                    iconClass = 'fa-spinner fa-spin';
-                    statusClass = 'running';
-                    break;
-                case 'failed':
-                    iconClass = 'fa-times-circle';
-                    statusClass = 'failed';
-                    break;
-                default:
-                    iconClass = 'fa-clock';
-                    statusClass = 'pending';
-            }
+    const stages = exp.stage_details || getDefaultStages();
+    document.getElementById('progressStages').innerHTML = stages.map(stage => {
+        let iconClass, statusClass;
+        switch (stage.status) {
+            case 'completed':
+                iconClass = 'fa-check-circle';
+                statusClass = 'completed';
+                break;
+            case 'running':
+                iconClass = 'fa-spinner fa-spin';
+                statusClass = 'running';
+                break;
+            case 'failed':
+                iconClass = 'fa-times-circle';
+                statusClass = 'failed';
+                break;
+            default:
+                iconClass = 'fa-clock';
+                statusClass = 'pending';
+        }
 
-            const duration = stage.duration_seconds
-                ? formatDuration(stage.duration_seconds)
-                : '';
+        const duration = stage.duration_seconds ? formatDuration(stage.duration_seconds) : '';
 
-            return `
-                <div class="quicktest-stage ${statusClass}">
-                    <div class="quicktest-stage-icon ${statusClass}">
-                        <i class="fas ${iconClass}"></i>
-                    </div>
-                    <span class="quicktest-stage-name">${stage.name}</span>
-                    <span class="quicktest-stage-duration">${duration}</span>
+        return `
+            <div class="quicktest-stage ${statusClass}">
+                <div class="quicktest-stage-icon ${statusClass}">
+                    <i class="fas ${iconClass}"></i>
                 </div>
-            `;
-        }).join('');
-
-        document.getElementById('qtStages').innerHTML = stagesHtml;
-    }
+                <span class="quicktest-stage-name">${stage.name}</span>
+                <span class="quicktest-stage-duration">${duration}</span>
+            </div>
+        `;
+    }).join('');
 
     // Update elapsed time
-    if (quickTest.elapsed_seconds) {
-        document.getElementById('qtElapsed').textContent = formatDuration(quickTest.elapsed_seconds);
+    if (exp.elapsed_seconds) {
+        document.getElementById('progressElapsed').textContent = formatDuration(exp.elapsed_seconds);
     }
 }
 
-// =============================================================================
-// RESULTS
-// =============================================================================
-function showResults(quickTest) {
-    // Hide progress modal
-    document.getElementById('quickTestProgress').classList.add('hidden');
+function getDefaultStages() {
+    return [
+        { name: 'ExampleGen', status: 'pending' },
+        { name: 'StatisticsGen', status: 'pending' },
+        { name: 'SchemaGen', status: 'pending' },
+        { name: 'Transform', status: 'pending' },
+        { name: 'Trainer', status: 'pending' }
+    ];
+}
 
-    // Update results modal
-    document.getElementById('qtrFeatureConfig').textContent = selectedFeatureConfigName;
-    document.getElementById('qtrModelConfig').textContent = selectedModelConfigName;
+function openResultsModal(exp) {
+    document.getElementById('resultsExpName').textContent = exp.display_name;
+    document.getElementById('resultsConfigs').textContent = `${exp.feature_config_name} + ${exp.model_config_name}`;
 
     // Status icon and badge
-    const statusIcon = document.getElementById('qtrStatusIcon');
-    const statusBadge = document.getElementById('qtrStatusBadge');
+    const statusIcon = document.getElementById('resultsStatusIcon');
+    const statusBadge = document.getElementById('resultsStatusBadge');
 
-    if (quickTest.status === 'completed') {
+    if (exp.status === 'completed') {
         statusIcon.className = 'modal-header-icon success';
         statusIcon.innerHTML = '<i class="fas fa-check"></i>';
         statusBadge.innerHTML = '<span class="status-badge active"><i class="fas fa-check-circle"></i> Completed</span>';
-    } else if (quickTest.status === 'failed') {
+    } else if (exp.status === 'failed') {
         statusIcon.className = 'modal-header-icon error';
         statusIcon.innerHTML = '<i class="fas fa-times"></i>';
         statusBadge.innerHTML = '<span class="status-badge" style="background: #fef2f2; color: #991b1b;"><i class="fas fa-times-circle"></i> Failed</span>';
@@ -1207,9 +1800,9 @@ function showResults(quickTest) {
         statusBadge.innerHTML = '<span class="status-badge draft"><i class="fas fa-ban"></i> Cancelled</span>';
     }
 
-    // Metrics (nested under 'metrics' object from API)
-    const metrics = quickTest.metrics || {};
-    const metricsHtml = quickTest.status === 'completed' ? `
+    // Metrics
+    const metrics = exp.metrics || {};
+    document.getElementById('resultsMetrics').innerHTML = exp.status === 'completed' ? `
         <div class="quicktest-metric">
             <span class="quicktest-metric-label">Loss</span>
             <span class="quicktest-metric-value">${metrics.loss != null ? metrics.loss.toFixed(4) : 'N/A'}</span>
@@ -1228,69 +1821,103 @@ function showResults(quickTest) {
         </div>
     ` : '<p class="text-gray-500">No metrics available</p>';
 
-    document.getElementById('qtrMetrics').innerHTML = metricsHtml;
-
-    // Vocabulary stats
-    const vocabSection = document.getElementById('qtrVocabSection');
-    if (quickTest.vocabulary_stats && Object.keys(quickTest.vocabulary_stats).length > 0) {
-        vocabSection.classList.remove('hidden');
-        const vocabHtml = Object.entries(quickTest.vocabulary_stats).map(([feature, stats]) => `
-            <div class="quicktest-metric">
-                <span class="quicktest-metric-label">${feature}</span>
-                <span class="quicktest-metric-value">
-                    ${stats.vocab_size?.toLocaleString() || 'N/A'} vocab
-                    ${stats.oov_rate !== undefined ? ` (${(stats.oov_rate * 100).toFixed(2)}% OOV)` : ''}
-                </span>
-            </div>
-        `).join('');
-        document.getElementById('qtrVocabStats').innerHTML = vocabHtml;
-    } else {
-        vocabSection.classList.add('hidden');
-    }
-
     // Error section
-    const errorSection = document.getElementById('qtrErrorSection');
-    if (quickTest.status === 'failed' && quickTest.error_message) {
+    const errorSection = document.getElementById('resultsErrorSection');
+    if (exp.status === 'failed' && exp.error_message) {
         errorSection.classList.remove('hidden');
-        document.getElementById('qtrErrorMessage').textContent = quickTest.error_message;
+        document.getElementById('resultsErrorMessage').textContent = exp.error_message;
     } else {
         errorSection.classList.add('hidden');
     }
 
     // Duration
-    document.getElementById('qtrDuration').textContent = quickTest.duration_seconds
-        ? formatDuration(quickTest.duration_seconds)
+    document.getElementById('resultsDuration').textContent = exp.duration_seconds
+        ? formatDuration(exp.duration_seconds)
         : '-';
 
     // Vertex AI link
-    if (quickTest.vertex_pipeline_job_id) {
-        const link = `https://console.cloud.google.com/vertex-ai/pipelines/runs/${quickTest.vertex_pipeline_job_id}?project=b2b-recs`;
-        document.getElementById('qtrVertexLink').href = link;
-        document.getElementById('qtrVertexLink').style.display = 'inline';
+    if (exp.vertex_pipeline_job_id) {
+        const link = `https://console.cloud.google.com/vertex-ai/pipelines/runs/${exp.vertex_pipeline_job_id}?project=b2b-recs`;
+        document.getElementById('resultsVertexLink').href = link;
+        document.getElementById('resultsVertexLink').style.display = 'inline';
     } else {
-        document.getElementById('qtrVertexLink').style.display = 'none';
+        document.getElementById('resultsVertexLink').style.display = 'none';
     }
 
-    // Show results modal
-    document.getElementById('quickTestResults').classList.remove('hidden');
+    document.getElementById('expResultsModal').classList.remove('hidden');
 }
 
-function closeQuickTestResults() {
-    document.getElementById('quickTestResults').classList.add('hidden');
+function closeResultsModal() {
+    document.getElementById('expResultsModal').classList.add('hidden');
+}
+
+// =============================================================================
+// POLLING
+// =============================================================================
+function startExpPolling(expId) {
+    stopExpPolling();
+
+    pollInterval = setInterval(async () => {
+        try {
+            const response = await fetch(`/api/quick-tests/${expId}/`);
+            const data = await response.json();
+
+            if (data.success) {
+                const exp = data.quick_test;
+                updateProgressUI(exp);
+
+                // Also update the card in the list
+                updateExpCard(exp);
+
+                if (['completed', 'failed', 'cancelled'].includes(exp.status)) {
+                    stopExpPolling();
+                    closeProgressModal();
+                    openResultsModal(exp);
+                }
+            }
+        } catch (error) {
+            console.error('Polling error:', error);
+        }
+    }, 10000);
+}
+
+function stopExpPolling() {
+    if (pollInterval) {
+        clearInterval(pollInterval);
+        pollInterval = null;
+    }
+}
+
+function startBackgroundPolling() {
+    // Poll for running experiments every 30 seconds
+    setInterval(async () => {
+        const hasRunning = experiments.some(e => e.status === 'running' || e.status === 'submitting');
+        if (hasRunning) {
+            await loadExperiments(pagination.page);
+        }
+    }, 30000);
+}
+
+function updateExpCard(exp) {
+    // Find and update the card in the DOM
+    const card = document.querySelector(`[data-exp-id="${exp.id}"]`);
+    if (card) {
+        card.outerHTML = renderExpCard(exp);
+    }
 }
 
 // =============================================================================
 // CANCEL
 // =============================================================================
-async function cancelQuickTest() {
-    if (!currentQuickTestId) return;
+async function cancelExperiment() {
+    if (!currentExpId) return;
 
-    const btn = document.getElementById('qtCancelBtn');
+    const btn = document.getElementById('progressCancelBtn');
     btn.disabled = true;
-    btn.innerHTML = '<span class="btn-neu-inner"><i class="fas fa-spinner fa-spin mr-2"></i>Cancelling...</span>';
+    btn.querySelector('.btn-neu-inner').innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Cancelling...';
 
     try {
-        const response = await fetch(`/api/quick-tests/${currentQuickTestId}/cancel/`, {
+        const response = await fetch(`/api/quick-tests/${currentExpId}/cancel/`, {
             method: 'POST',
             headers: {
                 'X-CSRFToken': getCookie('csrftoken')
@@ -1300,18 +1927,30 @@ async function cancelQuickTest() {
         const data = await response.json();
 
         if (data.success) {
-            stopPolling();
-            document.getElementById('quickTestProgress').classList.add('hidden');
-            showSuccess('Quick Test cancelled');
+            stopExpPolling();
+            closeProgressModal();
+            await loadExperiments(pagination.page);
+            showSuccess('Experiment cancelled');
         } else {
-            showError(data.error || 'Failed to cancel Quick Test');
+            showError(data.error || 'Failed to cancel experiment');
         }
     } catch (error) {
         showError('Failed to cancel: ' + error.message);
     } finally {
         btn.disabled = false;
-        btn.innerHTML = '<span class="btn-neu-inner"><i class="fas fa-stop mr-2"></i>Cancel Test</span>';
+        btn.querySelector('.btn-neu-inner').innerHTML = '<i class="fas fa-stop mr-2"></i>Cancel';
     }
+}
+
+// =============================================================================
+// COMPARE MODAL (Placeholder)
+// =============================================================================
+function openCompareModal() {
+    document.getElementById('compareModal').classList.remove('hidden');
+}
+
+function closeCompareModal() {
+    document.getElementById('compareModal').classList.add('hidden');
 }
 
 // =============================================================================
@@ -1322,6 +1961,20 @@ function formatDuration(seconds) {
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
     return `${mins}:${secs.toString().padStart(2, '0')}`;
+}
+
+function formatTimeAgo(date) {
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return 'just now';
+    if (diffMins < 60) return `${diffMins} min ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString();
 }
 
 function getCookie(name) {

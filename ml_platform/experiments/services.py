@@ -121,7 +121,7 @@ class ExperimentService:
         from ml_platform.models import QuickTest
 
         # Create QuickTest record
-        quick_test = QuickTest.objects.create(
+        quick_test = QuickTest(
             feature_config=feature_config,
             model_config=model_config,
             created_by=user,
@@ -134,6 +134,9 @@ class ExperimentService:
             learning_rate=learning_rate or model_config.learning_rate,
             status=QuickTest.STATUS_SUBMITTING,
         )
+        # Assign sequential experiment number before saving
+        quick_test.assign_experiment_number()
+        quick_test.save()
 
         try:
             # Generate code and submit pipeline

@@ -1589,6 +1589,13 @@ class QuickTest(models.Model):
         help_text="Column name containing ratings/scores (required for ranking models)"
     )
 
+    # Experiment number (auto-incrementing per Model Endpoint)
+    experiment_number = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Sequential experiment number within the Model Endpoint (Exp #1, Exp #2, etc.)"
+    )
+
     # =========================================================================
     # Pipeline Tracking
     # =========================================================================
@@ -1729,6 +1736,32 @@ class QuickTest(models.Model):
             self.STATUS_FAILED,
             self.STATUS_CANCELLED
         ]
+
+    @property
+    def display_name(self):
+        """Return display name like 'Exp #1', 'Exp #2', etc."""
+        if self.experiment_number:
+            return f"Exp #{self.experiment_number}"
+        return f"Exp #{self.pk}"
+
+    def assign_experiment_number(self):
+        """
+        Assign the next sequential experiment number for this Model Endpoint.
+        Should be called when creating a new QuickTest.
+        """
+        if self.experiment_number is not None:
+            return  # Already assigned
+
+        # Get the model endpoint through the feature config's dataset
+        model_endpoint = self.feature_config.dataset.model_endpoint
+
+        # Find the max experiment_number for this model endpoint
+        max_number = QuickTest.objects.filter(
+            feature_config__dataset__model_endpoint=model_endpoint,
+            experiment_number__isnull=False
+        ).aggregate(models.Max('experiment_number'))['experiment_number__max']
+
+        self.experiment_number = (max_number or 0) + 1
 
     @property
     def elapsed_seconds(self):

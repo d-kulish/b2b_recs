@@ -181,13 +181,14 @@ Django (Python 3.13)
 
 2. **Split Strategies**:
    - `random` (default): Hash-based 80/20 split for fastest iteration
-   - `time_holdout`: Excludes last N days from training, remaining data uses hash-based 80/20 split
-   - `strict_time`: **True temporal split** - Train/Val/Test periods determined by date ranges:
+   - `time_holdout`: Excludes last N days from training (relative to MAX date in dataset), remaining data uses hash-based 80/20 split
+   - `strict_time`: **True temporal split** - Train/Val/Test periods determined by date ranges relative to MAX date in dataset:
      - Train: oldest data (configurable days, default 80% of dataset)
      - Validation: middle data (configurable days, default 15% of dataset)
      - Test: newest data (held out completely, default 5% of dataset)
      - SQL generates a `split` column based on date ranges
      - TFX uses `partition_feature_name="split"` to route data (no random mixing)
+   - **Important**: All temporal calculations use `MAX(date_column)` from the actual dataset, NOT `CURRENT_DATE()`. This ensures split strategies work correctly with historical data.
 
 3. **Sampling**: Applied after holdout filter to preserve test set integrity
 
@@ -228,6 +229,8 @@ Django (Python 3.13)
 14. **FactorizedTopK serialization error (December 16, 2025)**: `ResourceGather is stateful` error during dataset serialization. Cause: `candidates_dataset.batch(128).map(self.candidate_tower)` tried to serialize `Embedding` layers into dataset pipeline. Fix: Removed `FactorizedTopK` metrics from training (not required for loss computation, only for evaluation).
 
 15. **Untracked resource error during model save (December 16, 2025)**: `tf.saved_model.save()` failed with "untracked resource" for TFT vocabulary hash tables. Cause: Standalone `@tf.function` captured TFT resources not tracked by model. Fix: Created `ServingModel` class (inherits `tf.keras.Model`) that properly tracks all resources as attributes: `tft_layer`, `product_ids`, `product_embeddings`, `retrieval_model`.
+
+16. **Temporal split strategies returning 0 rows (December 18, 2025)**: `KeyError: 'customer_id'` in Transform stage when using `strict_time` or `time_holdout` split strategies with historical data. Cause: `_generate_holdout_cte()` in `ml_platform/datasets/services.py` used `CURRENT_DATE()` as reference point for date calculations. When dataset contained old data (e.g., ending 2024-04-28), the calculated date windows (e.g., 2025-10-10 to 2025-12-16) had zero overlap with actual data, resulting in 0 rows → empty TFRecords → empty schema → KeyError. Fix: Changed both `time_holdout` and `strict_time` strategies to use `MAX(date_column)` from the dataset instead of `CURRENT_DATE()`. Date windows are now calculated relative to the actual data range.
 
 ### Next Steps
 

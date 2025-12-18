@@ -1275,9 +1275,12 @@ class BigQueryService:
         """
         Generate CTE for holdout filtering based on date column.
 
+        All date calculations are relative to the MAX date in the dataset,
+        NOT CURRENT_DATE(). This ensures splits work correctly with historical data.
+
         Args:
             source_table: Source CTE or table name
-            date_column: Column name containing dates
+            date_column: Column name containing dates (Unix epoch INT64)
             holdout_days: Number of days to exclude (for time_holdout)
             strategy: 'time_holdout' or 'strict_time'
             train_days: Number of days for training data (strict_time only)
@@ -1288,43 +1291,50 @@ class BigQueryService:
             SQL for the holdout CTE body (without the AS wrapper)
 
         For time_holdout:
-            Excludes the last N days from training.
+            Excludes the last N days from training (relative to MAX date in data).
             Train+Val use all data before holdout, TFX does random train/val split.
 
         For strict_time:
-            True temporal split with data ordered by time:
-            - Train: from (train_days + val_days + test_days) ago to (val_days + test_days) ago
-            - Eval: from (val_days + test_days) ago to (test_days) ago
-            - Test: last test_days (completely excluded from query)
-            Adds a 'split' column for TFX to use with partition_feature_name.
+            True temporal split with data ordered by time (relative to MAX date in data):
+            - Train+Val window: from (train+val+test days before MAX) to (test days before MAX)
+            - Test: last test_days before MAX date (completely excluded from query)
+            TFX does hash-based train/eval split within the returned window.
         """
         if strategy == 'time_holdout':
-            # Simple holdout: exclude last N days
+            # Simple holdout: exclude last N days relative to MAX date in dataset
             # Note: date_column is already converted to Unix epoch (INT64) by for_tfx=True
-            # So we need to compare with Unix seconds, not DATE type
-            return f"""    SELECT *
-    FROM {source_table}
-    WHERE {date_column} < UNIX_SECONDS(TIMESTAMP(DATE_SUB(CURRENT_DATE(), INTERVAL {holdout_days} DAY)))"""
+            # We use a CTE to find MAX date once, then filter relative to it
+            return f"""    WITH max_date_ref AS (
+        SELECT DATE(TIMESTAMP_SECONDS(MAX({date_column}))) AS ref_date
+        FROM {source_table}
+    )
+    SELECT base.*
+    FROM {source_table} base, max_date_ref
+    WHERE base.{date_column} < UNIX_SECONDS(TIMESTAMP(DATE_SUB(max_date_ref.ref_date, INTERVAL {holdout_days} DAY)))"""
 
         elif strategy == 'strict_time':
             # True temporal split - exclude test period completely
-            # Timeline (days ago from today):
-            #   |<-- train_days -->|<-- val_days -->|<-- test_days -->| TODAY
+            # Timeline (days before MAX date in dataset):
+            #   |<-- train_days -->|<-- val_days -->|<-- test_days -->| MAX_DATE
             #   ^                  ^                ^                 ^
             #   total_window    val+test          test_days          0
-            #   (window start)  (excluded)       (excluded)
+            #   (window start)                    (excluded)
             #
-            # SQL returns only the train+val window (oldest data)
-            # Test period is completely excluded from training
+            # SQL returns only the train+val window
+            # Test period (last test_days before MAX date) is completely excluded
             # TFX does hash-based 80/20 split within this window for train/eval
             #
             # Note: date_column is already converted to Unix epoch (INT64) by for_tfx=True
-            # So we need to compare with Unix seconds, not DATE type
+            # We use a CTE to find MAX date once, then filter relative to it
             total_window = train_days + val_days + test_days
-            return f"""    SELECT *
-    FROM {source_table}
-    WHERE {date_column} >= UNIX_SECONDS(TIMESTAMP(DATE_SUB(CURRENT_DATE(), INTERVAL {total_window} DAY)))
-      AND {date_column} < UNIX_SECONDS(TIMESTAMP(DATE_SUB(CURRENT_DATE(), INTERVAL {test_days} DAY)))"""
+            return f"""    WITH max_date_ref AS (
+        SELECT DATE(TIMESTAMP_SECONDS(MAX({date_column}))) AS ref_date
+        FROM {source_table}
+    )
+    SELECT base.*
+    FROM {source_table} base, max_date_ref
+    WHERE base.{date_column} >= UNIX_SECONDS(TIMESTAMP(DATE_SUB(max_date_ref.ref_date, INTERVAL {total_window} DAY)))
+      AND base.{date_column} < UNIX_SECONDS(TIMESTAMP(DATE_SUB(max_date_ref.ref_date, INTERVAL {test_days} DAY)))"""
 
         else:
             # Random - no holdout filter

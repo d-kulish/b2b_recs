@@ -239,6 +239,25 @@ def quick_test_list(request):
 
         quick_tests = list(queryset[start_idx:end_idx])
 
+        # Refresh status for running/submitting experiments from Vertex AI
+        # This ensures the UI shows up-to-date status without requiring
+        # the user to click on each experiment individually
+        running_tests = [qt for qt in quick_tests
+                        if qt.status in (QuickTest.STATUS_RUNNING, QuickTest.STATUS_SUBMITTING)]
+
+        if running_tests:
+            try:
+                service = ExperimentService(model_endpoint)
+                for qt in running_tests:
+                    # Only refresh if we have a Vertex AI job to check
+                    if qt.vertex_pipeline_job_name:
+                        try:
+                            service.refresh_status(qt)
+                        except Exception as refresh_error:
+                            logger.warning(f"Failed to refresh status for QuickTest {qt.id}: {refresh_error}")
+            except Exception as service_error:
+                logger.warning(f"Failed to initialize ExperimentService for status refresh: {service_error}")
+
         return JsonResponse({
             'success': True,
             'quick_tests': [_serialize_quick_test(qt) for qt in quick_tests],
@@ -480,6 +499,10 @@ def get_date_columns(request, dataset_id):
 
 def _serialize_quick_test(quick_test, include_details=False):
     """Serialize a QuickTest model to dict."""
+    # Build stage_details for the response
+    # Handle different statuses appropriately
+    stage_details = _get_stage_details_for_status(quick_test)
+
     data = {
         'id': quick_test.id,
         'experiment_number': quick_test.experiment_number,
@@ -493,6 +516,9 @@ def _serialize_quick_test(quick_test, include_details=False):
         'progress_percent': quick_test.progress_percent,
         'elapsed_seconds': quick_test.elapsed_seconds,
         'duration_seconds': quick_test.duration_seconds,
+
+        # Stage details for progress bar (always included)
+        'stage_details': stage_details,
 
         # Configuration
         'split_strategy': quick_test.split_strategy,
@@ -531,6 +557,62 @@ def _serialize_quick_test(quick_test, include_details=False):
         data['error_message'] = quick_test.error_message
         data['vertex_pipeline_job_name'] = quick_test.vertex_pipeline_job_name
         data['gcs_artifacts_path'] = quick_test.gcs_artifacts_path
-        data['stage_timestamps'] = quick_test.stage_timestamps
 
     return data
+
+
+def _get_stage_details_for_status(quick_test):
+    """
+    Build stage_details based on the current status.
+
+    Handles special cases:
+    - 'submitting': Show Compile as running, others pending
+    - 'running'/'completed'/'failed': Use stored stage_details
+    - 'pending': All stages pending
+    """
+    from ml_platform.models import QuickTest
+
+    # Default stages with short names
+    default_stages = [
+        {'name': 'Compile', 'status': 'pending', 'duration_seconds': None},
+        {'name': 'Examples', 'status': 'pending', 'duration_seconds': None},
+        {'name': 'Stats', 'status': 'pending', 'duration_seconds': None},
+        {'name': 'Schema', 'status': 'pending', 'duration_seconds': None},
+        {'name': 'Transform', 'status': 'pending', 'duration_seconds': None},
+        {'name': 'Train', 'status': 'pending', 'duration_seconds': None},
+    ]
+
+    if quick_test.status == QuickTest.STATUS_PENDING:
+        # Not started yet - all pending
+        return default_stages
+
+    elif quick_test.status == QuickTest.STATUS_SUBMITTING:
+        # Cloud Build is running - Compile is active
+        stages = default_stages.copy()
+        stages[0] = {'name': 'Compile', 'status': 'running', 'duration_seconds': None}
+        return stages
+
+    elif quick_test.status in (QuickTest.STATUS_RUNNING, QuickTest.STATUS_COMPLETED,
+                                QuickTest.STATUS_FAILED, QuickTest.STATUS_CANCELLED):
+        # Use stored stage_details if available
+        if quick_test.stage_details and len(quick_test.stage_details) > 0:
+            return quick_test.stage_details
+        else:
+            # Fallback: Compile completed, others based on status
+            stages = default_stages.copy()
+            stages[0] = {'name': 'Compile', 'status': 'completed', 'duration_seconds': None}
+
+            if quick_test.status == QuickTest.STATUS_RUNNING:
+                # Mark Examples as running if no details available
+                stages[1] = {'name': 'Examples', 'status': 'running', 'duration_seconds': None}
+            elif quick_test.status == QuickTest.STATUS_COMPLETED:
+                # All completed
+                for stage in stages:
+                    stage['status'] = 'completed'
+            elif quick_test.status == QuickTest.STATUS_FAILED:
+                # Compile done, first pipeline stage failed (unknown which)
+                stages[1] = {'name': 'Examples', 'status': 'failed', 'duration_seconds': None}
+
+            return stages
+
+    return default_stages

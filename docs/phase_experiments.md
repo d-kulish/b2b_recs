@@ -5,7 +5,7 @@ This document provides **high-level specifications** for the Experiments domain.
 
 👉 **[phase_experiments_implementation.md](phase_experiments_implementation.md)** - Complete implementation guide with code examples
 
-**Last Updated**: 2025-12-16
+**Last Updated**: 2025-12-18
 
 ---
 
@@ -281,6 +281,47 @@ The wizard includes hardware selection for configuring compute resources:
 **Dataflow Integration:** StatisticsGen and Transform components always use Dataflow with the selected machine type for worker nodes. This ensures scalable processing for large datasets.
 
 ### Quick Test Progress
+
+**Stage Progress Bar (Updated December 2025):**
+
+Each experiment card shows a 6-stage progress bar with color-coded status:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Experiment #7 - Running                                    [Cancel]          │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│ [Compile ✓] [Examples ✓] [Stats ✓] [Schema ●] [Transform ○] [Train ○]       │
+│   green       green       green     orange      grey         grey            │
+│                                                                              │
+│ Current: Schema (analyzing statistics)                                       │
+│                                                                              │
+│ Feature: My Feature Config                                                   │
+│ Model: Standard Two-Tower                                                    │
+│ Split: Random (80/20)  Sample: 25%  Hardware: Medium                         │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Stage Statuses:**
+| Color | Icon | Status | Description |
+|-------|------|--------|-------------|
+| Grey | ○ | Pending | Stage not yet started |
+| Orange | ● | Running | Stage currently executing |
+| Green | ✓ | Success | Stage completed successfully |
+| Red | ✗ | Failed | Stage failed with error |
+
+**Pipeline Stages:**
+| Stage | TFX Component | Description |
+|-------|---------------|-------------|
+| Compile | Cloud Build | Compile TFX pipeline and submit to Vertex AI |
+| Examples | BigQueryExampleGen | Extract data from BigQuery to TFRecords |
+| Stats | StatisticsGen | Compute dataset statistics using TFDV |
+| Schema | SchemaGen | Infer schema from statistics |
+| Transform | Transform | Apply preprocessing_fn, generate vocabularies |
+| Train | Trainer | Train TFRS two-tower model |
+
+**Legacy Progress View (for reference):**
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -1024,6 +1065,19 @@ MLFLOW_TRACKING_URI = os.environ.get('MLFLOW_TRACKING_URI', 'http://mlflow-serve
 - [x] **NUM_OOV_BUCKETS constant**: Added to trainer module to match Transform preprocessing
 
 **Result:** Pipeline now completes successfully: BigQueryExampleGen → StatisticsGen → SchemaGen → Transform → Trainer → Model Saved
+
+### Phase 12: Pipeline Progress Bar & Error Improvements ✅ DONE (2025-12-18)
+> **Visual progress tracking and better error handling**
+
+- [x] **Stage progress bar**: 6-stage visual progress bar (Compile, Examples, Stats, Schema, Transform, Train)
+- [x] **Color-coded status**: Grey (pending), orange (running), green (success), red (failed)
+- [x] **Async Cloud Build**: Wizard closes immediately, status polled in background
+- [x] **Cloud Build tracking**: Added `cloud_build_id` and `cloud_build_run_id` fields to QuickTest
+- [x] **Column validation**: Validates FeatureConfig columns match BigQuery output before pipeline submission
+- [x] **Duplicate column fix**: Fixed `generate_query()` to handle duplicate columns consistently
+- [x] **Helpful error messages**: Column mismatch errors include suggestions for correct column names
+
+**Result:** Users see real-time pipeline progress and get actionable error messages when column names don't match.
 
 ### Previously Completed ✅
 - [x] Create `model_experiments.html` page (placeholder)

@@ -179,6 +179,10 @@ class ExperimentService:
         from ml_platform.configs.services import PreprocessingFnGenerator, TrainerModuleGenerator
         from ml_platform.datasets.services import BigQueryService
 
+        # 0. Validate FeatureConfig column names match BigQuery output
+        logger.info("Validating FeatureConfig column names against BigQuery output")
+        self._validate_column_names(feature_config)
+
         # 1. Generate transform code from FeatureConfig
         logger.info(f"Generating transform code for FeatureConfig {feature_config.id}")
         transform_generator = PreprocessingFnGenerator(feature_config)
@@ -230,9 +234,9 @@ class ExperimentService:
         quick_test.gcs_artifacts_path = gcs_base_path
         quick_test.save(update_fields=['gcs_artifacts_path'])
 
-        # 6. Submit TFX pipeline to Vertex AI
-        logger.info("Submitting TFX pipeline to Vertex AI")
-        pipeline_job = self._submit_vertex_pipeline(
+        # 6. Submit TFX pipeline to Vertex AI (async - triggers Cloud Build and returns immediately)
+        logger.info("Triggering TFX pipeline compilation via Cloud Build")
+        build_id = self._submit_vertex_pipeline(
             quick_test=quick_test,
             bigquery_query=bigquery_query,
             transform_module_path=transform_module_path,
@@ -242,12 +246,13 @@ class ExperimentService:
             machine_type=quick_test.machine_type,
         )
 
-        # Save Vertex AI job info
-        quick_test.vertex_pipeline_job_name = pipeline_job.resource_name
-        quick_test.vertex_pipeline_job_id = pipeline_job.name.split('/')[-1]
-        quick_test.save(update_fields=['vertex_pipeline_job_name', 'vertex_pipeline_job_id'])
+        # Save Cloud Build info for async tracking
+        # The Vertex AI job info will be populated by refresh_status() after Cloud Build completes
+        quick_test.cloud_build_id = build_id
+        quick_test.cloud_build_run_id = run_id
+        quick_test.save(update_fields=['cloud_build_id', 'cloud_build_run_id'])
 
-        logger.info(f"Pipeline submitted: {quick_test.vertex_pipeline_job_id}")
+        logger.info(f"Cloud Build triggered: {build_id} (run_id: {run_id})")
 
     def _upload_to_gcs(self, content: str, blob_path: str) -> str:
         """
@@ -266,6 +271,91 @@ class ExperimentService:
 
         return f"gs://{self.ARTIFACTS_BUCKET}/{blob_path}"
 
+    def _validate_column_names(self, feature_config):
+        """
+        Validate that FeatureConfig column names match the expected BigQuery output.
+
+        This prevents runtime errors in the Transform stage where preprocessing_fn
+        tries to access columns that don't exist in the TFRecords.
+
+        The column names must match because:
+        1. BigQuery query outputs columns with specific names (handles duplicates with table_alias_col)
+        2. FeatureConfig's features reference columns by name
+        3. Generated transform_module.py uses inputs[column_name]
+        4. If there's a mismatch, Transform fails with KeyError
+
+        Raises:
+            ExperimentServiceError: If column names don't match
+        """
+        dataset = feature_config.dataset
+        if not dataset:
+            return  # Can't validate without dataset
+
+        # Get column names from FeatureConfig features
+        feature_columns = set()
+        for feature in (feature_config.buyer_model_features or []):
+            if 'column' in feature:
+                feature_columns.add(feature['column'])
+        for feature in (feature_config.product_model_features or []):
+            if 'column' in feature:
+                feature_columns.add(feature['column'])
+
+        if not feature_columns:
+            return  # No features to validate
+
+        # Calculate expected BigQuery output column names
+        # This mirrors the logic in BigQueryService.generate_query()
+        selected_columns = dataset.selected_columns or {}
+        seen_cols = set()
+        expected_columns = set()
+
+        for table, cols in selected_columns.items():
+            table_alias = table.split('.')[-1]
+            for col in cols:
+                if col in seen_cols:
+                    # Duplicate column - uses table_alias_col format
+                    output_name = f"{table_alias}_{col}"
+                else:
+                    # First occurrence - uses raw column name
+                    output_name = col
+                    seen_cols.add(col)
+                expected_columns.add(output_name)
+
+        # Check if all FeatureConfig columns exist in BigQuery output
+        missing_columns = feature_columns - expected_columns
+        if missing_columns:
+            # Provide helpful error message with suggestions
+            suggestions = []
+            for missing in missing_columns:
+                # Check if this column exists with a table alias prefix
+                aliased_versions = [c for c in expected_columns if c.endswith(f"_{missing}")]
+                if aliased_versions:
+                    suggestions.append(f"  - '{missing}' -> try '{aliased_versions[0]}' (column exists in multiple tables)")
+                else:
+                    # Check for case-insensitive match
+                    case_matches = [c for c in expected_columns if c.lower() == missing.lower()]
+                    if case_matches:
+                        suggestions.append(f"  - '{missing}' -> try '{case_matches[0]}' (case mismatch)")
+
+            error_msg = (
+                f"FeatureConfig column names don't match BigQuery output.\n"
+                f"Missing columns: {sorted(missing_columns)}\n"
+                f"Available columns: {sorted(expected_columns)}"
+            )
+            if suggestions:
+                error_msg += f"\n\nSuggestions:\n" + "\n".join(suggestions)
+            error_msg += (
+                f"\n\nThis usually happens when:\n"
+                f"1. A column name appears in multiple tables (gets prefixed with table name)\n"
+                f"2. The FeatureConfig was created before changes to the Dataset\n"
+                f"3. Manual column name edits don't match the Dataset structure\n"
+                f"\nPlease update the FeatureConfig to use the correct column names."
+            )
+
+            raise ExperimentServiceError(error_msg)
+
+        logger.info(f"Column validation passed: {len(feature_columns)} columns verified")
+
     def _submit_vertex_pipeline(
         self,
         quick_test,
@@ -277,10 +367,11 @@ class ExperimentService:
         machine_type: str = 'n1-standard-4',
     ):
         """
-        Submit the TFX pipeline to Vertex AI via Cloud Build.
+        Submit the TFX pipeline to Vertex AI via Cloud Build (async).
 
         Cloud Build is used to compile the TFX pipeline (requires Python 3.10)
-        and submit it to Vertex AI. The result is written to GCS for retrieval.
+        and submit it to Vertex AI. This method returns immediately after
+        triggering Cloud Build - the result will be polled by refresh_status().
 
         Args:
             quick_test: QuickTest instance
@@ -292,10 +383,8 @@ class ExperimentService:
             machine_type: Compute machine type for Trainer and Dataflow workers
 
         Returns:
-            Object with resource_name and name attributes (pipeline job info)
+            build_id: Cloud Build ID for tracking
         """
-        import time
-
         logger.info(f"Triggering Cloud Build for TFX pipeline compilation: {run_id}")
 
         # Trigger Cloud Build
@@ -312,23 +401,11 @@ class ExperimentService:
             machine_type=machine_type,
         )
 
-        logger.info(f"Cloud Build triggered: {build_id}")
+        logger.info(f"Cloud Build triggered: {build_id} - returning immediately (async)")
 
-        # Wait for Cloud Build to complete and read result from GCS
-        result = self._wait_for_build_result(run_id, timeout_seconds=1800)
-
-        if not result.get('success'):
-            raise ExperimentServiceError(
-                f"Cloud Build failed: {result.get('error', 'Unknown error')}"
-            )
-
-        # Return a simple object with the pipeline job info
-        class PipelineJobInfo:
-            def __init__(self, resource_name):
-                self.resource_name = resource_name
-                self.name = resource_name
-
-        return PipelineJobInfo(result['vertex_pipeline_job_name'])
+        # Return immediately - don't wait for Cloud Build to complete
+        # The refresh_status() method will poll for completion
+        return build_id
 
     def _trigger_cloud_build(
         self,
@@ -699,7 +776,13 @@ if __name__ == "__main__":
 
     def refresh_status(self, quick_test) -> 'QuickTest':
         """
-        Refresh the status of a QuickTest from Vertex AI.
+        Refresh the status of a QuickTest from Cloud Build and/or Vertex AI.
+
+        This handles two phases:
+        1. Cloud Build phase (compilation): Check if Cloud Build completed and
+           read the Vertex AI job name from GCS
+        2. Vertex AI phase (pipeline execution): Check pipeline status and
+           update stage details
 
         Args:
             quick_test: QuickTest instance
@@ -707,9 +790,15 @@ if __name__ == "__main__":
         Returns:
             Updated QuickTest instance
         """
+        # Phase 1: If no Vertex AI job yet, check Cloud Build status
         if not quick_test.vertex_pipeline_job_name:
-            return quick_test
+            if quick_test.cloud_build_run_id:
+                self._check_cloud_build_result(quick_test)
+            # If still no vertex_pipeline_job_name after checking, return
+            if not quick_test.vertex_pipeline_job_name:
+                return quick_test
 
+        # Phase 2: Check Vertex AI pipeline status
         self._init_aiplatform()
 
         try:
@@ -724,7 +813,7 @@ if __name__ == "__main__":
 
             # Map Vertex AI states to QuickTest states
             state_mapping = {
-                'PIPELINE_STATE_PENDING': quick_test.STATUS_SUBMITTING,
+                'PIPELINE_STATE_PENDING': quick_test.STATUS_RUNNING,  # Pipeline submitted, waiting to start
                 'PIPELINE_STATE_RUNNING': quick_test.STATUS_RUNNING,
                 'PIPELINE_STATE_SUCCEEDED': quick_test.STATUS_COMPLETED,
                 'PIPELINE_STATE_FAILED': quick_test.STATUS_FAILED,
@@ -757,6 +846,69 @@ if __name__ == "__main__":
             logger.warning(f"Error refreshing status for QuickTest {quick_test.id}: {e}")
 
         return quick_test
+
+    def _check_cloud_build_result(self, quick_test):
+        """
+        Check if Cloud Build has completed and read the result from GCS.
+
+        The compile_and_submit.py script writes result to:
+        gs://{STAGING_BUCKET}/build_results/{run_id}.json
+
+        If Cloud Build completed successfully, this populates:
+        - vertex_pipeline_job_name
+        - vertex_pipeline_job_id
+        - status -> STATUS_RUNNING
+        - started_at
+
+        If Cloud Build failed, this sets:
+        - status -> STATUS_FAILED
+        - error_message
+
+        Args:
+            quick_test: QuickTest instance
+        """
+        run_id = quick_test.cloud_build_run_id
+        if not run_id:
+            return
+
+        result_blob_path = f"build_results/{run_id}.json"
+        bucket = self.storage_client.bucket(self.STAGING_BUCKET)
+        blob = bucket.blob(result_blob_path)
+
+        try:
+            if not blob.exists():
+                # Cloud Build still running - no result yet
+                logger.debug(f"Cloud Build result not ready yet: {result_blob_path}")
+                return
+
+            # Read result
+            content = blob.download_as_string().decode('utf-8')
+            result = json.loads(content)
+            logger.info(f"Cloud Build result for {run_id}: {result}")
+
+            if result.get('success'):
+                # Cloud Build succeeded - pipeline was submitted to Vertex AI
+                quick_test.vertex_pipeline_job_name = result['vertex_pipeline_job_name']
+                quick_test.vertex_pipeline_job_id = result['vertex_pipeline_job_name'].split('/')[-1]
+                quick_test.status = quick_test.STATUS_RUNNING
+                quick_test.started_at = timezone.now()
+                quick_test.save(update_fields=[
+                    'vertex_pipeline_job_name',
+                    'vertex_pipeline_job_id',
+                    'status',
+                    'started_at'
+                ])
+                logger.info(f"QuickTest {quick_test.id} pipeline submitted: {quick_test.vertex_pipeline_job_id}")
+            else:
+                # Cloud Build failed
+                quick_test.status = quick_test.STATUS_FAILED
+                quick_test.error_message = result.get('error', 'Cloud Build failed')
+                quick_test.completed_at = timezone.now()
+                quick_test.save(update_fields=['status', 'error_message', 'completed_at'])
+                logger.warning(f"QuickTest {quick_test.id} Cloud Build failed: {quick_test.error_message}")
+
+        except Exception as e:
+            logger.warning(f"Error checking Cloud Build result for QuickTest {quick_test.id}: {e}")
 
     def _extract_results(self, quick_test):
         """
@@ -807,36 +959,197 @@ if __name__ == "__main__":
         except Exception as e:
             logger.warning(f"Error extracting results for QuickTest {quick_test.id}: {e}")
 
+    # Mapping from TFX component names to short display names
+    STAGE_NAME_MAP = {
+        'bigqueryexamplegen': 'Examples',
+        'statisticsgen': 'Stats',
+        'schemagen': 'Schema',
+        'transform': 'Transform',
+        'trainer': 'Train',
+    }
+
+    # Order of stages for display
+    STAGE_ORDER = ['Compile', 'Examples', 'Stats', 'Schema', 'Transform', 'Train']
+
     def _update_progress(self, quick_test, pipeline_job):
         """
-        Update progress percentage and current stage from pipeline tasks.
+        Update progress and stage details from Vertex AI pipeline tasks.
+
+        Queries the pipeline job's task_details to get per-component status,
+        maps TFX component names to short display names, and builds the
+        stage_details structure for the UI.
 
         Args:
             quick_test: QuickTest instance
             pipeline_job: Vertex AI PipelineJob instance
         """
         try:
-            # This is simplified - full implementation would parse pipeline tasks
-            # For now, estimate based on state
-            state = pipeline_job.state.name
+            pipeline_state = pipeline_job.state.name
 
-            if state == 'PIPELINE_STATE_PENDING':
-                quick_test.progress_percent = 0
-                quick_test.current_stage = 'pending'
-            elif state == 'PIPELINE_STATE_RUNNING':
-                # Estimate progress (would need task details for accuracy)
-                quick_test.progress_percent = 50
-                quick_test.current_stage = 'running'
-            elif state == 'PIPELINE_STATE_SUCCEEDED':
-                quick_test.progress_percent = 100
-                quick_test.current_stage = 'completed'
-            elif state in ('PIPELINE_STATE_FAILED', 'PIPELINE_STATE_CANCELLED'):
-                quick_test.current_stage = 'failed' if 'FAILED' in state else 'cancelled'
+            # Initialize stage details with Compile already completed
+            # (since we're in refresh_status, Cloud Build has already succeeded)
+            stage_details = [
+                {'name': 'Compile', 'status': 'completed', 'duration_seconds': None}
+            ]
 
-            quick_test.save(update_fields=['progress_percent', 'current_stage'])
+            # Initialize remaining stages as pending
+            for stage_name in self.STAGE_ORDER[1:]:  # Skip 'Compile'
+                stage_details.append({
+                    'name': stage_name,
+                    'status': 'pending',
+                    'duration_seconds': None
+                })
+
+            # Try to get task details from the pipeline job
+            task_statuses = self._get_task_statuses(pipeline_job)
+
+            if task_statuses:
+                # Update stage details based on actual task statuses
+                for stage in stage_details:
+                    if stage['name'] == 'Compile':
+                        continue  # Already set to completed
+
+                    task_info = task_statuses.get(stage['name'])
+                    if task_info:
+                        stage['status'] = task_info['status']
+                        stage['duration_seconds'] = task_info.get('duration_seconds')
+
+            # Determine current stage (first non-completed stage)
+            current_stage = 'completed'
+            for stage in stage_details:
+                if stage['status'] == 'running':
+                    current_stage = stage['name'].lower()
+                    break
+                elif stage['status'] == 'pending':
+                    current_stage = stage['name'].lower()
+                    break
+                elif stage['status'] == 'failed':
+                    current_stage = 'failed'
+                    break
+
+            # Handle terminal pipeline states
+            if pipeline_state == 'PIPELINE_STATE_SUCCEEDED':
+                # Mark all stages as completed
+                for stage in stage_details:
+                    if stage['status'] != 'failed':
+                        stage['status'] = 'completed'
+                current_stage = 'completed'
+
+            elif pipeline_state in ('PIPELINE_STATE_FAILED', 'PIPELINE_STATE_CANCELLED'):
+                # Find the failed stage and mark subsequent as pending
+                found_failed = False
+                for stage in stage_details:
+                    if stage['status'] == 'failed':
+                        found_failed = True
+                    elif found_failed:
+                        stage['status'] = 'pending'
+                    elif stage['status'] == 'running':
+                        # The running stage is the one that failed
+                        stage['status'] = 'failed'
+                        found_failed = True
+                current_stage = 'failed' if 'FAILED' in pipeline_state else 'cancelled'
+
+            # Calculate progress (not used for display per user preference, but keep for API)
+            completed_count = sum(1 for s in stage_details if s['status'] == 'completed')
+            progress_percent = int((completed_count / len(stage_details)) * 100)
+
+            # Update QuickTest
+            quick_test.stage_details = stage_details
+            quick_test.current_stage = current_stage
+            quick_test.progress_percent = progress_percent
+            quick_test.save(update_fields=['stage_details', 'current_stage', 'progress_percent'])
+
+            logger.debug(f"Updated progress for QuickTest {quick_test.id}: {current_stage}, stages={stage_details}")
 
         except Exception as e:
             logger.warning(f"Error updating progress for QuickTest {quick_test.id}: {e}")
+
+    def _get_task_statuses(self, pipeline_job) -> dict:
+        """
+        Extract task statuses from Vertex AI pipeline job.
+
+        Args:
+            pipeline_job: Vertex AI PipelineJob instance
+
+        Returns:
+            Dict mapping short stage names to status info:
+            {
+                'Examples': {'status': 'completed', 'duration_seconds': 120},
+                'Stats': {'status': 'running', 'duration_seconds': None},
+                ...
+            }
+        """
+        try:
+            # Access the underlying gRPC resource to get task details
+            gca_resource = pipeline_job._gca_resource
+
+            if not hasattr(gca_resource, 'job_detail') or not gca_resource.job_detail:
+                logger.debug(f"No job_detail available for pipeline {pipeline_job.name}")
+                return {}
+
+            task_details = gca_resource.job_detail.task_details
+            if not task_details:
+                logger.debug(f"No task_details available for pipeline {pipeline_job.name}")
+                return {}
+
+            result = {}
+
+            for task in task_details:
+                # Get the task name (e.g., 'bigqueryexamplegen', 'statisticsgen')
+                task_name = task.task_name.lower() if task.task_name else ''
+
+                # Map to short stage name
+                short_name = self.STAGE_NAME_MAP.get(task_name)
+                if not short_name:
+                    # Try partial matching for component names like 'BigQueryExampleGen'
+                    for tfx_name, display_name in self.STAGE_NAME_MAP.items():
+                        if tfx_name in task_name:
+                            short_name = display_name
+                            break
+
+                if not short_name:
+                    logger.debug(f"Unknown task name: {task_name}")
+                    continue
+
+                # Get task state
+                task_state = task.state.name if task.state else 'PENDING'
+
+                # Map Vertex AI task states to our status
+                state_mapping = {
+                    'PENDING': 'pending',
+                    'RUNNING': 'running',
+                    'SUCCEEDED': 'completed',
+                    'SKIPPED': 'completed',
+                    'FAILED': 'failed',
+                    'CANCELLED': 'failed',
+                    'CANCELLING': 'running',
+                    'NOT_TRIGGERED': 'pending',
+                }
+                status = state_mapping.get(task_state, 'pending')
+
+                # Calculate duration if we have timestamps
+                duration_seconds = None
+                if task.start_time and task.end_time:
+                    duration = task.end_time - task.start_time
+                    duration_seconds = int(duration.total_seconds())
+                elif task.start_time and status == 'running':
+                    # For running tasks, calculate elapsed time
+                    from datetime import datetime, timezone as dt_timezone
+                    now = datetime.now(dt_timezone.utc)
+                    start = task.start_time
+                    if hasattr(start, 'timestamp'):
+                        duration_seconds = int(now.timestamp() - start.timestamp())
+
+                result[short_name] = {
+                    'status': status,
+                    'duration_seconds': duration_seconds,
+                }
+
+            return result
+
+        except Exception as e:
+            logger.warning(f"Error extracting task statuses: {e}")
+            return {}
 
     def cancel_quick_test(self, quick_test) -> 'QuickTest':
         """

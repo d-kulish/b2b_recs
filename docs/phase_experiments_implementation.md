@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides a **complete implementation guide** for building the Experiments domain with native TFX pipelines on Vertex AI. It is designed to be self-contained and actionable - you should be able to open this document and start implementing without additional context.
 
-**Last Updated**: 2025-12-17
+**Last Updated**: 2025-12-18
 
 ---
 
@@ -25,9 +25,10 @@ This document provides a **complete implementation guide** for building the Expe
 14. [Phase 9: Experiments UI Refactor](#phase-9-experiments-ui-refactor-december-2025)
 15. [Phase 10: Wizard Config Previews](#phase-10-wizard-config-previews-december-2025)
 16. [Phase 11: Hardware Configuration & Dataflow](#phase-11-hardware-configuration--dataflow-december-2025)
-17. [File Reference](#file-reference)
-18. [API Reference](#api-reference)
-19. [Testing Guide](#testing-guide)
+17. [Phase 12: Pipeline Progress Bar & Error Improvements](#phase-12-pipeline-progress-bar--error-improvements-december-2025)
+18. [File Reference](#file-reference)
+19. [API Reference](#api-reference)
+20. [Testing Guide](#testing-guide)
 
 ---
 
@@ -83,6 +84,7 @@ Experiments Page = Analyze Quick Test results to find optimal parameters
 | **Phase 9** | ✅ Complete | Experiments UI Refactor (new chapter layout, wizard modal, experiment cards, pagination) |
 | **Phase 10** | ✅ Complete | Wizard Config Previews (rich Feature/Model config previews, compact data sampling UI) |
 | **Phase 11** | ✅ Complete | Hardware Configuration & Dataflow (machine type selection, Dataflow for StatisticsGen/Transform) |
+| **Phase 12** | ✅ Complete | Pipeline Progress Bar & Error Improvements (stage progress bar, async Cloud Build, column validation) |
 
 ### Cloud Build Implementation (December 2025)
 
@@ -3441,6 +3443,345 @@ Summary:
 - [ ] Test auto-recommendation with different dataset sizes
 - [ ] Verify GPU cards are disabled but visible
 - [ ] Verify hardware is shown in Summary section
+
+---
+
+## Phase 12: Pipeline Progress Bar & Error Improvements (December 2025)
+
+This phase adds a visual stage progress bar to experiment cards and improves error handling for column name mismatches between FeatureConfig and BigQuery output.
+
+### Overview
+
+**Problems Addressed:**
+1. Users couldn't see which pipeline stage was running - only a spinning loader
+2. Pipeline failures (like Transform KeyError) didn't provide actionable error messages
+3. Column name mismatches between FeatureConfig and BigQuery output caused cryptic runtime errors
+4. Async Cloud Build submission blocked the UI for 5+ minutes
+
+**Solutions:**
+1. Add 6-stage progress bar showing: Compile → Examples → Stats → Schema → Transform → Train
+2. Color-coded stage status: grey (pending), orange (running), green (success), red (failed)
+3. Add column name validation before pipeline submission
+4. Make Cloud Build submission async so wizard closes immediately
+
+### Stage Progress Bar
+
+**Visual Design:**
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Experiment #7 - Running                                                      │
+│                                                                              │
+│ [Compile ✓] [Examples ✓] [Stats ✓] [Schema ●] [Transform ○] [Train ○]       │
+│   green       green       green     orange      grey         grey            │
+│                                                                              │
+│ Current: Schema (analyzing statistics)                                       │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Stage Definitions:**
+| Stage | TFX Component | Description |
+|-------|---------------|-------------|
+| Compile | Cloud Build | Compile TFX pipeline and submit to Vertex AI |
+| Examples | BigQueryExampleGen | Extract data from BigQuery to TFRecords |
+| Stats | StatisticsGen | Compute dataset statistics using TFDV |
+| Schema | SchemaGen | Infer schema from statistics |
+| Transform | Transform | Apply preprocessing_fn, generate vocabularies |
+| Train | Trainer | Train TFRS two-tower model |
+
+### Backend Implementation
+
+**Stage Name Mapping (services.py):**
+
+```python
+# Map Vertex AI task names to display names
+STAGE_NAME_MAP = {
+    'bigqueryexamplegen': 'Examples',
+    'statisticsgen': 'Stats',
+    'schemagen': 'Schema',
+    'transform': 'Transform',
+    'trainer': 'Train',
+}
+
+# Expected order for progress display
+STAGE_ORDER = ['Compile', 'Examples', 'Stats', 'Schema', 'Transform', 'Train']
+```
+
+**_update_progress() Method:**
+
+Queries Vertex AI `task_details` to get stage statuses:
+
+```python
+def _update_progress(self, quick_test):
+    """Update progress based on Vertex AI task details."""
+    # Get task statuses from Vertex AI
+    task_statuses = self._get_task_statuses(quick_test)
+
+    # Build stage_details list
+    stage_details = []
+    for stage_name in self.STAGE_ORDER:
+        if stage_name == 'Compile':
+            status = 'success'  # Already passed if we're here
+        else:
+            status = task_statuses.get(stage_name, 'pending')
+        stage_details.append({'name': stage_name, 'status': status})
+
+    # Calculate overall progress
+    completed = sum(1 for s in stage_details if s['status'] == 'success')
+    progress = int((completed / len(self.STAGE_ORDER)) * 100)
+
+    quick_test.progress = progress
+    quick_test.stage_details = stage_details
+    quick_test.save(update_fields=['progress', 'stage_details'])
+```
+
+**_get_task_statuses() Method:**
+
+```python
+def _get_task_statuses(self, quick_test) -> Dict[str, str]:
+    """Get task statuses from Vertex AI pipeline run."""
+    from google.cloud import aiplatform
+
+    job = aiplatform.PipelineJob.get(quick_test.vertex_job_name)
+    task_details = job.task_details
+
+    statuses = {}
+    for task in task_details:
+        component_name = task.task_name.lower()
+        display_name = self.STAGE_NAME_MAP.get(component_name)
+        if display_name:
+            state = task.state.name.lower()
+            if state == 'succeeded':
+                statuses[display_name] = 'success'
+            elif state == 'running':
+                statuses[display_name] = 'running'
+            elif state in ('failed', 'cancelled'):
+                statuses[display_name] = 'failed'
+            else:
+                statuses[display_name] = 'pending'
+
+    return statuses
+```
+
+### Async Cloud Build Submission
+
+**Problem:** Cloud Build takes 1-5 minutes to compile and submit the pipeline. The wizard was blocking until completion.
+
+**Solution:** Return immediately after triggering Cloud Build. Use `refresh_status()` to poll for completion.
+
+**New Database Fields (QuickTest model):**
+
+```python
+cloud_build_id = models.CharField(
+    max_length=255,
+    blank=True,
+    help_text='Cloud Build ID for pipeline compilation'
+)
+cloud_build_run_id = models.CharField(
+    max_length=255,
+    blank=True,
+    help_text='Run ID used for GCS result path'
+)
+```
+
+**Migration:** `0037_add_cloud_build_tracking.py`
+
+**_submit_vertex_pipeline() Changes:**
+
+```python
+def _submit_vertex_pipeline(self, quick_test, ...):
+    """Submit TFX pipeline to Vertex AI via Cloud Build (async)."""
+    # Trigger Cloud Build
+    build_id = self._trigger_cloud_build(...)
+
+    # Return immediately - don't wait for completion
+    return build_id  # NOT the Vertex job name
+```
+
+**refresh_status() Changes:**
+
+```python
+def refresh_status(self, quick_test):
+    """Refresh status from Vertex AI or Cloud Build."""
+    # Phase 1: Check if Cloud Build is still running
+    if quick_test.cloud_build_id and not quick_test.vertex_job_name:
+        self._check_cloud_build_result(quick_test)
+        if not quick_test.vertex_job_name:
+            return quick_test  # Still compiling
+
+    # Phase 2: Check Vertex AI pipeline status
+    if quick_test.vertex_job_name:
+        self._update_from_vertex_ai(quick_test)
+
+    return quick_test
+```
+
+### Column Name Validation
+
+**Problem:** If FeatureConfig column names don't match BigQuery output column names, the Transform stage fails with a cryptic `KeyError`.
+
+**Root Cause:** When tables share column names (e.g., both have `customer_id`), BigQuery renames duplicates using the format `{table_alias}_{column}`. If FeatureConfig was created without this logic, it has wrong column names.
+
+**Solution:** Validate column names before pipeline submission.
+
+**_validate_column_names() Method (services.py):**
+
+```python
+def _validate_column_names(self, feature_config):
+    """
+    Validate that FeatureConfig column names match the expected BigQuery output.
+
+    Prevents runtime errors in Transform stage where preprocessing_fn
+    tries to access columns that don't exist in TFRecords.
+    """
+    dataset = feature_config.dataset
+
+    # Get column names from FeatureConfig features
+    feature_columns = set()
+    for feature in (feature_config.buyer_model_features or []):
+        if 'column' in feature:
+            feature_columns.add(feature['column'])
+    for feature in (feature_config.product_model_features or []):
+        if 'column' in feature:
+            feature_columns.add(feature['column'])
+
+    # Calculate expected BigQuery output column names
+    # (mirrors logic in BigQueryService.generate_query())
+    selected_columns = dataset.selected_columns or {}
+    seen_cols = set()
+    expected_columns = set()
+
+    for table, cols in selected_columns.items():
+        table_alias = table.split('.')[-1]
+        for col in cols:
+            if col in seen_cols:
+                output_name = f"{table_alias}_{col}"  # Duplicate
+            else:
+                output_name = col  # First occurrence
+                seen_cols.add(col)
+            expected_columns.add(output_name)
+
+    # Check for mismatches
+    missing_columns = feature_columns - expected_columns
+    if missing_columns:
+        raise ExperimentServiceError(
+            f"FeatureConfig column names don't match BigQuery output.\n"
+            f"Missing: {sorted(missing_columns)}\n"
+            f"Available: {sorted(expected_columns)}\n\n"
+            f"This usually happens when a column appears in multiple tables."
+        )
+```
+
+**Duplicate Column Handling Fix (datasets/services.py):**
+
+The `generate_query()` method was fixed to handle duplicate columns consistently:
+
+```python
+# Before (inconsistent - only handled with date filter)
+select_cols.append(f"{table_alias}.{col}")
+
+# After (always handles duplicates)
+if col in seen_cols:
+    output_name = f"{table_alias}_{col}"  # Duplicate
+else:
+    output_name = col
+    seen_cols.add(col)
+select_cols.append(f"{table_alias}.{col} AS {output_name}")
+```
+
+### Frontend Implementation
+
+**CSS for Stage Progress Bar:**
+
+```css
+.stages-bar {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 12px;
+}
+
+.stage-pill {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 500;
+}
+
+.stage-pill.pending { background: #f3f4f6; color: #6b7280; }
+.stage-pill.running { background: #fef3c7; color: #92400e; }
+.stage-pill.success { background: #d1fae5; color: #065f46; }
+.stage-pill.failed { background: #fee2e2; color: #991b1b; }
+
+.stage-pill .icon { font-size: 10px; }
+```
+
+**renderStagesBar() Function:**
+
+```javascript
+function renderStagesBar(stageDetails) {
+    const icons = {
+        pending: '○',
+        running: '●',
+        success: '✓',
+        failed: '✗'
+    };
+
+    return stageDetails.map(stage => `
+        <span class="stage-pill ${stage.status}">
+            <span class="icon">${icons[stage.status]}</span>
+            ${stage.name}
+        </span>
+    `).join('');
+}
+```
+
+**API Response Enhancement:**
+
+The `_serialize_quick_test()` function now always includes `stage_details`:
+
+```python
+def _serialize_quick_test(quick_test):
+    return {
+        ...
+        'stage_details': quick_test.stage_details or get_default_stages(quick_test.status),
+        ...
+    }
+
+def get_default_stages(status):
+    """Generate default stage details based on status."""
+    stages = ['Compile', 'Examples', 'Stats', 'Schema', 'Transform', 'Train']
+
+    if status == 'completed':
+        return [{'name': s, 'status': 'success'} for s in stages]
+    elif status == 'failed':
+        return [{'name': s, 'status': 'failed'} for s in stages]
+    else:
+        return [{'name': s, 'status': 'pending'} for s in stages]
+```
+
+### Files Modified
+
+| File | Changes |
+|------|---------|
+| `ml_platform/models.py` | Added `cloud_build_id`, `cloud_build_run_id` fields |
+| `ml_platform/migrations/0037_...py` | Migration for Cloud Build tracking fields |
+| `ml_platform/experiments/services.py` | Added `_validate_column_names()`, `_get_task_statuses()`, `_check_cloud_build_result()`, updated `_update_progress()` |
+| `ml_platform/experiments/api.py` | Added `_get_stage_details_for_status()`, updated serializer |
+| `ml_platform/datasets/services.py` | Fixed duplicate column handling in `generate_query()` |
+| `ml_platform/configs/services.py` | Fixed `_get_all_columns_with_info()` for duplicate handling |
+| `templates/.../model_experiments.html` | Added CSS and JS for stage progress bar |
+
+### Testing Checklist
+
+- [ ] Verify stages bar shows on all experiment cards (running, completed, failed)
+- [ ] Verify stages update in real-time during pipeline execution
+- [ ] Verify wizard closes immediately after "Start Experiment" click
+- [ ] Verify column validation catches mismatched column names
+- [ ] Verify error message includes suggestions for fixing column names
+- [ ] Verify Compile stage shows success when Cloud Build completes
+- [ ] Test with duplicate column names across tables
 
 ---
 

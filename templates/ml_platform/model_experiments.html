@@ -227,6 +227,144 @@
     }
 
     /* =========================================================================
+       Stage Progress Bar (for running/submitting experiments)
+       ========================================================================= */
+    .exp-card-stages {
+        width: 100%;
+        margin-top: 12px;
+        padding-top: 12px;
+        border-top: 1px solid #f3f4f6;
+    }
+    .exp-stages-bar {
+        display: flex;
+        gap: 4px;
+        width: 100%;
+    }
+    .exp-stage {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 6px;
+    }
+    .exp-stage-indicator {
+        width: 100%;
+        height: 6px;
+        border-radius: 3px;
+        background: #e5e7eb;
+        position: relative;
+        overflow: hidden;
+    }
+    .exp-stage-indicator.completed {
+        background: #10b981;
+    }
+    .exp-stage-indicator.running {
+        background: linear-gradient(90deg, #f59e0b 0%, #fbbf24 50%, #f59e0b 100%);
+        background-size: 200% 100%;
+        animation: stage-pulse 1.5s ease-in-out infinite;
+    }
+    .exp-stage-indicator.failed {
+        background: #ef4444;
+    }
+    .exp-stage-indicator.pending {
+        background: #e5e7eb;
+    }
+    @keyframes stage-pulse {
+        0%, 100% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+    }
+    .exp-stage-label {
+        font-size: 10px;
+        font-weight: 500;
+        color: #9ca3af;
+        text-transform: uppercase;
+        letter-spacing: 0.02em;
+        white-space: nowrap;
+    }
+    .exp-stage.completed .exp-stage-label {
+        color: #10b981;
+    }
+    .exp-stage.running .exp-stage-label {
+        color: #f59e0b;
+        font-weight: 600;
+    }
+    .exp-stage.failed .exp-stage-label {
+        color: #ef4444;
+    }
+
+    /* Result section below progress bar */
+    .exp-card-result {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        margin-top: 10px;
+    }
+    .exp-result-metric {
+        display: flex;
+        align-items: baseline;
+        gap: 6px;
+    }
+    .exp-result-value {
+        font-size: 20px;
+        font-weight: 700;
+        color: #111827;
+    }
+    .exp-result-label {
+        font-size: 12px;
+        color: #6b7280;
+    }
+    .exp-result-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 4px 10px;
+        border-radius: 12px;
+        font-size: 11px;
+        font-weight: 600;
+    }
+    .exp-result-badge.success {
+        background: #dcfce7;
+        color: #15803d;
+    }
+    .exp-result-badge.failed {
+        background: #fee2e2;
+        color: #b91c1c;
+    }
+    .exp-result-badge.cancelled {
+        background: #f3f4f6;
+        color: #6b7280;
+    }
+
+    /* Adjusted card layout for vertical stacking */
+    .exp-card-new {
+        display: flex;
+        flex-direction: column;
+        padding: 16px;
+        background: white;
+        border: 1px solid #e5e7eb;
+        border-radius: 10px;
+        margin-bottom: 8px;
+        transition: all 0.15s ease;
+        cursor: pointer;
+    }
+    .exp-card-new:hover {
+        border-color: #d1d5db;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    }
+    .exp-card-new:last-child {
+        margin-bottom: 0;
+    }
+    .exp-card-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+    .exp-card-body {
+        flex: 1;
+        min-width: 0;
+    }
+
+    /* =========================================================================
        Pagination Styles
        ========================================================================= */
     .exp-pagination {
@@ -2094,60 +2232,103 @@ function renderExpCard(exp) {
     const createdAt = new Date(exp.created_at);
     const timeAgo = formatTimeAgo(createdAt);
 
-    // Build metric or progress display
-    let metricHtml = '';
-    if (exp.status === 'completed' && exp.recall_at_100 != null) {
-        metricHtml = `
-            <div class="exp-card-metric">
-                <div class="exp-card-metric-value">${(exp.recall_at_100 * 100).toFixed(1)}%</div>
-                <div class="exp-card-metric-label">Recall@100</div>
-            </div>
-        `;
-    } else if (exp.status === 'running' || exp.status === 'submitting') {
-        metricHtml = `
-            <div class="exp-card-progress">
-                <div class="exp-card-progress-bar">
-                    <div class="exp-card-progress-fill" style="width: ${exp.progress_percent || 0}%"></div>
-                </div>
-                <div class="exp-card-progress-text">${exp.progress_percent || 0}%</div>
-            </div>
-        `;
-    } else if (exp.status === 'failed') {
-        metricHtml = `
-            <div class="exp-card-metric">
-                <div class="exp-card-metric-value text-red-600">Failed</div>
-                <div class="exp-card-metric-label">${exp.current_stage || ''}</div>
-            </div>
-        `;
-    } else {
-        metricHtml = `
-            <div class="exp-card-metric">
-                <div class="exp-card-metric-value text-gray-400">-</div>
-            </div>
-        `;
-    }
-
-    // Duration or elapsed
+    // Duration or elapsed text
     let durationText = timeAgo;
     if (exp.status === 'completed' && exp.duration_seconds) {
         durationText = `Completed ${timeAgo} · ${formatDuration(exp.duration_seconds)}`;
-    } else if (exp.status === 'running' && exp.elapsed_seconds) {
+    } else if ((exp.status === 'running' || exp.status === 'submitting') && exp.elapsed_seconds) {
         durationText = `Started ${timeAgo} · Running ${formatDuration(exp.elapsed_seconds)}`;
     } else if (exp.status === 'failed') {
         durationText = `Failed ${timeAgo}`;
+    } else if (exp.status === 'cancelled') {
+        durationText = `Cancelled ${timeAgo}`;
     }
 
+    // Build the bottom section - always show progress bar + optional metrics/badge
+    let stagesHtml = renderStagesBar(exp.stage_details || getDefaultStages());
+    let resultHtml = '';
+
+    if (exp.status === 'completed') {
+        // Show metrics for completed experiments
+        if (exp.recall_at_100 != null) {
+            resultHtml = `
+                <div class="exp-card-result">
+                    <span class="exp-result-badge success">
+                        <i class="fas fa-check-circle"></i> Completed
+                    </span>
+                    <div class="exp-result-metric">
+                        <span class="exp-result-value">${(exp.recall_at_100 * 100).toFixed(1)}%</span>
+                        <span class="exp-result-label">Recall@100</span>
+                    </div>
+                </div>
+            `;
+        } else {
+            resultHtml = `
+                <div class="exp-card-result">
+                    <span class="exp-result-badge success">
+                        <i class="fas fa-check-circle"></i> Completed
+                    </span>
+                    <span class="exp-result-label">No metrics available</span>
+                </div>
+            `;
+        }
+    } else if (exp.status === 'failed') {
+        // Show failed badge
+        const failedStage = (exp.stage_details || []).find(s => s.status === 'failed');
+        const failedStageName = failedStage ? failedStage.name : (exp.current_stage || 'Unknown');
+        resultHtml = `
+            <div class="exp-card-result">
+                <span class="exp-result-badge failed">
+                    <i class="fas fa-times-circle"></i> Failed at ${failedStageName}
+                </span>
+            </div>
+        `;
+    } else if (exp.status === 'cancelled') {
+        resultHtml = `
+            <div class="exp-card-result">
+                <span class="exp-result-badge cancelled">
+                    <i class="fas fa-ban"></i> Cancelled
+                </span>
+            </div>
+        `;
+    }
+
+    const bottomHtml = stagesHtml + resultHtml;
+
     return `
-        <div class="exp-card" onclick="openExpDetails(${exp.id})" data-exp-id="${exp.id}">
-            <div class="exp-card-status ${statusClass}">
-                <i class="fas ${icon}"></i>
+        <div class="exp-card-new" onclick="openExpDetails(${exp.id})" data-exp-id="${exp.id}">
+            <div class="exp-card-header">
+                <div class="exp-card-status ${statusClass}">
+                    <i class="fas ${icon}"></i>
+                </div>
+                <div class="exp-card-body">
+                    <div class="exp-card-name">${exp.display_name}</div>
+                    <div class="exp-card-configs">${exp.feature_config_name} + ${exp.model_config_name}</div>
+                    <div class="exp-card-meta">${durationText}</div>
+                </div>
             </div>
-            <div class="exp-card-info">
-                <div class="exp-card-name">${exp.display_name}</div>
-                <div class="exp-card-configs">${exp.feature_config_name} + ${exp.model_config_name}</div>
-                <div class="exp-card-meta">${durationText}</div>
+            ${bottomHtml}
+        </div>
+    `;
+}
+
+function renderStagesBar(stages) {
+    // Render the 6-stage progress bar
+    const stagesHtml = stages.map(stage => {
+        const status = stage.status || 'pending';
+        return `
+            <div class="exp-stage ${status}">
+                <div class="exp-stage-indicator ${status}"></div>
+                <span class="exp-stage-label">${stage.name}</span>
             </div>
-            ${metricHtml}
+        `;
+    }).join('');
+
+    return `
+        <div class="exp-card-stages">
+            <div class="exp-stages-bar">
+                ${stagesHtml}
+            </div>
         </div>
     `;
 }
@@ -3049,11 +3230,12 @@ function updateProgressUI(exp) {
 
 function getDefaultStages() {
     return [
-        { name: 'ExampleGen', status: 'pending' },
-        { name: 'StatisticsGen', status: 'pending' },
-        { name: 'SchemaGen', status: 'pending' },
-        { name: 'Transform', status: 'pending' },
-        { name: 'Trainer', status: 'pending' }
+        { name: 'Compile', status: 'pending', duration_seconds: null },
+        { name: 'Examples', status: 'pending', duration_seconds: null },
+        { name: 'Stats', status: 'pending', duration_seconds: null },
+        { name: 'Schema', status: 'pending', duration_seconds: null },
+        { name: 'Transform', status: 'pending', duration_seconds: null },
+        { name: 'Train', status: 'pending', duration_seconds: null }
     ];
 }
 

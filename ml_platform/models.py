@@ -1651,6 +1651,18 @@ class QuickTest(models.Model):
         help_text="Short pipeline job ID for display"
     )
 
+    # Cloud Build tracking (for async compilation)
+    cloud_build_id = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Cloud Build ID for pipeline compilation"
+    )
+    cloud_build_run_id = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Run ID used for GCS result path"
+    )
+
     # Progress tracking
     current_stage = models.CharField(
         max_length=50,

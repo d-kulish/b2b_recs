@@ -930,8 +930,11 @@ class BigQueryService:
                     column_types[col_key] = stats.get('type', 'STRING')
 
             # Build SELECT clause with full table.column references
+            # IMPORTANT: Handle duplicate column names the same way as the filtered_data CTE
+            # to ensure FeatureConfig column names match BigQuery output.
             select_cols = []
             reverse_mapping = {v: k for k, v in column_mapping.items()}
+            seen_cols = set()  # Track seen column names to handle duplicates
 
             for table, columns in selected_columns.items():
                 table_alias = table.split('.')[-1]
@@ -948,11 +951,21 @@ class BigQueryService:
                         else:
                             select_cols.append(f"{table_alias}.{col} AS {mapped_name}")
                     else:
-                        if needs_conversion:
-                            # Convert TIMESTAMP to Unix epoch seconds (INT64) and keep original column name
-                            select_cols.append(f"UNIX_SECONDS(CAST({table_alias}.{col} AS TIMESTAMP)) AS {col}")
+                        # Handle duplicate column names across tables
+                        # First occurrence uses raw name, subsequent use table_alias_col
+                        if col in seen_cols:
+                            # Duplicate column - use table_alias_col format
+                            output_name = f"{table_alias}_{col}"
                         else:
-                            select_cols.append(f"{table_alias}.{col}")
+                            # First occurrence - use raw column name
+                            output_name = col
+                            seen_cols.add(col)
+
+                        if needs_conversion:
+                            # Convert TIMESTAMP to Unix epoch seconds (INT64)
+                            select_cols.append(f"UNIX_SECONDS(CAST({table_alias}.{col} AS TIMESTAMP)) AS {output_name}")
+                        else:
+                            select_cols.append(f"{table_alias}.{col} AS {output_name}")
 
             if not select_cols:
                 select_cols = ['*']
@@ -1287,9 +1300,11 @@ class BigQueryService:
         """
         if strategy == 'time_holdout':
             # Simple holdout: exclude last N days
+            # Note: date_column is already converted to Unix epoch (INT64) by for_tfx=True
+            # So we need to compare with Unix seconds, not DATE type
             return f"""    SELECT *
     FROM {source_table}
-    WHERE {date_column} < DATE_SUB(CURRENT_DATE(), INTERVAL {holdout_days} DAY)"""
+    WHERE {date_column} < UNIX_SECONDS(TIMESTAMP(DATE_SUB(CURRENT_DATE(), INTERVAL {holdout_days} DAY)))"""
 
         elif strategy == 'strict_time':
             # True temporal split - exclude test period completely
@@ -1302,11 +1317,14 @@ class BigQueryService:
             # SQL returns only the train+val window (oldest data)
             # Test period is completely excluded from training
             # TFX does hash-based 80/20 split within this window for train/eval
+            #
+            # Note: date_column is already converted to Unix epoch (INT64) by for_tfx=True
+            # So we need to compare with Unix seconds, not DATE type
             total_window = train_days + val_days + test_days
             return f"""    SELECT *
     FROM {source_table}
-    WHERE {date_column} >= DATE_SUB(CURRENT_DATE(), INTERVAL {total_window} DAY)
-      AND {date_column} < DATE_SUB(CURRENT_DATE(), INTERVAL {test_days} DAY)"""
+    WHERE {date_column} >= UNIX_SECONDS(TIMESTAMP(DATE_SUB(CURRENT_DATE(), INTERVAL {total_window} DAY)))
+      AND {date_column} < UNIX_SECONDS(TIMESTAMP(DATE_SUB(CURRENT_DATE(), INTERVAL {test_days} DAY)))"""
 
         else:
             # Random - no holdout filter

@@ -159,23 +159,46 @@ class SmartDefaultsService:
         }
 
     def _get_all_columns_with_info(self) -> List[Dict[str, Any]]:
-        """Get all selected columns with their type and statistics."""
+        """
+        Get all selected columns with their type and statistics.
+
+        IMPORTANT: This method handles duplicate column names across tables
+        the same way the BigQuery query generator does:
+        - First occurrence: uses raw column name
+        - Subsequent occurrences: uses {table_alias}_{column_name}
+
+        This ensures FeatureConfig column names match the BigQuery output.
+        """
         columns = []
+        seen_cols = set()  # Track seen column names to handle duplicates
 
         # Reverse column mapping to get role by column name
         reverse_mapping = {v: k for k, v in self.column_mapping.items()}
 
         for table, cols in self.selected_columns.items():
+            table_alias = table.split('.')[-1]  # Get just the table name without dataset
+
             for col in cols:
                 # Get column stats if available
-                stats_key = f"{table}.{col}" if '.' not in col else col
+                stats_key = f"{table_alias}.{col}"
                 stats = self.column_stats.get(stats_key, {})
 
                 # Determine column type from stats or default to STRING
                 col_type = stats.get('type', 'STRING')
 
+                # Handle duplicate column names across tables
+                # This mirrors the logic in BigQueryService.generate_query()
+                if col in seen_cols:
+                    # Duplicate column - use table_alias_col format
+                    output_name = f"{table_alias}_{col}"
+                else:
+                    # First occurrence - use raw column name
+                    output_name = col
+                    seen_cols.add(col)
+
                 columns.append({
-                    'name': col,
+                    'name': output_name,  # This is what TFX will see
+                    'original_name': col,  # Keep original for reference
                     'table': table,
                     'type': col_type,
                     'stats': stats,

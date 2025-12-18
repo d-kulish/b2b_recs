@@ -249,12 +249,14 @@ def quick_test_list(request):
             try:
                 service = ExperimentService(model_endpoint)
                 for qt in running_tests:
-                    # Only refresh if we have a Vertex AI job to check
-                    if qt.vertex_pipeline_job_name:
-                        try:
-                            service.refresh_status(qt)
-                        except Exception as refresh_error:
-                            logger.warning(f"Failed to refresh status for QuickTest {qt.id}: {refresh_error}")
+                    # Refresh status for all running/submitting experiments
+                    # refresh_status() handles both phases:
+                    # - Cloud Build phase (no vertex_pipeline_job_name yet)
+                    # - Vertex AI phase (has vertex_pipeline_job_name)
+                    try:
+                        service.refresh_status(qt)
+                    except Exception as refresh_error:
+                        logger.warning(f"Failed to refresh status for QuickTest {qt.id}: {refresh_error}")
             except Exception as service_error:
                 logger.warning(f"Failed to initialize ExperimentService for status refresh: {service_error}")
 

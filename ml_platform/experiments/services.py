@@ -154,10 +154,20 @@ class ExperimentService:
             # Generate code and submit pipeline
             self._submit_pipeline(quick_test, feature_config, model_config)
 
-            # Update status
-            quick_test.status = QuickTest.STATUS_RUNNING
-            quick_test.started_at = timezone.now()
-            quick_test.save(update_fields=['status', 'started_at'])
+            # Pipeline submitted to Cloud Build - keep status as SUBMITTING
+            # Initialize stage_details with Compile stage running
+            # Status will transition to RUNNING when Cloud Build completes
+            # and Vertex AI job is created (handled by _check_cloud_build_result)
+            quick_test.stage_details = [
+                {'name': 'Compile', 'status': 'running', 'duration_seconds': None},
+                {'name': 'Examples', 'status': 'pending', 'duration_seconds': None},
+                {'name': 'Stats', 'status': 'pending', 'duration_seconds': None},
+                {'name': 'Schema', 'status': 'pending', 'duration_seconds': None},
+                {'name': 'Transform', 'status': 'pending', 'duration_seconds': None},
+                {'name': 'Train', 'status': 'pending', 'duration_seconds': None},
+            ]
+            quick_test.current_stage = 'compile'
+            quick_test.save(update_fields=['stage_details', 'current_stage'])
 
         except Exception as e:
             logger.exception(f"Error submitting quick test: {e}")
@@ -790,13 +800,21 @@ if __name__ == "__main__":
         Returns:
             Updated QuickTest instance
         """
+        logger.info(f"QuickTest {quick_test.id}: Refreshing status (current: {quick_test.status})")
+
         # Phase 1: If no Vertex AI job yet, check Cloud Build status
         if not quick_test.vertex_pipeline_job_name:
+            logger.info(f"QuickTest {quick_test.id}: No Vertex AI job yet, checking Cloud Build")
             if quick_test.cloud_build_run_id:
                 self._check_cloud_build_result(quick_test)
+            else:
+                logger.warning(f"QuickTest {quick_test.id}: No cloud_build_run_id, cannot check Cloud Build")
             # If still no vertex_pipeline_job_name after checking, return
             if not quick_test.vertex_pipeline_job_name:
+                logger.info(f"QuickTest {quick_test.id}: Still no Vertex AI job, Cloud Build may still be running")
                 return quick_test
+
+        logger.info(f"QuickTest {quick_test.id}: Checking Vertex AI pipeline {quick_test.vertex_pipeline_job_id}")
 
         # Phase 2: Check Vertex AI pipeline status
         self._init_aiplatform()
@@ -824,10 +842,12 @@ if __name__ == "__main__":
             new_status = state_mapping.get(state, quick_test.status)
 
             if new_status != quick_test.status:
+                logger.info(f"QuickTest {quick_test.id}: Status changing from {quick_test.status} to {new_status}")
                 quick_test.status = new_status
 
                 if new_status == quick_test.STATUS_COMPLETED:
                     quick_test.completed_at = timezone.now()
+                    logger.info(f"QuickTest {quick_test.id}: Pipeline completed, extracting results")
                     # Extract results from GCS
                     self._extract_results(quick_test)
 
@@ -836,6 +856,7 @@ if __name__ == "__main__":
                     # Try to extract error message
                     if hasattr(pipeline_job, 'error') and pipeline_job.error:
                         quick_test.error_message = str(pipeline_job.error)
+                    logger.warning(f"QuickTest {quick_test.id}: Pipeline failed: {quick_test.error_message}")
 
                 quick_test.save()
 
@@ -843,7 +864,7 @@ if __name__ == "__main__":
             self._update_progress(quick_test, pipeline_job)
 
         except Exception as e:
-            logger.warning(f"Error refreshing status for QuickTest {quick_test.id}: {e}")
+            logger.exception(f"Error refreshing status for QuickTest {quick_test.id}: {e}")
 
         return quick_test
 
@@ -892,11 +913,27 @@ if __name__ == "__main__":
                 quick_test.vertex_pipeline_job_id = result['vertex_pipeline_job_name'].split('/')[-1]
                 quick_test.status = quick_test.STATUS_RUNNING
                 quick_test.started_at = timezone.now()
+
+                # Update stage_details: Compile completed, Examples starting
+                quick_test.stage_details = [
+                    {'name': 'Compile', 'status': 'completed', 'duration_seconds': None},
+                    {'name': 'Examples', 'status': 'running', 'duration_seconds': None},
+                    {'name': 'Stats', 'status': 'pending', 'duration_seconds': None},
+                    {'name': 'Schema', 'status': 'pending', 'duration_seconds': None},
+                    {'name': 'Transform', 'status': 'pending', 'duration_seconds': None},
+                    {'name': 'Train', 'status': 'pending', 'duration_seconds': None},
+                ]
+                quick_test.current_stage = 'examples'
+                quick_test.progress_percent = 17  # ~1/6 stages complete
+
                 quick_test.save(update_fields=[
                     'vertex_pipeline_job_name',
                     'vertex_pipeline_job_id',
                     'status',
-                    'started_at'
+                    'started_at',
+                    'stage_details',
+                    'current_stage',
+                    'progress_percent'
                 ])
                 logger.info(f"QuickTest {quick_test.id} pipeline submitted: {quick_test.vertex_pipeline_job_id}")
             else:
@@ -904,7 +941,25 @@ if __name__ == "__main__":
                 quick_test.status = quick_test.STATUS_FAILED
                 quick_test.error_message = result.get('error', 'Cloud Build failed')
                 quick_test.completed_at = timezone.now()
-                quick_test.save(update_fields=['status', 'error_message', 'completed_at'])
+
+                # Update stage_details: Compile failed
+                quick_test.stage_details = [
+                    {'name': 'Compile', 'status': 'failed', 'duration_seconds': None},
+                    {'name': 'Examples', 'status': 'pending', 'duration_seconds': None},
+                    {'name': 'Stats', 'status': 'pending', 'duration_seconds': None},
+                    {'name': 'Schema', 'status': 'pending', 'duration_seconds': None},
+                    {'name': 'Transform', 'status': 'pending', 'duration_seconds': None},
+                    {'name': 'Train', 'status': 'pending', 'duration_seconds': None},
+                ]
+                quick_test.current_stage = 'failed'
+
+                quick_test.save(update_fields=[
+                    'status',
+                    'error_message',
+                    'completed_at',
+                    'stage_details',
+                    'current_stage'
+                ])
                 logger.warning(f"QuickTest {quick_test.id} Cloud Build failed: {quick_test.error_message}")
 
         except Exception as e:
@@ -985,73 +1040,103 @@ if __name__ == "__main__":
         """
         try:
             pipeline_state = pipeline_job.state.name
+            logger.info(f"QuickTest {quick_test.id}: Pipeline state is {pipeline_state}")
 
-            # Initialize stage details with Compile already completed
-            # (since we're in refresh_status, Cloud Build has already succeeded)
-            stage_details = [
-                {'name': 'Compile', 'status': 'completed', 'duration_seconds': None}
-            ]
-
-            # Initialize remaining stages as pending
-            for stage_name in self.STAGE_ORDER[1:]:  # Skip 'Compile'
-                stage_details.append({
-                    'name': stage_name,
-                    'status': 'pending',
-                    'duration_seconds': None
-                })
-
-            # Try to get task details from the pipeline job
-            task_statuses = self._get_task_statuses(pipeline_job)
-
-            if task_statuses:
-                # Update stage details based on actual task statuses
-                for stage in stage_details:
-                    if stage['name'] == 'Compile':
-                        continue  # Already set to completed
-
-                    task_info = task_statuses.get(stage['name'])
-                    if task_info:
-                        stage['status'] = task_info['status']
-                        stage['duration_seconds'] = task_info.get('duration_seconds')
-
-            # Determine current stage (first non-completed stage)
-            current_stage = 'completed'
-            for stage in stage_details:
-                if stage['status'] == 'running':
-                    current_stage = stage['name'].lower()
-                    break
-                elif stage['status'] == 'pending':
-                    current_stage = stage['name'].lower()
-                    break
-                elif stage['status'] == 'failed':
-                    current_stage = 'failed'
-                    break
-
-            # Handle terminal pipeline states
+            # Handle terminal pipeline states first (most reliable)
             if pipeline_state == 'PIPELINE_STATE_SUCCEEDED':
-                # Mark all stages as completed
-                for stage in stage_details:
-                    if stage['status'] != 'failed':
-                        stage['status'] = 'completed'
+                # Pipeline completed successfully - mark all stages as completed
+                stage_details = [
+                    {'name': 'Compile', 'status': 'completed', 'duration_seconds': None},
+                    {'name': 'Examples', 'status': 'completed', 'duration_seconds': None},
+                    {'name': 'Stats', 'status': 'completed', 'duration_seconds': None},
+                    {'name': 'Schema', 'status': 'completed', 'duration_seconds': None},
+                    {'name': 'Transform', 'status': 'completed', 'duration_seconds': None},
+                    {'name': 'Train', 'status': 'completed', 'duration_seconds': None},
+                ]
                 current_stage = 'completed'
+                progress_percent = 100
+                logger.info(f"QuickTest {quick_test.id}: Pipeline SUCCEEDED, marking all stages complete")
 
             elif pipeline_state in ('PIPELINE_STATE_FAILED', 'PIPELINE_STATE_CANCELLED'):
-                # Find the failed stage and mark subsequent as pending
-                found_failed = False
-                for stage in stage_details:
-                    if stage['status'] == 'failed':
-                        found_failed = True
-                    elif found_failed:
-                        stage['status'] = 'pending'
-                    elif stage['status'] == 'running':
-                        # The running stage is the one that failed
-                        stage['status'] = 'failed'
-                        found_failed = True
-                current_stage = 'failed' if 'FAILED' in pipeline_state else 'cancelled'
+                # Pipeline failed or cancelled - try to get task details to find which stage failed
+                task_statuses = self._get_task_statuses(pipeline_job)
 
-            # Calculate progress (not used for display per user preference, but keep for API)
-            completed_count = sum(1 for s in stage_details if s['status'] == 'completed')
-            progress_percent = int((completed_count / len(stage_details)) * 100)
+                stage_details = [
+                    {'name': 'Compile', 'status': 'completed', 'duration_seconds': None}
+                ]
+
+                # Build stage details from task statuses or use defaults
+                failed_stage_found = False
+                for stage_name in self.STAGE_ORDER[1:]:  # Skip 'Compile'
+                    task_info = task_statuses.get(stage_name, {})
+                    status = task_info.get('status', 'pending')
+                    duration = task_info.get('duration_seconds')
+
+                    # If we've already found a failed stage, mark rest as pending
+                    if failed_stage_found:
+                        status = 'pending'
+                        duration = None
+                    elif status == 'failed':
+                        failed_stage_found = True
+
+                    stage_details.append({
+                        'name': stage_name,
+                        'status': status,
+                        'duration_seconds': duration
+                    })
+
+                # If no specific failed stage found, mark the first pending/running as failed
+                if not failed_stage_found:
+                    for stage in stage_details:
+                        if stage['name'] != 'Compile' and stage['status'] in ('pending', 'running'):
+                            stage['status'] = 'failed'
+                            break
+
+                current_stage = 'failed' if 'FAILED' in pipeline_state else 'cancelled'
+                completed_count = sum(1 for s in stage_details if s['status'] == 'completed')
+                progress_percent = int((completed_count / len(stage_details)) * 100)
+                logger.info(f"QuickTest {quick_test.id}: Pipeline {pipeline_state}")
+
+            else:
+                # Pipeline is still running - get detailed task status
+                task_statuses = self._get_task_statuses(pipeline_job)
+
+                # Initialize stage details with Compile already completed
+                stage_details = [
+                    {'name': 'Compile', 'status': 'completed', 'duration_seconds': None}
+                ]
+
+                # Initialize remaining stages from task statuses or as pending
+                for stage_name in self.STAGE_ORDER[1:]:  # Skip 'Compile'
+                    task_info = task_statuses.get(stage_name, {})
+                    stage_details.append({
+                        'name': stage_name,
+                        'status': task_info.get('status', 'pending'),
+                        'duration_seconds': task_info.get('duration_seconds')
+                    })
+
+                # Log task statuses for debugging
+                if task_statuses:
+                    logger.info(f"QuickTest {quick_test.id}: Task statuses: {task_statuses}")
+                else:
+                    logger.warning(f"QuickTest {quick_test.id}: No task statuses available from Vertex AI")
+
+                # Determine current stage (first non-completed stage)
+                current_stage = 'completed'
+                for stage in stage_details:
+                    if stage['status'] == 'running':
+                        current_stage = stage['name'].lower()
+                        break
+                    elif stage['status'] == 'pending':
+                        current_stage = stage['name'].lower()
+                        break
+                    elif stage['status'] == 'failed':
+                        current_stage = 'failed'
+                        break
+
+                # Calculate progress
+                completed_count = sum(1 for s in stage_details if s['status'] == 'completed')
+                progress_percent = int((completed_count / len(stage_details)) * 100)
 
             # Update QuickTest
             quick_test.stage_details = stage_details
@@ -1059,10 +1144,10 @@ if __name__ == "__main__":
             quick_test.progress_percent = progress_percent
             quick_test.save(update_fields=['stage_details', 'current_stage', 'progress_percent'])
 
-            logger.debug(f"Updated progress for QuickTest {quick_test.id}: {current_stage}, stages={stage_details}")
+            logger.info(f"QuickTest {quick_test.id}: Updated progress - stage={current_stage}, progress={progress_percent}%")
 
         except Exception as e:
-            logger.warning(f"Error updating progress for QuickTest {quick_test.id}: {e}")
+            logger.exception(f"Error updating progress for QuickTest {quick_test.id}: {e}")
 
     def _get_task_statuses(self, pipeline_job) -> dict:
         """
@@ -1083,14 +1168,20 @@ if __name__ == "__main__":
             # Access the underlying gRPC resource to get task details
             gca_resource = pipeline_job._gca_resource
 
-            if not hasattr(gca_resource, 'job_detail') or not gca_resource.job_detail:
-                logger.debug(f"No job_detail available for pipeline {pipeline_job.name}")
+            if not hasattr(gca_resource, 'job_detail'):
+                logger.info(f"Pipeline {pipeline_job.name}: _gca_resource has no job_detail attribute")
+                return {}
+
+            if not gca_resource.job_detail:
+                logger.info(f"Pipeline {pipeline_job.name}: job_detail is empty/None")
                 return {}
 
             task_details = gca_resource.job_detail.task_details
             if not task_details:
-                logger.debug(f"No task_details available for pipeline {pipeline_job.name}")
+                logger.info(f"Pipeline {pipeline_job.name}: task_details is empty")
                 return {}
+
+            logger.info(f"Pipeline {pipeline_job.name}: Found {len(task_details)} task(s)")
 
             result = {}
 
@@ -1108,7 +1199,8 @@ if __name__ == "__main__":
                             break
 
                 if not short_name:
-                    logger.debug(f"Unknown task name: {task_name}")
+                    # Log unrecognized tasks at debug level (artifacts, etc.)
+                    logger.debug(f"Pipeline {pipeline_job.name}: Skipping unrecognized task '{task_name}'")
                     continue
 
                 # Get task state
@@ -1144,11 +1236,13 @@ if __name__ == "__main__":
                     'status': status,
                     'duration_seconds': duration_seconds,
                 }
+                logger.debug(f"Pipeline {pipeline_job.name}: Task '{task_name}' -> {short_name}: {status}")
 
+            logger.info(f"Pipeline {pipeline_job.name}: Extracted {len(result)} stage statuses")
             return result
 
         except Exception as e:
-            logger.warning(f"Error extracting task statuses: {e}")
+            logger.exception(f"Error extracting task statuses from pipeline {pipeline_job.name}: {e}")
             return {}
 
     def cancel_quick_test(self, quick_test) -> 'QuickTest':

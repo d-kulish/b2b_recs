@@ -3778,13 +3778,83 @@ def get_default_stages(status):
 
 ### Testing Checklist
 
-- [ ] Verify stages bar shows on all experiment cards (running, completed, failed)
-- [ ] Verify stages update in real-time during pipeline execution
-- [ ] Verify wizard closes immediately after "Start Experiment" click
-- [ ] Verify column validation catches mismatched column names
-- [ ] Verify error message includes suggestions for fixing column names
-- [ ] Verify Compile stage shows success when Cloud Build completes
-- [ ] Test with duplicate column names across tables
+- [x] Verify stages bar shows on all experiment cards (running, completed, failed)
+- [x] Verify stages update in real-time during pipeline execution
+- [x] Verify wizard closes immediately after "Start Experiment" click
+- [x] Verify column validation catches mismatched column names
+- [x] Verify error message includes suggestions for fixing column names
+- [x] Verify Compile stage shows success when Cloud Build completes
+- [x] Test with duplicate column names across tables
+
+### Progress Bar Bug Fix (December 2025)
+
+**Problem:** The progress bar was not updating correctly during pipeline execution:
+1. "Compile" stage showed as completed immediately when experiment was submitted (before Cloud Build finished)
+2. "Examples" stage showed as running from the start, even during Cloud Build phase
+3. Progress bar got stuck on "Examples" and never advanced to subsequent stages
+4. Spinner kept running for experiments that completed days ago
+
+**Root Causes Identified:**
+
+1. **Premature Status Transition** (`services.py:158-160`): Status was changed from `SUBMITTING` to `RUNNING` immediately after triggering Cloud Build, before it actually completed.
+
+2. **Polling Bug** (`api.py:252-257`): The list polling had a condition `if qt.vertex_pipeline_job_name` that prevented `refresh_status()` from being called for experiments where Cloud Build was still running. This created a deadlock where Cloud Build completion was never detected.
+
+3. **Misleading Fallback Logic** (`api.py:601-607`): When `stage_details` was empty (common for new experiments), the fallback incorrectly showed Compile as completed and Examples as running.
+
+4. **Silent Task Status Failures**: The `_get_task_statuses()` function could fail silently, returning empty dict, causing stages to never update.
+
+**Fixes Applied:**
+
+1. **Fixed Polling Condition** (`api.py`):
+```python
+# Before (broken):
+for qt in running_tests:
+    if qt.vertex_pipeline_job_name:  # Blocked Cloud Build detection
+        service.refresh_status(qt)
+
+# After (fixed):
+for qt in running_tests:
+    service.refresh_status(qt)  # Always call - handles both phases
+```
+
+2. **Fixed Status Transitions** (`services.py`):
+- `submit_quick_test()`: No longer changes status to RUNNING prematurely. Instead initializes `stage_details` with Compile=running.
+- `_check_cloud_build_result()`: Now properly initializes `stage_details` when Cloud Build completes (Compile=completed, Examples=running).
+
+3. **Improved `_update_progress()`** (`services.py`):
+- Handles terminal pipeline states (SUCCEEDED, FAILED, CANCELLED) first as source of truth
+- When pipeline SUCCEEDED: marks all stages as completed regardless of task details availability
+- When pipeline FAILED: attempts to identify which stage failed
+- Added comprehensive logging for diagnostics
+
+4. **Added Logging** (`services.py`):
+- `refresh_status()`: Logs which phase is being checked
+- `_update_progress()`: Logs pipeline state and progress updates
+- `_get_task_statuses()`: Logs task extraction details
+
+**Files Modified:**
+
+| File | Changes |
+|------|---------|
+| `ml_platform/experiments/api.py` | Removed restrictive `if qt.vertex_pipeline_job_name` condition in polling loop |
+| `ml_platform/experiments/services.py` | Fixed status transitions, improved `_update_progress()`, added logging |
+
+**Status Flow (After Fix):**
+
+```
+1. User clicks "Run Experiment"
+   → status=SUBMITTING, stage_details=[Compile=running, rest=pending]
+
+2. Cloud Build completes (~2-5 min)
+   → status=RUNNING, stage_details=[Compile=completed, Examples=running, rest=pending]
+
+3. Vertex AI pipeline executes
+   → stage_details updated from task_details as each stage completes
+
+4. Pipeline completes
+   → status=COMPLETED, stage_details=[all=completed]
+```
 
 ---
 

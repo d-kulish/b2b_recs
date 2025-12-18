@@ -3121,8 +3121,6 @@ async function submitExperiment() {
 
             // Start polling
             startBackgroundPolling();
-
-            showSuccess(`${data.quick_test.display_name} submitted successfully`);
         } else {
             showError(data.error || 'Failed to submit experiment');
         }

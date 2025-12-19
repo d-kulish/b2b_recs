@@ -37,6 +37,31 @@ This document provides **high-level specifications** for the Experiments domain.
 
 ## Recent Updates (December 2025)
 
+### View Modal Redesign with Tabs & Artifacts (2025-12-19)
+
+**Major Redesign:**
+
+1. **4-Tab Modal Layout** - Clean tabbed interface replacing cluttered boxes
+   - **Overview Tab**: Status, configuration, training params, results
+   - **Pipeline Tab**: 6-stage progress bar with stage-by-stage status
+   - **Data Insights Tab**: Dataset statistics + inferred schema (lazy-loaded)
+   - **Training Tab**: Training curves placeholder (for future MLflow integration)
+
+2. **Error Pattern Matching** - Smart error classification with fix suggestions
+   - 15+ patterns for common failures (memory, schema, BigQuery, timeout, etc.)
+   - User-friendly error titles instead of raw stack traces
+   - Actionable suggestions (e.g., "Try reducing batch_size or selecting larger hardware")
+
+3. **Artifact Visibility** - View pipeline artifacts without GCP access
+   - Statistics: Feature count, missing %, min/max/mean values
+   - Schema: Feature names, types, required/optional
+   - Lazy-loaded on tab switch (not on modal open)
+
+4. **Hidden GCP Details** - Users only see Django app
+   - Removed Vertex AI links (users can't access)
+   - Removed GCS paths (users can't access)
+   - All artifact data parsed and displayed in-app
+
 ### Experiment View Modal (2025-12-19)
 
 **New Features:**
@@ -46,8 +71,7 @@ This document provides **high-level specifications** for the Experiments domain.
    - Training Parameters: Epochs, Batch Size, LR, Sample %, Split Strategy, Hardware
    - Pipeline Progress: 6-stage progress bar with real-time updates
    - Results: Loss, Recall@10/50/100, Vocabulary statistics
-   - Technical Details: Database ID, Vertex Pipeline Job ID, Cloud Build ID, timestamps
-   - Error Section: Full error message for failed experiments
+   - Error Section: Classified error with suggestions for failed experiments
 
 2. **View Button** - Green button on experiment cards (above Cancel)
    - Opens the View modal with full experiment details
@@ -1151,6 +1175,20 @@ MLFLOW_TRACKING_URI = os.environ.get('MLFLOW_TRACKING_URI', 'http://mlflow-serve
 - [x] **Wizard scroll fix**: Step 2 now opens scrolled to top
 
 **Result:** Users can view comprehensive experiment details without leaving the page.
+
+### Phase 15: View Modal Redesign with Tabs & Artifacts ✅ DONE (2025-12-19)
+> **Tabbed modal with artifact viewing and smart error handling**
+
+- [x] **4-tab layout**: Overview, Pipeline, Data Insights, Training tabs
+- [x] **Error pattern matching**: 15+ patterns with user-friendly titles and fix suggestions
+- [x] **Artifact service**: Backend service to parse GCS statistics and schema
+- [x] **Lazy loading**: Artifact data fetched on tab switch (not on modal open)
+- [x] **Statistics display**: Feature count, missing %, min/max/mean values
+- [x] **Schema display**: Feature names, types, required/optional
+- [x] **Hidden GCP details**: Removed Vertex AI links and GCS paths from user view
+- [x] **Training placeholder**: Ready for future MLflow integration
+
+**Result:** Users see clean tabbed interface with actionable error messages and artifact visibility.
 
 ### Previously Completed ✅
 - [x] Create `model_experiments.html` page (placeholder)

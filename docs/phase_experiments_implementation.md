@@ -28,9 +28,10 @@ This document provides a **complete implementation guide** for building the Expe
 17. [Phase 12: Pipeline Progress Bar & Error Improvements](#phase-12-pipeline-progress-bar--error-improvements-december-2025)
 18. [Phase 13: Experiment Cards Redesign & Cancel](#phase-13-experiment-cards-redesign--cancel-december-2025)
 19. [Phase 14: Experiment View Modal](#phase-14-experiment-view-modal-december-2025)
-20. [File Reference](#file-reference)
-21. [API Reference](#api-reference)
-22. [Testing Guide](#testing-guide)
+20. [Phase 15: View Modal Redesign with Tabs & Artifacts](#phase-15-view-modal-redesign-with-tabs--artifacts-december-2025)
+22. [File Reference](#file-reference)
+23. [API Reference](#api-reference)
+24. [Testing Guide](#testing-guide)
 
 ---
 
@@ -89,6 +90,7 @@ Experiments Page = Analyze Quick Test results to find optimal parameters
 | **Phase 12** | ✅ Complete | Pipeline Progress Bar & Error Improvements (stage progress bar, async Cloud Build, column validation) |
 | **Phase 13** | ✅ Complete | Experiment Cards Redesign & Cancel (4-column layout, name/description fields, cancel button, progress bar styling) |
 | **Phase 14** | ✅ Complete | Experiment View Modal (comprehensive details modal, polling for running experiments, View button on cards, old modal cleanup) |
+| **Phase 15** | ✅ Complete | View Modal Redesign with Tabs & Artifacts (4-tab layout, error pattern matching, lazy-loaded statistics/schema, training history placeholder) |
 
 ### Cloud Build Implementation (December 2025)
 
@@ -4259,6 +4261,263 @@ function updateWizardUI() {
 
 ---
 
+## Phase 15: View Modal Redesign with Tabs & Artifacts (December 2025)
+
+This phase completely redesigns the View modal with a tabbed interface, removes all GCP-specific references (users only see Django), adds detailed error pattern matching with suggestions, and implements lazy-loaded artifact viewing for statistics and schema.
+
+### Overview
+
+**Problem Statement:**
+- Users couldn't access Vertex AI links or GCS paths (no GCP access)
+- Error messages were raw without actionable suggestions
+- No visibility into pipeline artifacts (statistics, schema)
+- Modal design was cluttered with boxes
+
+**Solution Implemented:**
+1. **4-Tab Modal Layout** - Clean tabbed interface replacing cluttered boxes
+2. **Error Pattern Matching** - Classifies errors and provides fix suggestions
+3. **Artifact Service** - Backend service to parse GCS artifacts (statistics, schema)
+4. **Lazy Loading** - Artifact data fetched on tab switch (not on modal open)
+5. **Hidden GCP Details** - Removed Vertex AI links and GCS paths from user view
+
+### Tab Structure
+
+| Tab | Purpose | Data Source |
+|-----|---------|-------------|
+| **Overview** | Status, configuration, training params, results | QuickTest model |
+| **Pipeline** | 6-stage progress bar with stage-by-stage status | Pipeline progress polling |
+| **Data Insights** | Dataset statistics + inferred schema | GCS artifacts (lazy-loaded) |
+| **Training** | Training curves placeholder (for MLflow integration) | Future: MLflow |
+
+### New Backend Files
+
+#### `ml_platform/experiments/error_patterns.py`
+
+Error pattern matching with 15+ patterns for common pipeline failures:
+
+```python
+ERROR_PATTERNS = [
+    # Memory/Resource errors
+    {'pattern': r'(ResourceExhausted|OOM|out of memory)',
+     'type': 'ResourceExhausted',
+     'title': 'Memory Limit Exceeded',
+     'suggestion': 'Try reducing batch_size or selecting larger hardware.'},
+
+    # Schema/Column errors
+    {'pattern': r'(column.*not found|KeyError)',
+     'type': 'SchemaError',
+     'title': 'Column Not Found',
+     'suggestion': 'Check that Feature Config columns match Dataset schema.'},
+
+    # BigQuery errors
+    {'pattern': r'(BigQuery.*error|table.*not found)',
+     'type': 'BigQueryError',
+     'title': 'BigQuery Query Failed',
+     'suggestion': 'Check Dataset configuration and permissions.'},
+
+    # ... 12 more patterns for timeout, permission, transform, training errors
+]
+
+def classify_error(error_message: str) -> Dict:
+    """Returns type, title, suggestion, severity, matched flag."""
+
+def format_error_for_display(error_message: str) -> Dict:
+    """Complete error info including summary and failed component."""
+```
+
+#### `ml_platform/experiments/artifact_service.py`
+
+Service for fetching and parsing pipeline artifacts from GCS:
+
+```python
+class ArtifactService:
+    """Fetches and parses TFX pipeline artifacts from GCS."""
+
+    def get_detailed_error(self, quick_test) -> Dict:
+        """Get formatted error with classification and suggestions."""
+
+    def get_statistics_summary(self, quick_test) -> Dict:
+        """Parse TFDV statistics from StatisticsGen output.
+        Returns: num_examples, num_features, feature stats (type, missing%, min/max/mean)."""
+
+    def get_schema_summary(self, quick_test) -> Dict:
+        """Parse TF Metadata schema from SchemaGen output.
+        Returns: feature names, types, required/optional."""
+
+    def get_training_history(self, quick_test) -> Dict:
+        """Placeholder for MLflow training curves integration."""
+```
+
+**Key Implementation Details:**
+
+1. **Path Discovery**: Vertex AI creates an `{execution_id}` folder under pipeline_root. The service searches for component names in blob paths.
+
+2. **Proto Parsing**: Uses `tensorflow-metadata` package (not TFDV, which doesn't support Python 3.13):
+   ```python
+   from tensorflow_metadata.proto.v0 import statistics_pb2, schema_pb2
+   stats = statistics_pb2.DatasetFeatureStatisticsList()
+   stats.ParseFromString(blob.download_as_bytes())
+   ```
+
+3. **Robust Parsing**: Uses `getattr()` with defaults and try-except blocks to handle proto version differences.
+
+### New API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/quick-tests/{id}/errors/` | Get classified error with suggestions |
+| GET | `/api/quick-tests/{id}/statistics/` | Get parsed statistics summary |
+| GET | `/api/quick-tests/{id}/schema/` | Get parsed schema summary |
+| GET | `/api/quick-tests/{id}/training-history/` | Get training curves (placeholder) |
+
+**Lazy Loading Pattern:**
+- Data Insights tab triggers `/statistics/` and `/schema/` calls on first open
+- Subsequent opens use cached data (stored in JavaScript)
+- Training tab triggers `/training-history/` call
+
+### Frontend Changes
+
+#### Tab HTML Structure
+
+```html
+<div class="exp-view-tabs">
+    <button class="exp-view-tab active" data-tab="overview">Overview</button>
+    <button class="exp-view-tab" data-tab="pipeline">Pipeline</button>
+    <button class="exp-view-tab" data-tab="insights">Data Insights</button>
+    <button class="exp-view-tab" data-tab="training">Training</button>
+</div>
+
+<div class="exp-view-tab-content active" id="tab-overview">...</div>
+<div class="exp-view-tab-content" id="tab-pipeline">...</div>
+<div class="exp-view-tab-content" id="tab-insights">...</div>
+<div class="exp-view-tab-content" id="tab-training">...</div>
+```
+
+#### CSS for Tabs
+
+```css
+.exp-view-tabs {
+    display: flex;
+    border-bottom: 1px solid #e5e7eb;
+    margin-bottom: 16px;
+}
+.exp-view-tab {
+    padding: 8px 16px;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: #6b7280;
+    cursor: pointer;
+    font-weight: 500;
+}
+.exp-view-tab.active {
+    color: #4f46e5;
+    border-bottom-color: #4f46e5;
+}
+```
+
+#### Error Display
+
+```css
+.exp-error-box {
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 16px;
+}
+.exp-error-title {
+    font-weight: 600;
+    color: #dc2626;
+    margin-bottom: 8px;
+}
+.exp-error-suggestion {
+    color: #b91c1c;
+    font-size: 13px;
+    margin-bottom: 12px;
+}
+.exp-error-details {
+    background: #fee2e2;
+    border-radius: 4px;
+    padding: 12px;
+    font-family: monospace;
+    font-size: 12px;
+    max-height: 200px;
+    overflow-y: auto;
+}
+```
+
+#### JavaScript Tab Switching
+
+```javascript
+let viewModalArtifactCache = {};
+
+function switchViewTab(tabName) {
+    // Update tab buttons
+    document.querySelectorAll('.exp-view-tab').forEach(t => t.classList.remove('active'));
+    document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+
+    // Update tab content
+    document.querySelectorAll('.exp-view-tab-content').forEach(c => c.classList.remove('active'));
+    document.getElementById(`tab-${tabName}`).classList.add('active');
+
+    // Lazy load data for insights/training tabs
+    if (tabName === 'insights' && !viewModalArtifactCache.insights) {
+        loadDataInsights(viewModalExpId);
+    }
+    if (tabName === 'training' && !viewModalArtifactCache.training) {
+        loadTrainingHistory(viewModalExpId);
+    }
+}
+
+async function loadDataInsights(expId) {
+    const statsResp = await fetch(`/experiments/api/quick-tests/${expId}/statistics/`);
+    const schemaResp = await fetch(`/experiments/api/quick-tests/${expId}/schema/`);
+    // ... render stats table and schema table
+    viewModalArtifactCache.insights = true;
+}
+```
+
+### Dependencies
+
+Added to `requirements.txt`:
+```
+tensorflow-metadata>=1.14.0
+```
+
+**Note:** `tensorflow-data-validation` (TFDV) was NOT used because it requires TensorFlow which doesn't support Python 3.13. The `tensorflow-metadata` package provides direct access to the proto definitions needed for parsing.
+
+### Files Created
+
+| File | Description |
+|------|-------------|
+| `ml_platform/experiments/error_patterns.py` | Error classification with 15+ patterns |
+| `ml_platform/experiments/artifact_service.py` | GCS artifact fetching and proto parsing |
+
+### Files Modified
+
+| File | Changes |
+|------|---------|
+| `ml_platform/experiments/api.py` | Added 4 new artifact endpoints |
+| `ml_platform/experiments/urls.py` | Added routes for artifact endpoints |
+| `templates/.../model_experiments.html` | Complete modal redesign with tabs |
+| `requirements.txt` | Added tensorflow-metadata |
+
+### Testing Checklist
+
+- [x] View modal opens with 4 tabs (Overview, Pipeline, Data Insights, Training)
+- [x] Overview tab shows status, config, params, results
+- [x] Pipeline tab shows 6-stage progress bar
+- [x] Data Insights tab lazy-loads statistics and schema
+- [x] Training tab shows MLflow placeholder
+- [x] Failed experiments show classified error with suggestion
+- [x] Error details are collapsible
+- [x] No Vertex AI links or GCS paths visible to users
+- [x] Statistics show feature count, missing %, min/max/mean
+- [x] Schema shows feature names, types, required/optional
+
+---
+
 ## File Reference
 
 ### Files to Create
@@ -4266,8 +4525,10 @@ function updateWizardUI() {
 | File | Description |
 |------|-------------|
 | `ml_platform/pipelines/tfx_pipeline.py` | Native TFX pipeline definition |
-| `ml_platform/experiments/services.py` | MLflow integration service |
-| `ml_platform/experiments/api.py` | MLflow API endpoints |
+| `ml_platform/experiments/services.py` | Experiment service with Cloud Build integration |
+| `ml_platform/experiments/api.py` | REST API endpoints for experiments |
+| `ml_platform/experiments/error_patterns.py` | Error classification with fix suggestions |
+| `ml_platform/experiments/artifact_service.py` | GCS artifact parsing (statistics, schema) |
 | `mlflow-server/Dockerfile` | MLflow server container |
 | `mlflow-server/cloudbuild.yaml` | Cloud Build config for MLflow |
 

@@ -1111,286 +1111,503 @@
     }
 
     /* =========================================================================
-       Experiment View Modal Styles
+       Experiment View Modal Styles (Tabbed Design)
        ========================================================================= */
     .exp-view-modal {
-        max-width: 700px;
+        max-width: 720px;
         max-height: 85vh;
         display: flex;
         flex-direction: column;
     }
+
+    /* Header */
     .exp-view-header {
         display: flex;
         justify-content: space-between;
-        align-items: center;
+        align-items: flex-start;
+        padding: 20px 24px 16px;
+        border-bottom: none;
     }
-    .exp-view-status-icon {
-        width: 44px;
-        height: 44px;
-        border-radius: 12px;
+    .exp-view-header-left {
+        display: flex;
+        align-items: flex-start;
+        gap: 14px;
+    }
+    .exp-view-status-dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        margin-top: 6px;
+        flex-shrink: 0;
+    }
+    .exp-view-status-dot.running {
+        background: #3b82f6;
+        animation: pulse-dot 1.5s ease-in-out infinite;
+    }
+    .exp-view-status-dot.submitting {
+        background: #f59e0b;
+        animation: pulse-dot 1.5s ease-in-out infinite;
+    }
+    .exp-view-status-dot.completed { background: #22c55e; }
+    .exp-view-status-dot.failed { background: #ef4444; }
+    .exp-view-status-dot.cancelled { background: #9ca3af; }
+    .exp-view-status-dot.pending { background: #d1d5db; }
+
+    @keyframes pulse-dot {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.6; transform: scale(1.1); }
+    }
+
+    .exp-view-header-info {
+        flex: 1;
+    }
+    .exp-view-title {
+        font-size: 18px;
+        font-weight: 600;
+        color: #111827;
+        margin: 0 0 2px;
+        line-height: 1.3;
+    }
+    .exp-view-subtitle {
+        font-size: 13px;
+        color: #6b7280;
+        margin: 0 0 6px;
+        line-height: 1.4;
+    }
+    .exp-view-meta {
+        font-size: 12px;
+        color: #9ca3af;
+    }
+    .exp-view-meta span:not(:last-child)::after {
+        content: "•";
+        margin: 0 8px;
+    }
+    .exp-view-header-right {
         display: flex;
         align-items: center;
-        justify-content: center;
-        font-size: 18px;
+        gap: 12px;
     }
-    .exp-view-status-icon.running {
-        background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+    .exp-view-status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 10px;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 500;
+    }
+    .exp-view-status-badge.running {
+        background: #dbeafe;
+        color: #1d4ed8;
+    }
+    .exp-view-status-badge.submitting {
+        background: #fef3c7;
+        color: #b45309;
+    }
+    .exp-view-status-badge.completed {
+        background: #dcfce7;
+        color: #166534;
+    }
+    .exp-view-status-badge.failed {
+        background: #fee2e2;
+        color: #991b1b;
+    }
+    .exp-view-status-badge.cancelled {
+        background: #f3f4f6;
+        color: #4b5563;
+    }
+
+    /* Tabs */
+    .exp-view-tabs {
+        display: flex;
+        gap: 0;
+        padding: 0 24px;
+        border-bottom: 1px solid #e5e7eb;
+        background: #fafafa;
+    }
+    .exp-view-tab {
+        padding: 12px 20px;
+        font-size: 13px;
+        font-weight: 500;
+        color: #6b7280;
+        background: none;
+        border: none;
+        cursor: pointer;
+        position: relative;
+        transition: color 0.15s ease;
+    }
+    .exp-view-tab:hover {
+        color: #374151;
+    }
+    .exp-view-tab.active {
         color: #2563eb;
     }
-    .exp-view-status-icon.completed {
-        background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
-        color: #16a34a;
+    .exp-view-tab.active::after {
+        content: "";
+        position: absolute;
+        bottom: -1px;
+        left: 0;
+        right: 0;
+        height: 2px;
+        background: #2563eb;
+        border-radius: 2px 2px 0 0;
     }
-    .exp-view-status-icon.failed {
-        background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
-        color: #dc2626;
-    }
-    .exp-view-status-icon.cancelled {
-        background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
-        color: #6b7280;
-    }
-    .exp-view-status-icon.submitting {
-        background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
-        color: #d97706;
-    }
+
+    /* Tab Content */
     .exp-view-body {
         overflow-y: auto;
         flex: 1;
-        padding: 16px 24px;
+        padding: 0;
     }
-    .exp-view-meta-row {
+    .exp-view-tab-content {
+        display: none;
+        padding: 20px 24px;
+    }
+    .exp-view-tab-content.active {
+        display: block;
+    }
+
+    /* Section Groups */
+    .exp-view-section-group {
+        margin-bottom: 24px;
+    }
+    .exp-view-section-group:last-child {
+        margin-bottom: 0;
+    }
+    .exp-view-group-title {
+        font-size: 11px;
+        font-weight: 600;
+        color: #9ca3af;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin: 0 0 12px;
+    }
+
+    /* Clean Rows Layout */
+    .exp-view-rows {
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+    }
+    .exp-view-row {
         display: flex;
         justify-content: space-between;
         align-items: center;
+        padding: 10px 0;
+        border-bottom: 1px solid #f3f4f6;
+    }
+    .exp-view-row:last-child {
+        border-bottom: none;
+    }
+    .exp-view-row-label {
         font-size: 13px;
         color: #6b7280;
-        margin-bottom: 16px;
-        padding-bottom: 12px;
-        border-bottom: 1px solid #e5e7eb;
     }
-    .exp-view-error-section {
-        background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
-        border: 1px solid #fecaca;
-        border-radius: 10px;
-        padding: 14px 16px;
-        margin-bottom: 16px;
+    .exp-view-row-value {
+        font-size: 13px;
+        font-weight: 500;
+        color: #111827;
     }
-    .exp-view-error-header {
+
+    /* Results Summary (Overview tab) */
+    .exp-view-results-summary {
+        margin-top: 24px;
+        padding-top: 20px;
+        border-top: 1px solid #e5e7eb;
+    }
+    .exp-view-metrics-row {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 16px;
+    }
+    .exp-view-metric-card {
+        text-align: center;
+        padding: 12px 8px;
+        background: #f9fafb;
+        border-radius: 8px;
+    }
+    .exp-view-metric-card-label {
+        font-size: 11px;
+        color: #6b7280;
+        margin-bottom: 4px;
+    }
+    .exp-view-metric-card-value {
+        font-size: 18px;
+        font-weight: 600;
+        color: #059669;
+    }
+
+    /* Pipeline Tab Styles */
+    .exp-view-progress-section {
         display: flex;
         align-items: center;
-        gap: 8px;
-        color: #991b1b;
-        font-weight: 600;
-        font-size: 14px;
-        margin-bottom: 8px;
+        gap: 12px;
+        margin-bottom: 20px;
     }
-    .exp-view-error-section p {
-        color: #b91c1c;
-        font-size: 13px;
-        margin: 0;
-        line-height: 1.5;
+    .exp-view-progress-bar-container {
+        flex: 1;
+        height: 8px;
+        background: #e5e7eb;
+        border-radius: 4px;
+        overflow: hidden;
     }
-    .exp-view-section {
-        margin-bottom: 16px;
+    .exp-view-progress-bar {
+        height: 100%;
+        background: linear-gradient(90deg, #3b82f6 0%, #2563eb 100%);
+        border-radius: 4px;
+        transition: width 0.3s ease;
     }
-    .exp-view-section-title {
+    .exp-view-progress-text {
         font-size: 13px;
         font-weight: 600;
         color: #374151;
-        margin-bottom: 10px;
+        min-width: 40px;
+    }
+
+    /* Pipeline Visual */
+    .exp-view-pipeline {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 20px;
+        flex-wrap: wrap;
+    }
+    .exp-view-pipeline-stage {
+        flex: 1;
+        min-width: 90px;
+        text-align: center;
+        padding: 12px 8px;
+        border-radius: 8px;
+        border: 1px solid #e5e7eb;
+        background: #f9fafb;
+        position: relative;
+    }
+    .exp-view-pipeline-stage.completed {
+        background: #f0fdf4;
+        border-color: #86efac;
+    }
+    .exp-view-pipeline-stage.running {
+        background: #eff6ff;
+        border-color: #93c5fd;
+    }
+    .exp-view-pipeline-stage.failed {
+        background: #fef2f2;
+        border-color: #fca5a5;
+    }
+    .exp-view-pipeline-stage-icon {
+        font-size: 18px;
+        margin-bottom: 6px;
+    }
+    .exp-view-pipeline-stage.completed .exp-view-pipeline-stage-icon { color: #22c55e; }
+    .exp-view-pipeline-stage.running .exp-view-pipeline-stage-icon { color: #3b82f6; }
+    .exp-view-pipeline-stage.failed .exp-view-pipeline-stage-icon { color: #ef4444; }
+    .exp-view-pipeline-stage.pending .exp-view-pipeline-stage-icon { color: #9ca3af; }
+    .exp-view-pipeline-stage-name {
+        font-size: 11px;
+        font-weight: 600;
+        color: #374151;
+        margin-bottom: 2px;
+    }
+    .exp-view-pipeline-stage-time {
+        font-size: 10px;
+        color: #6b7280;
+    }
+
+    /* Error Box */
+    .exp-view-error-box {
+        background: #fef2f2;
+        border: 1px solid #fecaca;
+        border-radius: 10px;
+        padding: 16px;
+        margin-top: 8px;
+    }
+    .exp-view-error-box .exp-view-error-header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 8px;
+    }
+    .exp-view-error-box .exp-view-error-header i {
+        color: #dc2626;
+        font-size: 18px;
+    }
+    .exp-view-error-box .exp-view-error-header span {
+        font-size: 14px;
+        font-weight: 600;
+        color: #991b1b;
+    }
+    .exp-view-error-suggestion {
+        font-size: 13px;
+        color: #b91c1c;
+        margin: 0 0 12px;
+        padding-left: 28px;
+        line-height: 1.5;
+    }
+    .exp-view-error-details {
+        border-top: 1px solid #fecaca;
+        padding-top: 12px;
+    }
+    .exp-view-error-toggle {
         display: flex;
         align-items: center;
         gap: 8px;
-    }
-    .exp-view-section-title i {
-        color: #6b7280;
+        background: none;
+        border: none;
+        color: #991b1b;
         font-size: 12px;
+        font-weight: 500;
+        cursor: pointer;
+        padding: 0;
     }
-    .exp-view-config-grid {
+    .exp-view-error-toggle:hover {
+        color: #7f1d1d;
+    }
+    .exp-view-error-toggle i {
+        font-size: 10px;
+        transition: transform 0.2s ease;
+    }
+    .exp-view-error-toggle i.expanded {
+        transform: rotate(180deg);
+    }
+    .exp-view-error-content {
+        margin-top: 12px;
+    }
+    .exp-view-error-content pre {
+        background: #fff5f5;
+        border: 1px solid #fecaca;
+        border-radius: 6px;
+        padding: 12px;
+        font-size: 11px;
+        font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+        color: #991b1b;
+        overflow-x: auto;
+        white-space: pre-wrap;
+        word-break: break-word;
+        max-height: 200px;
+        overflow-y: auto;
+        margin: 0;
+    }
+
+    /* Loading State */
+    .exp-view-loading {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 48px 24px;
+        color: #6b7280;
+        gap: 12px;
+    }
+    .exp-view-loading i {
+        font-size: 24px;
+        color: #3b82f6;
+    }
+    .exp-view-loading span {
+        font-size: 13px;
+    }
+
+    /* Data Message */
+    .exp-view-data-message {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 48px 24px;
+        color: #9ca3af;
+        gap: 8px;
+        text-align: center;
+    }
+    .exp-view-data-message i {
+        font-size: 24px;
+    }
+    .exp-view-data-message span {
+        font-size: 13px;
+    }
+
+    /* Chart Placeholder */
+    .exp-view-chart-placeholder {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 48px 24px;
+        background: #f9fafb;
+        border: 1px dashed #d1d5db;
+        border-radius: 8px;
+        color: #9ca3af;
+        text-align: center;
+    }
+    .exp-view-chart-placeholder i {
+        font-size: 32px;
+        margin-bottom: 12px;
+    }
+    .exp-view-chart-placeholder p {
+        font-size: 13px;
+        margin: 0;
+        max-width: 280px;
+    }
+
+    /* Statistics Table */
+    .exp-view-stats-summary {
         display: grid;
         grid-template-columns: repeat(3, 1fr);
         gap: 12px;
+        margin-bottom: 16px;
     }
-    .exp-view-config-item {
+    .exp-view-stat-box {
         background: #f9fafb;
-        border: 1px solid #e5e7eb;
         border-radius: 8px;
-        padding: 10px 12px;
-        text-align: center;
-    }
-    .exp-view-config-label {
-        display: block;
-        font-size: 11px;
-        color: #6b7280;
-        text-transform: uppercase;
-        margin-bottom: 4px;
-    }
-    .exp-view-config-value {
-        font-size: 14px;
-        font-weight: 600;
-        color: #111827;
-    }
-    .exp-view-params-grid {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-    }
-    .exp-view-param {
-        background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
-        border: 1px solid #bfdbfe;
-        border-radius: 8px;
-        padding: 8px 14px;
-        text-align: center;
-        min-width: 100px;
-    }
-    .exp-view-param-label {
-        display: block;
-        font-size: 10px;
-        color: #1e40af;
-        text-transform: uppercase;
-        margin-bottom: 2px;
-    }
-    .exp-view-param-value {
-        font-size: 14px;
-        font-weight: 600;
-        color: #1e3a8a;
-    }
-    .exp-view-stages-table {
-        display: grid;
-        grid-template-columns: repeat(6, 1fr);
-        gap: 8px;
-    }
-    .exp-view-stage {
-        text-align: center;
-        padding: 10px 6px;
-        border-radius: 8px;
-        border: 1px solid #e5e7eb;
-        background: #f9fafb;
-    }
-    .exp-view-stage.completed {
-        background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
-        border-color: #86efac;
-    }
-    .exp-view-stage.running {
-        background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
-        border-color: #93c5fd;
-    }
-    .exp-view-stage.failed {
-        background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
-        border-color: #fca5a5;
-    }
-    .exp-view-stage-icon {
-        font-size: 16px;
-        margin-bottom: 4px;
-    }
-    .exp-view-stage.completed .exp-view-stage-icon { color: #16a34a; }
-    .exp-view-stage.running .exp-view-stage-icon { color: #2563eb; }
-    .exp-view-stage.failed .exp-view-stage-icon { color: #dc2626; }
-    .exp-view-stage.pending .exp-view-stage-icon { color: #9ca3af; }
-    .exp-view-stage-name {
-        display: block;
-        font-size: 11px;
-        font-weight: 600;
-        color: #374151;
-        margin-bottom: 2px;
-    }
-    .exp-view-stage-duration {
-        display: block;
-        font-size: 10px;
-        color: #6b7280;
-    }
-    .exp-view-metrics-grid {
-        display: grid;
-        grid-template-columns: repeat(4, 1fr);
-        gap: 12px;
-    }
-    .exp-view-metric {
-        background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
-        border: 1px solid #86efac;
-        border-radius: 10px;
         padding: 12px;
         text-align: center;
     }
-    .exp-view-metric-label {
-        display: block;
-        font-size: 11px;
-        color: #166534;
-        text-transform: uppercase;
-        margin-bottom: 4px;
-    }
-    .exp-view-metric-value {
-        font-size: 18px;
-        font-weight: 700;
-        color: #15803d;
-    }
-    .exp-view-vocab-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-        gap: 10px;
-    }
-    .exp-view-vocab-item {
-        background: #faf5ff;
-        border: 1px solid #e9d5ff;
-        border-radius: 8px;
-        padding: 10px 12px;
-    }
-    .exp-view-vocab-name {
-        font-size: 12px;
+    .exp-view-stat-box-value {
+        font-size: 20px;
         font-weight: 600;
-        color: #6b21a8;
-        margin-bottom: 2px;
-    }
-    .exp-view-vocab-size {
-        font-size: 14px;
-        font-weight: 700;
-        color: #7c3aed;
-    }
-    .exp-view-technical {
-        background: #f9fafb;
-        border-radius: 10px;
-        padding: 12px 14px;
-        margin-top: 8px;
-    }
-    .exp-view-collapsible {
-        cursor: pointer;
-        user-select: none;
-        margin-bottom: 0;
-    }
-    .exp-view-collapsible:hover {
         color: #111827;
     }
-    .exp-view-collapse-icon {
-        margin-left: auto;
-        transition: transform 0.2s ease;
+    .exp-view-stat-box-label {
+        font-size: 11px;
+        color: #6b7280;
+        margin-top: 2px;
     }
-    .exp-view-collapse-icon.collapsed {
-        transform: rotate(-90deg);
-    }
-    .exp-view-technical-content {
-        margin-top: 12px;
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 8px;
-    }
-    .exp-view-technical-content.collapsed {
-        display: none;
-    }
-    .exp-view-technical-item {
+    .exp-view-features-table {
+        width: 100%;
+        border-collapse: collapse;
         font-size: 12px;
     }
-    .exp-view-technical-label {
-        color: #6b7280;
-        display: block;
-        margin-bottom: 2px;
+    .exp-view-features-table th {
+        text-align: left;
+        padding: 8px 12px;
+        background: #f9fafb;
+        font-weight: 600;
+        color: #374151;
+        border-bottom: 1px solid #e5e7eb;
     }
-    .exp-view-technical-value {
-        color: #111827;
+    .exp-view-features-table td {
+        padding: 8px 12px;
+        border-bottom: 1px solid #f3f4f6;
+        color: #374151;
+    }
+    .exp-view-features-table tr:last-child td {
+        border-bottom: none;
+    }
+    .exp-view-features-table .type-tag {
+        display: inline-block;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 10px;
         font-weight: 500;
     }
-    .exp-view-technical-path {
-        font-family: monospace;
-        font-size: 11px;
-        word-break: break-all;
+    .exp-view-features-table .type-tag.numeric {
+        background: #dbeafe;
+        color: #1d4ed8;
+    }
+    .exp-view-features-table .type-tag.categorical {
+        background: #f3e8ff;
+        color: #7c3aed;
+    }
+    .exp-view-features-table .type-tag.unknown {
+        background: #f3f4f6;
+        color: #6b7280;
     }
 
     /* =========================================================================
@@ -2067,182 +2284,211 @@
 </div>
 
 <!-- ============================================================================
-     EXPERIMENT VIEW MODAL (Comprehensive details view)
+     EXPERIMENT VIEW MODAL (Tabbed design with lazy-loaded artifacts)
      ============================================================================ -->
 <div id="expViewModal" class="modal-overlay hidden" onclick="closeExpViewModal(event)">
     <div class="modal-container exp-view-modal" onclick="event.stopPropagation()">
         <!-- Header -->
         <div class="modal-header exp-view-header">
-            <div class="flex items-center gap-3">
-                <div class="exp-view-status-icon" id="expViewStatusIcon">
-                    <i class="fas fa-flask"></i>
-                </div>
-                <div>
-                    <h3 class="modal-header-title" id="expViewTitle">Exp #1</h3>
-                    <p class="text-sm text-gray-500" id="expViewSubtitle"></p>
+            <div class="exp-view-header-left">
+                <div class="exp-view-status-dot" id="expViewStatusDot"></div>
+                <div class="exp-view-header-info">
+                    <h3 class="exp-view-title" id="expViewTitle">Experiment #1</h3>
+                    <p class="exp-view-subtitle" id="expViewSubtitle"></p>
+                    <div class="exp-view-meta" id="expViewMeta"></div>
                 </div>
             </div>
-            <div class="flex items-center gap-3">
-                <span id="expViewStatusBadge" class="status-badge"></span>
+            <div class="exp-view-header-right">
+                <span id="expViewStatusBadge" class="exp-view-status-badge"></span>
                 <button type="button" class="modal-close-btn" onclick="closeExpViewModal()">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
         </div>
 
-        <!-- Body -->
+        <!-- Tab Navigation -->
+        <div class="exp-view-tabs">
+            <button class="exp-view-tab active" data-tab="overview" onclick="switchExpViewTab('overview')">
+                Overview
+            </button>
+            <button class="exp-view-tab" data-tab="pipeline" onclick="switchExpViewTab('pipeline')">
+                Pipeline
+            </button>
+            <button class="exp-view-tab" data-tab="data" onclick="switchExpViewTab('data')">
+                Data Insights
+            </button>
+            <button class="exp-view-tab" data-tab="training" onclick="switchExpViewTab('training')">
+                Training
+            </button>
+        </div>
+
+        <!-- Tab Content -->
         <div class="modal-body exp-view-body">
-            <!-- Duration & Meta Row -->
-            <div class="exp-view-meta-row" id="expViewMetaRow">
-                <span id="expViewDuration"></span>
-                <span id="expViewCreatedBy"></span>
-            </div>
-
-            <!-- Error Section (shown for failed experiments) -->
-            <div id="expViewErrorSection" class="exp-view-error-section hidden">
-                <div class="exp-view-error-header">
-                    <i class="fas fa-exclamation-triangle"></i>
-                    <span>Pipeline Failed</span>
-                </div>
-                <p id="expViewErrorMessage"></p>
-            </div>
-
-            <!-- Configuration Section -->
-            <div class="exp-view-section">
-                <h4 class="exp-view-section-title">
-                    <i class="fas fa-cogs"></i> Configuration
-                </h4>
-                <div class="exp-view-config-grid">
-                    <div class="exp-view-config-item">
-                        <span class="exp-view-config-label">Dataset</span>
-                        <span class="exp-view-config-value" id="expViewDataset">-</span>
-                    </div>
-                    <div class="exp-view-config-item">
-                        <span class="exp-view-config-label">Feature Config</span>
-                        <span class="exp-view-config-value" id="expViewFeatureConfig">-</span>
-                    </div>
-                    <div class="exp-view-config-item">
-                        <span class="exp-view-config-label">Model Config</span>
-                        <span class="exp-view-config-value" id="expViewModelConfig">-</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Data Sampling Section -->
-            <div class="exp-view-section">
-                <h4 class="exp-view-section-title">
-                    <i class="fas fa-database"></i> Data Sampling
-                </h4>
-                <div class="exp-view-params-grid">
-                    <div class="exp-view-param">
-                        <span class="exp-view-param-label">Sample</span>
-                        <span class="exp-view-param-value" id="expViewSample">100%</span>
-                    </div>
-                    <div class="exp-view-param">
-                        <span class="exp-view-param-label">Split Strategy</span>
-                        <span class="exp-view-param-value" id="expViewSplit">Random 80/20</span>
-                    </div>
-                    <div class="exp-view-param" id="expViewDateColumnWrapper" style="display: none;">
-                        <span class="exp-view-param-label">Date Column</span>
-                        <span class="exp-view-param-value" id="expViewDateColumn">-</span>
-                    </div>
-                    <div class="exp-view-param" id="expViewHoldoutWrapper" style="display: none;">
-                        <span class="exp-view-param-label">Holdout Days</span>
-                        <span class="exp-view-param-value" id="expViewHoldout">-</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Training Parameters Section -->
-            <div class="exp-view-section">
-                <h4 class="exp-view-section-title">
-                    <i class="fas fa-sliders-h"></i> Training Parameters
-                </h4>
-                <div class="exp-view-params-grid">
-                    <div class="exp-view-param">
-                        <span class="exp-view-param-label">Epochs</span>
-                        <span class="exp-view-param-value" id="expViewEpochs">10</span>
-                    </div>
-                    <div class="exp-view-param">
-                        <span class="exp-view-param-label">Batch Size</span>
-                        <span class="exp-view-param-value" id="expViewBatchSize">4096</span>
-                    </div>
-                    <div class="exp-view-param">
-                        <span class="exp-view-param-label">Learning Rate</span>
-                        <span class="exp-view-param-value" id="expViewLearningRate">0.01</span>
-                    </div>
-                    <div class="exp-view-param">
-                        <span class="exp-view-param-label">Hardware</span>
-                        <span class="exp-view-param-value" id="expViewHardware">Small</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Pipeline Progress Section -->
-            <div class="exp-view-section">
-                <h4 class="exp-view-section-title">
-                    <i class="fas fa-stream"></i> Pipeline Progress
-                </h4>
-                <!-- Progress Bar (for running experiments) -->
-                <div id="expViewProgressBarWrapper" class="mb-3" style="display: none;">
-                    <div class="quicktest-progress-bar">
-                        <div class="quicktest-progress-fill animated" id="expViewProgressBar" style="width: 0%">
-                            <span class="quicktest-progress-text" id="expViewProgressText">0%</span>
+            <!-- Overview Tab -->
+            <div id="expViewTabOverview" class="exp-view-tab-content active">
+                <div class="exp-view-section-group">
+                    <h4 class="exp-view-group-title">Configuration</h4>
+                    <div class="exp-view-rows">
+                        <div class="exp-view-row">
+                            <span class="exp-view-row-label">Dataset</span>
+                            <span class="exp-view-row-value" id="expViewDataset">-</span>
+                        </div>
+                        <div class="exp-view-row">
+                            <span class="exp-view-row-label">Feature Config</span>
+                            <span class="exp-view-row-value" id="expViewFeatureConfig">-</span>
+                        </div>
+                        <div class="exp-view-row">
+                            <span class="exp-view-row-label">Model Config</span>
+                            <span class="exp-view-row-value" id="expViewModelConfig">-</span>
                         </div>
                     </div>
                 </div>
-                <!-- Stages Table -->
-                <div class="exp-view-stages-table" id="expViewStagesTable">
-                    <!-- Populated by JavaScript -->
+
+                <div class="exp-view-section-group">
+                    <h4 class="exp-view-group-title">Sampling</h4>
+                    <div class="exp-view-rows">
+                        <div class="exp-view-row">
+                            <span class="exp-view-row-label">Sample</span>
+                            <span class="exp-view-row-value" id="expViewSample">100%</span>
+                        </div>
+                        <div class="exp-view-row">
+                            <span class="exp-view-row-label">Split Strategy</span>
+                            <span class="exp-view-row-value" id="expViewSplit">Random 80/20</span>
+                        </div>
+                        <div class="exp-view-row" id="expViewDateColumnRow" style="display: none;">
+                            <span class="exp-view-row-label">Date Column</span>
+                            <span class="exp-view-row-value" id="expViewDateColumn">-</span>
+                        </div>
+                        <div class="exp-view-row" id="expViewHoldoutRow" style="display: none;">
+                            <span class="exp-view-row-label">Holdout Days</span>
+                            <span class="exp-view-row-value" id="expViewHoldout">-</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="exp-view-section-group">
+                    <h4 class="exp-view-group-title">Training Parameters</h4>
+                    <div class="exp-view-rows">
+                        <div class="exp-view-row">
+                            <span class="exp-view-row-label">Epochs</span>
+                            <span class="exp-view-row-value" id="expViewEpochs">10</span>
+                        </div>
+                        <div class="exp-view-row">
+                            <span class="exp-view-row-label">Batch Size</span>
+                            <span class="exp-view-row-value" id="expViewBatchSize">4096</span>
+                        </div>
+                        <div class="exp-view-row">
+                            <span class="exp-view-row-label">Learning Rate</span>
+                            <span class="exp-view-row-value" id="expViewLearningRate">0.001</span>
+                        </div>
+                        <div class="exp-view-row">
+                            <span class="exp-view-row-label">Hardware</span>
+                            <span class="exp-view-row-value" id="expViewHardware">Small</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Results Summary (only for completed) -->
+                <div id="expViewResultsSummary" class="exp-view-results-summary hidden">
+                    <h4 class="exp-view-group-title">Results</h4>
+                    <div class="exp-view-metrics-row" id="expViewMetricsSummary">
+                        <!-- Populated by JavaScript -->
+                    </div>
                 </div>
             </div>
 
-            <!-- Results Section (shown for completed experiments) -->
-            <div id="expViewResultsSection" class="exp-view-section hidden">
-                <h4 class="exp-view-section-title">
-                    <i class="fas fa-chart-line"></i> Results
-                </h4>
-                <div class="exp-view-metrics-grid" id="expViewMetrics">
+            <!-- Pipeline Tab -->
+            <div id="expViewTabPipeline" class="exp-view-tab-content">
+                <!-- Progress Bar (for running experiments) -->
+                <div id="expViewProgressSection" class="exp-view-progress-section" style="display: none;">
+                    <div class="exp-view-progress-bar-container">
+                        <div class="exp-view-progress-bar" id="expViewProgressBar" style="width: 0%"></div>
+                    </div>
+                    <span class="exp-view-progress-text" id="expViewProgressText">0%</span>
+                </div>
+
+                <!-- Pipeline Visual -->
+                <div class="exp-view-pipeline" id="expViewPipeline">
                     <!-- Populated by JavaScript -->
+                </div>
+
+                <!-- Error Section (for failed experiments) -->
+                <div id="expViewErrorSection" class="exp-view-error-box hidden">
+                    <div class="exp-view-error-header">
+                        <i class="fas fa-exclamation-circle"></i>
+                        <span id="expViewErrorTitle">Pipeline Failed</span>
+                    </div>
+                    <p class="exp-view-error-suggestion" id="expViewErrorSuggestion"></p>
+                    <div class="exp-view-error-details">
+                        <button class="exp-view-error-toggle" onclick="toggleErrorDetails()">
+                            <span id="expViewErrorToggleText">Show Error Details</span>
+                            <i class="fas fa-chevron-down" id="expViewErrorToggleIcon"></i>
+                        </button>
+                        <div id="expViewErrorDetails" class="exp-view-error-content hidden">
+                            <pre id="expViewErrorMessage"></pre>
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            <!-- Vocabulary Stats Section -->
-            <div id="expViewVocabSection" class="exp-view-section hidden">
-                <h4 class="exp-view-section-title">
-                    <i class="fas fa-spell-check"></i> Vocabulary Statistics
-                </h4>
-                <div class="exp-view-vocab-grid" id="expViewVocabStats">
-                    <!-- Populated by JavaScript -->
+            <!-- Data Insights Tab (lazy-loaded) -->
+            <div id="expViewTabData" class="exp-view-tab-content">
+                <div id="expViewDataLoading" class="exp-view-loading">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <span>Loading data insights...</span>
+                </div>
+                <div id="expViewDataContent" class="hidden">
+                    <!-- Statistics Section -->
+                    <div class="exp-view-section-group">
+                        <h4 class="exp-view-group-title">Dataset Statistics</h4>
+                        <div id="expViewStatsContent">
+                            <!-- Populated by JavaScript -->
+                        </div>
+                    </div>
+
+                    <!-- Schema Section -->
+                    <div class="exp-view-section-group">
+                        <h4 class="exp-view-group-title">Schema</h4>
+                        <div id="expViewSchemaContent">
+                            <!-- Populated by JavaScript -->
+                        </div>
+                    </div>
+                </div>
+                <div id="expViewDataError" class="exp-view-data-message hidden">
+                    <i class="fas fa-info-circle"></i>
+                    <span id="expViewDataErrorMessage">Data insights not available</span>
                 </div>
             </div>
 
-            <!-- Technical Details Section (collapsible) -->
-            <div class="exp-view-section exp-view-technical">
-                <h4 class="exp-view-section-title exp-view-collapsible" onclick="toggleExpViewTechnical()">
-                    <i class="fas fa-wrench"></i> Technical Details
-                    <i class="fas fa-chevron-down exp-view-collapse-icon" id="expViewTechnicalIcon"></i>
-                </h4>
-                <div id="expViewTechnicalContent" class="exp-view-technical-content">
-                    <div class="exp-view-technical-item">
-                        <span class="exp-view-technical-label">Vertex Pipeline ID</span>
-                        <span class="exp-view-technical-value" id="expViewVertexId">-</span>
+            <!-- Training Tab (lazy-loaded) -->
+            <div id="expViewTabTraining" class="exp-view-tab-content">
+                <div id="expViewTrainingLoading" class="exp-view-loading hidden">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <span>Loading training data...</span>
+                </div>
+
+                <!-- Training Curves Placeholder -->
+                <div class="exp-view-section-group">
+                    <h4 class="exp-view-group-title">Training Progress</h4>
+                    <div id="expViewTrainingChart" class="exp-view-chart-placeholder">
+                        <i class="fas fa-chart-line"></i>
+                        <p>Training curves will be available when MLflow integration is complete</p>
                     </div>
-                    <div class="exp-view-technical-item">
-                        <span class="exp-view-technical-label">GCS Artifacts</span>
-                        <span class="exp-view-technical-value exp-view-technical-path" id="expViewGcsPath">-</span>
+                </div>
+
+                <!-- Final Metrics -->
+                <div id="expViewFinalMetrics" class="exp-view-section-group hidden">
+                    <h4 class="exp-view-group-title">Final Metrics</h4>
+                    <div class="exp-view-rows" id="expViewMetricsRows">
+                        <!-- Populated by JavaScript -->
                     </div>
-                    <div class="exp-view-technical-item">
-                        <span class="exp-view-technical-label">Created</span>
-                        <span class="exp-view-technical-value" id="expViewCreatedAt">-</span>
-                    </div>
-                    <div class="exp-view-technical-item">
-                        <span class="exp-view-technical-label">Started</span>
-                        <span class="exp-view-technical-value" id="expViewStartedAt">-</span>
-                    </div>
-                    <div class="exp-view-technical-item">
-                        <span class="exp-view-technical-label">Completed</span>
-                        <span class="exp-view-technical-value" id="expViewCompletedAt">-</span>
+                </div>
+
+                <!-- Vocabulary Stats -->
+                <div id="expViewVocabSection" class="exp-view-section-group hidden">
+                    <h4 class="exp-view-group-title">Vocabularies</h4>
+                    <div class="exp-view-rows" id="expViewVocabRows">
+                        <!-- Populated by JavaScript -->
                     </div>
                 </div>
             </div>
@@ -2250,11 +2496,7 @@
 
         <!-- Footer -->
         <div class="modal-footer-wizard-neu">
-            <div class="footer-left">
-                <a href="#" id="expViewVertexLink" target="_blank" class="text-sm text-blue-600 hover:text-blue-800" style="display: none;">
-                    <i class="fas fa-external-link-alt mr-1"></i>View in Vertex AI
-                </a>
-            </div>
+            <div class="footer-left"></div>
             <div class="footer-right">
                 <button type="button" id="expViewCancelBtn" class="btn-neu btn-neu-action btn-neu-secondary" onclick="cancelFromViewModal()" style="display: none;">
                     <span class="btn-neu-inner"><i class="fas fa-stop mr-2"></i>Cancel</span>
@@ -3706,8 +3948,33 @@ async function openExpDetails(expId) {
     }
 }
 
+// =============================================================================
+// VIEW MODAL - TABBED DESIGN
+// =============================================================================
+
+// State for lazy-loaded tab data
+let viewModalDataCache = {
+    statistics: null,
+    schema: null,
+    errorDetails: null,
+    trainingHistory: null
+};
+let currentViewTab = 'overview';
+
 function openExpViewModal(exp) {
     viewModalExpId = exp.id;
+
+    // Reset state
+    viewModalDataCache = { statistics: null, schema: null, errorDetails: null, trainingHistory: null };
+    currentViewTab = 'overview';
+
+    // Reset tabs to default
+    document.querySelectorAll('.exp-view-tab').forEach(t => t.classList.remove('active'));
+    document.querySelector('.exp-view-tab[data-tab="overview"]').classList.add('active');
+    document.querySelectorAll('.exp-view-tab-content').forEach(c => c.classList.remove('active'));
+    document.getElementById('expViewTabOverview').classList.add('active');
+
+    // Populate modal
     populateExpViewModal(exp);
     document.getElementById('expViewModal').classList.remove('hidden');
 
@@ -3722,9 +3989,37 @@ function closeExpViewModal(event) {
     document.getElementById('expViewModal').classList.add('hidden');
     stopViewModalPolling();
     viewModalExpId = null;
+    viewModalDataCache = { statistics: null, schema: null, errorDetails: null, trainingHistory: null };
+}
+
+function switchExpViewTab(tabName) {
+    currentViewTab = tabName;
+
+    // Update tab buttons
+    document.querySelectorAll('.exp-view-tab').forEach(t => t.classList.remove('active'));
+    document.querySelector(`.exp-view-tab[data-tab="${tabName}"]`).classList.add('active');
+
+    // Update tab content
+    document.querySelectorAll('.exp-view-tab-content').forEach(c => c.classList.remove('active'));
+    const tabContent = document.getElementById(`expViewTab${tabName.charAt(0).toUpperCase() + tabName.slice(1)}`);
+    if (tabContent) tabContent.classList.add('active');
+
+    // Load lazy data for data/training tabs
+    if (tabName === 'data' && !viewModalDataCache.statistics) {
+        loadDataInsights();
+    }
+    if (tabName === 'training' && !viewModalDataCache.trainingHistory) {
+        loadTrainingHistory();
+    }
+    if (tabName === 'pipeline' && !viewModalDataCache.errorDetails) {
+        loadErrorDetails();
+    }
 }
 
 function populateExpViewModal(exp) {
+    // Store current exp for tab data loading
+    window.currentViewExp = exp;
+
     // Header
     const title = exp.experiment_name
         ? `${exp.display_name}: ${exp.experiment_name}`
@@ -3732,54 +4027,38 @@ function populateExpViewModal(exp) {
     document.getElementById('expViewTitle').textContent = title;
     document.getElementById('expViewSubtitle').textContent = exp.experiment_description || '';
 
-    // Status icon
-    const statusIcon = document.getElementById('expViewStatusIcon');
-    const statusIcons = {
-        'submitting': 'fa-clock',
-        'running': 'fa-spinner fa-spin',
-        'completed': 'fa-check',
-        'failed': 'fa-times',
-        'cancelled': 'fa-ban'
-    };
-    statusIcon.className = `exp-view-status-icon ${exp.status}`;
-    statusIcon.innerHTML = `<i class="fas ${statusIcons[exp.status] || 'fa-flask'}"></i>`;
+    // Status dot
+    const statusDot = document.getElementById('expViewStatusDot');
+    statusDot.className = `exp-view-status-dot ${exp.status}`;
 
     // Status badge
     const statusBadge = document.getElementById('expViewStatusBadge');
-    const badgeConfigs = {
-        'submitting': { class: 'draft', icon: 'fa-clock', text: 'Submitting' },
-        'running': { class: 'draft', icon: 'fa-spinner fa-spin', text: 'Running' },
-        'completed': { class: 'active', icon: 'fa-check-circle', text: 'Completed' },
-        'failed': { class: '', style: 'background: #fef2f2; color: #991b1b;', icon: 'fa-times-circle', text: 'Failed' },
-        'cancelled': { class: 'draft', icon: 'fa-ban', text: 'Cancelled' }
+    const badgeTexts = {
+        'submitting': 'Submitting',
+        'running': 'Running',
+        'completed': 'Completed',
+        'failed': 'Failed',
+        'cancelled': 'Cancelled'
     };
-    const badge = badgeConfigs[exp.status] || badgeConfigs['submitting'];
-    statusBadge.className = `status-badge ${badge.class}`;
-    if (badge.style) statusBadge.style.cssText = badge.style;
-    else statusBadge.style.cssText = '';
-    statusBadge.innerHTML = `<i class="fas ${badge.icon}"></i> ${badge.text}`;
+    statusBadge.className = `exp-view-status-badge ${exp.status}`;
+    statusBadge.textContent = badgeTexts[exp.status] || exp.status;
 
-    // Meta row (duration & created by)
+    // Meta row
     const durationStr = exp.duration_seconds ? formatDuration(exp.duration_seconds) :
-        (exp.elapsed_seconds ? `${formatDuration(exp.elapsed_seconds)} (running)` : '-');
-    document.getElementById('expViewDuration').innerHTML = `<i class="fas fa-clock mr-1"></i> Duration: ${durationStr}`;
-    document.getElementById('expViewCreatedBy').textContent = exp.created_by ? `by ${exp.created_by}` : '';
+        (exp.elapsed_seconds ? `${formatDuration(exp.elapsed_seconds)}` : '-');
+    const createdStr = formatDateTime(exp.created_at);
+    const metaEl = document.getElementById('expViewMeta');
+    metaEl.innerHTML = `
+        <span>${durationStr}</span>
+        ${exp.created_by ? `<span>${exp.created_by}</span>` : ''}
+        <span>${createdStr}</span>
+    `;
 
-    // Error section
-    const errorSection = document.getElementById('expViewErrorSection');
-    if (exp.status === 'failed' && exp.error_message) {
-        errorSection.classList.remove('hidden');
-        document.getElementById('expViewErrorMessage').textContent = exp.error_message;
-    } else {
-        errorSection.classList.add('hidden');
-    }
-
-    // Configuration
+    // Overview Tab
     document.getElementById('expViewDataset').textContent = exp.dataset_name || '-';
     document.getElementById('expViewFeatureConfig').textContent = exp.feature_config_name || '-';
     document.getElementById('expViewModelConfig').textContent = exp.model_config_name || '-';
 
-    // Data Sampling
     document.getElementById('expViewSample').textContent = `${exp.data_sample_percent || 100}%`;
     const splitLabels = {
         'random': 'Random 80/20',
@@ -3788,140 +4067,360 @@ function populateExpViewModal(exp) {
     };
     document.getElementById('expViewSplit').textContent = splitLabels[exp.split_strategy] || exp.split_strategy;
 
-    // Show date column and holdout for time-based strategies
-    const dateColWrapper = document.getElementById('expViewDateColumnWrapper');
-    const holdoutWrapper = document.getElementById('expViewHoldoutWrapper');
+    // Date column and holdout
+    const dateColRow = document.getElementById('expViewDateColumnRow');
+    const holdoutRow = document.getElementById('expViewHoldoutRow');
     if (exp.split_strategy !== 'random') {
-        dateColWrapper.style.display = '';
+        dateColRow.style.display = '';
         document.getElementById('expViewDateColumn').textContent = exp.date_column || '-';
         if (exp.split_strategy === 'time_holdout') {
-            holdoutWrapper.style.display = '';
+            holdoutRow.style.display = '';
             document.getElementById('expViewHoldout').textContent = `${exp.holdout_days || 1} days`;
         } else {
-            holdoutWrapper.style.display = 'none';
+            holdoutRow.style.display = 'none';
         }
     } else {
-        dateColWrapper.style.display = 'none';
-        holdoutWrapper.style.display = 'none';
+        dateColRow.style.display = 'none';
+        holdoutRow.style.display = 'none';
     }
 
     // Training Parameters
     document.getElementById('expViewEpochs').textContent = exp.epochs || '-';
-    document.getElementById('expViewBatchSize').textContent = exp.batch_size || '-';
+    document.getElementById('expViewBatchSize').textContent = exp.batch_size?.toLocaleString() || '-';
     document.getElementById('expViewLearningRate').textContent = exp.learning_rate || '-';
     const hardwareLabels = {
         'n1-standard-4': 'Small',
         'n1-standard-8': 'Medium',
         'n1-standard-16': 'Large'
     };
-    document.getElementById('expViewHardware').textContent = hardwareLabels[exp.machine_type] || exp.machine_type || 'Small';
+    document.getElementById('expViewHardware').textContent = hardwareLabels[exp.machine_type] || 'Small';
 
-    // Pipeline Progress
+    // Results Summary (overview tab)
+    const resultsSummary = document.getElementById('expViewResultsSummary');
+    if (exp.status === 'completed' && exp.metrics) {
+        resultsSummary.classList.remove('hidden');
+        renderMetricsSummary(exp.metrics);
+    } else {
+        resultsSummary.classList.add('hidden');
+    }
+
+    // Pipeline Tab
     const isRunning = exp.status === 'running' || exp.status === 'submitting';
-    document.getElementById('expViewProgressBarWrapper').style.display = isRunning ? '' : 'none';
+    document.getElementById('expViewProgressSection').style.display = isRunning ? 'flex' : 'none';
     if (isRunning) {
         const percent = exp.progress_percent || 0;
         document.getElementById('expViewProgressBar').style.width = `${percent}%`;
         document.getElementById('expViewProgressText').textContent = `${percent}%`;
     }
-    renderExpViewStages(exp.stage_details || getDefaultStages());
+    renderPipelineStages(exp.stage_details || getDefaultStages());
 
-    // Results Section
-    const resultsSection = document.getElementById('expViewResultsSection');
-    if (exp.status === 'completed' && exp.metrics) {
-        resultsSection.classList.remove('hidden');
-        renderExpViewMetrics(exp.metrics);
+    // Error section (pipeline tab) - show basic error immediately
+    const errorSection = document.getElementById('expViewErrorSection');
+    if (exp.status === 'failed') {
+        errorSection.classList.remove('hidden');
+        document.getElementById('expViewErrorTitle').textContent = 'Pipeline Failed';
+        document.getElementById('expViewErrorSuggestion').textContent = '';
+        document.getElementById('expViewErrorMessage').textContent = exp.error_message || 'No error details available';
+        // Load detailed error when pipeline tab is visible
+        if (currentViewTab === 'pipeline') {
+            loadErrorDetails();
+        }
     } else {
-        resultsSection.classList.add('hidden');
+        errorSection.classList.add('hidden');
     }
 
-    // Vocabulary Stats Section
+    // Training Tab - Final Metrics
+    const finalMetrics = document.getElementById('expViewFinalMetrics');
+    if (exp.status === 'completed' && exp.metrics) {
+        finalMetrics.classList.remove('hidden');
+        renderFinalMetrics(exp.metrics);
+    } else {
+        finalMetrics.classList.add('hidden');
+    }
+
+    // Training Tab - Vocabulary
     const vocabSection = document.getElementById('expViewVocabSection');
     if (exp.vocabulary_stats && Object.keys(exp.vocabulary_stats).length > 0) {
         vocabSection.classList.remove('hidden');
-        renderExpViewVocab(exp.vocabulary_stats);
+        renderVocabRows(exp.vocabulary_stats);
     } else {
         vocabSection.classList.add('hidden');
     }
 
-    // Technical Details
-    document.getElementById('expViewVertexId').textContent = exp.vertex_pipeline_job_id || '-';
-    document.getElementById('expViewGcsPath').textContent = exp.gcs_artifacts_path || '-';
-    document.getElementById('expViewCreatedAt').textContent = formatDateTime(exp.created_at);
-    document.getElementById('expViewStartedAt').textContent = formatDateTime(exp.started_at);
-    document.getElementById('expViewCompletedAt').textContent = formatDateTime(exp.completed_at);
-
-    // Vertex AI link
-    const vertexLink = document.getElementById('expViewVertexLink');
-    if (exp.vertex_pipeline_job_id) {
-        vertexLink.href = `https://console.cloud.google.com/vertex-ai/pipelines/runs/${exp.vertex_pipeline_job_id}?project=b2b-recs`;
-        vertexLink.style.display = 'inline';
-    } else {
-        vertexLink.style.display = 'none';
-    }
-
-    // Cancel button (only for running experiments)
+    // Cancel button
     document.getElementById('expViewCancelBtn').style.display = isRunning ? '' : 'none';
 }
 
-function renderExpViewStages(stages) {
-    const container = document.getElementById('expViewStagesTable');
+function renderMetricsSummary(metrics) {
+    const container = document.getElementById('expViewMetricsSummary');
+    const items = [
+        { label: 'Loss', value: metrics.loss, format: v => v?.toFixed(4) || 'N/A' },
+        { label: 'Recall@10', value: metrics.recall_at_10, format: v => v != null ? (v * 100).toFixed(1) + '%' : 'N/A' },
+        { label: 'Recall@50', value: metrics.recall_at_50, format: v => v != null ? (v * 100).toFixed(1) + '%' : 'N/A' },
+        { label: 'Recall@100', value: metrics.recall_at_100, format: v => v != null ? (v * 100).toFixed(1) + '%' : 'N/A' }
+    ];
+    container.innerHTML = items.map(item => `
+        <div class="exp-view-metric-card">
+            <div class="exp-view-metric-card-label">${item.label}</div>
+            <div class="exp-view-metric-card-value">${item.format(item.value)}</div>
+        </div>
+    `).join('');
+}
+
+function renderPipelineStages(stages) {
+    const container = document.getElementById('expViewPipeline');
+    const icons = {
+        'completed': 'fa-check-circle',
+        'running': 'fa-spinner fa-spin',
+        'failed': 'fa-times-circle',
+        'pending': 'fa-circle'
+    };
+
     container.innerHTML = stages.map(stage => {
-        const icons = {
-            'completed': 'fa-check-circle',
-            'running': 'fa-spinner fa-spin',
-            'failed': 'fa-times-circle',
-            'pending': 'fa-clock'
-        };
         const statusClass = stage.status || 'pending';
-        const icon = icons[statusClass] || 'fa-clock';
+        const icon = icons[statusClass] || 'fa-circle';
         const duration = stage.duration_seconds ? formatDuration(stage.duration_seconds) : '-';
 
         return `
-            <div class="exp-view-stage ${statusClass}">
-                <div class="exp-view-stage-icon">
+            <div class="exp-view-pipeline-stage ${statusClass}">
+                <div class="exp-view-pipeline-stage-icon">
                     <i class="fas ${icon}"></i>
                 </div>
-                <span class="exp-view-stage-name">${stage.name}</span>
-                <span class="exp-view-stage-duration">${duration}</span>
+                <div class="exp-view-pipeline-stage-name">${stage.name}</div>
+                <div class="exp-view-pipeline-stage-time">${duration}</div>
             </div>
         `;
     }).join('');
 }
 
-function renderExpViewMetrics(metrics) {
-    const container = document.getElementById('expViewMetrics');
-    const metricItems = [
-        { label: 'Loss', value: metrics.loss, format: v => v.toFixed(4) },
-        { label: 'Recall@10', value: metrics.recall_at_10, format: v => (v * 100).toFixed(2) + '%' },
-        { label: 'Recall@50', value: metrics.recall_at_50, format: v => (v * 100).toFixed(2) + '%' },
-        { label: 'Recall@100', value: metrics.recall_at_100, format: v => (v * 100).toFixed(2) + '%' }
+function renderFinalMetrics(metrics) {
+    const container = document.getElementById('expViewMetricsRows');
+    const items = [
+        { label: 'Loss', value: metrics.loss?.toFixed(4) || 'N/A' },
+        { label: 'Recall@10', value: metrics.recall_at_10 != null ? (metrics.recall_at_10 * 100).toFixed(2) + '%' : 'N/A' },
+        { label: 'Recall@50', value: metrics.recall_at_50 != null ? (metrics.recall_at_50 * 100).toFixed(2) + '%' : 'N/A' },
+        { label: 'Recall@100', value: metrics.recall_at_100 != null ? (metrics.recall_at_100 * 100).toFixed(2) + '%' : 'N/A' }
     ];
-
-    container.innerHTML = metricItems.map(item => `
-        <div class="exp-view-metric">
-            <span class="exp-view-metric-label">${item.label}</span>
-            <span class="exp-view-metric-value">${item.value != null ? item.format(item.value) : 'N/A'}</span>
+    container.innerHTML = items.map(item => `
+        <div class="exp-view-row">
+            <span class="exp-view-row-label">${item.label}</span>
+            <span class="exp-view-row-value">${item.value}</span>
         </div>
     `).join('');
 }
 
-function renderExpViewVocab(vocabStats) {
-    const container = document.getElementById('expViewVocabStats');
-    const items = Object.entries(vocabStats).map(([name, size]) => `
-        <div class="exp-view-vocab-item">
-            <div class="exp-view-vocab-name">${name}</div>
-            <div class="exp-view-vocab-size">${typeof size === 'number' ? size.toLocaleString() : size}</div>
+function renderVocabRows(vocabStats) {
+    const container = document.getElementById('expViewVocabRows');
+    container.innerHTML = Object.entries(vocabStats).map(([name, size]) => `
+        <div class="exp-view-row">
+            <span class="exp-view-row-label">${name}</span>
+            <span class="exp-view-row-value">${typeof size === 'number' ? size.toLocaleString() : size}</span>
         </div>
-    `);
-    container.innerHTML = items.join('');
+    `).join('');
 }
 
-function toggleExpViewTechnical() {
-    const content = document.getElementById('expViewTechnicalContent');
-    const icon = document.getElementById('expViewTechnicalIcon');
-    content.classList.toggle('collapsed');
-    icon.classList.toggle('collapsed');
+// Lazy load error details
+async function loadErrorDetails() {
+    if (!viewModalExpId || viewModalDataCache.errorDetails) return;
+
+    try {
+        const response = await fetch(`/api/quick-tests/${viewModalExpId}/errors/`);
+        const data = await response.json();
+
+        if (data.success && data.error_details?.has_error) {
+            viewModalDataCache.errorDetails = data.error_details;
+
+            // Update error display
+            const details = data.error_details;
+            document.getElementById('expViewErrorTitle').textContent = details.title || 'Pipeline Failed';
+            document.getElementById('expViewErrorSuggestion').textContent = details.suggestion || '';
+            if (details.full_message) {
+                document.getElementById('expViewErrorMessage').textContent = details.full_message;
+            }
+        }
+    } catch (error) {
+        console.error('Error loading error details:', error);
+    }
+}
+
+// Lazy load data insights (statistics + schema)
+async function loadDataInsights() {
+    if (!viewModalExpId) return;
+
+    const loadingEl = document.getElementById('expViewDataLoading');
+    const contentEl = document.getElementById('expViewDataContent');
+    const errorEl = document.getElementById('expViewDataError');
+
+    loadingEl.classList.remove('hidden');
+    contentEl.classList.add('hidden');
+    errorEl.classList.add('hidden');
+
+    try {
+        // Fetch both in parallel
+        const [statsRes, schemaRes] = await Promise.all([
+            fetch(`/api/quick-tests/${viewModalExpId}/statistics/`),
+            fetch(`/api/quick-tests/${viewModalExpId}/schema/`)
+        ]);
+
+        const statsData = await statsRes.json();
+        const schemaData = await schemaRes.json();
+
+        viewModalDataCache.statistics = statsData.statistics;
+        viewModalDataCache.schema = schemaData.schema;
+
+        // Check if any data is available
+        const statsAvailable = statsData.success && statsData.statistics?.available;
+        const schemaAvailable = schemaData.success && schemaData.schema?.available;
+
+        if (!statsAvailable && !schemaAvailable) {
+            loadingEl.classList.add('hidden');
+            errorEl.classList.remove('hidden');
+            document.getElementById('expViewDataErrorMessage').textContent =
+                statsData.statistics?.message || schemaData.schema?.message || 'Data insights not available';
+            return;
+        }
+
+        // Render statistics
+        if (statsAvailable) {
+            renderStatistics(statsData.statistics);
+        } else {
+            document.getElementById('expViewStatsContent').innerHTML =
+                '<p class="text-sm text-gray-500">Statistics not available</p>';
+        }
+
+        // Render schema
+        if (schemaAvailable) {
+            renderSchema(schemaData.schema);
+        } else {
+            document.getElementById('expViewSchemaContent').innerHTML =
+                '<p class="text-sm text-gray-500">Schema not available</p>';
+        }
+
+        loadingEl.classList.add('hidden');
+        contentEl.classList.remove('hidden');
+
+    } catch (error) {
+        console.error('Error loading data insights:', error);
+        loadingEl.classList.add('hidden');
+        errorEl.classList.remove('hidden');
+        document.getElementById('expViewDataErrorMessage').textContent = 'Failed to load data insights';
+    }
+}
+
+function renderStatistics(stats) {
+    const container = document.getElementById('expViewStatsContent');
+
+    // Summary boxes
+    let html = `
+        <div class="exp-view-stats-summary">
+            <div class="exp-view-stat-box">
+                <div class="exp-view-stat-box-value">${stats.num_examples?.toLocaleString() || '-'}</div>
+                <div class="exp-view-stat-box-label">Examples</div>
+            </div>
+            <div class="exp-view-stat-box">
+                <div class="exp-view-stat-box-value">${stats.num_features || '-'}</div>
+                <div class="exp-view-stat-box-label">Features</div>
+            </div>
+            <div class="exp-view-stat-box">
+                <div class="exp-view-stat-box-value">${stats.avg_missing_ratio?.toFixed(1) || '0'}%</div>
+                <div class="exp-view-stat-box-label">Avg Missing</div>
+            </div>
+        </div>
+    `;
+
+    // Features table
+    if (stats.features?.length > 0) {
+        html += `
+            <table class="exp-view-features-table">
+                <thead>
+                    <tr>
+                        <th>Feature</th>
+                        <th>Type</th>
+                        <th>Unique</th>
+                        <th>Missing</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${stats.features.slice(0, 20).map(f => `
+                        <tr>
+                            <td>${f.name}</td>
+                            <td><span class="type-tag ${f.type?.toLowerCase() || 'unknown'}">${f.type || 'UNKNOWN'}</span></td>
+                            <td>${f.num_unique?.toLocaleString() || '-'}</td>
+                            <td>${f.missing_pct?.toFixed(1) || '0'}%</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        `;
+        if (stats.truncated) {
+            html += `<p class="text-xs text-gray-400 mt-2">Showing first 20 of ${stats.total_features} features</p>`;
+        }
+    }
+
+    container.innerHTML = html;
+}
+
+function renderSchema(schema) {
+    const container = document.getElementById('expViewSchemaContent');
+
+    if (!schema.features?.length) {
+        container.innerHTML = '<p class="text-sm text-gray-500">No schema information available</p>';
+        return;
+    }
+
+    container.innerHTML = `
+        <table class="exp-view-features-table">
+            <thead>
+                <tr>
+                    <th>Feature</th>
+                    <th>Type</th>
+                    <th>Required</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${schema.features.slice(0, 20).map(f => `
+                    <tr>
+                        <td>${f.name}</td>
+                        <td>${f.type || 'UNKNOWN'}</td>
+                        <td>${f.required ? 'Yes' : 'No'}</td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+        ${schema.truncated ? `<p class="text-xs text-gray-400 mt-2">Showing first 20 of ${schema.total_features} features</p>` : ''}
+    `;
+}
+
+// Lazy load training history
+async function loadTrainingHistory() {
+    if (!viewModalExpId) return;
+
+    const loadingEl = document.getElementById('expViewTrainingLoading');
+    loadingEl.classList.remove('hidden');
+
+    try {
+        const response = await fetch(`/api/quick-tests/${viewModalExpId}/training-history/`);
+        const data = await response.json();
+
+        viewModalDataCache.trainingHistory = data.training_history;
+
+        // For now, just hide loading - chart is placeholder
+        loadingEl.classList.add('hidden');
+
+    } catch (error) {
+        console.error('Error loading training history:', error);
+        loadingEl.classList.add('hidden');
+    }
+}
+
+function toggleErrorDetails() {
+    const content = document.getElementById('expViewErrorDetails');
+    const icon = document.getElementById('expViewErrorToggleIcon');
+    const text = document.getElementById('expViewErrorToggleText');
+
+    content.classList.toggle('hidden');
+    icon.classList.toggle('expanded');
+    text.textContent = content.classList.contains('hidden') ? 'Show Error Details' : 'Hide Error Details';
 }
 
 function formatDateTime(isoStr) {
@@ -3981,7 +4480,6 @@ async function cancelFromViewModal() {
 
         if (data.success) {
             stopViewModalPolling();
-            // Refresh the view with updated data
             const refreshResponse = await fetch(`/api/quick-tests/${viewModalExpId}/`);
             const refreshData = await refreshResponse.json();
             if (refreshData.success) {

@@ -12,6 +12,7 @@ from django.views.decorators.csrf import csrf_exempt
 
 from ml_platform.models import FeatureConfig, ModelConfig, QuickTest, Dataset
 from .services import ExperimentService
+from .artifact_service import ArtifactService
 
 logger = logging.getLogger(__name__)
 
@@ -624,3 +625,253 @@ def _get_stage_details_for_status(quick_test):
             return stages
 
     return default_stages
+
+
+# =============================================================================
+# Artifact API Endpoints (Lazy-loaded)
+# =============================================================================
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def quick_test_errors(request, quick_test_id):
+    """
+    Get detailed error information for a failed Quick Test.
+
+    GET /api/quick-tests/<id>/errors/
+
+    Returns:
+    {
+        "success": true,
+        "error_details": {
+            "has_error": true,
+            "failed_component": "Transform",
+            "error_type": "ResourceExhausted",
+            "title": "Memory Limit Exceeded",
+            "suggestion": "Try reducing batch_size...",
+            "summary": "...",
+            "has_stack_trace": true,
+            "full_message": "..."
+        }
+    }
+    """
+    try:
+        model_endpoint = _get_model_endpoint(request)
+        if not model_endpoint:
+            return JsonResponse({
+                'success': False,
+                'error': 'No model endpoint selected'
+            }, status=400)
+
+        try:
+            quick_test = QuickTest.objects.get(
+                id=quick_test_id,
+                feature_config__dataset__model_endpoint=model_endpoint
+            )
+        except QuickTest.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': f'QuickTest {quick_test_id} not found'
+            }, status=404)
+
+        # Get detailed error information
+        artifact_service = ArtifactService(project_id=model_endpoint.gcp_project_id)
+        error_details = artifact_service.get_detailed_error(quick_test)
+
+        return JsonResponse({
+            'success': True,
+            'error_details': error_details
+        })
+
+    except Exception as e:
+        logger.exception(f"Error getting error details: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def quick_test_statistics(request, quick_test_id):
+    """
+    Get dataset statistics from TFDV artifacts.
+
+    GET /api/quick-tests/<id>/statistics/
+
+    Returns:
+    {
+        "success": true,
+        "statistics": {
+            "available": true,
+            "num_examples": 1234567,
+            "num_features": 45,
+            "avg_missing_ratio": 2.3,
+            "features": [
+                {
+                    "name": "user_id",
+                    "type": "CATEGORICAL",
+                    "num_unique": 50234,
+                    "missing_pct": 0
+                },
+                ...
+            ]
+        }
+    }
+    """
+    try:
+        model_endpoint = _get_model_endpoint(request)
+        if not model_endpoint:
+            return JsonResponse({
+                'success': False,
+                'error': 'No model endpoint selected'
+            }, status=400)
+
+        try:
+            quick_test = QuickTest.objects.get(
+                id=quick_test_id,
+                feature_config__dataset__model_endpoint=model_endpoint
+            )
+        except QuickTest.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': f'QuickTest {quick_test_id} not found'
+            }, status=404)
+
+        # Get statistics summary
+        artifact_service = ArtifactService(project_id=model_endpoint.gcp_project_id)
+        statistics = artifact_service.get_statistics_summary(quick_test)
+
+        return JsonResponse({
+            'success': True,
+            'statistics': statistics
+        })
+
+    except Exception as e:
+        logger.exception(f"Error getting statistics: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def quick_test_schema(request, quick_test_id):
+    """
+    Get schema information from TensorFlow Metadata artifacts.
+
+    GET /api/quick-tests/<id>/schema/
+
+    Returns:
+    {
+        "success": true,
+        "schema": {
+            "available": true,
+            "num_features": 45,
+            "features": [
+                {
+                    "name": "user_id",
+                    "type": "INT64",
+                    "required": true
+                },
+                ...
+            ]
+        }
+    }
+    """
+    try:
+        model_endpoint = _get_model_endpoint(request)
+        if not model_endpoint:
+            return JsonResponse({
+                'success': False,
+                'error': 'No model endpoint selected'
+            }, status=400)
+
+        try:
+            quick_test = QuickTest.objects.get(
+                id=quick_test_id,
+                feature_config__dataset__model_endpoint=model_endpoint
+            )
+        except QuickTest.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': f'QuickTest {quick_test_id} not found'
+            }, status=404)
+
+        # Get schema summary
+        artifact_service = ArtifactService(project_id=model_endpoint.gcp_project_id)
+        schema = artifact_service.get_schema_summary(quick_test)
+
+        return JsonResponse({
+            'success': True,
+            'schema': schema
+        })
+
+    except Exception as e:
+        logger.exception(f"Error getting schema: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def quick_test_training_history(request, quick_test_id):
+    """
+    Get training history (per-epoch metrics).
+
+    Currently returns a placeholder response.
+    Will be implemented with MLflow integration.
+
+    GET /api/quick-tests/<id>/training-history/
+
+    Returns:
+    {
+        "success": true,
+        "training_history": {
+            "available": false,
+            "placeholder": true,
+            "message": "Training curves will be available when MLflow integration is complete",
+            "final_metrics": {
+                "loss": 0.0234,
+                "recall_at_10": 0.125,
+                ...
+            }
+        }
+    }
+    """
+    try:
+        model_endpoint = _get_model_endpoint(request)
+        if not model_endpoint:
+            return JsonResponse({
+                'success': False,
+                'error': 'No model endpoint selected'
+            }, status=400)
+
+        try:
+            quick_test = QuickTest.objects.get(
+                id=quick_test_id,
+                feature_config__dataset__model_endpoint=model_endpoint
+            )
+        except QuickTest.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': f'QuickTest {quick_test_id} not found'
+            }, status=404)
+
+        # Get training history (placeholder for MLflow)
+        artifact_service = ArtifactService(project_id=model_endpoint.gcp_project_id)
+        training_history = artifact_service.get_training_history(quick_test)
+
+        return JsonResponse({
+            'success': True,
+            'training_history': training_history
+        })
+
+    except Exception as e:
+        logger.exception(f"Error getting training history: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)

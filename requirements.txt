@@ -51,3 +51,8 @@ google-cloud-build>=3.0.0
 # - tensorflow>=2.13.0
 # - tensorflow-recommenders>=0.7.3
 # - tensorflow-transform>=1.14.0
+
+# For parsing TFX pipeline artifacts (statistics, schema)
+# Note: tensorflow-data-validation requires TensorFlow which doesn't support Python 3.13
+# We use tensorflow-metadata directly to parse proto files
+tensorflow-metadata>=1.14.0

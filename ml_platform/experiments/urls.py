@@ -26,6 +26,28 @@ urlpatterns = [
         name='quick_test_cancel'
     ),
 
+    # Artifact endpoints (lazy-loaded)
+    path(
+        'api/quick-tests/<int:quick_test_id>/errors/',
+        api.quick_test_errors,
+        name='quick_test_errors'
+    ),
+    path(
+        'api/quick-tests/<int:quick_test_id>/statistics/',
+        api.quick_test_statistics,
+        name='quick_test_statistics'
+    ),
+    path(
+        'api/quick-tests/<int:quick_test_id>/schema/',
+        api.quick_test_schema,
+        name='quick_test_schema'
+    ),
+    path(
+        'api/quick-tests/<int:quick_test_id>/training-history/',
+        api.quick_test_training_history,
+        name='quick_test_training_history'
+    ),
+
     # Start a new Quick Test (from FeatureConfig)
     path(
         'api/feature-configs/<int:feature_config_id>/quick-test/',

@@ -294,6 +294,25 @@
     background-color: #059669;
 }
 
+/* Cancel Action Button (red, same size as View) */
+.card-action-btn.cancel {
+    width: 64px;
+    height: 32px;
+    background-color: #ef4444;
+    color: #ffffff;
+    font-weight: 600;
+    font-size: 12px;
+}
+
+.card-action-btn.cancel:hover:not(:disabled) {
+    background-color: #dc2626;
+}
+
+.card-action-btn.cancel:disabled {
+    background-color: #fca5a5;
+    cursor: not-allowed;
+}
+
 /* Pause Action Button (yellow, same size as Run) */
 .card-action-btn.pause-large {
     width: 64px;

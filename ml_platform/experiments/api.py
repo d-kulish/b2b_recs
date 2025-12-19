@@ -517,6 +517,7 @@ def _serialize_quick_test(quick_test, include_details=False):
         'experiment_description': quick_test.experiment_description,
         'feature_config_id': quick_test.feature_config_id,
         'feature_config_name': quick_test.feature_config.name,
+        'dataset_id': quick_test.feature_config.dataset.id if quick_test.feature_config.dataset else None,
         'dataset_name': quick_test.feature_config.dataset.name if quick_test.feature_config.dataset else None,
         'model_config_id': quick_test.model_config_id,
         'model_config_name': quick_test.model_config.name if quick_test.model_config else None,

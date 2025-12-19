@@ -29,6 +29,7 @@ This document provides a **complete implementation guide** for building the Expe
 18. [Phase 13: Experiment Cards Redesign & Cancel](#phase-13-experiment-cards-redesign--cancel-december-2025)
 19. [Phase 14: Experiment View Modal](#phase-14-experiment-view-modal-december-2025)
 20. [Phase 15: View Modal Redesign with Tabs & Artifacts](#phase-15-view-modal-redesign-with-tabs--artifacts-december-2025)
+21. [Phase 16: View Modal Config Visualizations](#phase-16-view-modal-config-visualizations-december-2025)
 22. [File Reference](#file-reference)
 23. [API Reference](#api-reference)
 24. [Testing Guide](#testing-guide)
@@ -91,6 +92,7 @@ Experiments Page = Analyze Quick Test results to find optimal parameters
 | **Phase 13** | ✅ Complete | Experiment Cards Redesign & Cancel (4-column layout, name/description fields, cancel button, progress bar styling) |
 | **Phase 14** | ✅ Complete | Experiment View Modal (comprehensive details modal, polling for running experiments, View button on cards, old modal cleanup) |
 | **Phase 15** | ✅ Complete | View Modal Redesign with Tabs & Artifacts (4-tab layout, error pattern matching, lazy-loaded statistics/schema, training history placeholder) |
+| **Phase 16** | ✅ Complete | View Modal Config Visualizations (Features tensor breakdown, Model tower architecture, chip-format parameters, detailed hardware specs) |
 
 ### Cloud Build Implementation (December 2025)
 
@@ -4515,6 +4517,205 @@ tensorflow-metadata>=1.14.0
 - [x] No Vertex AI links or GCS paths visible to users
 - [x] Statistics show feature count, missing %, min/max/mean
 - [x] Schema shows feature names, types, required/optional
+
+---
+
+## Phase 16: View Modal Config Visualizations (December 2025)
+
+This phase enhances the View modal's Overview tab with rich visualizations for Features Config and Model Config, plus improved styling for training parameters and sampling sections.
+
+### Overview
+
+**Problem Statement:**
+- Features config only showed name (e.g., "feats_v3") without any details
+- Model config only showed name without architecture visualization
+- Training parameters were scattered between model config defaults and actual pipeline values
+- Hardware showed generic labels ("Small") instead of actual specifications
+- Inconsistent styling between sections (row-based vs chip-based)
+
+**Solution Implemented:**
+1. **Features Config Visualization** - Tensor breakdown showing Buyer/Product tensor dimensions
+2. **Model Config Visualization** - Tower architecture with layer details and parameter counts
+3. **Unified Training Parameters** - Chip format showing actual pipeline values (not model defaults)
+4. **Detailed Hardware Specs** - Shows vCPUs and memory instead of just "Small/Medium/Large"
+5. **Consistent Chip Styling** - Sampling and Training Parameters both use chip format
+
+### Data Sources
+
+| Section | Data Source | API Endpoint |
+|---------|-------------|--------------|
+| Features Config | FeatureConfig model (full details) | `/api/feature-configs/{id}/` |
+| Model Config | ModelConfig model (full details) | `/api/model-configs/{id}/` |
+| Training Parameters | Experiment model (actual pipeline values) | Already in experiment data |
+| Sampling | Experiment model | Already in experiment data |
+| Optimizer | ModelConfig model | `/api/model-configs/{id}/` |
+
+### Features Config Visualization
+
+Shows tensor breakdown similar to the Features chapter in Model Configs page:
+
+```
+Features config: feats_v3
+
+┌─────────────────────────────┐  ┌─────────────────────────────┐
+│ Buyer Tensor           79D  │  │ Product Tensor         24D  │
+│ ┌─────────────────────────┐ │  │ ┌───────────────┐           │
+│ │ 32 │ 17 │ 17 │  8  │ 5 │ │  │ │  16  │   8   │           │
+│ └─────────────────────────┘ │  │ └───────────────┘           │
+│ customer_id           32D   │  │ product_id           16D    │
+│ total_transactions    17D   │  │ category              8D    │
+│ lifetime_value        17D   │  └─────────────────────────────┘
+│ transaction_date       5D   │
+│ payment_method         8D   │
+└─────────────────────────────┘
+```
+
+**Implementation:**
+- `loadFeaturesConfigForExp(featureConfigId)` - Fetches full config from API
+- `renderFeaturesConfigForExp(config)` - Renders tensor panels
+- `calculateExpTensorBreakdown(features, crosses)` - Calculates dimensions
+- `getExpFeatureDimension(feature)` - Gets dimension based on transforms
+- `renderExpTensorBar(model, total, breakdown, maxTotal)` - Colored bar visualization
+
+### Model Config Visualization
+
+Shows tower architecture with layers and parameters:
+
+```
+Model config: model_v3
+
+┌─────────────────────┐
+│      RANKING        │
+└─────────────────────┘
+
+Tower Architecture
+┌──────────────────────────┐  ┌──────────────────────────┐
+│ BUYER TOWER              │  │ PRODUCT TOWER            │
+│ ┌──────────────────────┐ │  │ ┌──────────────────────┐ │
+│ │ DENSE 128, relu, L2  │ │  │ │ DENSE 128, relu, L2  │ │
+│ │ DENSE 64, relu       │ │  │ │ DENSE 64, relu       │ │
+│ │ DENSE 32, relu  ←out │ │  │ │ DENSE 32, relu  ←out │ │
+│ └──────────────────────┘ │  │ └──────────────────────┘ │
+│ Total params:    23,264  │  │ Total params:    23,264  │
+│ Trainable:       23,264  │  │ Trainable:       23,264  │
+│ Non-trainable:        0  │  │ Non-trainable:        0  │
+└──────────────────────────┘  └──────────────────────────┘
+
+Rating Head (for Ranking models)
+┌──────────────────────────┐
+│ RANKING TOWER            │
+│ ┌──────────────────────┐ │
+│ │ DENSE 64, relu       │ │
+│ └──────────────────────┘ │
+└──────────────────────────┘
+```
+
+**Implementation:**
+- `loadModelConfigForExp(modelConfigId)` - Fetches full config from API
+- `renderModelConfigForExp(mc)` - Renders tower architecture
+- `renderExpTowerLayers(layers)` - Renders individual layer items
+- `calculateExpTowerParams(layers, inputDim)` - Calculates parameter count
+
+### Training Parameters (Chip Format)
+
+Now shows actual pipeline values in chip format:
+
+```
+┌────────────────┐ ┌────────────────┐ ┌──────────────────┐ ┌────────────────────┐ ┌──────────────────────┐
+│ Optimizer:     │ │ Epochs: 10     │ │ Batch Size:      │ │ Learning Rate:     │ │ Hardware:            │
+│ Adagrad        │ │                │ │ 1,024            │ │ 0.001              │ │ 4 vCPUs, 15 GB       │
+└────────────────┘ └────────────────┘ └──────────────────┘ └────────────────────┘ └──────────────────────┘
+```
+
+**Key Changes:**
+- Optimizer comes from Model Config (loaded asynchronously)
+- Epochs, Batch Size, Learning Rate come from Experiment (actual pipeline values)
+- Hardware shows detailed specs: `{vCPUs}, {memory}`
+
+**Hardware Specifications:**
+| Machine Type | Display |
+|--------------|---------|
+| n1-standard-4 | 4 vCPUs, 15 GB |
+| n1-standard-8 | 8 vCPUs, 30 GB |
+| n1-standard-16 | 16 vCPUs, 60 GB |
+| n1-highmem-4 | 4 vCPUs, 26 GB |
+| n1-highmem-8 | 8 vCPUs, 52 GB |
+
+### Sampling (Chip Format)
+
+```
+┌──────────────────┐ ┌────────────────────────┐ ┌──────────────────────────┐ ┌────────────────────┐
+│ Sample: 100%     │ │ Split Strategy:        │ │ Date Column:             │ │ Holdout Days:      │
+│                  │ │ Time Holdout           │ │ transaction_date         │ │ 1 days             │
+└──────────────────┘ └────────────────────────┘ └──────────────────────────┘ └────────────────────┘
+```
+
+Date Column and Holdout Days only shown for temporal split strategies.
+
+### CSS Classes Added
+
+```css
+/* Features Config */
+.exp-view-features-grid           /* 2-column grid for tensor panels */
+.exp-view-tensor-panel            /* Panel container (buyer/product variants) */
+.exp-view-tensor-bar              /* Colored dimension bar */
+.exp-view-tensor-segment          /* Individual bar segment */
+.exp-view-tensor-features         /* Feature list below bar */
+.exp-view-tensor-feature-row      /* Feature name + dimension */
+
+/* Model Config */
+.exp-view-model-type-badge        /* RETRIEVAL/RANKING/MULTITASK badge */
+.exp-view-towers-grid             /* 2-column grid for towers */
+.exp-view-tower-stack             /* Tower container (buyer/product/ranking) */
+.exp-view-layer-item              /* Individual layer row */
+.exp-view-layer-badge             /* DENSE/DROPOUT/BATCHNORM badge */
+.exp-view-tower-params            /* Parameter summary box */
+.exp-view-rating-head-section     /* Rating head for ranking models */
+
+/* Training/Sampling Chips */
+.exp-view-training-params         /* Flex container for chips */
+.exp-view-param-chip              /* Individual parameter chip */
+.exp-view-param-chip-label        /* Gray label text */
+.exp-view-param-chip-value        /* Bold value text */
+```
+
+### JavaScript Functions Added
+
+| Function | Purpose |
+|----------|---------|
+| `loadFeaturesConfigForExp(id)` | Fetch features config from API |
+| `renderFeaturesConfigForExp(config)` | Render tensor visualization |
+| `calculateExpTensorBreakdown(features, crosses)` | Calculate tensor dimensions |
+| `getExpFeatureDimension(feature)` | Get dimension for single feature |
+| `getExpDataTypeFromBqType(bqType)` | Map BQ type to data type |
+| `getExpCrossFeatureNames(cross)` | Extract cross feature names |
+| `renderExpTensorBar(model, total, breakdown, max)` | Render colored bar |
+| `loadModelConfigForExp(id)` | Fetch model config from API |
+| `renderModelConfigForExp(mc)` | Render tower architecture |
+| `renderExpTowerLayers(layers)` | Render layer items |
+| `calculateExpTowerParams(layers, inputDim)` | Calculate parameter count |
+| `renderSamplingChips(exp)` | Render sampling parameters |
+| `renderTrainingParamsChips(exp)` | Render training parameters |
+
+### Files Modified
+
+| File | Changes |
+|------|---------|
+| `templates/ml_platform/model_experiments.html` | CSS for tensor/tower visualization, HTML sections, JavaScript functions |
+
+### Testing Checklist
+
+- [x] Features Config shows tensor visualization with dimensions
+- [x] Colored bar segments proportional to feature dimensions
+- [x] Feature list shows all features with individual dimensions
+- [x] Model Config shows tower architecture with layers
+- [x] Output layer has red border highlight
+- [x] Parameter counts calculated and displayed
+- [x] Rating Head section shown for ranking/multitask models
+- [x] Training Parameters in chip format with Optimizer
+- [x] Hardware shows vCPUs and memory
+- [x] Sampling in chip format
+- [x] Date Column/Holdout Days only shown for temporal strategies
 
 ---
 

@@ -280,58 +280,6 @@
         50% { background-position: 100% 50%; }
     }
 
-    /* Cancel button for experiments */
-    .exp-card-cancel-btn {
-        padding: 6px 12px;
-        background-color: #fef2f2;
-        color: #dc2626;
-        border: 1px solid #fecaca;
-        border-radius: 6px;
-        font-size: 12px;
-        font-weight: 500;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        display: flex;
-        align-items: center;
-        gap: 4px;
-    }
-    .exp-card-cancel-btn:hover:not(:disabled) {
-        background-color: #fee2e2;
-        border-color: #f87171;
-    }
-    .exp-card-cancel-btn:disabled {
-        background-color: #fef2f2;
-        color: #fca5a5;
-        border-color: #fecaca;
-        cursor: not-allowed;
-    }
-    .exp-card-cancel-btn i {
-        font-size: 10px;
-    }
-
-    /* View button for experiments */
-    .exp-card-view-btn {
-        padding: 6px 12px;
-        background-color: #f0fdf4;
-        color: #16a34a;
-        border: 1px solid #bbf7d0;
-        border-radius: 6px;
-        font-size: 12px;
-        font-weight: 500;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        display: flex;
-        align-items: center;
-        gap: 4px;
-    }
-    .exp-card-view-btn:hover {
-        background-color: #dcfce7;
-        border-color: #86efac;
-    }
-    .exp-card-view-btn i {
-        font-size: 10px;
-    }
-
     /* Experiment card - column layout */
     .exp-card-new {
         display: flex;
@@ -1115,77 +1063,96 @@
        ========================================================================= */
     .exp-view-modal {
         max-width: 720px;
-        max-height: 85vh;
-        display: flex;
-        flex-direction: column;
+        height: 600px;
     }
 
     /* Header */
     .exp-view-header {
         display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
-        padding: 20px 24px 16px;
-        border-bottom: none;
-    }
-    .exp-view-header-left {
-        display: flex;
         align-items: flex-start;
         gap: 14px;
+        padding: 20px 24px 16px;
+        border-radius: 12px 12px 0 0;
     }
-    .exp-view-status-dot {
-        width: 12px;
-        height: 12px;
-        border-radius: 50%;
-        margin-top: 6px;
+    .exp-view-header.running {
+        background: #dbeafe;
+    }
+    .exp-view-header.submitting {
+        background: #dbeafe;
+    }
+    .exp-view-header.completed {
+        background: #dcfce7;
+    }
+    .exp-view-header.failed {
+        background: #fee2e2;
+    }
+    .exp-view-header.cancelled {
+        background: #f3f4f6;
+    }
+    .exp-view-header.pending {
+        background: #f3f4f6;
+    }
+    .exp-view-status-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 20px;
         flex-shrink: 0;
     }
-    .exp-view-status-dot.running {
-        background: #3b82f6;
-        animation: pulse-dot 1.5s ease-in-out infinite;
+    .exp-view-status-icon.running {
+        background: linear-gradient(135deg, #bfdbfe 0%, #93c5fd 100%);
+        color: #2563eb;
     }
-    .exp-view-status-dot.submitting {
-        background: #f59e0b;
-        animation: pulse-dot 1.5s ease-in-out infinite;
+    .exp-view-status-icon.submitting {
+        background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+        color: #d97706;
     }
-    .exp-view-status-dot.completed { background: #22c55e; }
-    .exp-view-status-dot.failed { background: #ef4444; }
-    .exp-view-status-dot.cancelled { background: #9ca3af; }
-    .exp-view-status-dot.pending { background: #d1d5db; }
-
-    @keyframes pulse-dot {
-        0%, 100% { opacity: 1; transform: scale(1); }
-        50% { opacity: 0.6; transform: scale(1.1); }
+    .exp-view-status-icon.completed {
+        background: linear-gradient(135deg, #bbf7d0 0%, #86efac 100%);
+        color: #16a34a;
     }
-
+    .exp-view-status-icon.failed {
+        background: linear-gradient(135deg, #fecaca 0%, #fca5a5 100%);
+        color: #dc2626;
+    }
+    .exp-view-status-icon.cancelled {
+        background: linear-gradient(135deg, #e5e7eb 0%, #d1d5db 100%);
+        color: #6b7280;
+    }
+    .exp-view-status-icon.pending {
+        background: linear-gradient(135deg, #e5e7eb 0%, #d1d5db 100%);
+        color: #9ca3af;
+    }
     .exp-view-header-info {
         flex: 1;
     }
     .exp-view-title {
-        font-size: 18px;
+        font-size: 16px;
         font-weight: 600;
         color: #111827;
         margin: 0 0 2px;
-        line-height: 1.3;
     }
-    .exp-view-subtitle {
+    .exp-view-exp-name {
+        font-size: 14px;
+        color: #374151;
+        margin: 0 0 2px;
+    }
+    .exp-view-description {
         font-size: 13px;
-        color: #6b7280;
+        color: #9ca3af;
         margin: 0 0 6px;
-        line-height: 1.4;
     }
-    .exp-view-meta {
+    .exp-view-times {
+        display: flex;
+        gap: 16px;
         font-size: 12px;
         color: #9ca3af;
     }
-    .exp-view-meta span:not(:last-child)::after {
-        content: "•";
-        margin: 0 8px;
-    }
-    .exp-view-header-right {
-        display: flex;
-        align-items: center;
-        gap: 12px;
+    .exp-view-times span {
+        color: #6b7280;
     }
     .exp-view-status-badge {
         display: inline-flex;
@@ -1215,6 +1182,10 @@
     .exp-view-status-badge.cancelled {
         background: #f3f4f6;
         color: #4b5563;
+    }
+    .exp-view-status-badge.pending {
+        background: #f3f4f6;
+        color: #6b7280;
     }
 
     /* Tabs */
@@ -1281,6 +1252,123 @@
         text-transform: uppercase;
         letter-spacing: 0.05em;
         margin: 0 0 12px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+    .exp-view-config-badges {
+        display: flex;
+        gap: 8px;
+    }
+    .exp-view-config-badge {
+        font-size: 10px;
+        font-weight: 500;
+        padding: 2px 8px;
+        border-radius: 4px;
+        text-transform: none;
+        letter-spacing: normal;
+    }
+    .exp-view-config-badge.feature {
+        background: #dbeafe;
+        color: #1d4ed8;
+    }
+    .exp-view-config-badge.model {
+        background: #f3e8ff;
+        color: #7c3aed;
+    }
+    .exp-view-loading {
+        text-align: center;
+        padding: 12px;
+        color: #9ca3af;
+        font-size: 12px;
+    }
+    .exp-view-dataset-details {
+        font-size: 12px;
+    }
+    .exp-view-ds-section {
+        margin-bottom: 12px;
+    }
+    .exp-view-ds-section:last-child {
+        margin-bottom: 0;
+    }
+    .exp-view-ds-title {
+        font-size: 12px;
+        font-weight: 600;
+        color: #374151;
+        margin-bottom: 6px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .exp-view-ds-title i {
+        color: #6b7280;
+    }
+    .exp-view-ds-grid {
+        display: grid;
+        grid-template-columns: 70px 1fr;
+        gap: 2px 8px;
+        font-size: 12px;
+    }
+    .exp-view-ds-grid .label {
+        color: #9ca3af;
+    }
+    .exp-view-ds-grid .value {
+        color: #374151;
+    }
+    .exp-view-ds-join {
+        margin-top: 6px;
+        padding-top: 6px;
+        border-top: 1px solid #e5e7eb;
+        font-size: 11px;
+        color: #6b7280;
+    }
+    .exp-view-ds-join-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-top: 2px;
+    }
+    .exp-view-ds-join-row .key {
+        color: #374151;
+        font-weight: 500;
+    }
+    .exp-view-ds-join-row .badge {
+        background: #e5e7eb;
+        color: #6b7280;
+        padding: 1px 6px;
+        border-radius: 3px;
+        font-size: 10px;
+    }
+    .exp-view-ds-filter {
+        padding: 6px 0 6px 10px;
+        border-left: 3px solid #e5e7eb;
+        margin-bottom: 8px;
+    }
+    .exp-view-ds-filter:last-child {
+        margin-bottom: 0;
+    }
+    .exp-view-ds-filter.date { border-left-color: #3b82f6; }
+    .exp-view-ds-filter.customer { border-left-color: #22c55e; }
+    .exp-view-ds-filter.product { border-left-color: #a855f7; }
+    .exp-view-ds-filter-title {
+        font-size: 12px;
+        font-weight: 500;
+        color: #374151;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .exp-view-ds-filter-title i.fa-calendar-alt { color: #3b82f6; }
+    .exp-view-ds-filter-title i.fa-users { color: #22c55e; }
+    .exp-view-ds-filter-title i.fa-box { color: #a855f7; }
+    .exp-view-ds-filter-detail {
+        font-size: 11px;
+        color: #6b7280;
+        margin-top: 2px;
+    }
+    .exp-view-ds-no-filters {
+        font-size: 11px;
+        color: #9ca3af;
     }
 
     /* Clean Rows Layout */
@@ -1335,6 +1423,304 @@
         font-size: 18px;
         font-weight: 600;
         color: #059669;
+    }
+
+    /* Features Config (Tensor Visualization) */
+    .exp-view-features-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+    }
+    .exp-view-tensor-panel {
+        padding: 16px;
+        border-radius: 10px;
+    }
+    .exp-view-tensor-panel.buyer {
+        background: #eff6ff;
+    }
+    .exp-view-tensor-panel.product {
+        background: #ecfdf5;
+    }
+    .exp-view-tensor-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 12px;
+    }
+    .exp-view-tensor-title {
+        font-size: 14px;
+        font-weight: 600;
+    }
+    .exp-view-tensor-title.buyer {
+        color: #1d4ed8;
+    }
+    .exp-view-tensor-title.product {
+        color: #059669;
+    }
+    .exp-view-tensor-total {
+        font-size: 14px;
+        font-weight: 600;
+    }
+    .exp-view-tensor-total.buyer {
+        color: #3b82f6;
+    }
+    .exp-view-tensor-total.product {
+        color: #10b981;
+    }
+    .exp-view-tensor-bar {
+        display: flex;
+        height: 20px;
+        border-radius: 5px;
+        overflow: hidden;
+        background: #e5e7eb;
+        margin-bottom: 10px;
+    }
+    .exp-view-tensor-segment {
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 10px;
+        font-weight: 500;
+        color: white;
+        transition: width 0.3s ease;
+        overflow: hidden;
+        white-space: nowrap;
+    }
+    .exp-view-tensor-features {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+    .exp-view-tensor-feature-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 12px;
+    }
+    .exp-view-tensor-feature-name {
+        color: #374151;
+    }
+    .exp-view-tensor-feature-name.cross {
+        font-style: italic;
+    }
+    .exp-view-tensor-feature-name.buyer {
+        color: #1d4ed8;
+    }
+    .exp-view-tensor-feature-name.product {
+        color: #059669;
+    }
+    .exp-view-tensor-feature-dim {
+        font-weight: 500;
+    }
+    .exp-view-tensor-feature-dim.buyer {
+        color: #3b82f6;
+    }
+    .exp-view-tensor-feature-dim.product {
+        color: #10b981;
+    }
+
+    /* Model Config (Tower Architecture Visualization) */
+    .exp-view-model-type-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 4px 10px;
+        border-radius: 6px;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 16px;
+    }
+    .exp-view-model-type-badge.retrieval {
+        background: #dbeafe;
+        color: #1d4ed8;
+    }
+    .exp-view-model-type-badge.ranking {
+        background: #fef3c7;
+        color: #92400e;
+    }
+    .exp-view-model-type-badge.multitask {
+        background: #f3e8ff;
+        color: #7c3aed;
+    }
+    .exp-view-tower-section-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: #374151;
+        margin-bottom: 12px;
+    }
+    .exp-view-towers-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+        margin-bottom: 16px;
+    }
+    .exp-view-tower-column {
+        min-width: 0;
+    }
+    .exp-view-tower-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 8px;
+    }
+    .exp-view-tower-label {
+        font-size: 10px;
+        font-weight: 600;
+        color: #6b7280;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .exp-view-tower-stack {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        border-radius: 10px;
+        padding: 10px;
+        border: 2px dashed;
+        min-height: 80px;
+    }
+    .exp-view-tower-stack.buyer {
+        background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+        border-color: #3b82f6;
+    }
+    .exp-view-tower-stack.product {
+        background: linear-gradient(135deg, #f0fdf4 0%, #d1fae5 100%);
+        border-color: #10b981;
+    }
+    .exp-view-tower-stack.ranking {
+        background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%);
+        border-color: #8b5cf6;
+    }
+    .exp-view-layer-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 10px;
+        background: white;
+        border-radius: 6px;
+        border: 1px solid rgba(0, 0, 0, 0.08);
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    }
+    .exp-view-tower-stack.buyer .exp-view-layer-item {
+        border-color: rgba(59, 130, 246, 0.2);
+    }
+    .exp-view-tower-stack.product .exp-view-layer-item {
+        border-color: rgba(16, 185, 129, 0.2);
+    }
+    .exp-view-tower-stack.ranking .exp-view-layer-item {
+        border-color: rgba(139, 92, 246, 0.2);
+    }
+    .exp-view-layer-item.output-layer {
+        border: 2px solid #f87171;
+    }
+    .exp-view-layer-drag {
+        color: #c4c4c4;
+        font-size: 11px;
+    }
+    .exp-view-layer-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 9px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+        flex-shrink: 0;
+    }
+    .exp-view-layer-badge.dense {
+        background: #e5e7eb;
+        color: #374151;
+    }
+    .exp-view-layer-badge.dropout {
+        background: #fef3c7;
+        color: #92400e;
+    }
+    .exp-view-layer-badge.batch_norm,
+    .exp-view-layer-badge.layer_norm {
+        background: #f3e8ff;
+        color: #7c3aed;
+    }
+    .exp-view-layer-params {
+        font-size: 11px;
+        color: #4b5563;
+    }
+    .exp-view-tower-params {
+        margin-top: 8px;
+        padding: 8px 10px;
+        border-radius: 6px;
+        border: 2px dashed;
+        font-size: 11px;
+        font-family: 'SF Mono', Monaco, monospace;
+    }
+    .exp-view-tower-params.buyer {
+        border-color: #93c5fd;
+        background: #eff6ff;
+    }
+    .exp-view-tower-params.product {
+        border-color: #6ee7b7;
+        background: #ecfdf5;
+    }
+    .exp-view-tower-params.ranking {
+        border-color: #c4b5fd;
+        background: #f5f3ff;
+    }
+    .exp-view-tower-params-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 2px 0;
+    }
+    .exp-view-tower-params-row span:first-child {
+        color: #6b7280;
+    }
+    .exp-view-tower-params-row span:last-child {
+        font-weight: 500;
+        color: #374151;
+    }
+    .exp-view-training-params {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 16px;
+    }
+    .exp-view-param-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        background: #f9fafb;
+        border: 1px solid #e5e7eb;
+        border-radius: 6px;
+        font-size: 12px;
+    }
+    .exp-view-param-chip-label {
+        color: #6b7280;
+    }
+    .exp-view-param-chip-value {
+        font-weight: 600;
+        color: #111827;
+    }
+    .exp-view-rating-head-section {
+        margin-top: 16px;
+    }
+    .exp-view-rating-head-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: #374151;
+        margin-bottom: 8px;
+    }
+    .exp-view-rating-head-label {
+        font-size: 10px;
+        font-weight: 600;
+        color: #8b5cf6;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 8px;
+    }
+    .exp-view-rating-tower-wrapper {
+        max-width: 280px;
     }
 
     /* Pipeline Tab Styles */
@@ -2289,21 +2675,20 @@
 <div id="expViewModal" class="modal-overlay hidden" onclick="closeExpViewModal(event)">
     <div class="modal-container exp-view-modal" onclick="event.stopPropagation()">
         <!-- Header -->
-        <div class="modal-header exp-view-header">
-            <div class="exp-view-header-left">
-                <div class="exp-view-status-dot" id="expViewStatusDot"></div>
-                <div class="exp-view-header-info">
-                    <h3 class="exp-view-title" id="expViewTitle">Experiment #1</h3>
-                    <p class="exp-view-subtitle" id="expViewSubtitle"></p>
-                    <div class="exp-view-meta" id="expViewMeta"></div>
+        <div class="modal-header exp-view-header" id="expViewHeader">
+            <div class="exp-view-status-icon" id="expViewStatusIcon">
+                <i class="fas fa-spinner fa-spin"></i>
+            </div>
+            <div class="exp-view-header-info">
+                <h3 class="exp-view-title" id="expViewTitle">Exp #1</h3>
+                <div class="exp-view-exp-name" id="expViewExpName"></div>
+                <div class="exp-view-description" id="expViewDescription"></div>
+                <div class="exp-view-times">
+                    <div>Start: <span id="expViewStartTime">-</span></div>
+                    <div>End: <span id="expViewEndTime">-</span></div>
                 </div>
             </div>
-            <div class="exp-view-header-right">
-                <span id="expViewStatusBadge" class="exp-view-status-badge"></span>
-                <button type="button" class="modal-close-btn" onclick="closeExpViewModal()">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
+            <span id="expViewStatusBadge" class="exp-view-status-badge"></span>
         </div>
 
         <!-- Tab Navigation -->
@@ -2326,65 +2711,51 @@
         <div class="modal-body exp-view-body">
             <!-- Overview Tab -->
             <div id="expViewTabOverview" class="exp-view-tab-content active">
+                <!-- Dataset Section -->
                 <div class="exp-view-section-group">
-                    <h4 class="exp-view-group-title">Configuration</h4>
-                    <div class="exp-view-rows">
-                        <div class="exp-view-row">
-                            <span class="exp-view-row-label">Dataset</span>
-                            <span class="exp-view-row-value" id="expViewDataset">-</span>
-                        </div>
-                        <div class="exp-view-row">
-                            <span class="exp-view-row-label">Feature Config</span>
-                            <span class="exp-view-row-value" id="expViewFeatureConfig">-</span>
-                        </div>
-                        <div class="exp-view-row">
-                            <span class="exp-view-row-label">Model Config</span>
-                            <span class="exp-view-row-value" id="expViewModelConfig">-</span>
-                        </div>
+                    <h4 class="exp-view-group-title">
+                        <span><i class="fas fa-layer-group" style="margin-right:6px;"></i>DATASET: <span id="expViewDatasetName" style="color:#374151;">-</span></span>
+                        <span class="exp-view-config-badges">
+                            <span class="exp-view-config-badge feature" id="expViewFeatureBadge">-</span>
+                            <span class="exp-view-config-badge model" id="expViewModelBadge">-</span>
+                        </span>
+                    </h4>
+                    <div id="expViewDatasetDetails" class="exp-view-dataset-details">
+                        <div class="exp-view-loading"><i class="fas fa-spinner fa-spin"></i> Loading...</div>
+                    </div>
+                </div>
+
+                <!-- Features Config Section -->
+                <div class="exp-view-section-group">
+                    <h4 class="exp-view-group-title">
+                        <span>Features config: <span id="expViewFeaturesConfigName" style="color:#374151;">-</span></span>
+                    </h4>
+                    <div id="expViewFeaturesConfigContent">
+                        <div class="exp-view-loading"><i class="fas fa-spinner fa-spin"></i> Loading...</div>
+                    </div>
+                </div>
+
+                <!-- Model Config Section -->
+                <div class="exp-view-section-group">
+                    <h4 class="exp-view-group-title">
+                        <span>Model config: <span id="expViewModelConfigName" style="color:#374151;">-</span></span>
+                    </h4>
+                    <div id="expViewModelConfigContent">
+                        <div class="exp-view-loading"><i class="fas fa-spinner fa-spin"></i> Loading...</div>
                     </div>
                 </div>
 
                 <div class="exp-view-section-group">
                     <h4 class="exp-view-group-title">Sampling</h4>
-                    <div class="exp-view-rows">
-                        <div class="exp-view-row">
-                            <span class="exp-view-row-label">Sample</span>
-                            <span class="exp-view-row-value" id="expViewSample">100%</span>
-                        </div>
-                        <div class="exp-view-row">
-                            <span class="exp-view-row-label">Split Strategy</span>
-                            <span class="exp-view-row-value" id="expViewSplit">Random 80/20</span>
-                        </div>
-                        <div class="exp-view-row" id="expViewDateColumnRow" style="display: none;">
-                            <span class="exp-view-row-label">Date Column</span>
-                            <span class="exp-view-row-value" id="expViewDateColumn">-</span>
-                        </div>
-                        <div class="exp-view-row" id="expViewHoldoutRow" style="display: none;">
-                            <span class="exp-view-row-label">Holdout Days</span>
-                            <span class="exp-view-row-value" id="expViewHoldout">-</span>
-                        </div>
+                    <div id="expViewSamplingChips" class="exp-view-training-params">
+                        <!-- Populated by JavaScript -->
                     </div>
                 </div>
 
                 <div class="exp-view-section-group">
                     <h4 class="exp-view-group-title">Training Parameters</h4>
-                    <div class="exp-view-rows">
-                        <div class="exp-view-row">
-                            <span class="exp-view-row-label">Epochs</span>
-                            <span class="exp-view-row-value" id="expViewEpochs">10</span>
-                        </div>
-                        <div class="exp-view-row">
-                            <span class="exp-view-row-label">Batch Size</span>
-                            <span class="exp-view-row-value" id="expViewBatchSize">4096</span>
-                        </div>
-                        <div class="exp-view-row">
-                            <span class="exp-view-row-label">Learning Rate</span>
-                            <span class="exp-view-row-value" id="expViewLearningRate">0.001</span>
-                        </div>
-                        <div class="exp-view-row">
-                            <span class="exp-view-row-label">Hardware</span>
-                            <span class="exp-view-row-value" id="expViewHardware">Small</span>
-                        </div>
+                    <div id="expViewTrainingParamsChips" class="exp-view-training-params">
+                        <!-- Populated by JavaScript -->
                     </div>
                 </div>
 
@@ -3046,12 +3417,8 @@ function renderExpCard(exp) {
 
     // Show Cancel button - active only for running/submitting experiments
     const isRunning = exp.status === 'running' || exp.status === 'submitting';
-    const viewBtn = `<button class="exp-card-view-btn" onclick="viewExpFromCard(event, ${exp.id})">
-           <i class="fas fa-eye"></i> View
-       </button>`;
-    const cancelBtn = `<button class="exp-card-cancel-btn" onclick="cancelExpFromCard(event, ${exp.id})" ${isRunning ? '' : 'disabled'}>
-           <i class="fas fa-stop"></i> Cancel
-       </button>`;
+    const viewBtn = `<button class="card-action-btn view" onclick="viewExpFromCard(event, ${exp.id})">View</button>`;
+    const cancelBtn = `<button class="card-action-btn cancel" onclick="cancelExpFromCard(event, ${exp.id})" ${isRunning ? '' : 'disabled'}>Cancel</button>`;
 
     return `
         <div class="exp-card-new" onclick="openExpDetails(${exp.id})" data-exp-id="${exp.id}">
@@ -3992,6 +4359,578 @@ function closeExpViewModal(event) {
     viewModalDataCache = { statistics: null, schema: null, errorDetails: null, trainingHistory: null };
 }
 
+function loadDatasetDetailsForExp(datasetId) {
+    const container = document.getElementById('expViewDatasetDetails');
+    container.innerHTML = '<div class="exp-view-loading"><i class="fas fa-spinner fa-spin"></i> Loading...</div>';
+
+    fetch(`/api/datasets/${datasetId}/summary/`, {
+        headers: { 'X-CSRFToken': getCookie('csrftoken') }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status !== 'success') {
+            container.innerHTML = '<div class="exp-view-no-filters">Failed to load dataset details</div>';
+            return;
+        }
+        renderDatasetDetailsForExp(data.summary);
+    })
+    .catch(error => {
+        console.error('Error loading dataset details:', error);
+        container.innerHTML = '<div class="exp-view-no-filters">Failed to load dataset details</div>';
+    });
+}
+
+function renderDatasetDetailsForExp(summary) {
+    const container = document.getElementById('expViewDatasetDetails');
+    const snapshot = summary.summary_snapshot || {};
+    const filtersApplied = snapshot.filters_applied || {};
+    const joinConfig = summary.join_config || {};
+
+    let html = '';
+
+    // Tables & Joins section
+    const primaryTable = summary.tables.primary?.replace('raw_data.', '') || '-';
+    html += `<div class="exp-view-ds-section">
+        <div class="exp-view-ds-title"><i class="fas fa-database"></i>Tables & Joins</div>
+        <div class="exp-view-ds-grid">
+            <span class="label">Primary:</span>
+            <span class="value">${primaryTable}</span>`;
+
+    if (summary.tables.secondary?.length > 0) {
+        html += `<span class="label">Secondary:</span>
+            <span class="value">${summary.tables.secondary.map(t => t.replace('raw_data.', '')).join(', ')}</span>`;
+    }
+    html += `</div>`;
+
+    // Join keys
+    if (Object.keys(joinConfig).length > 0) {
+        html += `<div class="exp-view-ds-join"><span>Join Keys:</span>`;
+        for (const [table, config] of Object.entries(joinConfig)) {
+            const tableName = table.replace('raw_data.', '');
+            html += `<div class="exp-view-ds-join-row">
+                <span class="key">${primaryTable}.${config.join_key}</span>
+                <i class="fas fa-arrows-alt-h" style="color:#9ca3af;font-size:10px;"></i>
+                <span class="key">${tableName}.${config.secondary_column}</span>
+                <span class="badge">${config.join_type || 'left'}</span>
+            </div>`;
+        }
+        html += `</div>`;
+    }
+    html += `</div>`;
+
+    // Filters Applied section
+    html += `<div class="exp-view-ds-section">
+        <div class="exp-view-ds-title"><i class="fas fa-filter"></i>Filters Applied</div>`;
+
+    let hasFilters = false;
+
+    // Date filter
+    if (filtersApplied.dates?.type === 'rolling') {
+        hasFilters = true;
+        html += `<div class="exp-view-ds-filter date">
+            <div class="exp-view-ds-filter-title"><i class="fas fa-calendar-alt"></i>Date Filter</div>
+            <div class="exp-view-ds-filter-detail">Column: <strong>${filtersApplied.dates.column || 'N/A'}</strong></div>
+            <div class="exp-view-ds-filter-detail">Range: Last ${filtersApplied.dates.days} days (rolling window)</div>
+        </div>`;
+    } else if (filtersApplied.dates?.type === 'fixed') {
+        hasFilters = true;
+        html += `<div class="exp-view-ds-filter date">
+            <div class="exp-view-ds-filter-title"><i class="fas fa-calendar-alt"></i>Date Filter</div>
+            <div class="exp-view-ds-filter-detail">Column: <strong>${filtersApplied.dates.column || 'N/A'}</strong></div>
+            <div class="exp-view-ds-filter-detail">Start: ${filtersApplied.dates.start_date}</div>
+        </div>`;
+    }
+
+    // Customer filters
+    if (filtersApplied.customers?.type === 'multiple' && filtersApplied.customers.filters?.length > 0) {
+        hasFilters = true;
+        const count = filtersApplied.customers.count || filtersApplied.customers.filters.length;
+        let items = filtersApplied.customers.filters.map(f => {
+            if (f.type === 'top_revenue') {
+                return `<div class="exp-view-ds-filter-detail">• Top <strong>${f.percent}%</strong> customers by revenue</div>
+                    <div class="exp-view-ds-filter-detail" style="margin-left:10px;font-size:10px;">Customer: ${f.customer_column || 'N/A'}, Revenue: ${f.revenue_column || 'N/A'}</div>`;
+            }
+            if (f.type === 'category') return `<div class="exp-view-ds-filter-detail">• ${f.column}: ${f.values?.slice(0,3).join(', ')}${f.values?.length > 3 ? '...' : ''}</div>`;
+            return `<div class="exp-view-ds-filter-detail">• ${f.type}</div>`;
+        }).join('');
+        html += `<div class="exp-view-ds-filter customer">
+            <div class="exp-view-ds-filter-title"><i class="fas fa-users"></i>Customer Filters (${count})</div>
+            ${items}
+        </div>`;
+    }
+
+    // Product filters
+    if (filtersApplied.products?.type === 'multiple' && filtersApplied.products.filters?.length > 0) {
+        hasFilters = true;
+        const count = filtersApplied.products.count || filtersApplied.products.filters.length;
+        let items = filtersApplied.products.filters.map(f => {
+            if (f.type === 'top_revenue') {
+                return `<div class="exp-view-ds-filter-detail">• Top <strong>${f.percent}%</strong> products by revenue</div>
+                    <div class="exp-view-ds-filter-detail" style="margin-left:10px;font-size:10px;">Product: ${f.product_column || 'N/A'}, Revenue: ${f.revenue_column || 'N/A'}</div>`;
+            }
+            if (f.type === 'category') return `<div class="exp-view-ds-filter-detail">• ${f.column}: ${f.values?.slice(0,3).join(', ')}${f.values?.length > 3 ? '...' : ''}</div>`;
+            return `<div class="exp-view-ds-filter-detail">• ${f.type}</div>`;
+        }).join('');
+        html += `<div class="exp-view-ds-filter product">
+            <div class="exp-view-ds-filter-title"><i class="fas fa-box"></i>Product Filters (${count})</div>
+            ${items}
+        </div>`;
+    }
+
+    if (!hasFilters) {
+        html += `<div class="exp-view-ds-no-filters">No filters applied - using all data</div>`;
+    }
+
+    html += `</div>`;
+
+    container.innerHTML = html;
+}
+
+// =============================================================================
+// FEATURES CONFIG VISUALIZATION (for View Modal)
+// =============================================================================
+
+function loadFeaturesConfigForExp(featureConfigId) {
+    const container = document.getElementById('expViewFeaturesConfigContent');
+    container.innerHTML = '<div class="exp-view-loading"><i class="fas fa-spinner fa-spin"></i> Loading...</div>';
+
+    fetch(`/api/feature-configs/${featureConfigId}/`, {
+        headers: { 'X-CSRFToken': getCookie('csrftoken') }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (!data.success) {
+            container.innerHTML = '<div class="exp-view-no-filters">Failed to load features config</div>';
+            return;
+        }
+        renderFeaturesConfigForExp(data.data);
+    })
+    .catch(error => {
+        console.error('Error loading features config:', error);
+        container.innerHTML = '<div class="exp-view-no-filters">Failed to load features config</div>';
+    });
+}
+
+function renderFeaturesConfigForExp(config) {
+    const container = document.getElementById('expViewFeaturesConfigContent');
+
+    // Calculate tensor breakdowns
+    const buyerResult = calculateExpTensorBreakdown(
+        config.buyer_model_features || [],
+        config.buyer_model_crosses || []
+    );
+    const productResult = calculateExpTensorBreakdown(
+        config.product_model_features || [],
+        config.product_model_crosses || []
+    );
+
+    const maxTotal = Math.max(buyerResult.total || 0, productResult.total || 0);
+
+    // Build HTML
+    let html = '<div class="exp-view-features-grid">';
+
+    // Buyer Tensor Panel
+    html += `
+        <div class="exp-view-tensor-panel buyer">
+            <div class="exp-view-tensor-header">
+                <span class="exp-view-tensor-title buyer">Buyer Tensor</span>
+                <span class="exp-view-tensor-total buyer">${buyerResult.total}D</span>
+            </div>
+            <div id="expViewBuyerBar" class="exp-view-tensor-bar"></div>
+            <div class="exp-view-tensor-features">
+                ${buyerResult.breakdown.map(item => `
+                    <div class="exp-view-tensor-feature-row">
+                        <span class="exp-view-tensor-feature-name buyer ${item.is_cross ? 'cross' : ''}">${item.name}</span>
+                        <span class="exp-view-tensor-feature-dim buyer">${item.dim}D</span>
+                    </div>
+                `).join('')}
+            </div>
+        </div>`;
+
+    // Product Tensor Panel
+    html += `
+        <div class="exp-view-tensor-panel product">
+            <div class="exp-view-tensor-header">
+                <span class="exp-view-tensor-title product">Product Tensor</span>
+                <span class="exp-view-tensor-total product">${productResult.total}D</span>
+            </div>
+            <div id="expViewProductBar" class="exp-view-tensor-bar"></div>
+            <div class="exp-view-tensor-features">
+                ${productResult.breakdown.map(item => `
+                    <div class="exp-view-tensor-feature-row">
+                        <span class="exp-view-tensor-feature-name product ${item.is_cross ? 'cross' : ''}">${item.name}</span>
+                        <span class="exp-view-tensor-feature-dim product">${item.dim}D</span>
+                    </div>
+                `).join('')}
+            </div>
+        </div>`;
+
+    html += '</div>';
+    container.innerHTML = html;
+
+    // Render tensor bars after DOM update
+    setTimeout(() => {
+        renderExpTensorBar('buyer', buyerResult.total, buyerResult.breakdown, maxTotal);
+        renderExpTensorBar('product', productResult.total, productResult.breakdown, maxTotal);
+    }, 0);
+}
+
+function calculateExpTensorBreakdown(features, crosses) {
+    const breakdown = [];
+    let total = 0;
+
+    // Process features
+    (features || []).forEach(feature => {
+        const dim = getExpFeatureDimension(feature);
+        if (dim > 0) {
+            breakdown.push({ name: feature.column, dim: dim });
+            total += dim;
+        }
+    });
+
+    // Process cross features
+    (crosses || []).forEach(cross => {
+        const dim = cross.embedding_dim || 16;
+        const featureNames = getExpCrossFeatureNames(cross);
+        const name = featureNames.join(' × ');
+        breakdown.push({ name: name, dim: dim, is_cross: true });
+        total += dim;
+    });
+
+    return { total, breakdown };
+}
+
+function getExpFeatureDimension(feature) {
+    const dataType = feature.data_type || getExpDataTypeFromBqType(feature.bq_type);
+    const transforms = feature.transforms || {};
+    let totalDim = 0;
+
+    if (dataType === 'numeric') {
+        if (transforms.normalize?.enabled) totalDim += 1;
+        if (transforms.bucketize?.enabled) totalDim += (transforms.bucketize.embedding_dim || 32);
+    } else if (dataType === 'text') {
+        if (transforms.embedding?.enabled) totalDim += (transforms.embedding.embedding_dim || 32);
+    } else if (dataType === 'temporal') {
+        if (transforms.normalize?.enabled) totalDim += 1;
+        if (transforms.cyclical?.enabled) {
+            const c = transforms.cyclical;
+            if (c.yearly || c.annual) totalDim += 2;
+            if (c.quarterly) totalDim += 2;
+            if (c.monthly) totalDim += 2;
+            if (c.weekly) totalDim += 2;
+            if (c.daily) totalDim += 2;
+        }
+    }
+
+    return totalDim;
+}
+
+function getExpDataTypeFromBqType(bqType) {
+    const type = (bqType || 'STRING').toUpperCase();
+    if (['INTEGER', 'INT64', 'FLOAT', 'FLOAT64', 'NUMERIC', 'BIGNUMERIC'].includes(type)) {
+        return 'numeric';
+    } else if (['TIMESTAMP', 'DATETIME', 'DATE', 'TIME'].includes(type)) {
+        return 'temporal';
+    }
+    return 'text';
+}
+
+function getExpCrossFeatureNames(cross) {
+    if (!cross.features || cross.features.length === 0) return [];
+    if (typeof cross.features[0] === 'string') return cross.features;
+    return cross.features.map(f => f.column);
+}
+
+function renderExpTensorBar(model, total, breakdown, maxTotal) {
+    const barId = model === 'buyer' ? 'expViewBuyerBar' : 'expViewProductBar';
+    const bar = document.getElementById(barId);
+    if (!bar) return;
+
+    bar.innerHTML = '';
+    if (!breakdown || breakdown.length === 0) return;
+
+    // Set bar width proportionally
+    if (maxTotal && maxTotal > 0) {
+        bar.style.width = `${(total / maxTotal) * 100}%`;
+    }
+
+    const colors = model === 'buyer'
+        ? ['#3b82f6', '#60a5fa', '#93c5fd', '#bfdbfe', '#dbeafe']
+        : ['#10b981', '#34d399', '#6ee7b7', '#a7f3d0', '#d1fae5'];
+
+    breakdown.forEach((item, idx) => {
+        const pct = (item.dim / total) * 100;
+        const color = colors[idx % colors.length];
+
+        const segment = document.createElement('div');
+        segment.className = 'exp-view-tensor-segment';
+        segment.style.width = `${pct}%`;
+        segment.style.backgroundColor = color;
+        segment.title = `${item.name}: ${item.dim}D`;
+        if (pct > 10) {
+            segment.textContent = item.dim;
+        }
+        bar.appendChild(segment);
+    });
+}
+
+// =============================================================================
+// MODEL CONFIG VISUALIZATION (for View Modal)
+// =============================================================================
+
+function loadModelConfigForExp(modelConfigId) {
+    const container = document.getElementById('expViewModelConfigContent');
+    container.innerHTML = '<div class="exp-view-loading"><i class="fas fa-spinner fa-spin"></i> Loading...</div>';
+
+    fetch(`/api/model-configs/${modelConfigId}/`, {
+        headers: { 'X-CSRFToken': getCookie('csrftoken') }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (!data.success) {
+            container.innerHTML = '<div class="exp-view-no-filters">Failed to load model config</div>';
+            return;
+        }
+        renderModelConfigForExp(data.data);
+    })
+    .catch(error => {
+        console.error('Error loading model config:', error);
+        container.innerHTML = '<div class="exp-view-no-filters">Failed to load model config</div>';
+    });
+}
+
+function renderModelConfigForExp(mc) {
+    const container = document.getElementById('expViewModelConfigContent');
+
+    // Model type badge
+    const modelTypeLabels = {
+        'retrieval': 'Retrieval',
+        'ranking': 'Ranking',
+        'multitask': 'Multitask'
+    };
+    const modelTypeLabel = modelTypeLabels[mc.model_type] || mc.model_type;
+
+    // Build tower layers HTML
+    const buyerLayers = mc.buyer_tower_layers || [];
+    const productLayers = mc.product_tower_layers || [];
+    const buyerParams = calculateExpTowerParams(buyerLayers);
+    const productParams = calculateExpTowerParams(productLayers);
+
+    let html = `
+        <span class="exp-view-model-type-badge ${mc.model_type}">${modelTypeLabel}</span>
+
+        <div class="exp-view-tower-section-title">Tower Architecture</div>
+        <div class="exp-view-towers-grid">
+            <div class="exp-view-tower-column">
+                <div class="exp-view-tower-header">
+                    <span class="exp-view-tower-label">BUYER TOWER</span>
+                </div>
+                <div class="exp-view-tower-stack buyer">
+                    ${renderExpTowerLayers(buyerLayers)}
+                </div>
+                <div class="exp-view-tower-params buyer">
+                    <div class="exp-view-tower-params-row"><span>Total params:</span><span>${buyerParams.toLocaleString()}</span></div>
+                    <div class="exp-view-tower-params-row"><span>Trainable params:</span><span>${buyerParams.toLocaleString()}</span></div>
+                    <div class="exp-view-tower-params-row"><span>Non-trainable params:</span><span>0</span></div>
+                </div>
+            </div>
+            <div class="exp-view-tower-column">
+                <div class="exp-view-tower-header">
+                    <span class="exp-view-tower-label">PRODUCT TOWER</span>
+                </div>
+                <div class="exp-view-tower-stack product">
+                    ${renderExpTowerLayers(productLayers)}
+                </div>
+                <div class="exp-view-tower-params product">
+                    <div class="exp-view-tower-params-row"><span>Total params:</span><span>${productParams.toLocaleString()}</span></div>
+                    <div class="exp-view-tower-params-row"><span>Trainable params:</span><span>${productParams.toLocaleString()}</span></div>
+                    <div class="exp-view-tower-params-row"><span>Non-trainable params:</span><span>0</span></div>
+                </div>
+            </div>
+        </div>`;
+
+    // Rating Head section (for ranking and multitask models)
+    if (['ranking', 'multitask'].includes(mc.model_type)) {
+        const ratingHeadLayers = mc.rating_head_layers || [];
+        const ratingHeadParams = calculateExpTowerParams(ratingHeadLayers, (mc.output_embedding_dim || 32) * 2);
+
+        html += `
+        <div class="exp-view-rating-head-section">
+            <div class="exp-view-rating-head-title">Rating Head</div>
+            <div class="exp-view-rating-head-label">RANKING TOWER</div>
+            <div class="exp-view-rating-tower-wrapper">
+                <div class="exp-view-tower-stack ranking">
+                    ${renderExpTowerLayers(ratingHeadLayers)}
+                </div>
+                <div class="exp-view-tower-params ranking">
+                    <div class="exp-view-tower-params-row"><span>Total params:</span><span>${ratingHeadParams.toLocaleString()}</span></div>
+                    <div class="exp-view-tower-params-row"><span>Trainable params:</span><span>${ratingHeadParams.toLocaleString()}</span></div>
+                    <div class="exp-view-tower-params-row"><span>Non-trainable params:</span><span>0</span></div>
+                </div>
+            </div>
+        </div>`;
+    }
+
+    container.innerHTML = html;
+
+    // Update Optimizer in Training Parameters section (from model config)
+    const optimizerEl = document.getElementById('expViewOptimizerValue');
+    if (optimizerEl) {
+        optimizerEl.textContent = mc.optimizer_display || mc.optimizer || 'Adagrad';
+    }
+}
+
+function renderExpTowerLayers(layers) {
+    if (!layers || layers.length === 0) {
+        return '<div class="text-xs text-gray-400 italic p-2">No layers</div>';
+    }
+
+    return layers.map((layer, idx) => {
+        const isOutput = idx === layers.length - 1;
+        let badge = '';
+        let params = '';
+
+        if (layer.type === 'dense') {
+            badge = '<span class="exp-view-layer-badge dense">DENSE</span>';
+            params = `${layer.units} units`;
+            if (layer.activation) params += `, ${layer.activation}`;
+            if (layer.l2_regularization) params += `, L2=${layer.l2_regularization}`;
+            else if (layer.l2_reg) params += `, L2=${layer.l2_reg}`;
+        } else if (layer.type === 'dropout') {
+            badge = '<span class="exp-view-layer-badge dropout">DROPOUT</span>';
+            params = `rate: ${layer.rate}`;
+        } else if (layer.type === 'batch_norm') {
+            badge = '<span class="exp-view-layer-badge batch_norm">BATCHNORM</span>';
+            params = '';
+        } else if (layer.type === 'layer_norm') {
+            badge = '<span class="exp-view-layer-badge layer_norm">LAYERNORM</span>';
+            params = layer.epsilon ? `ε: ${layer.epsilon}` : '';
+        }
+
+        return `
+            <div class="exp-view-layer-item${isOutput ? ' output-layer' : ''}">
+                <span class="exp-view-layer-drag"><i class="fas fa-grip-vertical"></i></span>
+                ${badge}
+                <span class="exp-view-layer-params">${params}</span>
+            </div>
+        `;
+    }).join('');
+}
+
+function calculateExpTowerParams(layers, inputDim = 128) {
+    // Approximate parameter calculation for tower
+    if (!layers || layers.length === 0) return 0;
+
+    let total = 0;
+    let prevDim = inputDim;
+
+    layers.forEach(layer => {
+        if (layer.type === 'dense') {
+            // Dense layer: input_dim * units + units (bias)
+            total += prevDim * layer.units + layer.units;
+            prevDim = layer.units;
+        }
+        // Dropout and norm layers don't add trainable parameters
+    });
+
+    return total;
+}
+
+// =============================================================================
+// SAMPLING CHIPS (for View Modal)
+// =============================================================================
+
+function renderSamplingChips(exp) {
+    const container = document.getElementById('expViewSamplingChips');
+    if (!container) return;
+
+    const splitLabels = {
+        'random': 'Random 80/20',
+        'time_holdout': 'Time Holdout',
+        'strict_time': 'Strict Temporal'
+    };
+
+    let html = `
+        <div class="exp-view-param-chip">
+            <span class="exp-view-param-chip-label">Sample:</span>
+            <span class="exp-view-param-chip-value">${exp.data_sample_percent || 100}%</span>
+        </div>
+        <div class="exp-view-param-chip">
+            <span class="exp-view-param-chip-label">Split Strategy:</span>
+            <span class="exp-view-param-chip-value">${splitLabels[exp.split_strategy] || exp.split_strategy}</span>
+        </div>
+    `;
+
+    // Add Date Column chip for temporal strategies
+    if (exp.split_strategy !== 'random' && exp.date_column) {
+        html += `
+        <div class="exp-view-param-chip">
+            <span class="exp-view-param-chip-label">Date Column:</span>
+            <span class="exp-view-param-chip-value">${exp.date_column}</span>
+        </div>
+        `;
+    }
+
+    // Add Holdout Days chip for time_holdout strategy
+    if (exp.split_strategy === 'time_holdout') {
+        html += `
+        <div class="exp-view-param-chip">
+            <span class="exp-view-param-chip-label">Holdout Days:</span>
+            <span class="exp-view-param-chip-value">${exp.holdout_days || 1} days</span>
+        </div>
+        `;
+    }
+
+    container.innerHTML = html;
+}
+
+// =============================================================================
+// TRAINING PARAMETERS CHIPS (for View Modal - actual pipeline values)
+// =============================================================================
+
+function renderTrainingParamsChips(exp) {
+    const container = document.getElementById('expViewTrainingParamsChips');
+    if (!container) return;
+
+    // Hardware specifications mapping
+    const hardwareSpecs = {
+        'n1-standard-4': { name: 'Small', cpu: '4 vCPUs', memory: '15 GB' },
+        'n1-standard-8': { name: 'Medium', cpu: '8 vCPUs', memory: '30 GB' },
+        'n1-standard-16': { name: 'Large', cpu: '16 vCPUs', memory: '60 GB' },
+        'n1-highmem-4': { name: 'High Memory', cpu: '4 vCPUs', memory: '26 GB' },
+        'n1-highmem-8': { name: 'High Memory', cpu: '8 vCPUs', memory: '52 GB' }
+    };
+
+    const machineType = exp.machine_type || 'n1-standard-4';
+    const hwSpec = hardwareSpecs[machineType] || { name: 'Custom', cpu: '-', memory: '-' };
+    const hardwareDisplay = `${hwSpec.cpu}, ${hwSpec.memory}`;
+
+    let html = `
+        <div class="exp-view-param-chip" id="expViewOptimizerChip">
+            <span class="exp-view-param-chip-label">Optimizer:</span>
+            <span class="exp-view-param-chip-value" id="expViewOptimizerValue">-</span>
+        </div>
+        <div class="exp-view-param-chip">
+            <span class="exp-view-param-chip-label">Epochs:</span>
+            <span class="exp-view-param-chip-value">${exp.epochs || '-'}</span>
+        </div>
+        <div class="exp-view-param-chip">
+            <span class="exp-view-param-chip-label">Batch Size:</span>
+            <span class="exp-view-param-chip-value">${exp.batch_size?.toLocaleString() || '-'}</span>
+        </div>
+        <div class="exp-view-param-chip">
+            <span class="exp-view-param-chip-label">Learning Rate:</span>
+            <span class="exp-view-param-chip-value">${exp.learning_rate || '-'}</span>
+        </div>
+        <div class="exp-view-param-chip">
+            <span class="exp-view-param-chip-label">Hardware:</span>
+            <span class="exp-view-param-chip-value">${hardwareDisplay}</span>
+        </div>
+    `;
+
+    container.innerHTML = html;
+}
+
 function switchExpViewTab(tabName) {
     currentViewTab = tabName;
 
@@ -4020,80 +4959,92 @@ function populateExpViewModal(exp) {
     // Store current exp for tab data loading
     window.currentViewExp = exp;
 
-    // Header
-    const title = exp.experiment_name
-        ? `${exp.display_name}: ${exp.experiment_name}`
-        : exp.display_name;
-    document.getElementById('expViewTitle').textContent = title;
-    document.getElementById('expViewSubtitle').textContent = exp.experiment_description || '';
+    // Header background based on status
+    const header = document.getElementById('expViewHeader');
+    header.className = `modal-header exp-view-header ${exp.status}`;
 
-    // Status dot
-    const statusDot = document.getElementById('expViewStatusDot');
-    statusDot.className = `exp-view-status-dot ${exp.status}`;
+    // Status icon
+    const statusIcon = document.getElementById('expViewStatusIcon');
+    const statusIcons = {
+        'submitting': 'fa-paper-plane',
+        'running': 'fa-spinner fa-spin',
+        'completed': 'fa-check',
+        'failed': 'fa-times',
+        'cancelled': 'fa-ban',
+        'pending': 'fa-clock'
+    };
+    statusIcon.className = `exp-view-status-icon ${exp.status}`;
+    statusIcon.innerHTML = `<i class="fas ${statusIcons[exp.status] || 'fa-circle'}"></i>`;
+
+    // Title (Exp #N)
+    document.getElementById('expViewTitle').textContent = exp.display_name;
+
+    // Experiment name
+    const expNameEl = document.getElementById('expViewExpName');
+    expNameEl.textContent = exp.experiment_name || '';
+    expNameEl.style.display = exp.experiment_name ? '' : 'none';
+
+    // Description
+    const descEl = document.getElementById('expViewDescription');
+    descEl.textContent = exp.experiment_description || '';
+    descEl.style.display = exp.experiment_description ? '' : 'none';
+
+    // Start/End times
+    const formatDateTime = (isoStr) => {
+        if (!isoStr) return '-';
+        const d = new Date(isoStr);
+        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' +
+               d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    };
+    document.getElementById('expViewStartTime').textContent = formatDateTime(exp.started_at || exp.created_at);
+    document.getElementById('expViewEndTime').textContent = exp.completed_at ? formatDateTime(exp.completed_at) : '-';
 
     // Status badge
     const statusBadge = document.getElementById('expViewStatusBadge');
     const badgeTexts = {
         'submitting': 'Submitting',
         'running': 'Running',
-        'completed': 'Completed',
+        'completed': 'Success',
         'failed': 'Failed',
-        'cancelled': 'Cancelled'
+        'cancelled': 'Cancelled',
+        'pending': 'Pending'
     };
     statusBadge.className = `exp-view-status-badge ${exp.status}`;
     statusBadge.textContent = badgeTexts[exp.status] || exp.status;
 
-    // Meta row
-    const durationStr = exp.duration_seconds ? formatDuration(exp.duration_seconds) :
-        (exp.elapsed_seconds ? `${formatDuration(exp.elapsed_seconds)}` : '-');
-    const createdStr = formatDateTime(exp.created_at);
-    const metaEl = document.getElementById('expViewMeta');
-    metaEl.innerHTML = `
-        <span>${durationStr}</span>
-        ${exp.created_by ? `<span>${exp.created_by}</span>` : ''}
-        <span>${createdStr}</span>
-    `;
+    // Overview Tab - Dataset section
+    document.getElementById('expViewDatasetName').textContent = exp.dataset_name || 'Dataset';
+    document.getElementById('expViewFeatureBadge').textContent = exp.feature_config_name || '-';
+    document.getElementById('expViewModelBadge').textContent = exp.model_config_name || '-';
 
-    // Overview Tab
-    document.getElementById('expViewDataset').textContent = exp.dataset_name || '-';
-    document.getElementById('expViewFeatureConfig').textContent = exp.feature_config_name || '-';
-    document.getElementById('expViewModelConfig').textContent = exp.model_config_name || '-';
-
-    document.getElementById('expViewSample').textContent = `${exp.data_sample_percent || 100}%`;
-    const splitLabels = {
-        'random': 'Random 80/20',
-        'time_holdout': 'Time Holdout',
-        'strict_time': 'Strict Temporal'
-    };
-    document.getElementById('expViewSplit').textContent = splitLabels[exp.split_strategy] || exp.split_strategy;
-
-    // Date column and holdout
-    const dateColRow = document.getElementById('expViewDateColumnRow');
-    const holdoutRow = document.getElementById('expViewHoldoutRow');
-    if (exp.split_strategy !== 'random') {
-        dateColRow.style.display = '';
-        document.getElementById('expViewDateColumn').textContent = exp.date_column || '-';
-        if (exp.split_strategy === 'time_holdout') {
-            holdoutRow.style.display = '';
-            document.getElementById('expViewHoldout').textContent = `${exp.holdout_days || 1} days`;
-        } else {
-            holdoutRow.style.display = 'none';
-        }
+    // Load dataset details
+    if (exp.dataset_id) {
+        loadDatasetDetailsForExp(exp.dataset_id);
     } else {
-        dateColRow.style.display = 'none';
-        holdoutRow.style.display = 'none';
+        document.getElementById('expViewDatasetDetails').innerHTML = '<div class="exp-view-no-filters">No dataset configured</div>';
     }
 
-    // Training Parameters
-    document.getElementById('expViewEpochs').textContent = exp.epochs || '-';
-    document.getElementById('expViewBatchSize').textContent = exp.batch_size?.toLocaleString() || '-';
-    document.getElementById('expViewLearningRate').textContent = exp.learning_rate || '-';
-    const hardwareLabels = {
-        'n1-standard-4': 'Small',
-        'n1-standard-8': 'Medium',
-        'n1-standard-16': 'Large'
-    };
-    document.getElementById('expViewHardware').textContent = hardwareLabels[exp.machine_type] || 'Small';
+    // Load features config details
+    document.getElementById('expViewFeaturesConfigName').textContent = exp.feature_config_name || '-';
+    if (exp.feature_config_id) {
+        loadFeaturesConfigForExp(exp.feature_config_id);
+    } else {
+        document.getElementById('expViewFeaturesConfigContent').innerHTML = '<div class="exp-view-no-filters">No features config</div>';
+    }
+
+    // Load model config details
+    document.getElementById('expViewModelConfigName').textContent = exp.model_config_name || '-';
+    if (exp.model_config_id) {
+        loadModelConfigForExp(exp.model_config_id);
+    } else {
+        document.getElementById('expViewModelConfigContent').innerHTML = '<div class="exp-view-no-filters">No model config</div>';
+    }
+
+    // Sampling (chip format)
+    renderSamplingChips(exp);
+
+    // Training Parameters (chip format)
+    renderTrainingParamsChips(exp);
 
     // Results Summary (overview tab)
     const resultsSummary = document.getElementById('expViewResultsSummary');

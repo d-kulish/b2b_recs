@@ -5,7 +5,7 @@ This document provides **high-level specifications** for the Experiments domain.
 
 👉 **[phase_experiments_implementation.md](phase_experiments_implementation.md)** - Complete implementation guide with code examples
 
-**Last Updated**: 2025-12-18
+**Last Updated**: 2025-12-19
 
 ---
 
@@ -36,6 +36,30 @@ This document provides **high-level specifications** for the Experiments domain.
 ---
 
 ## Recent Updates (December 2025)
+
+### Experiment Cards Redesign & Cancel (2025-12-19)
+
+**New Features:**
+
+1. **Experiment Name & Description** - Optional fields to identify experiments
+   - Name and Description fields in Step 1 of New Experiment wizard
+   - Displayed on experiment cards (description truncated to 50 chars)
+
+2. **Cancel Running Experiments** - Cancel button on every experiment card
+   - Active (red) for running/submitting experiments
+   - Disabled (light red) for completed/failed/cancelled
+   - Calls `aiplatform.PipelineJob.cancel()` via Vertex AI SDK
+
+3. **4-Column Card Layout** - Better information organization
+   - Column 1 (30%): Exp #, Name, Description, Start/End times
+   - Column 2 (20%): Dataset, Features, Model
+   - Column 3 (30%): Training params (placeholder)
+   - Column 4 (20%): Cancel button
+
+4. **Progress Bar Styling** - Tensor-breakdown-bar style
+   - 24px height with labels inside
+   - Gradient green colors for completed stages
+   - Animated blue for running, red for failed
 
 ### Page Split from Configs Domain (2025-12-13)
 

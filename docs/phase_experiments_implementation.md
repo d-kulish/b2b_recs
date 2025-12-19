@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides a **complete implementation guide** for building the Experiments domain with native TFX pipelines on Vertex AI. It is designed to be self-contained and actionable - you should be able to open this document and start implementing without additional context.
 
-**Last Updated**: 2025-12-18
+**Last Updated**: 2025-12-19
 
 ---
 
@@ -26,9 +26,10 @@ This document provides a **complete implementation guide** for building the Expe
 15. [Phase 10: Wizard Config Previews](#phase-10-wizard-config-previews-december-2025)
 16. [Phase 11: Hardware Configuration & Dataflow](#phase-11-hardware-configuration--dataflow-december-2025)
 17. [Phase 12: Pipeline Progress Bar & Error Improvements](#phase-12-pipeline-progress-bar--error-improvements-december-2025)
-18. [File Reference](#file-reference)
-19. [API Reference](#api-reference)
-20. [Testing Guide](#testing-guide)
+18. [Phase 13: Experiment Cards Redesign & Cancel](#phase-13-experiment-cards-redesign--cancel-december-2025)
+19. [File Reference](#file-reference)
+20. [API Reference](#api-reference)
+21. [Testing Guide](#testing-guide)
 
 ---
 
@@ -85,6 +86,7 @@ Experiments Page = Analyze Quick Test results to find optimal parameters
 | **Phase 10** | ✅ Complete | Wizard Config Previews (rich Feature/Model config previews, compact data sampling UI) |
 | **Phase 11** | ✅ Complete | Hardware Configuration & Dataflow (machine type selection, Dataflow for StatisticsGen/Transform) |
 | **Phase 12** | ✅ Complete | Pipeline Progress Bar & Error Improvements (stage progress bar, async Cloud Build, column validation) |
+| **Phase 13** | ✅ Complete | Experiment Cards Redesign & Cancel (4-column layout, name/description fields, cancel button, progress bar styling) |
 
 ### Cloud Build Implementation (December 2025)
 
@@ -3855,6 +3857,154 @@ for qt in running_tests:
 4. Pipeline completes
    → status=COMPLETED, stage_details=[all=completed]
 ```
+
+---
+
+## Phase 13: Experiment Cards Redesign & Cancel (December 2025)
+
+This phase redesigns the experiment cards with a 4-column layout, adds experiment name/description fields, implements cancel functionality, and improves the progress bar styling.
+
+### Overview
+
+**Changes Implemented:**
+
+1. **Experiment Cards Redesign** - 4-column layout for better information display
+2. **Experiment Metadata** - Name and Description fields in New Experiment wizard
+3. **Cancel Button** - Cancel running experiments directly from cards
+4. **Progress Bar Styling** - Tensor-breakdown-bar style with gradient colors
+5. **UI Cleanup** - Removed redundant result badges and Compare button
+
+### 4-Column Card Layout
+
+The experiment cards now use a structured column layout:
+
+| Column | Width | Content |
+|--------|-------|---------|
+| **Info** | 30% | Status icon, Exp #, Name, Description (50 chars), Start/End times |
+| **Config** | 20% | Dataset, Features set, Model |
+| **Params** | 30% | Training parameters (placeholder for future) |
+| **Actions** | 20% | Cancel button |
+
+**CSS Classes:**
+- `.exp-card-columns` - Flex container
+- `.exp-card-col-info` - Column 1
+- `.exp-card-col-config` - Column 2
+- `.exp-card-col-params` - Column 3
+- `.exp-card-col-actions` - Column 4
+
+### Experiment Name & Description
+
+**New Fields Added to QuickTest Model:**
+
+```python
+experiment_name = models.CharField(
+    max_length=255,
+    blank=True,
+    help_text="User-defined name for this experiment (optional)"
+)
+
+experiment_description = models.TextField(
+    blank=True,
+    help_text="User-defined description for this experiment (optional)"
+)
+```
+
+**Migration:** `0038_add_experiment_name_description.py`
+
+**Wizard UI:**
+- Name field: Full-width text input at top of Step 1
+- Description field: Full-width textarea (3 rows) below name
+- Both fields are optional
+
+**Card Display:**
+- Name shown below Exp # (e.g., "Exp #9" then "test_1")
+- Description truncated to 50 characters with full text in tooltip
+
+### Cancel Functionality
+
+**Backend (already existed):**
+- API endpoint: `POST /api/quick-tests/<id>/cancel/`
+- Service method: `cancel_quick_test()` calls `aiplatform.PipelineJob.cancel()`
+- Validates experiment is in `running` or `submitting` status
+
+**Frontend (new):**
+- Cancel button on every experiment card
+- Active (red) for running/submitting experiments
+- Disabled (light red) for completed/failed/cancelled experiments
+- `cancelExpFromCard(event, expId)` function with confirmation dialog
+
+**CSS:**
+```css
+.exp-card-cancel-btn {
+    padding: 6px 12px;
+    background-color: #fef2f2;
+    color: #dc2626;
+    border: 1px solid #fecaca;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+}
+.exp-card-cancel-btn:disabled {
+    background-color: #fef2f2;
+    color: #fca5a5;  /* Light red for disabled */
+    border-color: #fecaca;
+    cursor: not-allowed;
+}
+```
+
+### Progress Bar Styling
+
+**Before:** Tiny 6px bars with labels below, uniform colors
+
+**After:** Tensor-breakdown-bar style (24px height, labels inside, gradient colors)
+
+**Completed Stage Colors (gradient):**
+```javascript
+const completedColors = ['#059669', '#10b981', '#22c55e', '#34d399', '#4ade80', '#6ee7b7'];
+```
+
+**Running Stage:** Animated blue gradient pulse
+
+**Failed Stage:** Red background (#ef4444)
+
+**Pending Stage:** Gray background (#d1d5db)
+
+### UI Cleanup
+
+**Removed Elements:**
+1. Result badges below progress bars ("Completed", "Failed at Transform", "No metrics available")
+2. "Compare" button from Quick Tests header (functionality kept for future use)
+3. Redundant status text (status already shown via icon and progress bar colors)
+
+### API Changes
+
+**Added to `_serialize_quick_test()` response:**
+```python
+'experiment_name': quick_test.experiment_name,
+'experiment_description': quick_test.experiment_description,
+'dataset_name': quick_test.feature_config.dataset.name,
+```
+
+### Files Modified
+
+| File | Changes |
+|------|---------|
+| `ml_platform/models.py` | Added `experiment_name`, `experiment_description` fields |
+| `ml_platform/migrations/0038_...py` | Migration for new fields |
+| `ml_platform/experiments/api.py` | Added new fields to serializer, `dataset_name` |
+| `ml_platform/experiments/services.py` | Pass name/description to QuickTest creation |
+| `templates/.../model_experiments.html` | Redesigned cards, new wizard fields, cancel button, progress bar styling |
+
+### Testing Checklist
+
+- [x] Verify 4-column layout displays correctly
+- [x] Verify Name and Description fields work in wizard
+- [x] Verify Name/Description display on cards (with truncation)
+- [x] Verify Cancel button is active only for running experiments
+- [x] Verify Cancel confirmation and API call work correctly
+- [x] Verify progress bar gradient colors for completed stages
+- [x] Verify Start/End times display correctly
+- [x] Verify Dataset name displays in Config column
 
 ---
 

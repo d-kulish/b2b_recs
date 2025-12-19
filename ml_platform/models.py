@@ -1529,6 +1529,21 @@ class QuickTest(models.Model):
     )
 
     # =========================================================================
+    # Experiment Metadata
+    # =========================================================================
+
+    experiment_name = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="User-defined name for this experiment (optional)"
+    )
+
+    experiment_description = models.TextField(
+        blank=True,
+        help_text="User-defined description for this experiment (optional)"
+    )
+
+    # =========================================================================
     # Test Configuration
     # =========================================================================
 

@@ -117,6 +117,9 @@ def start_quick_test(request, feature_config_id):
             'test_days': data.get('test_days', 7),
             # Hardware configuration
             'machine_type': data.get('machine_type', QuickTest.MACHINE_TYPE_SMALL),
+            # Experiment metadata (optional)
+            'experiment_name': data.get('experiment_name', ''),
+            'experiment_description': data.get('experiment_description', ''),
         }
 
         # Validate split strategy requires date column
@@ -509,8 +512,11 @@ def _serialize_quick_test(quick_test, include_details=False):
         'id': quick_test.id,
         'experiment_number': quick_test.experiment_number,
         'display_name': quick_test.display_name,
+        'experiment_name': quick_test.experiment_name,
+        'experiment_description': quick_test.experiment_description,
         'feature_config_id': quick_test.feature_config_id,
         'feature_config_name': quick_test.feature_config.name,
+        'dataset_name': quick_test.feature_config.dataset.name if quick_test.feature_config.dataset else None,
         'model_config_id': quick_test.model_config_id,
         'model_config_name': quick_test.model_config.name if quick_test.model_config else None,
         'status': quick_test.status,

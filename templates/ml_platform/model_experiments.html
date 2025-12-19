@@ -166,8 +166,8 @@
         color: #6b7280;
     }
     .exp-card-status.submitting {
-        background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
-        color: #d97706;
+        background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+        color: #2563eb;
     }
     .exp-card-info {
         flex: 1;
@@ -178,6 +178,10 @@
         font-size: 15px;
         color: #111827;
         margin-bottom: 4px;
+    }
+    .exp-card-custom-name {
+        font-weight: 400;
+        color: #6b7280;
     }
     .exp-card-configs {
         font-size: 13px;
@@ -228,6 +232,7 @@
 
     /* =========================================================================
        Stage Progress Bar (for running/submitting experiments)
+       Styled like tensor-breakdown-bar from model_configs.html
        ========================================================================= */
     .exp-card-stages {
         width: 100%;
@@ -237,105 +242,74 @@
     }
     .exp-stages-bar {
         display: flex;
-        gap: 4px;
-        width: 100%;
-    }
-    .exp-stage {
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 6px;
-    }
-    .exp-stage-indicator {
-        width: 100%;
-        height: 6px;
-        border-radius: 3px;
-        background: #e5e7eb;
-        position: relative;
+        height: 24px;
+        border-radius: 6px;
         overflow: hidden;
+        background: #e5e7eb;
     }
-    .exp-stage-indicator.completed {
-        background: #10b981;
+    .exp-stage-segment {
+        flex: 1;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 10px;
+        font-weight: 500;
+        color: white;
+        text-transform: uppercase;
+        letter-spacing: 0.02em;
+        white-space: nowrap;
+        overflow: hidden;
+        transition: background-color 0.3s ease;
     }
-    .exp-stage-indicator.running {
-        background: linear-gradient(90deg, #f59e0b 0%, #fbbf24 50%, #f59e0b 100%);
+    /* Completed segments get gradient colors via inline styles */
+    .exp-stage-segment.running {
+        background: linear-gradient(90deg, #3b82f6 0%, #60a5fa 50%, #3b82f6 100%);
         background-size: 200% 100%;
         animation: stage-pulse 1.5s ease-in-out infinite;
     }
-    .exp-stage-indicator.failed {
+    .exp-stage-segment.failed {
         background: #ef4444;
     }
-    .exp-stage-indicator.pending {
-        background: #e5e7eb;
+    .exp-stage-segment.pending {
+        background: #d1d5db;
+        color: #6b7280;
     }
     @keyframes stage-pulse {
         0%, 100% { background-position: 0% 50%; }
         50% { background-position: 100% 50%; }
     }
-    .exp-stage-label {
-        font-size: 10px;
-        font-weight: 500;
-        color: #9ca3af;
-        text-transform: uppercase;
-        letter-spacing: 0.02em;
-        white-space: nowrap;
-    }
-    .exp-stage.completed .exp-stage-label {
-        color: #10b981;
-    }
-    .exp-stage.running .exp-stage-label {
-        color: #f59e0b;
-        font-weight: 600;
-    }
-    .exp-stage.failed .exp-stage-label {
-        color: #ef4444;
-    }
 
-    /* Result section below progress bar */
-    .exp-card-result {
-        display: flex;
-        align-items: center;
-        gap: 16px;
-        margin-top: 10px;
-    }
-    .exp-result-metric {
-        display: flex;
-        align-items: baseline;
-        gap: 6px;
-    }
-    .exp-result-value {
-        font-size: 20px;
-        font-weight: 700;
-        color: #111827;
-    }
-    .exp-result-label {
+    /* Cancel button for experiments */
+    .exp-card-cancel-btn {
+        padding: 6px 12px;
+        background-color: #fef2f2;
+        color: #dc2626;
+        border: 1px solid #fecaca;
+        border-radius: 6px;
         font-size: 12px;
-        color: #6b7280;
-    }
-    .exp-result-badge {
-        display: inline-flex;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        display: flex;
         align-items: center;
         gap: 4px;
-        padding: 4px 10px;
-        border-radius: 12px;
-        font-size: 11px;
-        font-weight: 600;
     }
-    .exp-result-badge.success {
-        background: #dcfce7;
-        color: #15803d;
+    .exp-card-cancel-btn:hover:not(:disabled) {
+        background-color: #fee2e2;
+        border-color: #f87171;
     }
-    .exp-result-badge.failed {
-        background: #fee2e2;
-        color: #b91c1c;
+    .exp-card-cancel-btn:disabled {
+        background-color: #fef2f2;
+        color: #fca5a5;
+        border-color: #fecaca;
+        cursor: not-allowed;
     }
-    .exp-result-badge.cancelled {
-        background: #f3f4f6;
-        color: #6b7280;
+    .exp-card-cancel-btn i {
+        font-size: 10px;
     }
 
-    /* Adjusted card layout for vertical stacking */
+    /* Experiment card - column layout */
     .exp-card-new {
         display: flex;
         flex-direction: column;
@@ -354,6 +328,89 @@
     .exp-card-new:last-child {
         margin-bottom: 0;
     }
+    .exp-card-columns {
+        display: flex;
+        align-items: flex-start;
+        gap: 16px;
+        margin-bottom: 8px;
+    }
+    /* Column 1: Experiment Info (30%) */
+    .exp-card-col-info {
+        width: 30%;
+        min-width: 0;
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+    }
+    .exp-card-info-text {
+        flex: 1;
+        min-width: 0;
+    }
+    .exp-card-name {
+        font-weight: 600;
+        font-size: 15px;
+        color: #111827;
+        margin-bottom: 2px;
+    }
+    .exp-card-custom-name {
+        font-weight: 400;
+        color: #6b7280;
+    }
+    .exp-card-exp-name {
+        font-size: 13px;
+        color: #374151;
+        margin-bottom: 2px;
+    }
+    .exp-card-description {
+        font-size: 12px;
+        color: #9ca3af;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .exp-card-times {
+        display: flex;
+        gap: 12px;
+        font-size: 11px;
+        color: #9ca3af;
+        margin-top: 4px;
+    }
+    .exp-card-times span {
+        color: #6b7280;
+    }
+    /* Column 2: Config Info (20%) */
+    .exp-card-col-config {
+        width: 20%;
+        min-width: 0;
+    }
+    .exp-card-config-item {
+        font-size: 12px;
+        font-weight: 400;
+        color: #374151;
+        margin-bottom: 2px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .exp-card-config-label {
+        font-weight: 600;
+        color: #6b7280;
+    }
+    /* Column 3: Training Params (30%) */
+    .exp-card-col-params {
+        width: 30%;
+        min-width: 0;
+        font-size: 12px;
+        color: #9ca3af;
+    }
+    /* Column 4: Actions (20%) */
+    .exp-card-col-actions {
+        width: 20%;
+        display: flex;
+        justify-content: flex-end;
+        align-items: flex-start;
+    }
+    /* Legacy support */
     .exp-card-header {
         display: flex;
         align-items: center;
@@ -1188,10 +1245,7 @@
                 <i class="fas fa-bolt"></i>
             </div>
             <h2 class="chapter-title">Quick Test</h2>
-            <div class="ml-auto flex gap-2">
-                <button onclick="openCompareModal()" class="btn btn-secondary btn-sm" style="width: 120px;">
-                    <i class="fas fa-columns mr-1"></i>Compare
-                </button>
+            <div class="ml-auto">
                 <button onclick="openNewExpWizard()" class="btn btn-primary btn-sm" style="width: 120px;">
                     <i class="fas fa-plus mr-1"></i>New Exp
                 </button>
@@ -1301,6 +1355,18 @@
         <div class="modal-body-wizard" style="max-height: calc(90vh - 200px); overflow-y: auto;">
             <!-- Step 1: Select Configurations -->
             <div id="wizardStep1" class="wizard-step active">
+                <!-- Experiment Metadata -->
+                <div class="mb-6 pb-6 border-b border-gray-200">
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Experiment Name <span class="text-gray-400 font-normal">(optional)</span></label>
+                        <input type="text" id="wizardExpName" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500" placeholder="e.g., Baseline with new features">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Description <span class="text-gray-400 font-normal">(optional)</span></label>
+                        <textarea id="wizardExpDescription" rows="3" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 resize-y" placeholder="Describe the purpose of this experiment..."></textarea>
+                    </div>
+                </div>
+
                 <!-- Feature Config Selection -->
                 <div class="mb-4">
                     <label class="block text-sm font-medium text-gray-700 mb-2">Feature Config</label>
@@ -2218,7 +2284,7 @@ function renderExperiments() {
 
 function renderExpCard(exp) {
     const statusIcons = {
-        'submitting': 'fa-clock',
+        'submitting': 'fa-spinner fa-spin',
         'running': 'fa-spinner fa-spin',
         'completed': 'fa-check',
         'failed': 'fa-times',
@@ -2228,100 +2294,80 @@ function renderExpCard(exp) {
     const statusClass = exp.status === 'submitting' ? 'submitting' : exp.status;
     const icon = statusIcons[exp.status] || 'fa-clock';
 
-    // Format time
-    const createdAt = new Date(exp.created_at);
-    const timeAgo = formatTimeAgo(createdAt);
+    // Build the progress bar
+    const stagesHtml = renderStagesBar(exp.stage_details || getDefaultStages());
 
-    // Duration or elapsed text
-    let durationText = timeAgo;
-    if (exp.status === 'completed' && exp.duration_seconds) {
-        durationText = `Completed ${timeAgo} · ${formatDuration(exp.duration_seconds)}`;
-    } else if ((exp.status === 'running' || exp.status === 'submitting') && exp.elapsed_seconds) {
-        durationText = `Started ${timeAgo} · Running ${formatDuration(exp.elapsed_seconds)}`;
-    } else if (exp.status === 'failed') {
-        durationText = `Failed ${timeAgo}`;
-    } else if (exp.status === 'cancelled') {
-        durationText = `Cancelled ${timeAgo}`;
-    }
+    // Truncate description to 50 chars
+    const descTruncated = exp.experiment_description
+        ? (exp.experiment_description.length > 50
+            ? exp.experiment_description.substring(0, 50) + '...'
+            : exp.experiment_description)
+        : '';
 
-    // Build the bottom section - always show progress bar + optional metrics/badge
-    let stagesHtml = renderStagesBar(exp.stage_details || getDefaultStages());
-    let resultHtml = '';
+    // Format Start and End times
+    const formatDateTime = (isoStr) => {
+        if (!isoStr) return '-';
+        const d = new Date(isoStr);
+        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' +
+               d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    };
+    const startTime = formatDateTime(exp.started_at || exp.created_at);
+    const endTime = exp.completed_at ? formatDateTime(exp.completed_at) : '-';
 
-    if (exp.status === 'completed') {
-        // Show metrics for completed experiments
-        if (exp.recall_at_100 != null) {
-            resultHtml = `
-                <div class="exp-card-result">
-                    <span class="exp-result-badge success">
-                        <i class="fas fa-check-circle"></i> Completed
-                    </span>
-                    <div class="exp-result-metric">
-                        <span class="exp-result-value">${(exp.recall_at_100 * 100).toFixed(1)}%</span>
-                        <span class="exp-result-label">Recall@100</span>
-                    </div>
-                </div>
-            `;
-        } else {
-            resultHtml = `
-                <div class="exp-card-result">
-                    <span class="exp-result-badge success">
-                        <i class="fas fa-check-circle"></i> Completed
-                    </span>
-                    <span class="exp-result-label">No metrics available</span>
-                </div>
-            `;
-        }
-    } else if (exp.status === 'failed') {
-        // Show failed badge
-        const failedStage = (exp.stage_details || []).find(s => s.status === 'failed');
-        const failedStageName = failedStage ? failedStage.name : (exp.current_stage || 'Unknown');
-        resultHtml = `
-            <div class="exp-card-result">
-                <span class="exp-result-badge failed">
-                    <i class="fas fa-times-circle"></i> Failed at ${failedStageName}
-                </span>
-            </div>
-        `;
-    } else if (exp.status === 'cancelled') {
-        resultHtml = `
-            <div class="exp-card-result">
-                <span class="exp-result-badge cancelled">
-                    <i class="fas fa-ban"></i> Cancelled
-                </span>
-            </div>
-        `;
-    }
-
-    const bottomHtml = stagesHtml + resultHtml;
+    // Show Cancel button - active only for running/submitting experiments
+    const isRunning = exp.status === 'running' || exp.status === 'submitting';
+    const cancelBtn = `<button class="exp-card-cancel-btn" onclick="cancelExpFromCard(event, ${exp.id})" ${isRunning ? '' : 'disabled'}>
+           <i class="fas fa-stop"></i> Cancel
+       </button>`;
 
     return `
         <div class="exp-card-new" onclick="openExpDetails(${exp.id})" data-exp-id="${exp.id}">
-            <div class="exp-card-header">
-                <div class="exp-card-status ${statusClass}">
-                    <i class="fas ${icon}"></i>
+            <div class="exp-card-columns">
+                <!-- Column 1: Experiment Info (30%) -->
+                <div class="exp-card-col-info">
+                    <div class="exp-card-status ${statusClass}">
+                        <i class="fas ${icon}"></i>
+                    </div>
+                    <div class="exp-card-info-text">
+                        <div class="exp-card-name">${exp.display_name}</div>
+                        ${exp.experiment_name ? `<div class="exp-card-exp-name">${exp.experiment_name}</div>` : ''}
+                        ${descTruncated ? `<div class="exp-card-description" title="${exp.experiment_description}">${descTruncated}</div>` : ''}
+                        <div class="exp-card-times">
+                            <div>Start: <span>${startTime}</span></div>
+                            <div>End: <span>${endTime}</span></div>
+                        </div>
+                    </div>
                 </div>
-                <div class="exp-card-body">
-                    <div class="exp-card-name">${exp.display_name}</div>
-                    <div class="exp-card-configs">${exp.feature_config_name} + ${exp.model_config_name}</div>
-                    <div class="exp-card-meta">${durationText}</div>
+                <!-- Column 2: Config Info (20%) -->
+                <div class="exp-card-col-config">
+                    <div class="exp-card-config-item"><span class="exp-card-config-label">Dataset:</span> ${exp.dataset_name || '-'}</div>
+                    <div class="exp-card-config-item"><span class="exp-card-config-label">Features:</span> ${exp.feature_config_name || '-'}</div>
+                    <div class="exp-card-config-item"><span class="exp-card-config-label">Model:</span> ${exp.model_config_name || '-'}</div>
+                </div>
+                <!-- Column 3: Training Params (30%) - placeholder -->
+                <div class="exp-card-col-params">
+                    <!-- Training params will be added later -->
+                </div>
+                <!-- Column 4: Actions (20%) -->
+                <div class="exp-card-col-actions">
+                    ${cancelBtn}
                 </div>
             </div>
-            ${bottomHtml}
+            ${stagesHtml}
         </div>
     `;
 }
 
 function renderStagesBar(stages) {
-    // Render the 6-stage progress bar
-    const stagesHtml = stages.map(stage => {
+    // Render the 6-stage progress bar (tensor-breakdown-bar style)
+    // Green gradient palette for completed stages - saturated enough for white text
+    const completedColors = ['#059669', '#10b981', '#22c55e', '#34d399', '#4ade80', '#6ee7b7'];
+
+    const stagesHtml = stages.map((stage, idx) => {
         const status = stage.status || 'pending';
-        return `
-            <div class="exp-stage ${status}">
-                <div class="exp-stage-indicator ${status}"></div>
-                <span class="exp-stage-label">${stage.name}</span>
-            </div>
-        `;
+        // Apply gradient color for completed stages based on position
+        const style = status === 'completed' ? `style="background: ${completedColors[idx % completedColors.length]}"` : '';
+        return `<div class="exp-stage-segment ${status}" ${style} title="${stage.name}">${stage.name}</div>`;
     }).join('');
 
     return `
@@ -2437,6 +2483,8 @@ function openNewExpWizard() {
 
     // Reset UI
     updateWizardUI();
+    document.getElementById('wizardExpName').value = '';
+    document.getElementById('wizardExpDescription').value = '';
     document.getElementById('wizardFeatureSelect').value = '';
     document.getElementById('wizardModelSelect').value = '';
     document.getElementById('wizardFeaturePreview').classList.add('hidden');
@@ -3082,7 +3130,10 @@ async function submitExperiment() {
         val_days: parseInt(document.getElementById('wizardValDays').value) || 7,
         test_days: parseInt(document.getElementById('wizardTestDays').value) || 7,
         // Hardware configuration
-        machine_type: document.getElementById('wizardMachineType').value || 'n1-standard-4'
+        machine_type: document.getElementById('wizardMachineType').value || 'n1-standard-4',
+        // Experiment metadata (optional)
+        experiment_name: document.getElementById('wizardExpName').value.trim(),
+        experiment_description: document.getElementById('wizardExpDescription').value.trim()
     };
 
     // Add rating column for ranking models
@@ -3398,6 +3449,42 @@ async function cancelExperiment() {
     } finally {
         btn.disabled = false;
         btn.querySelector('.btn-neu-inner').innerHTML = '<i class="fas fa-stop mr-2"></i>Cancel';
+    }
+}
+
+// Cancel from experiment card
+async function cancelExpFromCard(event, expId) {
+    event.stopPropagation(); // Prevent card click
+
+    if (!confirm('Cancel this experiment?')) return;
+
+    const btn = event.target.closest('button');
+    const originalHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+    try {
+        const response = await fetch(`/api/quick-tests/${expId}/cancel/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken')
+            }
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            await loadExperiments(pagination.page);
+            showSuccess('Experiment cancelled');
+        } else {
+            showError(data.error || 'Failed to cancel experiment');
+            btn.disabled = false;
+            btn.innerHTML = originalHtml;
+        }
+    } catch (error) {
+        showError('Failed to cancel: ' + error.message);
+        btn.disabled = false;
+        btn.innerHTML = originalHtml;
     }
 }
 

@@ -103,6 +103,8 @@ class ExperimentService:
         val_days: int = 7,
         test_days: int = 7,
         machine_type: str = 'n1-standard-4',
+        experiment_name: str = '',
+        experiment_description: str = '',
     ):
         """
         Submit a new Quick Test pipeline to Vertex AI.
@@ -144,6 +146,8 @@ class ExperimentService:
             val_days=val_days,
             test_days=test_days,
             machine_type=machine_type,
+            experiment_name=experiment_name,
+            experiment_description=experiment_description,
             status=QuickTest.STATUS_SUBMITTING,
         )
         # Assign sequential experiment number before saving

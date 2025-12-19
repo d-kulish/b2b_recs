@@ -37,6 +37,32 @@ This document provides **high-level specifications** for the Experiments domain.
 
 ## Recent Updates (December 2025)
 
+### Experiment View Modal (2025-12-19)
+
+**New Features:**
+
+1. **Comprehensive View Modal** - Click experiment card or View button to see full details
+   - Configuration: Feature Config, Model Config, Dataset
+   - Training Parameters: Epochs, Batch Size, LR, Sample %, Split Strategy, Hardware
+   - Pipeline Progress: 6-stage progress bar with real-time updates
+   - Results: Loss, Recall@10/50/100, Vocabulary statistics
+   - Technical Details: Database ID, Vertex Pipeline Job ID, Cloud Build ID, timestamps
+   - Error Section: Full error message for failed experiments
+
+2. **View Button** - Green button on experiment cards (above Cancel)
+   - Opens the View modal with full experiment details
+   - Alternative to clicking the card itself
+
+3. **Real-time Updates** - View modal polls for updates on running experiments
+   - Updates every 10 seconds
+   - Auto-stops polling when experiment completes
+
+4. **Styled Confirmation Dialog** - Cancel now uses styled modal instead of browser confirm()
+   - Matches the design of confirmation dialogs elsewhere in the app
+
+5. **Unified Backend Logging** - All experiment logs now show `Exp #N (id=X)` format
+   - Makes it easier to correlate UI and server logs
+
 ### Experiment Cards Redesign & Cancel (2025-12-19)
 
 **New Features:**
@@ -54,7 +80,7 @@ This document provides **high-level specifications** for the Experiments domain.
    - Column 1 (30%): Exp #, Name, Description, Start/End times
    - Column 2 (20%): Dataset, Features, Model
    - Column 3 (30%): Training params (placeholder)
-   - Column 4 (20%): Cancel button
+   - Column 4 (20%): View button, Cancel button
 
 4. **Progress Bar Styling** - Tensor-breakdown-bar style
    - 24px height with labels inside
@@ -1102,6 +1128,29 @@ MLFLOW_TRACKING_URI = os.environ.get('MLFLOW_TRACKING_URI', 'http://mlflow-serve
 - [x] **Helpful error messages**: Column mismatch errors include suggestions for correct column names
 
 **Result:** Users see real-time pipeline progress and get actionable error messages when column names don't match.
+
+### Phase 13: Experiment Cards Redesign & Cancel ✅ DONE (2025-12-19)
+> **Improved card layout and cancel functionality**
+
+- [x] **4-column layout**: Exp info (30%), Config (20%), Params placeholder (30%), Actions (20%)
+- [x] **Experiment name/description**: Optional fields in New Experiment wizard Step 1
+- [x] **Cancel button**: Active for running experiments, disabled for others
+- [x] **Progress bar styling**: Tensor-breakdown-bar with gradient green colors
+- [x] **Styled confirmation**: Cancel uses styled modal instead of browser confirm()
+
+**Result:** Experiment cards show more information in organized columns with cancel functionality.
+
+### Phase 14: Experiment View Modal ✅ DONE (2025-12-19)
+> **Comprehensive experiment details modal**
+
+- [x] **View modal**: Full experiment details (config, params, progress, results, technical details)
+- [x] **View button**: Green button on cards, opens View modal
+- [x] **Real-time polling**: View modal updates every 10s for running experiments
+- [x] **Code cleanup**: Removed old progress/results modals and unused functions
+- [x] **Unified logging**: Backend logs use `{display_name} (id={id})` format
+- [x] **Wizard scroll fix**: Step 2 now opens scrolled to top
+
+**Result:** Users can view comprehensive experiment details without leaving the page.
 
 ### Previously Completed ✅
 - [x] Create `model_experiments.html` page (placeholder)

@@ -804,21 +804,21 @@ if __name__ == "__main__":
         Returns:
             Updated QuickTest instance
         """
-        logger.info(f"QuickTest {quick_test.id}: Refreshing status (current: {quick_test.status})")
+        logger.info(f"{quick_test.display_name} (id={quick_test.id}): Refreshing status (current: {quick_test.status})")
 
         # Phase 1: If no Vertex AI job yet, check Cloud Build status
         if not quick_test.vertex_pipeline_job_name:
-            logger.info(f"QuickTest {quick_test.id}: No Vertex AI job yet, checking Cloud Build")
+            logger.info(f"{quick_test.display_name} (id={quick_test.id}): No Vertex AI job yet, checking Cloud Build")
             if quick_test.cloud_build_run_id:
                 self._check_cloud_build_result(quick_test)
             else:
-                logger.warning(f"QuickTest {quick_test.id}: No cloud_build_run_id, cannot check Cloud Build")
+                logger.warning(f"{quick_test.display_name} (id={quick_test.id}): No cloud_build_run_id, cannot check Cloud Build")
             # If still no vertex_pipeline_job_name after checking, return
             if not quick_test.vertex_pipeline_job_name:
-                logger.info(f"QuickTest {quick_test.id}: Still no Vertex AI job, Cloud Build may still be running")
+                logger.info(f"{quick_test.display_name} (id={quick_test.id}): Still no Vertex AI job, Cloud Build may still be running")
                 return quick_test
 
-        logger.info(f"QuickTest {quick_test.id}: Checking Vertex AI pipeline {quick_test.vertex_pipeline_job_id}")
+        logger.info(f"{quick_test.display_name} (id={quick_test.id}): Checking Vertex AI pipeline {quick_test.vertex_pipeline_job_id}")
 
         # Phase 2: Check Vertex AI pipeline status
         self._init_aiplatform()
@@ -846,12 +846,12 @@ if __name__ == "__main__":
             new_status = state_mapping.get(state, quick_test.status)
 
             if new_status != quick_test.status:
-                logger.info(f"QuickTest {quick_test.id}: Status changing from {quick_test.status} to {new_status}")
+                logger.info(f"{quick_test.display_name} (id={quick_test.id}): Status changing from {quick_test.status} to {new_status}")
                 quick_test.status = new_status
 
                 if new_status == quick_test.STATUS_COMPLETED:
                     quick_test.completed_at = timezone.now()
-                    logger.info(f"QuickTest {quick_test.id}: Pipeline completed, extracting results")
+                    logger.info(f"{quick_test.display_name} (id={quick_test.id}): Pipeline completed, extracting results")
                     # Extract results from GCS
                     self._extract_results(quick_test)
 
@@ -860,7 +860,7 @@ if __name__ == "__main__":
                     # Try to extract error message
                     if hasattr(pipeline_job, 'error') and pipeline_job.error:
                         quick_test.error_message = str(pipeline_job.error)
-                    logger.warning(f"QuickTest {quick_test.id}: Pipeline failed: {quick_test.error_message}")
+                    logger.warning(f"{quick_test.display_name} (id={quick_test.id}): Pipeline failed: {quick_test.error_message}")
 
                 quick_test.save()
 
@@ -868,7 +868,7 @@ if __name__ == "__main__":
             self._update_progress(quick_test, pipeline_job)
 
         except Exception as e:
-            logger.exception(f"Error refreshing status for QuickTest {quick_test.id}: {e}")
+            logger.exception(f"Error refreshing status for {quick_test.display_name} (id={quick_test.id}): {e}")
 
         return quick_test
 
@@ -939,7 +939,7 @@ if __name__ == "__main__":
                     'current_stage',
                     'progress_percent'
                 ])
-                logger.info(f"QuickTest {quick_test.id} pipeline submitted: {quick_test.vertex_pipeline_job_id}")
+                logger.info(f"{quick_test.display_name} (id={quick_test.id}) pipeline submitted: {quick_test.vertex_pipeline_job_id}")
             else:
                 # Cloud Build failed
                 quick_test.status = quick_test.STATUS_FAILED
@@ -964,10 +964,10 @@ if __name__ == "__main__":
                     'stage_details',
                     'current_stage'
                 ])
-                logger.warning(f"QuickTest {quick_test.id} Cloud Build failed: {quick_test.error_message}")
+                logger.warning(f"{quick_test.display_name} (id={quick_test.id}) Cloud Build failed: {quick_test.error_message}")
 
         except Exception as e:
-            logger.warning(f"Error checking Cloud Build result for QuickTest {quick_test.id}: {e}")
+            logger.warning(f"Error checking Cloud Build result for {quick_test.display_name} (id={quick_test.id}): {e}")
 
     def _extract_results(self, quick_test):
         """
@@ -1013,10 +1013,10 @@ if __name__ == "__main__":
                 if update_fields:
                     quick_test.save(update_fields=update_fields)
 
-                logger.info(f"Extracted results for QuickTest {quick_test.id}: {metrics}")
+                logger.info(f"Extracted results for {quick_test.display_name} (id={quick_test.id}): {metrics}")
 
         except Exception as e:
-            logger.warning(f"Error extracting results for QuickTest {quick_test.id}: {e}")
+            logger.warning(f"Error extracting results for {quick_test.display_name} (id={quick_test.id}): {e}")
 
     # Mapping from TFX component names to short display names
     STAGE_NAME_MAP = {
@@ -1044,7 +1044,7 @@ if __name__ == "__main__":
         """
         try:
             pipeline_state = pipeline_job.state.name
-            logger.info(f"QuickTest {quick_test.id}: Pipeline state is {pipeline_state}")
+            logger.info(f"{quick_test.display_name} (id={quick_test.id}): Pipeline state is {pipeline_state}")
 
             # Handle terminal pipeline states first (most reliable)
             if pipeline_state == 'PIPELINE_STATE_SUCCEEDED':
@@ -1059,7 +1059,7 @@ if __name__ == "__main__":
                 ]
                 current_stage = 'completed'
                 progress_percent = 100
-                logger.info(f"QuickTest {quick_test.id}: Pipeline SUCCEEDED, marking all stages complete")
+                logger.info(f"{quick_test.display_name} (id={quick_test.id}): Pipeline SUCCEEDED, marking all stages complete")
 
             elif pipeline_state in ('PIPELINE_STATE_FAILED', 'PIPELINE_STATE_CANCELLED'):
                 # Pipeline failed or cancelled - try to get task details to find which stage failed
@@ -1099,7 +1099,7 @@ if __name__ == "__main__":
                 current_stage = 'failed' if 'FAILED' in pipeline_state else 'cancelled'
                 completed_count = sum(1 for s in stage_details if s['status'] == 'completed')
                 progress_percent = int((completed_count / len(stage_details)) * 100)
-                logger.info(f"QuickTest {quick_test.id}: Pipeline {pipeline_state}")
+                logger.info(f"{quick_test.display_name} (id={quick_test.id}): Pipeline {pipeline_state}")
 
             else:
                 # Pipeline is still running - get detailed task status
@@ -1121,9 +1121,9 @@ if __name__ == "__main__":
 
                 # Log task statuses for debugging
                 if task_statuses:
-                    logger.info(f"QuickTest {quick_test.id}: Task statuses: {task_statuses}")
+                    logger.info(f"{quick_test.display_name} (id={quick_test.id}): Task statuses: {task_statuses}")
                 else:
-                    logger.warning(f"QuickTest {quick_test.id}: No task statuses available from Vertex AI")
+                    logger.warning(f"{quick_test.display_name} (id={quick_test.id}): No task statuses available from Vertex AI")
 
                 # Determine current stage (first non-completed stage)
                 current_stage = 'completed'
@@ -1148,10 +1148,10 @@ if __name__ == "__main__":
             quick_test.progress_percent = progress_percent
             quick_test.save(update_fields=['stage_details', 'current_stage', 'progress_percent'])
 
-            logger.info(f"QuickTest {quick_test.id}: Updated progress - stage={current_stage}, progress={progress_percent}%")
+            logger.info(f"{quick_test.display_name} (id={quick_test.id}): Updated progress - stage={current_stage}, progress={progress_percent}%")
 
         except Exception as e:
-            logger.exception(f"Error updating progress for QuickTest {quick_test.id}: {e}")
+            logger.exception(f"Error updating progress for {quick_test.display_name} (id={quick_test.id}): {e}")
 
     def _get_task_statuses(self, pipeline_job) -> dict:
         """
@@ -1278,10 +1278,10 @@ if __name__ == "__main__":
             quick_test.completed_at = timezone.now()
             quick_test.save(update_fields=['status', 'completed_at'])
 
-            logger.info(f"Cancelled QuickTest {quick_test.id}")
+            logger.info(f"Cancelled {quick_test.display_name} (id={quick_test.id})")
 
         except Exception as e:
-            logger.warning(f"Error cancelling QuickTest {quick_test.id}: {e}")
+            logger.warning(f"Error cancelling {quick_test.display_name} (id={quick_test.id}): {e}")
             quick_test.status = quick_test.STATUS_CANCELLED
             quick_test.error_message = f"Cancel error: {str(e)}"
             quick_test.save(update_fields=['status', 'error_message'])

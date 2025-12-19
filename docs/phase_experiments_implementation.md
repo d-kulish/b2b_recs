@@ -27,9 +27,10 @@ This document provides a **complete implementation guide** for building the Expe
 16. [Phase 11: Hardware Configuration & Dataflow](#phase-11-hardware-configuration--dataflow-december-2025)
 17. [Phase 12: Pipeline Progress Bar & Error Improvements](#phase-12-pipeline-progress-bar--error-improvements-december-2025)
 18. [Phase 13: Experiment Cards Redesign & Cancel](#phase-13-experiment-cards-redesign--cancel-december-2025)
-19. [File Reference](#file-reference)
-20. [API Reference](#api-reference)
-21. [Testing Guide](#testing-guide)
+19. [Phase 14: Experiment View Modal](#phase-14-experiment-view-modal-december-2025)
+20. [File Reference](#file-reference)
+21. [API Reference](#api-reference)
+22. [Testing Guide](#testing-guide)
 
 ---
 
@@ -87,6 +88,7 @@ Experiments Page = Analyze Quick Test results to find optimal parameters
 | **Phase 11** | ✅ Complete | Hardware Configuration & Dataflow (machine type selection, Dataflow for StatisticsGen/Transform) |
 | **Phase 12** | ✅ Complete | Pipeline Progress Bar & Error Improvements (stage progress bar, async Cloud Build, column validation) |
 | **Phase 13** | ✅ Complete | Experiment Cards Redesign & Cancel (4-column layout, name/description fields, cancel button, progress bar styling) |
+| **Phase 14** | ✅ Complete | Experiment View Modal (comprehensive details modal, polling for running experiments, View button on cards, old modal cleanup) |
 
 ### Cloud Build Implementation (December 2025)
 
@@ -4005,6 +4007,255 @@ const completedColors = ['#059669', '#10b981', '#22c55e', '#34d399', '#4ade80', 
 - [x] Verify progress bar gradient colors for completed stages
 - [x] Verify Start/End times display correctly
 - [x] Verify Dataset name displays in Config column
+
+---
+
+## Phase 14: Experiment View Modal (December 2025)
+
+This phase adds a comprehensive View modal for experiments, providing detailed information about each experiment without leaving the page.
+
+### Overview
+
+**Changes Implemented:**
+
+1. **View Modal** - Comprehensive modal showing all experiment details
+2. **View Button** - Green "View" button on experiment cards (above Cancel)
+3. **Styled Confirmation** - Cancel button uses styled modal instead of browser confirm()
+4. **Real-time Updates** - Polling for running experiments with auto-refresh
+5. **Code Cleanup** - Removed old progress/results modals and unused functions
+6. **Unified Logging** - All backend logs use format: `{display_name} (id={id})`
+
+### View Modal Design
+
+The View modal displays comprehensive experiment information in organized sections:
+
+**Header:**
+- Status icon (color-coded: green for completed, red for failed, orange for running)
+- Experiment name and description
+- Status badge
+
+**Configuration Section:**
+- Feature Config name
+- Model Config name
+- Dataset name
+
+**Training Parameters:**
+- Epochs, Batch Size, Learning Rate
+- Sample %, Split Strategy
+- Hardware tier, Machine type
+
+**Pipeline Progress (for running experiments):**
+- 6-stage progress bar (Compile, Examples, Stats, Schema, Transform, Train)
+- Color-coded status per stage
+- Elapsed time
+
+**Results (for completed experiments):**
+- Training metrics (Loss, Recall@10, Recall@50, Recall@100)
+- Vocabulary statistics (from artifact)
+- Duration
+
+**Technical Details (collapsed by default):**
+- Database ID, Vertex Pipeline Job ID
+- Cloud Build ID
+- GCS Artifacts path
+- Created/Started/Completed timestamps
+
+**Error Section (for failed experiments):**
+- Error message with red styling
+
+**Footer:**
+- Vertex AI Pipeline link
+- Cancel button (for running experiments)
+- Close button
+
+### JavaScript Implementation
+
+**New Functions Added:**
+
+```javascript
+// Modal state
+let viewModalExpId = null;
+let viewModalPollInterval = null;
+
+// Open experiment details
+async function openExpDetails(expId) {
+    const response = await fetch(`/api/quick-tests/${expId}/`);
+    const data = await response.json();
+    openExpViewModal(data.quick_test);
+}
+
+// Open the View modal
+function openExpViewModal(exp) {
+    viewModalExpId = exp.id;
+    populateExpViewModal(exp);
+    document.getElementById('expViewModal').classList.remove('hidden');
+    if (exp.status === 'running' || exp.status === 'submitting') {
+        startViewModalPolling(exp.id);
+    }
+}
+
+// Close the View modal
+function closeExpViewModal(event) {
+    if (event && event.target !== event.currentTarget) return;
+    document.getElementById('expViewModal').classList.add('hidden');
+    stopViewModalPolling();
+    viewModalExpId = null;
+}
+
+// Populate modal with experiment data
+function populateExpViewModal(exp) {
+    // Sets all modal fields based on experiment data
+    // Handles status-based styling
+    // Renders pipeline stages
+    // Shows/hides sections based on experiment state
+}
+
+// Polling for running experiments
+function startViewModalPolling(expId) {
+    viewModalPollInterval = setInterval(async () => {
+        const data = await fetch(`/api/quick-tests/${expId}/`).json();
+        if (data.success) {
+            populateExpViewModal(data.quick_test);
+            updateExpCard(data.quick_test);
+            if (['completed', 'failed', 'cancelled'].includes(data.quick_test.status)) {
+                stopViewModalPolling();
+            }
+        }
+    }, 10000);
+}
+
+// View from card (with event propagation stop)
+function viewExpFromCard(event, expId) {
+    event.stopPropagation();
+    openExpDetails(expId);
+}
+```
+
+### Styled Confirmation Modal
+
+Replaced browser's `confirm()` with styled modal for Cancel confirmation:
+
+```javascript
+function showConfirmModal({ title, message, confirmText, cancelText, type, onConfirm }) {
+    document.getElementById('confirmModalTitle').textContent = title;
+    document.getElementById('confirmModalMessage').innerHTML = message;
+    document.getElementById('confirmModalConfirmBtn').textContent = confirmText;
+    document.getElementById('confirmModalCancelBtn').textContent = cancelText;
+    // Set type-based styling (warning, error, info)
+    confirmModalCallback = onConfirm;
+    document.getElementById('confirmModal').classList.remove('hidden');
+}
+```
+
+### View Button Styling
+
+**CSS for View Button:**
+```css
+.exp-card-view-btn {
+    padding: 6px 12px;
+    background-color: #f0fdf4;
+    color: #16a34a;
+    border: 1px solid #bbf7d0;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+.exp-card-view-btn:hover {
+    background-color: #dcfce7;
+    border-color: #86efac;
+}
+```
+
+**Actions Column Layout:**
+```css
+.exp-card-col-actions {
+    width: 20%;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: flex-end;
+    gap: 6px;
+}
+```
+
+### Unified Logging Format
+
+Updated all backend logging to use consistent format: `{display_name} (id={id})`
+
+**Before:**
+```
+QuickTest 40: Starting pipeline
+```
+
+**After:**
+```
+Exp #9 (id=40): Starting pipeline
+```
+
+**Files Updated:**
+- `ml_platform/experiments/services.py` (23 log statements)
+- `ml_platform/experiments/api.py` (1 log statement)
+
+### Code Cleanup
+
+**Removed HTML:**
+- `expProgressModal` - Old progress modal (~50 lines)
+- `expResultsModal` - Old results modal (~50 lines)
+
+**Removed JavaScript:**
+- `openProgressModal()` - Old progress modal opener
+- `closeProgressModal()` - Old progress modal closer
+- `updateProgressUI()` - Old progress updater
+- `openResultsModal()` - Old results modal opener
+- `closeResultsModal()` - Old results modal closer
+- `startExpPolling()` - Old polling (modal-specific)
+- `stopExpPolling()` - Old polling stopper
+- `cancelExperiment()` - Old cancel (modal-specific)
+
+**Removed Variables:**
+- `currentExpId` - Replaced by `viewModalExpId`
+- `pollInterval` - Replaced by `viewModalPollInterval`
+
+### Wizard Scroll Fix
+
+Fixed issue where Step 2 of wizard opened scrolled to bottom:
+
+```javascript
+function updateWizardUI() {
+    // ... existing code ...
+
+    // Reset scroll position when changing steps
+    const modalBody = document.getElementById('wizardModalBody');
+    if (modalBody) {
+        modalBody.scrollTop = 0;
+    }
+}
+```
+
+### Files Modified
+
+| File | Changes |
+|------|---------|
+| `templates/.../model_experiments.html` | Added View modal HTML, CSS, JavaScript; Added View button to cards; Removed old modals and functions; Added scroll fix |
+| `ml_platform/experiments/services.py` | Updated 23 log statements to unified format |
+| `ml_platform/experiments/api.py` | Updated 1 log statement to unified format |
+
+### Testing Checklist
+
+- [x] Verify View button appears on all experiment cards (green, above Cancel)
+- [x] Verify clicking card or View button opens View modal
+- [x] Verify View modal shows all sections for completed experiment
+- [x] Verify View modal shows pipeline progress for running experiment
+- [x] Verify polling updates View modal and card in real-time
+- [x] Verify Cancel from View modal works with styled confirmation
+- [x] Verify old progress/results modals are completely removed
+- [x] Verify logs show unified format with display_name and id
+- [x] Verify wizard Step 2 opens scrolled to top
 
 ---
 

@@ -309,6 +309,29 @@
         font-size: 10px;
     }
 
+    /* View button for experiments */
+    .exp-card-view-btn {
+        padding: 6px 12px;
+        background-color: #f0fdf4;
+        color: #16a34a;
+        border: 1px solid #bbf7d0;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+    .exp-card-view-btn:hover {
+        background-color: #dcfce7;
+        border-color: #86efac;
+    }
+    .exp-card-view-btn i {
+        font-size: 10px;
+    }
+
     /* Experiment card - column layout */
     .exp-card-new {
         display: flex;
@@ -407,8 +430,10 @@
     .exp-card-col-actions {
         width: 20%;
         display: flex;
-        justify-content: flex-end;
-        align-items: flex-start;
+        flex-direction: column;
+        justify-content: flex-start;
+        align-items: flex-end;
+        gap: 6px;
     }
     /* Legacy support */
     .exp-card-header {
@@ -861,17 +886,17 @@
     }
     .hardware-options {
         display: flex;
-        gap: 12px;
+        gap: 10px;
         flex-wrap: wrap;
     }
     .hardware-card {
         flex: 1;
-        min-width: 140px;
-        max-width: 180px;
+        min-width: 120px;
+        max-width: 160px;
         background: white;
         border: 2px solid #e9d5ff;
         border-radius: 8px;
-        padding: 12px;
+        padding: 10px;
         cursor: pointer;
         transition: all 0.15s ease;
         position: relative;
@@ -932,45 +957,6 @@
         right: 8px;
         color: #9ca3af;
         font-size: 12px;
-    }
-    .hardware-gpu-section {
-        margin-top: 12px;
-        padding-top: 12px;
-        border-top: 1px solid #e9d5ff;
-    }
-    .hardware-gpu-label {
-        font-size: 11px;
-        color: #9333ea;
-        margin-bottom: 8px;
-        display: flex;
-        align-items: center;
-        gap: 6px;
-    }
-    .hardware-gpu-options {
-        display: flex;
-        gap: 8px;
-    }
-    .hardware-gpu-card {
-        flex: 1;
-        max-width: 120px;
-        background: #f9fafb;
-        border: 1px dashed #d1d5db;
-        border-radius: 6px;
-        padding: 8px 12px;
-        text-align: center;
-        opacity: 0.6;
-        cursor: not-allowed;
-        position: relative;
-    }
-    .hardware-gpu-card-name {
-        font-size: 12px;
-        font-weight: 600;
-        color: #6b7280;
-    }
-    .hardware-gpu-card-lock {
-        font-size: 10px;
-        color: #9ca3af;
-        margin-top: 2px;
     }
 
     /* Summary Section - Modern Card Layout */
@@ -1122,6 +1108,289 @@
     .quicktest-metric-value {
         font-weight: 600;
         color: #111827;
+    }
+
+    /* =========================================================================
+       Experiment View Modal Styles
+       ========================================================================= */
+    .exp-view-modal {
+        max-width: 700px;
+        max-height: 85vh;
+        display: flex;
+        flex-direction: column;
+    }
+    .exp-view-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .exp-view-status-icon {
+        width: 44px;
+        height: 44px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 18px;
+    }
+    .exp-view-status-icon.running {
+        background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+        color: #2563eb;
+    }
+    .exp-view-status-icon.completed {
+        background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
+        color: #16a34a;
+    }
+    .exp-view-status-icon.failed {
+        background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+        color: #dc2626;
+    }
+    .exp-view-status-icon.cancelled {
+        background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+        color: #6b7280;
+    }
+    .exp-view-status-icon.submitting {
+        background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+        color: #d97706;
+    }
+    .exp-view-body {
+        overflow-y: auto;
+        flex: 1;
+        padding: 16px 24px;
+    }
+    .exp-view-meta-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 13px;
+        color: #6b7280;
+        margin-bottom: 16px;
+        padding-bottom: 12px;
+        border-bottom: 1px solid #e5e7eb;
+    }
+    .exp-view-error-section {
+        background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+        border: 1px solid #fecaca;
+        border-radius: 10px;
+        padding: 14px 16px;
+        margin-bottom: 16px;
+    }
+    .exp-view-error-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: #991b1b;
+        font-weight: 600;
+        font-size: 14px;
+        margin-bottom: 8px;
+    }
+    .exp-view-error-section p {
+        color: #b91c1c;
+        font-size: 13px;
+        margin: 0;
+        line-height: 1.5;
+    }
+    .exp-view-section {
+        margin-bottom: 16px;
+    }
+    .exp-view-section-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: #374151;
+        margin-bottom: 10px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .exp-view-section-title i {
+        color: #6b7280;
+        font-size: 12px;
+    }
+    .exp-view-config-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+    }
+    .exp-view-config-item {
+        background: #f9fafb;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        padding: 10px 12px;
+        text-align: center;
+    }
+    .exp-view-config-label {
+        display: block;
+        font-size: 11px;
+        color: #6b7280;
+        text-transform: uppercase;
+        margin-bottom: 4px;
+    }
+    .exp-view-config-value {
+        font-size: 14px;
+        font-weight: 600;
+        color: #111827;
+    }
+    .exp-view-params-grid {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+    .exp-view-param {
+        background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+        border: 1px solid #bfdbfe;
+        border-radius: 8px;
+        padding: 8px 14px;
+        text-align: center;
+        min-width: 100px;
+    }
+    .exp-view-param-label {
+        display: block;
+        font-size: 10px;
+        color: #1e40af;
+        text-transform: uppercase;
+        margin-bottom: 2px;
+    }
+    .exp-view-param-value {
+        font-size: 14px;
+        font-weight: 600;
+        color: #1e3a8a;
+    }
+    .exp-view-stages-table {
+        display: grid;
+        grid-template-columns: repeat(6, 1fr);
+        gap: 8px;
+    }
+    .exp-view-stage {
+        text-align: center;
+        padding: 10px 6px;
+        border-radius: 8px;
+        border: 1px solid #e5e7eb;
+        background: #f9fafb;
+    }
+    .exp-view-stage.completed {
+        background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
+        border-color: #86efac;
+    }
+    .exp-view-stage.running {
+        background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+        border-color: #93c5fd;
+    }
+    .exp-view-stage.failed {
+        background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+        border-color: #fca5a5;
+    }
+    .exp-view-stage-icon {
+        font-size: 16px;
+        margin-bottom: 4px;
+    }
+    .exp-view-stage.completed .exp-view-stage-icon { color: #16a34a; }
+    .exp-view-stage.running .exp-view-stage-icon { color: #2563eb; }
+    .exp-view-stage.failed .exp-view-stage-icon { color: #dc2626; }
+    .exp-view-stage.pending .exp-view-stage-icon { color: #9ca3af; }
+    .exp-view-stage-name {
+        display: block;
+        font-size: 11px;
+        font-weight: 600;
+        color: #374151;
+        margin-bottom: 2px;
+    }
+    .exp-view-stage-duration {
+        display: block;
+        font-size: 10px;
+        color: #6b7280;
+    }
+    .exp-view-metrics-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 12px;
+    }
+    .exp-view-metric {
+        background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+        border: 1px solid #86efac;
+        border-radius: 10px;
+        padding: 12px;
+        text-align: center;
+    }
+    .exp-view-metric-label {
+        display: block;
+        font-size: 11px;
+        color: #166534;
+        text-transform: uppercase;
+        margin-bottom: 4px;
+    }
+    .exp-view-metric-value {
+        font-size: 18px;
+        font-weight: 700;
+        color: #15803d;
+    }
+    .exp-view-vocab-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+        gap: 10px;
+    }
+    .exp-view-vocab-item {
+        background: #faf5ff;
+        border: 1px solid #e9d5ff;
+        border-radius: 8px;
+        padding: 10px 12px;
+    }
+    .exp-view-vocab-name {
+        font-size: 12px;
+        font-weight: 600;
+        color: #6b21a8;
+        margin-bottom: 2px;
+    }
+    .exp-view-vocab-size {
+        font-size: 14px;
+        font-weight: 700;
+        color: #7c3aed;
+    }
+    .exp-view-technical {
+        background: #f9fafb;
+        border-radius: 10px;
+        padding: 12px 14px;
+        margin-top: 8px;
+    }
+    .exp-view-collapsible {
+        cursor: pointer;
+        user-select: none;
+        margin-bottom: 0;
+    }
+    .exp-view-collapsible:hover {
+        color: #111827;
+    }
+    .exp-view-collapse-icon {
+        margin-left: auto;
+        transition: transform 0.2s ease;
+    }
+    .exp-view-collapse-icon.collapsed {
+        transform: rotate(-90deg);
+    }
+    .exp-view-technical-content {
+        margin-top: 12px;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+    }
+    .exp-view-technical-content.collapsed {
+        display: none;
+    }
+    .exp-view-technical-item {
+        font-size: 12px;
+    }
+    .exp-view-technical-label {
+        color: #6b7280;
+        display: block;
+        margin-bottom: 2px;
+    }
+    .exp-view-technical-value {
+        color: #111827;
+        font-weight: 500;
+    }
+    .exp-view-technical-path {
+        font-family: monospace;
+        font-size: 11px;
+        word-break: break-all;
     }
 
     /* =========================================================================
@@ -1352,7 +1621,7 @@
         </div>
 
         <!-- Modal Body -->
-        <div class="modal-body-wizard" style="max-height: calc(90vh - 200px); overflow-y: auto;">
+        <div id="wizardModalBody" class="modal-body-wizard" style="max-height: calc(90vh - 200px); overflow-y: auto;">
             <!-- Step 1: Select Configurations -->
             <div id="wizardStep1" class="wizard-step active">
                 <!-- Experiment Metadata -->
@@ -1585,24 +1854,24 @@
                             <label style="color: #1e40af; font-size: 12px; display: block; margin-bottom: 6px;">Epochs</label>
                             <div class="flex items-center gap-2">
                                 <button type="button" class="param-btn" data-param="epochs" data-value="5" onclick="setParam('epochs', 5)">5</button>
-                                <button type="button" class="param-btn active" data-param="epochs" data-value="10" onclick="setParam('epochs', 10)">10</button>
-                                <button type="button" class="param-btn" data-param="epochs" data-value="25" onclick="setParam('epochs', 25)">25</button>
+                                <button type="button" class="param-btn" data-param="epochs" data-value="10" onclick="setParam('epochs', 10)">10</button>
+                                <button type="button" class="param-btn active" data-param="epochs" data-value="25" onclick="setParam('epochs', 25)">25</button>
                                 <button type="button" class="param-btn" data-param="epochs" data-value="50" onclick="setParam('epochs', 50)">50</button>
                                 <button type="button" class="param-btn" data-param="epochs" data-value="100" onclick="setParam('epochs', 100)">100</button>
                                 <span class="text-gray-400 text-sm px-1">or</span>
-                                <input type="number" id="wizardEpochs" class="param-input" value="10" min="1" max="500" onchange="onParamInputChange('epochs')">
+                                <input type="number" id="wizardEpochs" class="param-input" value="25" min="1" max="500" onchange="onParamInputChange('epochs')">
                             </div>
                         </div>
                         <!-- Batch Size -->
                         <div>
                             <label style="color: #1e40af; font-size: 12px; display: block; margin-bottom: 6px;">Batch Size</label>
                             <div class="flex items-center gap-2">
-                                <button type="button" class="param-btn" data-param="batchSize" data-value="1024" onclick="setParam('batchSize', 1024)">1024</button>
+                                <button type="button" class="param-btn active" data-param="batchSize" data-value="1024" onclick="setParam('batchSize', 1024)">1024</button>
                                 <button type="button" class="param-btn" data-param="batchSize" data-value="2048" onclick="setParam('batchSize', 2048)">2048</button>
-                                <button type="button" class="param-btn active" data-param="batchSize" data-value="4096" onclick="setParam('batchSize', 4096)">4096</button>
+                                <button type="button" class="param-btn" data-param="batchSize" data-value="4096" onclick="setParam('batchSize', 4096)">4096</button>
                                 <button type="button" class="param-btn" data-param="batchSize" data-value="8192" onclick="setParam('batchSize', 8192)">8192</button>
                                 <span class="text-gray-400 text-sm px-1">or</span>
-                                <input type="number" id="wizardBatchSize" class="param-input" value="4096" min="128" max="65536" step="128" onchange="onParamInputChange('batchSize')">
+                                <input type="number" id="wizardBatchSize" class="param-input" value="1024" min="128" max="65536" step="128" onchange="onParamInputChange('batchSize')">
                             </div>
                         </div>
                         <!-- Learning Rate -->
@@ -1610,11 +1879,11 @@
                             <label style="color: #1e40af; font-size: 12px; display: block; margin-bottom: 6px;">Learning Rate</label>
                             <div class="flex items-center gap-2">
                                 <button type="button" class="param-btn" data-param="learningRate" data-value="0.001" onclick="setParam('learningRate', 0.001)">0.001</button>
-                                <button type="button" class="param-btn" data-param="learningRate" data-value="0.01" onclick="setParam('learningRate', 0.01)">0.01</button>
+                                <button type="button" class="param-btn active" data-param="learningRate" data-value="0.01" onclick="setParam('learningRate', 0.01)">0.01</button>
                                 <button type="button" class="param-btn" data-param="learningRate" data-value="0.05" onclick="setParam('learningRate', 0.05)">0.05</button>
-                                <button type="button" class="param-btn active" data-param="learningRate" data-value="0.1" onclick="setParam('learningRate', 0.1)">0.1</button>
+                                <button type="button" class="param-btn" data-param="learningRate" data-value="0.1" onclick="setParam('learningRate', 0.1)">0.1</button>
                                 <span class="text-gray-400 text-sm px-1">or</span>
-                                <input type="number" id="wizardLearningRate" class="param-input" value="0.1" min="0.0001" max="1.0" step="0.001" onchange="onParamInputChange('learningRate')">
+                                <input type="number" id="wizardLearningRate" class="param-input" value="0.01" min="0.0001" max="1.0" step="0.001" onchange="onParamInputChange('learningRate')">
                             </div>
                         </div>
                     </div>
@@ -1654,20 +1923,17 @@
                             <div class="hardware-card-type">n1-standard-16</div>
                             <div class="hardware-card-specs">16 vCPU<br>60 GB RAM</div>
                         </div>
-                    </div>
-                    <div class="hardware-gpu-section">
-                        <div class="hardware-gpu-label">
-                            <i class="fas fa-bolt"></i> GPU Acceleration <span style="font-size: 10px; color: #9ca3af;">(coming soon)</span>
+                        <div class="hardware-card disabled" title="GPU acceleration coming soon">
+                            <div class="hardware-card-lock"><i class="fas fa-lock"></i></div>
+                            <div class="hardware-card-title">GPU T4</div>
+                            <div class="hardware-card-type">n1-standard-4 + T4</div>
+                            <div class="hardware-card-specs">4 vCPU, 15 GB RAM<br>16 GB GPU</div>
                         </div>
-                        <div class="hardware-gpu-options">
-                            <div class="hardware-gpu-card" title="GPU acceleration coming soon">
-                                <div class="hardware-gpu-card-name">NVIDIA T4</div>
-                                <div class="hardware-gpu-card-lock"><i class="fas fa-lock"></i></div>
-                            </div>
-                            <div class="hardware-gpu-card" title="GPU acceleration coming soon">
-                                <div class="hardware-gpu-card-name">NVIDIA V100</div>
-                                <div class="hardware-gpu-card-lock"><i class="fas fa-lock"></i></div>
-                            </div>
+                        <div class="hardware-card disabled" title="GPU acceleration coming soon">
+                            <div class="hardware-card-lock"><i class="fas fa-lock"></i></div>
+                            <div class="hardware-card-title">GPU V100</div>
+                            <div class="hardware-card-type">n1-standard-8 + V100</div>
+                            <div class="hardware-card-specs">8 vCPU, 30 GB RAM<br>16 GB GPU</div>
                         </div>
                     </div>
                 </div>
@@ -1698,15 +1964,15 @@
                         <div class="exp-summary-params">
                             <div class="exp-summary-param">
                                 <span class="exp-summary-param-label">Epochs</span>
-                                <span class="exp-summary-param-value" id="wizardSummaryEpochs">10</span>
+                                <span class="exp-summary-param-value" id="wizardSummaryEpochs">25</span>
                             </div>
                             <div class="exp-summary-param">
                                 <span class="exp-summary-param-label">Batch Size</span>
-                                <span class="exp-summary-param-value" id="wizardSummaryBatch">4096</span>
+                                <span class="exp-summary-param-value" id="wizardSummaryBatch">1024</span>
                             </div>
                             <div class="exp-summary-param">
                                 <span class="exp-summary-param-label">Learning Rate</span>
-                                <span class="exp-summary-param-value" id="wizardSummaryLR">0.1</span>
+                                <span class="exp-summary-param-value" id="wizardSummaryLR">0.01</span>
                             </div>
                             <div class="exp-summary-param" style="background: #faf5ff; border: 1px solid #e9d5ff;">
                                 <span class="exp-summary-param-label" style="color: #7c3aed;">Hardware</span>
@@ -1734,111 +2000,6 @@
                 </button>
                 <button type="button" class="btn-neu btn-neu-action btn-neu-cancel" onclick="closeNewExpWizard()">
                     <span class="btn-neu-inner">Cancel</span>
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- ============================================================================
-     PROGRESS MODAL
-     ============================================================================ -->
-<div id="expProgressModal" class="modal-overlay hidden">
-    <div class="modal-container" style="max-width: 500px;">
-        <div class="modal-header">
-            <div class="modal-header-icon info">
-                <i class="fas fa-cog fa-spin"></i>
-            </div>
-            <h3 class="modal-header-title">Experiment Running</h3>
-        </div>
-        <div class="modal-body">
-            <p class="text-sm text-gray-600 mb-4">
-                <span id="progressExpName" class="font-semibold"></span><br>
-                <span class="text-gray-500" id="progressConfigs"></span>
-            </p>
-
-            <!-- Progress Bar -->
-            <div class="quicktest-progress-bar mb-4">
-                <div class="quicktest-progress-fill animated" id="progressBar" style="width: 0%">
-                    <span class="quicktest-progress-text" id="progressText">0%</span>
-                </div>
-            </div>
-
-            <!-- Pipeline Stages -->
-            <h4 class="font-medium text-gray-900 mb-3">Pipeline Stages</h4>
-            <div id="progressStages">
-                <!-- Populated by JavaScript -->
-            </div>
-
-            <!-- Elapsed Time -->
-            <div class="mt-4 text-sm text-gray-500">
-                <span>Elapsed: </span>
-                <span id="progressElapsed">0:00</span>
-            </div>
-        </div>
-        <div class="modal-footer-wizard-neu">
-            <div class="footer-left"></div>
-            <div class="footer-right">
-                <button type="button" class="btn-neu btn-neu-action btn-neu-secondary" onclick="cancelExperiment()" id="progressCancelBtn">
-                    <span class="btn-neu-inner"><i class="fas fa-stop mr-2"></i>Cancel</span>
-                </button>
-                <button type="button" class="btn-neu btn-neu-action btn-neu-cancel" onclick="closeProgressModal()">
-                    <span class="btn-neu-inner">Close</span>
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- ============================================================================
-     RESULTS MODAL
-     ============================================================================ -->
-<div id="expResultsModal" class="modal-overlay hidden">
-    <div class="modal-container" style="max-width: 600px;">
-        <div class="modal-header">
-            <div class="modal-header-icon" id="resultsStatusIcon">
-                <i class="fas fa-check"></i>
-            </div>
-            <h3 class="modal-header-title">Experiment Results</h3>
-            <button type="button" class="modal-close-btn" onclick="closeResultsModal()">
-                <i class="fas fa-times"></i>
-            </button>
-        </div>
-        <div class="modal-body">
-            <p class="text-sm text-gray-600 mb-4">
-                <span id="resultsExpName" class="font-semibold"></span><br>
-                <span class="text-gray-500" id="resultsConfigs"></span>
-            </p>
-
-            <!-- Status Badge -->
-            <div class="mb-4" id="resultsStatusBadge"></div>
-
-            <!-- Metrics -->
-            <h4 class="font-medium text-gray-900 mb-3">Training Metrics</h4>
-            <div id="resultsMetrics" class="mb-4">
-                <!-- Populated by JavaScript -->
-            </div>
-
-            <!-- Error Section (if failed) -->
-            <div id="resultsErrorSection" class="hidden bg-red-50 rounded-lg p-4">
-                <h4 class="font-medium text-red-900 mb-2">Error Details</h4>
-                <p class="text-sm text-red-700" id="resultsErrorMessage"></p>
-            </div>
-
-            <!-- Duration -->
-            <div class="mt-4 text-sm text-gray-500">
-                Duration: <span id="resultsDuration">-</span>
-            </div>
-        </div>
-        <div class="modal-footer-wizard-neu">
-            <div class="footer-left">
-                <a href="#" id="resultsVertexLink" target="_blank" class="text-sm text-blue-600 hover:text-blue-800">
-                    <i class="fas fa-external-link-alt mr-1"></i>View in Vertex AI
-                </a>
-            </div>
-            <div class="footer-right">
-                <button type="button" class="btn-neu btn-neu-action btn-neu-cancel" onclick="closeResultsModal()">
-                    <span class="btn-neu-inner">Close</span>
                 </button>
             </div>
         </div>
@@ -1876,6 +2037,235 @@
         </div>
     </div>
 </div>
+
+<!-- =============================================================================
+     CONFIRMATION MODAL (Reusable styled confirmation dialog)
+     ============================================================================ -->
+<div id="confirmModal" class="modal-overlay hidden">
+    <div class="modal-container modal-container-sm">
+        <div class="modal-header">
+            <div id="confirmModalIcon" class="modal-header-icon warning">
+                <i class="fas fa-exclamation-triangle text-xl"></i>
+            </div>
+            <h3 id="confirmModalTitle" class="modal-header-title">Confirm Action</h3>
+        </div>
+        <div class="modal-body">
+            <p id="confirmModalMessage">Are you sure you want to proceed?</p>
+        </div>
+        <div class="modal-footer-wizard-neu">
+            <div class="footer-left"></div>
+            <div class="footer-right">
+                <button id="confirmModalConfirmBtn" class="btn-neu btn-neu-action btn-neu-cancel">
+                    <span class="btn-neu-inner">Confirm</span>
+                </button>
+                <button id="confirmModalCancelBtn" class="btn-neu btn-neu-action btn-neu-secondary">
+                    <span class="btn-neu-inner">Cancel</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================================
+     EXPERIMENT VIEW MODAL (Comprehensive details view)
+     ============================================================================ -->
+<div id="expViewModal" class="modal-overlay hidden" onclick="closeExpViewModal(event)">
+    <div class="modal-container exp-view-modal" onclick="event.stopPropagation()">
+        <!-- Header -->
+        <div class="modal-header exp-view-header">
+            <div class="flex items-center gap-3">
+                <div class="exp-view-status-icon" id="expViewStatusIcon">
+                    <i class="fas fa-flask"></i>
+                </div>
+                <div>
+                    <h3 class="modal-header-title" id="expViewTitle">Exp #1</h3>
+                    <p class="text-sm text-gray-500" id="expViewSubtitle"></p>
+                </div>
+            </div>
+            <div class="flex items-center gap-3">
+                <span id="expViewStatusBadge" class="status-badge"></span>
+                <button type="button" class="modal-close-btn" onclick="closeExpViewModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Body -->
+        <div class="modal-body exp-view-body">
+            <!-- Duration & Meta Row -->
+            <div class="exp-view-meta-row" id="expViewMetaRow">
+                <span id="expViewDuration"></span>
+                <span id="expViewCreatedBy"></span>
+            </div>
+
+            <!-- Error Section (shown for failed experiments) -->
+            <div id="expViewErrorSection" class="exp-view-error-section hidden">
+                <div class="exp-view-error-header">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <span>Pipeline Failed</span>
+                </div>
+                <p id="expViewErrorMessage"></p>
+            </div>
+
+            <!-- Configuration Section -->
+            <div class="exp-view-section">
+                <h4 class="exp-view-section-title">
+                    <i class="fas fa-cogs"></i> Configuration
+                </h4>
+                <div class="exp-view-config-grid">
+                    <div class="exp-view-config-item">
+                        <span class="exp-view-config-label">Dataset</span>
+                        <span class="exp-view-config-value" id="expViewDataset">-</span>
+                    </div>
+                    <div class="exp-view-config-item">
+                        <span class="exp-view-config-label">Feature Config</span>
+                        <span class="exp-view-config-value" id="expViewFeatureConfig">-</span>
+                    </div>
+                    <div class="exp-view-config-item">
+                        <span class="exp-view-config-label">Model Config</span>
+                        <span class="exp-view-config-value" id="expViewModelConfig">-</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Data Sampling Section -->
+            <div class="exp-view-section">
+                <h4 class="exp-view-section-title">
+                    <i class="fas fa-database"></i> Data Sampling
+                </h4>
+                <div class="exp-view-params-grid">
+                    <div class="exp-view-param">
+                        <span class="exp-view-param-label">Sample</span>
+                        <span class="exp-view-param-value" id="expViewSample">100%</span>
+                    </div>
+                    <div class="exp-view-param">
+                        <span class="exp-view-param-label">Split Strategy</span>
+                        <span class="exp-view-param-value" id="expViewSplit">Random 80/20</span>
+                    </div>
+                    <div class="exp-view-param" id="expViewDateColumnWrapper" style="display: none;">
+                        <span class="exp-view-param-label">Date Column</span>
+                        <span class="exp-view-param-value" id="expViewDateColumn">-</span>
+                    </div>
+                    <div class="exp-view-param" id="expViewHoldoutWrapper" style="display: none;">
+                        <span class="exp-view-param-label">Holdout Days</span>
+                        <span class="exp-view-param-value" id="expViewHoldout">-</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Training Parameters Section -->
+            <div class="exp-view-section">
+                <h4 class="exp-view-section-title">
+                    <i class="fas fa-sliders-h"></i> Training Parameters
+                </h4>
+                <div class="exp-view-params-grid">
+                    <div class="exp-view-param">
+                        <span class="exp-view-param-label">Epochs</span>
+                        <span class="exp-view-param-value" id="expViewEpochs">10</span>
+                    </div>
+                    <div class="exp-view-param">
+                        <span class="exp-view-param-label">Batch Size</span>
+                        <span class="exp-view-param-value" id="expViewBatchSize">4096</span>
+                    </div>
+                    <div class="exp-view-param">
+                        <span class="exp-view-param-label">Learning Rate</span>
+                        <span class="exp-view-param-value" id="expViewLearningRate">0.01</span>
+                    </div>
+                    <div class="exp-view-param">
+                        <span class="exp-view-param-label">Hardware</span>
+                        <span class="exp-view-param-value" id="expViewHardware">Small</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pipeline Progress Section -->
+            <div class="exp-view-section">
+                <h4 class="exp-view-section-title">
+                    <i class="fas fa-stream"></i> Pipeline Progress
+                </h4>
+                <!-- Progress Bar (for running experiments) -->
+                <div id="expViewProgressBarWrapper" class="mb-3" style="display: none;">
+                    <div class="quicktest-progress-bar">
+                        <div class="quicktest-progress-fill animated" id="expViewProgressBar" style="width: 0%">
+                            <span class="quicktest-progress-text" id="expViewProgressText">0%</span>
+                        </div>
+                    </div>
+                </div>
+                <!-- Stages Table -->
+                <div class="exp-view-stages-table" id="expViewStagesTable">
+                    <!-- Populated by JavaScript -->
+                </div>
+            </div>
+
+            <!-- Results Section (shown for completed experiments) -->
+            <div id="expViewResultsSection" class="exp-view-section hidden">
+                <h4 class="exp-view-section-title">
+                    <i class="fas fa-chart-line"></i> Results
+                </h4>
+                <div class="exp-view-metrics-grid" id="expViewMetrics">
+                    <!-- Populated by JavaScript -->
+                </div>
+            </div>
+
+            <!-- Vocabulary Stats Section -->
+            <div id="expViewVocabSection" class="exp-view-section hidden">
+                <h4 class="exp-view-section-title">
+                    <i class="fas fa-spell-check"></i> Vocabulary Statistics
+                </h4>
+                <div class="exp-view-vocab-grid" id="expViewVocabStats">
+                    <!-- Populated by JavaScript -->
+                </div>
+            </div>
+
+            <!-- Technical Details Section (collapsible) -->
+            <div class="exp-view-section exp-view-technical">
+                <h4 class="exp-view-section-title exp-view-collapsible" onclick="toggleExpViewTechnical()">
+                    <i class="fas fa-wrench"></i> Technical Details
+                    <i class="fas fa-chevron-down exp-view-collapse-icon" id="expViewTechnicalIcon"></i>
+                </h4>
+                <div id="expViewTechnicalContent" class="exp-view-technical-content">
+                    <div class="exp-view-technical-item">
+                        <span class="exp-view-technical-label">Vertex Pipeline ID</span>
+                        <span class="exp-view-technical-value" id="expViewVertexId">-</span>
+                    </div>
+                    <div class="exp-view-technical-item">
+                        <span class="exp-view-technical-label">GCS Artifacts</span>
+                        <span class="exp-view-technical-value exp-view-technical-path" id="expViewGcsPath">-</span>
+                    </div>
+                    <div class="exp-view-technical-item">
+                        <span class="exp-view-technical-label">Created</span>
+                        <span class="exp-view-technical-value" id="expViewCreatedAt">-</span>
+                    </div>
+                    <div class="exp-view-technical-item">
+                        <span class="exp-view-technical-label">Started</span>
+                        <span class="exp-view-technical-value" id="expViewStartedAt">-</span>
+                    </div>
+                    <div class="exp-view-technical-item">
+                        <span class="exp-view-technical-label">Completed</span>
+                        <span class="exp-view-technical-value" id="expViewCompletedAt">-</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="modal-footer-wizard-neu">
+            <div class="footer-left">
+                <a href="#" id="expViewVertexLink" target="_blank" class="text-sm text-blue-600 hover:text-blue-800" style="display: none;">
+                    <i class="fas fa-external-link-alt mr-1"></i>View in Vertex AI
+                </a>
+            </div>
+            <div class="footer-right">
+                <button type="button" id="expViewCancelBtn" class="btn-neu btn-neu-action btn-neu-secondary" onclick="cancelFromViewModal()" style="display: none;">
+                    <span class="btn-neu-inner"><i class="fas fa-stop mr-2"></i>Cancel</span>
+                </button>
+                <button type="button" class="btn-neu btn-neu-action btn-neu-cancel" onclick="closeExpViewModal()">
+                    <span class="btn-neu-inner">Close</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -1898,9 +2288,7 @@ let selectedModelConfig = null;
 let datasetEstimatedRows = null;  // Estimated rows from selected feature config's dataset
 let datasetDateDays = null;  // Number of days in dataset for split strategy calculations
 
-// Polling
-let currentExpId = null;
-let pollInterval = null;
+// Misc
 let searchDebounceTimer = null;
 
 // Data type constants
@@ -1909,6 +2297,106 @@ const DATA_TYPES = {
     text: { label: 'Text', icon: 'font' },
     temporal: { label: 'Temporal', icon: 'calendar' }
 };
+
+// =============================================================================
+// CONFIRMATION MODAL FUNCTIONS
+// =============================================================================
+
+/**
+ * Show confirmation modal with custom title, message, and callbacks
+ * @param {Object} options - Modal configuration
+ * @param {string} options.title - Modal title
+ * @param {string} options.message - Modal message (HTML supported)
+ * @param {string} options.confirmText - Text for confirm button (default: "Confirm")
+ * @param {string} options.cancelText - Text for cancel button (default: "Cancel")
+ * @param {string} options.type - Modal type: 'danger', 'warning', 'info', 'success' (default: 'warning')
+ * @param {Function} options.onConfirm - Callback when confirmed
+ * @param {Function} options.onCancel - Callback when cancelled (optional)
+ */
+function showConfirmModal(options) {
+    const modal = document.getElementById('confirmModal');
+    const icon = document.getElementById('confirmModalIcon');
+    const title = document.getElementById('confirmModalTitle');
+    const message = document.getElementById('confirmModalMessage');
+    const confirmBtn = document.getElementById('confirmModalConfirmBtn');
+    const cancelBtn = document.getElementById('confirmModalCancelBtn');
+
+    // Set content
+    title.textContent = options.title || 'Confirm Action';
+    message.innerHTML = options.message || 'Are you sure you want to proceed?';
+
+    // Update inner span text for neumorphic buttons
+    const confirmInner = confirmBtn.querySelector('.btn-neu-inner');
+    const cancelInner = cancelBtn.querySelector('.btn-neu-inner');
+    if (confirmInner) confirmInner.textContent = options.confirmText || 'Confirm';
+    if (cancelInner) cancelInner.textContent = options.cancelText || 'Cancel';
+
+    // Set icon and button type
+    const type = options.type || 'warning';
+    icon.className = `modal-header-icon ${type}`;
+
+    // Update icon based on type
+    const iconElement = icon.querySelector('i');
+    const baseClasses = 'btn-neu btn-neu-action';
+
+    if (type === 'danger') {
+        iconElement.className = 'fas fa-exclamation-triangle text-xl';
+        confirmBtn.className = `${baseClasses} btn-neu-cancel`;
+    } else if (type === 'warning') {
+        iconElement.className = 'fas fa-exclamation-circle text-xl';
+        confirmBtn.className = `${baseClasses} btn-neu-warning`;
+    } else if (type === 'info') {
+        iconElement.className = 'fas fa-info-circle text-xl';
+        confirmBtn.className = `${baseClasses} btn-neu-nav-wide`;
+    } else if (type === 'success') {
+        iconElement.className = 'fas fa-check-circle text-xl';
+        confirmBtn.className = `${baseClasses} btn-neu-save`;
+    }
+
+    // Remove old event listeners by cloning
+    const newConfirmBtn = confirmBtn.cloneNode(true);
+    const newCancelBtn = cancelBtn.cloneNode(true);
+    confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+    cancelBtn.parentNode.replaceChild(newCancelBtn, cancelBtn);
+
+    // Add new event listeners
+    newConfirmBtn.addEventListener('click', () => {
+        hideConfirmModal();
+        if (options.onConfirm) options.onConfirm();
+    });
+
+    newCancelBtn.addEventListener('click', () => {
+        hideConfirmModal();
+        if (options.onCancel) options.onCancel();
+    });
+
+    // Show modal
+    modal.classList.remove('hidden');
+
+    // Close on overlay click
+    modal.addEventListener('click', function overlayClick(e) {
+        if (e.target === modal) {
+            hideConfirmModal();
+            if (options.onCancel) options.onCancel();
+            modal.removeEventListener('click', overlayClick);
+        }
+    });
+
+    // Close on ESC key
+    function escapeHandler(e) {
+        if (e.key === 'Escape') {
+            hideConfirmModal();
+            if (options.onCancel) options.onCancel();
+            document.removeEventListener('keydown', escapeHandler);
+        }
+    }
+    document.addEventListener('keydown', escapeHandler);
+}
+
+function hideConfirmModal() {
+    const modal = document.getElementById('confirmModal');
+    modal.classList.add('hidden');
+}
 
 // =============================================================================
 // FEATURE CONFIG HELPER FUNCTIONS
@@ -2316,6 +2804,9 @@ function renderExpCard(exp) {
 
     // Show Cancel button - active only for running/submitting experiments
     const isRunning = exp.status === 'running' || exp.status === 'submitting';
+    const viewBtn = `<button class="exp-card-view-btn" onclick="viewExpFromCard(event, ${exp.id})">
+           <i class="fas fa-eye"></i> View
+       </button>`;
     const cancelBtn = `<button class="exp-card-cancel-btn" onclick="cancelExpFromCard(event, ${exp.id})" ${isRunning ? '' : 'disabled'}>
            <i class="fas fa-stop"></i> Cancel
        </button>`;
@@ -2350,6 +2841,7 @@ function renderExpCard(exp) {
                 </div>
                 <!-- Column 4: Actions (20%) -->
                 <div class="exp-card-col-actions">
+                    ${viewBtn}
                     ${cancelBtn}
                 </div>
             </div>
@@ -2499,9 +2991,9 @@ function openNewExpWizard() {
         btn.classList.toggle('active', btn.dataset.value === '100');
     });
     // Reset training parameters with button states
-    setParam('epochs', 10);
-    setParam('batchSize', 4096);
-    setParam('learningRate', 0.1);
+    setParam('epochs', 25);
+    setParam('batchSize', 1024);
+    setParam('learningRate', 0.01);
     // Reset split strategy UI (use style.display for inline-styled elements)
     document.getElementById('wizardRandomInfo').style.display = 'flex';
     document.getElementById('wizardTimeOptions').style.display = 'none';
@@ -2792,7 +3284,7 @@ function onParamInputChange(param) {
 
     // Handle NaN
     if (isNaN(value)) {
-        value = param === 'learningRate' ? 0.1 : (param === 'epochs' ? 10 : 4096);
+        value = param === 'learningRate' ? 0.01 : (param === 'epochs' ? 25 : 1024);
         input.value = value;
     }
 
@@ -3040,6 +3532,12 @@ function updateWizardUI() {
 
     // Show/hide action buttons
     document.getElementById('wizardRunBtn').classList.toggle('hidden', wizardStep !== 2);
+
+    // Scroll modal body to top when changing steps
+    const modalBody = document.getElementById('wizardModalBody');
+    if (modalBody) {
+        modalBody.scrollTop = 0;
+    }
 }
 
 function updateWizardSummary() {
@@ -3064,11 +3562,11 @@ function updateWizardSummary() {
 
     // Training parameters
     document.getElementById('wizardSummaryEpochs').textContent =
-        document.getElementById('wizardEpochs').value || '10';
+        document.getElementById('wizardEpochs').value || '25';
     document.getElementById('wizardSummaryBatch').textContent =
-        document.getElementById('wizardBatchSize').value || '4096';
+        document.getElementById('wizardBatchSize').value || '1024';
     document.getElementById('wizardSummaryLR').textContent =
-        document.getElementById('wizardLearningRate').value || '0.1';
+        document.getElementById('wizardLearningRate').value || '0.01';
 
     // Hardware
     const machineType = document.getElementById('wizardMachineType').value || 'n1-standard-4';
@@ -3185,8 +3683,11 @@ async function submitExperiment() {
 }
 
 // =============================================================================
-// EXPERIMENT DETAILS & MODALS
+// EXPERIMENT DETAILS & VIEW MODAL
 // =============================================================================
+let viewModalExpId = null;
+let viewModalPollInterval = null;
+
 async function openExpDetails(expId) {
     try {
         const response = await fetch(`/api/quick-tests/${expId}/`);
@@ -3198,82 +3699,304 @@ async function openExpDetails(expId) {
         }
 
         const exp = data.quick_test;
-
-        if (exp.status === 'running' || exp.status === 'submitting') {
-            // Show progress modal
-            openProgressModal(exp);
-        } else {
-            // Show results modal
-            openResultsModal(exp);
-        }
+        openExpViewModal(exp);
     } catch (error) {
         console.error('Error loading experiment details:', error);
         showError('Failed to load experiment details');
     }
 }
 
-function openProgressModal(exp) {
-    currentExpId = exp.id;
+function openExpViewModal(exp) {
+    viewModalExpId = exp.id;
+    populateExpViewModal(exp);
+    document.getElementById('expViewModal').classList.remove('hidden');
 
-    document.getElementById('progressExpName').textContent = exp.display_name;
-    document.getElementById('progressConfigs').textContent = `${exp.feature_config_name} + ${exp.model_config_name}`;
-
-    updateProgressUI(exp);
-    document.getElementById('expProgressModal').classList.remove('hidden');
-
-    // Start polling for this specific experiment
-    startExpPolling(exp.id);
+    // Start polling if experiment is running
+    if (exp.status === 'running' || exp.status === 'submitting') {
+        startViewModalPolling(exp.id);
+    }
 }
 
-function closeProgressModal() {
-    document.getElementById('expProgressModal').classList.add('hidden');
-    stopExpPolling();
+function closeExpViewModal(event) {
+    if (event && event.target !== event.currentTarget) return;
+    document.getElementById('expViewModal').classList.add('hidden');
+    stopViewModalPolling();
+    viewModalExpId = null;
 }
 
-function updateProgressUI(exp) {
-    // Update progress bar
-    const percent = exp.progress_percent || 0;
-    document.getElementById('progressBar').style.width = percent + '%';
-    document.getElementById('progressText').textContent = percent + '%';
+function populateExpViewModal(exp) {
+    // Header
+    const title = exp.experiment_name
+        ? `${exp.display_name}: ${exp.experiment_name}`
+        : exp.display_name;
+    document.getElementById('expViewTitle').textContent = title;
+    document.getElementById('expViewSubtitle').textContent = exp.experiment_description || '';
 
-    // Update stages
-    const stages = exp.stage_details || getDefaultStages();
-    document.getElementById('progressStages').innerHTML = stages.map(stage => {
-        let iconClass, statusClass;
-        switch (stage.status) {
-            case 'completed':
-                iconClass = 'fa-check-circle';
-                statusClass = 'completed';
-                break;
-            case 'running':
-                iconClass = 'fa-spinner fa-spin';
-                statusClass = 'running';
-                break;
-            case 'failed':
-                iconClass = 'fa-times-circle';
-                statusClass = 'failed';
-                break;
-            default:
-                iconClass = 'fa-clock';
-                statusClass = 'pending';
+    // Status icon
+    const statusIcon = document.getElementById('expViewStatusIcon');
+    const statusIcons = {
+        'submitting': 'fa-clock',
+        'running': 'fa-spinner fa-spin',
+        'completed': 'fa-check',
+        'failed': 'fa-times',
+        'cancelled': 'fa-ban'
+    };
+    statusIcon.className = `exp-view-status-icon ${exp.status}`;
+    statusIcon.innerHTML = `<i class="fas ${statusIcons[exp.status] || 'fa-flask'}"></i>`;
+
+    // Status badge
+    const statusBadge = document.getElementById('expViewStatusBadge');
+    const badgeConfigs = {
+        'submitting': { class: 'draft', icon: 'fa-clock', text: 'Submitting' },
+        'running': { class: 'draft', icon: 'fa-spinner fa-spin', text: 'Running' },
+        'completed': { class: 'active', icon: 'fa-check-circle', text: 'Completed' },
+        'failed': { class: '', style: 'background: #fef2f2; color: #991b1b;', icon: 'fa-times-circle', text: 'Failed' },
+        'cancelled': { class: 'draft', icon: 'fa-ban', text: 'Cancelled' }
+    };
+    const badge = badgeConfigs[exp.status] || badgeConfigs['submitting'];
+    statusBadge.className = `status-badge ${badge.class}`;
+    if (badge.style) statusBadge.style.cssText = badge.style;
+    else statusBadge.style.cssText = '';
+    statusBadge.innerHTML = `<i class="fas ${badge.icon}"></i> ${badge.text}`;
+
+    // Meta row (duration & created by)
+    const durationStr = exp.duration_seconds ? formatDuration(exp.duration_seconds) :
+        (exp.elapsed_seconds ? `${formatDuration(exp.elapsed_seconds)} (running)` : '-');
+    document.getElementById('expViewDuration').innerHTML = `<i class="fas fa-clock mr-1"></i> Duration: ${durationStr}`;
+    document.getElementById('expViewCreatedBy').textContent = exp.created_by ? `by ${exp.created_by}` : '';
+
+    // Error section
+    const errorSection = document.getElementById('expViewErrorSection');
+    if (exp.status === 'failed' && exp.error_message) {
+        errorSection.classList.remove('hidden');
+        document.getElementById('expViewErrorMessage').textContent = exp.error_message;
+    } else {
+        errorSection.classList.add('hidden');
+    }
+
+    // Configuration
+    document.getElementById('expViewDataset').textContent = exp.dataset_name || '-';
+    document.getElementById('expViewFeatureConfig').textContent = exp.feature_config_name || '-';
+    document.getElementById('expViewModelConfig').textContent = exp.model_config_name || '-';
+
+    // Data Sampling
+    document.getElementById('expViewSample').textContent = `${exp.data_sample_percent || 100}%`;
+    const splitLabels = {
+        'random': 'Random 80/20',
+        'time_holdout': 'Time Holdout',
+        'strict_time': 'Strict Temporal'
+    };
+    document.getElementById('expViewSplit').textContent = splitLabels[exp.split_strategy] || exp.split_strategy;
+
+    // Show date column and holdout for time-based strategies
+    const dateColWrapper = document.getElementById('expViewDateColumnWrapper');
+    const holdoutWrapper = document.getElementById('expViewHoldoutWrapper');
+    if (exp.split_strategy !== 'random') {
+        dateColWrapper.style.display = '';
+        document.getElementById('expViewDateColumn').textContent = exp.date_column || '-';
+        if (exp.split_strategy === 'time_holdout') {
+            holdoutWrapper.style.display = '';
+            document.getElementById('expViewHoldout').textContent = `${exp.holdout_days || 1} days`;
+        } else {
+            holdoutWrapper.style.display = 'none';
         }
+    } else {
+        dateColWrapper.style.display = 'none';
+        holdoutWrapper.style.display = 'none';
+    }
 
-        const duration = stage.duration_seconds ? formatDuration(stage.duration_seconds) : '';
+    // Training Parameters
+    document.getElementById('expViewEpochs').textContent = exp.epochs || '-';
+    document.getElementById('expViewBatchSize').textContent = exp.batch_size || '-';
+    document.getElementById('expViewLearningRate').textContent = exp.learning_rate || '-';
+    const hardwareLabels = {
+        'n1-standard-4': 'Small',
+        'n1-standard-8': 'Medium',
+        'n1-standard-16': 'Large'
+    };
+    document.getElementById('expViewHardware').textContent = hardwareLabels[exp.machine_type] || exp.machine_type || 'Small';
+
+    // Pipeline Progress
+    const isRunning = exp.status === 'running' || exp.status === 'submitting';
+    document.getElementById('expViewProgressBarWrapper').style.display = isRunning ? '' : 'none';
+    if (isRunning) {
+        const percent = exp.progress_percent || 0;
+        document.getElementById('expViewProgressBar').style.width = `${percent}%`;
+        document.getElementById('expViewProgressText').textContent = `${percent}%`;
+    }
+    renderExpViewStages(exp.stage_details || getDefaultStages());
+
+    // Results Section
+    const resultsSection = document.getElementById('expViewResultsSection');
+    if (exp.status === 'completed' && exp.metrics) {
+        resultsSection.classList.remove('hidden');
+        renderExpViewMetrics(exp.metrics);
+    } else {
+        resultsSection.classList.add('hidden');
+    }
+
+    // Vocabulary Stats Section
+    const vocabSection = document.getElementById('expViewVocabSection');
+    if (exp.vocabulary_stats && Object.keys(exp.vocabulary_stats).length > 0) {
+        vocabSection.classList.remove('hidden');
+        renderExpViewVocab(exp.vocabulary_stats);
+    } else {
+        vocabSection.classList.add('hidden');
+    }
+
+    // Technical Details
+    document.getElementById('expViewVertexId').textContent = exp.vertex_pipeline_job_id || '-';
+    document.getElementById('expViewGcsPath').textContent = exp.gcs_artifacts_path || '-';
+    document.getElementById('expViewCreatedAt').textContent = formatDateTime(exp.created_at);
+    document.getElementById('expViewStartedAt').textContent = formatDateTime(exp.started_at);
+    document.getElementById('expViewCompletedAt').textContent = formatDateTime(exp.completed_at);
+
+    // Vertex AI link
+    const vertexLink = document.getElementById('expViewVertexLink');
+    if (exp.vertex_pipeline_job_id) {
+        vertexLink.href = `https://console.cloud.google.com/vertex-ai/pipelines/runs/${exp.vertex_pipeline_job_id}?project=b2b-recs`;
+        vertexLink.style.display = 'inline';
+    } else {
+        vertexLink.style.display = 'none';
+    }
+
+    // Cancel button (only for running experiments)
+    document.getElementById('expViewCancelBtn').style.display = isRunning ? '' : 'none';
+}
+
+function renderExpViewStages(stages) {
+    const container = document.getElementById('expViewStagesTable');
+    container.innerHTML = stages.map(stage => {
+        const icons = {
+            'completed': 'fa-check-circle',
+            'running': 'fa-spinner fa-spin',
+            'failed': 'fa-times-circle',
+            'pending': 'fa-clock'
+        };
+        const statusClass = stage.status || 'pending';
+        const icon = icons[statusClass] || 'fa-clock';
+        const duration = stage.duration_seconds ? formatDuration(stage.duration_seconds) : '-';
 
         return `
-            <div class="quicktest-stage ${statusClass}">
-                <div class="quicktest-stage-icon ${statusClass}">
-                    <i class="fas ${iconClass}"></i>
+            <div class="exp-view-stage ${statusClass}">
+                <div class="exp-view-stage-icon">
+                    <i class="fas ${icon}"></i>
                 </div>
-                <span class="quicktest-stage-name">${stage.name}</span>
-                <span class="quicktest-stage-duration">${duration}</span>
+                <span class="exp-view-stage-name">${stage.name}</span>
+                <span class="exp-view-stage-duration">${duration}</span>
             </div>
         `;
     }).join('');
+}
 
-    // Update elapsed time
-    if (exp.elapsed_seconds) {
-        document.getElementById('progressElapsed').textContent = formatDuration(exp.elapsed_seconds);
+function renderExpViewMetrics(metrics) {
+    const container = document.getElementById('expViewMetrics');
+    const metricItems = [
+        { label: 'Loss', value: metrics.loss, format: v => v.toFixed(4) },
+        { label: 'Recall@10', value: metrics.recall_at_10, format: v => (v * 100).toFixed(2) + '%' },
+        { label: 'Recall@50', value: metrics.recall_at_50, format: v => (v * 100).toFixed(2) + '%' },
+        { label: 'Recall@100', value: metrics.recall_at_100, format: v => (v * 100).toFixed(2) + '%' }
+    ];
+
+    container.innerHTML = metricItems.map(item => `
+        <div class="exp-view-metric">
+            <span class="exp-view-metric-label">${item.label}</span>
+            <span class="exp-view-metric-value">${item.value != null ? item.format(item.value) : 'N/A'}</span>
+        </div>
+    `).join('');
+}
+
+function renderExpViewVocab(vocabStats) {
+    const container = document.getElementById('expViewVocabStats');
+    const items = Object.entries(vocabStats).map(([name, size]) => `
+        <div class="exp-view-vocab-item">
+            <div class="exp-view-vocab-name">${name}</div>
+            <div class="exp-view-vocab-size">${typeof size === 'number' ? size.toLocaleString() : size}</div>
+        </div>
+    `);
+    container.innerHTML = items.join('');
+}
+
+function toggleExpViewTechnical() {
+    const content = document.getElementById('expViewTechnicalContent');
+    const icon = document.getElementById('expViewTechnicalIcon');
+    content.classList.toggle('collapsed');
+    icon.classList.toggle('collapsed');
+}
+
+function formatDateTime(isoStr) {
+    if (!isoStr) return '-';
+    const d = new Date(isoStr);
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + ' ' +
+           d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+}
+
+// View Modal Polling
+function startViewModalPolling(expId) {
+    stopViewModalPolling();
+
+    viewModalPollInterval = setInterval(async () => {
+        try {
+            const response = await fetch(`/api/quick-tests/${expId}/`);
+            const data = await response.json();
+
+            if (data.success) {
+                const exp = data.quick_test;
+                populateExpViewModal(exp);
+                updateExpCard(exp);
+
+                if (['completed', 'failed', 'cancelled'].includes(exp.status)) {
+                    stopViewModalPolling();
+                }
+            }
+        } catch (error) {
+            console.error('View modal polling error:', error);
+        }
+    }, 10000);
+}
+
+function stopViewModalPolling() {
+    if (viewModalPollInterval) {
+        clearInterval(viewModalPollInterval);
+        viewModalPollInterval = null;
+    }
+}
+
+async function cancelFromViewModal() {
+    if (!viewModalExpId) return;
+
+    const btn = document.getElementById('expViewCancelBtn');
+    btn.disabled = true;
+    btn.querySelector('.btn-neu-inner').innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Cancelling...';
+
+    try {
+        const response = await fetch(`/api/quick-tests/${viewModalExpId}/cancel/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken')
+            }
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            stopViewModalPolling();
+            // Refresh the view with updated data
+            const refreshResponse = await fetch(`/api/quick-tests/${viewModalExpId}/`);
+            const refreshData = await refreshResponse.json();
+            if (refreshData.success) {
+                populateExpViewModal(refreshData.quick_test);
+                updateExpCard(refreshData.quick_test);
+            }
+            showSuccess('Experiment cancelled');
+        } else {
+            showError(data.error || 'Failed to cancel experiment');
+        }
+    } catch (error) {
+        showError('Failed to cancel: ' + error.message);
+    } finally {
+        btn.disabled = false;
+        btn.querySelector('.btn-neu-inner').innerHTML = '<i class="fas fa-stop mr-2"></i>Cancel';
     }
 }
 
@@ -3288,116 +4011,9 @@ function getDefaultStages() {
     ];
 }
 
-function openResultsModal(exp) {
-    document.getElementById('resultsExpName').textContent = exp.display_name;
-    document.getElementById('resultsConfigs').textContent = `${exp.feature_config_name} + ${exp.model_config_name}`;
-
-    // Status icon and badge
-    const statusIcon = document.getElementById('resultsStatusIcon');
-    const statusBadge = document.getElementById('resultsStatusBadge');
-
-    if (exp.status === 'completed') {
-        statusIcon.className = 'modal-header-icon success';
-        statusIcon.innerHTML = '<i class="fas fa-check"></i>';
-        statusBadge.innerHTML = '<span class="status-badge active"><i class="fas fa-check-circle"></i> Completed</span>';
-    } else if (exp.status === 'failed') {
-        statusIcon.className = 'modal-header-icon error';
-        statusIcon.innerHTML = '<i class="fas fa-times"></i>';
-        statusBadge.innerHTML = '<span class="status-badge" style="background: #fef2f2; color: #991b1b;"><i class="fas fa-times-circle"></i> Failed</span>';
-    } else {
-        statusIcon.className = 'modal-header-icon info';
-        statusIcon.innerHTML = '<i class="fas fa-ban"></i>';
-        statusBadge.innerHTML = '<span class="status-badge draft"><i class="fas fa-ban"></i> Cancelled</span>';
-    }
-
-    // Metrics
-    const metrics = exp.metrics || {};
-    document.getElementById('resultsMetrics').innerHTML = exp.status === 'completed' ? `
-        <div class="quicktest-metric">
-            <span class="quicktest-metric-label">Loss</span>
-            <span class="quicktest-metric-value">${metrics.loss != null ? metrics.loss.toFixed(4) : 'N/A'}</span>
-        </div>
-        <div class="quicktest-metric">
-            <span class="quicktest-metric-label">Recall@10</span>
-            <span class="quicktest-metric-value">${metrics.recall_at_10 != null ? (metrics.recall_at_10 * 100).toFixed(2) + '%' : 'N/A'}</span>
-        </div>
-        <div class="quicktest-metric">
-            <span class="quicktest-metric-label">Recall@50</span>
-            <span class="quicktest-metric-value">${metrics.recall_at_50 != null ? (metrics.recall_at_50 * 100).toFixed(2) + '%' : 'N/A'}</span>
-        </div>
-        <div class="quicktest-metric">
-            <span class="quicktest-metric-label">Recall@100</span>
-            <span class="quicktest-metric-value">${metrics.recall_at_100 != null ? (metrics.recall_at_100 * 100).toFixed(2) + '%' : 'N/A'}</span>
-        </div>
-    ` : '<p class="text-gray-500">No metrics available</p>';
-
-    // Error section
-    const errorSection = document.getElementById('resultsErrorSection');
-    if (exp.status === 'failed' && exp.error_message) {
-        errorSection.classList.remove('hidden');
-        document.getElementById('resultsErrorMessage').textContent = exp.error_message;
-    } else {
-        errorSection.classList.add('hidden');
-    }
-
-    // Duration
-    document.getElementById('resultsDuration').textContent = exp.duration_seconds
-        ? formatDuration(exp.duration_seconds)
-        : '-';
-
-    // Vertex AI link
-    if (exp.vertex_pipeline_job_id) {
-        const link = `https://console.cloud.google.com/vertex-ai/pipelines/runs/${exp.vertex_pipeline_job_id}?project=b2b-recs`;
-        document.getElementById('resultsVertexLink').href = link;
-        document.getElementById('resultsVertexLink').style.display = 'inline';
-    } else {
-        document.getElementById('resultsVertexLink').style.display = 'none';
-    }
-
-    document.getElementById('expResultsModal').classList.remove('hidden');
-}
-
-function closeResultsModal() {
-    document.getElementById('expResultsModal').classList.add('hidden');
-}
-
 // =============================================================================
-// POLLING
+// BACKGROUND POLLING
 // =============================================================================
-function startExpPolling(expId) {
-    stopExpPolling();
-
-    pollInterval = setInterval(async () => {
-        try {
-            const response = await fetch(`/api/quick-tests/${expId}/`);
-            const data = await response.json();
-
-            if (data.success) {
-                const exp = data.quick_test;
-                updateProgressUI(exp);
-
-                // Also update the card in the list
-                updateExpCard(exp);
-
-                if (['completed', 'failed', 'cancelled'].includes(exp.status)) {
-                    stopExpPolling();
-                    closeProgressModal();
-                    openResultsModal(exp);
-                }
-            }
-        } catch (error) {
-            console.error('Polling error:', error);
-        }
-    }, 10000);
-}
-
-function stopExpPolling() {
-    if (pollInterval) {
-        clearInterval(pollInterval);
-        pollInterval = null;
-    }
-}
-
 function startBackgroundPolling() {
     // Poll for running experiments every 30 seconds
     setInterval(async () => {
@@ -3416,76 +4032,54 @@ function updateExpCard(exp) {
     }
 }
 
-// =============================================================================
-// CANCEL
-// =============================================================================
-async function cancelExperiment() {
-    if (!currentExpId) return;
-
-    const btn = document.getElementById('progressCancelBtn');
-    btn.disabled = true;
-    btn.querySelector('.btn-neu-inner').innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Cancelling...';
-
-    try {
-        const response = await fetch(`/api/quick-tests/${currentExpId}/cancel/`, {
-            method: 'POST',
-            headers: {
-                'X-CSRFToken': getCookie('csrftoken')
-            }
-        });
-
-        const data = await response.json();
-
-        if (data.success) {
-            stopExpPolling();
-            closeProgressModal();
-            await loadExperiments(pagination.page);
-            showSuccess('Experiment cancelled');
-        } else {
-            showError(data.error || 'Failed to cancel experiment');
-        }
-    } catch (error) {
-        showError('Failed to cancel: ' + error.message);
-    } finally {
-        btn.disabled = false;
-        btn.querySelector('.btn-neu-inner').innerHTML = '<i class="fas fa-stop mr-2"></i>Cancel';
-    }
+// View from experiment card
+function viewExpFromCard(event, expId) {
+    event.stopPropagation(); // Prevent card click
+    openExpDetails(expId);
 }
 
 // Cancel from experiment card
-async function cancelExpFromCard(event, expId) {
+function cancelExpFromCard(event, expId) {
     event.stopPropagation(); // Prevent card click
-
-    if (!confirm('Cancel this experiment?')) return;
 
     const btn = event.target.closest('button');
     const originalHtml = btn.innerHTML;
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
 
-    try {
-        const response = await fetch(`/api/quick-tests/${expId}/cancel/`, {
-            method: 'POST',
-            headers: {
-                'X-CSRFToken': getCookie('csrftoken')
+    showConfirmModal({
+        title: 'Cancel Experiment',
+        message: 'Are you sure you want to cancel this experiment?<br><span class="text-sm text-gray-500 mt-2 block">This will stop the Vertex AI pipeline.</span>',
+        confirmText: 'Yes, Cancel',
+        cancelText: 'Keep Running',
+        type: 'warning',
+        onConfirm: async () => {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+            try {
+                const response = await fetch(`/api/quick-tests/${expId}/cancel/`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': getCookie('csrftoken')
+                    }
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    await loadExperiments(pagination.page);
+                    showSuccess('Experiment cancelled');
+                } else {
+                    showError(data.error || 'Failed to cancel experiment');
+                    btn.disabled = false;
+                    btn.innerHTML = originalHtml;
+                }
+            } catch (error) {
+                showError('Failed to cancel: ' + error.message);
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
             }
-        });
-
-        const data = await response.json();
-
-        if (data.success) {
-            await loadExperiments(pagination.page);
-            showSuccess('Experiment cancelled');
-        } else {
-            showError(data.error || 'Failed to cancel experiment');
-            btn.disabled = false;
-            btn.innerHTML = originalHtml;
         }
-    } catch (error) {
-        showError('Failed to cancel: ' + error.message);
-        btn.disabled = false;
-        btn.innerHTML = originalHtml;
-    }
+    });
 }
 
 // =============================================================================

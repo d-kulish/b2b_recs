@@ -259,7 +259,7 @@ def quick_test_list(request):
                     try:
                         service.refresh_status(qt)
                     except Exception as refresh_error:
-                        logger.warning(f"Failed to refresh status for QuickTest {qt.id}: {refresh_error}")
+                        logger.warning(f"Failed to refresh status for {qt.display_name} (id={qt.id}): {refresh_error}")
             except Exception as service_error:
                 logger.warning(f"Failed to initialize ExperimentService for status refresh: {service_error}")
 

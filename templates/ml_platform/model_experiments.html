@@ -2273,6 +2273,205 @@
     }
 
     /* =========================================================================
+       TFDV Rich Statistics Styles
+       ========================================================================= */
+    .exp-view-group-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+    }
+    .exp-view-group-header .exp-view-group-title {
+        margin-bottom: 0;
+    }
+    .exp-view-tfdv-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        background: #4f46e5;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background 0.2s;
+    }
+    .exp-view-tfdv-btn:hover {
+        background: #4338ca;
+    }
+    .exp-view-feature-count {
+        font-size: 12px;
+        color: #6b7280;
+        font-weight: normal;
+        margin-left: 8px;
+    }
+
+    /* TFDV Table Styles */
+    .tfdv-table-container {
+        overflow-x: auto;
+        margin-top: 12px;
+    }
+    .tfdv-features-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+    }
+    .tfdv-features-table th {
+        text-align: left;
+        padding: 8px 10px;
+        background: #f8fafc;
+        border-bottom: 2px solid #e2e8f0;
+        font-weight: 600;
+        color: #475569;
+        white-space: nowrap;
+    }
+    .tfdv-features-table td {
+        padding: 8px 10px;
+        border-bottom: 1px solid #e2e8f0;
+        vertical-align: middle;
+    }
+    .tfdv-features-table tr:hover {
+        background: #f8fafc;
+    }
+    .tfdv-features-table .feature-name {
+        font-weight: 500;
+        color: #1e293b;
+        max-width: 150px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .tfdv-features-table .top-values-cell {
+        max-width: 180px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .tfdv-features-table .top-value {
+        background: #f1f5f9;
+        padding: 2px 6px;
+        border-radius: 3px;
+        font-size: 11px;
+    }
+    .tfdv-features-table .no-data {
+        color: #9ca3af;
+    }
+
+    /* Mini Histogram (vertical bars) */
+    .mini-histogram {
+        display: flex;
+        align-items: flex-end;
+        gap: 1px;
+        height: 24px;
+        min-width: 60px;
+    }
+    .mini-bar {
+        width: 5px;
+        background: #60a5fa;
+        border-radius: 1px 1px 0 0;
+        transition: background 0.2s;
+    }
+    .mini-bar:hover {
+        background: #3b82f6;
+    }
+
+    /* Mini Horizontal Bar Chart */
+    .mini-hbar-chart {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 60px;
+    }
+    .mini-hbar {
+        height: 4px;
+        background: #a78bfa;
+        border-radius: 2px;
+        transition: background 0.2s;
+    }
+    .mini-hbar:hover {
+        background: #8b5cf6;
+    }
+
+    /* TFDV Modal */
+    .tfdv-modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.6);
+        z-index: 10001;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+    }
+    .tfdv-modal-content {
+        background: white;
+        border-radius: 12px;
+        width: 95%;
+        max-width: 1400px;
+        height: 90vh;
+        display: flex;
+        flex-direction: column;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    }
+    .tfdv-modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 16px 24px;
+        border-bottom: 1px solid #e2e8f0;
+    }
+    .tfdv-modal-header h3 {
+        margin: 0;
+        font-size: 18px;
+        font-weight: 600;
+        color: #1e293b;
+    }
+    .tfdv-modal-close {
+        width: 32px;
+        height: 32px;
+        border: none;
+        background: #f1f5f9;
+        border-radius: 8px;
+        font-size: 20px;
+        color: #64748b;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    .tfdv-modal-close:hover {
+        background: #e2e8f0;
+        color: #1e293b;
+    }
+    .tfdv-modal-body {
+        flex: 1;
+        overflow: hidden;
+        position: relative;
+    }
+    .tfdv-modal-loading {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+        color: #64748b;
+    }
+    .tfdv-modal-loading i {
+        font-size: 24px;
+        color: #4f46e5;
+    }
+    .tfdv-iframe {
+        width: 100%;
+        height: 100%;
+        border: none;
+    }
+
+    /* =========================================================================
        Toast Notification Styles
        ========================================================================= */
     .toast-container {
@@ -3120,10 +3319,37 @@
                     <span>Loading data insights...</span>
                 </div>
                 <div id="expViewDataContent" class="hidden">
-                    <!-- Statistics Section -->
+                    <!-- Statistics Summary Section -->
                     <div class="exp-view-section-group">
-                        <h4 class="exp-view-group-title">Dataset Statistics</h4>
+                        <div class="exp-view-group-header">
+                            <h4 class="exp-view-group-title">Dataset Statistics</h4>
+                            <button id="expViewTfdvBtn" class="exp-view-tfdv-btn hidden" onclick="showTfdvVisualization()">
+                                <i class="fas fa-chart-bar"></i> View Full TFDV Report
+                            </button>
+                        </div>
                         <div id="expViewStatsContent">
+                            <!-- Populated by JavaScript -->
+                        </div>
+                    </div>
+
+                    <!-- Numeric Features Section -->
+                    <div id="expViewNumericSection" class="exp-view-section-group hidden">
+                        <h4 class="exp-view-group-title">
+                            <span>Numeric Features</span>
+                            <span id="expViewNumericCount" class="exp-view-feature-count"></span>
+                        </h4>
+                        <div id="expViewNumericContent">
+                            <!-- Populated by JavaScript -->
+                        </div>
+                    </div>
+
+                    <!-- Categorical Features Section -->
+                    <div id="expViewCategoricalSection" class="exp-view-section-group hidden">
+                        <h4 class="exp-view-group-title">
+                            <span>Categorical Features</span>
+                            <span id="expViewCategoricalCount" class="exp-view-feature-count"></span>
+                        </h4>
+                        <div id="expViewCategoricalContent">
                             <!-- Populated by JavaScript -->
                         </div>
                     </div>
@@ -3139,6 +3365,23 @@
                 <div id="expViewDataError" class="exp-view-data-message hidden">
                     <i class="fas fa-info-circle"></i>
                     <span id="expViewDataErrorMessage">Data insights not available</span>
+                </div>
+            </div>
+
+            <!-- TFDV Visualization Modal -->
+            <div id="tfdvModal" class="tfdv-modal hidden">
+                <div class="tfdv-modal-content">
+                    <div class="tfdv-modal-header">
+                        <h3>TFDV Statistics Visualization</h3>
+                        <button class="tfdv-modal-close" onclick="closeTfdvModal()">&times;</button>
+                    </div>
+                    <div class="tfdv-modal-body">
+                        <div id="tfdvModalLoading" class="tfdv-modal-loading">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            <span>Loading TFDV visualization...</span>
+                        </div>
+                        <iframe id="tfdvModalFrame" class="tfdv-iframe hidden"></iframe>
+                    </div>
                 </div>
             </div>
 
@@ -5812,8 +6055,17 @@ async function loadDataInsights() {
 
 function renderStatistics(stats) {
     const container = document.getElementById('expViewStatsContent');
+    const numericSection = document.getElementById('expViewNumericSection');
+    const categoricalSection = document.getElementById('expViewCategoricalSection');
+    const numericContent = document.getElementById('expViewNumericContent');
+    const categoricalContent = document.getElementById('expViewCategoricalContent');
+    const tfdvBtn = document.getElementById('expViewTfdvBtn');
 
-    // Summary boxes
+    // Summary boxes with enhanced counts
+    const numNumeric = stats.num_numeric_features || 0;
+    const numCategorical = stats.num_categorical_features || 0;
+    const avgMissing = stats.avg_missing_pct ?? stats.avg_missing_ratio ?? 0;
+
     let html = `
         <div class="exp-view-stats-summary">
             <div class="exp-view-stat-box">
@@ -5825,42 +6077,243 @@ function renderStatistics(stats) {
                 <div class="exp-view-stat-box-label">Features</div>
             </div>
             <div class="exp-view-stat-box">
-                <div class="exp-view-stat-box-value">${stats.avg_missing_ratio?.toFixed(1) || '0'}%</div>
+                <div class="exp-view-stat-box-value">${numNumeric} / ${numCategorical}</div>
+                <div class="exp-view-stat-box-label">Numeric / Categorical</div>
+            </div>
+            <div class="exp-view-stat-box">
+                <div class="exp-view-stat-box-value">${avgMissing?.toFixed(1) || '0'}%</div>
                 <div class="exp-view-stat-box-label">Avg Missing</div>
             </div>
         </div>
     `;
+    container.innerHTML = html;
 
-    // Features table
-    if (stats.features?.length > 0) {
-        html += `
-            <table class="exp-view-features-table">
+    // Show TFDV button if stats available
+    if (stats.available) {
+        tfdvBtn.classList.remove('hidden');
+    }
+
+    // Render Numeric Features Section
+    if (stats.numeric_features?.length > 0) {
+        numericSection.classList.remove('hidden');
+        document.getElementById('expViewNumericCount').textContent = `(${stats.numeric_features.length})`;
+        numericContent.innerHTML = renderNumericFeaturesTable(stats.numeric_features);
+    } else {
+        numericSection.classList.add('hidden');
+    }
+
+    // Render Categorical Features Section
+    if (stats.categorical_features?.length > 0) {
+        categoricalSection.classList.remove('hidden');
+        document.getElementById('expViewCategoricalCount').textContent = `(${stats.categorical_features.length})`;
+        categoricalContent.innerHTML = renderCategoricalFeaturesTable(stats.categorical_features);
+    } else {
+        categoricalSection.classList.add('hidden');
+    }
+
+    // Fallback: if we only have old-style features array
+    if (!stats.numeric_features && !stats.categorical_features && stats.features?.length > 0) {
+        numericSection.classList.remove('hidden');
+        document.getElementById('expViewNumericCount').textContent = '';
+        numericContent.innerHTML = renderLegacyFeaturesTable(stats.features, stats.truncated, stats.total_features);
+        categoricalSection.classList.add('hidden');
+    }
+}
+
+function renderNumericFeaturesTable(features) {
+    return `
+        <div class="tfdv-table-container">
+            <table class="tfdv-features-table">
+                <thead>
+                    <tr>
+                        <th>Feature</th>
+                        <th>Count</th>
+                        <th>Missing</th>
+                        <th>Mean</th>
+                        <th>Std Dev</th>
+                        <th>Zeros</th>
+                        <th>Min</th>
+                        <th>Median</th>
+                        <th>Max</th>
+                        <th>Distribution</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${features.slice(0, 30).map(f => {
+                        const ns = f.numeric_stats || {};
+                        return `
+                        <tr>
+                            <td class="feature-name">${f.name}</td>
+                            <td>${ns.count?.toLocaleString() || '-'}</td>
+                            <td>${formatPercent(ns.missing_pct)}</td>
+                            <td>${formatNumber(ns.mean)}</td>
+                            <td>${formatNumber(ns.std_dev)}</td>
+                            <td>${formatPercent(ns.zeros_pct)}</td>
+                            <td>${formatNumber(ns.min_val)}</td>
+                            <td>${formatNumber(ns.median)}</td>
+                            <td>${formatNumber(ns.max_val)}</td>
+                            <td>${renderMiniHistogram(ns.histogram)}</td>
+                        </tr>
+                    `}).join('')}
+                </tbody>
+            </table>
+        </div>
+        ${features.length > 30 ? `<p class="text-xs text-gray-400 mt-2">Showing first 30 of ${features.length} numeric features</p>` : ''}
+    `;
+}
+
+function renderCategoricalFeaturesTable(features) {
+    return `
+        <div class="tfdv-table-container">
+            <table class="tfdv-features-table">
+                <thead>
+                    <tr>
+                        <th>Feature</th>
+                        <th>Count</th>
+                        <th>Missing</th>
+                        <th>Unique</th>
+                        <th>Top Values</th>
+                        <th>Distribution</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${features.slice(0, 30).map(f => {
+                        const cs = f.categorical_stats || {};
+                        return `
+                        <tr>
+                            <td class="feature-name">${f.name}</td>
+                            <td>${cs.count?.toLocaleString() || '-'}</td>
+                            <td>${formatPercent(cs.missing_pct)}</td>
+                            <td>${cs.unique?.toLocaleString() || '-'}</td>
+                            <td class="top-values-cell">${renderTopValues(cs.top_values)}</td>
+                            <td>${renderTopValuesChart(cs.top_values)}</td>
+                        </tr>
+                    `}).join('')}
+                </tbody>
+            </table>
+        </div>
+        ${features.length > 30 ? `<p class="text-xs text-gray-400 mt-2">Showing first 30 of ${features.length} categorical features</p>` : ''}
+    `;
+}
+
+function renderLegacyFeaturesTable(features, truncated, total) {
+    return `
+        <div class="tfdv-table-container">
+            <table class="tfdv-features-table">
                 <thead>
                     <tr>
                         <th>Feature</th>
                         <th>Type</th>
                         <th>Unique</th>
                         <th>Missing</th>
+                        <th>Min</th>
+                        <th>Max</th>
+                        <th>Mean</th>
                     </tr>
                 </thead>
                 <tbody>
-                    ${stats.features.slice(0, 20).map(f => `
+                    ${features.slice(0, 30).map(f => `
                         <tr>
-                            <td>${f.name}</td>
+                            <td class="feature-name">${f.name}</td>
                             <td><span class="type-tag ${f.type?.toLowerCase() || 'unknown'}">${f.type || 'UNKNOWN'}</span></td>
                             <td>${f.num_unique?.toLocaleString() || '-'}</td>
-                            <td>${f.missing_pct?.toFixed(1) || '0'}%</td>
+                            <td>${formatPercent(f.missing_pct)}</td>
+                            <td>${formatNumber(f.min)}</td>
+                            <td>${formatNumber(f.max)}</td>
+                            <td>${formatNumber(f.mean)}</td>
                         </tr>
                     `).join('')}
                 </tbody>
             </table>
-        `;
-        if (stats.truncated) {
-            html += `<p class="text-xs text-gray-400 mt-2">Showing first 20 of ${stats.total_features} features</p>`;
+        </div>
+        ${truncated ? `<p class="text-xs text-gray-400 mt-2">Showing first 30 of ${total} features</p>` : ''}
+    `;
+}
+
+function formatNumber(val) {
+    if (val === null || val === undefined) return '-';
+    if (Math.abs(val) >= 1000000) return (val / 1000000).toFixed(2) + 'M';
+    if (Math.abs(val) >= 1000) return (val / 1000).toFixed(2) + 'K';
+    if (Number.isInteger(val)) return val.toLocaleString();
+    return val.toFixed(2);
+}
+
+function formatPercent(val) {
+    if (val === null || val === undefined) return '0%';
+    return val.toFixed(1) + '%';
+}
+
+function renderMiniHistogram(histogram) {
+    if (!histogram || histogram.length === 0) return '<span class="no-data">-</span>';
+
+    const maxCount = Math.max(...histogram.map(b => b.count || 0));
+    if (maxCount === 0) return '<span class="no-data">-</span>';
+
+    const bars = histogram.slice(0, 10).map(b => {
+        const height = Math.max(2, Math.round((b.count / maxCount) * 24));
+        return `<div class="mini-bar" style="height: ${height}px;" title="${b.count?.toLocaleString() || 0}"></div>`;
+    }).join('');
+
+    return `<div class="mini-histogram">${bars}</div>`;
+}
+
+function renderTopValues(topValues) {
+    if (!topValues || topValues.length === 0) return '<span class="no-data">-</span>';
+
+    const top3 = topValues.slice(0, 3).map(tv => {
+        const val = tv.value?.length > 15 ? tv.value.substring(0, 15) + '...' : tv.value;
+        return `<span class="top-value" title="${tv.value}: ${tv.frequency_pct?.toFixed(1) || 0}%">${val}</span>`;
+    }).join(', ');
+
+    return top3;
+}
+
+function renderTopValuesChart(topValues) {
+    if (!topValues || topValues.length === 0) return '<span class="no-data">-</span>';
+
+    const maxPct = Math.max(...topValues.map(tv => tv.frequency_pct || 0));
+    if (maxPct === 0) return '<span class="no-data">-</span>';
+
+    const bars = topValues.slice(0, 5).map(tv => {
+        const width = Math.max(2, Math.round((tv.frequency_pct / maxPct) * 60));
+        return `<div class="mini-hbar" style="width: ${width}px;" title="${tv.value}: ${tv.frequency_pct?.toFixed(1)}%"></div>`;
+    }).join('');
+
+    return `<div class="mini-hbar-chart">${bars}</div>`;
+}
+
+// TFDV Visualization Modal
+async function showTfdvVisualization() {
+    const modal = document.getElementById('tfdvModal');
+    const loading = document.getElementById('tfdvModalLoading');
+    const iframe = document.getElementById('tfdvModalFrame');
+
+    modal.classList.remove('hidden');
+    loading.classList.remove('hidden');
+    iframe.classList.add('hidden');
+
+    try {
+        const response = await fetch(`/api/quick-tests/${viewModalExpId}/tfdv-visualization/`);
+        const data = await response.json();
+
+        if (data.success && data.html) {
+            iframe.srcdoc = data.html;
+            iframe.classList.remove('hidden');
+        } else {
+            iframe.srcdoc = '<html><body><p>TFDV visualization not available</p></body></html>';
+            iframe.classList.remove('hidden');
         }
+    } catch (error) {
+        console.error('Error loading TFDV visualization:', error);
+        iframe.srcdoc = '<html><body><p>Failed to load TFDV visualization</p></body></html>';
+        iframe.classList.remove('hidden');
     }
 
-    container.innerHTML = html;
+    loading.classList.add('hidden');
+}
+
+function closeTfdvModal() {
+    document.getElementById('tfdvModal').classList.add('hidden');
 }
 
 function renderSchema(schema) {

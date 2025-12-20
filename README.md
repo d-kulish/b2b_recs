@@ -144,6 +144,7 @@ See [`implementation.md`](implementation.md) for full architecture details.
 |-----------|------|-----------|---------|
 | **Django App** | Cloud Run Service | 2Gi RAM, 2 CPU | Web UI + API |
 | **ETL Runner** | Cloud Run Job | 8Gi RAM, 4 CPU | ETL execution (< 1M rows) |
+| **TFDV Parser** | Cloud Run Service | 2Gi RAM, 2 CPU | Parse TFX artifacts (Python 3.10 with TFDV) |
 | **Dataflow** | Dataflow Jobs | Auto-scaling | Large-scale ETL (≥ 1M rows) |
 | **Database** | Cloud SQL PostgreSQL 15 | Standard | Application data |
 | **Data Warehouse** | BigQuery | `raw_data` dataset | Analytics storage |
@@ -340,6 +341,7 @@ See [`next_steps.md`](next_steps.md) for detailed roadmap.
 |---------|---------|-----------|
 | `django-app@b2b-recs.iam.gserviceaccount.com` | Django App | Cloud SQL Client, Secret Manager Accessor |
 | `etl-runner@b2b-recs.iam.gserviceaccount.com` | ETL Runner | BigQuery Data Editor, Storage Object Viewer |
+| `tfdv-parser@b2b-recs.iam.gserviceaccount.com` | TFDV Parser | Storage Object Viewer |
 
 ### **Environment Variables**
 
@@ -383,6 +385,17 @@ WHERE source_type='gcs';
 ---
 
 ## 📝 Recent Updates
+
+**December 20, 2025 - TFDV Parser Microservice (Phase 18)**
+- ✅ **TFDV Parser Cloud Run Service** - Dedicated Python 3.10 service for parsing TFX artifacts
+- ✅ **Data Insights now working** - Rich statistics display in experiment View modal
+- ✅ **Statistics Parser** - Parse FeatureStats.pb with count, missing%, mean, std_dev, zeros%, min/median/max, histograms
+- ✅ **Schema Parser** - Parse schema.pbtxt files from SchemaGen component
+- ✅ **Mini visualizations** - Inline histograms for numeric features, bar charts for categorical top values
+- ✅ **TFDV HTML visualization** - Full TFDV visualization available in modal
+- ✅ **Service-to-service auth** - Identity token authentication from Django to Cloud Run
+- ✅ **Local dev support** - Fallback to `gcloud auth print-identity-token` for development
+- See [Phase 18: TFDV Parser Microservice](docs/phase_experiments_implementation.md#phase-18-tfdv-parser-microservice-december-2025) for details
 
 **December 17, 2025 - Hardware Configuration & Dataflow Integration**
 - ✅ **Hardware selection UI** - Choose CPU tiers (Small/Medium/Large) for experiments

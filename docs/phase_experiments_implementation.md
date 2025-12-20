@@ -31,6 +31,7 @@ This document provides a **complete implementation guide** for building the Expe
 20. [Phase 15: View Modal Redesign with Tabs & Artifacts](#phase-15-view-modal-redesign-with-tabs--artifacts-december-2025)
 21. [Phase 16: View Modal Config Visualizations](#phase-16-view-modal-config-visualizations-december-2025)
 22. [Phase 17: Pipeline DAG Visualization & Component Logs](#phase-17-pipeline-dag-visualization--component-logs-december-2025)
+23. [Phase 18: TFDV Parser Cloud Run Service](#phase-18-tfdv-parser-cloud-run-service-december-2025)
 23. [File Reference](#file-reference)
 23. [API Reference](#api-reference)
 24. [Testing Guide](#testing-guide)
@@ -95,6 +96,7 @@ Experiments Page = Analyze Quick Test results to find optimal parameters
 | **Phase 15** | ✅ Complete | View Modal Redesign with Tabs & Artifacts (4-tab layout, error pattern matching, lazy-loaded statistics/schema, training history placeholder) |
 | **Phase 16** | ✅ Complete | View Modal Config Visualizations (Features tensor breakdown, Model tower architecture, chip-format parameters, detailed hardware specs) |
 | **Phase 17** | ✅ Complete | Pipeline DAG Visualization & Component Logs (vertical DAG layout, SVG connections, Cloud Logging integration, component logs panel) |
+| **Phase 18** | ✅ Complete | TFDV Parser Cloud Run Service (Python 3.10 microservice for parsing TFX artifacts, rich statistics display, histograms, TFDV HTML visualization) |
 
 ### Cloud Build Implementation (December 2025)
 
@@ -5138,6 +5140,222 @@ gsutil ls gs://b2b-recs-quicktest-artifacts/
 3. **Implement Ranking Models** - Update TrainerModuleGenerator
 4. **Implement Multitask Models** - Combined retrieval + ranking
 5. **Add Hyperparameter Tuning** - Vertex AI Vizier integration
+
+---
+
+## Phase 18: TFDV Parser Cloud Run Service (December 2025)
+
+This phase implements a dedicated Cloud Run microservice for parsing TensorFlow Data Validation (TFDV) artifacts, solving the Python version incompatibility between Django (Python 3.12) and TensorFlow/TFDV (requires Python 3.10).
+
+### Problem Statement
+
+1. **Django runs on Python 3.12** for long-term support and modern features
+2. **TFDV requires TensorFlow** which doesn't support Python 3.12+
+3. **tensorflow-metadata** has protobuf version conflicts with google-cloud packages
+4. **Data Insights tab** was showing "Statistics not yet available" due to failed imports
+
+### Solution Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│  Django (Cloud Run - Python 3.12)                                       │
+│  • No TensorFlow dependencies                                           │
+│  • Calls tfdv-parser via HTTP with identity token                       │
+└─────────────────────────────────────────────────────────────────────────┘
+                              │
+                              │ HTTP POST (Cloud Run service-to-service auth)
+                              ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│  tfdv-parser (Cloud Run - Python 3.10)                                  │
+│  • Full TFX/TFDV stack installed                                        │
+│  • Parses FeatureStats.pb and schema.pbtxt from GCS                     │
+│  • Returns rich statistics JSON + optional HTML visualization           │
+│  URL: https://tfdv-parser-3dmqemfmxq-lm.a.run.app                       │
+└─────────────────────────────────────────────────────────────────────────┘
+                              │
+                              │ GCS Read
+                              ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│  GCS: b2b-recs-pipeline-staging                                         │
+│  /pipeline_root/{run_id}/StatisticsGen/.../FeatureStats.pb              │
+│  /pipeline_root/{run_id}/SchemaGen/.../schema.pbtxt                     │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### TFDV Parser Service
+
+**Service Details:**
+- **URL**: `https://tfdv-parser-3dmqemfmxq-lm.a.run.app`
+- **Region**: `europe-central2`
+- **Python**: 3.10
+- **Service Account**: `tfdv-parser@b2b-recs.iam.gserviceaccount.com`
+- **Authentication**: IAM-based (no public access)
+
+**API Endpoints:**
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/health` | GET | Health check |
+| `/parse/statistics` | POST | Parse FeatureStats.pb with rich statistics |
+| `/parse/statistics/html` | POST | Generate TFDV HTML visualization |
+| `/parse/schema` | POST | Parse schema.pbtxt |
+| `/parse/all` | POST | Parse both statistics and schema |
+
+**Statistics Response (matching TFDV standard display):**
+
+```json
+{
+    "success": true,
+    "statistics": {
+        "available": true,
+        "dataset_name": "train",
+        "num_examples": 1234567,
+        "num_features": 45,
+        "num_numeric_features": 30,
+        "num_categorical_features": 15,
+        "avg_missing_pct": 2.3,
+        "numeric_features": [
+            {
+                "name": "customer_id",
+                "feature_type": "INT",
+                "stats_type": "numeric",
+                "numeric_stats": {
+                    "count": 1234567,
+                    "missing": 0,
+                    "missing_pct": 0,
+                    "mean": 500234.5,
+                    "std_dev": 289012.3,
+                    "zeros": 0,
+                    "zeros_pct": 0,
+                    "min_val": 1,
+                    "median": 500000,
+                    "max_val": 1000000,
+                    "histogram": [
+                        {"low": 1, "high": 100000, "count": 123456},
+                        ...
+                    ]
+                }
+            }
+        ],
+        "categorical_features": [
+            {
+                "name": "category",
+                "feature_type": "STRING",
+                "stats_type": "categorical",
+                "categorical_stats": {
+                    "count": 1234567,
+                    "missing": 0,
+                    "missing_pct": 0,
+                    "unique": 125,
+                    "top_values": [
+                        {"value": "Electronics", "frequency": 234567, "frequency_pct": 19.0},
+                        {"value": "Books", "frequency": 198765, "frequency_pct": 16.1},
+                        ...
+                    ],
+                    "avg_length": 12.5
+                }
+            }
+        ]
+    }
+}
+```
+
+### Files Created
+
+| File | Purpose |
+|------|---------|
+| `tfdv_parser/Dockerfile` | Python 3.10 image with TFX/TFDV |
+| `tfdv_parser/requirements.txt` | Service dependencies |
+| `tfdv_parser/main.py` | Flask app with REST API endpoints |
+| `tfdv_parser/parsers/__init__.py` | Module exports |
+| `tfdv_parser/parsers/statistics_parser.py` | Parse FeatureStats.pb with rich stats |
+| `tfdv_parser/parsers/schema_parser.py` | Parse schema.pbtxt |
+| `tfdv_parser/cloudbuild.yaml` | Cloud Build deployment config |
+| `tfdv_parser/README.md` | Deployment documentation |
+
+### Files Modified
+
+| File | Changes |
+|------|---------|
+| `ml_platform/experiments/artifact_service.py` | Replaced local parsing with HTTP calls to tfdv-parser |
+| `ml_platform/experiments/api.py` | Added `/tfdv-visualization/` endpoint |
+| `ml_platform/experiments/urls.py` | Added URL route for TFDV visualization |
+| `templates/ml_platform/model_experiments.html` | Enhanced Data Insights UI with rich display |
+| `requirements.txt` | Removed tensorflow-metadata dependency |
+
+### Enhanced Data Insights UI
+
+**Summary Section:**
+- Examples count
+- Total features count
+- Numeric / Categorical breakdown
+- Average missing percentage
+
+**Numeric Features Table (matches TFDV standard):**
+
+| Feature | Count | Missing | Mean | Std Dev | Zeros | Min | Median | Max | Distribution |
+|---------|-------|---------|------|---------|-------|-----|--------|-----|--------------|
+| customer_id | 1.2M | 0% | 500K | 289K | 0% | 1 | 500K | 1M | [histogram] |
+
+**Categorical Features Table:**
+
+| Feature | Count | Missing | Unique | Top Values | Distribution |
+|---------|-------|---------|--------|------------|--------------|
+| category | 1.2M | 0% | 125 | Electronics (19%), Books... | [bar chart] |
+
+**TFDV HTML Visualization:**
+- "View Full TFDV Report" button opens modal with complete TFDV interactive visualization
+
+### Authentication Flow
+
+**Production (Cloud Run to Cloud Run):**
+```python
+# Uses google.oauth2.id_token.fetch_id_token()
+# Automatically works with service account metadata endpoint
+```
+
+**Local Development:**
+```python
+# Falls back to gcloud CLI
+subprocess.run(['gcloud', 'auth', 'print-identity-token'])
+```
+
+### IAM Permissions
+
+| Principal | Role | Resource |
+|-----------|------|----------|
+| `tfdv-parser@b2b-recs.iam.gserviceaccount.com` | `roles/storage.objectViewer` | GCS bucket |
+| `django-app@b2b-recs.iam.gserviceaccount.com` | `roles/run.invoker` | tfdv-parser service |
+| `user:kulish.dmytro@gmail.com` | `roles/run.invoker` | tfdv-parser service (local dev) |
+
+### Deployment Commands
+
+```bash
+# Deploy tfdv-parser service
+gcloud builds submit --config=tfdv_parser/cloudbuild.yaml --project=b2b-recs
+
+# Get service URL
+gcloud run services describe tfdv-parser --region=europe-central2 --format='value(status.url)'
+
+# Grant Django invoker permission
+gcloud run services add-iam-policy-binding tfdv-parser \
+    --region=europe-central2 \
+    --member="serviceAccount:django-app@b2b-recs.iam.gserviceaccount.com" \
+    --role="roles/run.invoker"
+```
+
+### Testing Checklist
+
+- [x] tfdv-parser service deploys successfully
+- [x] `/health` endpoint returns healthy status
+- [x] `/parse/statistics` returns rich statistics with histograms
+- [x] Statistics match TFDV standard display format
+- [x] Data Insights tab displays numeric features table
+- [x] Data Insights tab displays categorical features table
+- [x] Mini histograms render for numeric features
+- [x] Top values display for categorical features
+- [x] Authentication works from local dev server
+- [x] Authentication works from Cloud Run (django-app)
 
 ---
 

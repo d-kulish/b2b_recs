@@ -1,0 +1,68 @@
+# Cloud Build configuration for TFDV Parser service
+# Builds and deploys to Cloud Run in europe-central2
+
+steps:
+  # Build the Docker image
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'europe-central2-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/tfdv-parser:$COMMIT_SHA'
+      - '-t'
+      - 'europe-central2-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/tfdv-parser:latest'
+      - '.'
+    dir: 'tfdv_parser'
+
+  # Push the image to Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'europe-central2-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/tfdv-parser:$COMMIT_SHA'
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'europe-central2-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/tfdv-parser:latest'
+
+  # Deploy to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'gcloud'
+    args:
+      - 'run'
+      - 'deploy'
+      - 'tfdv-parser'
+      - '--image'
+      - 'europe-central2-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/tfdv-parser:$COMMIT_SHA'
+      - '--region'
+      - 'europe-central2'
+      - '--platform'
+      - 'managed'
+      - '--memory'
+      - '2Gi'
+      - '--cpu'
+      - '2'
+      - '--timeout'
+      - '300'
+      - '--concurrency'
+      - '10'
+      - '--min-instances'
+      - '0'
+      - '--max-instances'
+      - '5'
+      - '--set-env-vars'
+      - 'GCP_PROJECT_ID=$PROJECT_ID'
+      - '--no-allow-unauthenticated'
+      - '--service-account'
+      - 'tfdv-parser@$PROJECT_ID.iam.gserviceaccount.com'
+
+# Store images in Artifact Registry
+images:
+  - 'europe-central2-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/tfdv-parser:$COMMIT_SHA'
+  - 'europe-central2-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/tfdv-parser:latest'
+
+# Build options
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+# Timeout for the entire build
+timeout: '1800s'

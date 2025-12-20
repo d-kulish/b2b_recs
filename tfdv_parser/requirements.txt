@@ -1,0 +1,20 @@
+# TFDV Parser Cloud Run Service
+# Python 3.10 required for TensorFlow/TFDV compatibility
+
+# Web framework
+flask>=2.3.0
+gunicorn>=21.0.0
+
+# Google Cloud
+google-cloud-storage>=2.10.0
+
+# TensorFlow ecosystem (requires Python 3.10)
+tensorflow>=2.13.0,<2.16.0
+tensorflow-data-validation>=1.14.0
+tensorflow-metadata>=1.14.0
+
+# Required by tfx_bsl (transitive dependency of TFDV)
+dill>=0.3.0
+
+# Utilities
+protobuf>=3.20.0,<4.22.0

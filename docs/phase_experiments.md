@@ -37,6 +37,24 @@ This document provides **high-level specifications** for the Experiments domain.
 
 ## Recent Updates (December 2025)
 
+### TFDV Parser Cloud Run Service (2025-12-20)
+
+**Problem Solved:** Data Insights tab was showing "Statistics not yet available" because Django (Python 3.12) couldn't import `tensorflow-metadata` due to protobuf version conflicts with google-cloud packages.
+
+**Solution:** Created a dedicated Cloud Run microservice (`tfdv-parser`) running Python 3.10 with full TFX/TFDV stack.
+
+**Key Features:**
+1. **Microservice Architecture** - Separates TensorFlow dependencies from Django
+2. **Rich Statistics Display** - Matches standard TFDV visualization format
+   - Numeric: count, missing%, mean, std_dev, zeros%, min, median, max, histograms
+   - Categorical: count, missing%, unique, top values, distribution charts
+3. **TFDV HTML Visualization** - "View Full TFDV Report" button for complete TFDV interactive display
+4. **Cloud Run Service-to-Service Auth** - IAM-based authentication between Django and tfdv-parser
+
+**Service Details:**
+- URL: `https://tfdv-parser-3dmqemfmxq-lm.a.run.app`
+- Endpoints: `/parse/statistics`, `/parse/schema`, `/parse/statistics/html`
+
 ### Pipeline DAG Visualization with Component Logs (2025-12-20)
 
 **Major Enhancement:**
@@ -1230,6 +1248,20 @@ MLFLOW_TRACKING_URI = os.environ.get('MLFLOW_TRACKING_URI', 'http://mlflow-serve
 - [x] **7-day lookback**: Timestamp filter for accessing older experiment logs
 
 **Result:** Users see visual pipeline DAG and can inspect component execution logs without GCP access.
+
+### Phase 18: TFDV Parser Cloud Run Service ✅ DONE (2025-12-20)
+> **Microservice for parsing TFX artifacts with full TFDV support**
+
+- [x] **Cloud Run service**: Python 3.10 with TFX/TFDV (`tfdv-parser`)
+- [x] **Statistics parsing**: Parse FeatureStats.pb with rich statistics (histograms, top values)
+- [x] **Schema parsing**: Parse schema.pbtxt with feature types and constraints
+- [x] **TFDV HTML visualization**: Generate full TFDV interactive display
+- [x] **Service-to-service auth**: IAM-based authentication between Django and tfdv-parser
+- [x] **Enhanced Data Insights UI**: Rich tables for numeric and categorical features
+- [x] **Mini visualizations**: Histogram bars for numeric, bar charts for categorical
+- [x] **Identity token fallback**: gcloud CLI for local development
+
+**Result:** Data Insights tab shows comprehensive TFDV statistics matching the standard visualization format.
 
 ### Previously Completed ✅
 - [x] Create `model_experiments.html` page (placeholder)

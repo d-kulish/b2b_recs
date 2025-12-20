@@ -43,6 +43,11 @@ urlpatterns = [
         name='quick_test_schema'
     ),
     path(
+        'api/quick-tests/<int:quick_test_id>/tfdv-visualization/',
+        api.quick_test_tfdv_visualization,
+        name='quick_test_tfdv_visualization'
+    ),
+    path(
         'api/quick-tests/<int:quick_test_id>/training-history/',
         api.quick_test_training_history,
         name='quick_test_training_history'

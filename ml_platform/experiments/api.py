@@ -818,6 +818,62 @@ def quick_test_schema(request, quick_test_id):
 
 @csrf_exempt
 @require_http_methods(["GET"])
+def quick_test_tfdv_visualization(request, quick_test_id):
+    """
+    Get TFDV HTML visualization for dataset statistics.
+
+    GET /api/quick-tests/<id>/tfdv-visualization/
+
+    Returns:
+    {
+        "success": true,
+        "html": "<html>...</html>"
+    }
+    """
+    try:
+        model_endpoint = _get_model_endpoint(request)
+        if not model_endpoint:
+            return JsonResponse({
+                'success': False,
+                'error': 'No model endpoint selected'
+            }, status=400)
+
+        try:
+            quick_test = QuickTest.objects.get(
+                id=quick_test_id,
+                feature_config__dataset__model_endpoint=model_endpoint
+            )
+        except QuickTest.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': f'QuickTest {quick_test_id} not found'
+            }, status=404)
+
+        # Get TFDV HTML visualization
+        artifact_service = ArtifactService(project_id=model_endpoint.gcp_project_id)
+        html = artifact_service.get_statistics_html(quick_test)
+
+        if html:
+            return JsonResponse({
+                'success': True,
+                'html': html
+            })
+        else:
+            return JsonResponse({
+                'success': False,
+                'error': 'TFDV visualization not available'
+            }, status=404)
+
+    except Exception as e:
+        logger.exception(f"Error getting TFDV visualization: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
 def quick_test_component_logs(request, quick_test_id, component):
     """
     Get recent logs for a specific pipeline component.

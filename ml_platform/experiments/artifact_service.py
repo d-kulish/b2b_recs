@@ -4,18 +4,31 @@ Artifact Service for Pipeline Artifacts
 Service for fetching and parsing TFX pipeline artifacts from GCS,
 including statistics, schema, and error details from Vertex AI.
 
+Statistics and schema parsing is delegated to the tfdv-parser Cloud Run
+service, which runs Python 3.10 with full TFDV support.
+
 Implements lazy loading - artifacts are fetched on-demand when requested,
 not proactively during pipeline execution.
 """
 import json
 import logging
+import os
 from typing import Dict, List, Optional, Any
 
+import requests
 from django.conf import settings
+from google.auth import default
+from google.auth.transport.requests import Request
 
 from .error_patterns import format_error_for_display
 
 logger = logging.getLogger(__name__)
+
+# TFDV Parser service URL (Cloud Run)
+TFDV_PARSER_URL = os.environ.get(
+    'TFDV_PARSER_URL',
+    'https://tfdv-parser-3dmqemfmxq-lm.a.run.app'
+)
 
 
 class ArtifactServiceError(Exception):
@@ -249,41 +262,114 @@ class ArtifactService:
             return []
 
     # =========================================================================
+    # TFDV Parser Service Client
+    # =========================================================================
+
+    def _get_auth_token(self) -> Optional[str]:
+        """
+        Get identity token for Cloud Run service-to-service calls.
+
+        Cloud Run requires an identity token (not access token) with the
+        target service URL as the audience.
+
+        For production (Cloud Run): Uses service account metadata endpoint
+        For local development: Falls back to gcloud CLI
+        """
+        # Method 1: Try google.oauth2.id_token (works with service accounts)
+        try:
+            import google.auth.transport.requests
+            import google.oauth2.id_token
+
+            auth_req = google.auth.transport.requests.Request()
+            token = google.oauth2.id_token.fetch_id_token(auth_req, TFDV_PARSER_URL)
+            return token
+        except Exception as e:
+            logger.debug(f"fetch_id_token failed (expected for user credentials): {e}")
+
+        # Method 2: Fallback for local dev - use gcloud CLI (without audiences for user accounts)
+        try:
+            import subprocess
+            result = subprocess.run(
+                ['gcloud', 'auth', 'print-identity-token'],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                return result.stdout.strip()
+            else:
+                logger.warning(f"gcloud identity token failed: {result.stderr}")
+        except Exception as e:
+            logger.warning(f"Failed to get identity token via gcloud: {e}")
+
+        return None
+
+    def _call_tfdv_parser(self, endpoint: str, payload: Dict) -> Optional[Dict]:
+        """
+        Call the tfdv-parser Cloud Run service.
+
+        Args:
+            endpoint: API endpoint (e.g., '/parse/statistics')
+            payload: JSON payload to send
+
+        Returns:
+            Response JSON or None on error
+        """
+        url = f"{TFDV_PARSER_URL}{endpoint}"
+
+        try:
+            # Get auth token for Cloud Run authentication
+            token = self._get_auth_token()
+            headers = {'Content-Type': 'application/json'}
+            if token:
+                headers['Authorization'] = f'Bearer {token}'
+
+            logger.info(f"Calling tfdv-parser: {endpoint}")
+            response = requests.post(
+                url,
+                json=payload,
+                headers=headers,
+                timeout=60  # Allow up to 60 seconds for large datasets
+            )
+
+            if response.ok:
+                return response.json()
+            else:
+                logger.warning(f"tfdv-parser returned {response.status_code}: {response.text}")
+                return None
+
+        except requests.exceptions.Timeout:
+            logger.warning(f"tfdv-parser request timed out")
+            return None
+        except requests.exceptions.RequestException as e:
+            logger.warning(f"tfdv-parser request failed: {e}")
+            return None
+
+    # =========================================================================
     # Statistics
     # =========================================================================
 
-    def get_statistics_summary(self, quick_test) -> Dict:
+    def get_statistics_summary(self, quick_test, include_html: bool = False) -> Dict:
         """
-        Get dataset statistics summary from TFDV artifacts.
+        Get dataset statistics summary from TFDV artifacts via tfdv-parser service.
 
-        Parses the StatisticsGen output to extract:
-        - Total example count
-        - Feature count
-        - Per-feature statistics (type, unique values, missing %, etc.)
+        Returns comprehensive statistics matching the standard TFDV visualization:
+
+        Numeric Features:
+        - count, missing%, mean, std_dev, zeros%, min, median, max
+        - histogram data for visualization
+
+        Categorical Features:
+        - count, missing%, unique
+        - top values with frequencies
+        - value distribution for bar charts
 
         Args:
             quick_test: QuickTest instance
+            include_html: If True, also return TFDV HTML visualization
 
         Returns:
-            Dict with statistics summary:
-            {
-                "available": bool,
-                "num_examples": int,
-                "num_features": int,
-                "avg_missing_ratio": float,
-                "features": [
-                    {
-                        "name": str,
-                        "type": str,
-                        "num_unique": int or None,
-                        "missing_pct": float,
-                        "min": float or None,
-                        "max": float or None,
-                        "mean": float or None,
-                    },
-                    ...
-                ]
-            }
+            Dict with statistics summary
         """
         pipeline_root = self._get_pipeline_root(quick_test)
         if not pipeline_root:
@@ -292,193 +378,54 @@ class ArtifactService:
                 'message': 'Pipeline artifacts not available'
             }
 
-        try:
-            # TFDV statistics are stored in the StatisticsGen component output
-            # Path pattern: {pipeline_root}/StatisticsGen/statistics/{execution_id}/Split-train/FeatureStats.pb
-            # We need to find the actual path by listing the directory
+        # Call tfdv-parser service
+        response = self._call_tfdv_parser('/parse/statistics', {
+            'pipeline_root': pipeline_root,
+            'include_html': include_html
+        })
 
-            stats = self._load_tfdv_statistics(pipeline_root)
-            if not stats:
-                return {
-                    'available': False,
-                    'message': 'Statistics not yet available. Pipeline may still be running.'
-                }
-
-            return self._parse_statistics(stats)
-
-        except Exception as e:
-            logger.exception(f"Error getting statistics: {e}")
+        if not response:
             return {
                 'available': False,
-                'message': f'Failed to load statistics: {str(e)}'
+                'message': 'Failed to connect to statistics parser service'
             }
 
-    def _load_tfdv_statistics(self, pipeline_root: str) -> Optional[Any]:
-        """
-        Load TFDV statistics from GCS.
-
-        Uses tensorflow_metadata to parse statistics proto directly
-        (without requiring full tensorflow_data_validation which needs TensorFlow).
-
-        Args:
-            pipeline_root: Pipeline root GCS path
-
-        Returns:
-            DatasetFeatureStatisticsList proto or None
-        """
-        try:
-            from tensorflow_metadata.proto.v0 import statistics_pb2
-        except ImportError:
-            logger.warning("tensorflow_metadata not installed")
-            return None
-
-        # Parse bucket and prefix from pipeline_root
-        # Format: gs://bucket/path/to/root
-        path_parts = pipeline_root.replace('gs://', '').split('/', 1)
-        bucket_name = path_parts[0]
-        prefix = path_parts[1] if len(path_parts) > 1 else ''
-
-        bucket = self.storage_client.bucket(bucket_name)
-
-        # Vertex AI creates an execution_id folder layer, so actual path is:
-        # {prefix}/{execution_id}/StatisticsGen/statistics/Split-train/FeatureStats.pb
-        # We search from the pipeline_root and look for StatisticsGen in the path
-
-        # List all blobs under pipeline_root (limited to avoid huge lists)
-        blobs = list(bucket.list_blobs(prefix=prefix, max_results=500))
-
-        # Find FeatureStats.pb file in StatisticsGen output
-        stats_blob = None
-        for blob in blobs:
-            # Look for the statistics file pattern
-            if ('StatisticsGen' in blob.name and
-                'statistics' in blob.name and
-                'Split-train' in blob.name and
-                blob.name.endswith('FeatureStats.pb')):
-                stats_blob = blob
-                logger.info(f"Found statistics blob: {blob.name}")
-                break
-
-        if not stats_blob:
-            # Fallback: look for any FeatureStats.pb in the prefix
-            for blob in blobs:
-                if blob.name.endswith('FeatureStats.pb'):
-                    stats_blob = blob
-                    logger.info(f"Found statistics blob (fallback): {blob.name}")
-                    break
-
-        if not stats_blob:
-            logger.info(f"No statistics file found under {prefix}. Found {len(blobs)} blobs total.")
-            # Log some of the blob names for debugging
-            if blobs:
-                sample_names = [b.name for b in blobs[:10]]
-                logger.info(f"Sample blob names: {sample_names}")
-            return None
-
-        # Download and parse the protobuf directly
-        logger.info(f"Loading statistics from gs://{bucket_name}/{stats_blob.name}")
-
-        try:
-            # Download raw bytes
-            stats_bytes = stats_blob.download_as_bytes()
-
-            # Parse as DatasetFeatureStatisticsList proto
-            stats = statistics_pb2.DatasetFeatureStatisticsList()
-            stats.ParseFromString(stats_bytes)
-
-            logger.info(f"Successfully parsed statistics with {len(stats.datasets)} datasets")
-            return stats
-
-        except Exception as e:
-            logger.warning(f"Failed to parse statistics proto: {e}")
-            return None
-
-    def _parse_statistics(self, stats) -> Dict:
-        """
-        Parse TFDV statistics into summary format.
-
-        Args:
-            stats: TFDV DatasetFeatureStatisticsList
-
-        Returns:
-            Summary dict
-        """
-        if not stats or not stats.datasets:
+        if not response.get('success'):
             return {
                 'available': False,
-                'message': 'No statistics data found'
+                'message': response.get('error', 'Unknown error from parser service')
             }
 
-        dataset = stats.datasets[0]
-        num_examples = dataset.num_examples
+        statistics = response.get('statistics', {})
 
-        features = []
-        total_missing_ratio = 0
+        # Add HTML if requested and available
+        if include_html and 'html' in response:
+            statistics['html_visualization'] = response['html']
 
-        for feature in dataset.features:
-            # Safely extract feature name
-            try:
-                feature_path = getattr(feature, 'path', None)
-                if feature_path and feature_path.step:
-                    feature_name = feature_path.step[0]
-                else:
-                    feature_name = getattr(feature, 'name', 'unknown')
-            except (AttributeError, IndexError):
-                feature_name = 'unknown'
+        return statistics
 
-            # Determine feature type and extract stats
-            feature_info = {
-                'name': feature_name,
-                'type': 'UNKNOWN',
-                'num_unique': None,
-                'missing_pct': 0,
-                'min': None,
-                'max': None,
-                'mean': None,
-            }
+    def get_statistics_html(self, quick_test) -> Optional[str]:
+        """
+        Get TFDV HTML visualization for statistics.
 
-            # Calculate missing percentage
-            if num_examples > 0:
-                missing_count = getattr(feature, 'num_missing', 0) or 0
-                feature_info['missing_pct'] = round((missing_count / num_examples) * 100, 2)
-                total_missing_ratio += feature_info['missing_pct']
+        Args:
+            quick_test: QuickTest instance
 
-            # Check for numeric stats - wrap in try-except for proto compatibility
-            try:
-                if feature.HasField('num_stats'):
-                    feature_info['type'] = 'NUMERIC'
-                    num_stats = feature.num_stats
-                    feature_info['min'] = round(num_stats.min, 4) if num_stats.min != float('inf') else None
-                    feature_info['max'] = round(num_stats.max, 4) if num_stats.max != float('-inf') else None
-                    feature_info['mean'] = round(num_stats.mean, 4) if num_stats.mean else None
+        Returns:
+            HTML string or None
+        """
+        pipeline_root = self._get_pipeline_root(quick_test)
+        if not pipeline_root:
+            return None
 
-                # Check for string stats
-                elif feature.HasField('string_stats'):
-                    feature_info['type'] = 'CATEGORICAL'
-                    string_stats = feature.string_stats
-                    feature_info['num_unique'] = string_stats.unique
+        response = self._call_tfdv_parser('/parse/statistics/html', {
+            'pipeline_root': pipeline_root
+        })
 
-                # Check for bytes stats
-                elif feature.HasField('bytes_stats'):
-                    feature_info['type'] = 'BYTES'
-            except (ValueError, AttributeError):
-                # HasField may fail for certain proto structures
-                pass
+        if response and response.get('success'):
+            return response.get('html')
 
-            features.append(feature_info)
-
-        # Calculate average missing ratio
-        avg_missing = total_missing_ratio / len(features) if features else 0
-
-        return {
-            'available': True,
-            'num_examples': num_examples,
-            'num_features': len(features),
-            'avg_missing_ratio': round(avg_missing, 2),
-            'features': features[:50],  # Limit to 50 features for UI
-            'total_features': len(features),
-            'truncated': len(features) > 50
-        }
+        return None
 
     # =========================================================================
     # Schema
@@ -486,30 +433,19 @@ class ArtifactService:
 
     def get_schema_summary(self, quick_test) -> Dict:
         """
-        Get schema summary from TensorFlow Metadata artifacts.
+        Get schema summary from TensorFlow Metadata artifacts via tfdv-parser service.
 
-        Parses the SchemaGen output to extract:
-        - Feature names
-        - Feature types
+        Returns comprehensive schema information:
+        - Feature names and types
         - Presence constraints (required/optional)
+        - Domain constraints (min/max, vocabulary)
+        - Value constraints
 
         Args:
             quick_test: QuickTest instance
 
         Returns:
-            Dict with schema summary:
-            {
-                "available": bool,
-                "features": [
-                    {
-                        "name": str,
-                        "type": str,
-                        "required": bool,
-                        "description": str or None,
-                    },
-                    ...
-                ]
-            }
+            Dict with schema summary
         """
         pipeline_root = self._get_pipeline_root(quick_test)
         if not pipeline_root:
@@ -518,141 +454,24 @@ class ArtifactService:
                 'message': 'Pipeline artifacts not available'
             }
 
-        try:
-            schema = self._load_schema(pipeline_root)
-            if not schema:
-                return {
-                    'available': False,
-                    'message': 'Schema not yet available. Pipeline may still be running.'
-                }
+        # Call tfdv-parser service
+        response = self._call_tfdv_parser('/parse/schema', {
+            'pipeline_root': pipeline_root
+        })
 
-            return self._parse_schema(schema)
-
-        except Exception as e:
-            logger.exception(f"Error getting schema: {e}")
+        if not response:
             return {
                 'available': False,
-                'message': f'Failed to load schema: {str(e)}'
+                'message': 'Failed to connect to schema parser service'
             }
 
-    def _load_schema(self, pipeline_root: str) -> Optional[Any]:
-        """
-        Load TensorFlow Metadata schema from GCS.
-
-        Args:
-            pipeline_root: Pipeline root GCS path
-
-        Returns:
-            Schema proto or None
-        """
-        try:
-            from tensorflow_metadata.proto.v0 import schema_pb2
-            from google.protobuf import text_format
-        except ImportError:
-            logger.warning("tensorflow_metadata not installed")
-            return None
-
-        # Parse bucket and prefix
-        path_parts = pipeline_root.replace('gs://', '').split('/', 1)
-        bucket_name = path_parts[0]
-        prefix = path_parts[1] if len(path_parts) > 1 else ''
-
-        bucket = self.storage_client.bucket(bucket_name)
-
-        # Vertex AI creates an execution_id folder layer, so actual path is:
-        # {prefix}/{execution_id}/SchemaGen/schema/schema.pbtxt
-        # We search from the pipeline_root and look for SchemaGen in the path
-
-        # List all blobs under pipeline_root
-        blobs = list(bucket.list_blobs(prefix=prefix, max_results=500))
-
-        # Find schema.pbtxt file in SchemaGen output
-        schema_blob = None
-        for blob in blobs:
-            if ('SchemaGen' in blob.name and
-                'schema' in blob.name and
-                blob.name.endswith('schema.pbtxt')):
-                schema_blob = blob
-                logger.info(f"Found schema blob: {blob.name}")
-                break
-
-        if not schema_blob:
-            # Fallback: look for any schema.pbtxt in the prefix
-            for blob in blobs:
-                if blob.name.endswith('schema.pbtxt'):
-                    schema_blob = blob
-                    logger.info(f"Found schema blob (fallback): {blob.name}")
-                    break
-
-        if not schema_blob:
-            logger.info(f"No schema file found under {prefix}. Found {len(blobs)} blobs total.")
-            return None
-
-        # Download and parse
-        logger.info(f"Loading schema from gs://{bucket_name}/{schema_blob.name}")
-        content = schema_blob.download_as_text()
-
-        schema = schema_pb2.Schema()
-        text_format.Parse(content, schema)
-
-        return schema
-
-    def _parse_schema(self, schema) -> Dict:
-        """
-        Parse TensorFlow Metadata schema into summary format.
-
-        Args:
-            schema: Schema proto
-
-        Returns:
-            Summary dict
-        """
-        from tensorflow_metadata.proto.v0 import schema_pb2
-
-        features = []
-
-        for feature in schema.feature:
-            # Safely get description - may not exist on all proto versions
-            description = getattr(feature, 'description', None)
-            if description == '':
-                description = None
-
-            feature_info = {
-                'name': feature.name,
-                'type': 'UNKNOWN',
-                'required': False,
-                'description': description,
+        if not response.get('success'):
+            return {
+                'available': False,
+                'message': response.get('error', 'Unknown error from parser service')
             }
 
-            # Get type - safely access in case proto version differs
-            type_map = {
-                schema_pb2.INT: 'INT64',
-                schema_pb2.FLOAT: 'FLOAT',
-                schema_pb2.BYTES: 'STRING',
-            }
-            feature_type = getattr(feature, 'type', None)
-            if feature_type is not None:
-                feature_info['type'] = type_map.get(feature_type, 'UNKNOWN')
-            else:
-                feature_info['type'] = 'UNKNOWN'
-
-            # Check if required - safely handle potential proto differences
-            try:
-                if feature.HasField('presence'):
-                    feature_info['required'] = feature.presence.min_fraction >= 1.0
-            except (ValueError, AttributeError):
-                # HasField may fail for certain field types or proto versions
-                pass
-
-            features.append(feature_info)
-
-        return {
-            'available': True,
-            'num_features': len(features),
-            'features': features[:50],  # Limit for UI
-            'total_features': len(features),
-            'truncated': len(features) > 50
-        }
+        return response.get('schema', {})
 
     # =========================================================================
     # Training History (Placeholder for MLflow)

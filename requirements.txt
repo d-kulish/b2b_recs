@@ -53,7 +53,7 @@ google-cloud-logging>=3.10.0
 # - tensorflow-recommenders>=0.7.3
 # - tensorflow-transform>=1.14.0
 
-# For parsing TFX pipeline artifacts (statistics, schema)
-# Note: tensorflow-data-validation requires TensorFlow which doesn't support Python 3.13
-# We use tensorflow-metadata directly to parse proto files
-tensorflow-metadata>=1.14.0
+# TFX pipeline artifacts (statistics, schema) are parsed by the tfdv-parser
+# Cloud Run service, which runs Python 3.10 with full TFDV support.
+# This avoids the tensorflow-metadata protobuf version conflicts in Python 3.12+.
+# The Django app calls tfdv-parser via HTTP (see TFDV_PARSER_URL env var).

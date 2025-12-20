@@ -1750,52 +1750,328 @@
         min-width: 40px;
     }
 
-    /* Pipeline Visual */
-    .exp-view-pipeline {
+    /* Compile Stage Indicator */
+    .exp-view-compile-stage {
         display: flex;
+        align-items: center;
         gap: 8px;
-        margin-bottom: 20px;
-        flex-wrap: wrap;
+        padding: 8px 12px;
+        background: #f0fdf4;
+        border: 1px solid #86efac;
+        border-radius: 6px;
+        margin-bottom: 12px;
+        font-size: 12px;
+        color: #166534;
     }
-    .exp-view-pipeline-stage {
-        flex: 1;
-        min-width: 90px;
-        text-align: center;
-        padding: 12px 8px;
-        border-radius: 8px;
-        border: 1px solid #e5e7eb;
+    .exp-view-compile-stage.running {
+        background: #eff6ff;
+        border-color: #93c5fd;
+        color: #1e40af;
+    }
+    .exp-view-compile-stage.failed {
+        background: #fef2f2;
+        border-color: #fca5a5;
+        color: #991b1b;
+    }
+    .exp-view-compile-stage.pending {
         background: #f9fafb;
-        position: relative;
+        border-color: #e5e7eb;
+        color: #6b7280;
     }
-    .exp-view-pipeline-stage.completed {
+    .exp-view-compile-icon {
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 10px;
+        background: #dcfce7;
+    }
+    .exp-view-compile-stage.running .exp-view-compile-icon {
+        background: #dbeafe;
+    }
+    .exp-view-compile-stage.failed .exp-view-compile-icon {
+        background: #fee2e2;
+    }
+    .exp-view-compile-stage.pending .exp-view-compile-icon {
+        background: #f3f4f6;
+    }
+
+    /* Pipeline DAG Visual */
+    .exp-view-dag-container {
+        position: relative;
+        padding: 16px;
+        background: #fafafa;
+        border-radius: 8px;
+        margin-bottom: 16px;
+        min-height: 320px;
+    }
+    .exp-view-dag-svg {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: 0;
+    }
+    .exp-view-dag-svg path {
+        fill: none;
+        stroke: #d1d5db;
+        stroke-width: 2;
+    }
+    .exp-view-dag-svg path.completed {
+        stroke: #86efac;
+    }
+    .exp-view-dag-nodes {
+        position: relative;
+        z-index: 1;
+    }
+    .exp-view-dag-row {
+        display: flex;
+        justify-content: center;
+        gap: 24px;
+        margin-bottom: 12px;
+    }
+    .exp-view-dag-connector {
+        height: 24px;
+    }
+    .exp-view-dag-node {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 14px;
+        background: #ffffff;
+        border: 2px solid #e5e7eb;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        min-width: 140px;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    }
+    .exp-view-dag-node:hover {
+        border-color: #3b82f6;
+        box-shadow: 0 2px 8px rgba(59, 130, 246, 0.15);
+    }
+    .exp-view-dag-node.selected {
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+    }
+    .exp-view-dag-node.completed {
         background: #f0fdf4;
         border-color: #86efac;
     }
-    .exp-view-pipeline-stage.running {
+    .exp-view-dag-node.running {
         background: #eff6ff;
         border-color: #93c5fd;
+        animation: pulse-border 2s infinite;
     }
-    .exp-view-pipeline-stage.failed {
+    @keyframes pulse-border {
+        0%, 100% { border-color: #93c5fd; }
+        50% { border-color: #3b82f6; }
+    }
+    .exp-view-dag-node.failed {
         background: #fef2f2;
         border-color: #fca5a5;
     }
-    .exp-view-pipeline-stage-icon {
-        font-size: 18px;
-        margin-bottom: 6px;
+    .exp-view-dag-node.pending {
+        background: #f9fafb;
+        border-color: #e5e7eb;
+        opacity: 0.7;
     }
-    .exp-view-pipeline-stage.completed .exp-view-pipeline-stage-icon { color: #22c55e; }
-    .exp-view-pipeline-stage.running .exp-view-pipeline-stage-icon { color: #3b82f6; }
-    .exp-view-pipeline-stage.failed .exp-view-pipeline-stage-icon { color: #ef4444; }
-    .exp-view-pipeline-stage.pending .exp-view-pipeline-stage-icon { color: #9ca3af; }
-    .exp-view-pipeline-stage-name {
-        font-size: 11px;
+    .exp-view-dag-node-icon {
+        width: 28px;
+        height: 28px;
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 14px;
+        flex-shrink: 0;
+    }
+    .exp-view-dag-node.completed .exp-view-dag-node-icon {
+        background: #dcfce7;
+        color: #16a34a;
+    }
+    .exp-view-dag-node.running .exp-view-dag-node-icon {
+        background: #dbeafe;
+        color: #2563eb;
+    }
+    .exp-view-dag-node.failed .exp-view-dag-node-icon {
+        background: #fee2e2;
+        color: #dc2626;
+    }
+    .exp-view-dag-node.pending .exp-view-dag-node-icon {
+        background: #f3f4f6;
+        color: #9ca3af;
+    }
+    .exp-view-dag-node-info {
+        flex: 1;
+        min-width: 0;
+    }
+    .exp-view-dag-node-name {
+        font-size: 12px;
         font-weight: 600;
         color: #374151;
         margin-bottom: 2px;
     }
-    .exp-view-pipeline-stage-time {
+    .exp-view-dag-node-time {
         font-size: 10px;
         color: #6b7280;
+    }
+    .exp-view-dag-node-status {
+        font-size: 10px;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-weight: 500;
+    }
+    .exp-view-dag-node.running .exp-view-dag-node-status {
+        background: #dbeafe;
+        color: #1d4ed8;
+    }
+    .exp-view-dag-node.failed .exp-view-dag-node-status {
+        background: #fee2e2;
+        color: #b91c1c;
+    }
+
+    /* Component Detail Panel */
+    .exp-view-component-detail {
+        background: #ffffff;
+        border: 1px solid #e5e7eb;
+        border-radius: 10px;
+        margin-bottom: 16px;
+        overflow: hidden;
+    }
+    .exp-view-component-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 16px;
+        background: #f9fafb;
+        border-bottom: 1px solid #e5e7eb;
+    }
+    .exp-view-component-name {
+        font-size: 14px;
+        font-weight: 600;
+        color: #111827;
+    }
+    .exp-view-component-status {
+        font-size: 11px;
+        padding: 3px 8px;
+        border-radius: 4px;
+        font-weight: 500;
+    }
+    .exp-view-component-status.completed {
+        background: #dcfce7;
+        color: #166534;
+    }
+    .exp-view-component-status.running {
+        background: #dbeafe;
+        color: #1e40af;
+    }
+    .exp-view-component-status.failed {
+        background: #fee2e2;
+        color: #991b1b;
+    }
+    .exp-view-component-status.pending {
+        background: #f3f4f6;
+        color: #6b7280;
+    }
+    .exp-view-component-duration {
+        margin-left: auto;
+        font-size: 12px;
+        color: #6b7280;
+    }
+    .exp-view-component-duration i {
+        margin-right: 4px;
+    }
+    .exp-view-logs-section {
+        padding: 12px 16px;
+    }
+    .exp-view-logs-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 10px;
+    }
+    .exp-view-logs-header span {
+        font-size: 12px;
+        font-weight: 600;
+        color: #374151;
+    }
+    .exp-view-refresh-btn {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 10px;
+        background: #f3f4f6;
+        border: 1px solid #e5e7eb;
+        border-radius: 5px;
+        font-size: 11px;
+        color: #374151;
+        cursor: pointer;
+        transition: all 0.15s ease;
+    }
+    .exp-view-refresh-btn:hover {
+        background: #e5e7eb;
+    }
+    .exp-view-refresh-btn.loading i {
+        animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+    }
+    .exp-view-logs-container {
+        background: #1e1e1e;
+        border-radius: 6px;
+        padding: 12px;
+        max-height: 200px;
+        overflow-y: auto;
+        font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+        font-size: 11px;
+        line-height: 1.5;
+    }
+    .exp-view-logs-container::-webkit-scrollbar {
+        width: 6px;
+    }
+    .exp-view-logs-container::-webkit-scrollbar-thumb {
+        background: #4b5563;
+        border-radius: 3px;
+    }
+    .exp-view-log-entry {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 4px;
+    }
+    .exp-view-log-entry:last-child {
+        margin-bottom: 0;
+    }
+    .exp-view-log-time {
+        color: #6b7280;
+        flex-shrink: 0;
+    }
+    .exp-view-log-severity {
+        flex-shrink: 0;
+        min-width: 50px;
+    }
+    .exp-view-log-severity.INFO { color: #60a5fa; }
+    .exp-view-log-severity.WARNING { color: #fbbf24; }
+    .exp-view-log-severity.ERROR { color: #f87171; }
+    .exp-view-log-severity.DEBUG { color: #9ca3af; }
+    .exp-view-log-message {
+        color: #e5e7eb;
+        word-break: break-word;
+    }
+    .exp-view-logs-empty {
+        color: #6b7280;
+        text-align: center;
+        padding: 20px;
+    }
+    .exp-view-logs-error {
+        color: #f87171;
+        padding: 8px;
     }
 
     /* Error Box */
@@ -2778,9 +3054,44 @@
                     <span class="exp-view-progress-text" id="expViewProgressText">0%</span>
                 </div>
 
-                <!-- Pipeline Visual -->
-                <div class="exp-view-pipeline" id="expViewPipeline">
-                    <!-- Populated by JavaScript -->
+                <!-- Compile Stage Indicator (Cloud Build - separate from Vertex AI DAG) -->
+                <div class="exp-view-compile-stage" id="expViewCompileStage">
+                    <span class="exp-view-compile-icon" id="expViewCompileIcon">
+                        <i class="fas fa-check"></i>
+                    </span>
+                    <span class="exp-view-compile-text">Pipeline Compiled</span>
+                </div>
+
+                <!-- Pipeline DAG Visual -->
+                <div class="exp-view-dag-container" id="expViewDagContainer">
+                    <svg class="exp-view-dag-svg" id="expViewDagSvg"></svg>
+                    <div class="exp-view-dag-nodes" id="expViewDagNodes">
+                        <!-- Populated by JavaScript -->
+                    </div>
+                </div>
+
+                <!-- Component Detail Panel (shown on node click) -->
+                <div id="expViewComponentDetail" class="exp-view-component-detail hidden">
+                    <div class="exp-view-component-header">
+                        <span class="exp-view-component-name" id="expViewComponentName">Component</span>
+                        <span class="exp-view-component-status" id="expViewComponentStatus">pending</span>
+                        <span class="exp-view-component-duration" id="expViewComponentDuration">
+                            <i class="fas fa-clock"></i>
+                            <span id="expViewComponentDurationText">-</span>
+                        </span>
+                    </div>
+                    <div class="exp-view-logs-section">
+                        <div class="exp-view-logs-header">
+                            <span>Recent Logs</span>
+                            <button class="exp-view-refresh-btn" id="expViewRefreshLogsBtn" onclick="refreshComponentLogs()">
+                                <i class="fas fa-sync-alt"></i>
+                                Refresh
+                            </button>
+                        </div>
+                        <div class="exp-view-logs-container" id="expViewLogsContainer">
+                            <div class="exp-view-logs-empty">Click a component to view logs</div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Error Section (for failed experiments) -->
@@ -4357,6 +4668,7 @@ function closeExpViewModal(event) {
     stopViewModalPolling();
     viewModalExpId = null;
     viewModalDataCache = { statistics: null, schema: null, errorDetails: null, trainingHistory: null };
+    resetDagState();
 }
 
 function loadDatasetDetailsForExp(datasetId) {
@@ -5118,30 +5430,270 @@ function renderMetricsSummary(metrics) {
     `).join('');
 }
 
-function renderPipelineStages(stages) {
-    const container = document.getElementById('expViewPipeline');
+// =========================================================================
+// Pipeline DAG Visualization
+// =========================================================================
+
+// DAG structure - fixed for TFX pipeline (skip Compile, it's Cloud Build)
+const PIPELINE_DAG = {
+    nodes: [
+        { id: 'Examples', name: 'ExampleGen', icon: 'fa-database', row: 0 },
+        { id: 'Stats', name: 'StatisticsGen', icon: 'fa-chart-bar', row: 1 },
+        { id: 'Schema', name: 'SchemaGen', icon: 'fa-sitemap', row: 1 },
+        { id: 'Transform', name: 'Transform', icon: 'fa-exchange-alt', row: 2 },
+        { id: 'Train', name: 'Trainer', icon: 'fa-brain', row: 3 }
+    ],
+    edges: [
+        { from: 'Examples', to: 'Stats' },
+        { from: 'Examples', to: 'Schema' },
+        { from: 'Stats', to: 'Transform' },
+        { from: 'Schema', to: 'Transform' },
+        { from: 'Transform', to: 'Train' }
+    ]
+};
+
+// Track currently selected component
+let selectedComponentId = null;
+let currentStageDetails = [];
+
+function updateCompileStageIndicator(compileStage) {
+    const container = document.getElementById('expViewCompileStage');
+    const iconEl = document.getElementById('expViewCompileIcon');
+    if (!container || !iconEl) return;
+
+    const status = compileStage?.status || 'pending';
+    container.className = 'exp-view-compile-stage ' + status;
+
+    // Update icon and text
     const icons = {
-        'completed': 'fa-check-circle',
+        'completed': 'fa-check',
         'running': 'fa-spinner fa-spin',
-        'failed': 'fa-times-circle',
+        'failed': 'fa-times',
+        'pending': 'fa-circle'
+    };
+    const texts = {
+        'completed': 'Pipeline Compiled',
+        'running': 'Compiling Pipeline...',
+        'failed': 'Compilation Failed',
+        'pending': 'Waiting to Compile'
+    };
+
+    iconEl.innerHTML = `<i class="fas ${icons[status] || 'fa-circle'}"></i>`;
+    container.querySelector('.exp-view-compile-text').textContent = texts[status] || 'Compile';
+}
+
+function renderPipelineStages(stages) {
+    // Store stages for later use
+    currentStageDetails = stages;
+
+    // Map stage array to lookup by name (skip Compile - it's Cloud Build)
+    const stageMap = {};
+    stages.forEach(s => { stageMap[s.name] = s; });
+
+    // Update Compile stage indicator (separate from DAG)
+    updateCompileStageIndicator(stageMap['Compile']);
+
+    const container = document.getElementById('expViewDagNodes');
+    const icons = {
+        'completed': 'fa-check',
+        'running': 'fa-spinner fa-spin',
+        'failed': 'fa-times',
         'pending': 'fa-circle'
     };
 
-    container.innerHTML = stages.map(stage => {
-        const statusClass = stage.status || 'pending';
-        const icon = icons[statusClass] || 'fa-circle';
-        const duration = stage.duration_seconds ? formatDuration(stage.duration_seconds) : '-';
+    // Group nodes by row
+    const rows = {};
+    PIPELINE_DAG.nodes.forEach(node => {
+        if (!rows[node.row]) rows[node.row] = [];
+        rows[node.row].push(node);
+    });
 
-        return `
-            <div class="exp-view-pipeline-stage ${statusClass}">
-                <div class="exp-view-pipeline-stage-icon">
-                    <i class="fas ${icon}"></i>
+    // Build HTML
+    let html = '';
+    const rowKeys = Object.keys(rows).sort((a, b) => a - b);
+
+    rowKeys.forEach((rowKey, rowIndex) => {
+        const rowNodes = rows[rowKey];
+
+        // Add connector space between rows (except before first)
+        if (rowIndex > 0) {
+            html += '<div class="exp-view-dag-connector"></div>';
+        }
+
+        html += '<div class="exp-view-dag-row">';
+        rowNodes.forEach(node => {
+            const stage = stageMap[node.id] || { status: 'pending', duration_seconds: null };
+            const statusClass = stage.status || 'pending';
+            const statusIcon = icons[statusClass] || 'fa-circle';
+            const duration = stage.duration_seconds ? formatDuration(stage.duration_seconds) : '';
+            const selected = selectedComponentId === node.id ? 'selected' : '';
+
+            // Show status badge only for running/failed
+            const statusBadge = (statusClass === 'running' || statusClass === 'failed')
+                ? `<span class="exp-view-dag-node-status">${statusClass.toUpperCase()}</span>`
+                : '';
+
+            html += `
+                <div class="exp-view-dag-node ${statusClass} ${selected}"
+                     data-component="${node.id}"
+                     onclick="selectDagComponent('${node.id}')">
+                    <div class="exp-view-dag-node-icon">
+                        <i class="fas ${statusIcon}"></i>
+                    </div>
+                    <div class="exp-view-dag-node-info">
+                        <div class="exp-view-dag-node-name">${node.name}</div>
+                        <div class="exp-view-dag-node-time">${duration}</div>
+                    </div>
+                    ${statusBadge}
                 </div>
-                <div class="exp-view-pipeline-stage-name">${stage.name}</div>
-                <div class="exp-view-pipeline-stage-time">${duration}</div>
-            </div>
-        `;
-    }).join('');
+            `;
+        });
+        html += '</div>';
+    });
+
+    container.innerHTML = html;
+
+    // Draw SVG connections after DOM update
+    requestAnimationFrame(() => drawDagConnections(stageMap));
+}
+
+function drawDagConnections(stageMap) {
+    const svg = document.getElementById('expViewDagSvg');
+    const container = document.getElementById('expViewDagContainer');
+
+    if (!svg || !container) return;
+
+    // Clear existing paths
+    svg.innerHTML = '';
+
+    // Get container bounds
+    const containerRect = container.getBoundingClientRect();
+
+    // Draw each edge
+    PIPELINE_DAG.edges.forEach(edge => {
+        const fromNode = container.querySelector(`[data-component="${edge.from}"]`);
+        const toNode = container.querySelector(`[data-component="${edge.to}"]`);
+
+        if (!fromNode || !toNode) return;
+
+        const fromRect = fromNode.getBoundingClientRect();
+        const toRect = toNode.getBoundingClientRect();
+
+        // Calculate positions relative to container
+        const x1 = fromRect.left + fromRect.width / 2 - containerRect.left;
+        const y1 = fromRect.bottom - containerRect.top;
+        const x2 = toRect.left + toRect.width / 2 - containerRect.left;
+        const y2 = toRect.top - containerRect.top;
+
+        // Create bezier curve path
+        const midY = (y1 + y2) / 2;
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('d', `M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}`);
+
+        // Check if edge is "completed" (both nodes completed)
+        const fromStage = stageMap[edge.from] || {};
+        const toStage = stageMap[edge.to] || {};
+        if (fromStage.status === 'completed' &&
+            (toStage.status === 'completed' || toStage.status === 'running')) {
+            path.classList.add('completed');
+        }
+
+        svg.appendChild(path);
+    });
+}
+
+function selectDagComponent(componentId) {
+    // Update selection visually
+    const nodes = document.querySelectorAll('.exp-view-dag-node');
+    nodes.forEach(node => {
+        node.classList.remove('selected');
+        if (node.dataset.component === componentId) {
+            node.classList.add('selected');
+        }
+    });
+
+    selectedComponentId = componentId;
+
+    // Show detail panel
+    const detailPanel = document.getElementById('expViewComponentDetail');
+    detailPanel.classList.remove('hidden');
+
+    // Get stage info
+    const stage = currentStageDetails.find(s => s.name === componentId) || { status: 'pending' };
+
+    // Update header
+    const dagNode = PIPELINE_DAG.nodes.find(n => n.id === componentId);
+    document.getElementById('expViewComponentName').textContent = dagNode ? dagNode.name : componentId;
+
+    const statusEl = document.getElementById('expViewComponentStatus');
+    statusEl.textContent = stage.status || 'pending';
+    statusEl.className = 'exp-view-component-status ' + (stage.status || 'pending');
+
+    const durationText = stage.duration_seconds ? formatDuration(stage.duration_seconds) : '-';
+    document.getElementById('expViewComponentDurationText').textContent = durationText;
+
+    // Load logs for this component
+    loadComponentLogs(componentId);
+}
+
+async function loadComponentLogs(componentId) {
+    if (!viewModalExpId || !componentId) return;
+
+    const logsContainer = document.getElementById('expViewLogsContainer');
+
+    // Show loading state
+    logsContainer.innerHTML = '<div class="exp-view-logs-empty"><i class="fas fa-spinner fa-spin"></i> Loading logs...</div>';
+
+    try {
+        const response = await fetch(`/api/quick-tests/${viewModalExpId}/logs/${componentId}/`);
+        const data = await response.json();
+
+        if (data.success && data.logs?.available) {
+            if (data.logs.logs && data.logs.logs.length > 0) {
+                logsContainer.innerHTML = data.logs.logs.map(log => `
+                    <div class="exp-view-log-entry">
+                        <span class="exp-view-log-time">${log.timestamp}</span>
+                        <span class="exp-view-log-severity ${log.severity}">${log.severity}</span>
+                        <span class="exp-view-log-message">${escapeHtml(log.message)}</span>
+                    </div>
+                `).join('');
+            } else {
+                logsContainer.innerHTML = '<div class="exp-view-logs-empty">No logs available yet</div>';
+            }
+        } else {
+            const msg = data.logs?.message || 'Logs not available';
+            logsContainer.innerHTML = `<div class="exp-view-logs-empty">${escapeHtml(msg)}</div>`;
+        }
+    } catch (error) {
+        console.error('Error loading logs:', error);
+        logsContainer.innerHTML = '<div class="exp-view-logs-error">Failed to load logs</div>';
+    }
+}
+
+function refreshComponentLogs() {
+    if (!selectedComponentId) return;
+
+    // Add loading class to button
+    const btn = document.getElementById('expViewRefreshLogsBtn');
+    btn.classList.add('loading');
+
+    loadComponentLogs(selectedComponentId).finally(() => {
+        btn.classList.remove('loading');
+    });
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Reset DAG state when modal closes
+function resetDagState() {
+    selectedComponentId = null;
+    currentStageDetails = [];
+    const detailPanel = document.getElementById('expViewComponentDetail');
+    if (detailPanel) detailPanel.classList.add('hidden');
 }
 
 function renderFinalMetrics(metrics) {

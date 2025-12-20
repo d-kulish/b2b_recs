@@ -47,6 +47,11 @@ urlpatterns = [
         api.quick_test_training_history,
         name='quick_test_training_history'
     ),
+    path(
+        'api/quick-tests/<int:quick_test_id>/logs/<str:component>/',
+        api.quick_test_component_logs,
+        name='quick_test_component_logs'
+    ),
 
     # Start a new Quick Test (from FeatureConfig)
     path(

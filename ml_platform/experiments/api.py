@@ -818,6 +818,66 @@ def quick_test_schema(request, quick_test_id):
 
 @csrf_exempt
 @require_http_methods(["GET"])
+def quick_test_component_logs(request, quick_test_id, component):
+    """
+    Get recent logs for a specific pipeline component.
+
+    GET /api/quick-tests/<id>/logs/<component>/
+
+    Components: Examples, Stats, Schema, Transform, Train
+
+    Returns:
+    {
+        "success": true,
+        "logs": {
+            "available": true,
+            "component": "Transform",
+            "logs": [
+                {"timestamp": "14:32:05", "severity": "INFO", "message": "Starting..."},
+                ...
+            ],
+            "count": 10
+        }
+    }
+    """
+    try:
+        model_endpoint = _get_model_endpoint(request)
+        if not model_endpoint:
+            return JsonResponse({
+                'success': False,
+                'error': 'No model endpoint selected'
+            }, status=400)
+
+        try:
+            quick_test = QuickTest.objects.get(
+                id=quick_test_id,
+                feature_config__dataset__model_endpoint=model_endpoint
+            )
+        except QuickTest.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': f'QuickTest {quick_test_id} not found'
+            }, status=404)
+
+        # Get component logs
+        artifact_service = ArtifactService(project_id=model_endpoint.gcp_project_id)
+        logs = artifact_service.get_component_logs(quick_test, component)
+
+        return JsonResponse({
+            'success': True,
+            'logs': logs
+        })
+
+    except Exception as e:
+        logger.exception(f"Error getting component logs: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
 def quick_test_training_history(request, quick_test_id):
     """
     Get training history (per-epoch metrics).

@@ -5,7 +5,7 @@ This document provides **high-level specifications** for the Experiments domain.
 
 👉 **[phase_experiments_implementation.md](phase_experiments_implementation.md)** - Complete implementation guide with code examples
 
-**Last Updated**: 2025-12-19
+**Last Updated**: 2025-12-20
 
 ---
 
@@ -36,6 +36,33 @@ This document provides **high-level specifications** for the Experiments domain.
 ---
 
 ## Recent Updates (December 2025)
+
+### Pipeline DAG Visualization with Component Logs (2025-12-20)
+
+**Major Enhancement:**
+
+1. **Vertical DAG Layout** - Visual pipeline representation matching Vertex AI Pipelines style
+   - 4-row structure: Examples → Stats/Schema → Transform → Train
+   - SVG bezier curve connections between components
+   - Clickable components for log inspection
+
+2. **Component Logs Panel** - View execution logs without GCP access
+   - Last ~15 log entries per component
+   - Refresh button to fetch latest logs
+   - Logs fetched from Cloud Logging API via `resource.type="ml_job"`
+   - 7-day lookback window for completed experiments
+
+3. **Color-Coded Status** - Component status at a glance
+   - Grey outline: Pending
+   - Orange fill: Running (animated pulse)
+   - Green fill: Completed successfully
+   - Red fill: Failed
+
+4. **Technical Implementation**
+   - New endpoint: `GET /api/quick-tests/{id}/logs/{component}/`
+   - Uses Google Cloud Logging Python client
+   - Extracts task job IDs from Vertex AI pipeline task details
+   - IAM requirement: `roles/logging.viewer` for service account
 
 ### View Modal Redesign with Tabs & Artifacts (2025-12-19)
 
@@ -1189,6 +1216,20 @@ MLFLOW_TRACKING_URI = os.environ.get('MLFLOW_TRACKING_URI', 'http://mlflow-serve
 - [x] **Training placeholder**: Ready for future MLflow integration
 
 **Result:** Users see clean tabbed interface with actionable error messages and artifact visibility.
+
+### Phase 17: Pipeline DAG Visualization ✅ DONE (2025-12-20)
+> **Visual pipeline graph with component logs**
+
+- [x] **Vertical DAG layout**: 4-row pipeline visualization (Examples → Stats/Schema → Transform → Train)
+- [x] **SVG connections**: Bezier curve connections between components
+- [x] **Clickable components**: Click to view component logs
+- [x] **Cloud Logging integration**: Fetch logs via `google-cloud-logging` client
+- [x] **Task job ID extraction**: Parse Vertex AI task details for `container_detail.main_job`
+- [x] **Logs API endpoint**: `GET /api/quick-tests/{id}/logs/{component}/`
+- [x] **Refresh functionality**: Refresh button to fetch latest logs
+- [x] **7-day lookback**: Timestamp filter for accessing older experiment logs
+
+**Result:** Users see visual pipeline DAG and can inspect component execution logs without GCP access.
 
 ### Previously Completed ✅
 - [x] Create `model_experiments.html` page (placeholder)

@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides a **complete implementation guide** for building the Experiments domain with native TFX pipelines on Vertex AI. It is designed to be self-contained and actionable - you should be able to open this document and start implementing without additional context.
 
-**Last Updated**: 2025-12-19
+**Last Updated**: 2025-12-20
 
 ---
 
@@ -30,7 +30,8 @@ This document provides a **complete implementation guide** for building the Expe
 19. [Phase 14: Experiment View Modal](#phase-14-experiment-view-modal-december-2025)
 20. [Phase 15: View Modal Redesign with Tabs & Artifacts](#phase-15-view-modal-redesign-with-tabs--artifacts-december-2025)
 21. [Phase 16: View Modal Config Visualizations](#phase-16-view-modal-config-visualizations-december-2025)
-22. [File Reference](#file-reference)
+22. [Phase 17: Pipeline DAG Visualization & Component Logs](#phase-17-pipeline-dag-visualization--component-logs-december-2025)
+23. [File Reference](#file-reference)
 23. [API Reference](#api-reference)
 24. [Testing Guide](#testing-guide)
 
@@ -93,6 +94,7 @@ Experiments Page = Analyze Quick Test results to find optimal parameters
 | **Phase 14** | ✅ Complete | Experiment View Modal (comprehensive details modal, polling for running experiments, View button on cards, old modal cleanup) |
 | **Phase 15** | ✅ Complete | View Modal Redesign with Tabs & Artifacts (4-tab layout, error pattern matching, lazy-loaded statistics/schema, training history placeholder) |
 | **Phase 16** | ✅ Complete | View Modal Config Visualizations (Features tensor breakdown, Model tower architecture, chip-format parameters, detailed hardware specs) |
+| **Phase 17** | ✅ Complete | Pipeline DAG Visualization & Component Logs (vertical DAG layout, SVG connections, Cloud Logging integration, component logs panel) |
 
 ### Cloud Build Implementation (December 2025)
 
@@ -4716,6 +4718,174 @@ Date Column and Holdout Days only shown for temporal split strategies.
 - [x] Hardware shows vCPUs and memory
 - [x] Sampling in chip format
 - [x] Date Column/Holdout Days only shown for temporal strategies
+
+---
+
+## Phase 17: Pipeline DAG Visualization & Component Logs (December 2025)
+
+### Overview
+
+Redesigned the Pipeline tab in the View modal to show a Vertex AI-style DAG visualization with clickable components and real-time log viewing.
+
+### Problem Statement
+
+The previous Pipeline tab showed a simple horizontal row of stage cards, which:
+1. Didn't show the actual pipeline structure/dependencies
+2. Didn't provide access to component execution logs
+3. Looked different from the Vertex AI Pipelines console
+
+### Solution
+
+Implemented a vertical DAG visualization that:
+1. Shows the TFX pipeline structure with proper dependencies
+2. Draws SVG bezier curves between connected components
+3. Allows clicking any component to view its execution logs
+4. Fetches logs from Cloud Logging using the correct `ml_job` resource type
+
+### Visual Design
+
+```
+┌─────────────────────────────────────────────────────┐
+│  [✓] Pipeline Compiled                              │  ← Compile indicator
+├─────────────────────────────────────────────────────┤
+│                                                      │
+│           ┌─────────────────┐                        │
+│           │   ExampleGen    │ ✓                      │
+│           └────────┬────────┘                        │
+│                    │                                  │
+│         ┌─────────┴─────────┐                        │
+│         │                   │                        │
+│    ┌────┴────┐        ┌─────┴────┐                   │
+│    │  Stats  │ ✓      │  Schema  │ ✓                 │
+│    └────┬────┘        └─────┬────┘                   │
+│         └─────────┬─────────┘                        │
+│                   │                                   │
+│          ┌────────┴────────┐                         │
+│          │    Transform    │ ● RUNNING               │
+│          └────────┬────────┘                         │
+│                   │                                   │
+│          ┌────────┴────────┐                         │
+│          │     Trainer     │ ○ pending               │
+│          └─────────────────┘                         │
+│                                                      │
+├─────────────────────────────────────────────────────┤
+│  Transform   [RUNNING]            Duration: 5:47    │  ← Detail panel
+│  ─────────────────────────────────────────────      │
+│  Recent Logs                        [↻ Refresh]     │
+│  ┌─────────────────────────────────────────────┐   │
+│  │ 14:32:05 INFO  Starting Dataflow job...     │   │
+│  │ 14:32:12 INFO  Worker pool created          │   │
+│  │ 14:33:45 INFO  Processing 1.2M examples...  │   │
+│  └─────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────┘
+```
+
+### Key Implementation Details
+
+#### 1. DAG Structure (Fixed for TFX Pipeline)
+
+```javascript
+const PIPELINE_DAG = {
+    nodes: [
+        { id: 'Examples', name: 'ExampleGen', row: 0 },
+        { id: 'Stats', name: 'StatisticsGen', row: 1 },
+        { id: 'Schema', name: 'SchemaGen', row: 1 },
+        { id: 'Transform', name: 'Transform', row: 2 },
+        { id: 'Train', name: 'Trainer', row: 3 }
+    ],
+    edges: [
+        { from: 'Examples', to: 'Stats' },
+        { from: 'Examples', to: 'Schema' },
+        { from: 'Stats', to: 'Transform' },
+        { from: 'Schema', to: 'Transform' },
+        { from: 'Transform', to: 'Train' }
+    ]
+};
+```
+
+#### 2. Cloud Logging Integration
+
+Component logs in Vertex AI are stored under `resource.type="ml_job"` with a numeric job ID that's different from the pipeline job ID.
+
+**Log Query Process:**
+1. Get pipeline job details from Vertex AI API
+2. Extract task's `container_detail.main_job` (e.g., `customJobs/5506287161692913664`)
+3. Query Cloud Logging with filter:
+   ```
+   resource.type="ml_job"
+   resource.labels.job_id="5506287161692913664"
+   timestamp>="<7 days ago>"
+   ```
+
+#### 3. Required IAM Permissions
+
+```bash
+# Grant Logs Viewer role for Cloud Logging access
+gcloud projects add-iam-policy-binding PROJECT_ID \
+  --member="serviceAccount:django-app@PROJECT_ID.iam.gserviceaccount.com" \
+  --role="roles/logging.viewer"
+
+# Also needed for local development (user credentials)
+gcloud projects add-iam-policy-binding PROJECT_ID \
+  --member="user:YOUR_EMAIL@example.com" \
+  --role="roles/logging.viewer"
+```
+
+### API Endpoint
+
+**GET `/api/quick-tests/<id>/logs/<component>/`**
+
+Fetches recent logs for a specific pipeline component.
+
+**Parameters:**
+- `id`: QuickTest ID
+- `component`: One of `Examples`, `Stats`, `Schema`, `Transform`, `Train`
+
+**Response:**
+```json
+{
+    "success": true,
+    "logs": {
+        "available": true,
+        "component": "Transform",
+        "task_job_id": "5506287161692913664",
+        "logs": [
+            {"timestamp": "11:57:03", "severity": "INFO", "message": "Starting..."},
+            {"timestamp": "11:57:13", "severity": "ERROR", "message": "Failed..."}
+        ],
+        "count": 10
+    }
+}
+```
+
+### Files Created
+
+| File | Description |
+|------|-------------|
+| - | No new files (all changes in existing files) |
+
+### Files Modified
+
+| File | Changes |
+|------|---------|
+| `requirements.txt` | Added `google-cloud-logging>=3.10.0` |
+| `ml_platform/experiments/artifact_service.py` | Added `get_component_logs()`, `_get_task_job_id()`, `_get_pipeline_level_logs()` |
+| `ml_platform/experiments/api.py` | Added `quick_test_component_logs()` endpoint |
+| `ml_platform/experiments/urls.py` | Added `/logs/<component>/` route |
+| `templates/ml_platform/model_experiments.html` | DAG CSS, HTML structure, JavaScript functions |
+
+### Testing Checklist
+
+- [x] DAG shows all 5 TFX components in correct layout
+- [x] SVG connections draw between dependent components
+- [x] Connections turn green when source component completes
+- [x] Clicking component shows detail panel with logs
+- [x] Refresh button reloads logs
+- [x] Compile stage indicator shows Cloud Build status
+- [x] Component status badges (RUNNING, FAILED) display correctly
+- [x] Duration shown for completed components
+- [x] Logs display with timestamp, severity, and message
+- [x] Error handling for missing logs/permissions
 
 ---
 

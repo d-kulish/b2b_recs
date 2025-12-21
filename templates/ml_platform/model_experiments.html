@@ -2393,84 +2393,6 @@
         background: #8b5cf6;
     }
 
-    /* TFDV Modal */
-    .tfdv-modal {
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: rgba(0, 0, 0, 0.6);
-        z-index: 10001;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 24px;
-    }
-    .tfdv-modal-content {
-        background: white;
-        border-radius: 12px;
-        width: 95%;
-        max-width: 1400px;
-        height: 90vh;
-        display: flex;
-        flex-direction: column;
-        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-    }
-    .tfdv-modal-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 16px 24px;
-        border-bottom: 1px solid #e2e8f0;
-    }
-    .tfdv-modal-header h3 {
-        margin: 0;
-        font-size: 18px;
-        font-weight: 600;
-        color: #1e293b;
-    }
-    .tfdv-modal-close {
-        width: 32px;
-        height: 32px;
-        border: none;
-        background: #f1f5f9;
-        border-radius: 8px;
-        font-size: 20px;
-        color: #64748b;
-        cursor: pointer;
-        transition: all 0.2s;
-    }
-    .tfdv-modal-close:hover {
-        background: #e2e8f0;
-        color: #1e293b;
-    }
-    .tfdv-modal-body {
-        flex: 1;
-        overflow: hidden;
-        position: relative;
-    }
-    .tfdv-modal-loading {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 12px;
-        color: #64748b;
-    }
-    .tfdv-modal-loading i {
-        font-size: 24px;
-        color: #4f46e5;
-    }
-    .tfdv-iframe {
-        width: 100%;
-        height: 100%;
-        border: none;
-    }
-
     /* =========================================================================
        Toast Notification Styles
        ========================================================================= */
@@ -3323,9 +3245,9 @@
                     <div class="exp-view-section-group">
                         <div class="exp-view-group-header">
                             <h4 class="exp-view-group-title">Dataset Statistics</h4>
-                            <button id="expViewTfdvBtn" class="exp-view-tfdv-btn hidden" onclick="showTfdvVisualization()">
-                                <i class="fas fa-chart-bar"></i> View Full TFDV Report
-                            </button>
+                            <a id="expViewTfdvBtn" class="exp-view-tfdv-btn hidden" href="#" target="_blank">
+                                <i class="fas fa-external-link-alt"></i> Open Full Report
+                            </a>
                         </div>
                         <div id="expViewStatsContent">
                             <!-- Populated by JavaScript -->
@@ -3365,23 +3287,6 @@
                 <div id="expViewDataError" class="exp-view-data-message hidden">
                     <i class="fas fa-info-circle"></i>
                     <span id="expViewDataErrorMessage">Data insights not available</span>
-                </div>
-            </div>
-
-            <!-- TFDV Visualization Modal -->
-            <div id="tfdvModal" class="tfdv-modal hidden">
-                <div class="tfdv-modal-content">
-                    <div class="tfdv-modal-header">
-                        <h3>TFDV Statistics Visualization</h3>
-                        <button class="tfdv-modal-close" onclick="closeTfdvModal()">&times;</button>
-                    </div>
-                    <div class="tfdv-modal-body">
-                        <div id="tfdvModalLoading" class="tfdv-modal-loading">
-                            <i class="fas fa-spinner fa-spin"></i>
-                            <span>Loading TFDV visualization...</span>
-                        </div>
-                        <iframe id="tfdvModalFrame" class="tfdv-iframe hidden"></iframe>
-                    </div>
                 </div>
             </div>
 
@@ -6088,8 +5993,9 @@ function renderStatistics(stats) {
     `;
     container.innerHTML = html;
 
-    // Show TFDV button if stats available
+    // Show TFDV link if stats available and set the href
     if (stats.available) {
+        tfdvBtn.href = `/experiments/quick-tests/${viewModalExpId}/tfdv/`;
         tfdvBtn.classList.remove('hidden');
     }
 
@@ -6282,40 +6188,6 @@ function renderTopValuesChart(topValues) {
     return `<div class="mini-hbar-chart">${bars}</div>`;
 }
 
-// TFDV Visualization Modal
-async function showTfdvVisualization() {
-    const modal = document.getElementById('tfdvModal');
-    const loading = document.getElementById('tfdvModalLoading');
-    const iframe = document.getElementById('tfdvModalFrame');
-
-    modal.classList.remove('hidden');
-    loading.classList.remove('hidden');
-    iframe.classList.add('hidden');
-
-    try {
-        const response = await fetch(`/api/quick-tests/${viewModalExpId}/tfdv-visualization/`);
-        const data = await response.json();
-
-        if (data.success && data.html) {
-            iframe.srcdoc = data.html;
-            iframe.classList.remove('hidden');
-        } else {
-            iframe.srcdoc = '<html><body><p>TFDV visualization not available</p></body></html>';
-            iframe.classList.remove('hidden');
-        }
-    } catch (error) {
-        console.error('Error loading TFDV visualization:', error);
-        iframe.srcdoc = '<html><body><p>Failed to load TFDV visualization</p></body></html>';
-        iframe.classList.remove('hidden');
-    }
-
-    loading.classList.add('hidden');
-}
-
-function closeTfdvModal() {
-    document.getElementById('tfdvModal').classList.add('hidden');
-}
-
 function renderSchema(schema) {
     const container = document.getElementById('expViewSchemaContent');
 
@@ -6337,8 +6209,8 @@ function renderSchema(schema) {
                 ${schema.features.slice(0, 20).map(f => `
                     <tr>
                         <td>${f.name}</td>
-                        <td>${f.type || 'UNKNOWN'}</td>
-                        <td>${f.required ? 'Yes' : 'No'}</td>
+                        <td>${f.feature_type || 'UNKNOWN'}</td>
+                        <td>${f.presence === 'required' ? 'Yes' : 'No'}</td>
                     </tr>
                 `).join('')}
             </tbody>

@@ -5,7 +5,7 @@ This document provides **high-level specifications** for the Experiments domain.
 
 👉 **[phase_experiments_implementation.md](phase_experiments_implementation.md)** - Complete implementation guide with code examples
 
-**Last Updated**: 2025-12-20
+**Last Updated**: 2025-12-21
 
 ---
 
@@ -36,6 +36,36 @@ This document provides **high-level specifications** for the Experiments domain.
 ---
 
 ## Recent Updates (December 2025)
+
+### Schema Fix & TFDV Hybrid Visualization (2025-12-21)
+
+**Problems Solved:**
+1. **Schema Tab Bug** - Schema showed "UNKNOWN" for all feature types and "No" for all required fields
+2. **TFDV Modal Display Issues** - TFDV iframe modal rendered incorrectly (cramped, font errors, nested iframes)
+
+**Root Causes:**
+1. Field name mismatch: Backend returned `feature_type`/`presence`, frontend expected `type`/`required`
+2. TFDV uses Google Facets which creates triple-nested iframes and loads external dependencies from GitHub - impossible to style from parent page
+
+**Solutions:**
+1. **Schema Fix** - Updated `renderSchema()` to use correct field names:
+   ```javascript
+   <td>${f.feature_type || 'UNKNOWN'}</td>
+   <td>${f.presence === 'required' ? 'Yes' : 'No'}</td>
+   ```
+
+2. **Hybrid TFDV Approach**:
+   - **Removed** broken iframe modal (`#tfdvModal`, `showTfdvVisualization()`, `closeTfdvModal()`)
+   - **Kept** working custom statistics display (histograms, top values, distribution bars)
+   - **Added** "Open Full Report" button that opens TFDV in a new browser tab
+
+**New Endpoint:**
+- `GET /experiments/quick-tests/{id}/tfdv/` - Serves TFDV HTML as standalone page
+
+**Key Changes:**
+- Button changed from `<button onclick>` to `<a target="_blank">` (avoids popup blockers)
+- TFDV HTML wrapped in proper page with header and styling
+- Users can inspect full interactive TFDV report in a new tab
 
 ### TFDV Parser Cloud Run Service (2025-12-20)
 
@@ -1262,6 +1292,18 @@ MLFLOW_TRACKING_URI = os.environ.get('MLFLOW_TRACKING_URI', 'http://mlflow-serve
 - [x] **Identity token fallback**: gcloud CLI for local development
 
 **Result:** Data Insights tab shows comprehensive TFDV statistics matching the standard visualization format.
+
+### Phase 19: Schema Fix & TFDV Hybrid Visualization ✅ DONE (2025-12-21)
+> **Bug fixes for Schema tab and improved TFDV display approach**
+
+- [x] **Schema field name fix**: Updated `renderSchema()` to use `feature_type` and `presence` instead of `type` and `required`
+- [x] **Removed broken TFDV modal**: Deleted iframe-based `#tfdvModal` HTML, CSS (~80 lines), and JavaScript functions
+- [x] **New standalone TFDV endpoint**: `GET /experiments/quick-tests/{id}/tfdv/` serves TFDV HTML as full page
+- [x] **Open in New Tab button**: Changed from `<button onclick>` to `<a target="_blank">` to avoid popup blockers
+- [x] **Page wrapper**: TFDV HTML wrapped with header, experiment info, and consistent styling
+- [x] **Documentation**: Updated phase_experiments_implementation.md with Phase 19
+
+**Result:** Schema tab now displays correct feature types and required status. TFDV can be viewed in a new browser tab where it renders properly.
 
 ### Previously Completed ✅
 - [x] Create `model_experiments.html` page (placeholder)

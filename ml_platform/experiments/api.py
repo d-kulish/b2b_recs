@@ -6,7 +6,7 @@ Handles starting, monitoring, and cancelling pipeline runs.
 """
 import json
 import logging
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse
 from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
 
@@ -870,6 +870,121 @@ def quick_test_tfdv_visualization(request, quick_test_id):
             'success': False,
             'error': str(e)
         }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def quick_test_tfdv_page(request, quick_test_id):
+    """
+    Serve TFDV HTML visualization as a standalone page.
+
+    Opens in a new browser tab with proper rendering (not embedded in iframe).
+
+    GET /experiments/quick-tests/<id>/tfdv/
+
+    Returns: HTML page (Content-Type: text/html)
+    """
+    try:
+        model_endpoint = _get_model_endpoint(request)
+        if not model_endpoint:
+            return HttpResponse(
+                '<html><body><h1>Error</h1><p>No model endpoint selected. '
+                'Please select a model endpoint first.</p></body></html>',
+                content_type='text/html',
+                status=400
+            )
+
+        try:
+            quick_test = QuickTest.objects.get(
+                id=quick_test_id,
+                feature_config__dataset__model_endpoint=model_endpoint
+            )
+        except QuickTest.DoesNotExist:
+            return HttpResponse(
+                f'<html><body><h1>Error</h1><p>QuickTest {quick_test_id} not found.</p></body></html>',
+                content_type='text/html',
+                status=404
+            )
+
+        # Get TFDV HTML visualization
+        artifact_service = ArtifactService(project_id=model_endpoint.gcp_project_id)
+        html = artifact_service.get_statistics_html(quick_test)
+
+        if html:
+            # Wrap in a proper HTML page with title and basic styling
+            page_html = f'''<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>TFDV Statistics - {quick_test.display_name}</title>
+    <style>
+        body {{
+            margin: 0;
+            padding: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f5;
+        }}
+        .header {{
+            background: white;
+            padding: 16px 24px;
+            margin: -20px -20px 20px -20px;
+            border-bottom: 1px solid #e0e0e0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }}
+        .header h1 {{
+            margin: 0;
+            font-size: 20px;
+            color: #333;
+        }}
+        .header .subtitle {{
+            color: #666;
+            font-size: 14px;
+            margin-top: 4px;
+        }}
+        .close-btn {{
+            padding: 8px 16px;
+            background: #f0f0f0;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+        }}
+        .close-btn:hover {{
+            background: #e0e0e0;
+        }}
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div>
+            <h1>TFDV Statistics Visualization</h1>
+            <div class="subtitle">{quick_test.display_name}</div>
+        </div>
+        <button class="close-btn" onclick="window.close()">Close Tab</button>
+    </div>
+    {html}
+</body>
+</html>'''
+            return HttpResponse(page_html, content_type='text/html')
+        else:
+            return HttpResponse(
+                '<html><body><h1>Not Available</h1>'
+                '<p>TFDV visualization is not available for this experiment. '
+                'The Statistics stage may not have completed yet.</p></body></html>',
+                content_type='text/html',
+                status=404
+            )
+
+    except Exception as e:
+        logger.exception(f"Error getting TFDV page: {e}")
+        return HttpResponse(
+            f'<html><body><h1>Error</h1><p>{str(e)}</p></body></html>',
+            content_type='text/html',
+            status=500
+        )
 
 
 @csrf_exempt

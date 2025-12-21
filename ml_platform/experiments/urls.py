@@ -47,6 +47,12 @@ urlpatterns = [
         api.quick_test_tfdv_visualization,
         name='quick_test_tfdv_visualization'
     ),
+    # Standalone TFDV page (opens in new tab)
+    path(
+        'experiments/quick-tests/<int:quick_test_id>/tfdv/',
+        api.quick_test_tfdv_page,
+        name='quick_test_tfdv_page'
+    ),
     path(
         'api/quick-tests/<int:quick_test_id>/training-history/',
         api.quick_test_training_history,

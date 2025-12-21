@@ -5359,6 +5359,141 @@ gcloud run services add-iam-policy-binding tfdv-parser \
 
 ---
 
+## Phase 19: Schema Fix and TFDV Hybrid Visualization (December 2025)
+
+This phase fixes the Schema display bug and replaces the broken iframe-based TFDV visualization with a hybrid approach.
+
+### Problem 1: Schema Display Shows "UNKNOWN" Type
+
+**Issue:** Schema table in Data Insights tab showed "UNKNOWN" for all feature types and "No" for all required flags.
+
+**Root Cause:** Field name mismatch between backend and frontend:
+- Backend returns: `feature_type`, `presence`
+- Frontend expected: `type`, `required`
+
+**Fix:** Updated `renderSchema()` in `model_experiments.html`:
+```javascript
+// Before (broken)
+<td>${f.type || 'UNKNOWN'}</td>
+<td>${f.required ? 'Yes' : 'No'}</td>
+
+// After (fixed)
+<td>${f.feature_type || 'UNKNOWN'}</td>
+<td>${f.presence === 'required' ? 'Yes' : 'No'}</td>
+```
+
+### Problem 2: TFDV Visualization Broken in Modal
+
+**Issue:** "View Full TFDV Report" opened an iframe modal that displayed poorly:
+- Nested iframes (modal → our iframe → Facets iframe)
+- Google Fonts failed to load (400 errors)
+- Fixed 500px height caused cramped display
+- CSS injection attempts failed due to cross-origin restrictions
+
+**Root Cause:** TFDV's `get_statistics_html()` generates HTML using Google Facets library, which is designed for Jupyter notebooks, not embedded web applications.
+
+**Solution: Hybrid Approach**
+1. **Keep custom statistics display** (already works well) - Summary KPIs, numeric/categorical feature tables with mini histograms
+2. **Remove broken iframe modal** - Deleted HTML, CSS, and JavaScript
+3. **Add "Open in New Tab"** - TFDV renders properly as a full page
+
+### Architecture (After Fix)
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│  Data Insights Tab (In-Modal - Custom Display)                         │
+│  • Summary KPIs: Examples, Features, Numeric/Categorical, Avg Missing   │
+│  • Numeric Features Table with mini histograms                          │
+│  • Categorical Features Table with top values                           │
+│  • Schema Table with feature types                                      │
+│  • [Open Full Report ↗] button                                          │
+└─────────────────────────────────────────────────────────────────────────┘
+                              │
+                              │ User clicks "Open Full Report"
+                              ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│  New Browser Tab                                                         │
+│  GET /experiments/quick-tests/{id}/tfdv/                                │
+│  • Full HTML page with header                                            │
+│  • Native TFDV/Facets visualization                                     │
+│  • Renders correctly (not in iframe)                                    │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### Files Modified
+
+| File | Changes |
+|------|---------|
+| `templates/ml_platform/model_experiments.html` | Fixed `renderSchema()` field names; Removed TFDV modal HTML/CSS/JS; Changed button to `<a target="_blank">` |
+| `ml_platform/experiments/api.py` | Added `quick_test_tfdv_page()` view returning full HTML page |
+| `ml_platform/experiments/urls.py` | Added URL pattern `/experiments/quick-tests/{id}/tfdv/` |
+
+### New API Endpoint
+
+**GET /experiments/quick-tests/{id}/tfdv/**
+
+Returns standalone HTML page with TFDV visualization. Opens in new browser tab.
+
+```python
+@csrf_exempt
+@require_http_methods(["GET"])
+def quick_test_tfdv_page(request, quick_test_id):
+    """Serve TFDV HTML visualization as a standalone page."""
+    # Returns HttpResponse with content_type='text/html'
+    # Wraps TFDV HTML in proper page with header and styling
+```
+
+### Code Removed
+
+**HTML Removed:**
+```html
+<!-- TFDV Visualization Modal - REMOVED -->
+<div id="tfdvModal" class="tfdv-modal hidden">
+    <div class="tfdv-modal-content">...</div>
+</div>
+```
+
+**CSS Removed:** All `.tfdv-modal*` styles (~80 lines)
+
+**JavaScript Removed:**
+- `showTfdvVisualization()` function
+- `closeTfdvModal()` function
+
+### Button Change
+
+```html
+<!-- Before -->
+<button id="expViewTfdvBtn" onclick="showTfdvVisualization()">
+    <i class="fas fa-chart-bar"></i> View Full TFDV Report
+</button>
+
+<!-- After -->
+<a id="expViewTfdvBtn" href="#" target="_blank" class="exp-view-tfdv-btn hidden">
+    <i class="fas fa-external-link-alt"></i> Open Full Report
+</a>
+```
+
+JavaScript sets the href dynamically:
+```javascript
+if (stats.available) {
+    tfdvBtn.href = `/experiments/quick-tests/${viewModalExpId}/tfdv/`;
+    tfdvBtn.classList.remove('hidden');
+}
+```
+
+### Testing Checklist
+
+- [x] Schema table shows correct feature types (INT, FLOAT, STRING)
+- [x] Schema table shows correct required flags (Yes/No based on presence)
+- [x] "Open Full Report" button appears when stats available
+- [x] Clicking button opens new browser tab
+- [x] TFDV visualization renders properly in new tab
+- [x] No iframe nesting issues
+- [x] No font loading errors in main page (Facets loads fonts in separate tab)
+- [x] Custom statistics display still works (numeric/categorical tables)
+
+---
+
 ## Related Documentation
 
 - [Phase: Datasets](phase_datasets.md) - Dataset configuration

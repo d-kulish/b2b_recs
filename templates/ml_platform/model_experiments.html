@@ -1066,162 +1066,144 @@
         height: 600px;
     }
 
-    /* Header */
+    /* Header - Vertex Pipelines Style - 3 Column Layout */
     .exp-view-header {
         display: flex;
-        align-items: flex-start;
-        gap: 14px;
-        padding: 20px 24px 16px;
+        align-items: stretch;
+        gap: 0;
+        padding: 0;
         border-radius: 12px 12px 0 0;
+        background: white;
+        overflow: hidden;
     }
-    .exp-view-header.running {
-        background: #dbeafe;
-    }
-    .exp-view-header.submitting {
-        background: #dbeafe;
-    }
-    .exp-view-header.completed {
-        background: #dcfce7;
-    }
-    .exp-view-header.failed {
-        background: #fee2e2;
-    }
-    .exp-view-header.cancelled {
-        background: #f3f4f6;
-    }
-    .exp-view-header.pending {
-        background: #f3f4f6;
-    }
-    .exp-view-status-icon {
-        width: 48px;
-        height: 48px;
-        border-radius: 12px;
+    /* Column 1: Experiment Number (20%, centered) */
+    .exp-view-header-number {
+        width: 20%;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 20px;
-        flex-shrink: 0;
-    }
-    .exp-view-status-icon.running {
-        background: linear-gradient(135deg, #bfdbfe 0%, #93c5fd 100%);
-        color: #2563eb;
-    }
-    .exp-view-status-icon.submitting {
-        background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
-        color: #d97706;
-    }
-    .exp-view-status-icon.completed {
-        background: linear-gradient(135deg, #bbf7d0 0%, #86efac 100%);
-        color: #16a34a;
-    }
-    .exp-view-status-icon.failed {
-        background: linear-gradient(135deg, #fecaca 0%, #fca5a5 100%);
-        color: #dc2626;
-    }
-    .exp-view-status-icon.cancelled {
-        background: linear-gradient(135deg, #e5e7eb 0%, #d1d5db 100%);
-        color: #6b7280;
-    }
-    .exp-view-status-icon.pending {
-        background: linear-gradient(135deg, #e5e7eb 0%, #d1d5db 100%);
-        color: #9ca3af;
-    }
-    .exp-view-header-info {
-        flex: 1;
+        padding: 16px;
     }
     .exp-view-title {
-        font-size: 16px;
-        font-weight: 600;
+        font-size: 18px;
+        font-weight: 700;
         color: #111827;
-        margin: 0 0 2px;
+        margin: 0;
+    }
+    /* Column 2: Name, Description, Times (60%, left-aligned) */
+    .exp-view-header-info {
+        width: 60%;
+        padding: 16px 24px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
     }
     .exp-view-exp-name {
-        font-size: 14px;
+        font-size: 15px;
+        font-weight: 600;
         color: #374151;
-        margin: 0 0 2px;
+        margin: 0 0 4px;
     }
     .exp-view-description {
         font-size: 13px;
         color: #9ca3af;
-        margin: 0 0 6px;
+        margin: 0 0 8px;
     }
     .exp-view-times {
         display: flex;
-        gap: 16px;
-        font-size: 12px;
+        gap: 24px;
+        font-size: 13px;
         color: #9ca3af;
     }
     .exp-view-times span {
-        color: #6b7280;
-    }
-    .exp-view-status-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        padding: 4px 10px;
-        border-radius: 6px;
-        font-size: 12px;
+        color: #374151;
         font-weight: 500;
     }
-    .exp-view-status-badge.running {
+    /* Column 3: Status Panel (20%, centered) */
+    .exp-view-status-panel {
+        width: 20%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .exp-view-status-panel.running {
         background: #dbeafe;
-        color: #1d4ed8;
     }
-    .exp-view-status-badge.submitting {
-        background: #fef3c7;
-        color: #b45309;
+    .exp-view-status-panel.submitting {
+        background: #dbeafe;
     }
-    .exp-view-status-badge.completed {
-        background: #dcfce7;
-        color: #166534;
+    .exp-view-status-panel.completed {
+        background: #d1fae5;
     }
-    .exp-view-status-badge.failed {
+    .exp-view-status-panel.failed {
         background: #fee2e2;
-        color: #991b1b;
     }
-    .exp-view-status-badge.cancelled {
-        background: #f3f4f6;
-        color: #4b5563;
+    .exp-view-status-panel.cancelled {
+        background: #e5e7eb;
     }
-    .exp-view-status-badge.pending {
-        background: #f3f4f6;
-        color: #6b7280;
+    .exp-view-status-panel.pending {
+        background: #e5e7eb;
+    }
+    /* Status Icon - Solid filled circle with white icon */
+    .exp-view-status-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 18px;
+        flex-shrink: 0;
+        color: white;
+        font-weight: 600;
+    }
+    .exp-view-status-icon.running {
+        background: #2563eb;
+    }
+    .exp-view-status-icon.submitting {
+        background: #2563eb;
+    }
+    .exp-view-status-icon.completed {
+        background: #16a34a;
+    }
+    .exp-view-status-icon.failed {
+        background: #dc2626;
+    }
+    .exp-view-status-icon.cancelled {
+        background: #6b7280;
+    }
+    .exp-view-status-icon.pending {
+        background: #9ca3af;
     }
 
-    /* Tabs */
+    /* Tabs - Pill Button Style (matching ETL page) */
     .exp-view-tabs {
         display: flex;
-        gap: 0;
-        padding: 0 24px;
+        gap: 8px;
+        padding: 16px 24px;
+        background: white;
         border-bottom: 1px solid #e5e7eb;
-        background: #fafafa;
     }
     .exp-view-tab {
-        padding: 12px 20px;
+        flex: 1;
+        padding: 10px 16px;
         font-size: 13px;
-        font-weight: 500;
-        color: #6b7280;
-        background: none;
-        border: none;
+        font-weight: 600;
+        color: #374151;
+        background: #ffffff;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
         cursor: pointer;
-        position: relative;
-        transition: color 0.15s ease;
+        transition: all 0.15s ease;
+        text-align: center;
     }
     .exp-view-tab:hover {
-        color: #374151;
+        background: #f9fafb;
     }
     .exp-view-tab.active {
-        color: #2563eb;
-    }
-    .exp-view-tab.active::after {
-        content: "";
-        position: absolute;
-        bottom: -1px;
-        left: 0;
-        right: 0;
-        height: 2px;
-        background: #2563eb;
-        border-radius: 2px 2px 0 0;
+        background: #eff6ff;
+        border-color: #2563eb;
+        color: #1d4ed8;
     }
 
     /* Tab Content */
@@ -1750,62 +1732,18 @@
         min-width: 40px;
     }
 
-    /* Compile Stage Indicator */
-    .exp-view-compile-stage {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        padding: 8px 12px;
-        background: #f0fdf4;
-        border: 1px solid #86efac;
-        border-radius: 6px;
-        margin-bottom: 12px;
-        font-size: 12px;
-        color: #166534;
-    }
-    .exp-view-compile-stage.running {
-        background: #eff6ff;
-        border-color: #93c5fd;
-        color: #1e40af;
-    }
-    .exp-view-compile-stage.failed {
-        background: #fef2f2;
-        border-color: #fca5a5;
-        color: #991b1b;
-    }
-    .exp-view-compile-stage.pending {
-        background: #f9fafb;
-        border-color: #e5e7eb;
-        color: #6b7280;
-    }
-    .exp-view-compile-icon {
-        width: 20px;
-        height: 20px;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 10px;
-        background: #dcfce7;
-    }
-    .exp-view-compile-stage.running .exp-view-compile-icon {
-        background: #dbeafe;
-    }
-    .exp-view-compile-stage.failed .exp-view-compile-icon {
-        background: #fee2e2;
-    }
-    .exp-view-compile-stage.pending .exp-view-compile-icon {
-        background: #f3f4f6;
-    }
-
-    /* Pipeline DAG Visual */
+    /* Pipeline DAG Visual - 2D Layout with SVG Connections */
     .exp-view-dag-container {
         position: relative;
-        padding: 16px;
-        background: #fafafa;
+        padding: 24px 16px;
+        background: #f8f9fa;
+        background-image: radial-gradient(circle, #e0e0e0 1px, transparent 1px);
+        background-size: 20px 20px;
         border-radius: 8px;
         margin-bottom: 16px;
-        min-height: 320px;
+        min-height: 680px;
+        min-width: 520px;
+        overflow-x: auto;
     }
     .exp-view-dag-svg {
         position: absolute;
@@ -1814,125 +1752,277 @@
         width: 100%;
         height: 100%;
         pointer-events: none;
-        z-index: 0;
+        z-index: 1;
+        overflow: visible;
     }
     .exp-view-dag-svg path {
         fill: none;
-        stroke: #d1d5db;
-        stroke-width: 2;
+        stroke-width: 1.5px;
+        stroke-linecap: round;
+    }
+    .exp-view-dag-svg path.pending {
+        stroke: #dadce0;
     }
     .exp-view-dag-svg path.completed {
-        stroke: #86efac;
+        stroke: #1a73e8;
+    }
+    .exp-view-dag-svg path.failed {
+        stroke: #ea4335;
     }
     .exp-view-dag-nodes {
         position: relative;
-        z-index: 1;
+        z-index: 2;
+        width: 100%;
+        height: 100%;
     }
-    .exp-view-dag-row {
-        display: flex;
-        justify-content: center;
-        gap: 24px;
-        margin-bottom: 12px;
-    }
-    .exp-view-dag-connector {
-        height: 24px;
-    }
+
+    /* Component Nodes (Vertex AI style) - Absolute positioned */
     .exp-view-dag-node {
+        position: absolute;
         display: flex;
         align-items: center;
-        gap: 10px;
-        padding: 10px 14px;
+        gap: 12px;
+        padding: 12px 16px;
         background: #ffffff;
-        border: 2px solid #e5e7eb;
+        border: 1px solid #dadce0;
         border-radius: 8px;
         cursor: pointer;
         transition: all 0.15s ease;
-        min-width: 140px;
-        box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        width: 220px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.08);
     }
     .exp-view-dag-node:hover {
-        border-color: #3b82f6;
-        box-shadow: 0 2px 8px rgba(59, 130, 246, 0.15);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.12);
     }
     .exp-view-dag-node.selected {
-        border-color: #3b82f6;
-        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+        border-color: #1a73e8;
+        box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.2);
     }
+    /* Completed state - green right border accent */
     .exp-view-dag-node.completed {
-        background: #f0fdf4;
-        border-color: #86efac;
+        background: #ffffff;
+        border-color: #dadce0;
     }
+    .exp-view-dag-node.completed::after {
+        content: '';
+        position: absolute;
+        right: 0;
+        top: 0;
+        bottom: 0;
+        width: 40px;
+        background: linear-gradient(to right, transparent, #e8f5e9);
+        border-radius: 0 7px 7px 0;
+        pointer-events: none;
+    }
+    /* Running state - blue accent */
     .exp-view-dag-node.running {
-        background: #eff6ff;
-        border-color: #93c5fd;
-        animation: pulse-border 2s infinite;
+        background: #ffffff;
+        border-color: #dadce0;
     }
-    @keyframes pulse-border {
-        0%, 100% { border-color: #93c5fd; }
-        50% { border-color: #3b82f6; }
+    .exp-view-dag-node.running::after {
+        content: '';
+        position: absolute;
+        right: 0;
+        top: 0;
+        bottom: 0;
+        width: 40px;
+        background: linear-gradient(to right, transparent, #e3f2fd);
+        border-radius: 0 7px 7px 0;
+        pointer-events: none;
     }
+    /* Failed state - red accent */
     .exp-view-dag-node.failed {
-        background: #fef2f2;
-        border-color: #fca5a5;
+        background: #ffffff;
+        border-color: #dadce0;
+    }
+    .exp-view-dag-node.failed::after {
+        content: '';
+        position: absolute;
+        right: 0;
+        top: 0;
+        bottom: 0;
+        width: 40px;
+        background: linear-gradient(to right, transparent, #ffebee);
+        border-radius: 0 7px 7px 0;
+        pointer-events: none;
     }
     .exp-view-dag-node.pending {
-        background: #f9fafb;
-        border-color: #e5e7eb;
-        opacity: 0.7;
+        background: #ffffff;
+        border-color: #dadce0;
+        opacity: 0.6;
     }
+    .exp-view-dag-node.skipped {
+        background: #f8f9fa;
+        border-color: #dadce0;
+        opacity: 0.5;
+    }
+    /* Component icon (blue cube like Vertex AI) */
     .exp-view-dag-node-icon {
-        width: 28px;
-        height: 28px;
-        border-radius: 6px;
+        width: 36px;
+        height: 36px;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 14px;
+        font-size: 18px;
         flex-shrink: 0;
+        color: #1a73e8;
     }
-    .exp-view-dag-node.completed .exp-view-dag-node-icon {
-        background: #dcfce7;
-        color: #16a34a;
-    }
-    .exp-view-dag-node.running .exp-view-dag-node-icon {
-        background: #dbeafe;
-        color: #2563eb;
-    }
-    .exp-view-dag-node.failed .exp-view-dag-node-icon {
-        background: #fee2e2;
-        color: #dc2626;
-    }
-    .exp-view-dag-node.pending .exp-view-dag-node-icon {
-        background: #f3f4f6;
-        color: #9ca3af;
+    .exp-view-dag-node.pending .exp-view-dag-node-icon,
+    .exp-view-dag-node.skipped .exp-view-dag-node-icon {
+        color: #9aa0a6;
     }
     .exp-view-dag-node-info {
         flex: 1;
         min-width: 0;
     }
     .exp-view-dag-node-name {
-        font-size: 12px;
-        font-weight: 600;
-        color: #374151;
+        font-size: 14px;
+        font-weight: 500;
+        color: #202124;
         margin-bottom: 2px;
     }
     .exp-view-dag-node-time {
-        font-size: 10px;
-        color: #6b7280;
+        font-size: 12px;
+        color: #5f6368;
     }
-    .exp-view-dag-node-status {
-        font-size: 10px;
-        padding: 2px 6px;
+    /* Status indicator (right side badge) */
+    .exp-view-dag-node-status-badge {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 14px;
+        flex-shrink: 0;
+        position: relative;
+        z-index: 1;
+    }
+    .exp-view-dag-node.completed .exp-view-dag-node-status-badge {
+        background: #34a853;
+        color: white;
+    }
+    .exp-view-dag-node.running .exp-view-dag-node-status-badge {
+        background: #1a73e8;
+        color: white;
+    }
+    .exp-view-dag-node.failed .exp-view-dag-node-status-badge {
+        background: #ea4335;
+        color: white;
+    }
+    .exp-view-dag-node.pending .exp-view-dag-node-status-badge,
+    .exp-view-dag-node.skipped .exp-view-dag-node-status-badge {
+        background: #e8eaed;
+        color: #9aa0a6;
+    }
+    /* Port indicators on nodes */
+    .exp-view-dag-node-port {
+        position: absolute;
+        width: 8px;
+        height: 8px;
+        background: #1a73e8;
+        border: 1.5px solid #ffffff;
+        border-radius: 50%;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.15);
+    }
+    .exp-view-dag-node-port.top {
+        top: -4px;
+        left: 50%;
+        transform: translateX(-50%);
+    }
+    .exp-view-dag-node-port.bottom {
+        bottom: -4px;
+        left: 50%;
+        transform: translateX(-50%);
+    }
+    .exp-view-dag-node.pending .exp-view-dag-node-port,
+    .exp-view-dag-node.skipped .exp-view-dag-node-port {
+        background: #dadce0;
+    }
+
+    /* Artifact Nodes (small square icons - Vertex AI style) - Absolute positioned */
+    .exp-view-dag-artifact {
+        position: absolute;
+        width: 32px;
+        height: 32px;
+        background: #ffffff;
+        border: 1px solid #dadce0;
         border-radius: 4px;
-        font-weight: 500;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 13px;
+        color: #5f6368;
+        transition: all 0.15s ease;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.05);
     }
-    .exp-view-dag-node.running .exp-view-dag-node-status {
-        background: #dbeafe;
-        color: #1d4ed8;
+    .exp-view-dag-artifact:hover {
+        border-color: #1a73e8;
+        background: #e8f0fe;
+        color: #1a73e8;
     }
-    .exp-view-dag-node.failed .exp-view-dag-node-status {
-        background: #fee2e2;
-        color: #b91c1c;
+    .exp-view-dag-artifact.completed {
+        border-color: #1a73e8;
+        color: #1a73e8;
+    }
+    .exp-view-dag-artifact.schema {
+        border-color: #f9ab00;
+        color: #e37400;
+        background: #fef7e0;
+    }
+    .exp-view-dag-artifact.schema.completed {
+        border-color: #f9ab00;
+        color: #e37400;
+    }
+    .exp-view-dag-artifact.pending {
+        opacity: 0.5;
+        color: #9aa0a6;
+    }
+    /* Artifact port indicators - small dots */
+    .exp-view-dag-artifact::before,
+    .exp-view-dag-artifact::after {
+        content: '';
+        position: absolute;
+        width: 4px;
+        height: 4px;
+        background: #dadce0;
+        border-radius: 50%;
+        left: 50%;
+        transform: translateX(-50%);
+    }
+    .exp-view-dag-artifact::before {
+        top: -2px;
+    }
+    .exp-view-dag-artifact::after {
+        bottom: -2px;
+    }
+    .exp-view-dag-artifact.completed::before,
+    .exp-view-dag-artifact.completed::after {
+        background: #1a73e8;
+    }
+    .exp-view-dag-artifact.schema::before,
+    .exp-view-dag-artifact.schema::after {
+        background: #f9ab00;
+    }
+    .exp-view-dag-artifact-tooltip {
+        position: absolute;
+        bottom: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #3c4043;
+        color: white;
+        padding: 6px 10px;
+        border-radius: 4px;
+        font-size: 11px;
+        white-space: nowrap;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.15s ease;
+        margin-bottom: 8px;
+        z-index: 10;
+    }
+    .exp-view-dag-artifact:hover .exp-view-dag-artifact-tooltip {
+        opacity: 1;
     }
 
     /* Component Detail Panel */
@@ -2149,22 +2239,27 @@
         margin: 0;
     }
 
-    /* Loading State */
-    .exp-view-loading {
+    /* Loading State - Full tab centering */
+    .exp-view-tab-content > .exp-view-loading {
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
+        min-height: 300px;
+        height: 100%;
         padding: 48px 24px;
         color: #6b7280;
         gap: 12px;
     }
-    .exp-view-loading i {
-        font-size: 24px;
+    .exp-view-tab-content > .exp-view-loading.hidden {
+        display: none !important;
+    }
+    .exp-view-tab-content > .exp-view-loading i {
+        font-size: 28px;
         color: #3b82f6;
     }
-    .exp-view-loading span {
-        font-size: 13px;
+    .exp-view-tab-content > .exp-view-loading span {
+        font-size: 14px;
     }
 
     /* Data Message */
@@ -2211,7 +2306,7 @@
     /* Statistics Table */
     .exp-view-stats-summary {
         display: grid;
-        grid-template-columns: repeat(3, 1fr);
+        grid-template-columns: repeat(4, 1fr);
         gap: 12px;
         margin-bottom: 16px;
     }
@@ -2220,6 +2315,7 @@
         border-radius: 8px;
         padding: 12px;
         text-align: center;
+        min-width: 0;
     }
     .exp-view-stat-box-value {
         font-size: 20px;
@@ -3071,13 +3167,14 @@
      ============================================================================ -->
 <div id="expViewModal" class="modal-overlay hidden" onclick="closeExpViewModal(event)">
     <div class="modal-container exp-view-modal" onclick="event.stopPropagation()">
-        <!-- Header -->
+        <!-- Header - Vertex Pipelines Style - 3 Column Layout -->
         <div class="modal-header exp-view-header" id="expViewHeader">
-            <div class="exp-view-status-icon" id="expViewStatusIcon">
-                <i class="fas fa-spinner fa-spin"></i>
-            </div>
-            <div class="exp-view-header-info">
+            <!-- Column 1: Experiment Number (20%, centered) -->
+            <div class="exp-view-header-number">
                 <h3 class="exp-view-title" id="expViewTitle">Exp #1</h3>
+            </div>
+            <!-- Column 2: Name, Description, Times (60%, left-aligned) -->
+            <div class="exp-view-header-info">
                 <div class="exp-view-exp-name" id="expViewExpName"></div>
                 <div class="exp-view-description" id="expViewDescription"></div>
                 <div class="exp-view-times">
@@ -3085,7 +3182,12 @@
                     <div>End: <span id="expViewEndTime">-</span></div>
                 </div>
             </div>
-            <span id="expViewStatusBadge" class="exp-view-status-badge"></span>
+            <!-- Column 3: Status Panel (20%, centered) -->
+            <div class="exp-view-status-panel" id="expViewStatusPanel">
+                <div class="exp-view-status-icon" id="expViewStatusIcon">
+                    <i class="fas fa-spinner fa-spin"></i>
+                </div>
+            </div>
         </div>
 
         <!-- Tab Navigation -->
@@ -3112,10 +3214,6 @@
                 <div class="exp-view-section-group">
                     <h4 class="exp-view-group-title">
                         <span><i class="fas fa-layer-group" style="margin-right:6px;"></i>DATASET: <span id="expViewDatasetName" style="color:#374151;">-</span></span>
-                        <span class="exp-view-config-badges">
-                            <span class="exp-view-config-badge feature" id="expViewFeatureBadge">-</span>
-                            <span class="exp-view-config-badge model" id="expViewModelBadge">-</span>
-                        </span>
                     </h4>
                     <div id="expViewDatasetDetails" class="exp-view-dataset-details">
                         <div class="exp-view-loading"><i class="fas fa-spinner fa-spin"></i> Loading...</div>
@@ -3173,14 +3271,6 @@
                         <div class="exp-view-progress-bar" id="expViewProgressBar" style="width: 0%"></div>
                     </div>
                     <span class="exp-view-progress-text" id="expViewProgressText">0%</span>
-                </div>
-
-                <!-- Compile Stage Indicator (Cloud Build - separate from Vertex AI DAG) -->
-                <div class="exp-view-compile-stage" id="expViewCompileStage">
-                    <span class="exp-view-compile-icon" id="expViewCompileIcon">
-                        <i class="fas fa-check"></i>
-                    </span>
-                    <span class="exp-view-compile-text">Pipeline Compiled</span>
                 </div>
 
                 <!-- Pipeline DAG Visual -->
@@ -5419,17 +5509,17 @@ function populateExpViewModal(exp) {
     // Store current exp for tab data loading
     window.currentViewExp = exp;
 
-    // Header background based on status
-    const header = document.getElementById('expViewHeader');
-    header.className = `modal-header exp-view-header ${exp.status}`;
+    // Status panel (right side colored stripe) - Vertex Pipelines style
+    const statusPanel = document.getElementById('expViewStatusPanel');
+    statusPanel.className = `exp-view-status-panel ${exp.status}`;
 
-    // Status icon
+    // Status icon (circular icon inside status panel)
     const statusIcon = document.getElementById('expViewStatusIcon');
     const statusIcons = {
-        'submitting': 'fa-paper-plane',
+        'submitting': 'fa-spinner fa-spin',
         'running': 'fa-spinner fa-spin',
         'completed': 'fa-check',
-        'failed': 'fa-times',
+        'failed': 'fa-exclamation',
         'cancelled': 'fa-ban',
         'pending': 'fa-clock'
     };
@@ -5459,23 +5549,8 @@ function populateExpViewModal(exp) {
     document.getElementById('expViewStartTime').textContent = formatDateTime(exp.started_at || exp.created_at);
     document.getElementById('expViewEndTime').textContent = exp.completed_at ? formatDateTime(exp.completed_at) : '-';
 
-    // Status badge
-    const statusBadge = document.getElementById('expViewStatusBadge');
-    const badgeTexts = {
-        'submitting': 'Submitting',
-        'running': 'Running',
-        'completed': 'Success',
-        'failed': 'Failed',
-        'cancelled': 'Cancelled',
-        'pending': 'Pending'
-    };
-    statusBadge.className = `exp-view-status-badge ${exp.status}`;
-    statusBadge.textContent = badgeTexts[exp.status] || exp.status;
-
     // Overview Tab - Dataset section
     document.getElementById('expViewDatasetName').textContent = exp.dataset_name || 'Dataset';
-    document.getElementById('expViewFeatureBadge').textContent = exp.feature_config_name || '-';
-    document.getElementById('expViewModelBadge').textContent = exp.model_config_name || '-';
 
     // Load dataset details
     if (exp.dataset_id) {
@@ -5579,178 +5654,312 @@ function renderMetricsSummary(metrics) {
 }
 
 // =========================================================================
-// Pipeline DAG Visualization
+// Pipeline DAG Visualization (2D Layout with Bezier Connections)
 // =========================================================================
 
-// DAG structure - fixed for TFX pipeline (skip Compile, it's Cloud Build)
-const PIPELINE_DAG = {
-    nodes: [
-        { id: 'Examples', name: 'ExampleGen', icon: 'fa-database', row: 0 },
-        { id: 'Stats', name: 'StatisticsGen', icon: 'fa-chart-bar', row: 1 },
-        { id: 'Schema', name: 'SchemaGen', icon: 'fa-sitemap', row: 1 },
-        { id: 'Transform', name: 'Transform', icon: 'fa-exchange-alt', row: 2 },
-        { id: 'Train', name: 'Trainer', icon: 'fa-brain', row: 3 }
+// Layout constants for 2D DAG positioning
+const DAG_LAYOUT = {
+    nodeWidth: 220,
+    nodeHeight: 48,
+    artifactSize: 32
+};
+
+// TFX Pipeline Structure with 2D Positions
+const TFX_PIPELINE = {
+    // Components with absolute positions (x is left edge of 220px wide node)
+    components: [
+        { id: 'Compile', name: 'Pipeline Compile', icon: 'fa-cogs', x: 150, y: 15 },
+        { id: 'Examples', name: 'BigQueryExampleGen', icon: 'fa-database', x: 150, y: 80 },
+        { id: 'Stats', name: 'StatisticsGen', icon: 'fa-chart-bar', x: 20, y: 190 },
+        { id: 'Schema', name: 'SchemaGen', icon: 'fa-sitemap', x: 20, y: 295 },
+        { id: 'Transform', name: 'Transform', icon: 'fa-exchange-alt', x: 290, y: 400 },
+        { id: 'Train', name: 'Trainer', icon: 'fa-brain', x: 290, y: 565 }
     ],
+
+    // Artifacts with absolute positions (x is left edge of 32px artifact)
+    artifacts: [
+        { id: 'examples', name: 'Examples', icon: 'fa-th', type: 'dataset', componentId: 'Examples', x: 244, y: 140 },
+        { id: 'statistics', name: 'Statistics', icon: 'fa-chart-bar', type: 'statistics', componentId: 'Stats', x: 114, y: 250 },
+        { id: 'schema', name: 'Schema', icon: 'fa-sitemap', type: 'schema', componentId: 'Schema', x: 114, y: 355 },
+        // Transform artifacts in a horizontal row below Transform
+        { id: 'transform_graph', name: 'Transform Graph', icon: 'fa-project-diagram', type: 'graph', componentId: 'Transform', x: 200, y: 465 },
+        { id: 'transformed_examples', name: 'Transformed Examples', icon: 'fa-database', type: 'dataset', componentId: 'Transform', x: 245, y: 465 },
+        { id: 'pre_transform_schema', name: 'Pre-Transform Schema', icon: 'fa-sitemap', type: 'schema', componentId: 'Transform', x: 290, y: 465 },
+        { id: 'pre_transform_stats', name: 'Pre-Transform Stats', icon: 'fa-chart-bar', type: 'statistics', componentId: 'Transform', x: 335, y: 465 },
+        { id: 'post_transform_schema', name: 'Post-Transform Schema', icon: 'fa-sitemap', type: 'schema', componentId: 'Transform', x: 380, y: 465 },
+        { id: 'post_transform_stats', name: 'Post-Transform Stats', icon: 'fa-chart-bar', type: 'statistics', componentId: 'Transform', x: 425, y: 465 },
+        { id: 'post_transform_anomalies', name: 'Anomalies', icon: 'fa-exclamation-triangle', type: 'anomalies', componentId: 'Transform', x: 470, y: 465 },
+        // Trainer output
+        { id: 'model', name: 'Model', icon: 'fa-cube', type: 'model', componentId: 'Train', x: 384, y: 625 }
+    ],
+
+    // Edges: connections between nodes (components and artifacts)
+    // Types: 'straight', 'curve-left', 'curve-right', 'curve-down'
     edges: [
-        { from: 'Examples', to: 'Stats' },
-        { from: 'Examples', to: 'Schema' },
-        { from: 'Stats', to: 'Transform' },
-        { from: 'Schema', to: 'Transform' },
-        { from: 'Transform', to: 'Train' }
+        // Compile -> BigQueryExampleGen
+        { from: 'Compile', to: 'Examples', fromType: 'component', toType: 'component' },
+        // BigQueryExampleGen -> Examples artifact
+        { from: 'Examples', to: 'examples', fromType: 'component', toType: 'artifact' },
+        // Examples artifact -> StatisticsGen (curves left)
+        { from: 'examples', to: 'Stats', fromType: 'artifact', toType: 'component', curve: 'left' },
+        // Examples artifact -> Transform (long curve right - BRANCH)
+        { from: 'examples', to: 'Transform', fromType: 'artifact', toType: 'component', curve: 'down-right' },
+        // StatisticsGen -> Statistics artifact
+        { from: 'Stats', to: 'statistics', fromType: 'component', toType: 'artifact' },
+        // Statistics artifact -> SchemaGen
+        { from: 'statistics', to: 'Schema', fromType: 'component', toType: 'component' },
+        // SchemaGen -> Schema artifact
+        { from: 'Schema', to: 'schema', fromType: 'component', toType: 'artifact' },
+        // Schema artifact -> Transform (curves right)
+        { from: 'schema', to: 'Transform', fromType: 'artifact', toType: 'component', curve: 'right' },
+        // Schema artifact -> Trainer (long curve - BRANCH)
+        { from: 'schema', to: 'Train', fromType: 'artifact', toType: 'component', curve: 'down-right' },
+        // Transform -> Transform artifacts (fan out)
+        { from: 'Transform', to: 'transform_graph', fromType: 'component', toType: 'artifact' },
+        { from: 'Transform', to: 'transformed_examples', fromType: 'component', toType: 'artifact' },
+        { from: 'Transform', to: 'pre_transform_schema', fromType: 'component', toType: 'artifact' },
+        { from: 'Transform', to: 'pre_transform_stats', fromType: 'component', toType: 'artifact' },
+        { from: 'Transform', to: 'post_transform_schema', fromType: 'component', toType: 'artifact' },
+        { from: 'Transform', to: 'post_transform_stats', fromType: 'component', toType: 'artifact' },
+        { from: 'Transform', to: 'post_transform_anomalies', fromType: 'component', toType: 'artifact' },
+        // Transformed Examples -> Trainer
+        { from: 'transformed_examples', to: 'Train', fromType: 'artifact', toType: 'component' },
+        // Trainer -> Model artifact
+        { from: 'Train', to: 'model', fromType: 'component', toType: 'artifact' }
     ]
 };
 
-// Track currently selected component
+// Track state
 let selectedComponentId = null;
 let currentStageDetails = [];
+let stageMap = {};
 
-function updateCompileStageIndicator(compileStage) {
-    const container = document.getElementById('expViewCompileStage');
-    const iconEl = document.getElementById('expViewCompileIcon');
-    if (!container || !iconEl) return;
+// Status badge icons mapping
+const STATUS_BADGE_ICONS = {
+    'completed': 'fa-check',
+    'running': 'fa-sync fa-spin',
+    'failed': 'fa-exclamation',
+    'pending': 'fa-minus',
+    'skipped': 'fa-ban'
+};
 
-    const status = compileStage?.status || 'pending';
-    container.className = 'exp-view-compile-stage ' + status;
+// Get node position and dimensions for connection drawing
+function getNodeInfo(nodeId) {
+    // Check components first
+    const component = TFX_PIPELINE.components.find(c => c.id === nodeId);
+    if (component) {
+        return {
+            x: component.x,
+            y: component.y,
+            width: DAG_LAYOUT.nodeWidth,
+            height: DAG_LAYOUT.nodeHeight,
+            type: 'component'
+        };
+    }
+    // Check artifacts
+    const artifact = TFX_PIPELINE.artifacts.find(a => a.id === nodeId);
+    if (artifact) {
+        return {
+            x: artifact.x,
+            y: artifact.y,
+            width: DAG_LAYOUT.artifactSize,
+            height: DAG_LAYOUT.artifactSize,
+            type: 'artifact'
+        };
+    }
+    return null;
+}
 
-    // Update icon and text
-    const icons = {
-        'completed': 'fa-check',
-        'running': 'fa-spinner fa-spin',
-        'failed': 'fa-times',
-        'pending': 'fa-circle'
-    };
-    const texts = {
-        'completed': 'Pipeline Compiled',
-        'running': 'Compiling Pipeline...',
-        'failed': 'Compilation Failed',
-        'pending': 'Waiting to Compile'
-    };
+// Get the status for a connection based on source node
+function getEdgeStatus(fromId, fromType) {
+    if (fromType === 'component') {
+        const stage = stageMap[fromId];
+        if (stage) {
+            if (stage.status === 'completed') return 'completed';
+            if (stage.status === 'failed') return 'failed';
+        }
+    } else {
+        // Artifact status based on its parent component
+        const artifact = TFX_PIPELINE.artifacts.find(a => a.id === fromId);
+        if (artifact) {
+            const stage = stageMap[artifact.componentId];
+            if (stage) {
+                if (stage.status === 'completed') return 'completed';
+                if (stage.status === 'failed') return 'failed';
+            }
+        }
+    }
+    return 'pending';
+}
 
-    iconEl.innerHTML = `<i class="fas ${icons[status] || 'fa-circle'}"></i>`;
-    container.querySelector('.exp-view-compile-text').textContent = texts[status] || 'Compile';
+// Draw bezier curve between two nodes
+function drawBezierConnection(svg, fromNode, toNode, curveType, status) {
+    // Calculate connection points
+    const fromCenterX = fromNode.x + fromNode.width / 2;
+    const fromBottomY = fromNode.y + fromNode.height;
+    const toCenterX = toNode.x + toNode.width / 2;
+    const toTopY = toNode.y;
+
+    let path;
+    const dx = toCenterX - fromCenterX;
+    const dy = toTopY - fromBottomY;
+
+    if (curveType === 'left') {
+        // Curve going from right to left
+        const ctrl1X = fromCenterX;
+        const ctrl1Y = fromBottomY + dy * 0.5;
+        const ctrl2X = toCenterX;
+        const ctrl2Y = toTopY - dy * 0.3;
+        path = `M ${fromCenterX} ${fromBottomY} C ${ctrl1X} ${ctrl1Y}, ${ctrl2X} ${ctrl2Y}, ${toCenterX} ${toTopY}`;
+    } else if (curveType === 'right') {
+        // Curve going from left to right
+        const ctrl1X = fromCenterX;
+        const ctrl1Y = fromBottomY + dy * 0.5;
+        const ctrl2X = toCenterX;
+        const ctrl2Y = toTopY - dy * 0.3;
+        path = `M ${fromCenterX} ${fromBottomY} C ${ctrl1X} ${ctrl1Y}, ${ctrl2X} ${ctrl2Y}, ${toCenterX} ${toTopY}`;
+    } else if (curveType === 'down-right') {
+        // Long curve going down and then right (for branch connections)
+        const midY = fromBottomY + dy * 0.6;
+        const ctrl1X = fromCenterX;
+        const ctrl1Y = midY;
+        const ctrl2X = toCenterX;
+        const ctrl2Y = midY;
+        path = `M ${fromCenterX} ${fromBottomY} C ${ctrl1X} ${ctrl1Y}, ${ctrl2X} ${ctrl2Y}, ${toCenterX} ${toTopY}`;
+    } else {
+        // Default: straight or gentle curve for adjacent nodes
+        if (Math.abs(dx) < 50) {
+            // Nearly straight - use simple line
+            path = `M ${fromCenterX} ${fromBottomY} L ${toCenterX} ${toTopY}`;
+        } else {
+            // Gentle curve
+            const ctrl1X = fromCenterX;
+            const ctrl1Y = fromBottomY + dy * 0.4;
+            const ctrl2X = toCenterX;
+            const ctrl2Y = toTopY - dy * 0.4;
+            path = `M ${fromCenterX} ${fromBottomY} C ${ctrl1X} ${ctrl1Y}, ${ctrl2X} ${ctrl2Y}, ${toCenterX} ${toTopY}`;
+        }
+    }
+
+    const pathEl = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    pathEl.setAttribute('d', path);
+    pathEl.setAttribute('class', status);
+    svg.appendChild(pathEl);
+}
+
+// Draw all SVG connections
+function drawDagConnections() {
+    const svg = document.getElementById('expViewDagSvg');
+    if (!svg) return;
+
+    // Clear existing paths
+    svg.innerHTML = '';
+
+    // Draw each edge
+    TFX_PIPELINE.edges.forEach(edge => {
+        const fromNode = getNodeInfo(edge.from);
+        const toNode = getNodeInfo(edge.to);
+
+        if (fromNode && toNode) {
+            const status = getEdgeStatus(edge.from, edge.fromType);
+            drawBezierConnection(svg, fromNode, toNode, edge.curve, status);
+        }
+    });
 }
 
 function renderPipelineStages(stages) {
     // Store stages for later use
     currentStageDetails = stages;
 
-    // Map stage array to lookup by name (skip Compile - it's Cloud Build)
-    const stageMap = {};
+    // Map stage array to lookup by name
+    stageMap = {};
     stages.forEach(s => { stageMap[s.name] = s; });
 
-    // Update Compile stage indicator (separate from DAG)
-    updateCompileStageIndicator(stageMap['Compile']);
-
     const container = document.getElementById('expViewDagNodes');
-    const icons = {
-        'completed': 'fa-check',
-        'running': 'fa-spinner fa-spin',
-        'failed': 'fa-times',
-        'pending': 'fa-circle'
-    };
+    if (!container) return;
 
-    // Group nodes by row
-    const rows = {};
-    PIPELINE_DAG.nodes.forEach(node => {
-        if (!rows[node.row]) rows[node.row] = [];
-        rows[node.row].push(node);
-    });
-
-    // Build HTML
     let html = '';
-    const rowKeys = Object.keys(rows).sort((a, b) => a - b);
 
-    rowKeys.forEach((rowKey, rowIndex) => {
-        const rowNodes = rows[rowKey];
+    // Render all components with absolute positioning
+    TFX_PIPELINE.components.forEach((component, index) => {
+        const stage = stageMap[component.id] || { status: 'pending', duration_seconds: null };
+        let statusClass = stage.status || 'pending';
 
-        // Add connector space between rows (except before first)
-        if (rowIndex > 0) {
-            html += '<div class="exp-view-dag-connector"></div>';
+        // If a previous component failed, mark subsequent as skipped
+        if (statusClass === 'pending') {
+            const prevFailed = TFX_PIPELINE.components.slice(0, index).some(c => {
+                const s = stageMap[c.id];
+                return s && s.status === 'failed';
+            });
+            if (prevFailed) statusClass = 'skipped';
         }
 
-        html += '<div class="exp-view-dag-row">';
-        rowNodes.forEach(node => {
-            const stage = stageMap[node.id] || { status: 'pending', duration_seconds: null };
-            const statusClass = stage.status || 'pending';
-            const statusIcon = icons[statusClass] || 'fa-circle';
-            const duration = stage.duration_seconds ? formatDuration(stage.duration_seconds) : '';
-            const selected = selectedComponentId === node.id ? 'selected' : '';
+        const statusBadgeIcon = STATUS_BADGE_ICONS[statusClass] || 'fa-minus';
+        const duration = stage.duration_seconds ? formatDuration(stage.duration_seconds) : '';
+        const selected = selectedComponentId === component.id ? 'selected' : '';
 
-            // Show status badge only for running/failed
-            const statusBadge = (statusClass === 'running' || statusClass === 'failed')
-                ? `<span class="exp-view-dag-node-status">${statusClass.toUpperCase()}</span>`
-                : '';
-
-            html += `
-                <div class="exp-view-dag-node ${statusClass} ${selected}"
-                     data-component="${node.id}"
-                     onclick="selectDagComponent('${node.id}')">
-                    <div class="exp-view-dag-node-icon">
-                        <i class="fas ${statusIcon}"></i>
-                    </div>
-                    <div class="exp-view-dag-node-info">
-                        <div class="exp-view-dag-node-name">${node.name}</div>
-                        <div class="exp-view-dag-node-time">${duration}</div>
-                    </div>
-                    ${statusBadge}
+        html += `
+            <div class="exp-view-dag-node ${statusClass} ${selected}"
+                 style="left: ${component.x}px; top: ${component.y}px;"
+                 data-component="${component.id}"
+                 onclick="selectDagComponent('${component.id}')">
+                <span class="exp-view-dag-node-port top"></span>
+                <div class="exp-view-dag-node-icon">
+                    <i class="fas ${component.icon}"></i>
                 </div>
-            `;
-        });
-        html += '</div>';
+                <div class="exp-view-dag-node-info">
+                    <div class="exp-view-dag-node-name">${component.name}</div>
+                    ${duration ? `<div class="exp-view-dag-node-time">${duration}</div>` : ''}
+                </div>
+                <div class="exp-view-dag-node-status-badge">
+                    <i class="fas ${statusBadgeIcon}"></i>
+                </div>
+                <span class="exp-view-dag-node-port bottom"></span>
+            </div>
+        `;
+    });
+
+    // Render all artifacts with absolute positioning
+    TFX_PIPELINE.artifacts.forEach(artifact => {
+        const stage = stageMap[artifact.componentId] || { status: 'pending' };
+        const artifactStatus = stage.status === 'completed' ? 'completed' : 'pending';
+        const schemaClass = artifact.type === 'schema' ? 'schema' : '';
+
+        html += `
+            <div class="exp-view-dag-artifact ${artifactStatus} ${schemaClass}"
+                 style="left: ${artifact.x}px; top: ${artifact.y}px;"
+                 data-artifact="${artifact.id}">
+                <i class="fas ${artifact.icon}"></i>
+                <span class="exp-view-dag-artifact-tooltip">${artifact.name}</span>
+            </div>
+        `;
     });
 
     container.innerHTML = html;
 
     // Draw SVG connections after DOM update
-    requestAnimationFrame(() => drawDagConnections(stageMap));
-}
-
-function drawDagConnections(stageMap) {
-    const svg = document.getElementById('expViewDagSvg');
-    const container = document.getElementById('expViewDagContainer');
-
-    if (!svg || !container) return;
-
-    // Clear existing paths
-    svg.innerHTML = '';
-
-    // Get container bounds
-    const containerRect = container.getBoundingClientRect();
-
-    // Draw each edge
-    PIPELINE_DAG.edges.forEach(edge => {
-        const fromNode = container.querySelector(`[data-component="${edge.from}"]`);
-        const toNode = container.querySelector(`[data-component="${edge.to}"]`);
-
-        if (!fromNode || !toNode) return;
-
-        const fromRect = fromNode.getBoundingClientRect();
-        const toRect = toNode.getBoundingClientRect();
-
-        // Calculate positions relative to container
-        const x1 = fromRect.left + fromRect.width / 2 - containerRect.left;
-        const y1 = fromRect.bottom - containerRect.top;
-        const x2 = toRect.left + toRect.width / 2 - containerRect.left;
-        const y2 = toRect.top - containerRect.top;
-
-        // Create bezier curve path
-        const midY = (y1 + y2) / 2;
-        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-        path.setAttribute('d', `M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}`);
-
-        // Check if edge is "completed" (both nodes completed)
-        const fromStage = stageMap[edge.from] || {};
-        const toStage = stageMap[edge.to] || {};
-        if (fromStage.status === 'completed' &&
-            (toStage.status === 'completed' || toStage.status === 'running')) {
-            path.classList.add('completed');
-        }
-
-        svg.appendChild(path);
+    requestAnimationFrame(() => {
+        drawDagConnections();
     });
 }
 
+
 function selectDagComponent(componentId) {
+    // Don't show logs panel for Compile stage (it's Cloud Build, not Vertex AI)
+    if (componentId === 'Compile') {
+        // Just highlight, no detail panel
+        const nodes = document.querySelectorAll('.exp-view-dag-node');
+        nodes.forEach(node => {
+            node.classList.remove('selected');
+            if (node.dataset.component === componentId) {
+                node.classList.add('selected');
+            }
+        });
+        selectedComponentId = componentId;
+        document.getElementById('expViewComponentDetail')?.classList.add('hidden');
+        return;
+    }
+
     // Update selection visually
     const nodes = document.querySelectorAll('.exp-view-dag-node');
     nodes.forEach(node => {
@@ -5770,8 +5979,8 @@ function selectDagComponent(componentId) {
     const stage = currentStageDetails.find(s => s.name === componentId) || { status: 'pending' };
 
     // Update header
-    const dagNode = PIPELINE_DAG.nodes.find(n => n.id === componentId);
-    document.getElementById('expViewComponentName').textContent = dagNode ? dagNode.name : componentId;
+    const component = TFX_PIPELINE.components.find(c => c.id === componentId);
+    document.getElementById('expViewComponentName').textContent = component ? component.name : componentId;
 
     const statusEl = document.getElementById('expViewComponentStatus');
     statusEl.textContent = stage.status || 'pending';

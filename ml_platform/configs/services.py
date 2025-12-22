@@ -1420,6 +1420,7 @@ class TrainerModuleGenerator:
             self._generate_product_model(product_by_type),
             self._generate_retrieval_model(),
             self._generate_serve_fn(),
+            self._generate_mlflow_callback(),
             self._generate_run_fn(),
         ]
 
@@ -1512,6 +1513,7 @@ class TrainerModuleGenerator:
     def _generate_imports(self) -> str:
         """Generate import statements."""
         return '''import os
+import json
 import glob
 from typing import Dict, List, Text
 
@@ -1524,6 +1526,10 @@ from tfx.types import artifact_utils
 from tfx_bsl.public import tfxio
 
 from absl import logging
+
+# MLflow tracking
+import mlflow
+import mlflow.tensorflow
 '''
 
     def _generate_constants(self) -> str:
@@ -1534,6 +1540,9 @@ from absl import logging
             if layer.get('type') == 'dense' and 'l2_reg' in layer:
                 l2_reg = layer.get('l2_reg', 0.0)
                 break
+
+        # Get model endpoint name for MLflow experiment
+        model_endpoint_name = self.feature_config.dataset.model_endpoint.name
 
         return f'''
 # =============================================================================
@@ -1556,6 +1565,14 @@ TOP_K = {self.top_k}
 
 # OOV buckets (must match Transform preprocessing)
 NUM_OOV_BUCKETS = 1
+
+# =============================================================================
+# MLFLOW CONFIGURATION
+# =============================================================================
+
+MLFLOW_TRACKING_URI = os.environ.get('MLFLOW_TRACKING_URI', '')
+MLFLOW_EXPERIMENT_NAME = '{model_endpoint_name}'
+MLFLOW_RUN_NAME = os.environ.get('MLFLOW_RUN_NAME', 'quick-test')
 '''
 
     def _generate_input_fn(self) -> str:
@@ -2165,10 +2182,60 @@ def _precompute_candidate_embeddings(model, candidates_dataset, batch_size=128):
     return product_ids, tf.concat(embeddings, axis=0)
 '''
 
+    def _generate_mlflow_callback(self) -> str:
+        """Generate MLflow callback class for per-epoch metric logging."""
+        return '''
+# =============================================================================
+# MLFLOW CALLBACK
+# =============================================================================
+
+class MLflowCallback(tf.keras.callbacks.Callback):
+    """Log metrics to MLflow after each epoch."""
+
+    def on_epoch_end(self, epoch, logs=None):
+        if logs and mlflow.active_run():
+            for metric_name, value in logs.items():
+                mlflow.log_metric(metric_name, float(value), step=epoch)
+
+
+def _write_mlflow_info(gcs_output_path: str, run_id: str):
+    """Write MLflow run ID to GCS for Django to retrieve."""
+    if not gcs_output_path or not gcs_output_path.startswith('gs://'):
+        logging.warning(f"Cannot write MLflow info: invalid GCS path: {gcs_output_path}")
+        return
+
+    try:
+        from google.cloud import storage
+
+        path = gcs_output_path[5:]  # Remove 'gs://'
+        bucket_name = path.split('/')[0]
+        blob_path = '/'.join(path.split('/')[1:]) + '/mlflow_info.json'
+
+        client = storage.Client()
+        bucket = client.bucket(bucket_name)
+        blob = bucket.blob(blob_path)
+        blob.upload_from_string(json.dumps({
+            'run_id': run_id,
+            'experiment_name': MLFLOW_EXPERIMENT_NAME,
+        }))
+        logging.info(f"Wrote MLflow info to gs://{bucket_name}/{blob_path}")
+    except Exception as e:
+        logging.warning(f"Could not write MLflow info: {e}")
+'''
+
     def _generate_run_fn(self) -> str:
-        """Generate run_fn() - the TFX Trainer entry point with configurable optimizer."""
+        """Generate run_fn() - the TFX Trainer entry point with configurable optimizer and MLflow tracking."""
         # Get optimizer code
         optimizer_class = self.OPTIMIZER_CODE.get(self.optimizer, 'tf.keras.optimizers.Adam')
+
+        # Get IDs for MLflow parameter logging
+        feature_config_id = self.feature_config.id
+        model_config_id = self.model_config.id
+        dataset_id = self.feature_config.dataset.id
+        feature_config_name = self.feature_config.name
+        model_config_name = self.model_config.name
+        dataset_name = self.feature_config.dataset.name
+        model_type = self.model_config.model_type
 
         return f'''
 # =============================================================================
@@ -2177,7 +2244,7 @@ def _precompute_candidate_embeddings(model, candidates_dataset, batch_size=128):
 
 def run_fn(fn_args: tfx.components.FnArgs):
     """
-    TFX Trainer entry point.
+    TFX Trainer entry point with MLflow tracking.
 
     Args:
         fn_args: Training arguments from TFX including:
@@ -2198,6 +2265,10 @@ def run_fn(fn_args: tfx.components.FnArgs):
     epochs = custom_config.get('epochs', EPOCHS)
     learning_rate = custom_config.get('learning_rate', LEARNING_RATE)
     batch_size = custom_config.get('batch_size', BATCH_SIZE)
+    gcs_output_path = custom_config.get('gcs_output_path', '')
+
+    # MLflow tracking URI - prefer custom_config (for Vertex AI) over env var
+    mlflow_tracking_uri = custom_config.get('mlflow_tracking_uri', MLFLOW_TRACKING_URI)
 
     logging.info(f"Training config: epochs={{epochs}}, lr={{learning_rate}}, batch={{batch_size}}")
     logging.info(f"Output embedding dim: {{OUTPUT_EMBEDDING_DIM}}")
@@ -2217,104 +2288,171 @@ def run_fn(fn_args: tfx.components.FnArgs):
         batch_size
     )
 
-    # Build model
-    logging.info("Building RetrievalModel...")
-    model = RetrievalModel(
-        tf_transform_output=tf_transform_output
-    )
+    # =========================================================================
+    # MLflow Initialization
+    # =========================================================================
+    mlflow_run_id = None
+    if mlflow_tracking_uri:
+        try:
+            mlflow.set_tracking_uri(mlflow_tracking_uri)
+            mlflow.set_experiment(MLFLOW_EXPERIMENT_NAME)
+            logging.info(f"MLflow initialized: {{mlflow_tracking_uri}}, experiment={{MLFLOW_EXPERIMENT_NAME}}")
+        except Exception as e:
+            logging.warning(f"MLflow initialization failed: {{e}}")
 
-    # Compile with configured optimizer: {self.optimizer}
-    optimizer = {optimizer_class}(learning_rate=learning_rate)
-    model.compile(optimizer=optimizer)
-    logging.info(f"Using optimizer: {self.optimizer} with lr={{learning_rate}}")
+    # Start MLflow run (context manager handles cleanup)
+    mlflow_context = mlflow.start_run(run_name=MLFLOW_RUN_NAME) if mlflow_tracking_uri else None
 
-    # Calculate steps
-    train_steps = custom_config.get('train_steps', fn_args.train_steps)
-    eval_steps = custom_config.get('eval_steps', fn_args.eval_steps)
-
-    # Training callbacks
-    callbacks = []
-
-    # TensorBoard logging
-    if fn_args.model_run_dir:
-        tensorboard_callback = tf.keras.callbacks.TensorBoard(
-            log_dir=fn_args.model_run_dir,
-            update_freq='epoch'
-        )
-        callbacks.append(tensorboard_callback)
-
-    # Train
-    logging.info(f"Starting training for {{epochs}} epochs...")
-    history = model.fit(
-        train_dataset,
-        validation_data=eval_dataset,
-        epochs=epochs,
-        steps_per_epoch=train_steps,
-        validation_steps=eval_steps,
-        callbacks=callbacks
-    )
-    logging.info("Training completed.")
-
-    # Evaluate on test set if available (strict_time split strategy)
     try:
-        # Check for test split in transformed examples
-        # The test split is only present when using strict_time split strategy
-        transformed_examples_dir = os.path.dirname(fn_args.train_files[0])
-        test_split_dir = os.path.join(os.path.dirname(transformed_examples_dir), 'Split-test')
+        if mlflow_context:
+            mlflow_context.__enter__()
+            mlflow_run_id = mlflow.active_run().info.run_id
+            logging.info(f"MLflow run started: {{mlflow_run_id}}")
 
-        if tf.io.gfile.exists(test_split_dir):
-            test_files = tf.io.gfile.glob(os.path.join(test_split_dir, '*'))
-            if test_files:
-                logging.info(f"Test split found at {{test_split_dir}} - running final evaluation...")
-                test_dataset = _input_fn(
-                    test_files,
-                    fn_args.data_accessor,
-                    tf_transform_output,
-                    batch_size
-                )
-                test_results = model.evaluate(test_dataset, return_dict=True)
-                logging.info(f"=== TEST SET EVALUATION ===")
-                for metric_name, metric_value in test_results.items():
-                    logging.info(f"  test_{{metric_name}}: {{metric_value:.6f}}")
-                logging.info(f"===========================")
+            # Log parameters
+            mlflow.log_params({{
+                'epochs': epochs,
+                'batch_size': batch_size,
+                'learning_rate': learning_rate,
+                'optimizer': '{self.optimizer}',
+                'embedding_dim': OUTPUT_EMBEDDING_DIM,
+                'feature_config_id': {feature_config_id},
+                'model_config_id': {model_config_id},
+                'dataset_id': {dataset_id},
+            }})
+
+            # Log tags for filtering
+            mlflow.set_tags({{
+                'feature_config_name': '{feature_config_name}',
+                'model_config_name': '{model_config_name}',
+                'dataset_name': '{dataset_name}',
+                'model_type': '{model_type}',
+            }})
+
+        # Build model
+        logging.info("Building RetrievalModel...")
+        model = RetrievalModel(
+            tf_transform_output=tf_transform_output
+        )
+
+        # Compile with configured optimizer: {self.optimizer}
+        optimizer = {optimizer_class}(learning_rate=learning_rate)
+        model.compile(optimizer=optimizer)
+        logging.info(f"Using optimizer: {self.optimizer} with lr={{learning_rate}}")
+
+        # Calculate steps
+        train_steps = custom_config.get('train_steps', fn_args.train_steps)
+        eval_steps = custom_config.get('eval_steps', fn_args.eval_steps)
+
+        # Training callbacks
+        callbacks = []
+
+        # MLflow callback for per-epoch metrics
+        if mlflow_tracking_uri and mlflow.active_run():
+            callbacks.append(MLflowCallback())
+
+        # TensorBoard logging
+        if fn_args.model_run_dir:
+            tensorboard_callback = tf.keras.callbacks.TensorBoard(
+                log_dir=fn_args.model_run_dir,
+                update_freq='epoch'
+            )
+            callbacks.append(tensorboard_callback)
+
+        # Train
+        logging.info(f"Starting training for {{epochs}} epochs...")
+        history = model.fit(
+            train_dataset,
+            validation_data=eval_dataset,
+            epochs=epochs,
+            steps_per_epoch=train_steps,
+            validation_steps=eval_steps,
+            callbacks=callbacks
+        )
+        logging.info("Training completed.")
+
+        # Log final metrics to MLflow
+        if mlflow.active_run():
+            for metric_name, values in history.history.items():
+                mlflow.log_metric(f'final_{{metric_name}}', float(values[-1]))
+
+        # Evaluate on test set if available (strict_time split strategy)
+        test_results = None
+        try:
+            # Check for test split in transformed examples
+            # The test split is only present when using strict_time split strategy
+            transformed_examples_dir = os.path.dirname(fn_args.train_files[0])
+            test_split_dir = os.path.join(os.path.dirname(transformed_examples_dir), 'Split-test')
+
+            if tf.io.gfile.exists(test_split_dir):
+                test_files = tf.io.gfile.glob(os.path.join(test_split_dir, '*'))
+                if test_files:
+                    logging.info(f"Test split found at {{test_split_dir}} - running final evaluation...")
+                    test_dataset = _input_fn(
+                        test_files,
+                        fn_args.data_accessor,
+                        tf_transform_output,
+                        batch_size
+                    )
+                    test_results = model.evaluate(test_dataset, return_dict=True)
+                    logging.info(f"=== TEST SET EVALUATION ===")
+                    for metric_name, metric_value in test_results.items():
+                        logging.info(f"  test_{{metric_name}}: {{metric_value:.6f}}")
+                        # Log test metrics to MLflow
+                        if mlflow.active_run():
+                            mlflow.log_metric(f'test_{{metric_name}}', float(metric_value))
+                    logging.info(f"===========================")
+                else:
+                    logging.info("Test split directory exists but is empty - skipping test evaluation")
             else:
-                logging.info("Test split directory exists but is empty - skipping test evaluation")
-        else:
-            logging.info("No test split found (not using strict_time strategy) - skipping test evaluation")
-    except Exception as e:
-        logging.warning(f"Could not evaluate on test set: {{e}}")
+                logging.info("No test split found (not using strict_time strategy) - skipping test evaluation")
+        except Exception as e:
+            logging.warning(f"Could not evaluate on test set: {{e}}")
 
-    # Pre-compute candidate embeddings for serving
-    logging.info("Pre-computing candidate embeddings...")
-    candidates_for_serving = _input_fn(
-        fn_args.eval_files,
-        fn_args.data_accessor,
-        tf_transform_output,
-        batch_size
-    ).unbatch()
+        # Pre-compute candidate embeddings for serving
+        logging.info("Pre-computing candidate embeddings...")
+        candidates_for_serving = _input_fn(
+            fn_args.eval_files,
+            fn_args.data_accessor,
+            tf_transform_output,
+            batch_size
+        ).unbatch()
 
-    product_ids, product_embeddings = _precompute_candidate_embeddings(
-        model, candidates_for_serving
-    )
-    logging.info(f"Pre-computed embeddings for {{len(product_ids)}} products")
+        product_ids, product_embeddings = _precompute_candidate_embeddings(
+            model, candidates_for_serving
+        )
+        logging.info(f"Pre-computed embeddings for {{len(product_ids)}} products")
 
-    # Build serving model that properly tracks all resources
-    logging.info("Building serving model...")
-    serving_model = ServingModel(
-        retrieval_model=model,
-        tf_transform_output=tf_transform_output,
-        product_ids=product_ids,
-        product_embeddings=product_embeddings
-    )
+        # Build serving model that properly tracks all resources
+        logging.info("Building serving model...")
+        serving_model = ServingModel(
+            retrieval_model=model,
+            tf_transform_output=tf_transform_output,
+            product_ids=product_ids,
+            product_embeddings=product_embeddings
+        )
 
-    # Save serving model with signature
-    logging.info(f"Saving model to: {{fn_args.serving_model_dir}}")
-    tf.saved_model.save(
-        serving_model,
-        fn_args.serving_model_dir,
-        signatures={{'serving_default': serving_model.serve}}
-    )
-    logging.info("Model saved successfully!")
+        # Save serving model with signature
+        logging.info(f"Saving model to: {{fn_args.serving_model_dir}}")
+        tf.saved_model.save(
+            serving_model,
+            fn_args.serving_model_dir,
+            signatures={{'serving_default': serving_model.serve}}
+        )
+        logging.info("Model saved successfully!")
+
+        # Write MLflow run ID to GCS for Django to retrieve
+        if mlflow_run_id and gcs_output_path:
+            _write_mlflow_info(gcs_output_path, mlflow_run_id)
+
+    finally:
+        # Clean up MLflow run
+        if mlflow_context:
+            try:
+                mlflow_context.__exit__(None, None, None)
+                logging.info("MLflow run completed successfully")
+            except Exception as e:
+                logging.warning(f"Error closing MLflow run: {{e}}")
 '''
 
     def generate_and_validate(self) -> Tuple[str, bool, Optional[str], Optional[int]]:

@@ -200,6 +200,16 @@ TFX_COMPILER_IMAGE = os.environ.get(
     'europe-central2-docker.pkg.dev/b2b-recs/tfx-builder/tfx-compiler:latest'
 )
 
+# =============================================================================
+# MLFLOW CONFIGURATION
+# =============================================================================
+
+# MLflow Tracking Server URL (Cloud Run service for experiment tracking)
+MLFLOW_TRACKING_URI = os.environ.get(
+    'MLFLOW_TRACKING_URI',
+    'https://mlflow-server-555035914949.europe-central2.run.app'
+)
+
 # Logging Configuration
 # Ensures exceptions are logged to stdout/stderr for Cloud Run visibility
 LOGGING = {

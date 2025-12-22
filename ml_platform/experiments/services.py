@@ -598,7 +598,20 @@ def create_tfx_pipeline(
 
     train_args = trainer_pb2.TrainArgs(num_steps=train_steps)
     eval_args = trainer_pb2.EvalArgs(num_steps=eval_steps)
-    custom_config = {"epochs": epochs, "batch_size": batch_size, "learning_rate": learning_rate}
+
+    # Get MLflow tracking URI from environment or use default
+    mlflow_tracking_uri = os.environ.get(
+        'MLFLOW_TRACKING_URI',
+        'https://mlflow-server-555035914949.europe-central2.run.app'
+    )
+
+    custom_config = {
+        "epochs": epochs,
+        "batch_size": batch_size,
+        "learning_rate": learning_rate,
+        "gcs_output_path": output_path,  # For MLflow info file
+        "mlflow_tracking_uri": mlflow_tracking_uri,  # For MLflow experiment tracking
+    }
 
     trainer = Trainer(
         module_file=trainer_module_path,
@@ -1017,6 +1030,37 @@ if __name__ == "__main__":
 
         except Exception as e:
             logger.warning(f"Error extracting results for {quick_test.display_name} (id={quick_test.id}): {e}")
+
+        # Extract MLflow run ID from mlflow_info.json
+        try:
+            mlflow_info_path = f"{quick_test.gcs_artifacts_path}/mlflow_info.json"
+            mlflow_blob_path = mlflow_info_path.replace(f"gs://{self.ARTIFACTS_BUCKET}/", "")
+
+            mlflow_blob = bucket.blob(mlflow_blob_path)
+
+            if mlflow_blob.exists():
+                mlflow_content = mlflow_blob.download_as_string().decode('utf-8')
+                mlflow_info = json.loads(mlflow_content)
+
+                mlflow_update_fields = []
+
+                if 'run_id' in mlflow_info:
+                    quick_test.mlflow_run_id = mlflow_info['run_id']
+                    mlflow_update_fields.append('mlflow_run_id')
+
+                if 'experiment_name' in mlflow_info:
+                    quick_test.mlflow_experiment_name = mlflow_info['experiment_name']
+                    mlflow_update_fields.append('mlflow_experiment_name')
+
+                if mlflow_update_fields:
+                    quick_test.save(update_fields=mlflow_update_fields)
+
+                logger.info(f"Extracted MLflow info for {quick_test.display_name} (id={quick_test.id}): run_id={mlflow_info.get('run_id')}")
+            else:
+                logger.info(f"No mlflow_info.json found for {quick_test.display_name} (id={quick_test.id})")
+
+        except Exception as e:
+            logger.warning(f"Error extracting MLflow info for {quick_test.display_name} (id={quick_test.id}): {e}")
 
     # Mapping from TFX component names to short display names
     STAGE_NAME_MAP = {

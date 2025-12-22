@@ -1750,6 +1750,21 @@ class QuickTest(models.Model):
     )
 
     # =========================================================================
+    # MLflow Tracking
+    # =========================================================================
+
+    mlflow_run_id = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="MLflow run ID for this experiment"
+    )
+    mlflow_experiment_name = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="MLflow experiment name"
+    )
+
+    # =========================================================================
     # Timestamps
     # =========================================================================
 

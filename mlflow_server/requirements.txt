@@ -1,0 +1,13 @@
+# MLflow Tracking Server Dependencies
+
+# Core MLflow
+mlflow==2.9.2
+
+# Database backend (PostgreSQL)
+psycopg2-binary==2.9.9
+
+# GCS artifact storage
+google-cloud-storage==2.14.0
+
+# WSGI server (not needed - mlflow has built-in server)
+# gunicorn==21.2.0

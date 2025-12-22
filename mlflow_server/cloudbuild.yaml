@@ -1,0 +1,75 @@
+# Cloud Build configuration for MLflow Tracking Server
+# Builds and deploys to Cloud Run in europe-central2
+
+steps:
+  # Build the Docker image
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'europe-central2-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/mlflow-server:$COMMIT_SHA'
+      - '-t'
+      - 'europe-central2-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/mlflow-server:latest'
+      - '.'
+    dir: 'mlflow_server'
+
+  # Push the image to Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'europe-central2-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/mlflow-server:$COMMIT_SHA'
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'europe-central2-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/mlflow-server:latest'
+
+  # Deploy to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'gcloud'
+    args:
+      - 'run'
+      - 'deploy'
+      - 'mlflow-server'
+      - '--image'
+      - 'europe-central2-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/mlflow-server:$COMMIT_SHA'
+      - '--region'
+      - 'europe-central2'
+      - '--platform'
+      - 'managed'
+      - '--memory'
+      - '2Gi'
+      - '--cpu'
+      - '2'
+      - '--timeout'
+      - '600'
+      - '--concurrency'
+      - '20'
+      - '--min-instances'
+      - '0'
+      - '--max-instances'
+      - '3'
+      - '--no-allow-unauthenticated'
+      - '--service-account'
+      - 'mlflow-server@$PROJECT_ID.iam.gserviceaccount.com'
+      # Cloud SQL connection (Unix socket)
+      - '--add-cloudsql-instances'
+      - '$PROJECT_ID:europe-central2:b2b-recs-db'
+      # Database connection from Secret Manager
+      - '--set-secrets'
+      - 'MLFLOW_BACKEND_STORE_URI=mlflow-db-uri:latest'
+      # GCS artifact storage
+      - '--set-env-vars'
+      - 'MLFLOW_ARTIFACT_ROOT=gs://$PROJECT_ID-mlflow-artifacts'
+
+# Store images in Artifact Registry
+images:
+  - 'europe-central2-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/mlflow-server:$COMMIT_SHA'
+  - 'europe-central2-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/mlflow-server:latest'
+
+# Build options
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+# Timeout for the entire build
+timeout: '1800s'

@@ -1,0 +1,302 @@
+/**
+ * Pipeline DAG Visualization Styles
+ * Reusable component for TFX pipeline visualization (Vertex AI style)
+ *
+ * Usage: Include with {% static 'css/pipeline_dag.css' %}
+ * HTML: {% include 'includes/_pipeline_dag.html' %}
+ * JS: Include pipeline_dag.js and call renderPipelineStages(stages)
+ */
+
+/* Pipeline DAG Visual - 2D Layout with SVG Connections */
+.exp-view-dag-container {
+    position: relative;
+    padding: 24px 16px;
+    background: #ffffff;
+    background-image: radial-gradient(circle, #d8d8d8 1px, transparent 1px);
+    background-size: 20px 20px;
+    border-radius: 8px;
+    margin-bottom: 16px;
+    min-height: 1420px;
+    min-width: 520px;
+    overflow: visible;
+}
+.exp-view-dag-svg {
+    position: absolute;
+    top: 24px;
+    left: 16px;
+    width: calc(100% - 32px);
+    height: calc(100% - 48px);
+    pointer-events: none;
+    z-index: 1;
+    overflow: visible;
+}
+.exp-view-dag-svg path {
+    fill: none;
+    stroke-width: 2px;
+    stroke-linecap: round;
+    stroke: #9ca3af;
+}
+.exp-view-dag-svg path.pending {
+    stroke: #9ca3af;
+}
+.exp-view-dag-svg path.completed {
+    stroke: #1a73e8;
+}
+.exp-view-dag-svg path.failed {
+    stroke: #ea4335;
+}
+.exp-view-dag-nodes {
+    position: relative;
+    z-index: 2;
+    width: 100%;
+    height: 100%;
+}
+
+/* Component Nodes (Vertex AI style) - Absolute positioned */
+.exp-view-dag-node {
+    position: absolute;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: #ffffff;
+    border: 1px solid #dadce0;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    width: 264px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+.exp-view-dag-node:hover {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+}
+.exp-view-dag-node.selected {
+    border-color: #1a73e8;
+    box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.2);
+}
+/* Completed state - green right border accent */
+.exp-view-dag-node.completed {
+    background: #ffffff;
+    border-color: #dadce0;
+}
+.exp-view-dag-node.completed::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 40px;
+    background: linear-gradient(to right, transparent, #e8f5e9);
+    border-radius: 0 7px 7px 0;
+    pointer-events: none;
+}
+/* Running state - blue accent */
+.exp-view-dag-node.running {
+    background: #ffffff;
+    border-color: #dadce0;
+}
+.exp-view-dag-node.running::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 40px;
+    background: linear-gradient(to right, transparent, #e3f2fd);
+    border-radius: 0 7px 7px 0;
+    pointer-events: none;
+}
+/* Failed state - red accent */
+.exp-view-dag-node.failed {
+    background: #ffffff;
+    border-color: #dadce0;
+}
+.exp-view-dag-node.failed::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 40px;
+    background: linear-gradient(to right, transparent, #ffebee);
+    border-radius: 0 7px 7px 0;
+    pointer-events: none;
+}
+.exp-view-dag-node.pending {
+    background: #ffffff;
+    border-color: #dadce0;
+    opacity: 0.6;
+}
+.exp-view-dag-node.skipped {
+    background: #f8f9fa;
+    border-color: #dadce0;
+    opacity: 0.5;
+}
+/* Component icon (blue cube like Vertex AI) */
+.exp-view-dag-node-icon {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    flex-shrink: 0;
+    color: #1a73e8;
+}
+.exp-view-dag-node.pending .exp-view-dag-node-icon,
+.exp-view-dag-node.skipped .exp-view-dag-node-icon {
+    color: #9aa0a6;
+}
+.exp-view-dag-node-info {
+    flex: 1;
+    min-width: 0;
+}
+.exp-view-dag-node-name {
+    font-size: 14px;
+    font-weight: 500;
+    color: #202124;
+    margin-bottom: 2px;
+}
+.exp-view-dag-node-time {
+    font-size: 12px;
+    color: #5f6368;
+}
+/* Status indicator (right side badge) */
+.exp-view-dag-node-status-badge {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    flex-shrink: 0;
+    position: relative;
+    z-index: 1;
+}
+.exp-view-dag-node.completed .exp-view-dag-node-status-badge {
+    background: #34a853;
+    color: white;
+}
+.exp-view-dag-node.running .exp-view-dag-node-status-badge {
+    background: #1a73e8;
+    color: white;
+}
+.exp-view-dag-node.failed .exp-view-dag-node-status-badge {
+    background: #ea4335;
+    color: white;
+}
+.exp-view-dag-node.pending .exp-view-dag-node-status-badge,
+.exp-view-dag-node.skipped .exp-view-dag-node-status-badge {
+    background: #e8eaed;
+    color: #9aa0a6;
+}
+/* Port indicators on nodes */
+.exp-view-dag-node-port {
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    background: #1a73e8;
+    border: 1.5px solid #ffffff;
+    border-radius: 50%;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.15);
+}
+.exp-view-dag-node-port.top {
+    top: -4px;
+    left: 50%;
+    transform: translateX(-50%);
+}
+.exp-view-dag-node-port.bottom {
+    bottom: -4px;
+    left: 50%;
+    transform: translateX(-50%);
+}
+.exp-view-dag-node.pending .exp-view-dag-node-port,
+.exp-view-dag-node.skipped .exp-view-dag-node-port {
+    background: #dadce0;
+}
+
+/* Artifact Nodes (small square icons - Vertex AI style) - Absolute positioned */
+.exp-view-dag-artifact {
+    position: absolute;
+    width: 32px;
+    height: 32px;
+    background: #ffffff;
+    border: 1px solid #dadce0;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    color: #5f6368;
+    transition: all 0.15s ease;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}
+.exp-view-dag-artifact:hover {
+    border-color: #1a73e8;
+    background: #e8f0fe;
+    color: #1a73e8;
+}
+.exp-view-dag-artifact.completed {
+    border-color: #1a73e8;
+    color: #1a73e8;
+}
+.exp-view-dag-artifact.schema {
+    border-color: #f9ab00;
+    color: #e37400;
+    background: #fef7e0;
+}
+.exp-view-dag-artifact.schema.completed {
+    border-color: #f9ab00;
+    color: #e37400;
+}
+.exp-view-dag-artifact.pending {
+    opacity: 0.5;
+    color: #9aa0a6;
+}
+/* Artifact port indicators - small dots */
+.exp-view-dag-artifact::before,
+.exp-view-dag-artifact::after {
+    content: '';
+    position: absolute;
+    width: 4px;
+    height: 4px;
+    background: #dadce0;
+    border-radius: 50%;
+    left: 50%;
+    transform: translateX(-50%);
+}
+.exp-view-dag-artifact::before {
+    top: -2px;
+}
+.exp-view-dag-artifact::after {
+    bottom: -2px;
+}
+.exp-view-dag-artifact.completed::before,
+.exp-view-dag-artifact.completed::after {
+    background: #1a73e8;
+}
+.exp-view-dag-artifact.schema::before,
+.exp-view-dag-artifact.schema::after {
+    background: #f9ab00;
+}
+.exp-view-dag-artifact-tooltip {
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #3c4043;
+    color: white;
+    padding: 6px 10px;
+    border-radius: 4px;
+    font-size: 11px;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s ease;
+    margin-bottom: 8px;
+    z-index: 10;
+}
+.exp-view-dag-artifact:hover .exp-view-dag-artifact-tooltip {
+    opacity: 1;
+}

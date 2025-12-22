@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides a **complete implementation guide** for building the Experiments domain with native TFX pipelines on Vertex AI. It is designed to be self-contained and actionable - you should be able to open this document and start implementing without additional context.
 
-**Last Updated**: 2025-12-20
+**Last Updated**: 2025-12-22
 
 ---
 
@@ -32,9 +32,12 @@ This document provides a **complete implementation guide** for building the Expe
 21. [Phase 16: View Modal Config Visualizations](#phase-16-view-modal-config-visualizations-december-2025)
 22. [Phase 17: Pipeline DAG Visualization & Component Logs](#phase-17-pipeline-dag-visualization--component-logs-december-2025)
 23. [Phase 18: TFDV Parser Cloud Run Service](#phase-18-tfdv-parser-cloud-run-service-december-2025)
-23. [File Reference](#file-reference)
-23. [API Reference](#api-reference)
-24. [Testing Guide](#testing-guide)
+24. [Phase 19: Schema Fix & TFDV Hybrid Visualization](#phase-19-schema-fix--tfdv-hybrid-visualization-december-2025)
+25. [Phase 20: Enhanced Pipeline DAG Visualization](#phase-20-enhanced-pipeline-dag-visualization-december-2025)
+26. [Phase 21: Pipeline DAG Static File Extraction](#phase-21-pipeline-dag-static-file-extraction-december-2025)
+27. [File Reference](#file-reference)
+28. [API Reference](#api-reference)
+29. [Testing Guide](#testing-guide)
 
 ---
 
@@ -99,6 +102,7 @@ Experiments Page = Analyze Quick Test results to find optimal parameters
 | **Phase 18** | ✅ Complete | TFDV Parser Cloud Run Service (Python 3.10 microservice for parsing TFX artifacts, rich statistics display, histograms, TFDV HTML visualization) |
 | **Phase 19** | ✅ Complete | Schema Fix & TFDV Hybrid Visualization (field name fix, broken iframe modal removed, new tab TFDV display) |
 | **Phase 20** | ✅ Complete | Enhanced Pipeline DAG Visualization (8-node TFX pipeline with artifacts, Evaluator/Pusher nodes, bezier curves, white background) |
+| **Phase 21** | ✅ Complete | Pipeline DAG Static File Extraction (reusable CSS/JS/HTML components for future Full Training page) |
 
 ### Cloud Build Implementation (December 2025)
 
@@ -5764,6 +5768,206 @@ Consistent spacing pattern applied across all pipeline stages:
 - [x] Model → Pusher direct connection path works
 - [x] Transform Graph → Trainer connection works
 - [x] Container height accommodates all nodes (1420px minimum)
+
+---
+
+## Phase 21: Pipeline DAG Static File Extraction (December 2025)
+
+This phase extracts the pipeline DAG visualization into reusable static files, enabling the same visualization to be used on both the Quick Test (Experiments) page and the future Full Training page.
+
+### Overview
+
+The pipeline DAG visualization was originally embedded directly in `model_experiments.html` (~770 lines of CSS + JS + HTML). This phase extracts it into separate static files following Django best practices, making the component reusable across multiple pages.
+
+### Why Extract?
+
+1. **Reusability**: The Full Training page will use the identical pipeline structure (same 8 TFX components)
+2. **Maintainability**: Easier to update visualization in one place
+3. **Consistency**: Same styling and behavior across both pages
+4. **Separation of Concerns**: CSS, JS, and HTML in appropriate locations
+
+### New File Structure
+
+```
+static/
+├── css/
+│   └── pipeline_dag.css     (NEW - 293 lines of DAG styles)
+└── js/
+    └── pipeline_dag.js      (NEW - ~500 lines of DAG logic)
+
+templates/
+└── includes/
+    └── _pipeline_dag.html   (NEW - reusable HTML template)
+```
+
+### Files Created
+
+#### 1. `static/css/pipeline_dag.css`
+
+Contains all DAG visualization styles:
+- `.exp-view-dag-container` - Main container with dot grid background
+- `.exp-view-dag-svg` - SVG overlay for bezier curve connections
+- `.exp-view-dag-node` - Component nodes with all state variants (pending, running, completed, failed)
+- `.exp-view-dag-artifact` - Artifact nodes between components
+- `.exp-view-dag-node-port` - Connection port indicators
+- Status badge styling (green/blue/red/grey)
+- Hover and selected states
+
+#### 2. `static/js/pipeline_dag.js`
+
+Contains all DAG rendering logic:
+
+```javascript
+// Constants
+const DAG_LAYOUT = { nodeWidth: 264, nodeHeight: 62, artifactSize: 32 };
+const TFX_PIPELINE = { components: [...], artifacts: [...], edges: [...] };
+const STATUS_BADGE_ICONS = { completed: '✓', running: '●', failed: '✗', pending: '○' };
+
+// State
+let selectedComponentId = null;
+let currentStageDetails = [];
+let stageMap = {};
+
+// API Functions (globally available)
+function renderPipelineStages(stages) { ... }
+function selectDagComponent(componentId) { ... }
+function loadComponentLogs(componentId, experimentId) { ... }
+function refreshComponentLogs(experimentId) { ... }
+function resetDagState() { ... }
+function formatDuration(seconds) { ... }
+
+// Internal Functions
+function getNodeInfo(nodeId) { ... }
+function getEdgeStatus(fromId, fromType) { ... }
+function drawBezierConnection(svg, fromNode, toNode, curveType, status) { ... }
+function drawDagConnections() { ... }
+function escapeHtml(text) { ... }
+```
+
+#### 3. `templates/includes/_pipeline_dag.html`
+
+Minimal HTML template:
+
+```html
+<!--
+    Pipeline DAG Visualization Component
+
+    Usage:
+        { % include 'includes/_pipeline_dag.html' % }
+
+    Required CSS:
+        <link rel="stylesheet" href="{ % static 'css/pipeline_dag.css' % }?v=1">
+
+    Required JavaScript:
+        <script src="{ % static 'js/pipeline_dag.js' % }?v=1"></script>
+
+    JavaScript API:
+        - renderPipelineStages(stages)
+        - selectDagComponent(componentId)
+        - loadComponentLogs(componentId, experimentId)
+        - refreshComponentLogs(experimentId)
+        - resetDagState()
+        - formatDuration(seconds)
+-->
+<!-- Pipeline DAG Visual -->
+<div class="exp-view-dag-container" id="expViewDagContainer">
+    <svg class="exp-view-dag-svg" id="expViewDagSvg"></svg>
+    <div class="exp-view-dag-nodes" id="expViewDagNodes">
+        <!-- Populated by renderPipelineStages() -->
+    </div>
+</div>
+```
+
+**Note**: Template documentation uses HTML comments (`<!-- -->`) instead of Django comments (`{# #}`) because Django parses template tags even inside Django comments.
+
+### Changes to model_experiments.html
+
+1. **Added CSS import** in `{% block extra_css %}`:
+   ```django
+   <link rel="stylesheet" href="{% static 'css/pipeline_dag.css' %}?v=1">
+   ```
+
+2. **Replaced inline HTML** with include:
+   ```django
+   {% include 'includes/_pipeline_dag.html' %}
+   ```
+
+3. **Removed embedded CSS** (~293 lines replaced with comment):
+   ```css
+   /* Pipeline DAG styles moved to static/css/pipeline_dag.css */
+   ```
+
+4. **Removed embedded JS** (~480 lines replaced with comment):
+   ```javascript
+   // Pipeline DAG Visualization - Moved to static/js/pipeline_dag.js
+   ```
+
+5. **Added JS import** at end of file:
+   ```django
+   <script src="{% static 'js/pipeline_dag.js' %}?v=1"></script>
+   ```
+
+### Usage on Future Full Training Page
+
+```django
+{% load static %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/pipeline_dag.css' %}?v=1">
+{% endblock %}
+
+{% block content %}
+    <!-- Pipeline DAG -->
+    {% include 'includes/_pipeline_dag.html' %}
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/pipeline_dag.js' %}?v=1"></script>
+<script>
+    // Same API as Quick Test page
+    renderPipelineStages([
+        { name: 'Compile', status: 'completed', duration_seconds: 45 },
+        { name: 'Examples', status: 'completed', duration_seconds: 927 },
+        { name: 'Stats', status: 'running', duration_seconds: 120 },
+        // ... more stages
+    ]);
+
+    // Select a component
+    selectDagComponent('Train');
+
+    // Load component logs
+    loadComponentLogs('Train', trainingRunId);
+</script>
+{% endblock %}
+```
+
+### Key Implementation Notes
+
+1. **Global Functions**: All DAG functions are globally available (not namespaced) to minimize changes to existing code
+2. **experimentId Parameter**: `loadComponentLogs()` and `refreshComponentLogs()` accept experimentId as parameter instead of relying on page-global `viewModalExpId`
+3. **formatDuration()**: Included in pipeline_dag.js for standalone use
+4. **Version Query Params**: All static files use `?v=1` for cache busting
+
+### Files Modified
+
+| File | Action |
+|------|--------|
+| `static/css/pipeline_dag.css` | **CREATED** - 293 lines of CSS |
+| `static/js/pipeline_dag.js` | **CREATED** - ~500 lines of JS |
+| `templates/includes/_pipeline_dag.html` | **CREATED** - HTML template with documentation |
+| `templates/ml_platform/model_experiments.html` | **MODIFIED** - Removed embedded code, added imports/include |
+
+### Testing Checklist
+
+- [x] Pipeline visualization renders correctly on Experiments page
+- [x] All node states display properly (pending, running, completed, failed)
+- [x] SVG bezier curve connections draw correctly
+- [x] Node selection works and shows detail panel
+- [x] Component logs load when clicking nodes
+- [x] CSS loads without errors
+- [x] JavaScript loads without errors
+- [x] No duplicate function definitions
+- [x] Version parameter enables cache busting
 
 ---
 

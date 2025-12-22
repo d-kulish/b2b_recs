@@ -1,0 +1,44 @@
+<!--
+    Pipeline DAG Visualization Component
+
+    A reusable TFX pipeline visualization component styled like Vertex AI Pipelines console.
+
+    Usage:
+        { % include 'includes/_pipeline_dag.html' % }
+
+    Required CSS:
+        <link rel="stylesheet" href="{ % static 'css/pipeline_dag.css' % }?v=1">
+
+    Required JavaScript:
+        <script src="{ % static 'js/pipeline_dag.js' % }?v=1"></script>
+
+    JavaScript API:
+        - renderPipelineStages(stages) - Render pipeline with stage status array
+        - selectDagComponent(componentId) - Select a component node
+        - loadComponentLogs(componentId, experimentId) - Load logs for a component
+        - refreshComponentLogs(experimentId) - Refresh logs for selected component
+        - resetDagState() - Reset DAG state (call when modal closes)
+        - formatDuration(seconds) - Format seconds as MM:SS
+
+    Stage object format:
+        { name: 'Train', status: 'completed'|'running'|'failed'|'pending', duration_seconds: 125 }
+
+    Example:
+        renderPipelineStages([
+            { name: 'Compile', status: 'completed', duration_seconds: 45 },
+            { name: 'Examples', status: 'completed', duration_seconds: 927 },
+            { name: 'Stats', status: 'running', duration_seconds: 120 },
+            { name: 'Schema', status: 'pending', duration_seconds: null },
+            { name: 'Transform', status: 'pending', duration_seconds: null },
+            { name: 'Train', status: 'pending', duration_seconds: null },
+            { name: 'Evaluator', status: 'pending', duration_seconds: null },
+            { name: 'Pusher', status: 'pending', duration_seconds: null }
+        ]);
+-->
+<!-- Pipeline DAG Visual -->
+<div class="exp-view-dag-container" id="expViewDagContainer">
+    <svg class="exp-view-dag-svg" id="expViewDagSvg"></svg>
+    <div class="exp-view-dag-nodes" id="expViewDagNodes">
+        <!-- Populated by renderPipelineStages() -->
+    </div>
+</div>

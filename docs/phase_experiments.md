@@ -5,7 +5,7 @@ This document provides **high-level specifications** for the Experiments domain.
 
 👉 **[phase_experiments_implementation.md](phase_experiments_implementation.md)** - Complete implementation guide with code examples
 
-**Last Updated**: 2025-12-21
+**Last Updated**: 2025-12-22
 
 ---
 
@@ -36,6 +36,28 @@ This document provides **high-level specifications** for the Experiments domain.
 ---
 
 ## Recent Updates (December 2025)
+
+### Pipeline DAG Static File Extraction (2025-12-22)
+
+**Major Enhancement:** Extracted pipeline DAG visualization into reusable static files for use on future Full Training page.
+
+**Files Created:**
+- `static/css/pipeline_dag.css` - 293 lines of DAG styles
+- `static/js/pipeline_dag.js` - ~500 lines of DAG rendering logic
+- `templates/includes/_pipeline_dag.html` - Reusable HTML template
+
+**Key Benefits:**
+1. **Reusability** - Same visualization component for Quick Test and Full Training pages
+2. **Maintainability** - Single source of truth for DAG styling and logic
+3. **Django Best Practices** - Proper separation into static files and includes
+
+**Usage:**
+```django
+{% include 'includes/_pipeline_dag.html' %}
+<script src="{% static 'js/pipeline_dag.js' %}?v=1"></script>
+```
+
+**Note:** Template documentation uses HTML comments instead of Django comments because Django parses template tags even inside `{# #}` comments.
 
 ### Enhanced Pipeline DAG Visualization (2025-12-22)
 
@@ -1334,6 +1356,18 @@ MLFLOW_TRACKING_URI = os.environ.get('MLFLOW_TRACKING_URI', 'http://mlflow-serve
 - [x] **Direct Model → Pusher path**: Alternative deployment path without Evaluator
 
 **Result:** Pipeline visualization matches Vertex AI Pipelines console style with complete TFX component and artifact representation.
+
+### Phase 21: Pipeline DAG Static File Extraction ✅ DONE (2025-12-22)
+> **Reusable DAG visualization components for Full Training page**
+
+- [x] **CSS extraction**: Created `static/css/pipeline_dag.css` with all DAG styles (293 lines)
+- [x] **JS extraction**: Created `static/js/pipeline_dag.js` with DAG rendering logic (~500 lines)
+- [x] **HTML template**: Created `templates/includes/_pipeline_dag.html` as reusable include
+- [x] **model_experiments.html update**: Added imports, replaced inline code with includes
+- [x] **HTML comments for docs**: Use `<!-- -->` instead of `{# #}` (Django parses tags in Django comments)
+- [x] **Global functions preserved**: `renderPipelineStages()`, `selectDagComponent()`, `loadComponentLogs()`, etc.
+
+**Result:** Pipeline DAG visualization is now a reusable component that can be included on both Quick Test and Full Training pages.
 
 ### Previously Completed ✅
 - [x] Create `model_experiments.html` page (placeholder)

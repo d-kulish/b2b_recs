@@ -97,6 +97,8 @@ Experiments Page = Analyze Quick Test results to find optimal parameters
 | **Phase 16** | ✅ Complete | View Modal Config Visualizations (Features tensor breakdown, Model tower architecture, chip-format parameters, detailed hardware specs) |
 | **Phase 17** | ✅ Complete | Pipeline DAG Visualization & Component Logs (vertical DAG layout, SVG connections, Cloud Logging integration, component logs panel) |
 | **Phase 18** | ✅ Complete | TFDV Parser Cloud Run Service (Python 3.10 microservice for parsing TFX artifacts, rich statistics display, histograms, TFDV HTML visualization) |
+| **Phase 19** | ✅ Complete | Schema Fix & TFDV Hybrid Visualization (field name fix, broken iframe modal removed, new tab TFDV display) |
+| **Phase 20** | ✅ Complete | Enhanced Pipeline DAG Visualization (8-node TFX pipeline with artifacts, Evaluator/Pusher nodes, bezier curves, white background) |
 
 ### Cloud Build Implementation (December 2025)
 
@@ -5491,6 +5493,277 @@ if (stats.available) {
 - [x] No iframe nesting issues
 - [x] No font loading errors in main page (Facets loads fonts in separate tab)
 - [x] Custom statistics display still works (numeric/categorical tables)
+
+---
+
+## Phase 20: Enhanced Pipeline DAG Visualization (December 2025)
+
+This phase enhances the pipeline DAG visualization to show the complete TFX pipeline structure with 8 nodes and intermediate artifacts, matching the Vertex AI Pipelines console style.
+
+### Overview
+
+The pipeline visualization was expanded from 5 nodes to 8 nodes, with intermediate artifacts shown between components to provide a complete view of the TFX pipeline data flow.
+
+### Visual Design
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  Pipeline DAG                                                                │
+│  White background with subtle dot grid                                       │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│                    ┌────────────────────────────┐                            │
+│                    │    Pipeline Compile   ⚙️   │                            │
+│                    └────────────┬───────────────┘                            │
+│                                 │                                            │
+│                           ┌─────┴─────┐                                      │
+│                           │  Config   │  ← Artifact                          │
+│                           └─────┬─────┘                                      │
+│                                 │                                            │
+│                    ┌────────────┴───────────────┐                            │
+│                    │     Examples Gen     📊    │                            │
+│                    └────────────┬───────────────┘                            │
+│                                 │                                            │
+│                           ┌─────┴─────┐                                      │
+│                           │ Examples  │  ← Artifact                          │
+│                           └─────┬─────┘                                      │
+│                       ┌─────────┴─────────┐                                  │
+│                       │                   │                                  │
+│         ┌─────────────┴──────┐  ┌─────────┴─────────────┐                    │
+│         │   Stats Gen   📈   │  │   Schema Gen   🗃️    │                    │
+│         └─────────┬──────────┘  └─────────┬─────────────┘                    │
+│                   │                       │                                  │
+│             ┌─────┴─────┐           ┌─────┴─────┐                            │
+│             │Statistics │           │  Schema   │                            │
+│             └─────┬─────┘           └─────┬─────┘                            │
+│                   └───────────┬───────────┘                                  │
+│                               │                                              │
+│                    ┌──────────┴────────────┐                                 │
+│                    │     Transform    🔄   │                                 │
+│                    └──────────┬────────────┘                                 │
+│                        ┌──────┴──────┐                                       │
+│                        │             │                                       │
+│               ┌────────┴──┐    ┌─────┴────────┐                              │
+│               │transform_ │    │ transformed_ │                              │
+│               │  graph    │    │  examples    │                              │
+│               └────────┬──┘    └─────┬────────┘                              │
+│                        └──────┬──────┘                                       │
+│                               │                                              │
+│                    ┌──────────┴────────────┐                                 │
+│                    │      Trainer    🤖    │                                 │
+│                    └──────────┬────────────┘                                 │
+│                        ┌──────┴──────┐                                       │
+│                        │             │                                       │
+│               ┌────────┴──┐    ┌─────┴────────┐                              │
+│               │   Model   │    │  ModelRun    │                              │
+│               └────────┬──┘    └──────────────┘                              │
+│                        │                                                     │
+│                    ┌───┴────────────────────┐                                │
+│                    │     Evaluator    ✓✓   │                                 │
+│                    └──────────┬────────────┘                                 │
+│                        ┌──────┴──────┐                                       │
+│                        │             │                                       │
+│               ┌────────┴──┐    ┌─────┴────────┐                              │
+│               │  Model    │    │ Evaluation   │                              │
+│               │ Blessing  │    │              │                              │
+│               └────────┬──┘    └──────────────┘                              │
+│                        │                                                     │
+│                    ┌───┴────────────────────┐                                │
+│                    │      Pusher     ☁️     │                                │
+│                    └──────────┬────────────┘                                 │
+│                               │                                              │
+│                         ┌─────┴─────┐                                        │
+│                         │  Model    │                                        │
+│                         │ Endpoint  │                                        │
+│                         └───────────┘                                        │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Key Implementation Details
+
+#### 1. Expanded DAG Structure (8 Nodes + 11 Artifacts)
+
+```javascript
+const TFX_PIPELINE = {
+    components: [
+        { id: 'Compile', name: 'Pipeline Compile', icon: 'fa-cogs', x: 150, y: 15 },
+        { id: 'Examples', name: 'Examples Gen', icon: 'fa-database', x: 150, y: 189 },
+        { id: 'Stats', name: 'Stats Gen', icon: 'fa-chart-bar', x: 20, y: 363 },
+        { id: 'Schema', name: 'Schema Gen', icon: 'fa-sitemap', x: 290, y: 363 },
+        { id: 'Transform', name: 'Transform', icon: 'fa-exchange-alt', x: 290, y: 537 },
+        { id: 'Train', name: 'Trainer', icon: 'fa-microchip', x: 20, y: 711 },
+        { id: 'Evaluator', name: 'Evaluator', icon: 'fa-check-double', x: 290, y: 885 },
+        { id: 'Pusher', name: 'Pusher', icon: 'fa-cloud-upload-alt', x: 150, y: 1059 }
+    ],
+    artifacts: [
+        { id: 'config', name: 'Config', type: 'config', x: 232, y: 125 },
+        { id: 'examples', name: 'Examples', type: 'examples', x: 232, y: 299 },
+        { id: 'statistics', name: 'Statistics', type: 'stats', x: 102, y: 473 },
+        { id: 'schema', name: 'Schema', type: 'schema', x: 372, y: 473 },
+        { id: 'transform_graph', name: 'Transform Graph', type: 'transform', x: 335, y: 647 },
+        { id: 'transformed_examples', name: 'Transformed Examples', type: 'examples', x: 405, y: 647 },
+        { id: 'model', name: 'Model', type: 'model', x: 65, y: 821 },
+        { id: 'model_run', name: 'ModelRun', type: 'model', x: 135, y: 821 },
+        { id: 'model_blessing', name: 'Model Blessing', type: 'blessing', x: 335, y: 995 },
+        { id: 'evaluation', name: 'Evaluation', type: 'eval', x: 405, y: 995 },
+        { id: 'model_endpoint', name: 'Model Endpoint', type: 'endpoint', x: 232, y: 1169 }
+    ],
+    edges: [
+        // Pipeline flow with artifacts
+        { from: 'Compile', to: 'config', type: 'component-to-artifact' },
+        { from: 'config', to: 'Examples', type: 'artifact-to-component' },
+        { from: 'Examples', to: 'examples', type: 'component-to-artifact' },
+        { from: 'examples', to: 'Stats', type: 'artifact-to-component', curve: 'left' },
+        { from: 'examples', to: 'Schema', type: 'artifact-to-component', curve: 'right' },
+        { from: 'Stats', to: 'statistics', type: 'component-to-artifact' },
+        { from: 'Schema', to: 'schema', type: 'component-to-artifact' },
+        { from: 'statistics', to: 'Transform', type: 'artifact-to-component', curve: 'right' },
+        { from: 'schema', to: 'Transform', type: 'artifact-to-component' },
+        { from: 'Transform', to: 'transform_graph', type: 'component-to-artifact' },
+        { from: 'Transform', to: 'transformed_examples', type: 'component-to-artifact' },
+        { from: 'transform_graph', to: 'Train', type: 'artifact-to-component', curve: 'down-left' },
+        { from: 'transformed_examples', to: 'Train', type: 'artifact-to-component', curve: 'down-left' },
+        { from: 'Train', to: 'model', type: 'component-to-artifact' },
+        { from: 'Train', to: 'model_run', type: 'component-to-artifact' },
+        { from: 'model', to: 'Evaluator', type: 'artifact-to-component', curve: 'right' },
+        { from: 'Evaluator', to: 'model_blessing', type: 'component-to-artifact' },
+        { from: 'Evaluator', to: 'evaluation', type: 'component-to-artifact' },
+        { from: 'model_blessing', to: 'Pusher', type: 'artifact-to-component', curve: 'down-left' },
+        { from: 'model', to: 'Pusher', type: 'artifact-to-component', curve: 'down-right' },
+        { from: 'Pusher', to: 'model_endpoint', type: 'component-to-artifact' }
+    ]
+};
+```
+
+#### 2. Bezier Curve Connection Types
+
+The DAG uses SVG bezier curves with four curve types for different connection directions:
+
+```javascript
+function drawBezierConnection(svg, fromX, fromY, toX, toY, curveType = 'right') {
+    const midY = (fromY + toY) / 2;
+    let d;
+
+    if (curveType === 'left') {
+        // Curve going left
+        d = `M ${fromX} ${fromY} C ${fromX - 30} ${midY}, ${toX - 30} ${midY}, ${toX} ${toY}`;
+    } else if (curveType === 'right') {
+        // Curve going right
+        d = `M ${fromX} ${fromY} C ${fromX + 30} ${midY}, ${toX + 30} ${midY}, ${toX} ${toY}`;
+    } else if (curveType === 'down-right') {
+        // Curve going down then right
+        d = `M ${fromX} ${fromY} C ${fromX} ${midY}, ${toX} ${midY}, ${toX} ${toY}`;
+    } else if (curveType === 'down-left') {
+        // Curve going down then left (for right-to-left connections)
+        d = `M ${fromX} ${fromY} C ${fromX} ${fromY + 40}, ${toX} ${toY - 40}, ${toX} ${toY}`;
+    } else {
+        // Straight vertical line
+        d = `M ${fromX} ${fromY} L ${toX} ${toY}`;
+    }
+
+    return createSvgPath(d, completed);
+}
+```
+
+#### 3. Container Styling
+
+```css
+.exp-view-dag-container {
+    position: relative;
+    padding: 24px 16px;
+    background: #ffffff;
+    background-image: radial-gradient(circle, #d8d8d8 1px, transparent 1px);
+    background-size: 20px 20px;
+    border-radius: 8px;
+    margin-bottom: 16px;
+    min-height: 1420px;
+    min-width: 520px;
+    overflow: visible;
+}
+
+.exp-view-dag-node {
+    position: absolute;
+    width: 264px;  /* 20% increase from 220px */
+    height: 48px;
+    background: white;
+    border: 2px solid #ddd;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+    z-index: 10;
+}
+```
+
+#### 4. Node and Artifact Positioning
+
+Consistent spacing pattern applied across all pipeline stages:
+- Vertical spacing between nodes: ~174px (accounting for artifact height)
+- Artifact positioned centered between connected nodes
+- Node width: 264px (20% increase from original 220px)
+- Artifact size: 32px circles
+
+### New Pipeline Components
+
+| Component | Icon | Purpose |
+|-----------|------|---------|
+| Pipeline Compile | fa-cogs | Compile TFX pipeline and submit to Vertex AI |
+| Examples Gen | fa-database | Extract data from BigQuery to TFRecords |
+| Stats Gen | fa-chart-bar | Compute dataset statistics using TFDV |
+| Schema Gen | fa-sitemap | Infer schema from statistics |
+| Transform | fa-exchange-alt | Apply preprocessing, generate vocabularies |
+| Trainer | fa-microchip | Train TFRS two-tower model |
+| Evaluator | fa-check-double | Evaluate model quality and blessing |
+| Pusher | fa-cloud-upload-alt | Deploy model to serving endpoint |
+
+### New Artifacts
+
+| Artifact | Source Component | Description |
+|----------|-----------------|-------------|
+| Config | Pipeline Compile | Pipeline configuration |
+| Examples | Examples Gen | TFRecord examples |
+| Statistics | Stats Gen | TFDV statistics |
+| Schema | Schema Gen | Inferred schema |
+| Transform Graph | Transform | Preprocessing graph |
+| Transformed Examples | Transform | Preprocessed data |
+| Model | Trainer | Trained model |
+| ModelRun | Trainer | Training run metadata |
+| Model Blessing | Evaluator | Model quality approval |
+| Evaluation | Evaluator | Evaluation metrics |
+| Model Endpoint | Pusher | Deployed model endpoint |
+
+### Files Modified
+
+| File | Changes |
+|------|---------|
+| `templates/ml_platform/model_experiments.html` | Added 3 new components (Evaluator, Pusher), 6 new artifacts, updated DAG layout, added bezier curve types, increased node width, white background styling |
+
+### Node Renaming
+
+| Old Name | New Name |
+|----------|----------|
+| BigQueryExampleGen | Examples Gen |
+| StatisticsGen | Stats Gen |
+| SchemaGen | Schema Gen |
+
+### Testing Checklist
+
+- [x] DAG shows all 8 TFX components in correct layout
+- [x] All 11 artifacts displayed between components
+- [x] SVG bezier curves connect components through artifacts
+- [x] Connections use correct curve types (left, right, down-left, down-right)
+- [x] White background with subtle dot grid
+- [x] Node width increased to 264px
+- [x] Consistent spacing between all pipeline stages
+- [x] Trainer icon shows microchip (fa-microchip)
+- [x] Evaluator and Pusher nodes render correctly
+- [x] Model → Pusher direct connection path works
+- [x] Transform Graph → Trainer connection works
+- [x] Container height accommodates all nodes (1420px minimum)
 
 ---
 

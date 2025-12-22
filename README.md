@@ -386,6 +386,21 @@ WHERE source_type='gcs';
 
 ## 📝 Recent Updates
 
+**December 22, 2025 - Enhanced Pipeline DAG Visualization (Phase 20)**
+- ✅ **8-node TFX pipeline** - Pipeline Compile, Examples Gen, Stats Gen, Schema Gen, Transform, Trainer, Evaluator, Pusher
+- ✅ **11 artifacts displayed** - Config, Examples, Statistics, Schema, Transform Graph, Transformed Examples, Model, ModelRun, Model Blessing, Evaluation, Model Endpoint
+- ✅ **Bezier curve connections** - SVG curves with 4 types (left, right, down-left, down-right)
+- ✅ **White background styling** - Clean background with subtle dot grid, 264px node width
+- ✅ **Node renaming** - BigQueryExampleGen → Examples Gen, StatisticsGen → Stats Gen, SchemaGen → Schema Gen
+- ✅ **New Evaluator/Pusher nodes** - Placeholder components for full-scale training pipeline
+- See [Phase 20: Enhanced Pipeline DAG](docs/phase_experiments_implementation.md#phase-20-enhanced-pipeline-dag-visualization-december-2025) for details
+
+**December 21, 2025 - Schema Fix & TFDV Hybrid Visualization (Phase 19)**
+- ✅ **Schema field fix** - Updated `renderSchema()` to use correct field names (`feature_type`, `presence`)
+- ✅ **Removed broken TFDV modal** - Deleted iframe-based modal that rendered incorrectly
+- ✅ **Open in New Tab** - TFDV now opens as standalone page in new browser tab
+- See [Phase 19: Schema Fix](docs/phase_experiments_implementation.md#phase-19-schema-fix-and-tfdv-hybrid-visualization-december-2025) for details
+
 **December 20, 2025 - TFDV Parser Microservice (Phase 18)**
 - ✅ **TFDV Parser Cloud Run Service** - Dedicated Python 3.10 service for parsing TFX artifacts
 - ✅ **Data Insights now working** - Rich statistics display in experiment View modal

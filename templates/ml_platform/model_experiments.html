@@ -1736,32 +1736,33 @@
     .exp-view-dag-container {
         position: relative;
         padding: 24px 16px;
-        background: #f8f9fa;
-        background-image: radial-gradient(circle, #e0e0e0 1px, transparent 1px);
+        background: #ffffff;
+        background-image: radial-gradient(circle, #d8d8d8 1px, transparent 1px);
         background-size: 20px 20px;
         border-radius: 8px;
         margin-bottom: 16px;
-        min-height: 680px;
+        min-height: 1420px;
         min-width: 520px;
-        overflow-x: auto;
+        overflow: visible;
     }
     .exp-view-dag-svg {
         position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
+        top: 24px;
+        left: 16px;
+        width: calc(100% - 32px);
+        height: calc(100% - 48px);
         pointer-events: none;
         z-index: 1;
         overflow: visible;
     }
     .exp-view-dag-svg path {
         fill: none;
-        stroke-width: 1.5px;
+        stroke-width: 2px;
         stroke-linecap: round;
+        stroke: #9ca3af;
     }
     .exp-view-dag-svg path.pending {
-        stroke: #dadce0;
+        stroke: #9ca3af;
     }
     .exp-view-dag-svg path.completed {
         stroke: #1a73e8;
@@ -1788,7 +1789,7 @@
         border-radius: 8px;
         cursor: pointer;
         transition: all 0.15s ease;
-        width: 220px;
+        width: 264px;
         box-shadow: 0 1px 3px rgba(0,0,0,0.08);
     }
     .exp-view-dag-node:hover {
@@ -5659,7 +5660,7 @@ function renderMetricsSummary(metrics) {
 
 // Layout constants for 2D DAG positioning
 const DAG_LAYOUT = {
-    nodeWidth: 220,
+    nodeWidth: 264,
     nodeHeight: 48,
     artifactSize: 32
 };
@@ -5669,35 +5670,51 @@ const TFX_PIPELINE = {
     // Components with absolute positions (x is left edge of 220px wide node)
     components: [
         { id: 'Compile', name: 'Pipeline Compile', icon: 'fa-cogs', x: 150, y: 15 },
-        { id: 'Examples', name: 'BigQueryExampleGen', icon: 'fa-database', x: 150, y: 80 },
-        { id: 'Stats', name: 'StatisticsGen', icon: 'fa-chart-bar', x: 20, y: 190 },
-        { id: 'Schema', name: 'SchemaGen', icon: 'fa-sitemap', x: 20, y: 295 },
-        { id: 'Transform', name: 'Transform', icon: 'fa-exchange-alt', x: 290, y: 400 },
-        { id: 'Train', name: 'Trainer', icon: 'fa-brain', x: 290, y: 565 }
+        { id: 'Examples', name: 'Examples Gen', icon: 'fa-database', x: 150, y: 189 },
+        { id: 'Stats', name: 'Stats Gen', icon: 'fa-chart-bar', x: 20, y: 363 },
+        { id: 'Schema', name: 'Schema Gen', icon: 'fa-sitemap', x: 20, y: 537 },
+        { id: 'Transform', name: 'Transform', icon: 'fa-exchange-alt', x: 290, y: 711 },
+        { id: 'Train', name: 'Trainer', icon: 'fa-microchip', x: 20, y: 885 },
+        { id: 'Evaluator', name: 'Evaluator', icon: 'fa-check-double', x: 290, y: 1059 },
+        { id: 'Pusher', name: 'Pusher', icon: 'fa-cloud-upload-alt', x: 150, y: 1233 }
     ],
 
     // Artifacts with absolute positions (x is left edge of 32px artifact)
+    // Node centers: x=150 nodes -> center=282, x=20 nodes -> center=152, x=290 nodes -> center=422
     artifacts: [
-        { id: 'examples', name: 'Examples', icon: 'fa-th', type: 'dataset', componentId: 'Examples', x: 244, y: 140 },
-        { id: 'statistics', name: 'Statistics', icon: 'fa-chart-bar', type: 'statistics', componentId: 'Stats', x: 114, y: 250 },
-        { id: 'schema', name: 'Schema', icon: 'fa-sitemap', type: 'schema', componentId: 'Schema', x: 114, y: 355 },
-        // Transform artifacts in a horizontal row below Transform
-        { id: 'transform_graph', name: 'Transform Graph', icon: 'fa-project-diagram', type: 'graph', componentId: 'Transform', x: 200, y: 465 },
-        { id: 'transformed_examples', name: 'Transformed Examples', icon: 'fa-database', type: 'dataset', componentId: 'Transform', x: 245, y: 465 },
-        { id: 'pre_transform_schema', name: 'Pre-Transform Schema', icon: 'fa-sitemap', type: 'schema', componentId: 'Transform', x: 290, y: 465 },
-        { id: 'pre_transform_stats', name: 'Pre-Transform Stats', icon: 'fa-chart-bar', type: 'statistics', componentId: 'Transform', x: 335, y: 465 },
-        { id: 'post_transform_schema', name: 'Post-Transform Schema', icon: 'fa-sitemap', type: 'schema', componentId: 'Transform', x: 380, y: 465 },
-        { id: 'post_transform_stats', name: 'Post-Transform Stats', icon: 'fa-chart-bar', type: 'statistics', componentId: 'Transform', x: 425, y: 465 },
-        { id: 'post_transform_anomalies', name: 'Anomalies', icon: 'fa-exclamation-triangle', type: 'anomalies', componentId: 'Transform', x: 470, y: 465 },
-        // Trainer output
-        { id: 'model', name: 'Model', icon: 'fa-cube', type: 'model', componentId: 'Train', x: 384, y: 625 }
+        // Config artifact centered between Pipeline Compile and BigQueryExampleGen
+        { id: 'config', name: 'Config', icon: 'fa-file-code', type: 'config', componentId: 'Compile', x: 266, y: 125 },
+        // Examples artifact centered between BigQueryExampleGen and StatisticsGen
+        { id: 'examples', name: 'Examples', icon: 'fa-th', type: 'dataset', componentId: 'Examples', x: 266, y: 299 },
+        // Statistics artifact centered between StatisticsGen and SchemaGen
+        { id: 'statistics', name: 'Statistics', icon: 'fa-chart-bar', type: 'statistics', componentId: 'Stats', x: 136, y: 473 },
+        // Schema artifact centered between SchemaGen and Transform
+        { id: 'schema', name: 'Schema', icon: 'fa-sitemap', type: 'schema', componentId: 'Schema', x: 136, y: 647 },
+        // Transform artifacts in a horizontal row below Transform (centered between Transform and Trainer)
+        { id: 'transform_graph', name: 'Transform Graph', icon: 'fa-project-diagram', type: 'graph', componentId: 'Transform', x: 290, y: 821 },
+        { id: 'transformed_examples', name: 'Transformed Examples', icon: 'fa-database', type: 'dataset', componentId: 'Transform', x: 335, y: 821 },
+        { id: 'pre_transform_schema', name: 'Pre-Transform Schema', icon: 'fa-sitemap', type: 'schema', componentId: 'Transform', x: 380, y: 821 },
+        { id: 'pre_transform_stats', name: 'Pre-Transform Stats', icon: 'fa-chart-bar', type: 'statistics', componentId: 'Transform', x: 425, y: 821 },
+        { id: 'post_transform_schema', name: 'Post-Transform Schema', icon: 'fa-sitemap', type: 'schema', componentId: 'Transform', x: 470, y: 821 },
+        { id: 'post_transform_stats', name: 'Post-Transform Stats', icon: 'fa-chart-bar', type: 'statistics', componentId: 'Transform', x: 515, y: 821 },
+        { id: 'post_transform_anomalies', name: 'Anomalies', icon: 'fa-exclamation-triangle', type: 'anomalies', componentId: 'Transform', x: 560, y: 821 },
+        // Trainer outputs (Model and ModelRun)
+        { id: 'model', name: 'Model', icon: 'fa-cube', type: 'model', componentId: 'Train', x: 120, y: 995 },
+        { id: 'model_run', name: 'Model Run', icon: 'fa-history', type: 'model_run', componentId: 'Train', x: 165, y: 995 },
+        // Evaluator outputs (ModelBlessing and Evaluation) - centered between Evaluator and Pusher
+        { id: 'model_blessing', name: 'Model Blessing', icon: 'fa-certificate', type: 'blessing', componentId: 'Evaluator', x: 390, y: 1169 },
+        { id: 'evaluation', name: 'Evaluation', icon: 'fa-clipboard-check', type: 'evaluation', componentId: 'Evaluator', x: 435, y: 1169 },
+        // Pusher output
+        { id: 'pushed_model', name: 'Model Endpoint', icon: 'fa-cloud', type: 'pushed_model', componentId: 'Pusher', x: 266, y: 1343 }
     ],
 
     // Edges: connections between nodes (components and artifacts)
     // Types: 'straight', 'curve-left', 'curve-right', 'curve-down'
     edges: [
-        // Compile -> BigQueryExampleGen
-        { from: 'Compile', to: 'Examples', fromType: 'component', toType: 'component' },
+        // Compile -> Config artifact (straight line)
+        { from: 'Compile', to: 'config', fromType: 'component', toType: 'artifact' },
+        // Config artifact -> BigQueryExampleGen
+        { from: 'config', to: 'Examples', fromType: 'artifact', toType: 'component' },
         // BigQueryExampleGen -> Examples artifact
         { from: 'Examples', to: 'examples', fromType: 'component', toType: 'artifact' },
         // Examples artifact -> StatisticsGen (curves left)
@@ -5723,9 +5740,23 @@ const TFX_PIPELINE = {
         { from: 'Transform', to: 'post_transform_stats', fromType: 'component', toType: 'artifact' },
         { from: 'Transform', to: 'post_transform_anomalies', fromType: 'component', toType: 'artifact' },
         // Transformed Examples -> Trainer
-        { from: 'transformed_examples', to: 'Train', fromType: 'artifact', toType: 'component' },
-        // Trainer -> Model artifact
-        { from: 'Train', to: 'model', fromType: 'component', toType: 'artifact' }
+        { from: 'transformed_examples', to: 'Train', fromType: 'artifact', toType: 'component', curve: 'down-left' },
+        // Transform Graph -> Trainer (preprocessing function)
+        { from: 'transform_graph', to: 'Train', fromType: 'artifact', toType: 'component', curve: 'down-left' },
+        // Trainer -> Model and ModelRun artifacts
+        { from: 'Train', to: 'model', fromType: 'component', toType: 'artifact' },
+        { from: 'Train', to: 'model_run', fromType: 'component', toType: 'artifact' },
+        // Model -> Evaluator (evaluation path)
+        { from: 'model', to: 'Evaluator', fromType: 'artifact', toType: 'component', curve: 'right' },
+        // Model -> Pusher (direct push path, skips evaluation)
+        { from: 'model', to: 'Pusher', fromType: 'artifact', toType: 'component', curve: 'down-right' },
+        // Evaluator -> ModelBlessing and Evaluation artifacts
+        { from: 'Evaluator', to: 'model_blessing', fromType: 'component', toType: 'artifact' },
+        { from: 'Evaluator', to: 'evaluation', fromType: 'component', toType: 'artifact' },
+        // ModelBlessing -> Pusher
+        { from: 'model_blessing', to: 'Pusher', fromType: 'artifact', toType: 'component', curve: 'down-left' },
+        // Pusher -> PushedModel artifact
+        { from: 'Pusher', to: 'pushed_model', fromType: 'component', toType: 'artifact' }
     ]
 };
 
@@ -5820,6 +5851,14 @@ function drawBezierConnection(svg, fromNode, toNode, curveType, status) {
         path = `M ${fromCenterX} ${fromBottomY} C ${ctrl1X} ${ctrl1Y}, ${ctrl2X} ${ctrl2Y}, ${toCenterX} ${toTopY}`;
     } else if (curveType === 'down-right') {
         // Long curve going down and then right (for branch connections)
+        const midY = fromBottomY + dy * 0.6;
+        const ctrl1X = fromCenterX;
+        const ctrl1Y = midY;
+        const ctrl2X = toCenterX;
+        const ctrl2Y = midY;
+        path = `M ${fromCenterX} ${fromBottomY} C ${ctrl1X} ${ctrl1Y}, ${ctrl2X} ${ctrl2Y}, ${toCenterX} ${toTopY}`;
+    } else if (curveType === 'down-left') {
+        // Long curve going down and then left (for branch connections going left)
         const midY = fromBottomY + dy * 0.6;
         const ctrl1X = fromCenterX;
         const ctrl1Y = midY;

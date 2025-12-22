@@ -37,6 +37,21 @@ This document provides **high-level specifications** for the Experiments domain.
 
 ## Recent Updates (December 2025)
 
+### Enhanced Pipeline DAG Visualization (2025-12-22)
+
+**Major Enhancement:** Complete TFX pipeline visualization with 8 nodes and 11 artifacts.
+
+**Key Features:**
+1. **8-Node Pipeline** - Pipeline Compile, Examples Gen, Stats Gen, Schema Gen, Transform, Trainer, Evaluator, Pusher
+2. **11 Artifacts Displayed** - Config, Examples, Statistics, Schema, Transform Graph, Transformed Examples, Model, ModelRun, Model Blessing, Evaluation, Model Endpoint
+3. **Bezier Curve Connections** - SVG curves with 4 types (left, right, down-left, down-right)
+4. **Visual Improvements** - White background with subtle dots, 264px node width, consistent spacing
+
+**Node Renaming:**
+- BigQueryExampleGen → Examples Gen
+- StatisticsGen → Stats Gen
+- SchemaGen → Schema Gen
+
 ### Schema Fix & TFDV Hybrid Visualization (2025-12-21)
 
 **Problems Solved:**
@@ -1304,6 +1319,21 @@ MLFLOW_TRACKING_URI = os.environ.get('MLFLOW_TRACKING_URI', 'http://mlflow-serve
 - [x] **Documentation**: Updated phase_experiments_implementation.md with Phase 19
 
 **Result:** Schema tab now displays correct feature types and required status. TFDV can be viewed in a new browser tab where it renders properly.
+
+### Phase 20: Enhanced Pipeline DAG Visualization ✅ DONE (2025-12-22)
+> **Complete TFX pipeline visualization with 8 nodes and artifacts**
+
+- [x] **8-node TFX pipeline**: Pipeline Compile, Examples Gen, Stats Gen, Schema Gen, Transform, Trainer, Evaluator, Pusher
+- [x] **11 artifacts displayed**: Config, Examples, Statistics, Schema, Transform Graph, Transformed Examples, Model, ModelRun, Model Blessing, Evaluation, Model Endpoint
+- [x] **Bezier curve connections**: SVG curves with 4 types (left, right, down-left, down-right)
+- [x] **White background styling**: Clean background with subtle dot grid (#d8d8d8 1px dots)
+- [x] **Node width increase**: 264px (20% increase from 220px)
+- [x] **Consistent spacing**: Equal vertical spacing (~174px) between all pipeline stages
+- [x] **Node renaming**: BigQueryExampleGen → Examples Gen, StatisticsGen → Stats Gen, SchemaGen → Schema Gen
+- [x] **New icons**: Trainer uses fa-microchip, Evaluator uses fa-check-double, Pusher uses fa-cloud-upload-alt
+- [x] **Direct Model → Pusher path**: Alternative deployment path without Evaluator
+
+**Result:** Pipeline visualization matches Vertex AI Pipelines console style with complete TFX component and artifact representation.
 
 ### Previously Completed ✅
 - [x] Create `model_experiments.html` page (placeholder)

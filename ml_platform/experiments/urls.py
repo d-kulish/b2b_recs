@@ -89,4 +89,14 @@ urlpatterns = [
         api.experiment_leaderboard,
         name='experiment_leaderboard'
     ),
+    path(
+        'api/experiments/heatmap/',
+        api.experiment_heatmap,
+        name='experiment_heatmap'
+    ),
+    path(
+        'api/experiments/dashboard-stats/',
+        api.experiment_dashboard_stats,
+        name='experiment_dashboard_stats'
+    ),
 ]

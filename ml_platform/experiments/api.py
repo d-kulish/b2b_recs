@@ -1337,3 +1337,216 @@ def experiment_leaderboard(request):
             'success': False,
             'error': str(e)
         }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def experiment_heatmap(request):
+    """
+    Get heatmap data showing best metric for each Feature Config × Model Config combination.
+
+    GET /api/experiments/heatmap/?metric=recall_at_100
+
+    Query params:
+        metric: Metric to show (default: recall_at_100)
+
+    Returns:
+    {
+        "success": true,
+        "heatmap": {
+            "feature_configs": ["FC1", "FC2", ...],
+            "model_configs": ["MC1", "MC2", ...],
+            "data": [
+                {"x": 0, "y": 0, "v": 0.45, "exp_id": 123},
+                {"x": 0, "y": 1, "v": 0.42, "exp_id": 124},
+                ...
+            ],
+            "min_value": 0.35,
+            "max_value": 0.48
+        }
+    }
+    """
+    try:
+        model_endpoint = _get_model_endpoint(request)
+        if not model_endpoint:
+            return JsonResponse({
+                'success': False,
+                'error': 'No model endpoint selected'
+            }, status=400)
+
+        # Parse query params
+        metric = request.GET.get('metric', 'recall_at_100')
+
+        # Map metric name to model field
+        metric_field_map = {
+            'recall_at_100': 'recall_at_100',
+            'recall_at_50': 'recall_at_50',
+            'recall_at_10': 'recall_at_10',
+        }
+
+        metric_field = metric_field_map.get(metric, 'recall_at_100')
+
+        # Get all completed experiments with the metric
+        from django.db.models import Max
+
+        queryset = QuickTest.objects.filter(
+            feature_config__dataset__model_endpoint=model_endpoint,
+            status=QuickTest.STATUS_COMPLETED
+        ).exclude(
+            **{f'{metric_field}__isnull': True}
+        ).select_related('feature_config', 'model_config')
+
+        # Build a mapping of (feature_config_id, model_config_id) -> best experiment
+        config_best = {}  # (fc_id, mc_id) -> (metric_value, exp_id)
+
+        for qt in queryset:
+            fc_id = qt.feature_config_id
+            mc_id = qt.model_config_id if qt.model_config else None
+            if mc_id is None:
+                continue
+
+            metric_value = getattr(qt, metric_field)
+            if metric_value is None:
+                continue
+
+            key = (fc_id, mc_id)
+            if key not in config_best or metric_value > config_best[key][0]:
+                config_best[key] = (metric_value, qt.id)
+
+        # Get unique feature configs and model configs
+        fc_ids = set()
+        mc_ids = set()
+        for (fc_id, mc_id) in config_best.keys():
+            fc_ids.add(fc_id)
+            mc_ids.add(mc_id)
+
+        # Get names for display
+        fc_names = {}
+        mc_names = {}
+
+        if fc_ids:
+            for fc in FeatureConfig.objects.filter(id__in=fc_ids):
+                fc_names[fc.id] = fc.name
+
+        if mc_ids:
+            for mc in ModelConfig.objects.filter(id__in=mc_ids):
+                mc_names[mc.id] = mc.name
+
+        # Sort by name for consistent display
+        fc_list = sorted(fc_names.items(), key=lambda x: x[1])
+        mc_list = sorted(mc_names.items(), key=lambda x: x[1])
+
+        # Build index maps
+        fc_index = {fc_id: i for i, (fc_id, _) in enumerate(fc_list)}
+        mc_index = {mc_id: i for i, (mc_id, _) in enumerate(mc_list)}
+
+        # Build heatmap data points
+        data = []
+        values = []
+
+        for (fc_id, mc_id), (metric_value, exp_id) in config_best.items():
+            x = mc_index.get(mc_id)
+            y = fc_index.get(fc_id)
+            if x is not None and y is not None:
+                data.append({
+                    'x': x,
+                    'y': y,
+                    'v': round(metric_value, 4) if metric_value else None,
+                    'exp_id': exp_id
+                })
+                if metric_value:
+                    values.append(metric_value)
+
+        return JsonResponse({
+            'success': True,
+            'heatmap': {
+                'feature_configs': [name for _, name in fc_list],
+                'model_configs': [name for _, name in mc_list],
+                'data': data,
+                'min_value': round(min(values), 4) if values else None,
+                'max_value': round(max(values), 4) if values else None,
+                'metric': metric
+            }
+        })
+
+    except Exception as e:
+        logger.exception(f"Error getting heatmap data: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def experiment_dashboard_stats(request):
+    """
+    Get summary statistics for the experiments dashboard.
+
+    GET /api/experiments/dashboard-stats/
+
+    Returns:
+    {
+        "success": true,
+        "stats": {
+            "total": 25,
+            "completed": 18,
+            "running": 2,
+            "failed": 5,
+            "best_recall_100": 0.473,
+            "avg_recall_100": 0.412
+        }
+    }
+    """
+    try:
+        model_endpoint = _get_model_endpoint(request)
+        if not model_endpoint:
+            return JsonResponse({
+                'success': False,
+                'error': 'No model endpoint selected'
+            }, status=400)
+
+        from django.db.models import Count, Max, Avg
+
+        # Base queryset
+        base_qs = QuickTest.objects.filter(
+            feature_config__dataset__model_endpoint=model_endpoint
+        )
+
+        # Get counts by status
+        status_counts = base_qs.values('status').annotate(count=Count('id'))
+        counts_by_status = {item['status']: item['count'] for item in status_counts}
+
+        total = sum(counts_by_status.values())
+        completed = counts_by_status.get(QuickTest.STATUS_COMPLETED, 0)
+        running = counts_by_status.get(QuickTest.STATUS_RUNNING, 0) + \
+                  counts_by_status.get(QuickTest.STATUS_SUBMITTING, 0)
+        failed = counts_by_status.get(QuickTest.STATUS_FAILED, 0)
+
+        # Get metrics for completed experiments
+        metrics = base_qs.filter(
+            status=QuickTest.STATUS_COMPLETED,
+            recall_at_100__isnull=False
+        ).aggregate(
+            best_recall_100=Max('recall_at_100'),
+            avg_recall_100=Avg('recall_at_100')
+        )
+
+        return JsonResponse({
+            'success': True,
+            'stats': {
+                'total': total,
+                'completed': completed,
+                'running': running,
+                'failed': failed,
+                'best_recall_100': round(metrics['best_recall_100'], 4) if metrics['best_recall_100'] else None,
+                'avg_recall_100': round(metrics['avg_recall_100'], 4) if metrics['avg_recall_100'] else None,
+            }
+        })
+
+    except Exception as e:
+        logger.exception(f"Error getting dashboard stats: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)

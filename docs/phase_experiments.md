@@ -5,7 +5,7 @@ This document provides **high-level specifications** for the Experiments domain.
 
 👉 **[phase_experiments_implementation.md](phase_experiments_implementation.md)** - Complete implementation guide with code examples
 
-**Last Updated**: 2025-12-22
+**Last Updated**: 2025-12-23
 
 ---
 
@@ -36,6 +36,42 @@ This document provides **high-level specifications** for the Experiments domain.
 ---
 
 ## Recent Updates (December 2025)
+
+### Experiments Dashboard Chapter - MLflow Integration (2025-12-23)
+
+**Major Feature:** Added complete Experiments Dashboard chapter to `model_experiments.html` for MLflow-based experiment analysis.
+
+**New UI Components:**
+1. **Experiments Dashboard Chapter** (blue icon, after Quick Test chapter)
+   - Summary Dashboard: 4 stat cards (Total, Completed, Best R@100, Avg R@100)
+   - Leaderboard Table: Sortable by metric, clickable rows open View modal
+   - Configuration Heatmap: Chart.js grouped bar chart showing metrics by config combinations
+
+2. **Compare Modal** (in Quick Test chapter)
+   - Select 2-5 experiments via checkboxes
+   - Side-by-side comparison table with metrics and params
+   - Best values highlighted
+
+3. **Training Tab** (in View modal)
+   - Per-epoch loss charts (training + validation)
+   - Per-epoch recall charts (R@10, R@50, R@100)
+   - Chart.js visualizations with interactive tooltips
+
+**New API Endpoints:**
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/experiments/dashboard-stats/` | GET | Summary statistics |
+| `/api/experiments/heatmap/?metric=recall_at_100` | GET | Config combination matrix |
+| `/api/experiments/leaderboard/?metric=recall_at_100` | GET | Ranked experiments |
+| `/api/experiments/compare/` | POST | Multi-experiment comparison |
+| `/api/quick-tests/<id>/training-history/` | GET | Per-epoch MLflow metrics |
+
+**Files Modified:**
+- `templates/ml_platform/model_experiments.html` - Dashboard chapter HTML, CSS, JavaScript
+- `ml_platform/experiments/api.py` - Added 4 new endpoints
+- `ml_platform/experiments/urls.py` - Added URL routes
+
+**See:** [`phase_mlflow_integration.md`](phase_mlflow_integration.md) for full MLflow integration details.
 
 ### Pipeline DAG Static File Extraction (2025-12-22)
 
@@ -357,8 +393,8 @@ FeatureConfig + ModelConfig → Dataset → BigQueryService.generate_query() →
 
 The Experiments page has two main chapters:
 
-1. **Quick Test Chapter** - Run and monitor validation tests
-2. **Experiments Chapter** - Compare results via MLflow (future)
+1. **Quick Test Chapter** - Run and monitor validation tests ✅ IMPLEMENTED
+2. **Experiments Dashboard Chapter** - Compare results via MLflow ✅ IMPLEMENTED (2025-12-23)
 
 ### Quick Test Chapter UI
 

@@ -249,6 +249,7 @@ gcloud run jobs execute django-migrate-and-createsuperuser --region europe-centr
 | [`docs/phase_model_structure.md`](docs/phase_model_structure.md) | Model Structure (Architecture) specification |
 | [`docs/phase_experiments.md`](docs/phase_experiments.md) | Experiments (Quick Test + MLflow) specification |
 | [`docs/phase_experiments_implementation.md`](docs/phase_experiments_implementation.md) | **Experiments implementation guide (TFX, Cloud Build)** |
+| [`docs/phase_mlflow_integration.md`](docs/phase_mlflow_integration.md) | **MLflow integration guide (6 phases)** |
 | This file | Project overview and quick start |
 
 ---
@@ -303,12 +304,12 @@ gcloud run jobs execute django-migrate-and-createsuperuser --region europe-centr
 - **Modeling (Feature Engineering)** - Feature config wizard with drag-drop UI, tensor dimension preview (11 endpoints)
 - **Quick Test Pipeline** - ✅ **Fully working!** TFX pipeline on Vertex AI with TFRS model training and SavedModel export
 - **Model Structure** - Tower architecture builder with presets, layer configuration, training params (9 endpoints)
+- **MLflow Integration** - ✅ **Complete!** Experiment tracking, per-epoch charts, leaderboard, configuration heatmaps
 
 ### **🔮 Next Up**
-1. **Metrics Display** - Per-epoch training charts, comparison tables
-2. **MLflow Integration** - Experiment tracking, heatmaps, model comparison
-3. Full Training Pipeline - Extended training with checkpointing
-4. Model Deployment - Candidate index building, serving endpoints
+1. Full Training Pipeline - Extended training with checkpointing
+2. Model Deployment - Candidate index building, serving endpoints
+3. Model Registry - Version management, A/B testing support
 
 See [`next_steps.md`](next_steps.md) for detailed roadmap.
 

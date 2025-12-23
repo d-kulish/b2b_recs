@@ -19,33 +19,61 @@ Integrate MLflow as a backend for structured experiment tracking in the b2b_recs
 | **Phase 3** | Django MLflow Service Client | ✅ COMPLETE | `mlflow_service.py` created |
 | **Phase 4** | Experiment Comparison UI | ✅ COMPLETE | Compare modal implemented |
 | **Phase 5** | Per-Epoch Training Charts | ✅ COMPLETE | Chart.js integration done |
-| **Phase 6** | Configuration Heatmaps (Optional) | 🔲 PENDING | |
+| **Phase 6** | Experiments Dashboard & Heatmaps | ✅ COMPLETE | Dashboard chapter with leaderboard + heatmap |
 
 ### What's Working Now
+
+**Backend:**
 - MLflow server deployed at `https://mlflow-server-555035914949.europe-central2.run.app`
 - Trainer code generation includes MLflow tracking (params, metrics, callbacks)
 - MLflow run ID written to GCS and extracted by Django after pipeline completion
 - QuickTest model has `mlflow_run_id` and `mlflow_experiment_name` fields
-- **NEW**: Django MLflow service client (`ml_platform/experiments/mlflow_service.py`)
-- **NEW**: Training history API endpoint fetches per-epoch metrics from MLflow
-- **NEW**: Experiment comparison API endpoint for side-by-side analysis
-- **NEW**: Leaderboard API endpoint sorted by metrics
-- **NEW**: Training tab with Chart.js visualizations (loss + recall curves)
-- **NEW**: Compare modal with metrics/params tables and best value highlighting
+- Django MLflow service client (`ml_platform/experiments/mlflow_service.py`)
+- Training history API endpoint fetches per-epoch metrics from MLflow
+- Experiment comparison API endpoint for side-by-side analysis
+- Leaderboard API endpoint sorted by metrics
+- **NEW**: Heatmap API endpoint for config combination analysis
+- **NEW**: Dashboard stats API endpoint for summary metrics
 
-### Files Created/Modified (Phase 3-5)
+**Frontend:**
+- Training tab with Chart.js visualizations (loss + recall curves)
+- Compare modal with metrics/params tables and best value highlighting
+- **NEW**: Experiments Dashboard chapter (separate from Quick Test)
+- **NEW**: Summary cards (Total, Completed, Best R@100, Avg R@100)
+- **NEW**: Sortable leaderboard table with clickable rows
+- **NEW**: Configuration heatmap (grouped bar chart by config combinations)
+
+### Files Created/Modified (All Phases)
 | File | Action | Description |
 |------|--------|-------------|
 | `ml_platform/experiments/mlflow_service.py` | CREATED | MLflow REST API client |
 | `ml_platform/experiments/artifact_service.py` | MODIFIED | `get_training_history()` now uses MLflowService |
-| `ml_platform/experiments/api.py` | MODIFIED | Added `compare_experiments()` and `experiment_leaderboard()` |
-| `ml_platform/experiments/urls.py` | MODIFIED | Added routes for comparison and leaderboard |
-| `templates/ml_platform/model_experiments.html` | MODIFIED | Added Chart.js, training charts, compare modal, selection checkboxes |
+| `ml_platform/experiments/api.py` | MODIFIED | Added `compare_experiments()`, `experiment_leaderboard()`, `experiment_heatmap()`, `experiment_dashboard_stats()` |
+| `ml_platform/experiments/urls.py` | MODIFIED | Added routes for all MLflow endpoints |
+| `templates/ml_platform/model_experiments.html` | MODIFIED | Added Chart.js, training charts, compare modal, Experiments Dashboard chapter |
 
-### Next Steps
-1. **Test**: Run a Quick Test and verify MLflow data appears in Training tab
-2. **Test**: Select 2+ completed experiments and verify Compare modal works
-3. **Optional**: Implement Phase 6 (Configuration Heatmaps)
+### API Endpoints
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/quick-tests/<id>/training-history/` | GET | Per-epoch training metrics from MLflow |
+| `/api/experiments/compare/` | POST | Compare multiple experiments side-by-side |
+| `/api/experiments/leaderboard/` | GET | Ranked experiments by metric |
+| `/api/experiments/heatmap/` | GET | Config combination matrix data |
+| `/api/experiments/dashboard-stats/` | GET | Summary statistics for dashboard |
+
+### UI Structure
+```
+model_experiments.html
+├── Quick Test Chapter (existing)
+│   ├── Experiment cards with checkboxes
+│   ├── Compare button + modal
+│   └── View modal with Training tab (charts)
+│
+└── Experiments Dashboard Chapter (NEW)
+    ├── Summary Dashboard (4 stat cards)
+    ├── Leaderboard Table (sortable, clickable)
+    └── Configuration Heatmap (Chart.js grouped bar)
+```
 
 ---
 

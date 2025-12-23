@@ -474,30 +474,32 @@ class ArtifactService:
         return response.get('schema', {})
 
     # =========================================================================
-    # Training History (Placeholder for MLflow)
+    # Training History (MLflow Integration)
     # =========================================================================
 
     def get_training_history(self, quick_test) -> Dict:
         """
-        Get training history (per-epoch metrics).
+        Get training history (per-epoch metrics) from MLflow.
 
-        This is a placeholder for future MLflow integration.
-        Currently returns a placeholder response.
+        Fetches training curves and metrics from MLflow Tracking Server
+        for visualization in the UI.
 
         Args:
             quick_test: QuickTest instance
 
         Returns:
-            Dict with training history or placeholder:
+            Dict with training history:
             {
                 "available": bool,
                 "message": str (if not available),
                 "epochs": [...],
-                "loss": [...],
-                "metrics": {...}
+                "loss": {"train": [...], "val": [...]},
+                "metrics": {...},
+                "final_metrics": {...}
             }
         """
         from ml_platform.models import QuickTest
+        from .mlflow_service import MLflowService
 
         # Check if experiment completed
         if quick_test.status != QuickTest.STATUS_COMPLETED:
@@ -506,19 +508,54 @@ class ArtifactService:
                 'message': 'Training history only available for completed experiments'
             }
 
-        # Return placeholder for MLflow integration
-        # TODO: Implement MLflow integration to fetch actual per-epoch metrics
-        return {
-            'available': False,
-            'placeholder': True,
-            'message': 'Training curves will be available when MLflow integration is complete',
-            'final_metrics': {
-                'loss': quick_test.loss,
-                'recall_at_10': quick_test.recall_at_10,
-                'recall_at_50': quick_test.recall_at_50,
-                'recall_at_100': quick_test.recall_at_100,
+        # Check if MLflow run ID is available
+        if not quick_test.mlflow_run_id:
+            logger.info(f"No MLflow run ID for {quick_test.display_name} (id={quick_test.id})")
+            return {
+                'available': False,
+                'message': 'No MLflow tracking data available for this experiment',
+                'final_metrics': {
+                    'loss': quick_test.loss,
+                    'recall_at_10': quick_test.recall_at_10,
+                    'recall_at_50': quick_test.recall_at_50,
+                    'recall_at_100': quick_test.recall_at_100,
+                }
             }
-        }
+
+        # Fetch training history from MLflow
+        try:
+            mlflow_service = MLflowService()
+            history = mlflow_service.get_training_history(quick_test.mlflow_run_id)
+
+            if history.get('available'):
+                logger.info(f"Retrieved MLflow training history for {quick_test.display_name} (id={quick_test.id})")
+                return history
+            else:
+                # MLflow run exists but no metrics found
+                logger.warning(f"MLflow run {quick_test.mlflow_run_id} has no metrics")
+                return {
+                    'available': False,
+                    'message': history.get('message', 'No training metrics found in MLflow'),
+                    'final_metrics': {
+                        'loss': quick_test.loss,
+                        'recall_at_10': quick_test.recall_at_10,
+                        'recall_at_50': quick_test.recall_at_50,
+                        'recall_at_100': quick_test.recall_at_100,
+                    }
+                }
+
+        except Exception as e:
+            logger.exception(f"Error fetching MLflow training history for {quick_test.display_name}: {e}")
+            return {
+                'available': False,
+                'message': f'Error retrieving training history: {str(e)}',
+                'final_metrics': {
+                    'loss': quick_test.loss,
+                    'recall_at_10': quick_test.recall_at_10,
+                    'recall_at_50': quick_test.recall_at_50,
+                    'recall_at_100': quick_test.recall_at_100,
+                }
+            }
 
     # =========================================================================
     # Component Logs

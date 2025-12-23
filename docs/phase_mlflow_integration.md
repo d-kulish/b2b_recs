@@ -10,15 +10,15 @@ Integrate MLflow as a backend for structured experiment tracking in the b2b_recs
 
 ## Implementation Status
 
-**Last Updated**: 2025-12-22
+**Last Updated**: 2025-12-23
 
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
 | **Phase 1** | MLflow Cloud Run Infrastructure | ✅ COMPLETE | Deployed to Cloud Run |
 | **Phase 2** | Trainer Module MLflow Integration | ✅ COMPLETE | Code generation updated |
-| **Phase 3** | Django MLflow Service Client | 🔲 PENDING | **START HERE** |
-| **Phase 4** | Experiment Comparison UI | 🔲 PENDING | |
-| **Phase 5** | Per-Epoch Training Charts | 🔲 PENDING | |
+| **Phase 3** | Django MLflow Service Client | ✅ COMPLETE | `mlflow_service.py` created |
+| **Phase 4** | Experiment Comparison UI | ✅ COMPLETE | Compare modal implemented |
+| **Phase 5** | Per-Epoch Training Charts | ✅ COMPLETE | Chart.js integration done |
 | **Phase 6** | Configuration Heatmaps (Optional) | 🔲 PENDING | |
 
 ### What's Working Now
@@ -26,11 +26,26 @@ Integrate MLflow as a backend for structured experiment tracking in the b2b_recs
 - Trainer code generation includes MLflow tracking (params, metrics, callbacks)
 - MLflow run ID written to GCS and extracted by Django after pipeline completion
 - QuickTest model has `mlflow_run_id` and `mlflow_experiment_name` fields
+- **NEW**: Django MLflow service client (`ml_platform/experiments/mlflow_service.py`)
+- **NEW**: Training history API endpoint fetches per-epoch metrics from MLflow
+- **NEW**: Experiment comparison API endpoint for side-by-side analysis
+- **NEW**: Leaderboard API endpoint sorted by metrics
+- **NEW**: Training tab with Chart.js visualizations (loss + recall curves)
+- **NEW**: Compare modal with metrics/params tables and best value highlighting
 
-### Next Steps (Phase 3)
-1. Create `ml_platform/experiments/mlflow_service.py` - MLflow REST API client
-2. Add API endpoints for training history and experiment comparison
-3. Test with a real Quick Test run to verify end-to-end flow
+### Files Created/Modified (Phase 3-5)
+| File | Action | Description |
+|------|--------|-------------|
+| `ml_platform/experiments/mlflow_service.py` | CREATED | MLflow REST API client |
+| `ml_platform/experiments/artifact_service.py` | MODIFIED | `get_training_history()` now uses MLflowService |
+| `ml_platform/experiments/api.py` | MODIFIED | Added `compare_experiments()` and `experiment_leaderboard()` |
+| `ml_platform/experiments/urls.py` | MODIFIED | Added routes for comparison and leaderboard |
+| `templates/ml_platform/model_experiments.html` | MODIFIED | Added Chart.js, training charts, compare modal, selection checkboxes |
+
+### Next Steps
+1. **Test**: Run a Quick Test and verify MLflow data appears in Training tab
+2. **Test**: Select 2+ completed experiments and verify Compare modal works
+3. **Optional**: Implement Phase 6 (Configuration Heatmaps)
 
 ---
 

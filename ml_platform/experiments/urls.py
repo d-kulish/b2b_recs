@@ -77,4 +77,16 @@ urlpatterns = [
         api.get_date_columns,
         name='get_date_columns'
     ),
+
+    # MLflow Comparison and Leaderboard
+    path(
+        'api/experiments/compare/',
+        api.compare_experiments,
+        name='compare_experiments'
+    ),
+    path(
+        'api/experiments/leaderboard/',
+        api.experiment_leaderboard,
+        name='experiment_leaderboard'
+    ),
 ]

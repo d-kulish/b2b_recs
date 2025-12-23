@@ -1107,3 +1107,233 @@ def quick_test_training_history(request, quick_test_id):
             'success': False,
             'error': str(e)
         }, status=500)
+
+
+# =============================================================================
+# MLflow Comparison and Leaderboard Endpoints
+# =============================================================================
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def compare_experiments(request):
+    """
+    Compare multiple experiments side-by-side using MLflow data.
+
+    POST /api/experiments/compare/
+
+    Request body:
+    {
+        "quick_test_ids": [1, 2, 3]
+    }
+
+    Returns:
+    {
+        "success": true,
+        "comparison": {
+            "quick_tests": [...],
+            "runs": [...],
+            "metrics": {...},
+            "params": {...}
+        }
+    }
+    """
+    try:
+        model_endpoint = _get_model_endpoint(request)
+        if not model_endpoint:
+            return JsonResponse({
+                'success': False,
+                'error': 'No model endpoint selected'
+            }, status=400)
+
+        # Parse request body
+        try:
+            data = json.loads(request.body) if request.body else {}
+        except json.JSONDecodeError:
+            return JsonResponse({
+                'success': False,
+                'error': 'Invalid JSON in request body'
+            }, status=400)
+
+        quick_test_ids = data.get('quick_test_ids', [])
+
+        if len(quick_test_ids) < 2:
+            return JsonResponse({
+                'success': False,
+                'error': 'At least 2 experiments required for comparison'
+            }, status=400)
+
+        # Get QuickTests and verify access
+        quick_tests = QuickTest.objects.filter(
+            pk__in=quick_test_ids,
+            feature_config__dataset__model_endpoint=model_endpoint
+        ).select_related('feature_config', 'model_config', 'feature_config__dataset')
+
+        if quick_tests.count() < 2:
+            return JsonResponse({
+                'success': False,
+                'error': 'Not enough valid experiments found'
+            }, status=400)
+
+        # Build response with QuickTest metadata
+        qt_data = []
+        run_ids = []
+
+        for qt in quick_tests:
+            qt_info = {
+                'id': qt.id,
+                'experiment_number': qt.experiment_number,
+                'display_name': qt.display_name,
+                'feature_config': qt.feature_config.name,
+                'model_config': qt.model_config.name if qt.model_config else None,
+                'dataset': qt.feature_config.dataset.name if qt.feature_config.dataset else None,
+                'mlflow_run_id': qt.mlflow_run_id,
+                'status': qt.status,
+                'metrics': {
+                    'loss': qt.loss,
+                    'recall_at_10': qt.recall_at_10,
+                    'recall_at_50': qt.recall_at_50,
+                    'recall_at_100': qt.recall_at_100,
+                },
+                'params': {
+                    'epochs': qt.epochs,
+                    'batch_size': qt.batch_size,
+                    'learning_rate': str(qt.learning_rate),
+                    'data_sample_percent': qt.data_sample_percent,
+                    'split_strategy': qt.split_strategy,
+                    'machine_type': qt.machine_type,
+                }
+            }
+            qt_data.append(qt_info)
+
+            if qt.mlflow_run_id:
+                run_ids.append(qt.mlflow_run_id)
+
+        # If we have MLflow run IDs, get additional data from MLflow
+        mlflow_comparison = None
+        if len(run_ids) >= 2:
+            try:
+                from .mlflow_service import MLflowService
+                mlflow_service = MLflowService()
+                mlflow_comparison = mlflow_service.compare_runs(run_ids)
+            except Exception as e:
+                logger.warning(f"Could not fetch MLflow comparison data: {e}")
+
+        return JsonResponse({
+            'success': True,
+            'comparison': {
+                'quick_tests': qt_data,
+                'mlflow_data': mlflow_comparison
+            }
+        })
+
+    except Exception as e:
+        logger.exception(f"Error comparing experiments: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def experiment_leaderboard(request):
+    """
+    Get experiment leaderboard sorted by metric.
+
+    GET /api/experiments/leaderboard/?metric=recall_at_100&limit=20
+
+    Query params:
+        metric: Metric to sort by (default: recall_at_100)
+        limit: Max results (default: 20)
+
+    Returns:
+    {
+        "success": true,
+        "leaderboard": [
+            {
+                "rank": 1,
+                "quick_test_id": 123,
+                "experiment_number": "Exp #45",
+                "feature_config": "...",
+                "metrics": {...}
+            },
+            ...
+        ]
+    }
+    """
+    try:
+        model_endpoint = _get_model_endpoint(request)
+        if not model_endpoint:
+            return JsonResponse({
+                'success': False,
+                'error': 'No model endpoint selected'
+            }, status=400)
+
+        # Parse query params
+        metric = request.GET.get('metric', 'recall_at_100')
+        try:
+            limit = int(request.GET.get('limit', 20))
+            limit = min(max(1, limit), 100)  # Clamp between 1 and 100
+        except ValueError:
+            limit = 20
+
+        # Map metric name to model field
+        metric_field_map = {
+            'recall_at_100': 'recall_at_100',
+            'recall_at_50': 'recall_at_50',
+            'recall_at_10': 'recall_at_10',
+            'loss': 'loss',
+        }
+
+        order_field = metric_field_map.get(metric, 'recall_at_100')
+
+        # For loss, lower is better; for recall, higher is better
+        if metric == 'loss':
+            order_by = order_field  # Ascending
+        else:
+            order_by = f'-{order_field}'  # Descending
+
+        # Query completed experiments with the metric
+        queryset = QuickTest.objects.filter(
+            feature_config__dataset__model_endpoint=model_endpoint,
+            status=QuickTest.STATUS_COMPLETED
+        ).exclude(
+            **{f'{order_field}__isnull': True}
+        ).select_related(
+            'feature_config', 'model_config', 'feature_config__dataset'
+        ).order_by(order_by)[:limit]
+
+        # Build leaderboard
+        leaderboard = []
+        for i, qt in enumerate(queryset):
+            leaderboard.append({
+                'rank': i + 1,
+                'quick_test_id': qt.id,
+                'experiment_number': qt.experiment_number,
+                'display_name': qt.display_name,
+                'feature_config': qt.feature_config.name,
+                'model_config': qt.model_config.name if qt.model_config else None,
+                'dataset': qt.feature_config.dataset.name if qt.feature_config.dataset else None,
+                'mlflow_run_id': qt.mlflow_run_id,
+                'metrics': {
+                    'loss': qt.loss,
+                    'recall_at_10': qt.recall_at_10,
+                    'recall_at_50': qt.recall_at_50,
+                    'recall_at_100': qt.recall_at_100,
+                },
+                'created_at': qt.created_at.isoformat() if qt.created_at else None,
+            })
+
+        return JsonResponse({
+            'success': True,
+            'leaderboard': leaderboard,
+            'metric': metric,
+            'count': len(leaderboard)
+        })
+
+    except Exception as e:
+        logger.exception(f"Error getting leaderboard: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)

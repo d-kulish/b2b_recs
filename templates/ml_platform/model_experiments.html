@@ -314,6 +314,19 @@
         align-items: flex-start;
         gap: 12px;
     }
+    .exp-compare-label {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        padding: 4px;
+    }
+    .exp-compare-checkbox {
+        width: 18px;
+        height: 18px;
+        cursor: pointer;
+        accent-color: #f59e0b;
+    }
     .exp-card-info-text {
         flex: 1;
         min-width: 0;
@@ -2013,6 +2026,94 @@
         max-width: 280px;
     }
 
+    /* Training Charts */
+    .training-charts-container {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 24px;
+    }
+    @media (max-width: 768px) {
+        .training-charts-container {
+            grid-template-columns: 1fr;
+        }
+    }
+    .training-chart-wrapper {
+        background: #f9fafb;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        padding: 16px;
+    }
+    .training-chart-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: #374151;
+        margin: 0 0 12px 0;
+    }
+    .training-chart-wrapper canvas {
+        max-height: 200px;
+    }
+
+    /* Comparison Table */
+    .compare-table-wrapper {
+        overflow-x: auto;
+    }
+    .compare-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+    }
+    .compare-table th,
+    .compare-table td {
+        padding: 10px 12px;
+        text-align: left;
+        border-bottom: 1px solid #e5e7eb;
+    }
+    .compare-table th {
+        background: #f9fafb;
+        font-weight: 600;
+        color: #374151;
+        white-space: nowrap;
+    }
+    .compare-table th:first-child {
+        position: sticky;
+        left: 0;
+        z-index: 1;
+        background: #f9fafb;
+    }
+    .compare-table td:first-child {
+        position: sticky;
+        left: 0;
+        background: white;
+        font-weight: 500;
+        color: #6b7280;
+    }
+    .compare-table tbody tr:hover td {
+        background: #f9fafb;
+    }
+    .compare-table tbody tr:hover td:first-child {
+        background: #f3f4f6;
+    }
+    .compare-value-best {
+        color: #10b981;
+        font-weight: 600;
+    }
+    .compare-value-worst {
+        color: #ef4444;
+    }
+    .compare-exp-header {
+        min-width: 120px;
+        text-align: center;
+    }
+    .compare-exp-name {
+        font-weight: 600;
+        color: #111827;
+    }
+    .compare-exp-subtext {
+        font-size: 11px;
+        color: #9ca3af;
+        font-weight: normal;
+    }
+
     /* Statistics Table */
     .exp-view-stats-summary {
         display: grid;
@@ -2320,7 +2421,10 @@
                 <i class="fas fa-bolt"></i>
             </div>
             <h2 class="chapter-title">Quick Test</h2>
-            <div class="ml-auto">
+            <div class="ml-auto" style="display: flex; gap: 8px;">
+                <button onclick="openCompareModal()" class="btn btn-secondary btn-sm hidden" id="compareBtn" style="width: 120px;">
+                    <i class="fas fa-columns mr-1"></i>Compare (0)
+                </button>
                 <button onclick="openNewExpWizard()" class="btn btn-primary btn-sm" style="width: 120px;">
                     <i class="fas fa-plus mr-1"></i>New Exp
                 </button>
@@ -2813,10 +2917,10 @@
 </div>
 
 <!-- ============================================================================
-     COMPARE MODAL (Placeholder)
+     COMPARE MODAL (Experiment Comparison)
      ============================================================================ -->
-<div id="compareModal" class="modal-overlay hidden">
-    <div class="modal-container" style="max-width: 500px;">
+<div id="compareModal" class="modal-overlay hidden" onclick="closeCompareModal(event)">
+    <div class="modal-container" style="max-width: 900px;" onclick="event.stopPropagation()">
         <div class="modal-header">
             <div class="modal-header-icon info">
                 <i class="fas fa-columns"></i>
@@ -2826,15 +2930,81 @@
                 <i class="fas fa-times"></i>
             </button>
         </div>
-        <div class="modal-body">
-            <div class="chapter-empty-state">
-                <i class="fas fa-chart-bar chapter-empty-icon"></i>
-                <p class="chapter-empty-text">Comparison feature coming soon</p>
-                <p class="text-sm text-gray-400 mt-2">Side-by-side experiment comparison will be available here</p>
+        <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
+            <!-- Loading State -->
+            <div id="compareLoading" class="exp-view-loading hidden">
+                <i class="fas fa-spinner fa-spin"></i>
+                <span>Loading comparison data...</span>
+            </div>
+
+            <!-- Empty State (no experiments selected) -->
+            <div id="compareEmpty" class="chapter-empty-state">
+                <i class="fas fa-check-square chapter-empty-icon"></i>
+                <p class="chapter-empty-text">Select experiments to compare</p>
+                <p class="text-sm text-gray-400 mt-2">Use the checkboxes on experiment cards to select 2-5 experiments for comparison</p>
+            </div>
+
+            <!-- Comparison Content -->
+            <div id="compareContent" class="hidden">
+                <!-- Metrics Comparison Table -->
+                <div class="exp-view-section-group">
+                    <h4 class="exp-view-group-title">Metrics Comparison</h4>
+                    <div class="compare-table-wrapper">
+                        <table id="compareMetricsTable" class="compare-table">
+                            <thead>
+                                <tr id="compareMetricsHeader">
+                                    <th>Metric</th>
+                                    <!-- Experiment columns added dynamically -->
+                                </tr>
+                            </thead>
+                            <tbody id="compareMetricsBody">
+                                <!-- Rows added dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Parameters Comparison Table -->
+                <div class="exp-view-section-group">
+                    <h4 class="exp-view-group-title">Parameters Comparison</h4>
+                    <div class="compare-table-wrapper">
+                        <table id="compareParamsTable" class="compare-table">
+                            <thead>
+                                <tr id="compareParamsHeader">
+                                    <th>Parameter</th>
+                                    <!-- Experiment columns added dynamically -->
+                                </tr>
+                            </thead>
+                            <tbody id="compareParamsBody">
+                                <!-- Rows added dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Configuration Comparison Table -->
+                <div class="exp-view-section-group">
+                    <h4 class="exp-view-group-title">Configuration</h4>
+                    <div class="compare-table-wrapper">
+                        <table id="compareConfigTable" class="compare-table">
+                            <thead>
+                                <tr id="compareConfigHeader">
+                                    <th>Setting</th>
+                                    <!-- Experiment columns added dynamically -->
+                                </tr>
+                            </thead>
+                            <tbody id="compareConfigBody">
+                                <!-- Rows added dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
         </div>
         <div class="modal-footer-wizard-neu">
-            <div class="footer-left"></div>
+            <div class="footer-left">
+                <span id="compareSelectedCount" class="text-sm text-gray-500">0 experiments selected</span>
+            </div>
             <div class="footer-right">
                 <button type="button" class="btn-neu btn-neu-action btn-neu-cancel" onclick="closeCompareModal()">
                     <span class="btn-neu-inner">Close</span>
@@ -3091,12 +3261,27 @@
                     <span>Loading training data...</span>
                 </div>
 
-                <!-- Training Curves Placeholder -->
-                <div class="exp-view-section-group">
+                <!-- Training Curves - Placeholder (shown when no MLflow data) -->
+                <div id="expViewTrainingPlaceholder" class="exp-view-section-group">
                     <h4 class="exp-view-group-title">Training Progress</h4>
-                    <div id="expViewTrainingChart" class="exp-view-chart-placeholder">
+                    <div class="exp-view-chart-placeholder">
                         <i class="fas fa-chart-line"></i>
-                        <p>Training curves will be available when MLflow integration is complete</p>
+                        <p id="expViewTrainingMessage">Loading training data...</p>
+                    </div>
+                </div>
+
+                <!-- Training Curves - Charts (shown when MLflow data available) -->
+                <div id="expViewTrainingCharts" class="exp-view-section-group hidden">
+                    <h4 class="exp-view-group-title">Training Progress</h4>
+                    <div class="training-charts-container">
+                        <div class="training-chart-wrapper">
+                            <h5 class="training-chart-title">Loss</h5>
+                            <canvas id="trainingLossChart" height="200"></canvas>
+                        </div>
+                        <div class="training-chart-wrapper">
+                            <h5 class="training-chart-title">Recall Metrics</h5>
+                            <canvas id="trainingMetricsChart" height="200"></canvas>
+                        </div>
                     </div>
                 </div>
 
@@ -3673,11 +3858,23 @@ function renderExpCard(exp) {
     const viewBtn = `<button class="card-action-btn view" onclick="viewExpFromCard(event, ${exp.id})">View</button>`;
     const cancelBtn = `<button class="card-action-btn cancel" onclick="cancelExpFromCard(event, ${exp.id})" ${isRunning ? '' : 'disabled'}>Cancel</button>`;
 
+    // Compare checkbox - only for completed experiments
+    const canCompare = exp.status === 'completed';
+    const isSelected = selectedExperimentIds && selectedExperimentIds.has(exp.id);
+    const compareCheckbox = canCompare ? `
+        <label class="exp-compare-label" onclick="event.stopPropagation();" title="Select for comparison">
+            <input type="checkbox" class="exp-compare-checkbox"
+                   onchange="toggleExperimentSelection(${exp.id})"
+                   ${isSelected ? 'checked' : ''}>
+        </label>
+    ` : '';
+
     return `
         <div class="exp-card-new" onclick="openExpDetails(${exp.id})" data-exp-id="${exp.id}">
             <div class="exp-card-columns">
                 <!-- Column 1: Experiment Info (30%) -->
                 <div class="exp-card-col-info">
+                    ${compareCheckbox}
                     <div class="exp-card-status ${statusClass}">
                         <i class="fas ${icon}"></i>
                     </div>
@@ -4598,6 +4795,10 @@ function openExpViewModal(exp) {
     populateExpViewModal(exp);
     document.getElementById('expViewModal').classList.remove('hidden');
 
+    // Preload Data Insights in background (warms up Cloud Run service)
+    // This runs silently so data is ready when user clicks the Data Insights tab
+    preloadDataInsights();
+
     // Start polling if experiment is running
     if (exp.status === 'running' || exp.status === 'submitting') {
         startViewModalPolling(exp.id);
@@ -5198,7 +5399,7 @@ function switchExpViewTab(tabName) {
     if (tabContent) tabContent.classList.add('active');
 
     // Load lazy data for data/training tabs
-    if (tabName === 'data' && !viewModalDataCache.statistics) {
+    if (tabName === 'data') {
         loadDataInsights();
     }
     if (tabName === 'training' && !viewModalDataCache.trainingHistory) {
@@ -5418,6 +5619,44 @@ async function loadErrorDetails() {
     }
 }
 
+// Preload data insights in background (no UI updates)
+// Called when modal opens to warm up Cloud Run service and cache data
+async function preloadDataInsights() {
+    if (!viewModalExpId) return;
+
+    // Skip if already cached or currently loading
+    if (viewModalDataCache.statistics !== null || viewModalDataCache._loadingInsights) return;
+
+    viewModalDataCache._loadingInsights = true;
+    console.log('[DataInsights] Preload STARTED for experiment', viewModalExpId);
+    const startTime = performance.now();
+
+    try {
+        const [statsRes, schemaRes] = await Promise.all([
+            fetch(`/api/quick-tests/${viewModalExpId}/statistics/`),
+            fetch(`/api/quick-tests/${viewModalExpId}/schema/`)
+        ]);
+
+        const statsData = await statsRes.json();
+        const schemaData = await schemaRes.json();
+
+        const elapsed = ((performance.now() - startTime) / 1000).toFixed(1);
+        console.log(`[DataInsights] Preload COMPLETED in ${elapsed}s - data cached`);
+
+        // Only cache if modal is still open for same experiment
+        if (viewModalExpId) {
+            viewModalDataCache.statistics = statsData.statistics;
+            viewModalDataCache.schema = schemaData.schema;
+            viewModalDataCache._statsData = statsData;
+            viewModalDataCache._schemaData = schemaData;
+        }
+    } catch (error) {
+        console.log('[DataInsights] Preload FAILED:', error.message);
+    } finally {
+        viewModalDataCache._loadingInsights = false;
+    }
+}
+
 // Lazy load data insights (statistics + schema)
 async function loadDataInsights() {
     if (!viewModalExpId) return;
@@ -5425,6 +5664,62 @@ async function loadDataInsights() {
     const loadingEl = document.getElementById('expViewDataLoading');
     const contentEl = document.getElementById('expViewDataContent');
     const errorEl = document.getElementById('expViewDataError');
+
+    // Check if data was preloaded
+    if (viewModalDataCache.statistics !== null && viewModalDataCache._statsData) {
+        console.log('[DataInsights] Using CACHED data (instant load)');
+        const statsData = viewModalDataCache._statsData;
+        const schemaData = viewModalDataCache._schemaData;
+
+        const statsAvailable = statsData.success && statsData.statistics?.available;
+        const schemaAvailable = schemaData.success && schemaData.schema?.available;
+
+        // Always hide loading when using cached data
+        loadingEl.classList.add('hidden');
+
+        if (!statsAvailable && !schemaAvailable) {
+            contentEl.classList.add('hidden');
+            errorEl.classList.remove('hidden');
+            document.getElementById('expViewDataErrorMessage').textContent =
+                statsData.statistics?.message || schemaData.schema?.message || 'Data insights not available';
+            return;
+        }
+
+        if (statsAvailable) renderStatistics(statsData.statistics);
+        else document.getElementById('expViewStatsContent').innerHTML = '<p class="text-sm text-gray-500">Statistics not available</p>';
+
+        if (schemaAvailable) renderSchema(schemaData.schema);
+        else document.getElementById('expViewSchemaContent').innerHTML = '<p class="text-sm text-gray-500">Schema not available</p>';
+
+        errorEl.classList.add('hidden');
+        contentEl.classList.remove('hidden');
+        return;
+    }
+
+    // Wait if preload is in progress (with 90s timeout)
+    if (viewModalDataCache._loadingInsights) {
+        console.log('[DataInsights] Waiting for preload to complete...');
+        loadingEl.classList.remove('hidden');
+        contentEl.classList.add('hidden');
+        errorEl.classList.add('hidden');
+
+        let waitTime = 0;
+        const maxWait = 90000; // 90 seconds max
+        const checkPreload = setInterval(() => {
+            waitTime += 100;
+            if (!viewModalDataCache._loadingInsights) {
+                clearInterval(checkPreload);
+                console.log(`[DataInsights] Preload finished after ${(waitTime/1000).toFixed(1)}s wait`);
+                loadDataInsights();
+            } else if (waitTime >= maxWait) {
+                clearInterval(checkPreload);
+                console.log('[DataInsights] Preload timeout - falling back to direct fetch');
+                viewModalDataCache._loadingInsights = false;
+                loadDataInsights();
+            }
+        }, 100);
+        return;
+    }
 
     loadingEl.classList.remove('hidden');
     contentEl.classList.add('hidden');
@@ -5442,6 +5737,8 @@ async function loadDataInsights() {
 
         viewModalDataCache.statistics = statsData.statistics;
         viewModalDataCache.schema = schemaData.schema;
+        viewModalDataCache._statsData = statsData;
+        viewModalDataCache._schemaData = schemaData;
 
         // Check if any data is available
         const statsAvailable = statsData.success && statsData.statistics?.available;
@@ -5743,26 +6040,224 @@ function renderSchema(schema) {
     `;
 }
 
-// Lazy load training history
+// Training chart instances (for cleanup)
+let trainingLossChart = null;
+let trainingMetricsChart = null;
+
+// Lazy load training history and render charts
 async function loadTrainingHistory() {
     if (!viewModalExpId) return;
 
     const loadingEl = document.getElementById('expViewTrainingLoading');
+    const placeholderEl = document.getElementById('expViewTrainingPlaceholder');
+    const chartsEl = document.getElementById('expViewTrainingCharts');
+    const messageEl = document.getElementById('expViewTrainingMessage');
+
     loadingEl.classList.remove('hidden');
+    placeholderEl.classList.add('hidden');
+    chartsEl.classList.add('hidden');
+
+    // Destroy existing charts
+    if (trainingLossChart) {
+        trainingLossChart.destroy();
+        trainingLossChart = null;
+    }
+    if (trainingMetricsChart) {
+        trainingMetricsChart.destroy();
+        trainingMetricsChart = null;
+    }
 
     try {
         const response = await fetch(`/api/quick-tests/${viewModalExpId}/training-history/`);
         const data = await response.json();
 
-        viewModalDataCache.trainingHistory = data.training_history;
-
-        // For now, just hide loading - chart is placeholder
         loadingEl.classList.add('hidden');
+
+        if (!data.success) {
+            messageEl.textContent = data.error || 'Error loading training data';
+            placeholderEl.classList.remove('hidden');
+            return;
+        }
+
+        const history = data.training_history;
+        viewModalDataCache.trainingHistory = history;
+
+        if (!history.available) {
+            messageEl.textContent = history.message || 'Training data not available';
+            placeholderEl.classList.remove('hidden');
+            return;
+        }
+
+        // Render charts
+        renderTrainingCharts(history);
+        chartsEl.classList.remove('hidden');
 
     } catch (error) {
         console.error('Error loading training history:', error);
         loadingEl.classList.add('hidden');
+        messageEl.textContent = 'Error loading training data';
+        placeholderEl.classList.remove('hidden');
     }
+}
+
+// Render training charts with Chart.js
+function renderTrainingCharts(history) {
+    renderLossChart(history);
+    renderMetricsChart(history);
+}
+
+function renderLossChart(history) {
+    const ctx = document.getElementById('trainingLossChart');
+    if (!ctx) return;
+
+    const trainLoss = history.loss?.train || [];
+    const valLoss = history.loss?.val || [];
+    const epochs = history.epochs || trainLoss.map((_, i) => i);
+
+    if (trainLoss.length === 0) {
+        return;
+    }
+
+    const datasets = [];
+
+    if (trainLoss.length > 0) {
+        datasets.push({
+            label: 'Training Loss',
+            data: trainLoss,
+            borderColor: '#3b82f6',
+            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+            fill: true,
+            tension: 0.3,
+            pointRadius: 3,
+            pointHoverRadius: 5
+        });
+    }
+
+    if (valLoss.length > 0) {
+        datasets.push({
+            label: 'Validation Loss',
+            data: valLoss,
+            borderColor: '#f59e0b',
+            backgroundColor: 'rgba(245, 158, 11, 0.1)',
+            fill: true,
+            tension: 0.3,
+            pointRadius: 3,
+            pointHoverRadius: 5
+        });
+    }
+
+    trainingLossChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: epochs.map(e => `Epoch ${e + 1}`),
+            datasets: datasets
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'top',
+                    labels: {
+                        boxWidth: 12,
+                        font: { size: 11 }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: false,
+                    title: {
+                        display: true,
+                        text: 'Loss',
+                        font: { size: 11 }
+                    },
+                    ticks: { font: { size: 10 } }
+                },
+                x: {
+                    ticks: { font: { size: 10 } }
+                }
+            }
+        }
+    });
+}
+
+function renderMetricsChart(history) {
+    const ctx = document.getElementById('trainingMetricsChart');
+    if (!ctx) return;
+
+    const metrics = history.metrics || {};
+    const epochs = history.epochs || [];
+
+    if (Object.keys(metrics).length === 0) {
+        return;
+    }
+
+    const colors = ['#10b981', '#8b5cf6', '#ec4899', '#06b6d4'];
+    const datasets = [];
+
+    Object.entries(metrics).forEach(([key, values], i) => {
+        if (values && values.length > 0) {
+            // Format key for display
+            const label = key
+                .replace('top_', 'Recall@')
+                .replace('recall_at_', 'Recall@')
+                .replace(/_/g, ' ');
+
+            datasets.push({
+                label: label,
+                data: values,
+                borderColor: colors[i % colors.length],
+                tension: 0.3,
+                fill: false,
+                pointRadius: 3,
+                pointHoverRadius: 5
+            });
+        }
+    });
+
+    if (datasets.length === 0) return;
+
+    trainingMetricsChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: epochs.map(e => `Epoch ${e + 1}`),
+            datasets: datasets
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'top',
+                    labels: {
+                        boxWidth: 12,
+                        font: { size: 11 }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 1,
+                    title: {
+                        display: true,
+                        text: 'Accuracy',
+                        font: { size: 11 }
+                    },
+                    ticks: {
+                        font: { size: 10 },
+                        callback: function(value) {
+                            return (value * 100).toFixed(0) + '%';
+                        }
+                    }
+                },
+                x: {
+                    ticks: { font: { size: 10 } }
+                }
+            }
+        }
+    });
 }
 
 function toggleErrorDetails() {
@@ -5933,14 +6428,308 @@ function cancelExpFromCard(event, expId) {
 }
 
 // =============================================================================
-// COMPARE MODAL (Placeholder)
+// COMPARE MODAL (Experiment Comparison)
 // =============================================================================
-function openCompareModal() {
-    document.getElementById('compareModal').classList.remove('hidden');
+let selectedExperimentIds = new Set();
+
+function toggleExperimentSelection(expId) {
+    if (selectedExperimentIds.has(expId)) {
+        selectedExperimentIds.delete(expId);
+    } else if (selectedExperimentIds.size < 5) {
+        selectedExperimentIds.add(expId);
+    } else {
+        showError('Maximum 5 experiments can be compared');
+        return;
+    }
+    updateCompareButton();
 }
 
-function closeCompareModal() {
+function updateCompareButton() {
+    const compareBtn = document.getElementById('compareBtn');
+    if (compareBtn) {
+        const count = selectedExperimentIds.size;
+        if (count >= 2) {
+            compareBtn.classList.remove('hidden');
+            compareBtn.innerHTML = `<i class="fas fa-columns mr-1"></i>Compare (${count})`;
+        } else {
+            compareBtn.classList.add('hidden');
+        }
+    }
+}
+
+async function openCompareModal() {
+    const modal = document.getElementById('compareModal');
+    const loadingEl = document.getElementById('compareLoading');
+    const emptyEl = document.getElementById('compareEmpty');
+    const contentEl = document.getElementById('compareContent');
+    const countEl = document.getElementById('compareSelectedCount');
+
+    modal.classList.remove('hidden');
+
+    // Update count
+    countEl.textContent = `${selectedExperimentIds.size} experiments selected`;
+
+    // Check if we have enough experiments
+    if (selectedExperimentIds.size < 2) {
+        loadingEl.classList.add('hidden');
+        contentEl.classList.add('hidden');
+        emptyEl.classList.remove('hidden');
+        return;
+    }
+
+    // Show loading
+    emptyEl.classList.add('hidden');
+    contentEl.classList.add('hidden');
+    loadingEl.classList.remove('hidden');
+
+    try {
+        const response = await fetch('/api/experiments/compare/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({
+                quick_test_ids: Array.from(selectedExperimentIds)
+            })
+        });
+
+        const data = await response.json();
+        loadingEl.classList.add('hidden');
+
+        if (!data.success) {
+            showError(data.error || 'Failed to load comparison data');
+            emptyEl.classList.remove('hidden');
+            return;
+        }
+
+        // Render comparison tables
+        renderComparisonTables(data.comparison);
+        contentEl.classList.remove('hidden');
+
+    } catch (error) {
+        console.error('Error loading comparison:', error);
+        loadingEl.classList.add('hidden');
+        emptyEl.classList.remove('hidden');
+        showError('Error loading comparison data');
+    }
+}
+
+function closeCompareModal(event) {
+    if (event && event.target !== event.currentTarget) return;
     document.getElementById('compareModal').classList.add('hidden');
+}
+
+function renderComparisonTables(comparison) {
+    const quickTests = comparison.quick_tests || [];
+
+    if (quickTests.length === 0) return;
+
+    // Render headers for all tables
+    renderCompareHeaders(quickTests);
+
+    // Render metrics table
+    renderMetricsTable(quickTests);
+
+    // Render params table
+    renderParamsTable(quickTests);
+
+    // Render config table
+    renderConfigTable(quickTests);
+}
+
+function renderCompareHeaders(quickTests) {
+    const tables = ['compareMetricsHeader', 'compareParamsHeader', 'compareConfigHeader'];
+
+    tables.forEach(tableId => {
+        const headerRow = document.getElementById(tableId);
+        // Clear existing headers (except first)
+        while (headerRow.children.length > 1) {
+            headerRow.removeChild(headerRow.lastChild);
+        }
+
+        // Add experiment headers
+        quickTests.forEach(qt => {
+            const th = document.createElement('th');
+            th.className = 'compare-exp-header';
+            th.innerHTML = `
+                <div class="compare-exp-name">${qt.display_name}</div>
+                <div class="compare-exp-subtext">${qt.feature_config || ''}</div>
+            `;
+            headerRow.appendChild(th);
+        });
+    });
+}
+
+function renderMetricsTable(quickTests) {
+    const tbody = document.getElementById('compareMetricsBody');
+    tbody.innerHTML = '';
+
+    const metricLabels = {
+        'recall_at_100': 'Recall@100',
+        'recall_at_50': 'Recall@50',
+        'recall_at_10': 'Recall@10',
+        'loss': 'Loss'
+    };
+
+    Object.entries(metricLabels).forEach(([key, label]) => {
+        const values = quickTests.map(qt => qt.metrics?.[key]);
+        const hasData = values.some(v => v !== null && v !== undefined);
+
+        if (!hasData) return;
+
+        const row = document.createElement('tr');
+
+        // Metric name cell
+        const nameCell = document.createElement('td');
+        nameCell.textContent = label;
+        row.appendChild(nameCell);
+
+        // Find best/worst for highlighting
+        const numericValues = values.filter(v => v !== null && v !== undefined);
+        const isBetterHigher = key !== 'loss';
+        const bestValue = isBetterHigher ? Math.max(...numericValues) : Math.min(...numericValues);
+
+        // Value cells
+        values.forEach(val => {
+            const cell = document.createElement('td');
+            cell.style.textAlign = 'center';
+
+            if (val === null || val === undefined) {
+                cell.textContent = '-';
+                cell.style.color = '#9ca3af';
+            } else {
+                const formatted = key === 'loss' ? val.toFixed(4) : (val * 100).toFixed(2) + '%';
+                cell.textContent = formatted;
+
+                if (val === bestValue && numericValues.length > 1) {
+                    cell.className = 'compare-value-best';
+                }
+            }
+
+            row.appendChild(cell);
+        });
+
+        tbody.appendChild(row);
+    });
+}
+
+function renderParamsTable(quickTests) {
+    const tbody = document.getElementById('compareParamsBody');
+    tbody.innerHTML = '';
+
+    const paramLabels = {
+        'epochs': 'Epochs',
+        'batch_size': 'Batch Size',
+        'learning_rate': 'Learning Rate',
+        'data_sample_percent': 'Data Sample %'
+    };
+
+    Object.entries(paramLabels).forEach(([key, label]) => {
+        const row = document.createElement('tr');
+
+        const nameCell = document.createElement('td');
+        nameCell.textContent = label;
+        row.appendChild(nameCell);
+
+        quickTests.forEach(qt => {
+            const cell = document.createElement('td');
+            cell.style.textAlign = 'center';
+            const val = qt.params?.[key];
+            cell.textContent = val !== null && val !== undefined ? val : '-';
+            row.appendChild(cell);
+        });
+
+        tbody.appendChild(row);
+    });
+}
+
+function renderConfigTable(quickTests) {
+    const tbody = document.getElementById('compareConfigBody');
+    tbody.innerHTML = '';
+
+    const configItems = [
+        { key: 'feature_config', label: 'Feature Config' },
+        { key: 'model_config', label: 'Model Config' },
+        { key: 'dataset', label: 'Dataset' }
+    ];
+
+    // Add split_strategy from params
+    const splitRow = document.createElement('tr');
+    const splitNameCell = document.createElement('td');
+    splitNameCell.textContent = 'Split Strategy';
+    splitRow.appendChild(splitNameCell);
+
+    quickTests.forEach(qt => {
+        const cell = document.createElement('td');
+        cell.style.textAlign = 'center';
+        const strategy = qt.params?.split_strategy || '-';
+        cell.textContent = strategy.replace('_', ' ');
+        splitRow.appendChild(cell);
+    });
+    tbody.appendChild(splitRow);
+
+    // Add machine type from params
+    const machineRow = document.createElement('tr');
+    const machineNameCell = document.createElement('td');
+    machineNameCell.textContent = 'Machine Type';
+    machineRow.appendChild(machineNameCell);
+
+    quickTests.forEach(qt => {
+        const cell = document.createElement('td');
+        cell.style.textAlign = 'center';
+        cell.textContent = qt.params?.machine_type || '-';
+        machineRow.appendChild(cell);
+    });
+    tbody.appendChild(machineRow);
+
+    // Add status
+    const statusRow = document.createElement('tr');
+    const statusNameCell = document.createElement('td');
+    statusNameCell.textContent = 'Status';
+    statusRow.appendChild(statusNameCell);
+
+    quickTests.forEach(qt => {
+        const cell = document.createElement('td');
+        cell.style.textAlign = 'center';
+        cell.textContent = qt.status || '-';
+        if (qt.status === 'completed') {
+            cell.style.color = '#10b981';
+        } else if (qt.status === 'failed') {
+            cell.style.color = '#ef4444';
+        }
+        statusRow.appendChild(cell);
+    });
+    tbody.appendChild(statusRow);
+
+    // Add MLflow link row
+    const mlflowRow = document.createElement('tr');
+    const mlflowNameCell = document.createElement('td');
+    mlflowNameCell.textContent = 'MLflow Run';
+    mlflowRow.appendChild(mlflowNameCell);
+
+    quickTests.forEach(qt => {
+        const cell = document.createElement('td');
+        cell.style.textAlign = 'center';
+        if (qt.mlflow_run_id) {
+            cell.innerHTML = `<span class="text-green-600" title="${qt.mlflow_run_id}">&#10003; Tracked</span>`;
+        } else {
+            cell.textContent = '-';
+            cell.style.color = '#9ca3af';
+        }
+        cell.appendChild(document.createTextNode(''));
+        mlflowRow.appendChild(cell);
+    });
+    tbody.appendChild(mlflowRow);
+}
+
+function clearExperimentSelection() {
+    selectedExperimentIds.clear();
+    updateCompareButton();
+    // Update UI checkboxes if they exist
+    document.querySelectorAll('.exp-compare-checkbox').forEach(cb => {
+        cb.checked = false;
+    });
 }
 
 // =============================================================================
@@ -6027,6 +6816,9 @@ function showSuccess(message) {
     showToast('success', 'Success', message);
 }
 </script>
+
+<!-- Chart.js for training curves visualization -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 
 <!-- Pipeline DAG Visualization (extracted component) -->
 <script src="{% static 'js/pipeline_dag.js' %}?v=1"></script>

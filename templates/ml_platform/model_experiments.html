@@ -3032,7 +3032,7 @@
                         </select>
                         <!-- Random split info -->
                         <div id="wizardRandomInfo" style="display: flex; align-items: center; gap: 6px;">
-                            <span style="color: #7c3aed; font-size: 12px;"><i class="fas fa-info-circle mr-1"></i>Training 80% / Validation 20%</span>
+                            <span style="color: #7c3aed; font-size: 12px;"><i class="fas fa-info-circle mr-1"></i>Train 80% / Eval 15% / Test 5%</span>
                         </div>
                         <!-- Date column (inline, shown for time-based) -->
                         <div id="wizardDateColumnSection" style="display: none; align-items: center; gap: 8px;">
@@ -3043,9 +3043,9 @@
                         </div>
                         <!-- Holdout days (inline, shown for time_holdout) -->
                         <div id="wizardTimeOptions" style="display: none; align-items: center; gap: 6px;">
-                            <span style="color: #6d28d9; font-size: 12px;">exclude last</span>
+                            <span style="color: #6d28d9; font-size: 12px;">test: last</span>
                             <input type="number" id="wizardHoldoutDays" value="1" min="1" max="30" style="border-color: #c4b5fd; width: 60px; padding: 6px 8px; border-radius: 6px; font-size: 13px; text-align: center;">
-                            <span style="color: #6d28d9; font-size: 12px;">days</span>
+                            <span style="color: #6d28d9; font-size: 12px;">days, rest: 80/20</span>
                         </div>
                     </div>
                     <!-- Rolling window (second row, shown for strict_time) -->
@@ -4935,7 +4935,7 @@ function updateWizardSummary() {
     // Split strategy
     const splitStrategy = document.getElementById('wizardSplitStrategy').value;
     const splitLabels = {
-        'random': 'Random 80/20',
+        'random': 'Random 80/15/5',
         'time_holdout': 'Time Holdout',
         'strict_time': 'Strict Temporal'
     };
@@ -5622,7 +5622,7 @@ function renderSamplingChips(exp) {
     if (!container) return;
 
     const splitLabels = {
-        'random': 'Random 80/20',
+        'random': 'Random 80/15/5',
         'time_holdout': 'Time Holdout',
         'strict_time': 'Strict Temporal'
     };
@@ -5652,7 +5652,7 @@ function renderSamplingChips(exp) {
     if (exp.split_strategy === 'time_holdout') {
         html += `
         <div class="exp-view-param-chip">
-            <span class="exp-view-param-chip-label">Holdout Days:</span>
+            <span class="exp-view-param-chip-label">Test (last N days):</span>
             <span class="exp-view-param-chip-value">${exp.holdout_days || 1} days</span>
         </div>
         `;

@@ -1273,71 +1273,89 @@ class BigQueryService:
         test_days: int = 7,
     ) -> str:
         """
-        Generate CTE for holdout filtering based on date column.
+        Generate CTE for temporal splitting based on date column.
 
         All date calculations are relative to the MAX date in the dataset,
         NOT CURRENT_DATE(). This ensures splits work correctly with historical data.
 
+        Adds a 'split' column for TFX to use with partition_feature_name.
+
         Args:
             source_table: Source CTE or table name
             date_column: Column name containing dates (Unix epoch INT64)
-            holdout_days: Number of days to exclude (for time_holdout)
+            holdout_days: Number of days for test split (for time_holdout)
             strategy: 'time_holdout' or 'strict_time'
             train_days: Number of days for training data (strict_time only)
             val_days: Number of days for validation data (strict_time only)
-            test_days: Number of days for test data - held out (strict_time only)
+            test_days: Number of days for test data (strict_time only)
 
         Returns:
             SQL for the holdout CTE body (without the AS wrapper)
 
         For time_holdout:
-            Excludes the last N days from training (relative to MAX date in data).
-            Train+Val use all data before holdout, TFX does random train/val split.
+            - Last N days (holdout_days) → 'test' split (temporal)
+            - Remaining days → 80% 'train', 20% 'eval' (random via hash)
+            Uses FARM_FINGERPRINT for deterministic random assignment.
 
         For strict_time:
-            True temporal split with data ordered by time (relative to MAX date in data):
-            - Train+Val window: from (train+val+test days before MAX) to (test days before MAX)
-            - Test: last test_days before MAX date (completely excluded from query)
-            TFX does hash-based train/eval split within the returned window.
+            True temporal split with data ordered by time:
+            - Timeline: |<-- train_days -->|<-- val_days -->|<-- test_days -->| MAX_DATE
+            - Each section assigned to corresponding split
+            Pure temporal ordering, no random component.
         """
         if strategy == 'time_holdout':
-            # Simple holdout: exclude last N days relative to MAX date in dataset
+            # Time holdout: last N days = test, remaining = 80/20 train/eval (random)
             # Note: date_column is already converted to Unix epoch (INT64) by for_tfx=True
-            # We use a CTE to find MAX date once, then filter relative to it
+            # We use FARM_FINGERPRINT for deterministic 80/20 split on non-test data
             return f"""    WITH max_date_ref AS (
         SELECT DATE(TIMESTAMP_SECONDS(MAX({date_column}))) AS ref_date
         FROM {source_table}
     )
-    SELECT base.*
-    FROM {source_table} base, max_date_ref
-    WHERE base.{date_column} < UNIX_SECONDS(TIMESTAMP(DATE_SUB(max_date_ref.ref_date, INTERVAL {holdout_days} DAY)))"""
+    SELECT
+        base.*,
+        CASE
+            -- Last {holdout_days} days = test (temporal)
+            WHEN base.{date_column} >= UNIX_SECONDS(TIMESTAMP(DATE_SUB(max_date_ref.ref_date, INTERVAL {holdout_days} DAY)))
+                THEN 'test'
+            -- Remaining days: 80% train, 20% eval (deterministic random via hash)
+            WHEN MOD(ABS(FARM_FINGERPRINT(CAST(base.{date_column} AS STRING))), 100) < 80
+                THEN 'train'
+            ELSE 'eval'
+        END AS split
+    FROM {source_table} base, max_date_ref"""
 
         elif strategy == 'strict_time':
-            # True temporal split - exclude test period completely
-            # Timeline (days before MAX date in dataset):
+            # Strict temporal: explicit day-based splits
+            # Timeline (relative to MAX date):
             #   |<-- train_days -->|<-- val_days -->|<-- test_days -->| MAX_DATE
-            #   ^                  ^                ^                 ^
-            #   total_window    val+test          test_days          0
-            #   (window start)                    (excluded)
             #
-            # SQL returns only the train+val window
-            # Test period (last test_days before MAX date) is completely excluded
-            # TFX does hash-based 80/20 split within this window for train/eval
-            #
-            # Note: date_column is already converted to Unix epoch (INT64) by for_tfx=True
-            # We use a CTE to find MAX date once, then filter relative to it
+            # All data in the window gets a split assignment based on date
             total_window = train_days + val_days + test_days
+            val_test_days = val_days + test_days
             return f"""    WITH max_date_ref AS (
         SELECT DATE(TIMESTAMP_SECONDS(MAX({date_column}))) AS ref_date
         FROM {source_table}
     )
-    SELECT base.*
+    SELECT
+        base.*,
+        CASE
+            -- Last {test_days} days = test
+            WHEN base.{date_column} >= UNIX_SECONDS(TIMESTAMP(DATE_SUB(max_date_ref.ref_date, INTERVAL {test_days} DAY)))
+                THEN 'test'
+            -- Next {val_days} days (before test) = eval
+            WHEN base.{date_column} >= UNIX_SECONDS(TIMESTAMP(DATE_SUB(max_date_ref.ref_date, INTERVAL {val_test_days} DAY)))
+                THEN 'eval'
+            -- Remaining days in window = train
+            WHEN base.{date_column} >= UNIX_SECONDS(TIMESTAMP(DATE_SUB(max_date_ref.ref_date, INTERVAL {total_window} DAY)))
+                THEN 'train'
+            -- Data outside window (older than total_window days) - exclude
+            ELSE NULL
+        END AS split
     FROM {source_table} base, max_date_ref
-    WHERE base.{date_column} >= UNIX_SECONDS(TIMESTAMP(DATE_SUB(max_date_ref.ref_date, INTERVAL {total_window} DAY)))
-      AND base.{date_column} < UNIX_SECONDS(TIMESTAMP(DATE_SUB(max_date_ref.ref_date, INTERVAL {test_days} DAY)))"""
+    WHERE base.{date_column} >= UNIX_SECONDS(TIMESTAMP(DATE_SUB(max_date_ref.ref_date, INTERVAL {total_window} DAY)))"""
 
         else:
-            # Random - no holdout filter
+            # Random - no holdout filter, no split column (TFX does hash-based split)
             return f"    SELECT * FROM {source_table}"
 
     def _generate_top_products_cte(self, primary_alias, product_col, revenue_col, percent):

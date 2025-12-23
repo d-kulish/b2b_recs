@@ -566,20 +566,35 @@ def create_tfx_pipeline(
     logger.info(f"Creating TFX pipeline: {pipeline_name}, split_strategy={split_strategy}")
 
     # Configure split based on strategy
-    # All strategies use hash-based 80/20 split for train/eval
-    # The temporal ordering is enforced by the SQL query's date filtering:
-    # - 'random': No date filtering, pure random split
-    # - 'time_holdout': SQL excludes last N days, then hash-based split
-    # - 'strict_time': SQL filters to specific date window (excludes test period), then hash-based split
-    logger.info(f"Using hash-based 80/20 split (strategy={split_strategy})")
-    output_config = example_gen_pb2.Output(
-        split_config=example_gen_pb2.SplitConfig(
-            splits=[
-                example_gen_pb2.SplitConfig.Split(name="train", hash_buckets=8),
-                example_gen_pb2.SplitConfig.Split(name="eval", hash_buckets=2),
-            ]
+    # - 'random': Hash-based 80/15/5 split (train/eval/test)
+    # - 'time_holdout': SQL adds 'split' column (test=last N days, train/eval=80/20 random on rest)
+    # - 'strict_time': SQL adds 'split' column (explicit day-based train/eval/test)
+    if split_strategy == 'random':
+        # Random: hash-based 80/15/5 split
+        logger.info("Using hash-based 80/15/5 split (train/eval/test)")
+        output_config = example_gen_pb2.Output(
+            split_config=example_gen_pb2.SplitConfig(
+                splits=[
+                    example_gen_pb2.SplitConfig.Split(name="train", hash_buckets=16),
+                    example_gen_pb2.SplitConfig.Split(name="eval", hash_buckets=3),
+                    example_gen_pb2.SplitConfig.Split(name="test", hash_buckets=1),
+                ]
+            )
         )
-    )
+    else:
+        # time_holdout and strict_time: SQL provides 'split' column
+        # TFX uses partition_feature_name to split based on this column
+        logger.info(f"Using partition-based split from SQL 'split' column (strategy={split_strategy})")
+        output_config = example_gen_pb2.Output(
+            split_config=example_gen_pb2.SplitConfig(
+                splits=[
+                    example_gen_pb2.SplitConfig.Split(name="train"),
+                    example_gen_pb2.SplitConfig.Split(name="eval"),
+                    example_gen_pb2.SplitConfig.Split(name="test"),
+                ],
+                partition_feature_name='split'
+            )
+        )
 
     # Configure BigQueryExampleGen with explicit project to avoid using Vertex AI's internal ADC project
     logger.info(f"BigQueryExampleGen configured with project={project_id}")

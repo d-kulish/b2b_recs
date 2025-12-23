@@ -1527,9 +1527,24 @@ from tfx_bsl.public import tfxio
 
 from absl import logging
 
-# MLflow tracking
-import mlflow
-import mlflow.tensorflow
+# MLflow tracking - install mlflow-skinny if not available (lightweight, fewer dependencies)
+try:
+    import mlflow
+    MLFLOW_AVAILABLE = True
+except ImportError:
+    # Try to install mlflow-skinny at runtime (lightweight version for tracking only)
+    import subprocess
+    import sys
+    logging.info("MLflow not found - installing mlflow-skinny...")
+    try:
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "mlflow-skinny>=2.0.0", "--quiet"])
+        import mlflow
+        MLFLOW_AVAILABLE = True
+        logging.info("MLflow-skinny installed successfully")
+    except Exception as e:
+        mlflow = None
+        MLFLOW_AVAILABLE = False
+        logging.warning(f"Could not install MLflow: {e} - metrics will not be logged")
 '''
 
     def _generate_constants(self) -> str:
@@ -2180,6 +2195,117 @@ def _precompute_candidate_embeddings(model, candidates_dataset, batch_size=128):
         embeddings.append(batch_embeddings)
 
     return product_ids, tf.concat(embeddings, axis=0)
+
+
+def _evaluate_recall_on_test_set(model, test_dataset, product_ids, product_embeddings, steps=50):
+    """
+    Evaluate recall@k metrics on the test set.
+
+    Args:
+        model: The trained retrieval model
+        test_dataset: TF dataset for test examples
+        product_ids: List of all product IDs
+        product_embeddings: Pre-computed embeddings for all products
+        steps: Number of batches to evaluate
+
+    Returns:
+        Dict with recall metrics
+    """
+    logging.info("=" * 60)
+    logging.info("EVALUATING RECALL ON TEST SET")
+    logging.info("=" * 60)
+
+    # Create product ID to index mapping
+    product_to_idx = {{pid: i for i, pid in enumerate(product_ids)}}
+
+    # Initialize counters
+    total_recall_5 = 0.0
+    total_recall_10 = 0.0
+    total_recall_50 = 0.0
+    total_recall_100 = 0.0
+    total_batches = 0
+
+    try:
+        for batch in test_dataset.take(steps):
+            # Get query embeddings for this batch
+            query_embeddings = model.query_tower(batch)
+
+            # Compute similarities with all candidates
+            # query_embeddings: [batch_size, embedding_dim]
+            # product_embeddings: [num_products, embedding_dim]
+            similarities = tf.linalg.matmul(
+                query_embeddings,
+                product_embeddings,
+                transpose_b=True
+            )  # [batch_size, num_products]
+
+            # Get top-100 indices
+            _, top_indices = tf.nn.top_k(similarities, k=min(100, len(product_ids)))
+            top_indices = top_indices.numpy()
+
+            # Get actual product IDs from batch
+            if '{product_id_col}' in batch:
+                actual_products = batch['{product_id_col}'].numpy()
+                if hasattr(actual_products[0], 'decode'):
+                    actual_products = [p.decode() for p in actual_products]
+            else:
+                continue
+
+            batch_size = len(actual_products)
+
+            # Calculate recall for each K
+            for k in [5, 10, 50, 100]:
+                hits = 0
+                for i in range(batch_size):
+                    actual_product = actual_products[i]
+                    if actual_product in product_to_idx:
+                        actual_idx = product_to_idx[actual_product]
+                        if actual_idx in top_indices[i, :k]:
+                            hits += 1
+
+                batch_recall = hits / batch_size
+                if k == 5:
+                    total_recall_5 += batch_recall
+                elif k == 10:
+                    total_recall_10 += batch_recall
+                elif k == 50:
+                    total_recall_50 += batch_recall
+                elif k == 100:
+                    total_recall_100 += batch_recall
+
+            total_batches += 1
+
+            if total_batches % 10 == 0:
+                logging.info(f"  Evaluated {{total_batches}} batches...")
+
+        if total_batches == 0:
+            logging.warning("No batches evaluated for recall")
+            return {{}}
+
+        # Calculate final averages
+        results = {{
+            'recall_at_5': total_recall_5 / total_batches,
+            'recall_at_10': total_recall_10 / total_batches,
+            'recall_at_50': total_recall_50 / total_batches,
+            'recall_at_100': total_recall_100 / total_batches,
+        }}
+
+        logging.info("=" * 60)
+        logging.info("TEST SET RECALL RESULTS:")
+        logging.info(f"  Recall@5:   {{results['recall_at_5']:.4f}} ({{results['recall_at_5']*100:.2f}}%)")
+        logging.info(f"  Recall@10:  {{results['recall_at_10']:.4f}} ({{results['recall_at_10']*100:.2f}}%)")
+        logging.info(f"  Recall@50:  {{results['recall_at_50']:.4f}} ({{results['recall_at_50']*100:.2f}}%)")
+        logging.info(f"  Recall@100: {{results['recall_at_100']:.4f}} ({{results['recall_at_100']*100:.2f}}%)")
+        logging.info(f"  Batches evaluated: {{total_batches}}")
+        logging.info("=" * 60)
+
+        return results
+
+    except Exception as e:
+        logging.error(f"Error evaluating recall: {{e}}")
+        import traceback
+        traceback.print_exc()
+        return {{}}
 '''
 
     def _generate_mlflow_callback(self) -> str:
@@ -2193,7 +2319,7 @@ class MLflowCallback(tf.keras.callbacks.Callback):
     """Log metrics to MLflow after each epoch."""
 
     def on_epoch_end(self, epoch, logs=None):
-        if logs and mlflow.active_run():
+        if MLFLOW_AVAILABLE and logs and mlflow.active_run():
             for metric_name, value in logs.items():
                 mlflow.log_metric(metric_name, float(value), step=epoch)
 
@@ -2289,19 +2415,21 @@ def run_fn(fn_args: tfx.components.FnArgs):
     )
 
     # =========================================================================
-    # MLflow Initialization
+    # MLflow Initialization (optional - skipped if mlflow not installed)
     # =========================================================================
     mlflow_run_id = None
-    if mlflow_tracking_uri:
+    mlflow_context = None
+    if MLFLOW_AVAILABLE and mlflow_tracking_uri:
         try:
             mlflow.set_tracking_uri(mlflow_tracking_uri)
             mlflow.set_experiment(MLFLOW_EXPERIMENT_NAME)
             logging.info(f"MLflow initialized: {{mlflow_tracking_uri}}, experiment={{MLFLOW_EXPERIMENT_NAME}}")
+            # Start MLflow run (context manager handles cleanup)
+            mlflow_context = mlflow.start_run(run_name=MLFLOW_RUN_NAME)
         except Exception as e:
             logging.warning(f"MLflow initialization failed: {{e}}")
-
-    # Start MLflow run (context manager handles cleanup)
-    mlflow_context = mlflow.start_run(run_name=MLFLOW_RUN_NAME) if mlflow_tracking_uri else None
+    elif not MLFLOW_AVAILABLE:
+        logging.info("MLflow not available - skipping experiment tracking")
 
     try:
         if mlflow_context:
@@ -2348,7 +2476,7 @@ def run_fn(fn_args: tfx.components.FnArgs):
         callbacks = []
 
         # MLflow callback for per-epoch metrics
-        if mlflow_tracking_uri and mlflow.active_run():
+        if MLFLOW_AVAILABLE and mlflow_tracking_uri and mlflow.active_run():
             callbacks.append(MLflowCallback())
 
         # TensorBoard logging
@@ -2372,15 +2500,30 @@ def run_fn(fn_args: tfx.components.FnArgs):
         logging.info("Training completed.")
 
         # Log final metrics to MLflow
-        if mlflow.active_run():
+        if MLFLOW_AVAILABLE and mlflow.active_run():
             for metric_name, values in history.history.items():
                 mlflow.log_metric(f'final_{{metric_name}}', float(values[-1]))
 
-        # Evaluate on test set if available (strict_time split strategy)
-        test_results = None
+        # Pre-compute candidate embeddings (needed for both test eval and serving)
+        logging.info("Pre-computing candidate embeddings...")
+        candidates_for_serving = _input_fn(
+            fn_args.eval_files,
+            fn_args.data_accessor,
+            tf_transform_output,
+            batch_size
+        ).unbatch()
+
+        product_ids, product_embeddings = _precompute_candidate_embeddings(
+            model, candidates_for_serving
+        )
+        logging.info(f"Pre-computed embeddings for {{len(product_ids)}} products")
+
+        # Evaluate on test set
+        # All split strategies now have test data:
+        # - Random: 5% hash-based test split
+        # - Time Holdout: Last N days as test (temporal)
+        # - Strict Temporal: Explicit test_days as test (temporal)
         try:
-            # Check for test split in transformed examples
-            # The test split is only present when using strict_time split strategy
             transformed_examples_dir = os.path.dirname(fn_args.train_files[0])
             test_split_dir = os.path.join(os.path.dirname(transformed_examples_dir), 'Split-test')
 
@@ -2394,34 +2537,43 @@ def run_fn(fn_args: tfx.components.FnArgs):
                         tf_transform_output,
                         batch_size
                     )
-                    test_results = model.evaluate(test_dataset, return_dict=True)
-                    logging.info(f"=== TEST SET EVALUATION ===")
-                    for metric_name, metric_value in test_results.items():
+
+                    # 1. Basic loss evaluation
+                    test_loss_results = model.evaluate(test_dataset, return_dict=True)
+                    logging.info("=== TEST SET LOSS ===")
+                    for metric_name, metric_value in test_loss_results.items():
                         logging.info(f"  test_{{metric_name}}: {{metric_value:.6f}}")
-                        # Log test metrics to MLflow
-                        if mlflow.active_run():
+                        if MLFLOW_AVAILABLE and mlflow.active_run():
                             mlflow.log_metric(f'test_{{metric_name}}', float(metric_value))
-                    logging.info(f"===========================")
+
+                    # 2. Recall evaluation (Recall@5, @10, @50, @100)
+                    # Reload test dataset for recall evaluation
+                    test_dataset_for_recall = _input_fn(
+                        test_files,
+                        fn_args.data_accessor,
+                        tf_transform_output,
+                        batch_size
+                    )
+                    recall_results = _evaluate_recall_on_test_set(
+                        model,
+                        test_dataset_for_recall,
+                        product_ids,
+                        product_embeddings,
+                        steps=50
+                    )
+
+                    # Log recall metrics to MLflow
+                    if MLFLOW_AVAILABLE and mlflow.active_run() and recall_results:
+                        for metric_name, metric_value in recall_results.items():
+                            mlflow.log_metric(f'test_{{metric_name}}', float(metric_value))
                 else:
                     logging.info("Test split directory exists but is empty - skipping test evaluation")
             else:
-                logging.info("No test split found (not using strict_time strategy) - skipping test evaluation")
+                logging.warning("No test split found - skipping test evaluation")
         except Exception as e:
             logging.warning(f"Could not evaluate on test set: {{e}}")
-
-        # Pre-compute candidate embeddings for serving
-        logging.info("Pre-computing candidate embeddings...")
-        candidates_for_serving = _input_fn(
-            fn_args.eval_files,
-            fn_args.data_accessor,
-            tf_transform_output,
-            batch_size
-        ).unbatch()
-
-        product_ids, product_embeddings = _precompute_candidate_embeddings(
-            model, candidates_for_serving
-        )
-        logging.info(f"Pre-computed embeddings for {{len(product_ids)}} products")
+            import traceback
+            traceback.print_exc()
 
         # Build serving model that properly tracks all resources
         logging.info("Building serving model...")

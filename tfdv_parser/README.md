@@ -189,3 +189,65 @@ View logs in Cloud Console:
 resource.type="cloud_run_revision"
 resource.labels.service_name="tfdv-parser"
 ```
+
+## Troubleshooting
+
+### "Data insights not available" Error
+
+If the Data Insights tab shows "Data insights not available" even though the pipeline completed StatisticsGen and SchemaGen stages, check the following:
+
+#### 1. Check Cloud Run Logs
+
+Look for logs showing the GCS path being searched:
+```
+INFO - [STATS] Parsing from: gs://b2b-recs-pipeline-staging/pipeline_root/{run_id}
+INFO - Searching for statistics in gs://b2b-recs-pipeline-staging/pipeline_root/{run_id}
+INFO - Found 0 blobs in pipeline artifacts
+WARNING - No FeatureStats.pb found in 0 blobs
+```
+
+If "Found 0 blobs", the artifacts may have been deleted.
+
+#### 2. GCS Bucket Lifecycle Policy
+
+**Root Cause (Dec 2025):** The `b2b-recs-pipeline-staging` bucket had a 3-day lifecycle policy that automatically deleted all pipeline artifacts after 3 days. This caused Data Insights to fail for experiments older than 3 days.
+
+**Fix Applied:** Extended lifecycle policy to 360 days.
+
+Check current lifecycle policy:
+```bash
+gsutil lifecycle get gs://b2b-recs-pipeline-staging
+```
+
+Expected output:
+```json
+{"rule": [{"action": {"type": "Delete"}, "condition": {"age": 360}}]}
+```
+
+If the policy is too short, update it:
+```bash
+gsutil lifecycle set /dev/stdin gs://b2b-recs-pipeline-staging << 'EOF'
+{"rule": [{"action": {"type": "Delete"}, "condition": {"age": 360}}]}
+EOF
+```
+
+#### 3. Verify Artifacts Exist
+
+Check if statistics files exist for a specific experiment:
+```bash
+gsutil ls -r "gs://b2b-recs-pipeline-staging/pipeline_root/{run_id}/**/*FeatureStats*"
+gsutil ls -r "gs://b2b-recs-pipeline-staging/pipeline_root/{run_id}/**/*schema*"
+```
+
+#### 4. IPython Dependency
+
+The service requires IPython for TFDV visualization APIs. Ensure `requirements.txt` includes:
+```
+tensorflow-data-validation[visualization]>=1.14.0
+```
+
+Without the `[visualization]` extra, you'll see this warning in logs:
+```
+Unable to import IPython: No module named 'IPython'.
+TFDV visualization APIs will not function.
+```

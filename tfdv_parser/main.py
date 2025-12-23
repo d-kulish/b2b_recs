@@ -10,6 +10,7 @@ Runs on Python 3.10 with full TFX/TFDV stack, enabling features
 not available in the main Django app (Python 3.12).
 """
 import os
+import sys
 import logging
 from functools import wraps
 
@@ -17,12 +18,16 @@ from flask import Flask, request, jsonify
 
 from parsers import StatisticsParser, SchemaParser
 
-# Configure logging
+# Configure logging for Cloud Run (logs to stdout for Cloud Logging to capture)
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format='%(levelname)s - %(name)s - %(message)s',
+    stream=sys.stdout,
+    force=True  # Override any existing handlers
 )
 logger = logging.getLogger(__name__)
+# Also configure Flask's logger
+logging.getLogger('werkzeug').setLevel(logging.WARNING)
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -124,10 +129,16 @@ def parse_statistics():
         pipeline_root = data['pipeline_root']
         include_html = data.get('include_html', False)
 
-        logger.info(f"Parsing statistics from: {pipeline_root}")
+        logger.info(f"[STATS] Parsing from: {pipeline_root}")
 
         parser = get_statistics_parser()
         statistics = parser.parse_from_gcs(pipeline_root)
+
+        # Log the result
+        if statistics.get('available'):
+            logger.info(f"[STATS] Found {statistics.get('num_features', 0)} features, {statistics.get('num_examples', 0)} examples")
+        else:
+            logger.warning(f"[STATS] Not available: {statistics.get('error') or statistics.get('message', 'unknown reason')}")
 
         response = {
             'success': True,
@@ -143,7 +154,7 @@ def parse_statistics():
         return jsonify(response)
 
     except Exception as e:
-        logger.exception(f"Error parsing statistics: {e}")
+        logger.exception(f"[STATS] Error: {e}")
         return jsonify({
             'success': False,
             'error': str(e)
@@ -231,10 +242,16 @@ def parse_schema():
         data = request.get_json()
         pipeline_root = data['pipeline_root']
 
-        logger.info(f"Parsing schema from: {pipeline_root}")
+        logger.info(f"[SCHEMA] Parsing from: {pipeline_root}")
 
         parser = get_schema_parser()
         schema = parser.parse_from_gcs(pipeline_root)
+
+        # Log the result
+        if schema.get('available'):
+            logger.info(f"[SCHEMA] Found {schema.get('num_features', 0)} features")
+        else:
+            logger.warning(f"[SCHEMA] Not available: {schema.get('error') or schema.get('message', 'unknown reason')}")
 
         return jsonify({
             'success': True,
@@ -242,7 +259,7 @@ def parse_schema():
         })
 
     except Exception as e:
-        logger.exception(f"Error parsing schema: {e}")
+        logger.exception(f"[SCHEMA] Error: {e}")
         return jsonify({
             'success': False,
             'error': str(e)

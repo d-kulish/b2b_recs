@@ -128,8 +128,15 @@ class StatisticsParser:
         bucket_name = parts[0]
         prefix = parts[1] if len(parts) > 1 else ''
 
-        bucket = self.storage_client.bucket(bucket_name)
-        blobs = list(bucket.list_blobs(prefix=prefix, max_results=500))
+        logger.info(f"Searching for statistics in gs://{bucket_name}/{prefix}")
+
+        try:
+            bucket = self.storage_client.bucket(bucket_name)
+            blobs = list(bucket.list_blobs(prefix=prefix, max_results=500))
+            logger.info(f"Found {len(blobs)} blobs in pipeline artifacts")
+        except Exception as e:
+            logger.error(f"Error listing blobs: {e}")
+            return None
 
         # Look for StatisticsGen output (train split preferred)
         for blob in blobs:
@@ -137,13 +144,16 @@ class StatisticsParser:
                 'statistics' in blob.name and
                 'Split-train' in blob.name and
                 blob.name.endswith('FeatureStats.pb')):
+                logger.info(f"Found statistics file: {blob.name}")
                 return f"gs://{bucket_name}/{blob.name}"
 
         # Fallback: any FeatureStats.pb
         for blob in blobs:
             if blob.name.endswith('FeatureStats.pb'):
+                logger.info(f"Found fallback statistics file: {blob.name}")
                 return f"gs://{bucket_name}/{blob.name}"
 
+        logger.warning(f"No FeatureStats.pb found in {len(blobs)} blobs")
         return None
 
     def _load_statistics_proto(self, gcs_path: str) -> Optional[statistics_pb2.DatasetFeatureStatisticsList]:

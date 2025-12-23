@@ -10,7 +10,8 @@ google-cloud-storage>=2.10.0
 
 # TensorFlow ecosystem (requires Python 3.10)
 tensorflow>=2.13.0,<2.16.0
-tensorflow-data-validation>=1.14.0
+# [visualization] extra installs IPython required for TFDV visualization APIs
+tensorflow-data-validation[visualization]>=1.14.0
 tensorflow-metadata>=1.14.0
 
 # Required by tfx_bsl (transitive dependency of TFDV)

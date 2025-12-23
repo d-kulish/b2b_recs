@@ -97,21 +97,31 @@ class SchemaParser:
         bucket_name = parts[0]
         prefix = parts[1] if len(parts) > 1 else ''
 
-        bucket = self.storage_client.bucket(bucket_name)
-        blobs = list(bucket.list_blobs(prefix=prefix, max_results=500))
+        logger.info(f"Searching for schema in gs://{bucket_name}/{prefix}")
+
+        try:
+            bucket = self.storage_client.bucket(bucket_name)
+            blobs = list(bucket.list_blobs(prefix=prefix, max_results=500))
+            logger.info(f"Found {len(blobs)} blobs in pipeline artifacts")
+        except Exception as e:
+            logger.error(f"Error listing blobs: {e}")
+            return None
 
         # Look for SchemaGen output
         for blob in blobs:
             if ('SchemaGen' in blob.name and
                 'schema' in blob.name and
                 blob.name.endswith('schema.pbtxt')):
+                logger.info(f"Found schema file: {blob.name}")
                 return f"gs://{bucket_name}/{blob.name}"
 
         # Fallback: any schema.pbtxt
         for blob in blobs:
             if blob.name.endswith('schema.pbtxt'):
+                logger.info(f"Found fallback schema file: {blob.name}")
                 return f"gs://{bucket_name}/{blob.name}"
 
+        logger.warning(f"No schema.pbtxt found in {len(blobs)} blobs")
         return None
 
     def _load_schema_proto(self, gcs_path: str) -> Optional[schema_pb2.Schema]:

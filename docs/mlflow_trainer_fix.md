@@ -1,7 +1,7 @@
 # MLflow Trainer Integration Fix
 
 **Date:** 2024-12-24
-**Status:** Resolved
+**Status:** Partially Fixed (Cold Start Timeout Issue Pending)
 
 ## Problem Summary
 
@@ -72,13 +72,30 @@ gcloud run services add-iam-policy-binding mlflow-server \
   --project=b2b-recs
 ```
 
+### Issue 4: Cloud Run Cold Start Timeouts
+
+**Location:** `ml_platform/configs/services.py` (TrainerModuleGenerator)
+
+The MLflow Cloud Run service scales to zero when idle. Cold starts can take 10-30+ seconds (includes Cloud SQL connection). The original 10s timeout in `set_experiment()` was too short.
+
+**Symptom:** First Quick Test after MLflow server is idle fails with:
+```
+MLflow set_experiment error: The read operation timed out
+MLflow API error (runs/create): HTTP 400 - Bad Request
+MLflow run started: None
+```
+
+**Fix:** Added retry logic with exponential backoff and increased timeouts:
+- `set_experiment()`: 60s timeout on first attempt, up to 3 retries with 10s/20s backoff
+- `_request()`: 30s timeout with up to 3 retries and 5s/10s backoff
+
 ---
 
 ## Files Modified
 
 | File | Change |
 |------|--------|
-| `ml_platform/configs/services.py` | Added `import time`, added `_get_identity_token()`, added `_get_auth_headers()`, updated `_request()` and `set_experiment()` to use auth |
+| `ml_platform/configs/services.py` | Added `import time`, added `_get_identity_token()`, added `_get_auth_headers()`, updated `_request()` and `set_experiment()` with auth, retry logic, and increased timeouts |
 
 ---
 
@@ -317,3 +334,81 @@ gcloud run services add-iam-policy-binding mlflow-server \
   --role="roles/run.invoker" \
   --project=b2b-recs
 ```
+
+---
+
+## Failed Test Attempts (2024-12-24)
+
+### Test 1: Simplified MLflow Client Test (MISLEADING SUCCESS)
+
+**Job ID:** `2147587002093010944`
+
+A simplified test script was created that only tested MLflow REST API calls without the full TFX trainer. The test succeeded, but this did NOT prove the fix works because:
+
+1. The MLflow Cloud Run server was already warm from prior curl testing
+2. The test did not use the actual generated `trainer_module.py`
+3. The test did not replicate real pipeline conditions (cold start)
+
+**Conclusion:** This test was invalid - it passed only because the server was warm.
+
+### Test 2: Real Trainer Custom Job - Attempt 1 (FAILED)
+
+**Job ID:** `8712709358892351488`
+
+Attempted to run the actual `trainer_module.py` from Quick Test qt-47 with real TFX artifacts.
+
+**Error:**
+```
+AttributeError: 'str' object has no attribute 'get'
+epochs = custom_config.get('epochs', EPOCHS)
+```
+
+**Cause:** The wrapper script passed `custom_config` as a JSON string instead of a dict.
+
+### Test 3: Real Trainer Custom Job - Attempt 2 (FAILED)
+
+**Job ID:** `354028450492710912`
+
+Fixed the `custom_config` issue, but encountered a new error:
+
+**Error:**
+```
+AttributeError: 'NoneType' object has no attribute 'tf_dataset_factory'
+return data_accessor.tf_dataset_factory(
+```
+
+**Cause:** The wrapper script set `fn_args.data_accessor = None`, but the trainer module requires a TFX `DataAccessor` object to read TFRecord files. This object is provided by the TFX executor and cannot be easily mocked.
+
+**Conclusion:** Cannot properly test the real trainer module outside of the TFX pipeline environment without implementing the full TFX DataAccessor.
+
+---
+
+## Evidence of Cold Start Timeout (Quick Test qt-47)
+
+**Trainer Job ID:** `8023658615904665600`
+
+### Trainer Logs (UTC times):
+```
+13:47:56 - MLflow: Got identity token via google-auth
+13:48:26 - MLflow set_experiment error: The read operation timed out
+13:48:29 - MLflow API error (runs/create): HTTP 400 - Bad Request
+13:48:29 - MLflow run started: None
+13:49:32 - MLflow run completed successfully (misleading - run_id was None)
+```
+
+### MLflow Cloud Run Logs (EET = UTC+2):
+```
+15:48:16.786 - GET experiments/get-by-name returned 404 in 12.2s
+15:48:16.804 - "Starting new instance" (cold start triggered)
+15:48:26.222 - Gunicorn started (10 seconds after cold start)
+15:48:26.860 - POST runs/create returned 400 in 2.4s
+```
+
+### Analysis:
+- Client timeout: 10 seconds (hardcoded in trainer_module.py)
+- Server response time: 12.2 seconds (due to cold start)
+- Result: Client timed out 2.2 seconds before server responded
+- `experiment_id` was left as `None`, causing `runs/create` to fail with HTTP 400
+
+### Fix Required:
+Increase timeout and add retry logic in `ml_platform/configs/services.py` (changes staged but not yet tested in real pipeline).

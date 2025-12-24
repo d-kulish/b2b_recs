@@ -1591,44 +1591,59 @@ class MLflowRestClient:
             headers["Authorization"] = f"Bearer {token}"
         return headers
 
-    def _request(self, endpoint, data):
-        """Make authenticated POST request to MLflow API."""
+    def _request(self, endpoint, data, timeout=30):
+        """Make authenticated POST request to MLflow API with retry."""
         url = f"{self.tracking_uri}/api/2.0/mlflow/{endpoint}"
         headers = self._get_auth_headers()
-        try:
-            req = urllib.request.Request(url, data=json.dumps(data).encode(), headers=headers, method="POST")
-            with urllib.request.urlopen(req, timeout=10) as resp:
-                return json.loads(resp.read().decode())
-        except urllib.error.HTTPError as e:
-            logging.warning(f"MLflow API error ({endpoint}): HTTP {e.code} - {e.reason}")
-            return None
-        except Exception as e:
-            logging.warning(f"MLflow API error ({endpoint}): {e}")
-            return None
+        last_error = None
+        for attempt in range(3):
+            try:
+                req = urllib.request.Request(url, data=json.dumps(data).encode(), headers=headers, method="POST")
+                with urllib.request.urlopen(req, timeout=timeout) as resp:
+                    return json.loads(resp.read().decode())
+            except urllib.error.HTTPError as e:
+                logging.warning(f"MLflow API error ({endpoint}): HTTP {e.code} - {e.reason}")
+                return None  # Don't retry HTTP errors
+            except Exception as e:
+                last_error = e
+                if attempt < 2:
+                    wait = (attempt + 1) * 5  # 5s, 10s
+                    logging.info(f"MLflow request failed ({e}), retrying in {wait}s...")
+                    time.sleep(wait)
+        logging.warning(f"MLflow API error ({endpoint}): {last_error}")
+        return None
 
     def set_experiment(self, name):
-        """Get or create experiment by name."""
-        # Try to get existing experiment
-        try:
-            url = f"{self.tracking_uri}/api/2.0/mlflow/experiments/get-by-name?experiment_name={urllib.parse.quote(name)}"
-            headers = self._get_auth_headers()
-            req = urllib.request.Request(url, headers=headers)
-            with urllib.request.urlopen(req, timeout=10) as resp:
-                result = json.loads(resp.read().decode())
-                self.experiment_id = result.get("experiment", {}).get("experiment_id")
-                return self.experiment_id
-        except urllib.error.HTTPError as e:
-            if e.code == 404:
-                # Create new experiment
-                result = self._request("experiments/create", {"name": name})
-                if result:
-                    self.experiment_id = result.get("experiment_id")
-                return self.experiment_id
-            logging.warning(f"MLflow set_experiment error: HTTP {e.code}")
-            return None
-        except Exception as e:
-            logging.warning(f"MLflow set_experiment error: {e}")
-            return None
+        """Get or create experiment by name with retry for cold starts."""
+        last_error = None
+        for attempt in range(3):
+            try:
+                url = f"{self.tracking_uri}/api/2.0/mlflow/experiments/get-by-name?experiment_name={urllib.parse.quote(name)}"
+                headers = self._get_auth_headers()
+                req = urllib.request.Request(url, headers=headers)
+                # Use 60s timeout on first attempt (cold start), 30s after
+                timeout = 60 if attempt == 0 else 30
+                with urllib.request.urlopen(req, timeout=timeout) as resp:
+                    result = json.loads(resp.read().decode())
+                    self.experiment_id = result.get("experiment", {}).get("experiment_id")
+                    return self.experiment_id
+            except urllib.error.HTTPError as e:
+                if e.code == 404:
+                    # Create new experiment
+                    result = self._request("experiments/create", {"name": name}, timeout=60)
+                    if result:
+                        self.experiment_id = result.get("experiment_id")
+                    return self.experiment_id
+                logging.warning(f"MLflow set_experiment error: HTTP {e.code}")
+                return None
+            except Exception as e:
+                last_error = e
+                if attempt < 2:
+                    wait = (attempt + 1) * 10  # 10s, 20s backoff
+                    logging.info(f"MLflow set_experiment failed ({e}), retrying in {wait}s...")
+                    time.sleep(wait)
+        logging.warning(f"MLflow set_experiment error after retries: {last_error}")
+        return None
 
     def start_run(self, run_name=None):
         """Start a new run."""

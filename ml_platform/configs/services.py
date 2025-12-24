@@ -1528,26 +1528,80 @@ from tfx_bsl.public import tfxio
 from absl import logging
 
 # MLflow tracking via direct REST API (no mlflow library needed - zero dependencies)
+# Includes GCP identity token authentication for Cloud Run services
+import time
 import urllib.request
 import urllib.error
 import urllib.parse
 
 class MLflowRestClient:
-    """Lightweight MLflow client using REST API directly. No dependencies."""
+    """Lightweight MLflow client using REST API with GCP identity token auth."""
 
     def __init__(self, tracking_uri):
         self.tracking_uri = tracking_uri.rstrip('/')
         self.run_id = None
         self.experiment_id = None
+        self._token = None
+        self._token_expiry = 0
+
+    def _get_identity_token(self):
+        """
+        Fetch identity token for Cloud Run service authentication.
+
+        Uses GCP metadata server (available on all GCP compute).
+        Tokens are cached for ~1 hour and auto-refreshed.
+        """
+        # Return cached token if still valid (with 60s buffer)
+        if self._token and time.time() < self._token_expiry - 60:
+            return self._token
+
+        # Method 1: Try google-auth library (preferred, handles token refresh)
+        try:
+            import google.auth.transport.requests
+            import google.oauth2.id_token
+            auth_req = google.auth.transport.requests.Request()
+            self._token = google.oauth2.id_token.fetch_id_token(auth_req, self.tracking_uri)
+            self._token_expiry = time.time() + 3600
+            logging.info("MLflow: Got identity token via google-auth")
+            return self._token
+        except ImportError:
+            pass  # google-auth not available, try metadata server
+        except Exception as e:
+            logging.debug(f"MLflow: google-auth failed ({e}), trying metadata server")
+
+        # Method 2: GCP metadata server (always available on Vertex AI)
+        try:
+            audience = self.tracking_uri
+            url = f"http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/identity?audience={urllib.parse.quote(audience)}"
+            req = urllib.request.Request(url, headers={"Metadata-Flavor": "Google"})
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                self._token = resp.read().decode()
+                self._token_expiry = time.time() + 3600
+                logging.info("MLflow: Got identity token via metadata server")
+                return self._token
+        except Exception as e:
+            logging.warning(f"MLflow: Could not get identity token: {e}")
+            return None
+
+    def _get_auth_headers(self):
+        """Get headers with authentication for API requests."""
+        headers = {"Content-Type": "application/json"}
+        token = self._get_identity_token()
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+        return headers
 
     def _request(self, endpoint, data):
-        """Make POST request to MLflow API."""
+        """Make authenticated POST request to MLflow API."""
         url = f"{self.tracking_uri}/api/2.0/mlflow/{endpoint}"
-        headers = {"Content-Type": "application/json"}
+        headers = self._get_auth_headers()
         try:
             req = urllib.request.Request(url, data=json.dumps(data).encode(), headers=headers, method="POST")
             with urllib.request.urlopen(req, timeout=10) as resp:
                 return json.loads(resp.read().decode())
+        except urllib.error.HTTPError as e:
+            logging.warning(f"MLflow API error ({endpoint}): HTTP {e.code} - {e.reason}")
+            return None
         except Exception as e:
             logging.warning(f"MLflow API error ({endpoint}): {e}")
             return None
@@ -1557,7 +1611,8 @@ class MLflowRestClient:
         # Try to get existing experiment
         try:
             url = f"{self.tracking_uri}/api/2.0/mlflow/experiments/get-by-name?experiment_name={urllib.parse.quote(name)}"
-            req = urllib.request.Request(url)
+            headers = self._get_auth_headers()
+            req = urllib.request.Request(url, headers=headers)
             with urllib.request.urlopen(req, timeout=10) as resp:
                 result = json.loads(resp.read().decode())
                 self.experiment_id = result.get("experiment", {}).get("experiment_id")
@@ -1569,7 +1624,11 @@ class MLflowRestClient:
                 if result:
                     self.experiment_id = result.get("experiment_id")
                 return self.experiment_id
-            raise
+            logging.warning(f"MLflow set_experiment error: HTTP {e.code}")
+            return None
+        except Exception as e:
+            logging.warning(f"MLflow set_experiment error: {e}")
+            return None
 
     def start_run(self, run_name=None):
         """Start a new run."""

@@ -1090,6 +1090,7 @@
         border-radius: 12px 12px 0 0;
         background: white;
         overflow: hidden;
+        min-height: 110px; /* Unified header height */
     }
     /* Column 1: Experiment Number (20%, centered) */
     .exp-view-header-number {
@@ -1123,6 +1124,12 @@
         font-size: 13px;
         color: #9ca3af;
         margin: 0 0 8px;
+        /* Limit to 2 lines with ellipsis */
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        line-height: 1.4;
     }
     .exp-view-times {
         display: flex;

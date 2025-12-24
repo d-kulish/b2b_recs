@@ -13,7 +13,7 @@
     padding: 24px 16px;
     background: #ffffff;
     background-image: radial-gradient(circle, #d8d8d8 1px, transparent 1px);
-    background-size: 20px 20px;
+    background-size: 12px 12px;
     border-radius: 8px;
     margin-bottom: 16px;
     min-height: 1420px;
@@ -32,7 +32,7 @@
 }
 .exp-view-dag-svg path {
     fill: none;
-    stroke-width: 2px;
+    stroke-width: 1px;
     stroke-linecap: round;
     stroke: #9ca3af;
 }
@@ -60,15 +60,15 @@
     gap: 12px;
     padding: 12px 16px;
     background: #ffffff;
-    border: 1px solid #dadce0;
+    border: 1px solid #9ca3af;
     border-radius: 8px;
     cursor: pointer;
     transition: all 0.15s ease;
     width: 264px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15), 0 1px 3px rgba(0,0,0,0.1);
 }
 .exp-view-dag-node:hover {
-    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+    box-shadow: 0 6px 16px rgba(0,0,0,0.2), 0 2px 6px rgba(0,0,0,0.12);
 }
 .exp-view-dag-node.selected {
     border-color: #1a73e8;
@@ -77,7 +77,7 @@
 /* Completed state - green right border accent */
 .exp-view-dag-node.completed {
     background: #ffffff;
-    border-color: #dadce0;
+    border-color: #9ca3af;
 }
 .exp-view-dag-node.completed::after {
     content: '';
@@ -93,7 +93,7 @@
 /* Running state - blue accent */
 .exp-view-dag-node.running {
     background: #ffffff;
-    border-color: #dadce0;
+    border-color: #9ca3af;
 }
 .exp-view-dag-node.running::after {
     content: '';
@@ -109,7 +109,7 @@
 /* Failed state - red accent */
 .exp-view-dag-node.failed {
     background: #ffffff;
-    border-color: #dadce0;
+    border-color: #9ca3af;
 }
 .exp-view-dag-node.failed::after {
     content: '';
@@ -124,12 +124,12 @@
 }
 .exp-view-dag-node.pending {
     background: #ffffff;
-    border-color: #dadce0;
+    border-color: #9ca3af;
     opacity: 0.6;
 }
 .exp-view-dag-node.skipped {
     background: #f8f9fa;
-    border-color: #dadce0;
+    border-color: #9ca3af;
     opacity: 0.5;
 }
 /* Component icon (blue cube like Vertex AI) */
@@ -219,41 +219,59 @@
 /* Artifact Nodes (small square icons - Vertex AI style) - Absolute positioned */
 .exp-view-dag-artifact {
     position: absolute;
-    width: 32px;
-    height: 32px;
+    width: 40px;
+    height: 40px;
     background: #ffffff;
-    border: 1px solid #dadce0;
-    border-radius: 4px;
+    border: none;
+    border-radius: 8px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 13px;
-    color: #5f6368;
-    transition: all 0.15s ease;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-}
-.exp-view-dag-artifact:hover {
-    border-color: #1a73e8;
-    background: #e8f0fe;
-    color: #1a73e8;
-}
-.exp-view-dag-artifact.completed {
-    border-color: #1a73e8;
-    color: #1a73e8;
-}
-.exp-view-dag-artifact.schema {
-    border-color: #f9ab00;
-    color: #e37400;
-    background: #fef7e0;
-}
-.exp-view-dag-artifact.schema.completed {
-    border-color: #f9ab00;
-    color: #e37400;
+    font-size: 20px;
+    color: #9ca3af;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.08);
 }
 .exp-view-dag-artifact.pending {
     opacity: 0.5;
-    color: #9aa0a6;
 }
+
+/* Type-based icon colors - always visible */
+.exp-view-dag-artifact.artifact-examples,
+.exp-view-dag-artifact.artifact-document {
+    color: #8b5cf6;
+}
+.exp-view-dag-artifact.artifact-statistics {
+    color: #0ea5e9;
+}
+.exp-view-dag-artifact.artifact-schema {
+    color: #f59e0b;
+}
+.exp-view-dag-artifact.artifact-model {
+    color: #f97316;
+}
+.exp-view-dag-artifact.artifact-blessing {
+    color: #ec4899;
+}
+
+/* Type-based glow - only on hover */
+.exp-view-dag-artifact.artifact-examples:hover,
+.exp-view-dag-artifact.artifact-document:hover {
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.3), 0 4px 12px rgba(139, 92, 246, 0.25);
+}
+.exp-view-dag-artifact.artifact-statistics:hover {
+    box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.3), 0 4px 12px rgba(14, 165, 233, 0.25);
+}
+.exp-view-dag-artifact.artifact-schema:hover {
+    box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.3), 0 4px 12px rgba(245, 158, 11, 0.25);
+}
+.exp-view-dag-artifact.artifact-model:hover {
+    box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.3), 0 4px 12px rgba(249, 115, 22, 0.25);
+}
+.exp-view-dag-artifact.artifact-blessing:hover {
+    box-shadow: 0 0 0 3px rgba(236, 72, 153, 0.3), 0 4px 12px rgba(236, 72, 153, 0.25);
+}
+
 /* Artifact port indicators - small dots */
 .exp-view-dag-artifact::before,
 .exp-view-dag-artifact::after {
@@ -261,7 +279,7 @@
     position: absolute;
     width: 4px;
     height: 4px;
-    background: #dadce0;
+    background: #9ca3af;
     border-radius: 50%;
     left: 50%;
     transform: translateX(-50%);
@@ -272,13 +290,28 @@
 .exp-view-dag-artifact::after {
     bottom: -2px;
 }
-.exp-view-dag-artifact.completed::before,
-.exp-view-dag-artifact.completed::after {
-    background: #1a73e8;
+/* Port colors match artifact type on hover */
+.exp-view-dag-artifact.artifact-examples:hover::before,
+.exp-view-dag-artifact.artifact-examples:hover::after,
+.exp-view-dag-artifact.artifact-document:hover::before,
+.exp-view-dag-artifact.artifact-document:hover::after {
+    background: #8b5cf6;
 }
-.exp-view-dag-artifact.schema::before,
-.exp-view-dag-artifact.schema::after {
-    background: #f9ab00;
+.exp-view-dag-artifact.artifact-statistics:hover::before,
+.exp-view-dag-artifact.artifact-statistics:hover::after {
+    background: #0ea5e9;
+}
+.exp-view-dag-artifact.artifact-schema:hover::before,
+.exp-view-dag-artifact.artifact-schema:hover::after {
+    background: #f59e0b;
+}
+.exp-view-dag-artifact.artifact-model:hover::before,
+.exp-view-dag-artifact.artifact-model:hover::after {
+    background: #f97316;
+}
+.exp-view-dag-artifact.artifact-blessing:hover::before,
+.exp-view-dag-artifact.artifact-blessing:hover::after {
+    background: #ec4899;
 }
 .exp-view-dag-artifact-tooltip {
     position: absolute;

@@ -26,7 +26,7 @@
 const DAG_LAYOUT = {
     nodeWidth: 264,
     nodeHeight: 62,
-    artifactSize: 32
+    artifactSize: 40
 };
 
 // TFX Pipeline Structure with 2D Positions
@@ -44,23 +44,25 @@ const TFX_PIPELINE = {
     ],
 
     // Artifacts with absolute positions (x is left edge of 32px artifact)
+    // Types: examples (purple grid), statistics (teal bars), schema (amber shapes), document (purple doc)
     artifacts: [
-        { id: 'config', name: 'Config', icon: 'fa-file-code', type: 'config', componentId: 'Compile', x: 266, y: 125 },
-        { id: 'examples', name: 'Examples', icon: 'fa-th', type: 'dataset', componentId: 'Examples', x: 266, y: 299 },
+        { id: 'config', name: 'Config', icon: 'fa-file-alt', type: 'document', componentId: 'Compile', x: 266, y: 125 },
+        { id: 'examples', name: 'Examples', icon: 'fa-th', type: 'examples', componentId: 'Examples', x: 266, y: 299 },
         { id: 'statistics', name: 'Statistics', icon: 'fa-chart-bar', type: 'statistics', componentId: 'Stats', x: 136, y: 473 },
-        { id: 'schema', name: 'Schema', icon: 'fa-sitemap', type: 'schema', componentId: 'Schema', x: 136, y: 647 },
-        { id: 'transform_graph', name: 'Transform Graph', icon: 'fa-project-diagram', type: 'graph', componentId: 'Transform', x: 290, y: 821 },
-        { id: 'transformed_examples', name: 'Transformed Examples', icon: 'fa-database', type: 'dataset', componentId: 'Transform', x: 335, y: 821 },
-        { id: 'pre_transform_schema', name: 'Pre-Transform Schema', icon: 'fa-sitemap', type: 'schema', componentId: 'Transform', x: 380, y: 821 },
+        { id: 'schema', name: 'Schema', icon: 'fa-shapes', type: 'schema', componentId: 'Schema', x: 136, y: 647 },
+        { id: 'transform_graph', name: 'Transform Graph', icon: 'fa-file-alt', type: 'document', componentId: 'Transform', x: 290, y: 821 },
+        { id: 'transformed_examples', name: 'Transformed Examples', icon: 'fa-th', type: 'examples', componentId: 'Transform', x: 335, y: 821 },
+        { id: 'pre_transform_schema', name: 'Pre-Transform Schema', icon: 'fa-shapes', type: 'schema', componentId: 'Transform', x: 380, y: 821 },
         { id: 'pre_transform_stats', name: 'Pre-Transform Stats', icon: 'fa-chart-bar', type: 'statistics', componentId: 'Transform', x: 425, y: 821 },
-        { id: 'post_transform_schema', name: 'Post-Transform Schema', icon: 'fa-sitemap', type: 'schema', componentId: 'Transform', x: 470, y: 821 },
+        { id: 'post_transform_schema', name: 'Post-Transform Schema', icon: 'fa-shapes', type: 'schema', componentId: 'Transform', x: 470, y: 821 },
         { id: 'post_transform_stats', name: 'Post-Transform Stats', icon: 'fa-chart-bar', type: 'statistics', componentId: 'Transform', x: 515, y: 821 },
-        { id: 'post_transform_anomalies', name: 'Anomalies', icon: 'fa-exclamation-triangle', type: 'anomalies', componentId: 'Transform', x: 560, y: 821 },
-        { id: 'model', name: 'Model', icon: 'fa-cube', type: 'model', componentId: 'Train', x: 120, y: 995 },
-        { id: 'model_run', name: 'Model Run', icon: 'fa-history', type: 'model_run', componentId: 'Train', x: 165, y: 995 },
+        { id: 'post_transform_anomalies', name: 'Anomalies', icon: 'fa-file-alt', type: 'document', componentId: 'Transform', x: 560, y: 821 },
+        { id: 'updated_analyzer_cache', name: 'Analyzer Cache', icon: 'fa-database', type: 'statistics', componentId: 'Transform', x: 605, y: 821 },
+        { id: 'model', name: 'Model', icon: 'fa-lightbulb', type: 'model', componentId: 'Train', x: 120, y: 995 },
+        { id: 'model_run', name: 'Model Run', icon: 'fa-file-alt', type: 'document', componentId: 'Train', x: 165, y: 995 },
         { id: 'model_blessing', name: 'Model Blessing', icon: 'fa-certificate', type: 'blessing', componentId: 'Evaluator', x: 390, y: 1169 },
-        { id: 'evaluation', name: 'Evaluation', icon: 'fa-clipboard-check', type: 'evaluation', componentId: 'Evaluator', x: 435, y: 1169 },
-        { id: 'pushed_model', name: 'Model Endpoint', icon: 'fa-cloud', type: 'pushed_model', componentId: 'Pusher', x: 266, y: 1343 }
+        { id: 'evaluation', name: 'Evaluation', icon: 'fa-chart-bar', type: 'statistics', componentId: 'Evaluator', x: 435, y: 1169 },
+        { id: 'pushed_model', name: 'Model Endpoint', icon: 'fa-cloud', type: 'model', componentId: 'Pusher', x: 266, y: 1343 }
     ],
 
     // Edges: connections between nodes (components and artifacts)
@@ -82,6 +84,7 @@ const TFX_PIPELINE = {
         { from: 'Transform', to: 'post_transform_schema', fromType: 'component', toType: 'artifact' },
         { from: 'Transform', to: 'post_transform_stats', fromType: 'component', toType: 'artifact' },
         { from: 'Transform', to: 'post_transform_anomalies', fromType: 'component', toType: 'artifact' },
+        { from: 'Transform', to: 'updated_analyzer_cache', fromType: 'component', toType: 'artifact' },
         { from: 'transformed_examples', to: 'Train', fromType: 'artifact', toType: 'component', curve: 'down-left' },
         { from: 'transform_graph', to: 'Train', fromType: 'artifact', toType: 'component', curve: 'down-left' },
         { from: 'Train', to: 'model', fromType: 'component', toType: 'artifact' },
@@ -378,10 +381,9 @@ function renderPipelineStages(stages) {
     TFX_PIPELINE.artifacts.forEach(artifact => {
         const stage = stageMap[artifact.componentId] || { status: 'pending' };
         const artifactStatus = stage.status === 'completed' ? 'completed' : 'pending';
-        const schemaClass = artifact.type === 'schema' ? 'schema' : '';
 
         html += `
-            <div class="exp-view-dag-artifact ${artifactStatus} ${schemaClass}"
+            <div class="exp-view-dag-artifact ${artifactStatus} artifact-${artifact.type}"
                  style="left: ${artifact.x}px; top: ${artifact.y}px;"
                  data-artifact="${artifact.id}">
                 <i class="fas ${artifact.icon}"></i>

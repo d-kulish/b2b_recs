@@ -14,8 +14,9 @@
        ========================================================================= */
     .chapter-section {
         background: white;
-        border: 1px solid #e5e7eb;
+        border: 1px solid black;
         border-radius: 12px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
         padding: 24px;
         margin-bottom: 20px;
     }
@@ -2114,6 +2115,132 @@
         font-weight: normal;
     }
 
+    /* Comparison Selection List */
+    .compare-select-row {
+        display: flex;
+        align-items: center;
+        padding: 12px 16px;
+        border-bottom: 1px solid #f3f4f6;
+        cursor: pointer;
+        transition: background-color 0.15s ease;
+    }
+    .compare-select-row:last-child {
+        border-bottom: none;
+    }
+    .compare-select-row:hover {
+        background: #f9fafb;
+    }
+    .compare-select-row.selected {
+        background: #fef3c7;
+    }
+    .compare-select-row.disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+    .compare-select-checkbox {
+        width: 18px;
+        height: 18px;
+        margin-right: 12px;
+        accent-color: #f59e0b;
+        cursor: pointer;
+    }
+    .compare-select-info-col {
+        flex: 1;
+        min-width: 0;
+    }
+    .compare-select-exp-num {
+        font-weight: 600;
+        font-size: 14px;
+        color: #111827;
+    }
+    .compare-select-exp-name {
+        font-size: 13px;
+        color: #374151;
+        margin-left: 8px;
+    }
+    .compare-select-desc {
+        font-size: 12px;
+        color: #9ca3af;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        margin-top: 2px;
+    }
+    .compare-select-status {
+        font-size: 11px;
+        font-weight: 500;
+        padding: 2px 8px;
+        border-radius: 4px;
+        margin-right: 12px;
+        text-transform: capitalize;
+    }
+    .compare-select-status.completed {
+        background: #d1fae5;
+        color: #065f46;
+    }
+    .compare-select-status.failed {
+        background: #fee2e2;
+        color: #991b1b;
+    }
+    .compare-select-status.cancelled {
+        background: #e5e7eb;
+        color: #4b5563;
+    }
+    .compare-select-metric {
+        font-size: 14px;
+        font-weight: 600;
+        color: #059669;
+        min-width: 60px;
+        text-align: right;
+    }
+    .compare-select-metric.na {
+        color: #9ca3af;
+        font-weight: normal;
+    }
+
+    /* Comparison Table Enhancements */
+    .compare-section-header {
+        background: #f3f4f6 !important;
+        font-weight: 700;
+        text-transform: uppercase;
+        font-size: 11px;
+        letter-spacing: 0.05em;
+        color: #6b7280;
+    }
+    .compare-section-header td {
+        padding: 8px 12px !important;
+        background: #f3f4f6 !important;
+    }
+    .compare-indicator {
+        display: inline-block;
+        margin-left: 6px;
+        font-size: 11px;
+    }
+    .compare-indicator.identical {
+        color: #9ca3af;
+    }
+    .compare-indicator.different {
+        color: #f59e0b;
+    }
+    .compare-value-best {
+        color: #10b981;
+        font-weight: 600;
+    }
+    .compare-value-best::after {
+        content: ' ★';
+        font-size: 10px;
+    }
+    .compare-value-na {
+        color: #9ca3af;
+        font-style: italic;
+    }
+    .compare-row-identical td {
+        background: #f0fdf4 !important;
+    }
+    .compare-row-different td:not(:first-child) {
+        background: #fffbeb !important;
+    }
+
     /* Statistics Table */
     .exp-view-stats-summary {
         display: grid;
@@ -2622,10 +2749,10 @@
             </div>
             <h2 class="chapter-title">Quick Test</h2>
             <div class="ml-auto" style="display: flex; gap: 8px;">
-                <button onclick="openCompareModal()" class="btn btn-secondary btn-sm hidden" id="compareBtn" style="width: 120px;">
-                    <i class="fas fa-columns mr-1"></i>Compare (0)
+                <button onclick="openCompareSelectModal()" class="btn btn-secondary btn-sm" id="compareBtn" style="width: 150px;">
+                    <i class="fas fa-columns mr-1"></i>Compare
                 </button>
-                <button onclick="openNewExpWizard()" class="btn btn-primary btn-sm" style="width: 120px;">
+                <button onclick="openNewExpWizard()" class="btn btn-primary btn-sm" style="width: 150px;">
                     <i class="fas fa-plus mr-1"></i>New Exp
                 </button>
             </div>
@@ -3231,6 +3358,63 @@
                 </button>
                 <button type="button" class="btn-neu btn-neu-action btn-neu-cancel" onclick="closeNewExpWizard()">
                     <span class="btn-neu-inner">Cancel</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================================
+     COMPARE SELECTION MODAL (Select experiments to compare)
+     ============================================================================ -->
+<div id="compareSelectModal" class="modal-overlay hidden" onclick="closeCompareSelectModal(event)">
+    <div class="modal-container" style="max-width: 600px;" onclick="event.stopPropagation()">
+        <div class="modal-header">
+            <div class="modal-header-icon info">
+                <i class="fas fa-check-square"></i>
+            </div>
+            <h3 class="modal-header-title">Select Experiments to Compare</h3>
+            <button type="button" class="modal-close-btn" onclick="closeCompareSelectModal()">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="modal-body" style="padding: 16px 24px;">
+            <!-- Selection info -->
+            <div class="compare-select-info" style="margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center;">
+                <span class="text-sm text-gray-500">Select 2-5 experiments to compare</span>
+                <span id="compareSelectCount" class="text-sm font-medium" style="color: #f59e0b;">0 selected</span>
+            </div>
+
+            <!-- Loading State -->
+            <div id="compareSelectLoading" class="exp-view-loading">
+                <i class="fas fa-spinner fa-spin"></i>
+                <span>Loading experiments...</span>
+            </div>
+
+            <!-- Empty State -->
+            <div id="compareSelectEmpty" class="chapter-empty-state hidden" style="padding: 32px;">
+                <i class="fas fa-flask chapter-empty-icon"></i>
+                <p class="chapter-empty-text">No experiments available for comparison</p>
+                <p class="text-sm text-gray-400 mt-2">Run some experiments first, then come back to compare them.</p>
+            </div>
+
+            <!-- Experiment List -->
+            <div id="compareSelectList" class="compare-select-list hidden" style="max-height: 400px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 8px;">
+                <!-- Rows added dynamically -->
+            </div>
+        </div>
+        <div class="modal-footer-wizard-neu">
+            <div class="footer-left">
+                <button type="button" class="btn-neu btn-neu-action btn-neu-secondary" onclick="clearCompareSelection()" style="font-size: 12px;">
+                    <span class="btn-neu-inner">Clear All</span>
+                </button>
+            </div>
+            <div class="footer-right">
+                <button type="button" class="btn-neu btn-neu-action btn-neu-cancel" onclick="closeCompareSelectModal()">
+                    <span class="btn-neu-inner">Cancel</span>
+                </button>
+                <button type="button" id="compareSelectBtn" class="btn-neu btn-neu-action btn-neu-primary" onclick="proceedToCompare()" disabled>
+                    <span class="btn-neu-inner">Compare (0)</span>
                 </button>
             </div>
         </div>
@@ -4180,23 +4364,11 @@ function renderExpCard(exp) {
     const viewBtn = `<button class="card-action-btn view" onclick="viewExpFromCard(event, ${exp.id})">View</button>`;
     const cancelBtn = `<button class="card-action-btn cancel" onclick="cancelExpFromCard(event, ${exp.id})" ${isRunning ? '' : 'disabled'}>Cancel</button>`;
 
-    // Compare checkbox - only for completed experiments
-    const canCompare = exp.status === 'completed';
-    const isSelected = selectedExperimentIds && selectedExperimentIds.has(exp.id);
-    const compareCheckbox = canCompare ? `
-        <label class="exp-compare-label" onclick="event.stopPropagation();" title="Select for comparison">
-            <input type="checkbox" class="exp-compare-checkbox"
-                   onchange="toggleExperimentSelection(${exp.id})"
-                   ${isSelected ? 'checked' : ''}>
-        </label>
-    ` : '';
-
     return `
         <div class="exp-card-new" onclick="openExpDetails(${exp.id})" data-exp-id="${exp.id}">
             <div class="exp-card-columns">
                 <!-- Column 1: Experiment Info (30%) -->
                 <div class="exp-card-col-info">
-                    ${compareCheckbox}
                     <div class="exp-card-status ${statusClass}">
                         <i class="fas ${icon}"></i>
                     </div>
@@ -6750,34 +6922,185 @@ function cancelExpFromCard(event, expId) {
 }
 
 // =============================================================================
-// COMPARE MODAL (Experiment Comparison)
+// COMPARE SELECTION MODAL (Select experiments to compare)
 // =============================================================================
-let selectedExperimentIds = new Set();
+let compareSelectIds = new Set();
+let selectableExperiments = [];
 
-function toggleExperimentSelection(expId) {
-    if (selectedExperimentIds.has(expId)) {
-        selectedExperimentIds.delete(expId);
-    } else if (selectedExperimentIds.size < 5) {
-        selectedExperimentIds.add(expId);
+async function openCompareSelectModal() {
+    const modal = document.getElementById('compareSelectModal');
+    const loadingEl = document.getElementById('compareSelectLoading');
+    const emptyEl = document.getElementById('compareSelectEmpty');
+    const listEl = document.getElementById('compareSelectList');
+
+    // Reset selection
+    compareSelectIds.clear();
+    updateCompareSelectUI();
+
+    // Show modal with loading state
+    modal.classList.remove('hidden');
+    loadingEl.classList.remove('hidden');
+    emptyEl.classList.add('hidden');
+    listEl.classList.add('hidden');
+
+    try {
+        const response = await fetch('/api/experiments/selectable/');
+        const data = await response.json();
+
+        loadingEl.classList.add('hidden');
+
+        if (!data.success) {
+            showError(data.error || 'Failed to load experiments');
+            emptyEl.classList.remove('hidden');
+            return;
+        }
+
+        selectableExperiments = data.experiments || [];
+
+        if (selectableExperiments.length === 0) {
+            emptyEl.classList.remove('hidden');
+            return;
+        }
+
+        // Render experiment list
+        renderSelectableExperiments();
+        listEl.classList.remove('hidden');
+
+    } catch (error) {
+        console.error('Error loading selectable experiments:', error);
+        loadingEl.classList.add('hidden');
+        emptyEl.classList.remove('hidden');
+        showError('Error loading experiments');
+    }
+}
+
+function closeCompareSelectModal(event) {
+    if (event && event.target !== event.currentTarget) return;
+    document.getElementById('compareSelectModal').classList.add('hidden');
+}
+
+function renderSelectableExperiments() {
+    const listEl = document.getElementById('compareSelectList');
+    listEl.innerHTML = '';
+
+    selectableExperiments.forEach(exp => {
+        const row = document.createElement('div');
+        row.className = 'compare-select-row';
+        row.dataset.expId = exp.id;
+        row.onclick = () => toggleCompareSelect(exp.id);
+
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.className = 'compare-select-checkbox';
+        checkbox.checked = compareSelectIds.has(exp.id);
+        checkbox.onclick = (e) => e.stopPropagation();
+        checkbox.onchange = () => toggleCompareSelect(exp.id);
+
+        const infoCol = document.createElement('div');
+        infoCol.className = 'compare-select-info-col';
+
+        const topLine = document.createElement('div');
+        const expNum = document.createElement('span');
+        expNum.className = 'compare-select-exp-num';
+        expNum.textContent = exp.display_name || `Exp #${exp.experiment_number}`;
+        topLine.appendChild(expNum);
+
+        if (exp.experiment_name) {
+            const expName = document.createElement('span');
+            expName.className = 'compare-select-exp-name';
+            expName.textContent = '• ' + exp.experiment_name;
+            topLine.appendChild(expName);
+        }
+
+        infoCol.appendChild(topLine);
+
+        if (exp.experiment_description_short) {
+            const desc = document.createElement('div');
+            desc.className = 'compare-select-desc';
+            desc.textContent = exp.experiment_description_short;
+            infoCol.appendChild(desc);
+        }
+
+        const status = document.createElement('span');
+        status.className = `compare-select-status ${exp.status}`;
+        status.textContent = exp.status;
+
+        const metric = document.createElement('span');
+        metric.className = 'compare-select-metric';
+        if (exp.recall_at_100 !== null && exp.recall_at_100 !== undefined) {
+            metric.textContent = (exp.recall_at_100 * 100).toFixed(1) + '%';
+        } else {
+            metric.textContent = '—';
+            metric.classList.add('na');
+        }
+
+        row.appendChild(checkbox);
+        row.appendChild(infoCol);
+        row.appendChild(status);
+        row.appendChild(metric);
+
+        listEl.appendChild(row);
+    });
+}
+
+function toggleCompareSelect(expId) {
+    if (compareSelectIds.has(expId)) {
+        compareSelectIds.delete(expId);
+    } else if (compareSelectIds.size < 5) {
+        compareSelectIds.add(expId);
     } else {
         showError('Maximum 5 experiments can be compared');
         return;
     }
-    updateCompareButton();
+    updateCompareSelectUI();
 }
 
-function updateCompareButton() {
-    const compareBtn = document.getElementById('compareBtn');
-    if (compareBtn) {
-        const count = selectedExperimentIds.size;
-        if (count >= 2) {
-            compareBtn.classList.remove('hidden');
-            compareBtn.innerHTML = `<i class="fas fa-columns mr-1"></i>Compare (${count})`;
-        } else {
-            compareBtn.classList.add('hidden');
-        }
-    }
+function updateCompareSelectUI() {
+    const count = compareSelectIds.size;
+
+    // Update count display
+    const countEl = document.getElementById('compareSelectCount');
+    countEl.textContent = `${count} selected`;
+    countEl.style.color = count >= 2 ? '#10b981' : '#f59e0b';
+
+    // Update button state
+    const btn = document.getElementById('compareSelectBtn');
+    btn.disabled = count < 2;
+    btn.querySelector('.btn-neu-inner').textContent = `Compare (${count})`;
+
+    // Update row highlighting and checkboxes
+    document.querySelectorAll('.compare-select-row').forEach(row => {
+        const expId = parseInt(row.dataset.expId);
+        const isSelected = compareSelectIds.has(expId);
+        row.classList.toggle('selected', isSelected);
+        const checkbox = row.querySelector('.compare-select-checkbox');
+        if (checkbox) checkbox.checked = isSelected;
+
+        // Disable row if at limit and not selected
+        const atLimit = compareSelectIds.size >= 5 && !isSelected;
+        row.classList.toggle('disabled', atLimit);
+    });
 }
+
+function clearCompareSelection() {
+    compareSelectIds.clear();
+    updateCompareSelectUI();
+}
+
+async function proceedToCompare() {
+    if (compareSelectIds.size < 2) {
+        showError('Select at least 2 experiments to compare');
+        return;
+    }
+
+    // Close selection modal and open comparison modal
+    closeCompareSelectModal();
+    await openCompareModal();
+}
+
+// =============================================================================
+// COMPARE MODAL (Experiment Comparison Results)
+// =============================================================================
 
 async function openCompareModal() {
     const modal = document.getElementById('compareModal');
@@ -6787,17 +7110,7 @@ async function openCompareModal() {
     const countEl = document.getElementById('compareSelectedCount');
 
     modal.classList.remove('hidden');
-
-    // Update count
-    countEl.textContent = `${selectedExperimentIds.size} experiments selected`;
-
-    // Check if we have enough experiments
-    if (selectedExperimentIds.size < 2) {
-        loadingEl.classList.add('hidden');
-        contentEl.classList.add('hidden');
-        emptyEl.classList.remove('hidden');
-        return;
-    }
+    countEl.textContent = `${compareSelectIds.size} experiments selected`;
 
     // Show loading
     emptyEl.classList.add('hidden');
@@ -6812,7 +7125,7 @@ async function openCompareModal() {
                 'X-CSRFToken': getCookie('csrftoken')
             },
             body: JSON.stringify({
-                quick_test_ids: Array.from(selectedExperimentIds)
+                quick_test_ids: Array.from(compareSelectIds)
             })
         });
 
@@ -6825,7 +7138,7 @@ async function openCompareModal() {
             return;
         }
 
-        // Render comparison tables
+        // Render comparison tables with new grouped structure
         renderComparisonTables(data.comparison);
         contentEl.classList.remove('hidden');
 
@@ -6843,215 +7156,254 @@ function closeCompareModal(event) {
 }
 
 function renderComparisonTables(comparison) {
-    const quickTests = comparison.quick_tests || [];
+    const experiments = comparison.experiments || [];
+    if (experiments.length === 0) return;
 
-    if (quickTests.length === 0) return;
-
-    // Render headers for all tables
-    renderCompareHeaders(quickTests);
-
-    // Render metrics table
-    renderMetricsTable(quickTests);
-
-    // Render params table
-    renderParamsTable(quickTests);
-
-    // Render config table
-    renderConfigTable(quickTests);
+    // Clear and render all three tables with new grouped data
+    renderCompareHeaders(experiments);
+    renderGroupedMetricsTable(experiments);
+    renderGroupedParamsTable(experiments);
+    renderGroupedConfigTable(experiments);
 }
 
-function renderCompareHeaders(quickTests) {
+function renderCompareHeaders(experiments) {
     const tables = ['compareMetricsHeader', 'compareParamsHeader', 'compareConfigHeader'];
 
     tables.forEach(tableId => {
         const headerRow = document.getElementById(tableId);
-        // Clear existing headers (except first)
         while (headerRow.children.length > 1) {
             headerRow.removeChild(headerRow.lastChild);
         }
 
-        // Add experiment headers
-        quickTests.forEach(qt => {
+        experiments.forEach(exp => {
             const th = document.createElement('th');
             th.className = 'compare-exp-header';
             th.innerHTML = `
-                <div class="compare-exp-name">${qt.display_name}</div>
-                <div class="compare-exp-subtext">${qt.feature_config || ''}</div>
+                <div class="compare-exp-name">${exp.display_name}</div>
+                <div class="compare-exp-subtext">${exp.feature_config?.name || ''}</div>
             `;
             headerRow.appendChild(th);
         });
     });
 }
 
-function renderMetricsTable(quickTests) {
+function renderGroupedMetricsTable(experiments) {
     const tbody = document.getElementById('compareMetricsBody');
     tbody.innerHTML = '';
 
-    const metricLabels = {
-        'recall_at_100': 'Recall@100',
-        'recall_at_50': 'Recall@50',
-        'recall_at_10': 'Recall@10',
-        'loss': 'Loss'
-    };
+    // Results section
+    addSectionHeader(tbody, 'Results', experiments.length);
 
-    Object.entries(metricLabels).forEach(([key, label]) => {
-        const values = quickTests.map(qt => qt.metrics?.[key]);
-        const hasData = values.some(v => v !== null && v !== undefined);
+    const resultRows = [
+        { key: 'recall_at_100', label: 'Recall@100', getter: exp => exp.results?.recall_at_100, format: v => (v * 100).toFixed(2) + '%', higherBetter: true },
+        { key: 'recall_at_50', label: 'Recall@50', getter: exp => exp.results?.recall_at_50, format: v => (v * 100).toFixed(2) + '%', higherBetter: true },
+        { key: 'recall_at_10', label: 'Recall@10', getter: exp => exp.results?.recall_at_10, format: v => (v * 100).toFixed(2) + '%', higherBetter: true },
+        { key: 'loss', label: 'Loss', getter: exp => exp.results?.loss, format: v => v.toFixed(4), higherBetter: false },
+        { key: 'duration', label: 'Duration', getter: exp => exp.results?.duration_seconds, format: v => formatDuration(v), higherBetter: false },
+    ];
 
-        if (!hasData) return;
-
-        const row = document.createElement('tr');
-
-        // Metric name cell
-        const nameCell = document.createElement('td');
-        nameCell.textContent = label;
-        row.appendChild(nameCell);
-
-        // Find best/worst for highlighting
-        const numericValues = values.filter(v => v !== null && v !== undefined);
-        const isBetterHigher = key !== 'loss';
-        const bestValue = isBetterHigher ? Math.max(...numericValues) : Math.min(...numericValues);
-
-        // Value cells
-        values.forEach(val => {
-            const cell = document.createElement('td');
-            cell.style.textAlign = 'center';
-
-            if (val === null || val === undefined) {
-                cell.textContent = '-';
-                cell.style.color = '#9ca3af';
-            } else {
-                const formatted = key === 'loss' ? val.toFixed(4) : (val * 100).toFixed(2) + '%';
-                cell.textContent = formatted;
-
-                if (val === bestValue && numericValues.length > 1) {
-                    cell.className = 'compare-value-best';
-                }
-            }
-
-            row.appendChild(cell);
-        });
-
-        tbody.appendChild(row);
+    resultRows.forEach(rowDef => {
+        const values = experiments.map(rowDef.getter);
+        if (!values.some(v => v !== null && v !== undefined)) return;
+        addCompareRow(tbody, rowDef.label, experiments, rowDef.getter, rowDef.format, rowDef.higherBetter);
     });
+
+    // Status row
+    addCompareRow(tbody, 'Status', experiments, exp => exp.status, v => v, null, true);
 }
 
-function renderParamsTable(quickTests) {
+function renderGroupedParamsTable(experiments) {
     const tbody = document.getElementById('compareParamsBody');
     tbody.innerHTML = '';
 
-    const paramLabels = {
-        'epochs': 'Epochs',
-        'batch_size': 'Batch Size',
-        'learning_rate': 'Learning Rate',
-        'data_sample_percent': 'Data Sample %'
-    };
+    // Training Parameters section
+    addSectionHeader(tbody, 'Training Parameters', experiments.length);
 
-    Object.entries(paramLabels).forEach(([key, label]) => {
-        const row = document.createElement('tr');
+    const trainingRows = [
+        { label: 'Epochs', getter: exp => exp.training?.epochs },
+        { label: 'Batch Size', getter: exp => exp.training?.batch_size },
+        { label: 'Learning Rate', getter: exp => exp.training?.learning_rate, format: v => v?.toExponential ? v.toExponential(2) : v },
+        { label: 'Machine Type', getter: exp => exp.training?.machine_type },
+    ];
 
-        const nameCell = document.createElement('td');
-        nameCell.textContent = label;
-        row.appendChild(nameCell);
+    trainingRows.forEach(rowDef => {
+        addCompareRow(tbody, rowDef.label, experiments, rowDef.getter, rowDef.format);
+    });
 
-        quickTests.forEach(qt => {
-            const cell = document.createElement('td');
-            cell.style.textAlign = 'center';
-            const val = qt.params?.[key];
-            cell.textContent = val !== null && val !== undefined ? val : '-';
-            row.appendChild(cell);
-        });
+    // Sampling section
+    addSectionHeader(tbody, 'Sampling', experiments.length);
 
-        tbody.appendChild(row);
+    const samplingRows = [
+        { label: 'Sample %', getter: exp => exp.sampling?.data_sample_percent, format: v => v + '%' },
+        { label: 'Split Strategy', getter: exp => exp.sampling?.split_strategy, format: v => v?.replace('_', ' ') },
+        { label: 'Holdout Days', getter: exp => exp.sampling?.holdout_days },
+        { label: 'Date Column', getter: exp => exp.sampling?.date_column },
+    ];
+
+    samplingRows.forEach(rowDef => {
+        addCompareRow(tbody, rowDef.label, experiments, rowDef.getter, rowDef.format);
     });
 }
 
-function renderConfigTable(quickTests) {
+function renderGroupedConfigTable(experiments) {
     const tbody = document.getElementById('compareConfigBody');
     tbody.innerHTML = '';
 
-    const configItems = [
-        { key: 'feature_config', label: 'Feature Config' },
-        { key: 'model_config', label: 'Model Config' },
-        { key: 'dataset', label: 'Dataset' }
+    // Dataset section
+    addSectionHeader(tbody, 'Dataset', experiments.length);
+
+    const datasetRows = [
+        { label: 'Name', getter: exp => exp.dataset?.name },
+        { label: 'Rows', getter: exp => exp.dataset?.row_count, format: v => v?.toLocaleString() },
+        { label: 'Unique Users', getter: exp => exp.dataset?.unique_users, format: v => v?.toLocaleString() },
+        { label: 'Unique Products', getter: exp => exp.dataset?.unique_products, format: v => v?.toLocaleString() },
     ];
 
-    // Add split_strategy from params
-    const splitRow = document.createElement('tr');
-    const splitNameCell = document.createElement('td');
-    splitNameCell.textContent = 'Split Strategy';
-    splitRow.appendChild(splitNameCell);
-
-    quickTests.forEach(qt => {
-        const cell = document.createElement('td');
-        cell.style.textAlign = 'center';
-        const strategy = qt.params?.split_strategy || '-';
-        cell.textContent = strategy.replace('_', ' ');
-        splitRow.appendChild(cell);
+    datasetRows.forEach(rowDef => {
+        addCompareRow(tbody, rowDef.label, experiments, rowDef.getter, rowDef.format);
     });
-    tbody.appendChild(splitRow);
 
-    // Add machine type from params
-    const machineRow = document.createElement('tr');
-    const machineNameCell = document.createElement('td');
-    machineNameCell.textContent = 'Machine Type';
-    machineRow.appendChild(machineNameCell);
+    // Feature Config section
+    addSectionHeader(tbody, 'Feature Config', experiments.length);
 
-    quickTests.forEach(qt => {
-        const cell = document.createElement('td');
-        cell.style.textAlign = 'center';
-        cell.textContent = qt.params?.machine_type || '-';
-        machineRow.appendChild(cell);
+    const featureRows = [
+        { label: 'Name', getter: exp => exp.feature_config?.name },
+        { label: 'Version', getter: exp => exp.feature_config?.version },
+        { label: 'Buyer Features', getter: exp => exp.feature_config?.buyer_features || `${exp.feature_config?.buyer_features_count || 0} features` },
+        { label: 'Buyer Tensor Dim', getter: exp => exp.feature_config?.buyer_tensor_dim },
+        { label: 'Buyer Crosses', getter: exp => exp.feature_config?.buyer_crosses || '—' },
+        { label: 'Product Features', getter: exp => exp.feature_config?.product_features || `${exp.feature_config?.product_features_count || 0} features` },
+        { label: 'Product Tensor Dim', getter: exp => exp.feature_config?.product_tensor_dim },
+        { label: 'Product Crosses', getter: exp => exp.feature_config?.product_crosses || '—' },
+    ];
+
+    featureRows.forEach(rowDef => {
+        addCompareRow(tbody, rowDef.label, experiments, rowDef.getter, rowDef.format);
     });
-    tbody.appendChild(machineRow);
 
-    // Add status
-    const statusRow = document.createElement('tr');
-    const statusNameCell = document.createElement('td');
-    statusNameCell.textContent = 'Status';
-    statusRow.appendChild(statusNameCell);
+    // Model Config section
+    addSectionHeader(tbody, 'Model Config', experiments.length);
 
-    quickTests.forEach(qt => {
-        const cell = document.createElement('td');
-        cell.style.textAlign = 'center';
-        cell.textContent = qt.status || '-';
-        if (qt.status === 'completed') {
-            cell.style.color = '#10b981';
-        } else if (qt.status === 'failed') {
-            cell.style.color = '#ef4444';
+    const modelRows = [
+        { label: 'Name', getter: exp => exp.model_config?.name },
+        { label: 'Type', getter: exp => exp.model_config?.model_type },
+        { label: 'Optimizer', getter: exp => exp.model_config?.optimizer },
+        { label: 'Output Embedding', getter: exp => exp.model_config?.output_embedding_dim },
+        { label: 'Tower Layers', getter: exp => exp.model_config?.tower_layers || '—' },
+    ];
+
+    modelRows.forEach(rowDef => {
+        addCompareRow(tbody, rowDef.label, experiments, rowDef.getter, rowDef.format);
+    });
+}
+
+function addSectionHeader(tbody, title, colSpan) {
+    const row = document.createElement('tr');
+    row.className = 'compare-section-header';
+    const cell = document.createElement('td');
+    cell.colSpan = colSpan + 1;
+    cell.textContent = title;
+    row.appendChild(cell);
+    tbody.appendChild(row);
+}
+
+function addCompareRow(tbody, label, experiments, getter, format, higherBetter = null, isStatus = false) {
+    const row = document.createElement('tr');
+    const values = experiments.map(getter);
+
+    // Check if all values are identical
+    const validValues = values.filter(v => v !== null && v !== undefined && v !== '' && v !== '—');
+    const allIdentical = validValues.length > 1 && validValues.every(v => String(v) === String(validValues[0]));
+    const hasDifferences = validValues.length > 1 && !allIdentical;
+
+    // Apply row class based on identical/different
+    if (allIdentical) {
+        row.className = 'compare-row-identical';
+    } else if (hasDifferences) {
+        row.className = 'compare-row-different';
+    }
+
+    // Label cell with indicator
+    const nameCell = document.createElement('td');
+    nameCell.textContent = label;
+    if (allIdentical && validValues.length > 0) {
+        const indicator = document.createElement('span');
+        indicator.className = 'compare-indicator identical';
+        indicator.textContent = ' ≡';
+        indicator.title = 'Identical across all experiments';
+        nameCell.appendChild(indicator);
+    } else if (hasDifferences) {
+        const indicator = document.createElement('span');
+        indicator.className = 'compare-indicator different';
+        indicator.textContent = ' ≠';
+        indicator.title = 'Values differ between experiments';
+        nameCell.appendChild(indicator);
+    }
+    row.appendChild(nameCell);
+
+    // Find best value for metrics
+    let bestValue = null;
+    if (higherBetter !== null && validValues.length > 1) {
+        const numericValues = validValues.filter(v => typeof v === 'number');
+        if (numericValues.length > 1) {
+            bestValue = higherBetter ? Math.max(...numericValues) : Math.min(...numericValues);
         }
-        statusRow.appendChild(cell);
-    });
-    tbody.appendChild(statusRow);
+    }
 
-    // Add MLflow link row
-    const mlflowRow = document.createElement('tr');
-    const mlflowNameCell = document.createElement('td');
-    mlflowNameCell.textContent = 'MLflow Run';
-    mlflowRow.appendChild(mlflowNameCell);
-
-    quickTests.forEach(qt => {
+    // Value cells
+    values.forEach(val => {
         const cell = document.createElement('td');
         cell.style.textAlign = 'center';
-        if (qt.mlflow_run_id) {
-            cell.innerHTML = `<span class="text-green-600" title="${qt.mlflow_run_id}">&#10003; Tracked</span>`;
+
+        if (val === null || val === undefined || val === '') {
+            cell.textContent = '—';
+            cell.className = 'compare-value-na';
         } else {
-            cell.textContent = '-';
-            cell.style.color = '#9ca3af';
+            const formatted = format ? format(val) : val;
+            cell.textContent = formatted;
+
+            // Apply best value highlighting
+            if (bestValue !== null && val === bestValue) {
+                cell.className = 'compare-value-best';
+            }
+
+            // Status-specific coloring
+            if (isStatus) {
+                if (val === 'completed') {
+                    cell.style.color = '#10b981';
+                } else if (val === 'failed') {
+                    cell.style.color = '#ef4444';
+                } else if (val === 'cancelled') {
+                    cell.style.color = '#6b7280';
+                }
+            }
         }
-        cell.appendChild(document.createTextNode(''));
-        mlflowRow.appendChild(cell);
+
+        row.appendChild(cell);
     });
-    tbody.appendChild(mlflowRow);
+
+    tbody.appendChild(row);
+}
+
+// Keep the old variable for backwards compatibility with card checkboxes
+// (will be removed when we clean up the card checkboxes)
+let selectedExperimentIds = new Set();
+
+function toggleExperimentSelection(expId) {
+    // Deprecated: kept for backwards compatibility
+    if (selectedExperimentIds.has(expId)) {
+        selectedExperimentIds.delete(expId);
+    } else if (selectedExperimentIds.size < 5) {
+        selectedExperimentIds.add(expId);
+    }
+}
+
+function updateCompareButton() {
+    // No-op: Compare button is now always visible
 }
 
 function clearExperimentSelection() {
     selectedExperimentIds.clear();
-    updateCompareButton();
-    // Update UI checkboxes if they exist
-    document.querySelectorAll('.exp-compare-checkbox').forEach(cb => {
-        cb.checked = false;
-    });
 }
 
 // =============================================================================

@@ -80,6 +80,11 @@ urlpatterns = [
 
     # MLflow Comparison and Leaderboard
     path(
+        'api/experiments/selectable/',
+        api.selectable_experiments,
+        name='selectable_experiments'
+    ),
+    path(
         'api/experiments/compare/',
         api.compare_experiments,
         name='compare_experiments'

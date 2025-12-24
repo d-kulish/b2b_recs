@@ -474,6 +474,55 @@ class ArtifactService:
         return response.get('schema', {})
 
     # =========================================================================
+    # MLflow Status (Diagnostic Artifact)
+    # =========================================================================
+
+    def get_mlflow_status(self, quick_test) -> Optional[Dict]:
+        """
+        Get MLflow initialization status from GCS diagnostic artifact.
+
+        The trainer writes mlflow_status.json at various stages of initialization.
+        This helps diagnose why MLflow tracking may have failed.
+
+        Args:
+            quick_test: QuickTest instance
+
+        Returns:
+            Dict with status info or None if not available:
+            {
+                "status": "ready" | "failed" | "waiting" | etc,
+                "timestamp": "...",
+                "tracking_uri": "...",
+                "stage": "...",
+                "error": "..." (if failed),
+                ...
+            }
+        """
+        if not quick_test.gcs_artifacts_path:
+            return None
+
+        try:
+            gcs_path = quick_test.gcs_artifacts_path
+            if not gcs_path.startswith('gs://'):
+                return None
+
+            path = gcs_path[5:]  # Remove 'gs://'
+            bucket_name = path.split('/')[0]
+            blob_path = '/'.join(path.split('/')[1:]) + '/mlflow_status.json'
+
+            bucket = self.storage_client.bucket(bucket_name)
+            blob = bucket.blob(blob_path)
+
+            if blob.exists():
+                content = blob.download_as_string().decode('utf-8')
+                return json.loads(content)
+
+        except Exception as e:
+            logger.debug(f"Could not read mlflow_status.json: {e}")
+
+        return None
+
+    # =========================================================================
     # Training History (MLflow Integration)
     # =========================================================================
 
@@ -511,7 +560,11 @@ class ArtifactService:
         # Check if MLflow run ID is available
         if not quick_test.mlflow_run_id:
             logger.info(f"No MLflow run ID for {quick_test.display_name} (id={quick_test.id})")
-            return {
+
+            # Try to get diagnostic info from mlflow_status.json
+            mlflow_status = self.get_mlflow_status(quick_test)
+
+            response = {
                 'available': False,
                 'message': 'No MLflow tracking data available for this experiment',
                 'final_metrics': {
@@ -521,6 +574,22 @@ class ArtifactService:
                     'recall_at_100': quick_test.recall_at_100,
                 }
             }
+
+            # Include diagnostic info if available
+            if mlflow_status:
+                response['mlflow_status'] = mlflow_status
+                if mlflow_status.get('status') == 'failed':
+                    response['message'] = (
+                        f"MLflow initialization failed at stage '{mlflow_status.get('stage', 'unknown')}': "
+                        f"{mlflow_status.get('error', 'Unknown error')}"
+                    )
+                elif mlflow_status.get('status') == 'waiting':
+                    response['message'] = (
+                        f"MLflow was waiting for server at stage '{mlflow_status.get('stage', 'unknown')}'. "
+                        "Training may have timed out waiting for cold start."
+                    )
+
+            return response
 
         # Fetch training history from MLflow
         try:

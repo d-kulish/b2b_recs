@@ -5,7 +5,7 @@ This document provides **high-level specifications** for the Experiments domain.
 
 👉 **[phase_experiments_implementation.md](phase_experiments_implementation.md)** - Complete implementation guide with code examples
 
-**Last Updated**: 2025-12-23
+**Last Updated**: 2025-12-24
 
 ---
 
@@ -37,6 +37,132 @@ This document provides **high-level specifications** for the Experiments domain.
 
 ## Recent Updates (December 2025)
 
+### Compare Feature Redesign (2025-12-24)
+
+**Major Enhancement:** Redesigned experiment comparison with two-step modal flow and comprehensive grouped comparison tables.
+
+#### The Problem
+
+The old compare feature had several UX issues:
+1. Compare button was hidden until experiments were checkbox-selected from cards
+2. Users couldn't see all available experiments at once
+3. Comparison table lacked detail (no feature lists, no dataset info, no visual indicators)
+
+#### The Solution
+
+**1. Always-Visible Compare Button**
+- Compare button in Quick Test chapter header is now always visible
+- Clicking opens the Selection Modal (instead of requiring pre-selection)
+
+**2. Selection Modal**
+```
+┌─────────────────────────────────────────────────────────┐
+│ Select Experiments to Compare                      [X]  │
+├─────────────────────────────────────────────────────────┤
+│  Select 2-5 experiments                    3 selected   │
+│  ┌─────────────────────────────────────────────────────┐│
+│  │ ☑ Exp #12 • Testing Q4 feat...  completed   47.3%  ││
+│  │ ☑ Exp #11 • Baseline with...    completed   45.1%  ││
+│  │ ☑ Exp #9  • Failed debug        failed      —      ││
+│  │ ☐ Exp #8  • Another test        completed   43.2%  ││
+│  └─────────────────────────────────────────────────────┘│
+│  [Clear All]                    [Cancel]  [Compare (3)] │
+└─────────────────────────────────────────────────────────┘
+```
+
+- Scrollable list of all experiments (completed, failed, cancelled)
+- Each row shows: experiment number, name, description (30 chars), status badge, Recall@100
+- Checkbox selection with 5-experiment limit
+- Selected rows get yellow highlight
+- Rows disabled (greyed out) when 5 already selected
+
+**3. Enhanced Comparison Modal**
+```
+│ DATASET                                                 │
+│ Name              │ Q4 Data    ≡ │ Q4 Data      │ Q4 Data    │
+│ Rows              │ 1.2M       ≡ │ 1.2M         │ 1.2M       │
+│ FEATURE CONFIG                                          │
+│ Name              │ Q4 v2      ≠ │ Q3 v1        │ Q3 v1      │
+│ Buyer Features    │ user_id(64d) │ user_id(32d) │ user_id(32d)│
+│ RESULTS                                                 │
+│ Recall@100        │ 47.3% ★     │ 45.1%        │ —          │
+```
+
+- **Grouped sections**: Results, Training Parameters, Sampling, Dataset, Feature Config, Model Config
+- **Row indicators**: ≡ (identical values across all), ≠ (values differ)
+- **Best value highlighting**: ★ with green color for best metrics
+- **Feature lists**: Shows actual features like "user_id(64d), city(16d)" instead of just counts
+- **Cross features**: Formatted as "user_id×city(16d)"
+- **Tower layers**: Formatted as "256→128→64"
+
+#### New API Endpoint
+
+**GET /api/experiments/selectable/**
+
+Returns experiments available for comparison (excludes running/submitting/pending):
+
+```json
+{
+  "success": true,
+  "experiments": [
+    {
+      "id": 123,
+      "experiment_number": 45,
+      "display_name": "Exp #45",
+      "experiment_name": "Testing Q4 features",
+      "experiment_description_short": "First 30 chars of desc...",
+      "status": "completed",
+      "recall_at_100": 0.473,
+      "feature_config_name": "Q4 v2",
+      "model_config_name": "Standard",
+      "created_at": "2024-12-23T10:30:00Z"
+    }
+  ],
+  "count": 25
+}
+```
+
+#### Enhanced Compare Response
+
+**POST /api/experiments/compare/** now returns comprehensive data:
+
+```json
+{
+  "success": true,
+  "comparison": {
+    "experiments": [
+      {
+        "id": 123,
+        "display_name": "Exp #45",
+        "status": "completed",
+        "dataset": { "name": "Q4 Data", "row_count": 1200000, ... },
+        "feature_config": {
+          "name": "Q4 v2",
+          "buyer_features": "user_id(64d), city(16d)",
+          "buyer_tensor_dim": 128,
+          "buyer_crosses": "user_id×city(16d)",
+          ...
+        },
+        "model_config": { "name": "Standard", "tower_layers": "256→128→64", ... },
+        "sampling": { "data_sample_percent": 25, "split_strategy": "random", ... },
+        "training": { "epochs": 10, "batch_size": 4096, ... },
+        "results": { "recall_at_100": 0.473, "loss": 0.034, ... }
+      }
+    ]
+  }
+}
+```
+
+#### Files Modified
+
+| File | Change |
+|------|--------|
+| `ml_platform/experiments/api.py` | Added `selectable_experiments()`, enhanced `compare_experiments()`, added helper functions `_format_feature_list()`, `_format_crosses_list()`, `_format_tower_layers()` |
+| `ml_platform/experiments/urls.py` | Added route for `/api/experiments/selectable/` |
+| `templates/ml_platform/model_experiments.html` | New Selection Modal HTML, new CSS styles, new JavaScript functions, removed card checkboxes, Compare button always visible |
+
+---
+
 ### Experiments Dashboard Chapter - MLflow Integration (2025-12-23)
 
 **Major Feature:** Added complete Experiments Dashboard chapter to `model_experiments.html` for MLflow-based experiment analysis.
@@ -47,10 +173,17 @@ This document provides **high-level specifications** for the Experiments domain.
    - Leaderboard Table: Sortable by metric, clickable rows open View modal
    - Configuration Heatmap: Chart.js grouped bar chart showing metrics by config combinations
 
-2. **Compare Modal** (in Quick Test chapter)
-   - Select 2-5 experiments via checkboxes
-   - Side-by-side comparison table with metrics and params
-   - Best values highlighted
+2. **Compare Feature** (in Quick Test chapter) - **Redesigned 2025-12-24**
+   - **Always-visible Compare button** (no longer hidden until selection)
+   - **Two-step modal flow**: Selection Modal → Comparison Modal
+   - **Selection Modal**: Scrollable list of all experiments (completed/failed/cancelled)
+     - Shows: Exp #, name, description (30 chars), status badge, Recall@100
+     - Select 2-5 experiments via checkboxes
+     - "Clear All" and "Compare (N)" buttons
+   - **Comparison Modal**: Grouped comparison table with visual indicators
+     - Sections: Results, Training Parameters, Sampling, Dataset, Feature Config, Model Config
+     - Row indicators: ≡ (identical across all), ≠ (values differ)
+     - Best metrics highlighted with ★ (green)
 
 3. **Training Tab** (in View modal)
    - Per-epoch loss charts (training + validation)
@@ -63,7 +196,8 @@ This document provides **high-level specifications** for the Experiments domain.
 | `/api/experiments/dashboard-stats/` | GET | Summary statistics |
 | `/api/experiments/heatmap/?metric=recall_at_100` | GET | Config combination matrix |
 | `/api/experiments/leaderboard/?metric=recall_at_100` | GET | Ranked experiments |
-| `/api/experiments/compare/` | POST | Multi-experiment comparison |
+| `/api/experiments/selectable/` | GET | List experiments for comparison selection (2025-12-24) |
+| `/api/experiments/compare/` | POST | Multi-experiment comparison (enhanced 2025-12-24) |
 | `/api/quick-tests/<id>/training-history/` | GET | Per-epoch MLflow metrics |
 
 **Files Modified:**
@@ -72,6 +206,200 @@ This document provides **high-level specifications** for the Experiments domain.
 - `ml_platform/experiments/urls.py` - Added URL routes
 
 **See:** [`phase_mlflow_integration.md`](phase_mlflow_integration.md) for full MLflow integration details.
+
+### MLflow Trainer Integration Fix (2025-12-24)
+
+**Critical Fix:** Resolved 2-day issue where Vertex AI Trainer failed to communicate with MLflow server, resulting in experiments completing without any training metrics.
+
+#### The Problem
+
+The trainer component running on Vertex AI could not reliably send metrics to the MLflow server on Cloud Run. Experiments would complete successfully (model trained, metrics.json written), but the MLflow training history was empty. This made it impossible to visualize per-epoch training curves in the UI.
+
+**Root Cause Analysis:**
+
+| Issue | Description | Impact |
+|-------|-------------|--------|
+| **Cold Start Timeout** | MLflow server (Cloud Run, min-instances=0) takes 12-30s to cold start. Trainer used 10s timeout. | First request always failed |
+| **Silent Failure** | Trainer caught MLflow exceptions, logged warning, set `_mlflow_client = None`, and continued training | Training succeeded but no metrics logged |
+| **No Validation** | Trainer didn't verify MLflow was ready before starting training | Wasted hour-long experiments |
+| **Cascading Failure** | When `set_experiment()` timed out, `experiment_id = None`, causing `runs/create` to return HTTP 400 | All subsequent MLflow calls failed |
+
+**Evidence from Failed Experiment (qt-47):**
+```
+13:47:56 - MLflow: Got identity token via google-auth
+13:48:26 - MLflow set_experiment error: The read operation timed out  ← 10s timeout expired
+13:48:29 - MLflow API error (runs/create): HTTP 400 - Bad Request    ← No experiment_id!
+13:48:29 - MLflow run started: None                                   ← run_id = None
+```
+
+Server-side (MLflow Cloud Run) responded 2 seconds AFTER client timeout:
+```
+15:48:16.786 - GET experiments/get-by-name returned 404 in 12.2s
+15:48:26.222 - Gunicorn started (10 seconds after cold start)
+```
+
+#### The Fix
+
+**1. Added `wait_for_ready()` method to MLflowRestClient**
+
+The trainer now explicitly waits for MLflow server to be ready before attempting any operations:
+
+```python
+def wait_for_ready(self, max_wait_seconds=120):
+    """Wait for MLflow server to be ready (handles cold starts)."""
+    # Pings /health endpoint with exponential backoff
+    # 60s timeout on first attempt, 30s after
+    # Logs detailed progress for debugging
+    # Raises RuntimeError if server not ready after 120s
+```
+
+**2. Made MLflow Mandatory**
+
+Instead of silently continuing when MLflow fails, training now fails fast:
+
+```python
+# Before (broken):
+try:
+    _mlflow_client.set_experiment(...)
+except Exception as e:
+    logging.warning(f"MLflow failed: {e}")
+    _mlflow_client = None  # Training continues without MLflow!
+
+# After (fixed):
+_mlflow_client.wait_for_ready(max_wait_seconds=120)
+experiment_id = _mlflow_client.set_experiment(...)
+if not experiment_id:
+    raise RuntimeError("Failed to create experiment. Training cannot proceed.")
+```
+
+**3. Added Diagnostic Artifact (`mlflow_status.json`)**
+
+Trainer writes status to GCS at each stage so Django can diagnose failures:
+
+```json
+{
+  "status": "ready",
+  "stage": "initialized",
+  "experiment_id": "5",
+  "run_id": "1193c2eba3aa4b86b21390ae67cde4de",
+  "message": "MLflow fully initialized, training may proceed"
+}
+```
+
+**4. Added Comprehensive Logging**
+
+Trainer now logs exactly what's happening during MLflow connection:
+
+```
+--------------------------------------------------
+MLFLOW CONNECTION: Starting server health check
+  Server URL: https://mlflow-server-xxx.run.app
+  Max wait time: 120s
+--------------------------------------------------
+MLFLOW CONNECTION: Attempt 1
+  Elapsed: 0.0s | Remaining: 120.0s
+  Getting authentication token...
+  Auth token obtained: True
+  Sending health check request (timeout=60s)...
+  TIMEOUT - Server may be experiencing cold start
+  Waiting 5s before next attempt...
+MLFLOW CONNECTION: Attempt 2
+  ...
+  Response received: HTTP 200
+  Request time: 15.32s
+--------------------------------------------------
+MLFLOW CONNECTION: SUCCESS after 20.3s (2 attempts)
+--------------------------------------------------
+```
+
+**5. Added MLflow Server Request Logging**
+
+Updated `mlflow_server/Dockerfile` to log all requests with timing:
+
+```dockerfile
+CMD mlflow server \
+    --gunicorn-opts "--access-logfile - --access-logformat '%(t)s %(h)s %(m)s %(U)s %(s)s %(D)sms' --timeout 120"
+```
+
+**6. Created Integration Test Script**
+
+`tests/test_mlflow_integration.py` - Run before experiments to verify MLflow works:
+
+```bash
+python tests/test_mlflow_integration.py
+```
+
+#### Files Modified
+
+| File | Change |
+|------|--------|
+| `ml_platform/configs/services.py` | Added `wait_for_ready()`, mandatory MLflow, diagnostic artifact, comprehensive logging |
+| `ml_platform/experiments/artifact_service.py` | Added `get_mlflow_status()` to read diagnostics |
+| `mlflow_server/Dockerfile` | Added Gunicorn access logging and 120s timeout |
+| `tests/test_mlflow_integration.py` | New standalone verification script |
+
+#### Verification
+
+First successful experiment with fix (qt-48, Exp #17):
+
+**Trainer Logs:**
+- Health check: SUCCESS after cold start wait
+- Experiment created: id=5
+- Run started: id=1193c2eba3aa4b86b21390ae67cde4de
+- All 60+ metrics logged (HTTP 200)
+
+**MLflow Server Logs:**
+```
+16:22:40 | GET /health                  → 200 (1.4s)
+16:22:41 | POST /experiments/create     → 200 (27s)
+16:22:41 | POST /runs/create            → 200 (34s)
+16:22:42 | POST /runs/log-parameter ×8  → 200
+16:22:43 | POST /runs/set-tag ×4        → 200
+16:22:49 | POST /runs/log-metric ×60+   → 200
+16:23:17 | POST /runs/update            → 200
+```
+
+**UI Result:** Training curves now visible in View modal → Training tab.
+
+---
+
+### Known Issue: Cloud SQL Performance (2025-12-24)
+
+**Problem:** MLflow server response times are very slow (15-30 seconds per request).
+
+**Root Cause:** Cloud SQL instance is `db-f1-micro` (smallest tier):
+- 0.6 GB RAM (barely enough for PostgreSQL)
+- Shared vCPU (competes with other tenants)
+- Each metric INSERT takes 15-30s due to resource starvation
+
+**Impact:**
+- Training with 60+ metric calls takes extra ~20 minutes just for MLflow logging
+- Django UI is slow when loading training history
+- Worker timeouts during cold start (13 workers crashed in first 12 minutes)
+
+**MLflow Server Logs Showing Worker Crashes:**
+```
+15:49:35 | CRITICAL WORKER TIMEOUT (pid:11)
+15:49:37 | Worker was sent SIGKILL! Perhaps out of memory?
+... (repeated 13 times over 12 minutes)
+```
+
+**Recommendations:**
+
+| Option | Change | Cost Impact | Expected Improvement |
+|--------|--------|-------------|---------------------|
+| **Upgrade Cloud SQL** | `db-f1-micro` → `db-g1-small` | +$18/month | 3-5x faster |
+| **Batch Metrics** | Use `/runs/log-batch` endpoint | None | Fewer API calls |
+| **Increase Workers** | 2 → 4 workers with threads | None | Better concurrency |
+
+**Upgrade Command:**
+```bash
+gcloud sql instances patch b2b-recs-db --tier=db-g1-small --project=b2b-recs
+```
+
+**Status:** Not addressed yet. System is functional but slow.
+
+---
 
 ### Pipeline DAG Static File Extraction (2025-12-22)
 

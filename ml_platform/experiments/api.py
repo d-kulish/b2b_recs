@@ -1117,7 +1117,7 @@ def quick_test_training_history(request, quick_test_id):
 @require_http_methods(["POST"])
 def compare_experiments(request):
     """
-    Compare multiple experiments side-by-side using MLflow data.
+    Compare multiple experiments side-by-side with full configuration details.
 
     POST /api/experiments/compare/
 
@@ -1126,16 +1126,12 @@ def compare_experiments(request):
         "quick_test_ids": [1, 2, 3]
     }
 
-    Returns:
-    {
-        "success": true,
-        "comparison": {
-            "quick_tests": [...],
-            "runs": [...],
-            "metrics": {...},
-            "params": {...}
-        }
-    }
+    Returns comprehensive comparison data including:
+    - Dataset details (name, rows, users, products)
+    - Feature config details (buyer/product features with dimensions)
+    - Model config details (type, optimizer, layers)
+    - Training parameters
+    - Results metrics
     """
     try:
         model_endpoint = _get_model_endpoint(request)
@@ -1162,6 +1158,12 @@ def compare_experiments(request):
                 'error': 'At least 2 experiments required for comparison'
             }, status=400)
 
+        if len(quick_test_ids) > 5:
+            return JsonResponse({
+                'success': False,
+                'error': 'Maximum 5 experiments can be compared at once'
+            }, status=400)
+
         # Get QuickTests and verify access
         quick_tests = QuickTest.objects.filter(
             pk__in=quick_test_ids,
@@ -1174,55 +1176,94 @@ def compare_experiments(request):
                 'error': 'Not enough valid experiments found'
             }, status=400)
 
-        # Build response with QuickTest metadata
-        qt_data = []
-        run_ids = []
+        # Build comprehensive comparison data
+        experiments = []
 
         for qt in quick_tests:
-            qt_info = {
+            fc = qt.feature_config
+            mc = qt.model_config
+            ds = fc.dataset if fc else None
+
+            # Build feature list strings (e.g., "user_id(64d), city(16d)")
+            buyer_features_list = _format_feature_list(fc.buyer_model_features if fc else [])
+            product_features_list = _format_feature_list(fc.product_model_features if fc else [])
+            buyer_crosses_list = _format_crosses_list(fc.buyer_model_crosses if fc else [])
+            product_crosses_list = _format_crosses_list(fc.product_model_crosses if fc else [])
+
+            # Build model config summary
+            model_layers_summary = _format_tower_layers(mc.buyer_tower_layers if mc else [])
+
+            exp_data = {
                 'id': qt.id,
                 'experiment_number': qt.experiment_number,
                 'display_name': qt.display_name,
-                'feature_config': qt.feature_config.name,
-                'model_config': qt.model_config.name if qt.model_config else None,
-                'dataset': qt.feature_config.dataset.name if qt.feature_config.dataset else None,
-                'mlflow_run_id': qt.mlflow_run_id,
+                'experiment_name': qt.experiment_name or '',
                 'status': qt.status,
-                'metrics': {
+
+                # Dataset details
+                'dataset': {
+                    'name': ds.name if ds else None,
+                    'primary_table': ds.primary_table if ds else None,
+                    'row_count': ds.summary_snapshot.get('estimated_rows') if ds and ds.summary_snapshot else None,
+                    'unique_users': ds.summary_snapshot.get('unique_users') if ds and ds.summary_snapshot else None,
+                    'unique_products': ds.summary_snapshot.get('unique_products') if ds and ds.summary_snapshot else None,
+                },
+
+                # Feature config details
+                'feature_config': {
+                    'name': fc.name if fc else None,
+                    'version': fc.version if fc else None,
+                    'buyer_features': buyer_features_list,
+                    'buyer_features_count': len(fc.buyer_model_features) if fc else 0,
+                    'buyer_tensor_dim': fc.buyer_tensor_dim if fc else None,
+                    'buyer_crosses': buyer_crosses_list,
+                    'product_features': product_features_list,
+                    'product_features_count': len(fc.product_model_features) if fc else 0,
+                    'product_tensor_dim': fc.product_tensor_dim if fc else None,
+                    'product_crosses': product_crosses_list,
+                },
+
+                # Model config details
+                'model_config': {
+                    'name': mc.name if mc else None,
+                    'model_type': mc.model_type if mc else None,
+                    'optimizer': mc.optimizer if mc else None,
+                    'output_embedding_dim': mc.output_embedding_dim if mc else None,
+                    'tower_layers': model_layers_summary,
+                },
+
+                # Sampling parameters
+                'sampling': {
+                    'data_sample_percent': qt.data_sample_percent,
+                    'split_strategy': qt.split_strategy,
+                    'holdout_days': qt.holdout_days,
+                    'date_column': qt.date_column or None,
+                },
+
+                # Training parameters
+                'training': {
+                    'epochs': qt.epochs,
+                    'batch_size': qt.batch_size,
+                    'learning_rate': float(qt.learning_rate) if qt.learning_rate else None,
+                    'machine_type': qt.machine_type,
+                },
+
+                # Results
+                'results': {
                     'loss': qt.loss,
                     'recall_at_10': qt.recall_at_10,
                     'recall_at_50': qt.recall_at_50,
                     'recall_at_100': qt.recall_at_100,
+                    'duration_seconds': qt.duration_seconds,
                 },
-                'params': {
-                    'epochs': qt.epochs,
-                    'batch_size': qt.batch_size,
-                    'learning_rate': str(qt.learning_rate),
-                    'data_sample_percent': qt.data_sample_percent,
-                    'split_strategy': qt.split_strategy,
-                    'machine_type': qt.machine_type,
-                }
             }
-            qt_data.append(qt_info)
-
-            if qt.mlflow_run_id:
-                run_ids.append(qt.mlflow_run_id)
-
-        # If we have MLflow run IDs, get additional data from MLflow
-        mlflow_comparison = None
-        if len(run_ids) >= 2:
-            try:
-                from .mlflow_service import MLflowService
-                mlflow_service = MLflowService()
-                mlflow_comparison = mlflow_service.compare_runs(run_ids)
-            except Exception as e:
-                logger.warning(f"Could not fetch MLflow comparison data: {e}")
+            experiments.append(exp_data)
 
         return JsonResponse({
             'success': True,
             'comparison': {
-                'quick_tests': qt_data,
-                'mlflow_data': mlflow_comparison
+                'experiments': experiments,
+                'count': len(experiments)
             }
         })
 
@@ -1232,6 +1273,58 @@ def compare_experiments(request):
             'success': False,
             'error': str(e)
         }, status=500)
+
+
+def _format_feature_list(features):
+    """Format features as a readable list: 'user_id(64d), city(16d)'"""
+    if not features:
+        return ''
+    parts = []
+    for f in features:
+        col = f.get('column', '')
+        dim = f.get('embedding_dim', '')
+        if col and dim:
+            parts.append(f"{col}({dim}d)")
+        elif col:
+            parts.append(col)
+    return ', '.join(parts)
+
+
+def _format_crosses_list(crosses):
+    """Format cross features as a readable list: 'user_id×city(16d)'"""
+    if not crosses:
+        return ''
+    parts = []
+    for c in crosses:
+        features = c.get('features', [])
+        dim = c.get('embedding_dim', '')
+        if features:
+            # Handle both string features and dict features with 'column' key
+            feature_names = []
+            for f in features:
+                if isinstance(f, str):
+                    feature_names.append(f)
+                elif isinstance(f, dict):
+                    feature_names.append(f.get('column', str(f)))
+                else:
+                    feature_names.append(str(f))
+            cross_name = '×'.join(feature_names)
+            if dim:
+                parts.append(f"{cross_name}({dim}d)")
+            else:
+                parts.append(cross_name)
+    return ', '.join(parts)
+
+
+def _format_tower_layers(layers):
+    """Format tower layers as a summary: '256→128→64'"""
+    if not layers:
+        return ''
+    units = []
+    for layer in layers:
+        if layer.get('type') == 'dense':
+            units.append(str(layer.get('units', '')))
+    return '→'.join(units) if units else ''
 
 
 @csrf_exempt
@@ -1546,6 +1639,95 @@ def experiment_dashboard_stats(request):
 
     except Exception as e:
         logger.exception(f"Error getting dashboard stats: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def selectable_experiments(request):
+    """
+    Get list of experiments available for comparison selection.
+
+    Returns experiments with status: completed, failed, or cancelled.
+    Excludes running, submitting, and pending experiments.
+
+    GET /api/experiments/selectable/
+
+    Returns:
+    {
+        "success": true,
+        "experiments": [
+            {
+                "id": 123,
+                "experiment_number": "Exp #45",
+                "experiment_name": "Testing Q4 features",
+                "experiment_description_short": "First 30 chars of desc...",
+                "status": "completed",
+                "recall_at_100": 0.473,
+                "feature_config_name": "Q4 v2",
+                "model_config_name": "Standard",
+                "created_at": "2024-12-23T10:30:00Z"
+            },
+            ...
+        ],
+        "count": 25
+    }
+    """
+    try:
+        model_endpoint = _get_model_endpoint(request)
+        if not model_endpoint:
+            return JsonResponse({
+                'success': False,
+                'error': 'No model endpoint selected'
+            }, status=400)
+
+        # Get experiments that can be compared (not running/submitting/pending)
+        selectable_statuses = [
+            QuickTest.STATUS_COMPLETED,
+            QuickTest.STATUS_FAILED,
+            QuickTest.STATUS_CANCELLED,
+        ]
+
+        queryset = QuickTest.objects.filter(
+            feature_config__dataset__model_endpoint=model_endpoint,
+            status__in=selectable_statuses
+        ).select_related(
+            'feature_config', 'model_config'
+        ).order_by('-created_at')
+
+        experiments = []
+        for qt in queryset:
+            # Truncate description to 30 chars
+            desc_short = ''
+            if qt.experiment_description:
+                desc_short = qt.experiment_description[:30]
+                if len(qt.experiment_description) > 30:
+                    desc_short += '...'
+
+            experiments.append({
+                'id': qt.id,
+                'experiment_number': qt.experiment_number,
+                'display_name': qt.display_name,
+                'experiment_name': qt.experiment_name or '',
+                'experiment_description_short': desc_short,
+                'status': qt.status,
+                'recall_at_100': qt.recall_at_100,
+                'feature_config_name': qt.feature_config.name if qt.feature_config else None,
+                'model_config_name': qt.model_config.name if qt.model_config else None,
+                'created_at': qt.created_at.isoformat() if qt.created_at else None,
+            })
+
+        return JsonResponse({
+            'success': True,
+            'experiments': experiments,
+            'count': len(experiments)
+        })
+
+    except Exception as e:
+        logger.exception(f"Error getting selectable experiments: {e}")
         return JsonResponse({
             'success': False,
             'error': str(e)

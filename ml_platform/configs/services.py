@@ -1615,7 +1615,9 @@ class MLflowRestClient:
 
     def set_experiment(self, name):
         """Get or create experiment by name with retry for cold starts."""
+        logging.info(f"MLFLOW: Setting experiment '{name}'")
         last_error = None
+
         for attempt in range(3):
             try:
                 url = f"{self.tracking_uri}/api/2.0/mlflow/experiments/get-by-name?experiment_name={urllib.parse.quote(name)}"
@@ -1623,36 +1625,62 @@ class MLflowRestClient:
                 req = urllib.request.Request(url, headers=headers)
                 # Use 60s timeout on first attempt (cold start), 30s after
                 timeout = 60 if attempt == 0 else 30
+
+                logging.info(f"  Attempt {attempt + 1}/3: Looking up experiment...")
+                request_start = time.time()
                 with urllib.request.urlopen(req, timeout=timeout) as resp:
+                    request_time = time.time() - request_start
                     result = json.loads(resp.read().decode())
                     self.experiment_id = result.get("experiment", {}).get("experiment_id")
+                    logging.info(f"  Found existing experiment: id={self.experiment_id} ({request_time:.2f}s)")
                     return self.experiment_id
+
             except urllib.error.HTTPError as e:
                 if e.code == 404:
                     # Create new experiment
+                    logging.info(f"  Experiment not found, creating new one...")
                     result = self._request("experiments/create", {"name": name}, timeout=60)
                     if result:
                         self.experiment_id = result.get("experiment_id")
+                        logging.info(f"  Created new experiment: id={self.experiment_id}")
+                    else:
+                        logging.error(f"  Failed to create experiment")
                     return self.experiment_id
-                logging.warning(f"MLflow set_experiment error: HTTP {e.code}")
+                logging.warning(f"  HTTP Error: {e.code} - {e.reason}")
                 return None
+
             except Exception as e:
                 last_error = e
+                logging.warning(f"  Attempt {attempt + 1} failed: {type(e).__name__}: {e}")
                 if attempt < 2:
                     wait = (attempt + 1) * 10  # 10s, 20s backoff
-                    logging.info(f"MLflow set_experiment failed ({e}), retrying in {wait}s...")
+                    logging.info(f"  Retrying in {wait}s...")
                     time.sleep(wait)
-        logging.warning(f"MLflow set_experiment error after retries: {last_error}")
+
+        logging.error(f"MLFLOW: set_experiment FAILED after 3 attempts: {last_error}")
         return None
 
     def start_run(self, run_name=None):
         """Start a new run."""
+        logging.info(f"MLFLOW: Starting run")
+        logging.info(f"  Experiment ID: {self.experiment_id}")
+        logging.info(f"  Run name: {run_name}")
+
+        if not self.experiment_id:
+            logging.error("  Cannot start run: experiment_id is None")
+            return None
+
         data = {"experiment_id": self.experiment_id}
         if run_name:
             data["run_name"] = run_name
+
         result = self._request("runs/create", data)
         if result:
             self.run_id = result.get("run", {}).get("info", {}).get("run_id")
+            logging.info(f"  Run started successfully: {self.run_id}")
+        else:
+            logging.error(f"  Failed to start run - no response from server")
+
         return self.run_id
 
     def log_param(self, key, value):
@@ -1687,6 +1715,115 @@ class MLflowRestClient:
         """End the run."""
         if self.run_id:
             self._request("runs/update", {"run_id": self.run_id, "status": status, "end_time": int(time.time() * 1000)})
+
+    def wait_for_ready(self, max_wait_seconds=120):
+        """
+        Wait for MLflow server to be ready (handles cold starts).
+
+        Pings the health endpoint with exponential backoff until the server
+        responds. This ensures the server is fully initialized before
+        attempting any MLflow operations.
+
+        Args:
+            max_wait_seconds: Maximum time to wait for server (default 120s)
+
+        Returns:
+            True if server is ready
+
+        Raises:
+            RuntimeError if server is not ready after max_wait_seconds
+        """
+        health_url = f"{self.tracking_uri}/health"
+        start_time = time.time()
+        attempt = 0
+
+        logging.info("-" * 50)
+        logging.info("MLFLOW CONNECTION: Starting server health check")
+        logging.info(f"  Server URL: {self.tracking_uri}")
+        logging.info(f"  Health endpoint: {health_url}")
+        logging.info(f"  Max wait time: {max_wait_seconds}s")
+        logging.info("-" * 50)
+
+        while (time.time() - start_time) < max_wait_seconds:
+            attempt += 1
+            elapsed = time.time() - start_time
+            remaining = max_wait_seconds - elapsed
+
+            logging.info(f"MLFLOW CONNECTION: Attempt {attempt}")
+            logging.info(f"  Elapsed: {elapsed:.1f}s | Remaining: {remaining:.1f}s")
+
+            try:
+                # Get auth token
+                logging.info("  Getting authentication token...")
+                headers = self._get_auth_headers()
+                has_auth = "Authorization" in headers
+                logging.info(f"  Auth token obtained: {has_auth}")
+
+                req = urllib.request.Request(health_url, headers=headers)
+                # Use longer timeout for cold start (first attempt)
+                timeout = 60 if attempt == 1 else 30
+                logging.info(f"  Sending health check request (timeout={timeout}s)...")
+
+                request_start = time.time()
+                with urllib.request.urlopen(req, timeout=timeout) as resp:
+                    request_time = time.time() - request_start
+                    total_elapsed = time.time() - start_time
+                    logging.info(f"  Response received: HTTP {resp.status}")
+                    logging.info(f"  Request time: {request_time:.2f}s")
+                    logging.info("-" * 50)
+                    logging.info(f"MLFLOW CONNECTION: SUCCESS after {total_elapsed:.1f}s ({attempt} attempts)")
+                    logging.info("-" * 50)
+                    return True
+
+            except urllib.error.HTTPError as e:
+                request_time = time.time() - request_start if 'request_start' in dir() else 0
+                logging.warning(f"  HTTP Error: {e.code} - {e.reason}")
+                logging.warning(f"  Request time: {request_time:.2f}s")
+
+                # Server responded but with error - still means it's up
+                if e.code in (401, 403):
+                    logging.warning(f"  Server is UP but has authentication issues")
+                    logging.warning(f"  This may indicate IAM permission problems")
+                    return True
+                elif e.code >= 500:
+                    logging.warning(f"  Server error (5xx) - may be starting up")
+
+            except urllib.error.URLError as e:
+                logging.warning(f"  Connection failed: {e.reason}")
+                if "timed out" in str(e.reason).lower():
+                    logging.warning(f"  TIMEOUT - Server may be experiencing cold start")
+                elif "refused" in str(e.reason).lower():
+                    logging.warning(f"  CONNECTION REFUSED - Server may not be running")
+                elif "name or service not known" in str(e.reason).lower():
+                    logging.error(f"  DNS RESOLUTION FAILED - Check server URL")
+
+            except Exception as e:
+                logging.warning(f"  Unexpected error: {type(e).__name__}: {e}")
+
+            # Exponential backoff: 5s, 10s, 15s, 20s, then cap at 20s
+            wait_time = min(20, 5 * attempt)
+            if (time.time() - start_time + wait_time) < max_wait_seconds:
+                logging.info(f"  Waiting {wait_time}s before next attempt...")
+                time.sleep(wait_time)
+            else:
+                logging.warning(f"  No time remaining for another attempt")
+                break
+
+        # Final failure
+        total_elapsed = time.time() - start_time
+        logging.error("-" * 50)
+        logging.error("MLFLOW CONNECTION: FAILED")
+        logging.error(f"  Total time: {total_elapsed:.1f}s")
+        logging.error(f"  Attempts: {attempt}")
+        logging.error(f"  Server URL: {self.tracking_uri}")
+        logging.error("-" * 50)
+
+        raise RuntimeError(
+            f"MLflow server not ready after {total_elapsed:.0f}s ({attempt} attempts). "
+            f"Training cannot proceed without MLflow tracking. "
+            f"Server URL: {self.tracking_uri}. "
+            f"Check Cloud Run logs for mlflow-server service."
+        )
 
 # Global MLflow client instance (initialized in run_fn)
 _mlflow_client = None
@@ -2493,6 +2630,47 @@ def _write_mlflow_info(gcs_output_path: str, run_id: str):
         logging.info(f"Wrote MLflow info to gs://{bucket_name}/{blob_path}")
     except Exception as e:
         logging.warning(f"Could not write MLflow info: {e}")
+
+
+def _write_mlflow_status(gcs_output_path: str, status: str, details: dict = None):
+    """
+    Write MLflow initialization status to GCS for Django diagnostics.
+
+    This file is written at various stages of MLflow initialization so Django
+    can understand exactly what happened if something goes wrong.
+
+    Args:
+        gcs_output_path: GCS path for artifacts (e.g., gs://bucket/qt-XX-YYYYMMDD-HHMMSS)
+        status: One of 'starting', 'waiting', 'connected', 'ready', 'failed'
+        details: Optional dict with additional status information
+    """
+    if not gcs_output_path or not gcs_output_path.startswith('gs://'):
+        return
+
+    try:
+        from google.cloud import storage
+        from datetime import datetime
+
+        path = gcs_output_path[5:]  # Remove 'gs://'
+        bucket_name = path.split('/')[0]
+        blob_path = '/'.join(path.split('/')[1:]) + '/mlflow_status.json'
+
+        status_data = {
+            'status': status,
+            'timestamp': datetime.utcnow().isoformat() + 'Z',
+            'tracking_uri': MLFLOW_TRACKING_URI,
+        }
+        if details:
+            status_data.update(details)
+
+        client = storage.Client()
+        bucket = client.bucket(bucket_name)
+        blob = bucket.blob(blob_path)
+        blob.upload_from_string(json.dumps(status_data, indent=2))
+
+        logging.info(f"MLflow status [{status}] written to gs://{bucket_name}/{blob_path}")
+    except Exception as e:
+        logging.debug(f"Could not write MLflow status: {e}")
 '''
 
     def _generate_run_fn(self) -> str:
@@ -2561,40 +2739,130 @@ def run_fn(fn_args: tfx.components.FnArgs):
     )
 
     # =========================================================================
-    # MLflow Initialization (using REST API client - no dependencies)
+    # MLflow Initialization (MANDATORY - training will not proceed without it)
     # =========================================================================
     global _mlflow_client
     mlflow_run_id = None
-    if mlflow_tracking_uri:
-        try:
-            _mlflow_client = MLflowRestClient(mlflow_tracking_uri)
-            _mlflow_client.set_experiment(MLFLOW_EXPERIMENT_NAME)
-            mlflow_run_id = _mlflow_client.start_run(run_name=MLFLOW_RUN_NAME)
-            logging.info(f"MLflow initialized: {{mlflow_tracking_uri}}, experiment={{MLFLOW_EXPERIMENT_NAME}}")
-            logging.info(f"MLflow run started: {{mlflow_run_id}}")
 
-            # Log parameters
-            _mlflow_client.log_params({{
-                'epochs': epochs,
-                'batch_size': batch_size,
-                'learning_rate': learning_rate,
-                'optimizer': '{self.optimizer}',
-                'embedding_dim': OUTPUT_EMBEDDING_DIM,
-                'feature_config_id': {feature_config_id},
-                'model_config_id': {model_config_id},
-                'dataset_id': {dataset_id},
-            }})
+    if not mlflow_tracking_uri:
+        _write_mlflow_status(gcs_output_path, 'failed', {{
+            'error': 'MLflow tracking URI not configured',
+            'stage': 'config_check'
+        }})
+        raise RuntimeError(
+            "MLflow tracking URI not configured. "
+            "Training cannot proceed without experiment tracking. "
+            "Set mlflow_tracking_uri in custom_config or MLFLOW_TRACKING_URI env var."
+        )
 
-            # Log tags for filtering
-            _mlflow_client.set_tags({{
-                'feature_config_name': '{feature_config_name}',
-                'model_config_name': '{model_config_name}',
-                'dataset_name': '{dataset_name}',
-                'model_type': '{model_type}',
+    # Write initial status
+    _write_mlflow_status(gcs_output_path, 'starting', {{
+        'stage': 'initialization',
+        'experiment_name': MLFLOW_EXPERIMENT_NAME,
+        'run_name': MLFLOW_RUN_NAME
+    }})
+
+    # Step 1: Wait for MLflow server to be ready (handles cold starts)
+    logging.info("=" * 60)
+    logging.info("MLflow Initialization")
+    logging.info("=" * 60)
+
+    try:
+        _mlflow_client = MLflowRestClient(mlflow_tracking_uri)
+
+        _write_mlflow_status(gcs_output_path, 'waiting', {{
+            'stage': 'health_check',
+            'message': 'Waiting for MLflow server to be ready (may take up to 120s for cold start)'
+        }})
+
+        _mlflow_client.wait_for_ready(max_wait_seconds=120)
+
+        _write_mlflow_status(gcs_output_path, 'connected', {{
+            'stage': 'server_ready',
+            'message': 'MLflow server is ready'
+        }})
+
+    except Exception as e:
+        _write_mlflow_status(gcs_output_path, 'failed', {{
+            'error': str(e),
+            'stage': 'health_check'
+        }})
+        raise
+
+    # Step 2: Create/get experiment
+    try:
+        experiment_id = _mlflow_client.set_experiment(MLFLOW_EXPERIMENT_NAME)
+        if not experiment_id:
+            _write_mlflow_status(gcs_output_path, 'failed', {{
+                'error': f"Failed to create/get experiment '{{MLFLOW_EXPERIMENT_NAME}}'",
+                'stage': 'set_experiment'
             }})
-        except Exception as e:
-            logging.warning(f"MLflow initialization failed: {{e}}")
-            _mlflow_client = None
+            raise RuntimeError(
+                f"Failed to create/get MLflow experiment '{{MLFLOW_EXPERIMENT_NAME}}'. "
+                f"Training cannot proceed without experiment tracking."
+            )
+        logging.info(f"MLflow experiment: {{MLFLOW_EXPERIMENT_NAME}} (id={{experiment_id}})")
+    except RuntimeError:
+        raise
+    except Exception as e:
+        _write_mlflow_status(gcs_output_path, 'failed', {{
+            'error': str(e),
+            'stage': 'set_experiment'
+        }})
+        raise
+
+    # Step 3: Start run
+    try:
+        mlflow_run_id = _mlflow_client.start_run(run_name=MLFLOW_RUN_NAME)
+        if not mlflow_run_id:
+            _write_mlflow_status(gcs_output_path, 'failed', {{
+                'error': f"Failed to start run. experiment_id={{experiment_id}}",
+                'stage': 'start_run'
+            }})
+            raise RuntimeError(
+                f"Failed to start MLflow run. experiment_id={{experiment_id}}. "
+                f"Training cannot proceed without experiment tracking."
+            )
+        logging.info(f"MLflow run started: {{mlflow_run_id}}")
+    except RuntimeError:
+        raise
+    except Exception as e:
+        _write_mlflow_status(gcs_output_path, 'failed', {{
+            'error': str(e),
+            'stage': 'start_run'
+        }})
+        raise
+
+    # Step 4: Log parameters
+    _mlflow_client.log_params({{
+        'epochs': epochs,
+        'batch_size': batch_size,
+        'learning_rate': learning_rate,
+        'optimizer': '{self.optimizer}',
+        'embedding_dim': OUTPUT_EMBEDDING_DIM,
+        'feature_config_id': {feature_config_id},
+        'model_config_id': {model_config_id},
+        'dataset_id': {dataset_id},
+    }})
+
+    # Step 5: Log tags for filtering
+    _mlflow_client.set_tags({{
+        'feature_config_name': '{feature_config_name}',
+        'model_config_name': '{model_config_name}',
+        'dataset_name': '{dataset_name}',
+        'model_type': '{model_type}',
+    }})
+
+    # Write ready status - MLflow is fully initialized
+    _write_mlflow_status(gcs_output_path, 'ready', {{
+        'stage': 'initialized',
+        'experiment_id': experiment_id,
+        'run_id': mlflow_run_id,
+        'message': 'MLflow fully initialized, training may proceed'
+    }})
+
+    logging.info("MLflow initialization complete - training may proceed")
+    logging.info("=" * 60)
 
     try:
 
@@ -2616,9 +2884,8 @@ def run_fn(fn_args: tfx.components.FnArgs):
         # Training callbacks
         callbacks = []
 
-        # MLflow callback for per-epoch metrics
-        if _mlflow_client:
-            callbacks.append(MLflowCallback())
+        # MLflow callback for per-epoch metrics (always added - MLflow is mandatory)
+        callbacks.append(MLflowCallback())
 
         # TensorBoard logging
         if fn_args.model_run_dir:

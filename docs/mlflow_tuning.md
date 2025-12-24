@@ -1,6 +1,6 @@
 # MLflow Integration Tuning
 
-## Date: 2024-12-23
+## Date: 2024-12-24
 
 ## Overview
 
@@ -35,16 +35,9 @@ gcloud run services add-iam-policy-binding mlflow-server \
 
 **Root Cause**: The TFX container image on Vertex AI doesn't have MLflow pre-installed.
 
-**Fix**: Added runtime installation of MLflow in the generated trainer code:
-```python
-try:
-    import mlflow
-except ImportError:
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "mlflow>=2.0.0"])
-    import mlflow
-```
+**Attempted Fix**: Runtime installation of mlflow library.
 
-**Status**: FIXED (but led to Problem 3)
+**Status**: Led to Problem 3
 
 ---
 
@@ -55,52 +48,71 @@ except ImportError:
 Could not install MLflow: cannot import name 'Sentinel' from 'typing_extensions'
 ```
 
-**Root Cause**: The TFX container has pinned versions of packages (`typing_extensions`, `pydantic`, `protobuf`) that conflict with full MLflow's requirements.
+**Root Cause**: The TFX container has pinned versions of packages (`typing_extensions`, `pydantic`, `protobuf`) that conflict with both full `mlflow` and `mlflow-skinny` requirements.
 
-**Attempted Fix**: Use `mlflow-skinny` instead of full `mlflow`. This is a lightweight package with minimal dependencies, designed for tracking-only use cases.
+**Attempted Fixes**:
+1. Use `mlflow-skinny` instead of full `mlflow` - FAILED (same typing_extensions conflict)
+2. Upgrade `typing_extensions` before installing mlflow - FAILED (Python module caching issues)
 
-```python
-subprocess.check_call([sys.executable, "-m", "pip", "install", "mlflow-skinny>=2.0.0"])
-```
-
-**Status**: IN PROGRESS - Testing
+**Status**: Led to Final Solution
 
 ---
 
-## Current Implementation
+## Final Solution: MLflowRestClient (Zero Dependencies)
 
-### Generated Trainer Code (`configs/services.py`)
+After multiple failed attempts to install the mlflow library in the TFX container, we implemented a **custom REST API client** that requires zero external dependencies.
 
-The trainer module now includes:
+### Implementation
 
-1. **Graceful MLflow import with auto-install**:
-   ```python
-   try:
-       import mlflow
-       MLFLOW_AVAILABLE = True
-   except ImportError:
-       # Install mlflow-skinny at runtime
-       subprocess.check_call([...pip install mlflow-skinny...])
-       import mlflow
-       MLFLOW_AVAILABLE = True
-   ```
+The `MLflowRestClient` class uses Python's built-in `urllib` module to communicate directly with the MLflow REST API:
 
-2. **All MLflow calls protected by `MLFLOW_AVAILABLE` flag**:
-   - `MLflowCallback.on_epoch_end()`
-   - MLflow initialization in `run_fn()`
-   - Logging params, tags, metrics
-   - Test metrics logging
+```python
+import urllib.request
+import urllib.error
+import urllib.parse
 
-3. **Metrics logged to MLflow**:
-   - Per-epoch: `loss`, `val_loss`, `regularization_loss`
-   - Final: `final_loss`, `final_val_loss`
-   - Test: `test_loss`, `test_recall_at_5`, `test_recall_at_10`, `test_recall_at_50`, `test_recall_at_100`
+class MLflowRestClient:
+    """Lightweight MLflow client using REST API directly. No dependencies."""
+
+    def __init__(self, tracking_uri):
+        self.tracking_uri = tracking_uri.rstrip('/')
+        self.run_id = None
+        self.experiment_id = None
+
+    def _request(self, endpoint, data):
+        """Make POST request to MLflow API."""
+        url = f"{self.tracking_uri}/api/2.0/mlflow/{endpoint}"
+        headers = {"Content-Type": "application/json"}
+        req = urllib.request.Request(url, data=json.dumps(data).encode(), headers=headers, method="POST")
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            return json.loads(resp.read().decode())
+
+    def set_experiment(self, name): ...
+    def start_run(self, run_name=None): ...
+    def log_param(self, key, value): ...
+    def log_params(self, params): ...
+    def log_metric(self, key, value, step=None): ...
+    def set_tag(self, key, value): ...
+    def set_tags(self, tags): ...
+    def end_run(self, status="FINISHED"): ...
+```
+
+### Benefits
+
+1. **Zero external dependencies** - Uses only Python standard library
+2. **No installation required** - Works immediately in any Python environment
+3. **No version conflicts** - Doesn't interfere with TFX's dependency tree
+4. **Full functionality** - Supports all required tracking operations
+
+### Metrics Logged
+
+- **Per-epoch**: `loss`, `val_loss`, `regularization_loss` (with step numbers)
+- **Final**: `final_loss`, `final_val_loss`
+- **Test**: `test_loss`, `test_recall_at_5`, `test_recall_at_10`, `test_recall_at_50`, `test_recall_at_100`
 
 ---
 
 ## Split Strategy Implementation
-
-Also updated in this session:
 
 | Strategy | Train | Eval | Test | Implementation |
 |----------|-------|------|------|----------------|
@@ -112,21 +124,10 @@ Also updated in this session:
 
 ## Files Modified
 
-1. `ml_platform/configs/services.py` - Generated trainer code with MLflow integration
+1. `ml_platform/configs/services.py` - Generated trainer code with MLflowRestClient
 2. `ml_platform/experiments/services.py` - TFX pipeline split configuration
 3. `ml_platform/datasets/services.py` - SQL generation with `split` column
 4. `templates/ml_platform/model_experiments.html` - UI descriptions for split strategies
-
----
-
-## Next Steps
-
-1. **Test mlflow-skinny installation** - Run experiment and verify MLflow connects successfully
-2. **Verify Training tab** - Check that metrics appear in the View modal
-3. **If mlflow-skinny fails**, alternatives:
-   - Pin to older MLflow version (`mlflow==2.1.0`)
-   - Upgrade `typing_extensions` before installing MLflow
-   - Build custom Docker image with MLflow pre-installed
 
 ---
 

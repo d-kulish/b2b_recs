@@ -1527,24 +1527,96 @@ from tfx_bsl.public import tfxio
 
 from absl import logging
 
-# MLflow tracking - install mlflow-skinny if not available (lightweight, fewer dependencies)
-try:
-    import mlflow
-    MLFLOW_AVAILABLE = True
-except ImportError:
-    # Try to install mlflow-skinny at runtime (lightweight version for tracking only)
-    import subprocess
-    import sys
-    logging.info("MLflow not found - installing mlflow-skinny...")
-    try:
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "mlflow-skinny>=2.0.0", "--quiet"])
-        import mlflow
-        MLFLOW_AVAILABLE = True
-        logging.info("MLflow-skinny installed successfully")
-    except Exception as e:
-        mlflow = None
-        MLFLOW_AVAILABLE = False
-        logging.warning(f"Could not install MLflow: {e} - metrics will not be logged")
+# MLflow tracking via direct REST API (no mlflow library needed - zero dependencies)
+import urllib.request
+import urllib.error
+import urllib.parse
+
+class MLflowRestClient:
+    """Lightweight MLflow client using REST API directly. No dependencies."""
+
+    def __init__(self, tracking_uri):
+        self.tracking_uri = tracking_uri.rstrip('/')
+        self.run_id = None
+        self.experiment_id = None
+
+    def _request(self, endpoint, data):
+        """Make POST request to MLflow API."""
+        url = f"{self.tracking_uri}/api/2.0/mlflow/{endpoint}"
+        headers = {"Content-Type": "application/json"}
+        try:
+            req = urllib.request.Request(url, data=json.dumps(data).encode(), headers=headers, method="POST")
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                return json.loads(resp.read().decode())
+        except Exception as e:
+            logging.warning(f"MLflow API error ({endpoint}): {e}")
+            return None
+
+    def set_experiment(self, name):
+        """Get or create experiment by name."""
+        # Try to get existing experiment
+        try:
+            url = f"{self.tracking_uri}/api/2.0/mlflow/experiments/get-by-name?experiment_name={urllib.parse.quote(name)}"
+            req = urllib.request.Request(url)
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                result = json.loads(resp.read().decode())
+                self.experiment_id = result.get("experiment", {}).get("experiment_id")
+                return self.experiment_id
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                # Create new experiment
+                result = self._request("experiments/create", {"name": name})
+                if result:
+                    self.experiment_id = result.get("experiment_id")
+                return self.experiment_id
+            raise
+
+    def start_run(self, run_name=None):
+        """Start a new run."""
+        data = {"experiment_id": self.experiment_id}
+        if run_name:
+            data["run_name"] = run_name
+        result = self._request("runs/create", data)
+        if result:
+            self.run_id = result.get("run", {}).get("info", {}).get("run_id")
+        return self.run_id
+
+    def log_param(self, key, value):
+        """Log a parameter."""
+        if self.run_id:
+            self._request("runs/log-parameter", {"run_id": self.run_id, "key": key, "value": str(value)})
+
+    def log_params(self, params):
+        """Log multiple parameters."""
+        for key, value in params.items():
+            self.log_param(key, value)
+
+    def log_metric(self, key, value, step=None):
+        """Log a metric."""
+        if self.run_id:
+            data = {"run_id": self.run_id, "key": key, "value": float(value), "timestamp": int(time.time() * 1000)}
+            if step is not None:
+                data["step"] = step
+            self._request("runs/log-metric", data)
+
+    def set_tag(self, key, value):
+        """Set a tag."""
+        if self.run_id:
+            self._request("runs/set-tag", {"run_id": self.run_id, "key": key, "value": str(value)})
+
+    def set_tags(self, tags):
+        """Set multiple tags."""
+        for key, value in tags.items():
+            self.set_tag(key, value)
+
+    def end_run(self, status="FINISHED"):
+        """End the run."""
+        if self.run_id:
+            self._request("runs/update", {"run_id": self.run_id, "status": status, "end_time": int(time.time() * 1000)})
+
+# Global MLflow client instance (initialized in run_fn)
+_mlflow_client = None
+MLFLOW_AVAILABLE = True  # Always available - uses REST API with no dependencies
 '''
 
     def _generate_constants(self) -> str:
@@ -2316,12 +2388,12 @@ def _evaluate_recall_on_test_set(model, test_dataset, product_ids, product_embed
 # =============================================================================
 
 class MLflowCallback(tf.keras.callbacks.Callback):
-    """Log metrics to MLflow after each epoch."""
+    """Log metrics to MLflow after each epoch using REST API."""
 
     def on_epoch_end(self, epoch, logs=None):
-        if MLFLOW_AVAILABLE and logs and mlflow.active_run():
+        if _mlflow_client and logs:
             for metric_name, value in logs.items():
-                mlflow.log_metric(metric_name, float(value), step=epoch)
+                _mlflow_client.log_metric(metric_name, float(value), step=epoch)
 
 
 def _write_mlflow_info(gcs_output_path: str, run_id: str):
@@ -2415,30 +2487,20 @@ def run_fn(fn_args: tfx.components.FnArgs):
     )
 
     # =========================================================================
-    # MLflow Initialization (optional - skipped if mlflow not installed)
+    # MLflow Initialization (using REST API client - no dependencies)
     # =========================================================================
+    global _mlflow_client
     mlflow_run_id = None
-    mlflow_context = None
-    if MLFLOW_AVAILABLE and mlflow_tracking_uri:
+    if mlflow_tracking_uri:
         try:
-            mlflow.set_tracking_uri(mlflow_tracking_uri)
-            mlflow.set_experiment(MLFLOW_EXPERIMENT_NAME)
+            _mlflow_client = MLflowRestClient(mlflow_tracking_uri)
+            _mlflow_client.set_experiment(MLFLOW_EXPERIMENT_NAME)
+            mlflow_run_id = _mlflow_client.start_run(run_name=MLFLOW_RUN_NAME)
             logging.info(f"MLflow initialized: {{mlflow_tracking_uri}}, experiment={{MLFLOW_EXPERIMENT_NAME}}")
-            # Start MLflow run (context manager handles cleanup)
-            mlflow_context = mlflow.start_run(run_name=MLFLOW_RUN_NAME)
-        except Exception as e:
-            logging.warning(f"MLflow initialization failed: {{e}}")
-    elif not MLFLOW_AVAILABLE:
-        logging.info("MLflow not available - skipping experiment tracking")
-
-    try:
-        if mlflow_context:
-            mlflow_context.__enter__()
-            mlflow_run_id = mlflow.active_run().info.run_id
             logging.info(f"MLflow run started: {{mlflow_run_id}}")
 
             # Log parameters
-            mlflow.log_params({{
+            _mlflow_client.log_params({{
                 'epochs': epochs,
                 'batch_size': batch_size,
                 'learning_rate': learning_rate,
@@ -2450,12 +2512,17 @@ def run_fn(fn_args: tfx.components.FnArgs):
             }})
 
             # Log tags for filtering
-            mlflow.set_tags({{
+            _mlflow_client.set_tags({{
                 'feature_config_name': '{feature_config_name}',
                 'model_config_name': '{model_config_name}',
                 'dataset_name': '{dataset_name}',
                 'model_type': '{model_type}',
             }})
+        except Exception as e:
+            logging.warning(f"MLflow initialization failed: {{e}}")
+            _mlflow_client = None
+
+    try:
 
         # Build model
         logging.info("Building RetrievalModel...")
@@ -2476,7 +2543,7 @@ def run_fn(fn_args: tfx.components.FnArgs):
         callbacks = []
 
         # MLflow callback for per-epoch metrics
-        if MLFLOW_AVAILABLE and mlflow_tracking_uri and mlflow.active_run():
+        if _mlflow_client:
             callbacks.append(MLflowCallback())
 
         # TensorBoard logging
@@ -2500,9 +2567,9 @@ def run_fn(fn_args: tfx.components.FnArgs):
         logging.info("Training completed.")
 
         # Log final metrics to MLflow
-        if MLFLOW_AVAILABLE and mlflow.active_run():
+        if _mlflow_client:
             for metric_name, values in history.history.items():
-                mlflow.log_metric(f'final_{{metric_name}}', float(values[-1]))
+                _mlflow_client.log_metric(f'final_{{metric_name}}', float(values[-1]))
 
         # Pre-compute candidate embeddings (needed for both test eval and serving)
         logging.info("Pre-computing candidate embeddings...")
@@ -2543,8 +2610,8 @@ def run_fn(fn_args: tfx.components.FnArgs):
                     logging.info("=== TEST SET LOSS ===")
                     for metric_name, metric_value in test_loss_results.items():
                         logging.info(f"  test_{{metric_name}}: {{metric_value:.6f}}")
-                        if MLFLOW_AVAILABLE and mlflow.active_run():
-                            mlflow.log_metric(f'test_{{metric_name}}', float(metric_value))
+                        if _mlflow_client:
+                            _mlflow_client.log_metric(f'test_{{metric_name}}', float(metric_value))
 
                     # 2. Recall evaluation (Recall@5, @10, @50, @100)
                     # Reload test dataset for recall evaluation
@@ -2563,9 +2630,9 @@ def run_fn(fn_args: tfx.components.FnArgs):
                     )
 
                     # Log recall metrics to MLflow
-                    if MLFLOW_AVAILABLE and mlflow.active_run() and recall_results:
+                    if _mlflow_client and recall_results:
                         for metric_name, metric_value in recall_results.items():
-                            mlflow.log_metric(f'test_{{metric_name}}', float(metric_value))
+                            _mlflow_client.log_metric(f'test_{{metric_name}}', float(metric_value))
                 else:
                     logging.info("Test split directory exists but is empty - skipping test evaluation")
             else:
@@ -2599,9 +2666,9 @@ def run_fn(fn_args: tfx.components.FnArgs):
 
     finally:
         # Clean up MLflow run
-        if mlflow_context:
+        if _mlflow_client:
             try:
-                mlflow_context.__exit__(None, None, None)
+                _mlflow_client.end_run()
                 logging.info("MLflow run completed successfully")
             except Exception as e:
                 logging.warning(f"Error closing MLflow run: {{e}}")

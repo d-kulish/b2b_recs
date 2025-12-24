@@ -110,7 +110,7 @@ Returns experiments available for comparison (excludes running/submitting/pendin
       "experiment_number": 45,
       "display_name": "Exp #45",
       "experiment_name": "Testing Q4 features",
-      "experiment_description_short": "First 30 chars of desc...",
+      "experiment_description_short": "First 50 chars of desc...",
       "status": "completed",
       "recall_at_100": 0.473,
       "feature_config_name": "Q4 v2",

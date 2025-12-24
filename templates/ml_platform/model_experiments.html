@@ -2062,28 +2062,25 @@
         width: 100%;
         border-collapse: collapse;
         font-size: 13px;
+        table-layout: fixed;
     }
     .compare-table th,
     .compare-table td {
         padding: 10px 12px;
         text-align: left;
         border-bottom: 1px solid #e5e7eb;
+        word-wrap: break-word;
     }
     .compare-table th {
         background: #f9fafb;
         font-weight: 600;
         color: #374151;
-        white-space: nowrap;
     }
-    .compare-table th:first-child {
-        position: sticky;
-        left: 0;
-        z-index: 1;
-        background: #f9fafb;
+    .compare-table th:first-child,
+    .compare-table td:first-child {
+        width: 40%;
     }
     .compare-table td:first-child {
-        position: sticky;
-        left: 0;
         background: white;
         font-weight: 500;
         color: #6b7280;
@@ -2120,18 +2117,52 @@
         display: flex;
         align-items: center;
         padding: 12px 16px;
-        border-bottom: 1px solid #f3f4f6;
+        border-bottom: 1px solid rgba(0,0,0,0.08);
         cursor: pointer;
         transition: background-color 0.15s ease;
     }
-    .compare-select-row:last-child {
+    .compare-select-row:nth-child(odd) {
+        border-right: 1px solid rgba(0,0,0,0.08);
+    }
+    .compare-select-row:nth-last-child(-n+2) {
         border-bottom: none;
     }
-    .compare-select-row:hover {
+    /* Status-based row backgrounds */
+    .compare-select-row.status-completed {
+        background: #ecfdf5;
+    }
+    .compare-select-row.status-completed:hover {
+        background: #d1fae5;
+    }
+    .compare-select-row.status-completed.selected {
+        background: #a7f3d0;
+    }
+    .compare-select-row.status-failed {
+        background: #fef2f2;
+    }
+    .compare-select-row.status-failed:hover {
+        background: #fee2e2;
+    }
+    .compare-select-row.status-failed.selected {
+        background: #fecaca;
+    }
+    .compare-select-row.status-cancelled {
         background: #f9fafb;
     }
-    .compare-select-row.selected {
-        background: #fef3c7;
+    .compare-select-row.status-cancelled:hover {
+        background: #f3f4f6;
+    }
+    .compare-select-row.status-cancelled.selected {
+        background: #e5e7eb;
+    }
+    .compare-select-row.status-running {
+        background: #eff6ff;
+    }
+    .compare-select-row.status-running:hover {
+        background: #dbeafe;
+    }
+    .compare-select-row.status-running.selected {
+        background: #bfdbfe;
     }
     .compare-select-row.disabled {
         opacity: 0.5;
@@ -2167,24 +2198,23 @@
         margin-top: 2px;
     }
     .compare-select-status {
-        font-size: 11px;
-        font-weight: 500;
-        padding: 2px 8px;
-        border-radius: 4px;
-        margin-right: 12px;
+        font-size: 12px;
+        font-weight: 600;
         text-transform: capitalize;
+        min-width: 70px;
+        text-align: right;
     }
     .compare-select-status.completed {
-        background: #d1fae5;
-        color: #065f46;
+        color: #059669;
     }
     .compare-select-status.failed {
-        background: #fee2e2;
-        color: #991b1b;
+        color: #dc2626;
     }
     .compare-select-status.cancelled {
-        background: #e5e7eb;
-        color: #4b5563;
+        color: #6b7280;
+    }
+    .compare-select-status.running {
+        color: #2563eb;
     }
     .compare-select-metric {
         font-size: 14px;
@@ -2199,6 +2229,30 @@
     }
 
     /* Comparison Table Enhancements */
+    .compare-table-unified {
+        border-collapse: collapse;
+        width: 100%;
+    }
+    .compare-table-unified th,
+    .compare-table-unified td {
+        border: 1px solid #e5e7eb;
+    }
+    /* Main section headers (white background, larger text) */
+    .compare-main-section-header {
+        background: #ffffff !important;
+    }
+    .compare-main-section-header td {
+        padding: 16px 12px !important;
+        background: #ffffff !important;
+        font-weight: 700;
+        font-size: 14px;
+        color: #374151;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        border-left: none !important;
+        border-right: none !important;
+    }
+    /* Subsection headers (gray background) */
     .compare-section-header {
         background: #f3f4f6 !important;
         font-weight: 700;
@@ -3368,20 +3422,17 @@
      COMPARE SELECTION MODAL (Select experiments to compare)
      ============================================================================ -->
 <div id="compareSelectModal" class="modal-overlay hidden" onclick="closeCompareSelectModal(event)">
-    <div class="modal-container" style="max-width: 600px;" onclick="event.stopPropagation()">
+    <div class="modal-container" style="max-width: 900px;" onclick="event.stopPropagation()">
         <div class="modal-header">
             <div class="modal-header-icon info">
                 <i class="fas fa-check-square"></i>
             </div>
             <h3 class="modal-header-title">Select Experiments to Compare</h3>
-            <button type="button" class="modal-close-btn" onclick="closeCompareSelectModal()">
-                <i class="fas fa-times"></i>
-            </button>
         </div>
         <div class="modal-body" style="padding: 16px 24px;">
             <!-- Selection info -->
             <div class="compare-select-info" style="margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center;">
-                <span class="text-sm text-gray-500">Select 2-5 experiments to compare</span>
+                <span class="text-sm text-gray-500">Select 2-4 experiments to compare</span>
                 <span id="compareSelectCount" class="text-sm font-medium" style="color: #f59e0b;">0 selected</span>
             </div>
 
@@ -3398,23 +3449,34 @@
                 <p class="text-sm text-gray-400 mt-2">Run some experiments first, then come back to compare them.</p>
             </div>
 
-            <!-- Experiment List -->
-            <div id="compareSelectList" class="compare-select-list hidden" style="max-height: 400px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 8px;">
+            <!-- Experiment List (2-column grid) -->
+            <div id="compareSelectList" class="compare-select-list hidden" style="max-height: 324px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 8px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 0;">
                 <!-- Rows added dynamically -->
+            </div>
+
+            <!-- Pagination Controls -->
+            <div id="compareSelectPagination" class="hidden" style="display: flex; flex-direction: column; gap: 12px; margin-top: 16px; padding-top: 16px; border-top: 1px solid #e5e7eb;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div id="compareSelectPageInfo" class="text-sm text-gray-600">
+                        Showing 1-20 of 0 experiments
+                    </div>
+                    <div id="compareSelectPageControls" style="display: flex; align-items: center; gap: 8px;">
+                        <!-- Pagination buttons added dynamically -->
+                    </div>
+                </div>
             </div>
         </div>
         <div class="modal-footer-wizard-neu">
-            <div class="footer-left">
-                <button type="button" class="btn-neu btn-neu-action btn-neu-secondary" onclick="clearCompareSelection()" style="font-size: 12px;">
+            <div class="footer-left"></div>
+            <div class="footer-right">
+                <button type="button" class="btn-neu btn-neu-action btn-neu-secondary" onclick="clearCompareSelection()" style="min-width: 100px;">
                     <span class="btn-neu-inner">Clear All</span>
                 </button>
-            </div>
-            <div class="footer-right">
-                <button type="button" class="btn-neu btn-neu-action btn-neu-cancel" onclick="closeCompareSelectModal()">
-                    <span class="btn-neu-inner">Cancel</span>
+                <button type="button" id="compareSelectBtn" class="btn-neu btn-neu-action btn-neu-save" onclick="proceedToCompare()" disabled style="min-width: 100px;">
+                    <span class="btn-neu-inner">Compare</span>
                 </button>
-                <button type="button" id="compareSelectBtn" class="btn-neu btn-neu-action btn-neu-primary" onclick="proceedToCompare()" disabled>
-                    <span class="btn-neu-inner">Compare (0)</span>
+                <button type="button" class="btn-neu btn-neu-action btn-neu-cancel" onclick="closeCompareSelectModal()" style="min-width: 100px;">
+                    <span class="btn-neu-inner">Cancel</span>
                 </button>
             </div>
         </div>
@@ -3431,9 +3493,6 @@
                 <i class="fas fa-columns"></i>
             </div>
             <h3 class="modal-header-title">Compare Experiments</h3>
-            <button type="button" class="modal-close-btn" onclick="closeCompareModal()">
-                <i class="fas fa-times"></i>
-            </button>
         </div>
         <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
             <!-- Loading State -->
@@ -3446,63 +3505,24 @@
             <div id="compareEmpty" class="chapter-empty-state">
                 <i class="fas fa-check-square chapter-empty-icon"></i>
                 <p class="chapter-empty-text">Select experiments to compare</p>
-                <p class="text-sm text-gray-400 mt-2">Use the checkboxes on experiment cards to select 2-5 experiments for comparison</p>
+                <p class="text-sm text-gray-400 mt-2">Use the checkboxes on experiment cards to select 2-4 experiments for comparison</p>
             </div>
 
             <!-- Comparison Content -->
             <div id="compareContent" class="hidden">
-                <!-- Metrics Comparison Table -->
-                <div class="exp-view-section-group">
-                    <h4 class="exp-view-group-title">Metrics Comparison</h4>
-                    <div class="compare-table-wrapper">
-                        <table id="compareMetricsTable" class="compare-table">
-                            <thead>
-                                <tr id="compareMetricsHeader">
-                                    <th>Metric</th>
-                                    <!-- Experiment columns added dynamically -->
-                                </tr>
-                            </thead>
-                            <tbody id="compareMetricsBody">
-                                <!-- Rows added dynamically -->
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <!-- Parameters Comparison Table -->
-                <div class="exp-view-section-group">
-                    <h4 class="exp-view-group-title">Parameters Comparison</h4>
-                    <div class="compare-table-wrapper">
-                        <table id="compareParamsTable" class="compare-table">
-                            <thead>
-                                <tr id="compareParamsHeader">
-                                    <th>Parameter</th>
-                                    <!-- Experiment columns added dynamically -->
-                                </tr>
-                            </thead>
-                            <tbody id="compareParamsBody">
-                                <!-- Rows added dynamically -->
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <!-- Configuration Comparison Table -->
-                <div class="exp-view-section-group">
-                    <h4 class="exp-view-group-title">Configuration</h4>
-                    <div class="compare-table-wrapper">
-                        <table id="compareConfigTable" class="compare-table">
-                            <thead>
-                                <tr id="compareConfigHeader">
-                                    <th>Setting</th>
-                                    <!-- Experiment columns added dynamically -->
-                                </tr>
-                            </thead>
-                            <tbody id="compareConfigBody">
-                                <!-- Rows added dynamically -->
-                            </tbody>
-                        </table>
-                    </div>
+                <!-- Unified Comparison Table -->
+                <div class="compare-table-wrapper">
+                    <table id="compareUnifiedTable" class="compare-table compare-table-unified">
+                        <thead>
+                            <tr id="compareUnifiedHeader">
+                                <th></th>
+                                <!-- Experiment columns added dynamically -->
+                            </tr>
+                        </thead>
+                        <tbody id="compareUnifiedBody">
+                            <!-- All rows added dynamically -->
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>
@@ -6926,15 +6946,19 @@ function cancelExpFromCard(event, expId) {
 // =============================================================================
 let compareSelectIds = new Set();
 let selectableExperiments = [];
+let compareSelectCurrentPage = 1;
+const COMPARE_SELECT_PER_PAGE = 20;
 
 async function openCompareSelectModal() {
     const modal = document.getElementById('compareSelectModal');
     const loadingEl = document.getElementById('compareSelectLoading');
     const emptyEl = document.getElementById('compareSelectEmpty');
     const listEl = document.getElementById('compareSelectList');
+    const paginationEl = document.getElementById('compareSelectPagination');
 
-    // Reset selection
+    // Reset selection and pagination
     compareSelectIds.clear();
+    compareSelectCurrentPage = 1;
     updateCompareSelectUI();
 
     // Show modal with loading state
@@ -6959,12 +6983,22 @@ async function openCompareSelectModal() {
 
         if (selectableExperiments.length === 0) {
             emptyEl.classList.remove('hidden');
+            paginationEl.classList.add('hidden');
             return;
         }
 
-        // Render experiment list
+        // Render experiment list with pagination
         renderSelectableExperiments();
         listEl.classList.remove('hidden');
+
+        // Show pagination if more than one page
+        if (selectableExperiments.length > COMPARE_SELECT_PER_PAGE) {
+            paginationEl.classList.remove('hidden');
+            paginationEl.style.display = 'flex';
+            renderCompareSelectPagination();
+        } else {
+            paginationEl.classList.add('hidden');
+        }
 
     } catch (error) {
         console.error('Error loading selectable experiments:', error);
@@ -6983,10 +7017,16 @@ function renderSelectableExperiments() {
     const listEl = document.getElementById('compareSelectList');
     listEl.innerHTML = '';
 
-    selectableExperiments.forEach(exp => {
+    // Calculate pagination
+    const startIdx = (compareSelectCurrentPage - 1) * COMPARE_SELECT_PER_PAGE;
+    const endIdx = Math.min(startIdx + COMPARE_SELECT_PER_PAGE, selectableExperiments.length);
+    const pageExperiments = selectableExperiments.slice(startIdx, endIdx);
+
+    pageExperiments.forEach(exp => {
         const row = document.createElement('div');
-        row.className = 'compare-select-row';
+        row.className = `compare-select-row status-${exp.status || 'running'}`;
         row.dataset.expId = exp.id;
+        row.dataset.status = exp.status || 'running';
         row.onclick = () => toggleCompareSelect(exp.id);
 
         const checkbox = document.createElement('input');
@@ -7025,19 +7065,9 @@ function renderSelectableExperiments() {
         status.className = `compare-select-status ${exp.status}`;
         status.textContent = exp.status;
 
-        const metric = document.createElement('span');
-        metric.className = 'compare-select-metric';
-        if (exp.recall_at_100 !== null && exp.recall_at_100 !== undefined) {
-            metric.textContent = (exp.recall_at_100 * 100).toFixed(1) + '%';
-        } else {
-            metric.textContent = '—';
-            metric.classList.add('na');
-        }
-
         row.appendChild(checkbox);
         row.appendChild(infoCol);
         row.appendChild(status);
-        row.appendChild(metric);
 
         listEl.appendChild(row);
     });
@@ -7046,10 +7076,10 @@ function renderSelectableExperiments() {
 function toggleCompareSelect(expId) {
     if (compareSelectIds.has(expId)) {
         compareSelectIds.delete(expId);
-    } else if (compareSelectIds.size < 5) {
+    } else if (compareSelectIds.size < 4) {
         compareSelectIds.add(expId);
     } else {
-        showError('Maximum 5 experiments can be compared');
+        showError('Maximum 4 experiments can be compared');
         return;
     }
     updateCompareSelectUI();
@@ -7066,7 +7096,6 @@ function updateCompareSelectUI() {
     // Update button state
     const btn = document.getElementById('compareSelectBtn');
     btn.disabled = count < 2;
-    btn.querySelector('.btn-neu-inner').textContent = `Compare (${count})`;
 
     // Update row highlighting and checkboxes
     document.querySelectorAll('.compare-select-row').forEach(row => {
@@ -7077,7 +7106,7 @@ function updateCompareSelectUI() {
         if (checkbox) checkbox.checked = isSelected;
 
         // Disable row if at limit and not selected
-        const atLimit = compareSelectIds.size >= 5 && !isSelected;
+        const atLimit = compareSelectIds.size >= 4 && !isSelected;
         row.classList.toggle('disabled', atLimit);
     });
 }
@@ -7085,6 +7114,97 @@ function updateCompareSelectUI() {
 function clearCompareSelection() {
     compareSelectIds.clear();
     updateCompareSelectUI();
+}
+
+function renderCompareSelectPagination() {
+    const totalPages = Math.ceil(selectableExperiments.length / COMPARE_SELECT_PER_PAGE);
+    const startIdx = (compareSelectCurrentPage - 1) * COMPARE_SELECT_PER_PAGE + 1;
+    const endIdx = Math.min(compareSelectCurrentPage * COMPARE_SELECT_PER_PAGE, selectableExperiments.length);
+
+    // Update page info text
+    const pageInfoEl = document.getElementById('compareSelectPageInfo');
+    pageInfoEl.innerHTML = `Showing <span class="font-semibold">${startIdx}</span>-<span class="font-semibold">${endIdx}</span> of <span class="font-semibold">${selectableExperiments.length}</span> experiments`;
+
+    // Render pagination controls
+    const controlsEl = document.getElementById('compareSelectPageControls');
+    controlsEl.innerHTML = '';
+
+    // Previous button
+    const prevBtn = document.createElement('button');
+    prevBtn.className = 'px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold bg-white hover:bg-gray-50';
+    prevBtn.textContent = 'Previous';
+    prevBtn.disabled = compareSelectCurrentPage === 1;
+    if (compareSelectCurrentPage === 1) {
+        prevBtn.className = 'px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold opacity-50 cursor-not-allowed bg-gray-100';
+    }
+    prevBtn.onclick = () => goToCompareSelectPage(compareSelectCurrentPage - 1);
+    controlsEl.appendChild(prevBtn);
+
+    // Page number buttons
+    const maxVisiblePages = 5;
+    let startPage = 1;
+    let endPage = totalPages;
+
+    if (totalPages > maxVisiblePages) {
+        // Show first 5 pages, then ..., then last page
+        startPage = 1;
+        endPage = Math.min(5, totalPages);
+    }
+
+    for (let i = startPage; i <= endPage; i++) {
+        const pageBtn = document.createElement('button');
+        pageBtn.textContent = i;
+        if (i === compareSelectCurrentPage) {
+            pageBtn.className = 'w-10 h-10 flex items-center justify-center rounded-md text-sm font-semibold bg-blue-600 text-white';
+        } else {
+            pageBtn.className = 'w-10 h-10 flex items-center justify-center rounded-md text-sm font-semibold border border-gray-300 text-gray-700 hover:bg-blue-50 hover:border-blue-500';
+        }
+        pageBtn.onclick = () => goToCompareSelectPage(i);
+        controlsEl.appendChild(pageBtn);
+    }
+
+    // Ellipsis and last page if needed
+    if (totalPages > maxVisiblePages) {
+        const ellipsis = document.createElement('span');
+        ellipsis.className = 'px-2 text-gray-500';
+        ellipsis.textContent = '...';
+        controlsEl.appendChild(ellipsis);
+
+        const lastPageBtn = document.createElement('button');
+        lastPageBtn.textContent = totalPages;
+        if (totalPages === compareSelectCurrentPage) {
+            lastPageBtn.className = 'w-10 h-10 flex items-center justify-center rounded-md text-sm font-semibold bg-blue-600 text-white';
+        } else {
+            lastPageBtn.className = 'w-10 h-10 flex items-center justify-center rounded-md text-sm font-semibold border border-gray-300 text-gray-700 hover:bg-blue-50 hover:border-blue-500';
+        }
+        lastPageBtn.onclick = () => goToCompareSelectPage(totalPages);
+        controlsEl.appendChild(lastPageBtn);
+    }
+
+    // Next button
+    const nextBtn = document.createElement('button');
+    nextBtn.className = 'px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold bg-white hover:bg-gray-50';
+    nextBtn.textContent = 'Next';
+    nextBtn.disabled = compareSelectCurrentPage === totalPages;
+    if (compareSelectCurrentPage === totalPages) {
+        nextBtn.className = 'px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold opacity-50 cursor-not-allowed bg-gray-100';
+    }
+    nextBtn.onclick = () => goToCompareSelectPage(compareSelectCurrentPage + 1);
+    controlsEl.appendChild(nextBtn);
+}
+
+function goToCompareSelectPage(page) {
+    const totalPages = Math.ceil(selectableExperiments.length / COMPARE_SELECT_PER_PAGE);
+    if (page < 1 || page > totalPages) return;
+
+    compareSelectCurrentPage = page;
+    renderSelectableExperiments();
+    renderCompareSelectPagination();
+    updateCompareSelectUI();
+
+    // Scroll to top of list
+    const listEl = document.getElementById('compareSelectList');
+    listEl.scrollTop = 0;
 }
 
 async function proceedToCompare() {
@@ -7159,39 +7279,35 @@ function renderComparisonTables(comparison) {
     const experiments = comparison.experiments || [];
     if (experiments.length === 0) return;
 
-    // Clear and render all three tables with new grouped data
-    renderCompareHeaders(experiments);
-    renderGroupedMetricsTable(experiments);
-    renderGroupedParamsTable(experiments);
-    renderGroupedConfigTable(experiments);
+    // Render unified table
+    renderUnifiedCompareTable(experiments);
 }
 
-function renderCompareHeaders(experiments) {
-    const tables = ['compareMetricsHeader', 'compareParamsHeader', 'compareConfigHeader'];
+function renderUnifiedCompareTable(experiments) {
+    // Render header
+    const headerRow = document.getElementById('compareUnifiedHeader');
+    while (headerRow.children.length > 1) {
+        headerRow.removeChild(headerRow.lastChild);
+    }
 
-    tables.forEach(tableId => {
-        const headerRow = document.getElementById(tableId);
-        while (headerRow.children.length > 1) {
-            headerRow.removeChild(headerRow.lastChild);
-        }
-
-        experiments.forEach(exp => {
-            const th = document.createElement('th');
-            th.className = 'compare-exp-header';
-            th.innerHTML = `
-                <div class="compare-exp-name">${exp.display_name}</div>
-                <div class="compare-exp-subtext">${exp.feature_config?.name || ''}</div>
-            `;
-            headerRow.appendChild(th);
-        });
+    experiments.forEach(exp => {
+        const th = document.createElement('th');
+        th.className = 'compare-exp-header';
+        th.innerHTML = `
+            <div class="compare-exp-name">${exp.display_name}</div>
+            <div class="compare-exp-subtext">${exp.feature_config?.name || ''}</div>
+        `;
+        headerRow.appendChild(th);
     });
-}
 
-function renderGroupedMetricsTable(experiments) {
-    const tbody = document.getElementById('compareMetricsBody');
+    // Render body with all sections
+    const tbody = document.getElementById('compareUnifiedBody');
     tbody.innerHTML = '';
 
-    // Results section
+    // METRICS COMPARISON section
+    addSectionHeader(tbody, 'Metrics Comparison', experiments.length);
+
+    // Results subsection
     addSectionHeader(tbody, 'Results', experiments.length);
 
     const resultRows = [
@@ -7210,13 +7326,11 @@ function renderGroupedMetricsTable(experiments) {
 
     // Status row
     addCompareRow(tbody, 'Status', experiments, exp => exp.status, v => v, null, true);
-}
 
-function renderGroupedParamsTable(experiments) {
-    const tbody = document.getElementById('compareParamsBody');
-    tbody.innerHTML = '';
+    // PARAMETERS COMPARISON section
+    addSectionHeader(tbody, 'Parameters Comparison', experiments.length);
 
-    // Training Parameters section
+    // Training Parameters subsection
     addSectionHeader(tbody, 'Training Parameters', experiments.length);
 
     const trainingRows = [
@@ -7230,7 +7344,7 @@ function renderGroupedParamsTable(experiments) {
         addCompareRow(tbody, rowDef.label, experiments, rowDef.getter, rowDef.format);
     });
 
-    // Sampling section
+    // Sampling subsection
     addSectionHeader(tbody, 'Sampling', experiments.length);
 
     const samplingRows = [
@@ -7243,13 +7357,11 @@ function renderGroupedParamsTable(experiments) {
     samplingRows.forEach(rowDef => {
         addCompareRow(tbody, rowDef.label, experiments, rowDef.getter, rowDef.format);
     });
-}
 
-function renderGroupedConfigTable(experiments) {
-    const tbody = document.getElementById('compareConfigBody');
-    tbody.innerHTML = '';
+    // CONFIGURATION section
+    addSectionHeader(tbody, 'Configuration', experiments.length);
 
-    // Dataset section
+    // Dataset subsection
     addSectionHeader(tbody, 'Dataset', experiments.length);
 
     const datasetRows = [
@@ -7263,7 +7375,7 @@ function renderGroupedConfigTable(experiments) {
         addCompareRow(tbody, rowDef.label, experiments, rowDef.getter, rowDef.format);
     });
 
-    // Feature Config section
+    // Feature Config subsection
     addSectionHeader(tbody, 'Feature Config', experiments.length);
 
     const featureRows = [
@@ -7281,7 +7393,7 @@ function renderGroupedConfigTable(experiments) {
         addCompareRow(tbody, rowDef.label, experiments, rowDef.getter, rowDef.format);
     });
 
-    // Model Config section
+    // Model Config subsection
     addSectionHeader(tbody, 'Model Config', experiments.length);
 
     const modelRows = [
@@ -7297,9 +7409,13 @@ function renderGroupedConfigTable(experiments) {
     });
 }
 
-function addSectionHeader(tbody, title, colSpan) {
+function addSectionHeader(tbody, title, colSpan, isMainSection = false) {
+    // Main sections: Metrics Comparison, Parameters Comparison, Configuration
+    const mainSections = ['Metrics Comparison', 'Parameters Comparison', 'Configuration'];
+    const isMain = mainSections.includes(title);
+
     const row = document.createElement('tr');
-    row.className = 'compare-section-header';
+    row.className = isMain ? 'compare-main-section-header' : 'compare-section-header';
     const cell = document.createElement('td');
     cell.colSpan = colSpan + 1;
     cell.textContent = title;
@@ -7393,7 +7509,7 @@ function toggleExperimentSelection(expId) {
     // Deprecated: kept for backwards compatibility
     if (selectedExperimentIds.has(expId)) {
         selectedExperimentIds.delete(expId);
-    } else if (selectedExperimentIds.size < 5) {
+    } else if (selectedExperimentIds.size < 4) {
         selectedExperimentIds.add(expId);
     }
 }

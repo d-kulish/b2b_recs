@@ -1664,7 +1664,7 @@ def selectable_experiments(request):
                 "id": 123,
                 "experiment_number": "Exp #45",
                 "experiment_name": "Testing Q4 features",
-                "experiment_description_short": "First 30 chars of desc...",
+                "experiment_description_short": "First 50 chars of desc...",
                 "status": "completed",
                 "recall_at_100": 0.473,
                 "feature_config_name": "Q4 v2",
@@ -1700,11 +1700,11 @@ def selectable_experiments(request):
 
         experiments = []
         for qt in queryset:
-            # Truncate description to 30 chars
+            # Truncate description to 50 chars
             desc_short = ''
             if qt.experiment_description:
-                desc_short = qt.experiment_description[:30]
-                if len(qt.experiment_description) > 30:
+                desc_short = qt.experiment_description[:50]
+                if len(qt.experiment_description) > 50:
                     desc_short += '...'
 
             experiments.append({

@@ -2061,6 +2061,66 @@
         max-height: 200px;
     }
 
+    /* Final Metrics Table */
+    .final-metrics-table {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+    }
+    .final-metrics-category {
+        background: #f9fafb;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        padding: 12px 16px;
+    }
+    .final-metrics-category-title {
+        font-size: 12px;
+        font-weight: 600;
+        color: #6b7280;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin: 0 0 12px 0;
+    }
+    .final-metrics-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+        gap: 12px;
+    }
+    .final-metric-item {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+    .final-metric-label {
+        font-size: 11px;
+        color: #6b7280;
+    }
+    .final-metric-value {
+        font-size: 14px;
+        font-weight: 600;
+        color: #111827;
+    }
+    .final-metric-value.metric-value-highlight {
+        color: #059669;
+    }
+
+    /* Weight Stats Controls */
+    .weight-stats-controls {
+        margin-bottom: 8px;
+    }
+    .weight-stats-select {
+        padding: 4px 8px;
+        border: 1px solid #e5e7eb;
+        border-radius: 4px;
+        font-size: 12px;
+        background: white;
+        cursor: pointer;
+    }
+    .weight-stats-select:focus {
+        outline: none;
+        border-color: #3b82f6;
+    }
+
     /* Comparison Table */
     .compare-table-wrapper {
         overflow-x: auto;
@@ -3813,6 +3873,23 @@
                         <div class="training-chart-wrapper">
                             <h5 class="training-chart-title">Recall Metrics</h5>
                             <canvas id="trainingMetricsChart" height="200"></canvas>
+                        </div>
+                    </div>
+                    <!-- Second row: Weight Norms and Weight Distribution -->
+                    <div class="training-charts-container" style="margin-top: 16px;">
+                        <div class="training-chart-wrapper">
+                            <h5 class="training-chart-title">Weight Norms (L2)</h5>
+                            <canvas id="trainingGradientChart" height="200"></canvas>
+                        </div>
+                        <div class="training-chart-wrapper">
+                            <h5 class="training-chart-title">Weight Distribution</h5>
+                            <div class="weight-stats-controls">
+                                <select id="weightStatsTower" class="weight-stats-select" onchange="updateWeightStatsChart()">
+                                    <option value="query">Query Tower</option>
+                                    <option value="candidate">Candidate Tower</option>
+                                </select>
+                            </div>
+                            <canvas id="trainingWeightStatsChart" height="180"></canvas>
                         </div>
                     </div>
                 </div>
@@ -6564,6 +6641,9 @@ function renderSchema(schema) {
 // Training chart instances (for cleanup)
 let trainingLossChart = null;
 let trainingMetricsChart = null;
+let trainingGradientChart = null;
+let trainingWeightStatsChart = null;
+let currentWeightStatsData = null;  // Store for tower switching
 
 // Lazy load training history and render charts
 async function loadTrainingHistory() {
@@ -6587,6 +6667,15 @@ async function loadTrainingHistory() {
         trainingMetricsChart.destroy();
         trainingMetricsChart = null;
     }
+    if (trainingGradientChart) {
+        trainingGradientChart.destroy();
+        trainingGradientChart = null;
+    }
+    if (trainingWeightStatsChart) {
+        trainingWeightStatsChart.destroy();
+        trainingWeightStatsChart = null;
+    }
+    currentWeightStatsData = null;
 
     try {
         const response = await fetch(`/api/quick-tests/${viewModalExpId}/training-history/`);
@@ -6625,47 +6714,138 @@ async function loadTrainingHistory() {
 function renderTrainingCharts(history) {
     renderLossChart(history);
     renderMetricsChart(history);
+    renderGradientChart(history);
+    renderWeightStatsChart(history);
+    renderFinalMetricsTable(history);
+}
+
+// Render final metrics summary table from MLflow data
+function renderFinalMetricsTable(history) {
+    const container = document.getElementById('expViewMetricsRows');
+    const section = document.getElementById('expViewFinalMetrics');
+    if (!container || !section) return;
+
+    const finalMetrics = history.final_metrics || {};
+
+    // If no final metrics, hide the section
+    if (Object.keys(finalMetrics).length === 0) {
+        section.classList.add('hidden');
+        return;
+    }
+
+    // Group metrics by category
+    const categories = {
+        'Test Metrics': [],
+        'Final Training Metrics': []
+    };
+
+    // Define metric display config
+    const metricConfig = {
+        'test_loss': { label: 'Test Loss', format: 'loss', category: 'Test Metrics' },
+        'test_total_loss': { label: 'Test Total Loss', format: 'loss', category: 'Test Metrics' },
+        'test_regularization_loss': { label: 'Test Reg. Loss', format: 'loss', category: 'Test Metrics' },
+        'test_recall_at_5': { label: 'Test Recall@5', format: 'percent', category: 'Test Metrics' },
+        'test_recall_at_10': { label: 'Test Recall@10', format: 'percent', category: 'Test Metrics' },
+        'test_recall_at_50': { label: 'Test Recall@50', format: 'percent', category: 'Test Metrics' },
+        'test_recall_at_100': { label: 'Test Recall@100', format: 'percent', category: 'Test Metrics' },
+        'final_loss': { label: 'Final Training Loss', format: 'loss', category: 'Final Training Metrics' },
+        'final_val_loss': { label: 'Final Val. Loss', format: 'loss', category: 'Final Training Metrics' },
+        'final_total_loss': { label: 'Final Total Loss', format: 'loss', category: 'Final Training Metrics' },
+        'final_val_total_loss': { label: 'Final Val. Total Loss', format: 'loss', category: 'Final Training Metrics' },
+        'final_regularization_loss': { label: 'Final Reg. Loss', format: 'loss', category: 'Final Training Metrics' },
+    };
+
+    // Process metrics
+    Object.entries(finalMetrics).forEach(([key, value]) => {
+        const config = metricConfig[key];
+        if (config) {
+            let formattedValue;
+            if (config.format === 'percent') {
+                formattedValue = value != null ? (value * 100).toFixed(2) + '%' : 'N/A';
+            } else {
+                formattedValue = value != null ? value.toFixed(4) : 'N/A';
+            }
+            categories[config.category].push({
+                label: config.label,
+                value: formattedValue,
+                rawValue: value
+            });
+        }
+    });
+
+    // Build HTML
+    let html = '<div class="final-metrics-table">';
+
+    Object.entries(categories).forEach(([category, metrics]) => {
+        if (metrics.length > 0) {
+            html += `<div class="final-metrics-category">
+                <h5 class="final-metrics-category-title">${category}</h5>
+                <div class="final-metrics-grid">`;
+
+            metrics.forEach(metric => {
+                // Highlight recall metrics
+                const isRecall = metric.label.includes('Recall');
+                const valueClass = isRecall ? 'metric-value-highlight' : '';
+                html += `
+                    <div class="final-metric-item">
+                        <span class="final-metric-label">${metric.label}</span>
+                        <span class="final-metric-value ${valueClass}">${metric.value}</span>
+                    </div>`;
+            });
+
+            html += '</div></div>';
+        }
+    });
+
+    html += '</div>';
+    container.innerHTML = html;
+    section.classList.remove('hidden');
 }
 
 function renderLossChart(history) {
     const ctx = document.getElementById('trainingLossChart');
     if (!ctx) return;
 
-    const trainLoss = history.loss?.train || [];
-    const valLoss = history.loss?.val || [];
-    const epochs = history.epochs || trainLoss.map((_, i) => i);
+    const loss = history.loss || {};
+    const epochs = history.epochs || [];
 
-    if (trainLoss.length === 0) {
+    // Check if we have any loss data
+    const hasData = Object.values(loss).some(arr => arr && arr.length > 0);
+    if (!hasData) {
         return;
     }
 
     const datasets = [];
 
-    if (trainLoss.length > 0) {
-        datasets.push({
-            label: 'Training Loss',
-            data: trainLoss,
-            borderColor: '#3b82f6',
-            backgroundColor: 'rgba(59, 130, 246, 0.1)',
-            fill: true,
-            tension: 0.3,
-            pointRadius: 3,
-            pointHoverRadius: 5
-        });
-    }
+    // Define loss types with their display config
+    // Primary losses (solid lines, filled)
+    const lossConfig = [
+        { key: 'train', label: 'Training Loss', color: '#3b82f6', dash: [], fill: true },
+        { key: 'val', label: 'Validation Loss', color: '#f59e0b', dash: [], fill: true },
+        // Secondary losses (dashed lines, no fill) - hidden by default
+        { key: 'total', label: 'Total Loss', color: '#8b5cf6', dash: [5, 5], fill: false, hidden: true },
+        { key: 'val_total', label: 'Val Total Loss', color: '#a78bfa', dash: [5, 5], fill: false, hidden: true },
+        { key: 'regularization', label: 'Reg Loss', color: '#6b7280', dash: [2, 2], fill: false, hidden: true },
+        { key: 'val_regularization', label: 'Val Reg Loss', color: '#9ca3af', dash: [2, 2], fill: false, hidden: true },
+    ];
 
-    if (valLoss.length > 0) {
-        datasets.push({
-            label: 'Validation Loss',
-            data: valLoss,
-            borderColor: '#f59e0b',
-            backgroundColor: 'rgba(245, 158, 11, 0.1)',
-            fill: true,
-            tension: 0.3,
-            pointRadius: 3,
-            pointHoverRadius: 5
-        });
-    }
+    lossConfig.forEach(config => {
+        const data = loss[config.key] || [];
+        if (data.length > 0) {
+            datasets.push({
+                label: config.label,
+                data: data,
+                borderColor: config.color,
+                backgroundColor: config.fill ? `${config.color}1a` : 'transparent',
+                fill: config.fill,
+                tension: 0.3,
+                pointRadius: 3,
+                pointHoverRadius: 5,
+                borderDash: config.dash,
+                hidden: config.hidden || false
+            });
+        }
+    });
 
     trainingLossChart = new Chart(ctx, {
         type: 'line',
@@ -6681,8 +6861,21 @@ function renderLossChart(history) {
                     position: 'top',
                     labels: {
                         boxWidth: 12,
-                        font: { size: 11 }
+                        font: { size: 11 },
+                        usePointStyle: true
+                    },
+                    onClick: function(e, legendItem, legend) {
+                        // Toggle visibility when clicking legend
+                        const index = legendItem.datasetIndex;
+                        const ci = legend.chart;
+                        const meta = ci.getDatasetMeta(index);
+                        meta.hidden = meta.hidden === null ? !ci.data.datasets[index].hidden : null;
+                        ci.update();
                     }
+                },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false
                 }
             },
             scales: {
@@ -6698,6 +6891,11 @@ function renderLossChart(history) {
                 x: {
                     ticks: { font: { size: 10 } }
                 }
+            },
+            interaction: {
+                mode: 'nearest',
+                axis: 'x',
+                intersect: false
             }
         }
     });
@@ -6707,39 +6905,165 @@ function renderMetricsChart(history) {
     const ctx = document.getElementById('trainingMetricsChart');
     if (!ctx) return;
 
-    const metrics = history.metrics || {};
-    const epochs = history.epochs || [];
+    const finalMetrics = history.final_metrics || {};
 
-    if (Object.keys(metrics).length === 0) {
-        return;
-    }
+    // Extract recall metrics from final_metrics (test_recall_at_10, test_recall_at_50, test_recall_at_100)
+    const recallLabels = [];
+    const recallValues = [];
+    const colors = ['#10b981', '#8b5cf6', '#ec4899'];
 
-    const colors = ['#10b981', '#8b5cf6', '#ec4899', '#06b6d4'];
-    const datasets = [];
+    // Define the recall metrics we want to show (in order)
+    const recallKeys = [
+        { key: 'test_recall_at_10', label: 'Recall@10' },
+        { key: 'test_recall_at_50', label: 'Recall@50' },
+        { key: 'test_recall_at_100', label: 'Recall@100' }
+    ];
 
-    Object.entries(metrics).forEach(([key, values], i) => {
-        if (values && values.length > 0) {
-            // Format key for display
-            const label = key
-                .replace('top_', 'Recall@')
-                .replace('recall_at_', 'Recall@')
-                .replace(/_/g, ' ');
-
-            datasets.push({
-                label: label,
-                data: values,
-                borderColor: colors[i % colors.length],
-                tension: 0.3,
-                fill: false,
-                pointRadius: 3,
-                pointHoverRadius: 5
-            });
+    recallKeys.forEach(({ key, label }) => {
+        if (finalMetrics[key] !== undefined) {
+            recallLabels.push(label);
+            recallValues.push(finalMetrics[key]);
         }
     });
 
-    if (datasets.length === 0) return;
+    // If no recall metrics found, show a placeholder message
+    if (recallValues.length === 0) {
+        // Check if there was an evaluation error
+        const hasAnyFinalMetrics = Object.keys(finalMetrics).length > 0;
+        if (hasAnyFinalMetrics) {
+            // Training completed but recall evaluation failed
+            ctx.parentElement.innerHTML = `
+                <h5 class="training-chart-title">Recall Metrics</h5>
+                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 180px; color: #9ca3af; text-align: center;">
+                    <i class="fas fa-exclamation-triangle" style="font-size: 24px; margin-bottom: 8px; color: #f59e0b;"></i>
+                    <span style="font-size: 13px;">Recall evaluation failed</span>
+                    <span style="font-size: 11px; margin-top: 4px;">Check logs for details</span>
+                </div>
+            `;
+        }
+        return;
+    }
 
     trainingMetricsChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: recallLabels,
+            datasets: [{
+                label: 'Test Recall',
+                data: recallValues,
+                backgroundColor: colors.slice(0, recallValues.length),
+                borderColor: colors.slice(0, recallValues.length).map(c => c),
+                borderWidth: 1,
+                borderRadius: 4,
+                barThickness: 40
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const value = context.parsed.y;
+                            return `${(value * 100).toFixed(2)}%`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 1,
+                    title: {
+                        display: true,
+                        text: 'Recall Rate',
+                        font: { size: 11 }
+                    },
+                    ticks: {
+                        font: { size: 10 },
+                        callback: function(value) {
+                            return (value * 100).toFixed(0) + '%';
+                        }
+                    }
+                },
+                x: {
+                    ticks: { font: { size: 11 } }
+                }
+            }
+        }
+    });
+}
+
+// Render weight norms chart (tracks L2 norm of weights per tower)
+function renderGradientChart(history) {
+    const ctx = document.getElementById('trainingGradientChart');
+    if (!ctx) return;
+
+    const weightNorms = history.gradient || {};
+    const epochs = history.epochs || [];
+
+    // Check if we have weight norm data
+    const hasTotal = weightNorms.total && weightNorms.total.length > 0;
+    const hasQuery = weightNorms.query && weightNorms.query.length > 0;
+    const hasCandidate = weightNorms.candidate && weightNorms.candidate.length > 0;
+
+    if (!hasTotal && !hasQuery && !hasCandidate) {
+        // Show placeholder
+        ctx.parentElement.innerHTML = `
+            <h5 class="training-chart-title">Weight Norms (L2)</h5>
+            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 180px; color: #9ca3af; text-align: center;">
+                <i class="fas fa-chart-line" style="font-size: 24px; margin-bottom: 8px; opacity: 0.5;"></i>
+                <span style="font-size: 13px;">Weight norm data not available</span>
+                <span style="font-size: 11px; margin-top: 4px;">Run a new experiment to collect weight norms</span>
+            </div>
+        `;
+        return;
+    }
+
+    const datasets = [];
+
+    if (hasTotal) {
+        datasets.push({
+            label: 'Total',
+            data: weightNorms.total,
+            borderColor: '#6b7280',
+            backgroundColor: 'rgba(107, 114, 128, 0.1)',
+            fill: false,
+            tension: 0.3,
+            pointRadius: 3,
+            borderDash: [5, 5]
+        });
+    }
+
+    if (hasQuery) {
+        datasets.push({
+            label: 'Query Tower',
+            data: weightNorms.query,
+            borderColor: '#3b82f6',
+            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+            fill: true,
+            tension: 0.3,
+            pointRadius: 3
+        });
+    }
+
+    if (hasCandidate) {
+        datasets.push({
+            label: 'Candidate Tower',
+            data: weightNorms.candidate,
+            borderColor: '#10b981',
+            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+            fill: true,
+            tension: 0.3,
+            pointRadius: 3
+        });
+    }
+
+    trainingGradientChart = new Chart(ctx, {
         type: 'line',
         data: {
             labels: epochs.map(e => `Epoch ${e + 1}`),
@@ -6751,34 +7075,137 @@ function renderMetricsChart(history) {
             plugins: {
                 legend: {
                     position: 'top',
-                    labels: {
-                        boxWidth: 12,
-                        font: { size: 11 }
-                    }
-                }
+                    labels: { boxWidth: 12, font: { size: 11 } }
+                },
+                tooltip: { mode: 'index', intersect: false }
             },
             scales: {
                 y: {
                     beginAtZero: true,
-                    max: 1,
-                    title: {
-                        display: true,
-                        text: 'Accuracy',
-                        font: { size: 11 }
-                    },
-                    ticks: {
-                        font: { size: 10 },
-                        callback: function(value) {
-                            return (value * 100).toFixed(0) + '%';
-                        }
-                    }
-                },
-                x: {
+                    title: { display: true, text: 'L2 Norm', font: { size: 11 } },
                     ticks: { font: { size: 10 } }
-                }
+                },
+                x: { ticks: { font: { size: 10 } } }
             }
         }
     });
+}
+
+// Render weight statistics chart
+function renderWeightStatsChart(history, tower = 'query') {
+    const ctx = document.getElementById('trainingWeightStatsChart');
+    if (!ctx) return;
+
+    // Store data for tower switching
+    currentWeightStatsData = history;
+
+    const weightStats = history.weight_stats || {};
+    const epochs = history.epochs || [];
+    const towerStats = weightStats[tower] || {};
+
+    // Check if we have data
+    const hasData = towerStats.mean && towerStats.mean.length > 0;
+
+    if (!hasData) {
+        // Show placeholder
+        ctx.parentElement.querySelector('canvas').style.display = 'none';
+        const placeholder = document.createElement('div');
+        placeholder.style.cssText = 'display: flex; flex-direction: column; align-items: center; justify-content: center; height: 160px; color: #9ca3af; text-align: center;';
+        placeholder.innerHTML = `
+            <i class="fas fa-layer-group" style="font-size: 24px; margin-bottom: 8px; opacity: 0.5;"></i>
+            <span style="font-size: 13px;">Weight data not available</span>
+            <span style="font-size: 11px; margin-top: 4px;">Run a new experiment to collect weight stats</span>
+        `;
+        const existingPlaceholder = ctx.parentElement.querySelector('.weight-placeholder');
+        if (existingPlaceholder) existingPlaceholder.remove();
+        placeholder.className = 'weight-placeholder';
+        ctx.parentElement.appendChild(placeholder);
+        return;
+    }
+
+    // Remove placeholder if exists and show canvas
+    const existingPlaceholder = ctx.parentElement.querySelector('.weight-placeholder');
+    if (existingPlaceholder) existingPlaceholder.remove();
+    ctx.style.display = 'block';
+
+    // Destroy existing chart
+    if (trainingWeightStatsChart) {
+        trainingWeightStatsChart.destroy();
+    }
+
+    const datasets = [
+        {
+            label: 'Mean',
+            data: towerStats.mean,
+            borderColor: '#3b82f6',
+            tension: 0.3,
+            fill: false,
+            pointRadius: 2
+        },
+        {
+            label: 'Std Dev',
+            data: towerStats.std,
+            borderColor: '#f59e0b',
+            tension: 0.3,
+            fill: false,
+            pointRadius: 2
+        }
+    ];
+
+    // Add min/max as filled area if available
+    if (towerStats.min && towerStats.max) {
+        datasets.push({
+            label: 'Min',
+            data: towerStats.min,
+            borderColor: '#10b981',
+            borderDash: [2, 2],
+            tension: 0.3,
+            fill: false,
+            pointRadius: 0
+        });
+        datasets.push({
+            label: 'Max',
+            data: towerStats.max,
+            borderColor: '#ef4444',
+            borderDash: [2, 2],
+            tension: 0.3,
+            fill: false,
+            pointRadius: 0
+        });
+    }
+
+    trainingWeightStatsChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: epochs.map(e => `Epoch ${e + 1}`),
+            datasets: datasets
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'top',
+                    labels: { boxWidth: 12, font: { size: 10 } }
+                },
+                tooltip: { mode: 'index', intersect: false }
+            },
+            scales: {
+                y: {
+                    title: { display: true, text: 'Value', font: { size: 10 } },
+                    ticks: { font: { size: 9 } }
+                },
+                x: { ticks: { font: { size: 9 } } }
+            }
+        }
+    });
+}
+
+// Update weight stats chart when tower selection changes
+function updateWeightStatsChart() {
+    if (!currentWeightStatsData) return;
+    const tower = document.getElementById('weightStatsTower').value;
+    renderWeightStatsChart(currentWeightStatsData, tower);
 }
 
 function toggleErrorDetails() {

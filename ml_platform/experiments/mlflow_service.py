@@ -322,21 +322,71 @@ class MLflowService:
         result = {
             'available': True,
             'epochs': [],
-            'loss': {'train': [], 'val': []},
+            'loss': {
+                'train': [],
+                'val': [],
+                'regularization': [],
+                'val_regularization': [],
+                'total': [],
+                'val_total': []
+            },
+            'gradient': {
+                'norm': [],
+                'weight_norm': []
+            },
+            'weight_stats': {
+                'query': {'mean': [], 'std': [], 'min': [], 'max': []},
+                'candidate': {'mean': [], 'std': [], 'min': [], 'max': []}
+            },
             'metrics': {},
             'final_metrics': {}
         }
 
-        # Extract epoch numbers from loss metric
-        loss_history = metrics.get('loss', [])
+        # Extract epoch numbers from loss metric (use total_loss or loss as primary)
+        loss_history = metrics.get('total_loss', metrics.get('loss', []))
         if loss_history:
             result['epochs'] = [m['step'] for m in sorted(loss_history, key=lambda x: x['step'])]
-            result['loss']['train'] = [m['value'] for m in sorted(loss_history, key=lambda x: x['step'])]
 
-        # Validation loss
-        val_loss_history = metrics.get('val_loss', [])
-        if val_loss_history:
-            result['loss']['val'] = [m['value'] for m in sorted(val_loss_history, key=lambda x: x['step'])]
+        # All loss variants
+        loss_mappings = {
+            'loss': 'train',
+            'val_loss': 'val',
+            'regularization_loss': 'regularization',
+            'val_regularization_loss': 'val_regularization',
+            'total_loss': 'total',
+            'val_total_loss': 'val_total'
+        }
+
+        for metric_key, result_key in loss_mappings.items():
+            history = metrics.get(metric_key, [])
+            if history:
+                result['loss'][result_key] = [
+                    m['value'] for m in sorted(history, key=lambda x: x['step'])
+                ]
+
+        # Weight norm metrics (for monitoring training dynamics)
+        weight_norm_mappings = {
+            'weight_norm': 'total',
+            'query_weight_norm': 'query',
+            'candidate_weight_norm': 'candidate'
+        }
+
+        for metric_key, result_key in weight_norm_mappings.items():
+            history = metrics.get(metric_key, [])
+            if history:
+                result['gradient'][result_key] = [
+                    m['value'] for m in sorted(history, key=lambda x: x['step'])
+                ]
+
+        # Weight statistics per tower
+        for tower in ['query', 'candidate']:
+            for stat in ['mean', 'std', 'min', 'max']:
+                metric_key = f'{tower}_weights_{stat}'
+                history = metrics.get(metric_key, [])
+                if history:
+                    result['weight_stats'][tower][stat] = [
+                        m['value'] for m in sorted(history, key=lambda x: x['step'])
+                    ]
 
         # Recall metrics (may have various naming patterns)
         recall_patterns = ['recall_at_10', 'recall_at_50', 'recall_at_100',
@@ -353,10 +403,7 @@ class MLflowService:
                     m['value'] for m in sorted(history, key=lambda x: x['step'])
                 ]
 
-        # Extract final metrics
-        final_patterns = ['final_loss', 'final_val_loss', 'test_loss',
-                         'test_recall_at_10', 'test_recall_at_50', 'test_recall_at_100']
-
+        # Extract final metrics (all final_ and test_ prefixed metrics)
         for key, values in metrics.items():
             if key.startswith('final_') or key.startswith('test_'):
                 # Final metrics typically have only one value

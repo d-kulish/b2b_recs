@@ -5,7 +5,7 @@ This document provides **high-level specifications** for the Experiments domain.
 
 👉 **[phase_experiments_implementation.md](phase_experiments_implementation.md)** - Complete implementation guide with code examples
 
-**Last Updated**: 2025-12-24
+**Last Updated**: 2025-12-25
 
 ---
 
@@ -36,6 +36,133 @@ This document provides **high-level specifications** for the Experiments domain.
 ---
 
 ## Recent Updates (December 2025)
+
+### MLflow Training Metrics Enhancement (2025-12-25)
+
+**Major Enhancement:** Expanded training metrics collection and visualization in the Training tab.
+
+#### The Problem
+
+1. **Recall metrics not logged** - Bug in `_evaluate_recall_on_test_set` caused `TypeError: unhashable type: 'numpy.ndarray'` when building product ID lookup dictionary
+2. **Limited loss visualization** - Only training and validation loss shown, not regularization or total loss
+3. **No weight monitoring** - No visibility into weight norms or distributions during training
+4. **Gradient norms missing** - Couldn't detect vanishing/exploding gradients
+
+#### Changes Made
+
+**1. Fixed Recall Evaluation Bug**
+
+The `_precompute_candidate_embeddings` and `_evaluate_recall_on_test_set` functions now properly convert numpy arrays to Python scalars:
+
+```python
+# Fixed: Handle numpy arrays with extra dimensions and convert to Python scalars
+if len(batch_ids.shape) > 1:
+    batch_ids = batch_ids.flatten()
+for b in batch_ids:
+    if hasattr(b, 'decode'):
+        converted_ids.append(b.decode())  # Bytes -> string
+    elif hasattr(b, 'item'):
+        converted_ids.append(b.item())    # Numpy scalar -> Python scalar
+    else:
+        converted_ids.append(b)           # Already Python type
+```
+
+**2. Added Training Callbacks**
+
+Two new Keras callbacks log weight statistics to MLflow:
+
+| Callback | Metrics Logged | Purpose |
+|----------|---------------|---------|
+| `WeightNormCallback` | `weight_norm`, `query_weight_norm`, `candidate_weight_norm` | Detect weight explosion/collapse |
+| `WeightStatsCallback` | `{tower}_weights_mean/std/min/max` | Monitor weight distributions per tower |
+
+**Tower Categorization Logic:**
+- Query tower: variables with `'query'` OR `'buyer'` in name
+- Candidate tower: variables with `'candidate'` OR `'product'` in name
+
+**3. Enhanced MLflow Service**
+
+`get_training_history()` now returns:
+
+```python
+{
+    'loss': {
+        'train': [...],           # Per-epoch
+        'val': [...],
+        'regularization': [...],
+        'val_regularization': [...],
+        'total': [...],
+        'val_total': [...]
+    },
+    'gradient': {
+        'total': [...],           # Per-epoch weight norms
+        'query': [...],
+        'candidate': [...]
+    },
+    'weight_stats': {
+        'query': {'mean': [...], 'std': [...], 'min': [...], 'max': [...]},
+        'candidate': {'mean': [...], 'std': [...], 'min': [...], 'max': [...]}
+    },
+    'final_metrics': {
+        'test_loss': ...,
+        'test_recall_at_10': ...,
+        'test_recall_at_50': ...,
+        'test_recall_at_100': ...,
+        ...
+    }
+}
+```
+
+**4. Updated Training Tab UI**
+
+New 4-chart layout with final metrics table:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TRAINING PROGRESS                                                            │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ ┌─────────────────────────────────┐  ┌─────────────────────────────────────┐│
+│ │ Loss (Combined)                 │  │ Recall Metrics (Bar Chart)          ││
+│ │ - Training Loss (blue)          │  │ - Recall@10, @50, @100              ││
+│ │ - Validation Loss (orange)      │  │ - Shows final test values           ││
+│ │ - Reg Loss (grey, dashed)       │  │                                     ││
+│ │ - Total Loss (purple, dashed)   │  │                                     ││
+│ └─────────────────────────────────┘  └─────────────────────────────────────┘│
+│ ┌─────────────────────────────────┐  ┌─────────────────────────────────────┐│
+│ │ Weight Norms (L2)               │  │ Weight Distribution                 ││
+│ │ - Total (grey, dashed)          │  │ - Tower selector dropdown           ││
+│ │ - Query Tower (blue)            │  │ - Mean, Std, Min, Max lines         ││
+│ │ - Candidate Tower (green)       │  │                                     ││
+│ └─────────────────────────────────┘  └─────────────────────────────────────┘│
+│ FINAL METRICS                                                                │
+│ ┌─────────────────────────────────────────────────────────────────────────┐ │
+│ │ Test Metrics          │ Final Training Metrics                          │ │
+│ │ - Test Loss           │ - Final Training Loss                           │ │
+│ │ - Recall@10/50/100    │ - Final Val Loss                                │ │
+│ └─────────────────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Chart Features:**
+- **Loss chart**: Toggle legend to show/hide individual loss components
+- **Recall chart**: Bar chart (not line) since recall is only calculated at end
+- **Weight norms**: Shows training stability over epochs
+- **Weight distribution**: Dropdown to switch between Query and Candidate tower stats
+
+#### Files Modified
+
+| File | Change |
+|------|--------|
+| `ml_platform/configs/services.py` | Fixed recall bug, added `WeightNormCallback`, added `WeightStatsCallback`, registered callbacks in run_fn |
+| `ml_platform/experiments/mlflow_service.py` | Updated `get_training_history()` to include all loss variants, weight norms, weight stats |
+| `templates/ml_platform/model_experiments.html` | Added 4 new charts (Loss enhanced, Recall bar, Weight norms, Weight distribution), Final metrics table, CSS for new components |
+
+#### Backward Compatibility
+
+- **Existing experiments**: Will show placeholders ("data not available") for new metrics (weight norms, weight stats)
+- **New experiments**: Will collect and display all new metrics
+
+---
 
 ### Compare Feature Redesign (2025-12-24)
 

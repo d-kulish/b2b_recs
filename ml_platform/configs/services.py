@@ -2469,9 +2469,22 @@ def _precompute_candidate_embeddings(model, candidates_dataset, batch_size=128):
         # Get product ID from batch
         if '{product_id_col}' in batch:
             batch_ids = batch['{product_id_col}'].numpy()
-            if hasattr(batch_ids[0], 'decode'):
-                batch_ids = [b.decode() for b in batch_ids]
-            product_ids.extend(batch_ids)
+            # Flatten if needed (handle shape [batch, 1] -> [batch])
+            if len(batch_ids.shape) > 1:
+                batch_ids = batch_ids.flatten()
+            # Convert to Python scalars (handles both string and numeric types)
+            converted_ids = []
+            for b in batch_ids:
+                if hasattr(b, 'decode'):
+                    # Bytes -> string
+                    converted_ids.append(b.decode())
+                elif hasattr(b, 'item'):
+                    # Numpy scalar -> Python scalar
+                    converted_ids.append(b.item())
+                else:
+                    # Already a Python type
+                    converted_ids.append(b)
+            product_ids.extend(converted_ids)
 
         # Compute embeddings
         batch_embeddings = model.candidate_tower(batch)
@@ -2528,9 +2541,19 @@ def _evaluate_recall_on_test_set(model, test_dataset, product_ids, product_embed
 
             # Get actual product IDs from batch
             if '{product_id_col}' in batch:
-                actual_products = batch['{product_id_col}'].numpy()
-                if hasattr(actual_products[0], 'decode'):
-                    actual_products = [p.decode() for p in actual_products]
+                actual_products_raw = batch['{product_id_col}'].numpy()
+                # Flatten if needed (handle shape [batch, 1] -> [batch])
+                if len(actual_products_raw.shape) > 1:
+                    actual_products_raw = actual_products_raw.flatten()
+                # Convert to Python scalars (handles both string and numeric types)
+                actual_products = []
+                for p in actual_products_raw:
+                    if hasattr(p, 'decode'):
+                        actual_products.append(p.decode())
+                    elif hasattr(p, 'item'):
+                        actual_products.append(p.item())
+                    else:
+                        actual_products.append(p)
             else:
                 continue
 
@@ -2605,6 +2628,85 @@ class MLflowCallback(tf.keras.callbacks.Callback):
         if _mlflow_client and logs:
             for metric_name, value in logs.items():
                 _mlflow_client.log_metric(metric_name, float(value), step=epoch)
+
+
+class WeightNormCallback(tf.keras.callbacks.Callback):
+    """
+    Log weight L2 norms to MLflow for monitoring training dynamics.
+
+    Tracks the total L2 norm of all trainable weights per epoch.
+    Useful for detecting:
+    - Weight explosion (norms growing unboundedly)
+    - Weight collapse (norms shrinking to zero)
+    - Training stability
+
+    Note: This tracks WEIGHT norms, not gradient norms. True gradient norms
+    require custom training loops with tf.GradientTape.
+    """
+
+    def on_epoch_end(self, epoch, logs=None):
+        if not _mlflow_client:
+            return
+
+        # Compute total weight norm (L2 norm of all trainable weights)
+        total_norm_sq = 0.0
+        query_norm_sq = 0.0
+        candidate_norm_sq = 0.0
+
+        for var in self.model.trainable_variables:
+            var_norm_sq = tf.reduce_sum(tf.square(var)).numpy()
+            total_norm_sq += var_norm_sq
+
+            # Categorize by tower
+            var_name = var.name.lower()
+            if 'query' in var_name or 'buyer' in var_name:
+                query_norm_sq += var_norm_sq
+            elif 'candidate' in var_name or 'product' in var_name:
+                candidate_norm_sq += var_norm_sq
+
+        # Log norms
+        _mlflow_client.log_metric('weight_norm', float(np.sqrt(total_norm_sq)), step=epoch)
+        _mlflow_client.log_metric('query_weight_norm', float(np.sqrt(query_norm_sq)), step=epoch)
+        _mlflow_client.log_metric('candidate_weight_norm', float(np.sqrt(candidate_norm_sq)), step=epoch)
+
+
+class WeightStatsCallback(tf.keras.callbacks.Callback):
+    """
+    Log weight statistics per epoch for each tower.
+
+    Tracks min, max, mean, std of weights for the query and candidate towers.
+
+    Tower categorization:
+    - Query tower: variables containing 'query' or 'buyer' in name
+    - Candidate tower: variables containing 'candidate' or 'product' in name
+    """
+
+    def on_epoch_end(self, epoch, logs=None):
+        if not _mlflow_client:
+            return
+
+        # Collect weight stats per tower
+        tower_stats = {{'query': [], 'candidate': []}}
+
+        for var in self.model.trainable_variables:
+            var_name = var.name.lower()
+            weights = var.numpy().flatten()
+
+            # Query tower includes BuyerModel (buyer_model/) and query_tower/
+            if 'query' in var_name or 'buyer' in var_name:
+                tower_stats['query'].extend(weights)
+            # Candidate tower includes ProductModel (product_model/) and candidate_tower/
+            elif 'candidate' in var_name or 'product' in var_name:
+                tower_stats['candidate'].extend(weights)
+
+        # Log stats for each tower
+        for tower, weights in tower_stats.items():
+            if weights:
+                weights_arr = np.array(weights)
+                _mlflow_client.log_metric(f'{{tower}}_weights_mean', float(np.mean(weights_arr)), step=epoch)
+                _mlflow_client.log_metric(f'{{tower}}_weights_std', float(np.std(weights_arr)), step=epoch)
+                _mlflow_client.log_metric(f'{{tower}}_weights_min', float(np.min(weights_arr)), step=epoch)
+                _mlflow_client.log_metric(f'{{tower}}_weights_max', float(np.max(weights_arr)), step=epoch)
 
 
 def _write_mlflow_info(gcs_output_path: str, run_id: str):
@@ -2886,6 +2988,10 @@ def run_fn(fn_args: tfx.components.FnArgs):
 
         # MLflow callback for per-epoch metrics (always added - MLflow is mandatory)
         callbacks.append(MLflowCallback())
+
+        # Weight monitoring callbacks for debugging training issues
+        callbacks.append(WeightNormCallback())
+        callbacks.append(WeightStatsCallback())
 
         # TensorBoard logging
         if fn_args.model_run_dir:

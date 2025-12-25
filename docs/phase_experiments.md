@@ -162,6 +162,37 @@ New 4-chart layout with final metrics table:
 - **Existing experiments**: Will show placeholders ("data not available") for new metrics (weight norms, weight stats)
 - **New experiments**: Will collect and display all new metrics
 
+#### Bug Fixes (2025-12-25)
+
+Two bugs were discovered and fixed during initial testing:
+
+**1. Missing numpy import**
+```
+NameError: name 'np' is not defined
+File "trainer_module.py", line 833, in on_epoch_end
+    _mlflow_client.log_metric('weight_norm', float(np.sqrt(total_norm_sq)), step=epoch)
+```
+**Fix:** Added `import numpy as np` to `_generate_imports()` method.
+
+**2. Dict literal syntax in generated code**
+```
+TypeError: unhashable type: 'dict'
+File "trainer_module.py", line 852, in on_epoch_end
+    tower_stats = {{'query': [], 'candidate': []}}
+```
+**Cause:** Double braces `{{}}` in Python string templates escape to single braces, but the generated code `{{'query': []}}` is interpreted as a **set literal** containing a dict (not a dict literal). Sets require hashable elements, but dicts are unhashable.
+
+**Fix:** Changed to `dict()` constructor and string concatenation:
+```python
+# Before (broken)
+tower_stats = {{'query': [], 'candidate': []}}
+_mlflow_client.log_metric(f'{{tower}}_weights_mean', ...)
+
+# After (fixed)
+tower_stats = dict(query=[], candidate=[])
+_mlflow_client.log_metric(tower + '_weights_mean', ...)
+```
+
 ---
 
 ### Compare Feature Redesign (2025-12-24)

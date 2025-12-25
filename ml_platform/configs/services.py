@@ -1517,6 +1517,7 @@ import json
 import glob
 from typing import Dict, List, Text
 
+import numpy as np
 import tensorflow as tf
 import tensorflow_transform as tft
 import tensorflow_recommenders as tfrs

@@ -2687,7 +2687,7 @@ class WeightStatsCallback(tf.keras.callbacks.Callback):
             return
 
         # Collect weight stats per tower
-        tower_stats = {{'query': [], 'candidate': []}}
+        tower_stats = dict(query=[], candidate=[])
 
         for var in self.model.trainable_variables:
             var_name = var.name.lower()
@@ -2704,10 +2704,10 @@ class WeightStatsCallback(tf.keras.callbacks.Callback):
         for tower, weights in tower_stats.items():
             if weights:
                 weights_arr = np.array(weights)
-                _mlflow_client.log_metric(f'{{tower}}_weights_mean', float(np.mean(weights_arr)), step=epoch)
-                _mlflow_client.log_metric(f'{{tower}}_weights_std', float(np.std(weights_arr)), step=epoch)
-                _mlflow_client.log_metric(f'{{tower}}_weights_min', float(np.min(weights_arr)), step=epoch)
-                _mlflow_client.log_metric(f'{{tower}}_weights_max', float(np.max(weights_arr)), step=epoch)
+                _mlflow_client.log_metric(tower + '_weights_mean', float(np.mean(weights_arr)), step=epoch)
+                _mlflow_client.log_metric(tower + '_weights_std', float(np.std(weights_arr)), step=epoch)
+                _mlflow_client.log_metric(tower + '_weights_min', float(np.min(weights_arr)), step=epoch)
+                _mlflow_client.log_metric(tower + '_weights_max', float(np.max(weights_arr)), step=epoch)
 
 
 def _write_mlflow_info(gcs_output_path: str, run_id: str):

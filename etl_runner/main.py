@@ -716,8 +716,8 @@ class ETLRunner:
             # Prepare GCP configuration
             gcp_config = {
                 'project_id': self.config.gcp_project_id,
-                'region': 'europe-central2',  # Warsaw region
-                'bucket': 'b2b-recs-dataflow',  # TODO: Make configurable
+                'region': self.config.dataflow_region,
+                'bucket': self.config.dataflow_bucket,
                 'dataset_id': self.config.bigquery_dataset
             }
 

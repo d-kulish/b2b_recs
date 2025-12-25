@@ -31,7 +31,7 @@ gcloud run jobs deploy etl-runner \
   --task-timeout 3600 \
   --max-retries 1 \
   --service-account $SERVICE_ACCOUNT \
-  --set-env-vars GCP_PROJECT_ID=$PROJECT_ID,DJANGO_API_URL=https://django-app-3dmqemfmxq-lm.a.run.app,LOG_LEVEL=INFO \
+  --set-env-vars GCP_PROJECT_ID=$PROJECT_ID,DJANGO_API_URL=https://django-app-3dmqemfmxq-lm.a.run.app,LOG_LEVEL=INFO,DATAFLOW_BUCKET=b2b-recs-dataflow,DATAFLOW_REGION=$REGION \
   --project=$PROJECT_ID
 
 echo ""

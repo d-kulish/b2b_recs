@@ -26,6 +26,10 @@ class Config:
         self.gcp_project_id = os.getenv('GCP_PROJECT_ID', '')
         self.bigquery_dataset = os.getenv('BIGQUERY_DATASET', 'raw_data')
 
+        # Dataflow configuration
+        self.dataflow_bucket = os.getenv('DATAFLOW_BUCKET', 'b2b-recs-dataflow')
+        self.dataflow_region = os.getenv('DATAFLOW_REGION', 'europe-central2')
+
         # ETL configuration
         self.batch_size = int(os.getenv('ETL_BATCH_SIZE', '10000'))
         self.max_retries = int(os.getenv('ETL_MAX_RETRIES', '3'))
@@ -52,6 +56,8 @@ class Config:
         logger.info(f"  - Django API: {self.django_api_url}")
         logger.info(f"  - GCP Project: {self.gcp_project_id}")
         logger.info(f"  - BigQuery Dataset: {self.bigquery_dataset}")
+        logger.info(f"  - Dataflow Bucket: {self.dataflow_bucket}")
+        logger.info(f"  - Dataflow Region: {self.dataflow_region}")
         logger.info(f"  - Batch Size: {self.batch_size}")
 
     def get_job_config(self, data_source_id: int) -> Dict[str, Any]:

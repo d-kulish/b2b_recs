@@ -356,9 +356,13 @@
                 <div class="mb-3">
                     <div class="relative">
                         <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
-                        <input type="text"
+                        <input type="search"
                                id="connectionsSearch"
+                               name="etl-connection-filter-query"
                                placeholder="Search connections..."
+                               autocomplete="off"
+                               data-lpignore="true"
+                               data-form-type="other"
                                class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                oninput="handleConnectionsSearch()">
                     </div>
@@ -383,7 +387,7 @@
             <!-- RIGHT COLUMN: ETL Jobs -->
             <div class="pl-3">
                 <div class="flex items-center justify-between mb-4">
-                    <h3 class="text-lg font-bold text-gray-700">Jobs</h3>
+                    <h3 class="text-lg font-bold text-gray-700">ETL Jobs</h3>
                     <div class="btn-group">
                         <button onclick="showAddSourceModal()" class="btn btn-secondary btn-sm" style="width: 150px; min-width: 150px; max-width: 150px;">
                             <i class="fas fa-plus"></i>ETL Job
@@ -395,9 +399,13 @@
                 <div class="mb-3">
                     <div class="relative">
                         <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
-                        <input type="text"
-                               id="jobsSearch"
-                               placeholder="Search ETL jobs..."
+                        <input type="search"
+                               id="pipelinesSearch"
+                               name="etl-pipeline-filter"
+                               placeholder="Search pipelines..."
+                               autocomplete="off"
+                               data-lpignore="true"
+                               data-form-type="other"
                                class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                oninput="handleJobsSearch()">
                     </div>
@@ -2854,6 +2862,14 @@ function hideTooltip() {
 
 // Initialize chart and KPIs when DOM is ready
 document.addEventListener('DOMContentLoaded', function() {
+    // Clear search fields to prevent browser autofill (runs after browser autofill completes)
+    setTimeout(function() {
+        const searchFields = document.querySelectorAll('input[type="search"]');
+        searchFields.forEach(function(field) {
+            field.value = '';
+        });
+    }, 50);
+
     initKPIValues();
     initRidgeChart();
 
@@ -3863,8 +3879,11 @@ function renderConnectionsList() {
     const showingTextEl = document.getElementById('connectionsShowingText');
     const controlsEl = document.getElementById('connectionsPaginationControls');
 
+    // Sort connections by ID descending (newest first)
+    const sorted = [...allConnections].sort((a, b) => b.id - a.id);
+
     // Filter connections by search term
-    const filtered = filterConnections(allConnections, connectionsSearchTerm);
+    const filtered = filterConnections(sorted, connectionsSearchTerm);
 
     // Check for no results with search
     if (filtered.length === 0 && connectionsSearchTerm) {
@@ -4070,8 +4089,11 @@ function renderJobsList() {
     const showingTextEl = document.getElementById('jobsShowingText');
     const controlsEl = document.getElementById('jobsPaginationControls');
 
+    // Sort jobs by ID descending (newest first)
+    const sorted = [...allJobs].sort((a, b) => b.id - a.id);
+
     // Filter jobs by search term
-    const filtered = filterJobs(allJobs, jobsSearchTerm);
+    const filtered = filterJobs(sorted, jobsSearchTerm);
 
     // Check for no results with search
     if (filtered.length === 0 && jobsSearchTerm) {
@@ -7441,27 +7463,33 @@ function loadSavedConnections() {
                 return;
             }
 
-            // Render connections list
-            listContainer.innerHTML = savedConnections.map(conn => {
+            // Sort connections by newest first (by ID descending)
+            const sortedConnections = [...savedConnections].sort((a, b) => b.id - a.id);
+
+            // Render connections list with compact 2-column layout
+            listContainer.innerHTML = sortedConnections.map(conn => {
                 // Status indicator
                 const statusColor = conn.last_test_status === 'success' ? 'green' : (conn.last_test_status === 'failed' ? 'red' : 'gray');
                 const statusIcon = conn.last_test_status === 'success' ? 'check-circle' : (conn.last_test_status === 'failed' ? 'times-circle' : 'question-circle');
 
-                // Connection details
+                // Connection details - compact format: "Type\nhost:port/database"
+                const sourceType = conn.source_type_display || conn.source_type || 'Unknown';
                 const hostDb = conn.host && conn.database
                     ? `${conn.host}${conn.port ? ':' + conn.port : ''}/${conn.database}`
-                    : 'Details unavailable';
+                    : (conn.bucket_path || conn.bigquery_project || 'Details unavailable');
 
                 return `
-                    <label class="flex items-center p-3 border-2 border-gray-200 rounded-lg hover:bg-blue-50 hover:border-blue-400 cursor-pointer transition has-[:checked]:border-blue-600 has-[:checked]:bg-blue-50">
+                    <label class="flex items-center py-2 px-3 border-2 border-gray-200 rounded-lg hover:bg-blue-50 hover:border-blue-400 cursor-pointer transition has-[:checked]:border-blue-600 has-[:checked]:bg-blue-50">
                         <input type="radio" name="savedConnection" value="${conn.id}" class="mr-3 scale-110" onchange="selectSavedConnection(${conn.id})">
-                        <div class="flex-1 min-w-0">
-                            <div class="flex items-center gap-2 mb-1">
-                                <span class="text-sm font-bold text-gray-900">${conn.name}</span>
-                                <i class="fas fa-${statusIcon} text-${statusColor}-500 text-xs" title="${conn.last_test_status || 'Not tested'}"></i>
+                        <div class="flex-1 min-w-0 grid grid-cols-12 gap-2 items-center">
+                            <div class="col-span-5 flex items-center gap-2 min-w-0">
+                                <span class="text-sm font-bold text-gray-900 truncate">${conn.name}</span>
+                                <i class="fas fa-${statusIcon} text-${statusColor}-500 text-xs flex-shrink-0" title="${conn.last_test_status || 'Not tested'}"></i>
                             </div>
-                            <div class="text-xs text-gray-600 truncate">${conn.source_type_display || conn.source_type}</div>
-                            <div class="text-xs text-gray-500 truncate">${hostDb}</div>
+                            <div class="col-span-7 min-w-0">
+                                <div class="text-xs text-gray-600 truncate">${sourceType}</div>
+                                <div class="text-xs text-gray-500 truncate">${hostDb}</div>
+                            </div>
                         </div>
                     </label>
                 `;

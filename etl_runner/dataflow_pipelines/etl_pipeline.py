@@ -263,7 +263,18 @@ class SchemaAwareConverter(beam.DoFn):
                 else:
                     schema_matched_row[key] = float(value) if value is not None else None
 
-            elif target_type in ('TIMESTAMP', 'DATE', 'DATETIME'):
+            elif target_type == 'TIMESTAMP':
+                # Convert date strings to timestamp format for BigQuery
+                if isinstance(value, str):
+                    # If it's a date-only string (YYYY-MM-DD), add time component
+                    if len(value) == 10 and '-' in value:
+                        schema_matched_row[key] = f"{value}T00:00:00"
+                    else:
+                        schema_matched_row[key] = value
+                else:
+                    schema_matched_row[key] = value
+
+            elif target_type in ('DATE', 'DATETIME'):
                 # These should already be ISO strings from _serialize_value
                 schema_matched_row[key] = value
 
@@ -905,7 +916,16 @@ def run_file_pipeline(job_config: Dict[str, Any], gcp_config: Dict[str, Any]) ->
     logger.info(f"Starting Dataflow pipeline for file source")
     logger.info(f"File pattern: {job_config['file_pattern']}, Format: {job_config['file_format']}")
     logger.info(f"Destination: {table_ref}, Write mode: {write_disposition}")
-    logger.info(f"Using FILE_LOADS method (schema inferred from existing table)")
+    logger.info(f"Using FILE_LOADS method with schema-aware conversion")
+
+    # Fetch destination schema for type conversion
+    table_schema = get_bq_table_schema(
+        project_id=gcp_config['project_id'],
+        dataset_id=gcp_config['dataset_id'],
+        table_name=job_config['dest_table_name']
+    )
+    schema_map = {field.name: field.type for field in table_schema.fields}
+    logger.info(f"Fetched schema: {len(schema_map)} fields for type conversion")
 
     # Get list of files to process
     from extractors.file_extractor import FileExtractor
@@ -925,11 +945,21 @@ def run_file_pipeline(job_config: Dict[str, Any], gcp_config: Dict[str, Any]) ->
                     file_config=job_config
                 )
             )
+            # Normalize column names to lowercase (BigQuery schema uses lowercase)
+            | 'NormalizeColumnNames' >> beam.Map(
+                lambda row: {key.lower(): value for key, value in row.items()}
+            )
+            # Serialize datetime/Decimal/NaN with pure Python
+            | 'SerializeValues' >> beam.Map(
+                lambda row: {key: _serialize_value(value) for key, value in row.items()}
+            )
+            # Convert types to match destination schema (e.g., array → JSON string, date → timestamp)
+            | 'ConvertToSchema' >> beam.ParDo(SchemaAwareConverter(schema_map))
             | 'WriteToBigQuery' >> WriteToBigQuery(
                 table=table_ref,
                 write_disposition=write_disposition,
                 create_disposition=BigQueryDisposition.CREATE_NEVER,
-                method='FILE_LOADS'  # FILE_LOADS uses existing table schema automatically
+                method='FILE_LOADS'
             )
         )
 
@@ -999,10 +1029,17 @@ def run_scalable_pipeline(
     logger.info(f"Destination: {table_ref}")
     logger.info(f"Write mode: {write_disposition}")
     logger.info(f"Workers: 2 initial, up to 10 max (autoscaling)")
-    logger.info(f"Method: FILE_LOADS (uses existing table schema)")
+    logger.info(f"Method: FILE_LOADS with schema-aware conversion")
     logger.info("=" * 80)
 
-    # No schema fetching needed - FILE_LOADS uses existing table schema automatically
+    # Fetch destination schema for type conversion
+    table_schema = get_bq_table_schema(
+        project_id=gcp_config['project_id'],
+        dataset_id=gcp_config['dataset_id'],
+        table_name=job_config['dest_table_name']
+    )
+    schema_map = {field.name: field.type for field in table_schema.fields}
+    logger.info(f"Fetched schema: {len(schema_map)} fields for type conversion")
 
     with beam.Pipeline(options=options) as pipeline:
         (
@@ -1018,14 +1055,25 @@ def run_scalable_pipeline(
                 )
             )
 
+            # Normalize column names to lowercase (BigQuery schema uses lowercase)
+            | 'NormalizeColumnNames' >> beam.Map(
+                lambda row: {key.lower(): value for key, value in row.items()}
+            )
+
+            # Serialize datetime/Decimal/NaN with pure Python
+            | 'SerializeValues' >> beam.Map(
+                lambda row: {key: _serialize_value(value) for key, value in row.items()}
+            )
+
+            # Convert types to match destination schema (e.g., array → JSON string, date → timestamp)
+            | 'ConvertToSchema' >> beam.ParDo(SchemaAwareConverter(schema_map))
+
             # Write all rows to BigQuery
-            # FILE_LOADS uses existing table schema automatically
             | 'WriteToBigQuery' >> WriteToBigQuery(
                 table=table_ref,
-                # No schema parameter - BigQuery infers from existing table
                 write_disposition=write_disposition,
                 create_disposition=BigQueryDisposition.CREATE_NEVER,
-                method='FILE_LOADS'  # Simple, reliable, no Java dependency
+                method='FILE_LOADS'
             )
         )
 

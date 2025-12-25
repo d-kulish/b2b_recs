@@ -1050,7 +1050,9 @@ def run_source(request, source_id):
         etl_run.status = 'running'
         etl_run.total_sources = 1
         etl_run.successful_sources = 0
-        etl_run.total_tables = source.tables.filter(is_enabled=True).count()
+        # Count tables, default to 1 if none configured (single-table ETL jobs)
+        table_count = source.tables.filter(is_enabled=True).count()
+        etl_run.total_tables = table_count if table_count > 0 else 1
         etl_run.successful_tables = 0
         etl_run.save()
 
@@ -2092,6 +2094,20 @@ def run_update(request, run_id):
             elif data['status'] in ['completed', 'failed', 'cancelled'] and not etl_run.completed_at:
                 etl_run.completed_at = timezone.now()
 
+            # Auto-update successful_tables and successful_sources based on final status
+            if data['status'] == 'completed':
+                # All tables/sources successful if job completed
+                etl_run.successful_tables = etl_run.total_tables
+                etl_run.successful_sources = etl_run.total_sources
+            elif data['status'] == 'partial':
+                # Partial success - at least some tables succeeded
+                etl_run.successful_tables = max(0, etl_run.total_tables - 1)
+                etl_run.successful_sources = etl_run.total_sources
+            elif data['status'] in ['failed', 'cancelled']:
+                # No tables successful if job failed/cancelled
+                etl_run.successful_tables = 0
+                etl_run.successful_sources = 0
+
         # Update metrics if provided
         if 'rows_extracted' in data:
             etl_run.total_rows_extracted = data['rows_extracted']
@@ -2273,6 +2289,10 @@ def trigger_now(request, data_source_id):
                 'message': 'GCP_PROJECT_ID not configured'
             }, status=500)
 
+        # Count tables for this data source, default to 1 if none configured
+        table_count = data_source.tables.filter(is_enabled=True).count()
+        total_tables = table_count if table_count > 0 else 1
+
         # Create ETL run record
         etl_run = ETLRun.objects.create(
             etl_config=data_source.etl_config,
@@ -2281,6 +2301,10 @@ def trigger_now(request, data_source_id):
             status='pending',
             triggered_by=request.user,
             started_at=timezone.now(),
+            total_sources=1,
+            successful_sources=0,
+            total_tables=total_tables,
+            successful_tables=0,
         )
 
         # Trigger Cloud Run job

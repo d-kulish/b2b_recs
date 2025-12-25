@@ -43,6 +43,10 @@ def scheduler_webhook(request, data_source_id):
                 'message': 'GCP_PROJECT_ID not configured'
             }, status=500)
 
+        # Count tables for this data source, default to 1 if none configured
+        table_count = data_source.tables.filter(is_enabled=True).count()
+        total_tables = table_count if table_count > 0 else 1
+
         # Create ETL run record (no user for scheduled runs)
         etl_run = ETLRun.objects.create(
             etl_config=data_source.etl_config,
@@ -51,6 +55,10 @@ def scheduler_webhook(request, data_source_id):
             status='pending',
             triggered_by=None,  # Scheduled runs have no user
             started_at=timezone.now(),
+            total_sources=1,
+            successful_sources=0,
+            total_tables=total_tables,
+            successful_tables=0,
         )
 
         # Trigger Cloud Run job

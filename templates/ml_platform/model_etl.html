@@ -159,7 +159,10 @@
                 </thead>
                 <tbody class="divide-y divide-gray-200">
                     {% for run in page_obj.object_list %}
-                    <tr class="{% if run.status == 'completed' %}bg-green-50{% elif run.status == 'failed' %}bg-red-50{% elif run.status == 'partial' %}bg-yellow-50{% elif run.status == 'running' %}bg-blue-50{% else %}bg-gray-50{% endif %}">
+                    <tr id="run-row-{{ run.id }}"
+                        data-run-id="{{ run.id }}"
+                        data-run-status="{{ run.status }}"
+                        class="{% if run.status == 'completed' %}bg-green-50{% elif run.status == 'failed' %}bg-red-50{% elif run.status == 'partial' %}bg-yellow-50{% elif run.status == 'running' %}bg-blue-50{% else %}bg-gray-50{% endif %}">
                         <td class="px-4 py-3 text-sm font-medium text-gray-900">#{{ run.id }}</td>
                         <td class="px-4 py-3 text-sm text-gray-900">
                             {% if run.data_source %}
@@ -192,7 +195,7 @@
                             <span class="text-gray-400">—</span>
                             {% endif %}
                         </td>
-                        <td class="px-4 py-3">
+                        <td id="run-status-{{ run.id }}" class="px-4 py-3">
                             {% if run.status == 'completed' %}
                             <span class="text-green-700 text-xs font-semibold">
                                 <i class="fas fa-check-circle mr-1"></i>Completed
@@ -222,14 +225,14 @@
                         <td class="px-4 py-3 text-sm text-gray-600">
                             {% timezone "Europe/Kiev" %}{{ run.started_at|date:"M d, g:i A"|default:"—" }}{% endtimezone %}
                         </td>
-                        <td class="px-4 py-3 text-sm text-gray-600">
+                        <td id="run-duration-{{ run.id }}" class="px-4 py-3 text-sm text-gray-600">
                             {% if run.get_duration_seconds %}
                             {{ run.get_duration_seconds|floatformat:0 }}s
                             {% else %}
                             —
                             {% endif %}
                         </td>
-                        <td class="px-4 py-3 text-sm text-gray-600">
+                        <td id="run-rows-{{ run.id }}" class="px-4 py-3 text-sm text-gray-600">
                             {{ run.total_rows_extracted|intcomma|default:"0" }}
                         </td>
                         <td class="px-4 py-3">
@@ -328,9 +331,9 @@
     </div>
     <!-- End of ETL Dashboard -->
 
-    <!-- ETL Jobs Container: 2-Column Layout -->
+    <!-- ETL Setup Container: 2-Column Layout -->
     <div class="bg-white rounded-xl border border-black shadow-lg p-6">
-        <h2 class="text-2xl font-bold text-gray-900 mb-6">ETL Jobs</h2>
+        <h2 class="text-2xl font-bold text-gray-900 mb-6">ETL Setup</h2>
 
         <!-- Grid: 2 columns, 50/50 split -->
         <div class="grid grid-cols-2 gap-0">
@@ -349,13 +352,31 @@
                     </div>
                 </div>
 
-                <!-- Connections List Container (max 3 items with scroll) -->
-                <div id="connectionsList" class="space-y-3 overflow-y-auto" style="max-height: 320px;">
+                <!-- Search Input for Connections -->
+                <div class="mb-3">
+                    <div class="relative">
+                        <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                        <input type="text"
+                               id="connectionsSearch"
+                               placeholder="Search connections..."
+                               class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                               oninput="handleConnectionsSearch()">
+                    </div>
+                </div>
+
+                <!-- Connections List Container -->
+                <div id="connectionsList" class="space-y-3" style="min-height: 200px;">
                     <!-- Connection cards will be inserted here by JavaScript -->
                     <div class="card-empty-state">
                         <p class="card-empty-state-title">No database connections configured</p>
                         <p class="card-empty-state-text">Create your first connection to get started with data ingestion</p>
                     </div>
+                </div>
+
+                <!-- Connections Pagination -->
+                <div id="connectionsPagination" class="hidden flex flex-col sm:flex-row items-center justify-between mt-4 pt-4 border-t border-gray-200 gap-2">
+                    <div id="connectionsShowingText" class="text-sm text-gray-600"></div>
+                    <div id="connectionsPaginationControls" class="flex items-center gap-1"></div>
                 </div>
             </div>
 
@@ -370,114 +391,70 @@
                     </div>
                 </div>
 
-                <!-- ETL Jobs List Container (max 3 items with scroll) -->
-                <div id="etlJobsList" class="space-y-3 overflow-y-auto" style="max-height: 320px;">
-                    {% if data_sources %}
-                    <div class="space-y-3">
-                        {% for source in data_sources %}
-                        <div class="card">
-                            <div class="card-container-5col">
-                                <!-- Column 1: Job Info -->
-                                <div class="card-content">
-                                    <!-- Row 1: Status Dot + Job Name -->
-                                    <div class="card-header">
-                                        <span class="status-dot {% if source.is_enabled %}green{% else %}gray{% endif %}"></span>
-                                        <h4 class="card-title">{{ source.name }}</h4>
-                                    </div>
-
-                                    <!-- Row 2: Table Mappings -->
-                                    <div class="card-body">
-                                        {% for table in source.tables.all %}
-                                        <div style="display: flex; flex-direction: column; gap: 2px;">
-                                            <span class="card-value"><span class="card-label">From:</span> {{ table.source_table_name }}</span>
-                                            <span class="card-value"><span class="card-label">To:</span> {{ table.dest_table_name }}</span>
-                                        </div>
-                                        {% endfor %}
-                                    </div>
-                                </div>
-
-                                <!-- Column 2: Schedule + Connection (4 rows) -->
-                                <div class="card-meta-column">
-                                    <span class="card-label">Schedule:</span>
-                                    <span class="card-schedule-info">
-                                        {% with first_table=source.tables.first %}
-                                            {% if source.schedule_type == 'manual' or not source.schedule_type %}
-                                                Manual
-                                            {% elif source.schedule_type == 'hourly' %}
-                                                Hourly at :{% if first_table.schedule_minute %}{{ first_table.schedule_minute|stringformat:"02d" }}{% else %}00{% endif %}
-                                            {% elif source.schedule_type == 'daily' %}
-                                                Daily at {% if first_table.schedule_time %}{{ first_table.schedule_time|time:"H:i" }}{% else %}09:00{% endif %}
-                                            {% elif source.schedule_type == 'weekly' %}
-                                                Weekly on {% if first_table.schedule_day_of_week == 0 %}Mon{% elif first_table.schedule_day_of_week == 1 %}Tue{% elif first_table.schedule_day_of_week == 2 %}Wed{% elif first_table.schedule_day_of_week == 3 %}Thu{% elif first_table.schedule_day_of_week == 4 %}Fri{% elif first_table.schedule_day_of_week == 5 %}Sat{% elif first_table.schedule_day_of_week == 6 %}Sun{% else %}Mon{% endif %} at {% if first_table.schedule_time %}{{ first_table.schedule_time|time:"H:i" }}{% else %}09:00{% endif %}
-                                            {% else %}
-                                                {{ source.schedule_type|title }}
-                                            {% endif %}
-                                        {% endwith %}
-                                    </span>
-                                    <span class="card-label">Connection:</span>
-                                    <span class="card-schedule-info">
-                                        {% if source.connection %}{{ source.connection.name }}{% else %}None{% endif %}
-                                    </span>
-                                </div>
-
-                                <!-- Column 3: Last Run Info (4 rows, same style as Column 2) -->
-                                <div class="card-meta-column">
-                                    {% with last_run=source.runs.first %}
-                                    <span class="card-label">Last run:</span>
-                                    <span class="card-schedule-info">
-                                        {% timezone "Europe/Kiev" %}
-                                        {% if last_run and last_run.started_at %}{{ last_run.started_at|date:"M d, H:i" }}{% else %}Never{% endif %}
-                                        {% endtimezone %}
-                                    </span>
-                                    <span class="card-label">Last run status:</span>
-                                    <span class="card-schedule-info">
-                                        {% if last_run.status == 'completed' %}Success{% elif last_run.status == 'failed' %}Failed{% elif last_run.status == 'cancelled' %}Cancelled{% elif last_run.status %}{{ last_run.status|title }}{% else %}—{% endif %}
-                                    </span>
-                                    {% endwith %}
-                                </div>
-
-                                <!-- Column 4: Run + Pause Buttons (stacked) -->
-                                <div class="card-run-actions">
-                                    <button onclick="runSourceNow({{ source.id }})" class="card-action-btn run" title="Run ETL job now">
-                                        <i class="fas fa-play"></i>
-                                    </button>
-                                    {% if source.cloud_scheduler_job_name %}
-                                    <button onclick="togglePauseSource({{ source.id }}, {{ source.is_enabled|yesno:'true,false' }})"
-                                            class="card-action-btn {% if source.is_enabled %}pause-large{% else %}resume-large{% endif %}"
-                                            title="{% if source.is_enabled %}Pause scheduling{% else %}Resume scheduling{% endif %}"
-                                            id="pause-btn-{{ source.id }}">
-                                        <i class="fas {% if source.is_enabled %}fa-pause{% else %}fa-play-circle{% endif %}"></i>
-                                    </button>
-                                    {% endif %}
-                                </div>
-
-                                <!-- Column 5: Actions (Edit + Delete) -->
-                                <div class="card-actions">
-                                    <button onclick="editSource({{ source.id }})" class="card-action-btn edit" title="Edit ETL job">
-                                        <i class="fas fa-edit"></i>
-                                    </button>
-                                    <button onclick="deleteSource({{ source.id }})" class="card-action-btn delete" title="Delete ETL job">
-                                        <i class="fas fa-trash"></i>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                        {% endfor %}
+                <!-- Search Input for ETL Jobs -->
+                <div class="mb-3">
+                    <div class="relative">
+                        <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                        <input type="text"
+                               id="jobsSearch"
+                               placeholder="Search ETL jobs..."
+                               class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                               oninput="handleJobsSearch()">
                     </div>
-                    {% else %}
+                </div>
+
+                <!-- ETL Jobs List Container -->
+                <div id="etlJobsList" class="space-y-3" style="min-height: 200px;">
+                    <!-- Job cards will be inserted here by JavaScript -->
                     <div class="card-empty-state">
                         <p class="card-empty-state-title">No ETL jobs configured</p>
                         <p class="card-empty-state-text">Set up your first data pipeline to begin importing data</p>
                     </div>
-                    {% endif %}
+                </div>
+
+                <!-- ETL Jobs Pagination -->
+                <div id="jobsPagination" class="hidden flex flex-col sm:flex-row items-center justify-between mt-4 pt-4 border-t border-gray-200 gap-2">
+                    <div id="jobsShowingText" class="text-sm text-gray-600"></div>
+                    <div id="jobsPaginationControls" class="flex items-center gap-1"></div>
                 </div>
             </div>
+
+            <!-- ETL Jobs Data (JSON for JavaScript) -->
+            <script type="application/json" id="etlJobsData">
+            [
+                {% for source in data_sources %}
+                {
+                    "id": {{ source.id }},
+                    "name": "{{ source.name|escapejs }}",
+                    "is_enabled": {{ source.is_enabled|yesno:"true,false" }},
+                    "schedule_type": "{{ source.schedule_type|default:'manual'|escapejs }}",
+                    "connection_name": "{{ source.connection.name|default:''|escapejs }}",
+                    "cloud_scheduler_job_name": "{{ source.cloud_scheduler_job_name|default:''|escapejs }}",
+                    "tables": [
+                        {% for table in source.tables.all %}
+                        {
+                            "source_table_name": "{{ table.source_table_name|escapejs }}",
+                            "dest_table_name": "{{ table.dest_table_name|escapejs }}",
+                            "schedule_minute": {{ table.schedule_minute|default:"0" }},
+                            "schedule_time": "{{ table.schedule_time|default:'09:00'|time:'H:i' }}",
+                            "schedule_day_of_week": {{ table.schedule_day_of_week|default:"0" }}
+                        }{% if not forloop.last %},{% endif %}
+                        {% endfor %}
+                    ],
+                    "last_run": {% with last_run=source.runs.first %}{% if last_run %}{
+                        "started_at": "{% timezone "Europe/Kiev" %}{{ last_run.started_at|date:'M d, H:i' }}{% endtimezone %}",
+                        "status": "{{ last_run.status }}"
+                    }{% else %}null{% endif %}{% endwith %}
+                }{% if not forloop.last %},{% endif %}
+                {% endfor %}
+            ]
+            </script>
 
         </div>
         <!-- End of 2-column grid -->
 
     </div>
-    <!-- End of ETL Jobs Container -->
+    <!-- End of ETL Setup Container -->
 
 </div>
 
@@ -513,7 +490,7 @@
 <div id="runDetailsModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-[100] flex items-center justify-center p-4">
     <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl border border-gray-300 h-[600px] overflow-hidden flex flex-col">
         <!-- Header -->
-        <div id="runDetailsHeader" class="px-5 py-4 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
+        <div id="runDetailsHeader" class="px-5 py-4 border-b border-gray-200 flex items-center flex-shrink-0">
             <div class="flex items-center gap-3">
                 <div id="runDetailsStatusIcon" class="w-10 h-10 rounded-full flex items-center justify-center bg-gray-100">
                     <i class="fas fa-spinner fa-spin text-gray-500"></i>
@@ -523,9 +500,6 @@
                     <p id="runDetailsSubtitle" class="text-sm text-gray-500">Loading...</p>
                 </div>
             </div>
-            <button onclick="closeRunDetailsModal()" class="text-gray-400 hover:text-gray-600 transition-colors">
-                <i class="fas fa-times text-xl"></i>
-            </button>
         </div>
 
         <!-- Body -->
@@ -564,20 +538,12 @@
                 <!-- Timing Section -->
                 <div>
                     <h4 class="text-xs font-semibold text-gray-500 uppercase mb-3">Timeline</h4>
-                    <div class="space-y-2">
-                        <div class="flex items-center justify-between py-2 border-b border-gray-100">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="flex items-center justify-between py-2 px-3 bg-gray-50 rounded-lg">
                             <span class="text-sm text-gray-600"><i class="fas fa-play text-blue-500 mr-2 w-4"></i>Started</span>
                             <span id="runDetailsStarted" class="text-sm font-medium text-gray-900">—</span>
                         </div>
-                        <div id="runDetailsExtractionRow" class="flex items-center justify-between py-2 border-b border-gray-100">
-                            <span class="text-sm text-gray-600"><i class="fas fa-download text-yellow-500 mr-2 w-4"></i>Extraction</span>
-                            <span id="runDetailsExtraction" class="text-sm font-medium text-gray-900">—</span>
-                        </div>
-                        <div id="runDetailsLoadingRow" class="flex items-center justify-between py-2 border-b border-gray-100">
-                            <span class="text-sm text-gray-600"><i class="fas fa-upload text-green-500 mr-2 w-4"></i>Loading</span>
-                            <span id="runDetailsLoading2" class="text-sm font-medium text-gray-900">—</span>
-                        </div>
-                        <div class="flex items-center justify-between py-2">
+                        <div class="flex items-center justify-between py-2 px-3 bg-gray-50 rounded-lg">
                             <span class="text-sm text-gray-600"><i class="fas fa-flag-checkered text-gray-500 mr-2 w-4"></i>Completed</span>
                             <span id="runDetailsCompleted" class="text-sm font-medium text-gray-900">—</span>
                         </div>
@@ -614,24 +580,12 @@
                         <p id="runDetailsErrorMessage" class="text-sm text-red-700 font-mono whitespace-pre-wrap break-words"></p>
                     </div>
                 </div>
-
-                <!-- Triggered By Section -->
-                <div class="flex items-center justify-between text-sm text-gray-500 pt-2 border-t border-gray-100">
-                    <span>Triggered by: <span id="runDetailsTriggeredBy" class="font-medium text-gray-700">—</span></span>
-                    <span id="runDetailsExecutionId" class="text-xs text-gray-400"></span>
-                </div>
             </div>
         </div>
 
         <!-- Footer -->
         <div class="modal-footer-wizard-neu">
-            <div class="footer-left">
-                <div id="runDetailsLogsLink" class="hidden">
-                    <a id="runDetailsLogsUrl" href="#" target="_blank" class="text-sm text-blue-600 hover:text-blue-800 font-medium">
-                        <i class="fas fa-external-link-alt mr-1"></i>View Cloud Run Logs
-                    </a>
-                </div>
-            </div>
+            <div class="footer-left"></div>
             <div class="footer-right">
                 <button onclick="closeRunDetailsModal()" class="btn-neu btn-neu-action btn-neu-cancel">
                     <span class="btn-neu-inner">Cancel</span>
@@ -3696,24 +3650,6 @@ function populateRunDetailsModal(data) {
     document.getElementById('runDetailsStarted').textContent = formatDateTime(data.started_at);
     document.getElementById('runDetailsCompleted').textContent = formatDateTime(data.completed_at);
 
-    // Extraction timing
-    if (data.extraction_started_at || data.extraction_completed_at) {
-        document.getElementById('runDetailsExtractionRow').classList.remove('hidden');
-        const extractionDuration = calculateDuration(data.extraction_started_at, data.extraction_completed_at);
-        document.getElementById('runDetailsExtraction').textContent = extractionDuration || '—';
-    } else {
-        document.getElementById('runDetailsExtractionRow').classList.add('hidden');
-    }
-
-    // Loading timing
-    if (data.loading_started_at || data.loading_completed_at) {
-        document.getElementById('runDetailsLoadingRow').classList.remove('hidden');
-        const loadingDuration = calculateDuration(data.loading_started_at, data.loading_completed_at);
-        document.getElementById('runDetailsLoading2').textContent = loadingDuration || '—';
-    } else {
-        document.getElementById('runDetailsLoadingRow').classList.add('hidden');
-    }
-
     // Results
     document.getElementById('runDetailsTables').textContent = `${data.successful_tables}/${data.total_tables}`;
     document.getElementById('runDetailsRowsExtracted').textContent = formatNumber(data.total_rows_extracted);
@@ -3733,30 +3669,6 @@ function populateRunDetailsModal(data) {
         document.getElementById('runDetailsErrorMessage').textContent = data.error_message;
     } else {
         errorSection.classList.add('hidden');
-    }
-
-    // Triggered by
-    document.getElementById('runDetailsTriggeredBy').textContent = data.triggered_by || '—';
-
-    // Execution ID
-    if (data.cloud_run_execution_id) {
-        document.getElementById('runDetailsExecutionId').textContent = `Execution: ${data.cloud_run_execution_id}`;
-    } else {
-        document.getElementById('runDetailsExecutionId').textContent = '';
-    }
-
-    // Logs link
-    const logsLinkDiv = document.getElementById('runDetailsLogsLink');
-    if (data.logs_url) {
-        logsLinkDiv.classList.remove('hidden');
-        document.getElementById('runDetailsLogsUrl').href = data.logs_url;
-    } else if (data.cloud_run_execution_id) {
-        // Generate Cloud Run logs URL if we have execution ID
-        const logsUrl = `https://console.cloud.google.com/run/jobs/executions/details/europe-central2/etl-runner/${data.cloud_run_execution_id}/logs?project=b2b-recs`;
-        logsLinkDiv.classList.remove('hidden');
-        document.getElementById('runDetailsLogsUrl').href = logsUrl;
-    } else {
-        logsLinkDiv.classList.add('hidden');
     }
 
     // Show content, hide loading
@@ -3809,6 +3721,424 @@ function calculateDuration(startIso, endIso) {
 }
 
 // ============================================================================
+// Search and Pagination - Shared State & Utilities
+// ============================================================================
+
+const ITEMS_PER_PAGE = 10;
+
+// Connections state
+let allConnections = [];
+let connectionsCurrentPage = 1;
+let connectionsSearchTerm = '';
+let connectionsSearchTimeout = null;
+
+// ETL Jobs state
+let allJobs = [];
+let jobsCurrentPage = 1;
+let jobsSearchTerm = '';
+let jobsSearchTimeout = null;
+
+/**
+ * Generate pagination controls HTML
+ * @param {number} currentPage - Current page number (1-indexed)
+ * @param {number} totalItems - Total number of items
+ * @param {number} itemsPerPage - Items per page
+ * @param {string} onClickFn - Name of function to call on page click
+ * @returns {string} HTML string for pagination controls
+ */
+function generatePaginationControls(currentPage, totalItems, itemsPerPage, onClickFn) {
+    const totalPages = Math.ceil(totalItems / itemsPerPage);
+    if (totalPages <= 1) return '';
+
+    let html = '';
+
+    // Previous button
+    if (currentPage > 1) {
+        html += `<button onclick="${onClickFn}(${currentPage - 1})" class="px-3 py-1.5 border border-gray-300 rounded-md text-sm font-semibold bg-white hover:bg-gray-50">Previous</button>`;
+    } else {
+        html += `<span class="px-3 py-1.5 border border-gray-300 rounded-md text-sm font-semibold opacity-50 cursor-not-allowed bg-gray-100">Previous</span>`;
+    }
+
+    // Page numbers
+    if (totalPages <= 7) {
+        // Show all pages if 7 or fewer
+        for (let i = 1; i <= totalPages; i++) {
+            html += generatePageButton(i, currentPage, onClickFn);
+        }
+    } else {
+        // Dynamic pagination for many pages
+        if (currentPage <= 4) {
+            // Near the start: show 1,2,3,4,5 ... last
+            for (let i = 1; i <= 5; i++) {
+                html += generatePageButton(i, currentPage, onClickFn);
+            }
+            html += `<span class="px-2 text-gray-500">...</span>`;
+            html += generatePageButton(totalPages, currentPage, onClickFn);
+        } else if (currentPage > totalPages - 4) {
+            // Near the end: show 1 ... last-4,last-3,last-2,last-1,last
+            html += generatePageButton(1, currentPage, onClickFn);
+            html += `<span class="px-2 text-gray-500">...</span>`;
+            for (let i = totalPages - 4; i <= totalPages; i++) {
+                html += generatePageButton(i, currentPage, onClickFn);
+            }
+        } else {
+            // In the middle: show 1 ... current-1,current,current+1 ... last
+            html += generatePageButton(1, currentPage, onClickFn);
+            html += `<span class="px-2 text-gray-500">...</span>`;
+            for (let i = currentPage - 1; i <= currentPage + 1; i++) {
+                html += generatePageButton(i, currentPage, onClickFn);
+            }
+            html += `<span class="px-2 text-gray-500">...</span>`;
+            html += generatePageButton(totalPages, currentPage, onClickFn);
+        }
+    }
+
+    // Next button
+    if (currentPage < totalPages) {
+        html += `<button onclick="${onClickFn}(${currentPage + 1})" class="px-3 py-1.5 border border-gray-300 rounded-md text-sm font-semibold bg-white hover:bg-gray-50">Next</button>`;
+    } else {
+        html += `<span class="px-3 py-1.5 border border-gray-300 rounded-md text-sm font-semibold opacity-50 cursor-not-allowed bg-gray-100">Next</span>`;
+    }
+
+    return html;
+}
+
+function generatePageButton(pageNum, currentPage, onClickFn) {
+    const isActive = pageNum === currentPage;
+    if (isActive) {
+        return `<button class="w-8 h-8 flex items-center justify-center rounded-md text-sm font-semibold bg-blue-600 text-white">${pageNum}</button>`;
+    } else {
+        return `<button onclick="${onClickFn}(${pageNum})" class="w-8 h-8 flex items-center justify-center rounded-md text-sm font-semibold border border-gray-300 text-gray-700 hover:bg-blue-50 hover:border-blue-500">${pageNum}</button>`;
+    }
+}
+
+/**
+ * Generate "Showing X-Y of Z" text
+ */
+function generateShowingText(currentPage, totalItems, itemsPerPage, itemName) {
+    if (totalItems === 0) return '';
+    const start = (currentPage - 1) * itemsPerPage + 1;
+    const end = Math.min(currentPage * itemsPerPage, totalItems);
+    return `Showing <span class="font-semibold">${start}</span>-<span class="font-semibold">${end}</span> of <span class="font-semibold">${totalItems}</span> ${itemName}`;
+}
+
+// ============================================================================
+// Connections Search & Pagination Functions
+// ============================================================================
+
+function handleConnectionsSearch() {
+    // Debounce search
+    if (connectionsSearchTimeout) {
+        clearTimeout(connectionsSearchTimeout);
+    }
+    connectionsSearchTimeout = setTimeout(() => {
+        connectionsSearchTerm = document.getElementById('connectionsSearch').value.toLowerCase().trim();
+        connectionsCurrentPage = 1; // Reset to page 1 on search
+        renderConnectionsList();
+    }, 300);
+}
+
+function goToConnectionsPage(page) {
+    connectionsCurrentPage = page;
+    renderConnectionsList();
+}
+
+function clearConnectionsSearch() {
+    document.getElementById('connectionsSearch').value = '';
+    connectionsSearchTerm = '';
+    connectionsCurrentPage = 1;
+    renderConnectionsList();
+}
+
+function filterConnections(connections, searchTerm) {
+    if (!searchTerm) return connections;
+    return connections.filter(conn =>
+        conn.name.toLowerCase().includes(searchTerm)
+    );
+}
+
+function renderConnectionsList() {
+    const container = document.getElementById('connectionsList');
+    const paginationContainer = document.getElementById('connectionsPagination');
+    const showingTextEl = document.getElementById('connectionsShowingText');
+    const controlsEl = document.getElementById('connectionsPaginationControls');
+
+    // Filter connections by search term
+    const filtered = filterConnections(allConnections, connectionsSearchTerm);
+
+    // Check for no results with search
+    if (filtered.length === 0 && connectionsSearchTerm) {
+        container.innerHTML = `
+            <div class="card-empty-state">
+                <i class="fas fa-search text-gray-400 text-2xl mb-2"></i>
+                <p class="card-empty-state-title">No connections match "${connectionsSearchTerm}"</p>
+                <p class="card-empty-state-text">
+                    <a href="javascript:void(0)" onclick="clearConnectionsSearch()" class="text-blue-600 hover:underline">Clear search</a>
+                </p>
+            </div>
+        `;
+        paginationContainer.classList.add('hidden');
+        return;
+    }
+
+    // Check for no connections at all
+    if (filtered.length === 0) {
+        container.innerHTML = `
+            <div class="card-empty-state">
+                <p class="card-empty-state-title">No database connections configured</p>
+                <p class="card-empty-state-text">Create your first connection to get started with data ingestion</p>
+            </div>
+        `;
+        paginationContainer.classList.add('hidden');
+        return;
+    }
+
+    // Paginate
+    const start = (connectionsCurrentPage - 1) * ITEMS_PER_PAGE;
+    const end = start + ITEMS_PER_PAGE;
+    const paginated = filtered.slice(start, end);
+
+    // Render cards
+    container.innerHTML = '';
+    paginated.forEach(connection => {
+        renderConnectionCard(connection, container);
+    });
+
+    // Auto-test connections to update status
+    autoTestConnections(paginated);
+
+    // Update pagination controls
+    if (filtered.length > ITEMS_PER_PAGE) {
+        showingTextEl.innerHTML = generateShowingText(connectionsCurrentPage, filtered.length, ITEMS_PER_PAGE, 'connections');
+        controlsEl.innerHTML = generatePaginationControls(connectionsCurrentPage, filtered.length, ITEMS_PER_PAGE, 'goToConnectionsPage');
+        paginationContainer.classList.remove('hidden');
+    } else {
+        paginationContainer.classList.add('hidden');
+    }
+}
+
+// ============================================================================
+// ETL Jobs Search & Pagination Functions
+// ============================================================================
+
+function handleJobsSearch() {
+    // Debounce search
+    if (jobsSearchTimeout) {
+        clearTimeout(jobsSearchTimeout);
+    }
+    jobsSearchTimeout = setTimeout(() => {
+        jobsSearchTerm = document.getElementById('jobsSearch').value.toLowerCase().trim();
+        jobsCurrentPage = 1; // Reset to page 1 on search
+        renderJobsList();
+    }, 300);
+}
+
+function goToJobsPage(page) {
+    jobsCurrentPage = page;
+    renderJobsList();
+}
+
+function clearJobsSearch() {
+    document.getElementById('jobsSearch').value = '';
+    jobsSearchTerm = '';
+    jobsCurrentPage = 1;
+    renderJobsList();
+}
+
+function filterJobs(jobs, searchTerm) {
+    if (!searchTerm) return jobs;
+    return jobs.filter(job =>
+        job.name.toLowerCase().includes(searchTerm)
+    );
+}
+
+function renderJobCard(job) {
+    // Format schedule text
+    let scheduleText = 'Manual';
+    const firstTable = job.tables && job.tables.length > 0 ? job.tables[0] : null;
+
+    if (job.schedule_type === 'hourly' && firstTable) {
+        const minute = String(firstTable.schedule_minute || 0).padStart(2, '0');
+        scheduleText = `Hourly at :${minute}`;
+    } else if (job.schedule_type === 'daily' && firstTable) {
+        scheduleText = `Daily at ${firstTable.schedule_time || '09:00'}`;
+    } else if (job.schedule_type === 'weekly' && firstTable) {
+        const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+        const dayName = days[firstTable.schedule_day_of_week] || 'Mon';
+        scheduleText = `Weekly on ${dayName} at ${firstTable.schedule_time || '09:00'}`;
+    } else if (job.schedule_type && job.schedule_type !== 'manual') {
+        scheduleText = job.schedule_type.charAt(0).toUpperCase() + job.schedule_type.slice(1);
+    }
+
+    // Format last run info
+    const lastRunTime = job.last_run ? job.last_run.started_at : 'Never';
+    let lastRunStatus = '—';
+    if (job.last_run && job.last_run.status) {
+        const statusMap = {
+            'completed': 'Success',
+            'failed': 'Failed',
+            'cancelled': 'Cancelled',
+            'running': 'Running'
+        };
+        lastRunStatus = statusMap[job.last_run.status] || job.last_run.status.charAt(0).toUpperCase() + job.last_run.status.slice(1);
+    }
+
+    // Build table mappings HTML
+    let tableMappingsHtml = '';
+    if (job.tables && job.tables.length > 0) {
+        job.tables.forEach(table => {
+            tableMappingsHtml += `
+                <div style="display: flex; flex-direction: column; gap: 2px;">
+                    <span class="card-value"><span class="card-label">From:</span> ${table.source_table_name}</span>
+                    <span class="card-value"><span class="card-label">To:</span> ${table.dest_table_name}</span>
+                </div>
+            `;
+        });
+    }
+
+    // Build pause button if scheduled
+    let pauseButtonHtml = '';
+    if (job.cloud_scheduler_job_name) {
+        const pauseClass = job.is_enabled ? 'pause-large' : 'resume-large';
+        const pauseIcon = job.is_enabled ? 'fa-pause' : 'fa-play-circle';
+        const pauseTitle = job.is_enabled ? 'Pause scheduling' : 'Resume scheduling';
+        pauseButtonHtml = `
+            <button onclick="togglePauseSource(${job.id}, ${job.is_enabled})"
+                    class="card-action-btn ${pauseClass}"
+                    title="${pauseTitle}"
+                    id="pause-btn-${job.id}">
+                <i class="fas ${pauseIcon}"></i>
+            </button>
+        `;
+    }
+
+    return `
+        <div class="card" id="job-card-${job.id}">
+            <div class="card-container-5col">
+                <!-- Column 1: Job Info -->
+                <div class="card-content">
+                    <div class="card-header">
+                        <span class="status-dot ${job.is_enabled ? 'green' : 'gray'}"></span>
+                        <h4 class="card-title">${job.name}</h4>
+                    </div>
+                    <div class="card-body">
+                        ${tableMappingsHtml}
+                    </div>
+                </div>
+
+                <!-- Column 2: Schedule + Connection -->
+                <div class="card-meta-column">
+                    <span class="card-label">Schedule:</span>
+                    <span class="card-schedule-info">${scheduleText}</span>
+                    <span class="card-label">Connection:</span>
+                    <span class="card-schedule-info">${job.connection_name || 'None'}</span>
+                </div>
+
+                <!-- Column 3: Last Run Info -->
+                <div class="card-meta-column">
+                    <span class="card-label">Last run:</span>
+                    <span class="card-schedule-info">${lastRunTime}</span>
+                    <span class="card-label">Last run status:</span>
+                    <span class="card-schedule-info">${lastRunStatus}</span>
+                </div>
+
+                <!-- Column 4: Run + Pause Buttons -->
+                <div class="card-run-actions">
+                    <button onclick="runSourceNow(${job.id})" class="card-action-btn run" title="Run ETL job now">
+                        <i class="fas fa-play"></i>
+                    </button>
+                    ${pauseButtonHtml}
+                </div>
+
+                <!-- Column 5: Actions -->
+                <div class="card-actions">
+                    <button onclick="editSource(${job.id})" class="card-action-btn edit" title="Edit ETL job">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button onclick="deleteSource(${job.id})" class="card-action-btn delete" title="Delete ETL job">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function renderJobsList() {
+    const container = document.getElementById('etlJobsList');
+    const paginationContainer = document.getElementById('jobsPagination');
+    const showingTextEl = document.getElementById('jobsShowingText');
+    const controlsEl = document.getElementById('jobsPaginationControls');
+
+    // Filter jobs by search term
+    const filtered = filterJobs(allJobs, jobsSearchTerm);
+
+    // Check for no results with search
+    if (filtered.length === 0 && jobsSearchTerm) {
+        container.innerHTML = `
+            <div class="card-empty-state">
+                <i class="fas fa-search text-gray-400 text-2xl mb-2"></i>
+                <p class="card-empty-state-title">No ETL jobs match "${jobsSearchTerm}"</p>
+                <p class="card-empty-state-text">
+                    <a href="javascript:void(0)" onclick="clearJobsSearch()" class="text-blue-600 hover:underline">Clear search</a>
+                </p>
+            </div>
+        `;
+        paginationContainer.classList.add('hidden');
+        return;
+    }
+
+    // Check for no jobs at all
+    if (filtered.length === 0) {
+        container.innerHTML = `
+            <div class="card-empty-state">
+                <p class="card-empty-state-title">No ETL jobs configured</p>
+                <p class="card-empty-state-text">Set up your first data pipeline to begin importing data</p>
+            </div>
+        `;
+        paginationContainer.classList.add('hidden');
+        return;
+    }
+
+    // Paginate
+    const start = (jobsCurrentPage - 1) * ITEMS_PER_PAGE;
+    const end = start + ITEMS_PER_PAGE;
+    const paginated = filtered.slice(start, end);
+
+    // Render cards
+    container.innerHTML = paginated.map(job => renderJobCard(job)).join('');
+
+    // Update pagination controls
+    if (filtered.length > ITEMS_PER_PAGE) {
+        showingTextEl.innerHTML = generateShowingText(jobsCurrentPage, filtered.length, ITEMS_PER_PAGE, 'jobs');
+        controlsEl.innerHTML = generatePaginationControls(jobsCurrentPage, filtered.length, ITEMS_PER_PAGE, 'goToJobsPage');
+        paginationContainer.classList.remove('hidden');
+    } else {
+        paginationContainer.classList.add('hidden');
+    }
+}
+
+function loadETLJobs() {
+    // Load jobs from embedded JSON data
+    try {
+        const dataEl = document.getElementById('etlJobsData');
+        if (dataEl) {
+            allJobs = JSON.parse(dataEl.textContent);
+            renderJobsList();
+        }
+    } catch (error) {
+        console.error('Error loading ETL jobs data:', error);
+        const container = document.getElementById('etlJobsList');
+        container.innerHTML = `
+            <div class="card-empty-state">
+                <p class="card-empty-state-title" style="color: #ef4444;">Error loading ETL jobs</p>
+                <p class="card-empty-state-text">Please refresh the page</p>
+            </div>
+        `;
+    }
+}
+
+// ============================================================================
 // Connection Management Functions
 // ============================================================================
 
@@ -3818,22 +4148,16 @@ function loadConnections() {
     fetch(`/api/models/{{ model.id }}/connections/`)
         .then(response => response.json())
         .then(data => {
-            if (data.status === 'success' && data.connections.length > 0) {
-                connectionsList.innerHTML = '';
-                data.connections.forEach(connection => {
-                    renderConnectionCard(connection, connectionsList);
-                });
-
-                // Auto-test connections to update status
-                autoTestConnections(data.connections);
+            if (data.status === 'success') {
+                // Store all connections for filtering/pagination
+                allConnections = data.connections || [];
+                // Reset to page 1 when reloading
+                connectionsCurrentPage = 1;
+                // Render with pagination
+                renderConnectionsList();
             } else {
-                // Show empty state
-                connectionsList.innerHTML = `
-                    <div class="card-empty-state">
-                        <p class="card-empty-state-title">No database connections configured</p>
-                        <p class="card-empty-state-text">Create your first connection to get started with data ingestion</p>
-                    </div>
-                `;
+                allConnections = [];
+                renderConnectionsList();
             }
         })
         .catch(error => {
@@ -7886,12 +8210,182 @@ function createNewConnectionFromTest(connectionName, connectionData, messageDiv,
 }
 
 // ============================================================================
+// Running Jobs Status Polling
+// ============================================================================
+
+let runningJobsPollingInterval = null;
+const POLLING_INTERVAL_MS = 5000; // Poll every 5 seconds
+
+/**
+ * Start polling for running jobs status updates
+ */
+function startRunningJobsPolling() {
+    // Find all rows with running status
+    const runningRows = document.querySelectorAll('tr[data-run-status="running"]');
+
+    if (runningRows.length === 0) {
+        console.log('No running jobs to poll');
+        return;
+    }
+
+    console.log(`Starting polling for ${runningRows.length} running job(s)`);
+
+    // Poll immediately, then set interval
+    pollRunningJobs();
+
+    runningJobsPollingInterval = setInterval(pollRunningJobs, POLLING_INTERVAL_MS);
+}
+
+/**
+ * Stop polling
+ */
+function stopRunningJobsPolling() {
+    if (runningJobsPollingInterval) {
+        clearInterval(runningJobsPollingInterval);
+        runningJobsPollingInterval = null;
+        console.log('Stopped polling for running jobs');
+    }
+}
+
+/**
+ * Poll status for all running jobs
+ */
+function pollRunningJobs() {
+    const runningRows = document.querySelectorAll('tr[data-run-status="running"]');
+
+    if (runningRows.length === 0) {
+        stopRunningJobsPolling();
+        return;
+    }
+
+    runningRows.forEach(row => {
+        const runId = row.dataset.runId;
+        pollSingleRunStatus(runId);
+    });
+}
+
+/**
+ * Poll status for a single run
+ */
+function pollSingleRunStatus(runId) {
+    fetch(`/api/etl/runs/${runId}/status/`)
+        .then(response => response.json())
+        .then(data => {
+            updateRunRow(runId, data);
+        })
+        .catch(error => {
+            console.error(`Error polling run ${runId}:`, error);
+        });
+}
+
+/**
+ * Update a run row with new data
+ */
+function updateRunRow(runId, data) {
+    const row = document.getElementById(`run-row-${runId}`);
+    const statusCell = document.getElementById(`run-status-${runId}`);
+    const durationCell = document.getElementById(`run-duration-${runId}`);
+    const rowsCell = document.getElementById(`run-rows-${runId}`);
+
+    if (!row || !statusCell) return;
+
+    const currentStatus = row.dataset.runStatus;
+    const newStatus = data.status;
+
+    // Only update if status changed
+    if (currentStatus !== newStatus) {
+        console.log(`Run #${runId} status changed: ${currentStatus} → ${newStatus}`);
+
+        // Update data attribute
+        row.dataset.runStatus = newStatus;
+
+        // Update row background color
+        row.className = row.className.replace(/bg-\w+-50/g, '');
+        if (newStatus === 'completed') {
+            row.classList.add('bg-green-50');
+        } else if (newStatus === 'failed') {
+            row.classList.add('bg-red-50');
+        } else if (newStatus === 'partial') {
+            row.classList.add('bg-yellow-50');
+        } else if (newStatus === 'running') {
+            row.classList.add('bg-blue-50');
+        } else {
+            row.classList.add('bg-gray-50');
+        }
+
+        // Update status cell
+        statusCell.innerHTML = getStatusHTML(newStatus);
+    }
+
+    // Always update duration and rows (they change while running)
+    if (durationCell) {
+        if (data.duration_seconds) {
+            durationCell.textContent = `${Math.round(data.duration_seconds)}s`;
+        } else {
+            durationCell.textContent = '—';
+        }
+    }
+
+    if (rowsCell) {
+        const rows = data.total_rows_extracted || 0;
+        rowsCell.textContent = rows.toLocaleString();
+    }
+}
+
+/**
+ * Get HTML for status badge
+ */
+function getStatusHTML(status) {
+    const statusConfig = {
+        'completed': {
+            class: 'text-green-700',
+            icon: 'fa-check-circle',
+            label: 'Completed'
+        },
+        'failed': {
+            class: 'text-red-700',
+            icon: 'fa-times-circle',
+            label: 'Failed'
+        },
+        'cancelled': {
+            class: 'text-gray-600',
+            icon: 'fa-ban',
+            label: 'Cancelled'
+        },
+        'running': {
+            class: 'text-blue-700',
+            icon: 'fa-spinner fa-spin',
+            label: 'Running'
+        },
+        'partial': {
+            class: 'text-yellow-700',
+            icon: 'fa-exclamation-triangle',
+            label: 'Partial'
+        }
+    };
+
+    const config = statusConfig[status] || {
+        class: 'text-gray-700',
+        icon: 'fa-question-circle',
+        label: status
+    };
+
+    return `<span class="${config.class} text-xs font-semibold">
+        <i class="fas ${config.icon} mr-1"></i>${config.label}
+    </span>`;
+}
+
+// ============================================================================
 // Page Initialization
 // ============================================================================
 
-// Load connections when page loads
+// Load connections and ETL jobs when page loads
 document.addEventListener('DOMContentLoaded', function() {
     loadConnections();
+    loadETLJobs();
+
+    // Start polling for running jobs
+    startRunningJobsPolling();
 
     // Enable Next button in connection modal when connection type is selected
     document.querySelectorAll('input[name="connSourceType"]').forEach(radio => {

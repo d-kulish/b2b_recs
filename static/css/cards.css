@@ -363,3 +363,232 @@
     font-size: 12px;
     color: #9ca3af;
 }
+
+/* ============================================================================
+   ETL DASHBOARD STYLES
+   ============================================================================
+   Layout grid and KPI cards for the ETL Dashboard section
+   ============================================================================ */
+
+/* Dashboard Grid Container */
+.etl-dashboard-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+/* Row 1: KPIs + Chart side by side (35% / 65% split) */
+.etl-dashboard-row-1 {
+    display: grid;
+    grid-template-columns: 35fr 65fr;
+    gap: 24px;
+    align-items: stretch;
+}
+
+/* KPI Section: 3 rows × 2 columns grid of cards */
+.etl-kpi-section {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    grid-template-rows: repeat(3, 1fr);
+    gap: 10px;
+}
+
+/* Chart Section */
+.etl-chart-section {
+    display: flex;
+    flex-direction: column;
+    min-height: 240px;
+    background-color: #ffffff;
+    border-radius: 8px;
+    padding: 16px;
+    border: 1px solid #e5e7eb;
+}
+
+/* Runs Table Section */
+.etl-runs-section {
+    border-top: 1px solid #e5e7eb;
+    padding-top: 24px;
+}
+
+/* ============================================================================
+   KPI CARD STYLES (Rich Style)
+   ============================================================================ */
+
+.kpi-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background-color: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 10px 12px;
+    transition: all 0.2s ease-in-out;
+}
+
+.kpi-card:hover {
+    border-color: #d1d5db;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+/* Icon Wrapper */
+.kpi-icon-wrapper {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    flex-shrink: 0;
+    font-size: 14px;
+}
+
+/* Icon Color Variants */
+.kpi-icon-blue {
+    background-color: #dbeafe;
+    color: #2563eb;
+}
+
+.kpi-icon-green {
+    background-color: #d1fae5;
+    color: #059669;
+}
+
+.kpi-icon-red {
+    background-color: #fee2e2;
+    color: #dc2626;
+}
+
+.kpi-icon-yellow {
+    background-color: #fef3c7;
+    color: #d97706;
+}
+
+.kpi-icon-purple {
+    background-color: #ede9fe;
+    color: #7c3aed;
+}
+
+.kpi-icon-gray {
+    background-color: #f3f4f6;
+    color: #6b7280;
+}
+
+/* KPI Content */
+.kpi-content {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.kpi-value {
+    font-size: 18px;
+    font-weight: 700;
+    color: #111827;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.kpi-label {
+    font-size: 10px;
+    font-weight: 500;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+}
+
+/* ============================================================================
+   RESPONSIVE STYLES
+   ============================================================================ */
+
+/* Tablet breakpoint */
+@media (max-width: 1280px) {
+    .etl-dashboard-row-1 {
+        grid-template-columns: 40fr 60fr;
+    }
+
+    .kpi-card {
+        padding: 8px 10px;
+        gap: 8px;
+    }
+
+    .kpi-icon-wrapper {
+        width: 32px;
+        height: 32px;
+        font-size: 12px;
+    }
+
+    .kpi-value {
+        font-size: 16px;
+    }
+
+    .kpi-label {
+        font-size: 9px;
+    }
+}
+
+/* Stack layout on smaller screens */
+@media (max-width: 1024px) {
+    .etl-dashboard-row-1 {
+        grid-template-columns: 1fr;
+        gap: 20px;
+    }
+
+    .etl-kpi-section {
+        grid-template-columns: repeat(3, 1fr);
+        grid-template-rows: repeat(2, 1fr);
+    }
+
+    .kpi-card {
+        padding: 10px 12px;
+        gap: 10px;
+    }
+
+    .kpi-icon-wrapper {
+        width: 36px;
+        height: 36px;
+        font-size: 14px;
+    }
+
+    .kpi-value {
+        font-size: 18px;
+    }
+
+    .kpi-label {
+        font-size: 10px;
+    }
+
+    .etl-chart-section {
+        min-height: 280px;
+    }
+}
+
+/* Mobile: 2 columns for KPIs */
+@media (max-width: 768px) {
+    .etl-kpi-section {
+        grid-template-columns: repeat(2, 1fr);
+        grid-template-rows: repeat(3, 1fr);
+    }
+
+    .kpi-card {
+        padding: 10px;
+        gap: 8px;
+    }
+
+    .kpi-icon-wrapper {
+        width: 32px;
+        height: 32px;
+        font-size: 12px;
+    }
+
+    .kpi-value {
+        font-size: 16px;
+    }
+
+    .kpi-label {
+        font-size: 9px;
+    }
+}

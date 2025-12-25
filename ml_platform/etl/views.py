@@ -6,7 +6,8 @@ Handles rendering of ETL-related pages.
 from django.shortcuts import render, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.utils import timezone
-from django.db.models import Q
+from django.db.models import Q, Sum, Avg, Count, F, ExpressionWrapper, DurationField
+from django.db.models.functions import Extract
 from django.core.paginator import Paginator
 from datetime import timedelta
 from collections import defaultdict
@@ -199,9 +200,9 @@ def model_etl(request, model_id):
     page_obj = paginator.get_page(page_number)
 
     # Prepare ridge chart data for ETL Duration Analysis (3D histogram view)
-    # Get all runs from the last 3 days with hourly granularity
+    # Get all runs from the last 5 days with hourly granularity
     # Each individual run is shown as a separate histogram bar (not aggregated)
-    ridge_cutoff_date = timezone.now() - timedelta(days=3)
+    ridge_cutoff_date = timezone.now() - timedelta(days=5)
     all_runs_3_days = model.etl_runs.filter(
         started_at__gte=ridge_cutoff_date,
         status__in=['completed', 'partial', 'failed']
@@ -233,12 +234,12 @@ def model_etl(request, model_id):
             'status': 'success' if is_success else 'failed',
         })
 
-    # Generate all 72 hours (3 days * 24 hours) for consistent X-axis
+    # Generate all 120 hours (5 days * 24 hours) for consistent X-axis
     all_hours = []
     now = timezone.now()
-    # Start from 3 days ago at hour 0
-    start_time = now.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=2)
-    for i in range(72):  # 3 days * 24 hours
+    # Start from 5 days ago at hour 0
+    start_time = now.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=4)
+    for i in range(120):  # 5 days * 24 hours
         hour_time = start_time + timedelta(hours=i)
         hour_str = hour_time.strftime('%Y-%m-%d %H:00')
         all_hours.append(hour_str)
@@ -259,6 +260,68 @@ def model_etl(request, model_id):
         'job_names': sorted_job_names,
     })
 
+    # =========================================================================
+    # KPI Dashboard Aggregations (Last 30 Days)
+    # =========================================================================
+    # Get all runs from the last 30 days for KPI calculations
+    kpi_runs = model.etl_runs.filter(
+        started_at__gte=cutoff_date
+    )
+
+    # Aggregate metrics
+    kpi_aggregates = kpi_runs.aggregate(
+        total_runs=Count('id'),
+        completed_runs=Count('id', filter=Q(status='completed')),
+        failed_runs=Count('id', filter=Q(status='failed')),
+        partial_runs=Count('id', filter=Q(status='partial')),
+        cancelled_runs=Count('id', filter=Q(status='cancelled')),
+        total_rows_extracted=Sum('total_rows_extracted'),
+        total_bytes_processed=Sum('bytes_processed'),
+    )
+
+    # Calculate average duration from timestamps (more reliable than duration_seconds field)
+    # Only include completed runs with both start and end times
+    completed_runs_with_times = kpi_runs.filter(
+        status__in=['completed', 'partial'],
+        started_at__isnull=False,
+        completed_at__isnull=False
+    )
+
+    # Calculate average duration manually
+    avg_duration_seconds = 0
+    if completed_runs_with_times.exists():
+        total_duration = 0
+        count = 0
+        for run in completed_runs_with_times:
+            if run.started_at and run.completed_at:
+                duration = (run.completed_at - run.started_at).total_seconds()
+                if duration > 0:  # Only count positive durations
+                    total_duration += duration
+                    count += 1
+        if count > 0:
+            avg_duration_seconds = total_duration / count
+
+    # Calculate success rate (completed + partial are considered successful)
+    total_runs = kpi_aggregates['total_runs'] or 0
+    completed_runs = kpi_aggregates['completed_runs'] or 0
+    partial_runs = kpi_aggregates['partial_runs'] or 0
+    successful_runs = completed_runs + partial_runs
+
+    success_rate = round((successful_runs / total_runs * 100), 1) if total_runs > 0 else 0
+
+    # Build KPI data dictionary
+    kpi_data = {
+        'total_runs': total_runs,
+        'completed_runs': completed_runs,
+        'failed_runs': kpi_aggregates['failed_runs'] or 0,
+        'partial_runs': partial_runs,
+        'cancelled_runs': kpi_aggregates['cancelled_runs'] or 0,
+        'successful_runs': successful_runs,
+        'success_rate': success_rate,
+        'total_rows_extracted': kpi_aggregates['total_rows_extracted'] or 0,
+        'avg_duration_seconds': round(avg_duration_seconds),
+    }
+
     context = {
         'model': model,
         'etl_config': etl_config,
@@ -271,6 +334,7 @@ def model_etl(request, model_id):
         'has_any_runs': has_any_runs,
         'showing_last_30_days': True,
         'ridge_chart_data': ridge_chart_json,
+        'kpi_data': kpi_data,
     }
 
     return render(request, 'ml_platform/model_etl.html', context)

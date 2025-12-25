@@ -12,6 +12,322 @@
 
 {% block model_content %}
 <div class="space-y-6">
+    <!-- ETL Dashboard -->
+    <div class="bg-white rounded-xl border border-black shadow-lg p-6">
+        <div class="flex items-center justify-between mb-6">
+            <h2 class="text-2xl font-bold text-gray-900">ETL Dashboard</h2>
+            <span class="text-xs bg-gray-100 text-gray-600 px-3 py-1 rounded-full">
+                <i class="fas fa-calendar mr-1"></i>
+                Last 30 days
+            </span>
+        </div>
+
+        <!-- Dashboard Grid: 2 columns for KPIs + Chart, full width for table -->
+        <div class="etl-dashboard-grid">
+            <!-- Row 1: KPIs (left) + Chart (right) -->
+            <div class="etl-dashboard-row-1">
+                <!-- Column 1: KPI Cards (3 rows × 2 columns) -->
+                <div class="etl-kpi-section">
+                    <!-- Row 1: Total Runs + Success Rate -->
+                    <div class="kpi-card">
+                        <div class="kpi-icon-wrapper kpi-icon-blue">
+                            <i class="fas fa-play-circle"></i>
+                        </div>
+                        <div class="kpi-content">
+                            <span class="kpi-value">{{ kpi_data.total_runs|default:0 }}</span>
+                            <span class="kpi-label">Total Runs</span>
+                        </div>
+                    </div>
+
+                    <div class="kpi-card">
+                        <div class="kpi-icon-wrapper {% if kpi_data.success_rate >= 90 %}kpi-icon-green{% elif kpi_data.success_rate >= 70 %}kpi-icon-yellow{% else %}kpi-icon-red{% endif %}">
+                            <i class="fas fa-check-circle"></i>
+                        </div>
+                        <div class="kpi-content">
+                            <span class="kpi-value">{{ kpi_data.success_rate|default:0 }}%</span>
+                            <span class="kpi-label">Success Rate</span>
+                        </div>
+                    </div>
+
+                    <!-- Row 2: Successful Runs + Failed Runs -->
+                    <div class="kpi-card">
+                        <div class="kpi-icon-wrapper kpi-icon-green">
+                            <i class="fas fa-check-double"></i>
+                        </div>
+                        <div class="kpi-content">
+                            <span class="kpi-value">{{ kpi_data.successful_runs|default:0 }}</span>
+                            <span class="kpi-label">Successful Runs</span>
+                        </div>
+                    </div>
+
+                    <div class="kpi-card">
+                        <div class="kpi-icon-wrapper {% if kpi_data.failed_runs > 0 %}kpi-icon-red{% else %}kpi-icon-green{% endif %}">
+                            <i class="fas fa-times-circle"></i>
+                        </div>
+                        <div class="kpi-content">
+                            <span class="kpi-value">{{ kpi_data.failed_runs|default:0 }}</span>
+                            <span class="kpi-label">Failed Runs</span>
+                        </div>
+                    </div>
+
+                    <!-- Row 3: Rows Migrated + Avg Duration -->
+                    <div class="kpi-card">
+                        <div class="kpi-icon-wrapper kpi-icon-purple">
+                            <i class="fas fa-database"></i>
+                        </div>
+                        <div class="kpi-content">
+                            <span class="kpi-value" data-raw-value="{{ kpi_data.total_rows_extracted|default:0 }}">{{ kpi_data.total_rows_extracted|default:0|intcomma }}</span>
+                            <span class="kpi-label">Rows Migrated</span>
+                        </div>
+                    </div>
+
+                    <div class="kpi-card">
+                        <div class="kpi-icon-wrapper kpi-icon-blue">
+                            <i class="fas fa-clock"></i>
+                        </div>
+                        <div class="kpi-content">
+                            <span class="kpi-value" data-duration-seconds="{{ kpi_data.avg_duration_seconds|default:0 }}">—</span>
+                            <span class="kpi-label">Avg Duration</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Column 2: ETL Duration Analysis Chart -->
+                <div class="etl-chart-section">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-sm font-semibold text-gray-700">ETL Job Runs (Last 5 Days - Hourly)</h3>
+                        <div class="flex items-center gap-3">
+                            <!-- Legend -->
+                            <div class="flex items-center gap-3 text-xs">
+                                <div class="flex items-center gap-1">
+                                    <div class="w-2.5 h-2.5 rounded-sm bg-green-500"></div>
+                                    <span class="text-gray-500">Success</span>
+                                </div>
+                                <div class="flex items-center gap-1">
+                                    <div class="w-2.5 h-2.5 rounded-sm bg-red-500"></div>
+                                    <span class="text-gray-500">Failed</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Chart Container -->
+                    <div id="ridgeChartContainer" class="relative">
+                        <!-- Loading State -->
+                        <div id="ridgeChartLoading" class="flex items-center justify-center py-12">
+                            <i class="fas fa-spinner fa-spin text-gray-400 text-xl mr-2"></i>
+                            <span class="text-gray-500 text-sm">Loading chart...</span>
+                        </div>
+
+                        <!-- Empty State -->
+                        <div id="ridgeChartEmpty" class="hidden text-center py-12 bg-gray-50 rounded-lg">
+                            <i class="fas fa-chart-line text-gray-400 text-2xl mb-2"></i>
+                            <p class="text-gray-600 text-sm font-medium">No duration data</p>
+                            <p class="text-gray-400 text-xs mt-1">Run ETL jobs to see analysis</p>
+                        </div>
+
+                        <!-- Chart SVG -->
+                        <svg id="ridgeChart" class="w-full hidden"></svg>
+
+                        <!-- Tooltip -->
+                        <div id="ridgeChartTooltip" class="absolute hidden bg-gray-900 text-white text-xs rounded-lg px-3 py-2 pointer-events-none shadow-lg z-10">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Row 2: Recent ETL Runs Table (full width) -->
+            <div class="etl-runs-section mt-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-sm font-semibold text-gray-700">Recent Runs</h3>
+                </div>
+
+        {% if page_obj.object_list %}
+        <div class="overflow-x-auto">
+            <table class="w-full table-fixed">
+                <thead class="bg-gray-50 border-b border-gray-200">
+                    <tr>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase" style="width: 8%">Run ID</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase" style="width: 15%">ETL Job</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase" style="width: 18%">Connection</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase" style="width: 12%">Status</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase" style="width: 17%">Started</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase" style="width: 10%">Duration</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase" style="width: 8%">Rows</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase" style="width: 12%">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200">
+                    {% for run in page_obj.object_list %}
+                    <tr class="{% if run.status == 'completed' %}bg-green-50{% elif run.status == 'failed' %}bg-red-50{% elif run.status == 'partial' %}bg-yellow-50{% elif run.status == 'running' %}bg-blue-50{% else %}bg-gray-50{% endif %}">
+                        <td class="px-4 py-3 text-sm font-medium text-gray-900">#{{ run.id }}</td>
+                        <td class="px-4 py-3 text-sm text-gray-900">
+                            {% if run.data_source %}
+                            <span class="font-medium block truncate" title="{{ run.data_source.name }}">{{ run.data_source.name }}</span>
+                            {% else %}
+                            <span class="text-gray-400 italic">Unknown</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3 text-sm text-gray-600">
+                            {% if run.data_source and run.data_source.connection %}
+                            <span class="inline-flex items-center">
+                                {% if run.data_source.source_type == 'postgresql' %}
+                                <i class="fas fa-elephant text-blue-600 mr-1" title="PostgreSQL"></i>
+                                {% elif run.data_source.source_type == 'mysql' %}
+                                <i class="fas fa-database text-orange-500 mr-1" title="MySQL"></i>
+                                {% elif run.data_source.source_type == 'bigquery' %}
+                                <i class="fas fa-cloud text-blue-500 mr-1" title="BigQuery"></i>
+                                {% elif run.data_source.source_type == 'gcs' %}
+                                <i class="fas fa-cloud-upload-alt text-yellow-500 mr-1" title="GCS"></i>
+                                {% elif run.data_source.source_type == 's3' %}
+                                <i class="fab fa-aws text-orange-600 mr-1" title="AWS S3"></i>
+                                {% elif run.data_source.source_type == 'firestore' %}
+                                <i class="fas fa-fire text-yellow-600 mr-1" title="Firestore"></i>
+                                {% else %}
+                                <i class="fas fa-database text-gray-500 mr-1"></i>
+                                {% endif %}
+                                {{ run.data_source.connection.name|truncatechars:20 }}
+                            </span>
+                            {% else %}
+                            <span class="text-gray-400">—</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3">
+                            {% if run.status == 'completed' %}
+                            <span class="text-green-700 text-xs font-semibold">
+                                <i class="fas fa-check-circle mr-1"></i>Completed
+                            </span>
+                            {% elif run.status == 'failed' %}
+                            <span class="text-red-700 text-xs font-semibold">
+                                <i class="fas fa-times-circle mr-1"></i>Failed
+                            </span>
+                            {% elif run.status == 'cancelled' %}
+                            <span class="text-gray-600 text-xs font-semibold">
+                                <i class="fas fa-ban mr-1"></i>Cancelled
+                            </span>
+                            {% elif run.status == 'running' %}
+                            <span class="text-blue-700 text-xs font-semibold">
+                                <i class="fas fa-spinner fa-spin mr-1"></i>Running
+                            </span>
+                            {% elif run.status == 'partial' %}
+                            <span class="text-yellow-700 text-xs font-semibold">
+                                <i class="fas fa-exclamation-triangle mr-1"></i>Partial
+                            </span>
+                            {% else %}
+                            <span class="text-gray-700 text-xs font-semibold">
+                                {{ run.get_status_display }}
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3 text-sm text-gray-600">
+                            {% timezone "Europe/Kiev" %}{{ run.started_at|date:"M d, g:i A"|default:"—" }}{% endtimezone %}
+                        </td>
+                        <td class="px-4 py-3 text-sm text-gray-600">
+                            {% if run.get_duration_seconds %}
+                            {{ run.get_duration_seconds|floatformat:0 }}s
+                            {% else %}
+                            —
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3 text-sm text-gray-600">
+                            {{ run.total_rows_extracted|intcomma|default:"0" }}
+                        </td>
+                        <td class="px-4 py-3">
+                            <button onclick="viewRunDetails({{ run.id }})" class="text-blue-600 hover:text-blue-800 font-semibold text-sm">
+                                View Details
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination Controls -->
+        {% if page_obj.paginator.num_pages > 1 %}
+        <div class="flex flex-col sm:flex-row items-center justify-between mt-4 pt-4 border-t border-gray-200 gap-4">
+            <div class="text-sm text-gray-600">
+                Showing <span class="font-semibold">{{ page_obj.start_index }}</span>-<span class="font-semibold">{{ page_obj.end_index }}</span>
+                of <span class="font-semibold">{{ page_obj.paginator.count }}</span> runs
+            </div>
+            <div class="flex items-center gap-2">
+                {% if page_obj.has_previous %}
+                <a href="?page={{ page_obj.previous_page_number }}" class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold bg-white hover:bg-gray-50">Previous</a>
+                {% else %}
+                <span class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold opacity-50 cursor-not-allowed bg-gray-100">Previous</span>
+                {% endif %}
+
+                {% if page_obj.paginator.num_pages <= 7 %}
+                    {# Show all pages if 7 or fewer #}
+                    {% for num in page_obj.paginator.page_range %}
+                    <a href="?page={{ num }}" class="w-10 h-10 flex items-center justify-center rounded-md text-sm font-semibold {% if page_obj.number == num %}bg-blue-600 text-white{% else %}border border-gray-300 text-gray-700 hover:bg-blue-50 hover:border-blue-500{% endif %}">{{ num }}</a>
+                    {% endfor %}
+                {% else %}
+                    {# Dynamic pagination for many pages #}
+                    {% if page_obj.number <= 4 %}
+                        {# Near the start: show 1,2,3,4,5 ... last #}
+                        {% for num in page_obj.paginator.page_range %}
+                            {% if num <= 5 %}
+                            <a href="?page={{ num }}" class="w-10 h-10 flex items-center justify-center rounded-md text-sm font-semibold {% if page_obj.number == num %}bg-blue-600 text-white{% else %}border border-gray-300 text-gray-700 hover:bg-blue-50 hover:border-blue-500{% endif %}">{{ num }}</a>
+                            {% endif %}
+                        {% endfor %}
+                        <span class="px-2 text-gray-500">...</span>
+                        <a href="?page={{ page_obj.paginator.num_pages }}" class="w-10 h-10 flex items-center justify-center rounded-md text-sm font-semibold border border-gray-300 text-gray-700 hover:bg-blue-50 hover:border-blue-500">{{ page_obj.paginator.num_pages }}</a>
+                    {% elif page_obj.number > page_obj.paginator.num_pages|add:"-4" %}
+                        {# Near the end: show 1 ... last-4,last-3,last-2,last-1,last #}
+                        <a href="?page=1" class="w-10 h-10 flex items-center justify-center rounded-md text-sm font-semibold border border-gray-300 text-gray-700 hover:bg-blue-50 hover:border-blue-500">1</a>
+                        <span class="px-2 text-gray-500">...</span>
+                        {% for num in page_obj.paginator.page_range %}
+                            {% if num > page_obj.paginator.num_pages|add:"-5" %}
+                            <a href="?page={{ num }}" class="w-10 h-10 flex items-center justify-center rounded-md text-sm font-semibold {% if page_obj.number == num %}bg-blue-600 text-white{% else %}border border-gray-300 text-gray-700 hover:bg-blue-50 hover:border-blue-500{% endif %}">{{ num }}</a>
+                            {% endif %}
+                        {% endfor %}
+                    {% else %}
+                        {# In the middle: show 1 ... current-1,current,current+1 ... last #}
+                        <a href="?page=1" class="w-10 h-10 flex items-center justify-center rounded-md text-sm font-semibold border border-gray-300 text-gray-700 hover:bg-blue-50 hover:border-blue-500">1</a>
+                        <span class="px-2 text-gray-500">...</span>
+                        {% for num in page_obj.paginator.page_range %}
+                            {% with prev_page=page_obj.number|add:"-1" next_page=page_obj.number|add:"1" %}
+                            {% if num == prev_page or num == page_obj.number or num == next_page %}
+                            <a href="?page={{ num }}" class="w-10 h-10 flex items-center justify-center rounded-md text-sm font-semibold {% if page_obj.number == num %}bg-blue-600 text-white{% else %}border border-gray-300 text-gray-700 hover:bg-blue-50 hover:border-blue-500{% endif %}">{{ num }}</a>
+                            {% endif %}
+                            {% endwith %}
+                        {% endfor %}
+                        <span class="px-2 text-gray-500">...</span>
+                        <a href="?page={{ page_obj.paginator.num_pages }}" class="w-10 h-10 flex items-center justify-center rounded-md text-sm font-semibold border border-gray-300 text-gray-700 hover:bg-blue-50 hover:border-blue-500">{{ page_obj.paginator.num_pages }}</a>
+                    {% endif %}
+                {% endif %}
+
+                {% if page_obj.has_next %}
+                <a href="?page={{ page_obj.next_page_number }}" class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold bg-white hover:bg-gray-50">Next</a>
+                {% else %}
+                <span class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold opacity-50 cursor-not-allowed bg-gray-100">Next</span>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
+        {% else %}
+        <div class="text-center py-8 bg-gray-50 rounded-lg">
+            {% if has_any_runs %}
+                <!-- Runs exist, but none in last 30 days -->
+                <i class="fas fa-calendar-times text-gray-400 text-3xl mb-3"></i>
+                <p class="text-gray-700 font-semibold">No runs in last 30 days</p>
+                <p class="text-gray-500 text-sm mt-1">All recent ETL runs are older than 30 days</p>
+            {% else %}
+                <!-- Truly no runs -->
+                <i class="fas fa-inbox text-gray-400 text-3xl mb-3"></i>
+                <p class="text-gray-600">No ETL runs yet</p>
+            {% endif %}
+        </div>
+        {% endif %}
+            </div>
+            <!-- End of etl-runs-section -->
+        </div>
+        <!-- End of etl-dashboard-grid -->
+    </div>
+    <!-- End of ETL Dashboard -->
+
     <!-- ETL Jobs Container: 2-Column Layout -->
     <div class="bg-white rounded-xl border border-black shadow-lg p-6">
         <h2 class="text-2xl font-bold text-gray-900 mb-6">ETL Jobs</h2>
@@ -162,215 +478,6 @@
 
     </div>
     <!-- End of ETL Jobs Container -->
-
-    <!-- Recent ETL Runs -->
-    <div class="bg-white rounded-xl border border-black shadow-lg p-6">
-        <div class="flex items-center justify-between mb-4">
-            <h3 class="text-xl font-bold text-gray-900">Recent ETL Runs</h3>
-            <span class="text-xs bg-gray-100 text-gray-600 px-3 py-1 rounded-full">
-                <i class="fas fa-calendar mr-1"></i>
-                Last 30 days
-            </span>
-        </div>
-
-        {% if page_obj.object_list %}
-        <div class="overflow-x-auto">
-            <table class="w-full table-fixed">
-                <thead class="bg-gray-50 border-b border-gray-200">
-                    <tr>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase" style="width: 8%">Run ID</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase" style="width: 15%">ETL Job</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase" style="width: 18%">Connection</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase" style="width: 12%">Status</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase" style="width: 17%">Started</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase" style="width: 10%">Duration</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase" style="width: 8%">Rows</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase" style="width: 12%">Actions</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-gray-200">
-                    {% for run in page_obj.object_list %}
-                    <tr class="hover:bg-gray-50">
-                        <td class="px-4 py-3 text-sm font-medium text-gray-900">#{{ run.id }}</td>
-                        <td class="px-4 py-3 text-sm text-gray-900">
-                            {% if run.data_source %}
-                            <span class="font-medium block truncate" title="{{ run.data_source.name }}">{{ run.data_source.name }}</span>
-                            {% else %}
-                            <span class="text-gray-400 italic">Unknown</span>
-                            {% endif %}
-                        </td>
-                        <td class="px-4 py-3 text-sm text-gray-600">
-                            {% if run.data_source and run.data_source.connection %}
-                            <span class="inline-flex items-center">
-                                {% if run.data_source.source_type == 'postgresql' %}
-                                <i class="fas fa-elephant text-blue-600 mr-1" title="PostgreSQL"></i>
-                                {% elif run.data_source.source_type == 'mysql' %}
-                                <i class="fas fa-database text-orange-500 mr-1" title="MySQL"></i>
-                                {% elif run.data_source.source_type == 'bigquery' %}
-                                <i class="fas fa-cloud text-blue-500 mr-1" title="BigQuery"></i>
-                                {% elif run.data_source.source_type == 'gcs' %}
-                                <i class="fas fa-cloud-upload-alt text-yellow-500 mr-1" title="GCS"></i>
-                                {% elif run.data_source.source_type == 's3' %}
-                                <i class="fab fa-aws text-orange-600 mr-1" title="AWS S3"></i>
-                                {% elif run.data_source.source_type == 'firestore' %}
-                                <i class="fas fa-fire text-yellow-600 mr-1" title="Firestore"></i>
-                                {% else %}
-                                <i class="fas fa-database text-gray-500 mr-1"></i>
-                                {% endif %}
-                                {{ run.data_source.connection.name|truncatechars:20 }}
-                            </span>
-                            {% else %}
-                            <span class="text-gray-400">—</span>
-                            {% endif %}
-                        </td>
-                        <td class="px-4 py-3">
-                            {% if run.status == 'completed' %}
-                            <span class="px-2 py-1 bg-green-100 text-green-700 rounded text-xs font-semibold">
-                                <i class="fas fa-check-circle mr-1"></i>Completed
-                            </span>
-                            {% elif run.status == 'failed' %}
-                            <span class="px-2 py-1 bg-red-100 text-red-700 rounded text-xs font-semibold">
-                                <i class="fas fa-times-circle mr-1"></i>Failed
-                            </span>
-                            {% elif run.status == 'cancelled' %}
-                            <span class="px-2 py-1 bg-gray-100 text-gray-600 rounded text-xs font-semibold">
-                                <i class="fas fa-ban mr-1"></i>Cancelled
-                            </span>
-                            {% elif run.status == 'running' %}
-                            <span class="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-semibold">
-                                <i class="fas fa-spinner fa-spin mr-1"></i>Running
-                            </span>
-                            {% elif run.status == 'partial' %}
-                            <span class="px-2 py-1 bg-yellow-100 text-yellow-700 rounded text-xs font-semibold">
-                                <i class="fas fa-exclamation-triangle mr-1"></i>Partial
-                            </span>
-                            {% else %}
-                            <span class="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs font-semibold">
-                                {{ run.get_status_display }}
-                            </span>
-                            {% endif %}
-                        </td>
-                        <td class="px-4 py-3 text-sm text-gray-600">
-                            {% timezone "Europe/Kiev" %}{{ run.started_at|date:"M d, g:i A"|default:"—" }}{% endtimezone %}
-                        </td>
-                        <td class="px-4 py-3 text-sm text-gray-600">
-                            {% if run.get_duration_seconds %}
-                            {{ run.get_duration_seconds|floatformat:0 }}s
-                            {% else %}
-                            —
-                            {% endif %}
-                        </td>
-                        <td class="px-4 py-3 text-sm text-gray-600">
-                            {{ run.total_rows_extracted|intcomma|default:"0" }}
-                        </td>
-                        <td class="px-4 py-3">
-                            <button onclick="viewRunDetails({{ run.id }})" class="text-blue-600 hover:text-blue-800 font-semibold text-sm">
-                                View Details
-                            </button>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-
-        <!-- Pagination Controls -->
-        {% if page_obj.paginator.num_pages > 1 %}
-        <div class="flex flex-col sm:flex-row items-center justify-between mt-4 pt-4 border-t border-gray-200 gap-4">
-            <div class="text-sm text-gray-600">
-                Showing <span class="font-semibold">{{ page_obj.start_index }}</span>-<span class="font-semibold">{{ page_obj.end_index }}</span>
-                of <span class="font-semibold">{{ page_obj.paginator.count }}</span> runs
-            </div>
-            <div class="flex items-center gap-2">
-                {% if page_obj.has_previous %}
-                <a href="?page={{ page_obj.previous_page_number }}" class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold bg-white hover:bg-gray-50">Previous</a>
-                {% else %}
-                <span class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold opacity-50 cursor-not-allowed bg-gray-100">Previous</span>
-                {% endif %}
-
-                {% if page_obj.paginator.num_pages <= 6 %}
-                    {% for num in page_obj.paginator.page_range %}
-                    <a href="?page={{ num }}" class="w-10 h-10 flex items-center justify-center rounded-md text-sm font-semibold {% if page_obj.number == num %}bg-blue-600 text-white{% else %}border border-gray-300 text-gray-700 hover:bg-blue-50 hover:border-blue-500{% endif %}">{{ num }}</a>
-                    {% endfor %}
-                {% else %}
-                    {% for num in "12345"|make_list %}
-                    <a href="?page={{ num }}" class="w-10 h-10 flex items-center justify-center rounded-md text-sm font-semibold {% if page_obj.number == num|add:0 %}bg-blue-600 text-white{% else %}border border-gray-300 text-gray-700 hover:bg-blue-50 hover:border-blue-500{% endif %}">{{ num }}</a>
-                    {% endfor %}
-                    <span class="px-2 text-gray-500">...</span>
-                    <a href="?page={{ page_obj.paginator.num_pages }}" class="w-10 h-10 flex items-center justify-center rounded-md text-sm font-semibold {% if page_obj.number == page_obj.paginator.num_pages %}bg-blue-600 text-white{% else %}border border-gray-300 text-gray-700 hover:bg-blue-50 hover:border-blue-500{% endif %}">{{ page_obj.paginator.num_pages }}</a>
-                {% endif %}
-
-                {% if page_obj.has_next %}
-                <a href="?page={{ page_obj.next_page_number }}" class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold bg-white hover:bg-gray-50">Next</a>
-                {% else %}
-                <span class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold opacity-50 cursor-not-allowed bg-gray-100">Next</span>
-                {% endif %}
-            </div>
-        </div>
-        {% endif %}
-
-        {% else %}
-        <div class="text-center py-8 bg-gray-50 rounded-lg">
-            {% if has_any_runs %}
-                <!-- Runs exist, but none in last 30 days -->
-                <i class="fas fa-calendar-times text-gray-400 text-3xl mb-3"></i>
-                <p class="text-gray-700 font-semibold">No runs in last 30 days</p>
-                <p class="text-gray-500 text-sm mt-1">All recent ETL runs are older than 30 days</p>
-            {% else %}
-                <!-- Truly no runs -->
-                <i class="fas fa-inbox text-gray-400 text-3xl mb-3"></i>
-                <p class="text-gray-600">No ETL runs yet</p>
-            {% endif %}
-        </div>
-        {% endif %}
-    </div>
-
-    <!-- ETL Duration Analysis - Ridge Chart -->
-    <div class="bg-white rounded-xl border border-black shadow-lg p-6 mt-6">
-        <div class="flex items-center justify-between mb-4">
-            <h3 class="text-xl font-bold text-gray-900">ETL Duration Analysis</h3>
-            <div class="flex items-center gap-3">
-                <!-- Legend -->
-                <div class="flex items-center gap-4 text-xs">
-                    <div class="flex items-center gap-1">
-                        <div class="w-3 h-3 rounded-sm bg-green-500"></div>
-                        <span class="text-gray-600">Success</span>
-                    </div>
-                    <div class="flex items-center gap-1">
-                        <div class="w-3 h-3 rounded-sm bg-red-500"></div>
-                        <span class="text-gray-600">Failed</span>
-                    </div>
-                </div>
-                <span class="text-xs bg-gray-100 text-gray-600 px-3 py-1 rounded-full">
-                    <i class="fas fa-chart-bar mr-1"></i>
-                    Last 3 days (hourly)
-                </span>
-            </div>
-        </div>
-
-        <!-- Chart Container -->
-        <div id="ridgeChartContainer" class="relative">
-            <!-- Loading State -->
-            <div id="ridgeChartLoading" class="flex items-center justify-center py-16">
-                <i class="fas fa-spinner fa-spin text-gray-400 text-2xl mr-3"></i>
-                <span class="text-gray-500">Loading chart...</span>
-            </div>
-
-            <!-- Empty State -->
-            <div id="ridgeChartEmpty" class="hidden text-center py-16 bg-gray-50 rounded-lg">
-                <i class="fas fa-chart-line text-gray-400 text-3xl mb-3"></i>
-                <p class="text-gray-700 font-semibold">No duration data available</p>
-                <p class="text-gray-500 text-sm mt-1">Run some ETL jobs to see duration analysis</p>
-            </div>
-
-            <!-- Chart SVG -->
-            <svg id="ridgeChart" class="w-full hidden"></svg>
-
-            <!-- Tooltip -->
-            <div id="ridgeChartTooltip" class="absolute hidden bg-gray-900 text-white text-xs rounded-lg px-3 py-2 pointer-events-none shadow-lg z-10">
-            </div>
-        </div>
-    </div>
 
 </div>
 
@@ -2303,6 +2410,109 @@
 const ridgeChartData = {{ ridge_chart_data|safe }};
 
 // ============================================================================
+// KPI Formatting Utilities
+// ============================================================================
+
+/**
+ * Format large numbers with K, M, B suffixes
+ * @param {number} num - The number to format
+ * @returns {string} Formatted number string
+ */
+function formatLargeNumber(num) {
+    if (num === null || num === undefined || isNaN(num)) return '0';
+    num = Number(num);
+    if (num === 0) return '0';
+
+    const absNum = Math.abs(num);
+    if (absNum >= 1e9) {
+        return (num / 1e9).toFixed(1).replace(/\.0$/, '') + 'B';
+    } else if (absNum >= 1e6) {
+        return (num / 1e6).toFixed(1).replace(/\.0$/, '') + 'M';
+    } else if (absNum >= 1e3) {
+        return (num / 1e3).toFixed(1).replace(/\.0$/, '') + 'K';
+    }
+    return num.toLocaleString();
+}
+
+/**
+ * Format bytes to human-readable size
+ * @param {number} bytes - The bytes to format
+ * @returns {string} Formatted size string
+ */
+function formatBytes(bytes) {
+    if (bytes === null || bytes === undefined || isNaN(bytes) || bytes === 0) return '0 B';
+    bytes = Number(bytes);
+
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    let unitIndex = 0;
+    let size = Math.abs(bytes);
+
+    while (size >= 1024 && unitIndex < units.length - 1) {
+        size /= 1024;
+        unitIndex++;
+    }
+
+    // Format with appropriate precision
+    if (size >= 100) {
+        return Math.round(size) + ' ' + units[unitIndex];
+    } else if (size >= 10) {
+        return size.toFixed(1).replace(/\.0$/, '') + ' ' + units[unitIndex];
+    } else {
+        return size.toFixed(2).replace(/\.?0+$/, '') + ' ' + units[unitIndex];
+    }
+}
+
+/**
+ * Format duration in seconds to human-readable format
+ * @param {number} seconds - Duration in seconds
+ * @returns {string} Formatted duration string
+ */
+function formatDurationKPI(seconds) {
+    if (seconds === null || seconds === undefined || isNaN(seconds) || seconds === 0) return '0s';
+    seconds = Math.round(Number(seconds));
+
+    if (seconds < 60) {
+        return seconds + 's';
+    } else if (seconds < 3600) {
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`;
+    } else {
+        const hours = Math.floor(seconds / 3600);
+        const mins = Math.floor((seconds % 3600) / 60);
+        return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+    }
+}
+
+/**
+ * Initialize KPI values with proper formatting
+ */
+function initKPIValues() {
+    // Format duration KPI
+    const durationElements = document.querySelectorAll('[data-duration-seconds]');
+    durationElements.forEach(el => {
+        const seconds = parseInt(el.getAttribute('data-duration-seconds'), 10);
+        el.textContent = formatDurationKPI(seconds);
+    });
+
+    // Format bytes KPI
+    const bytesElements = document.querySelectorAll('[data-bytes-value]');
+    bytesElements.forEach(el => {
+        const bytes = parseInt(el.getAttribute('data-bytes-value'), 10);
+        el.textContent = formatBytes(bytes);
+    });
+
+    // Format large numbers (rows) - optional, already using intcomma in template
+    const rawValueElements = document.querySelectorAll('[data-raw-value]');
+    rawValueElements.forEach(el => {
+        const value = parseInt(el.getAttribute('data-raw-value'), 10);
+        if (value >= 1000000) {
+            el.textContent = formatLargeNumber(value);
+        }
+    });
+}
+
+// ============================================================================
 // 3D Perspective Histogram Chart Implementation
 // ============================================================================
 
@@ -2336,10 +2546,10 @@ function renderRidgeChart() {
     const container = document.getElementById('ridgeChartContainer');
     const containerWidth = container.clientWidth;
 
-    // Chart dimensions for 3D perspective histogram
-    const margin = { top: 25, right: 40, bottom: 40, left: 140 };
+    // Chart dimensions for 3D perspective histogram (adjusted for dashboard layout)
+    const margin = { top: 20, right: 30, bottom: 35, left: 120 };
     const width = containerWidth - margin.left - margin.right;
-    const height = 180;
+    const height = 160;
 
     // 3D perspective parameters
     const perspectiveSkew = 0.15; // Horizontal skew for depth effect
@@ -2630,15 +2840,6 @@ function renderRidgeChart() {
             return `${hour}:00`;
         });
 
-    // Add chart title
-    svg.append('text')
-        .attr('x', width / 2)
-        .attr('y', -15)
-        .attr('text-anchor', 'middle')
-        .attr('fill', '#374151')
-        .attr('font-size', '12px')
-        .attr('font-weight', '600')
-        .text('ETL Job Runs (Last 3 Days - Hourly)');
 }
 
 // Helper function to find closest data point to mouse X position
@@ -2697,8 +2898,9 @@ function hideTooltip() {
     tooltip.classList.add('hidden');
 }
 
-// Initialize chart when DOM is ready
+// Initialize chart and KPIs when DOM is ready
 document.addEventListener('DOMContentLoaded', function() {
+    initKPIValues();
     initRidgeChart();
 
     // Redraw chart on window resize

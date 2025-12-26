@@ -234,188 +234,82 @@
                     <h3 class="text-sm font-semibold text-gray-700">Recent Runs</h3>
                 </div>
 
-        {% if page_obj.object_list %}
-        <div class="overflow-x-auto">
-            <table class="w-full table-fixed">
-                <thead class="bg-gray-50 border-b border-gray-200">
-                    <tr>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase" style="width: 8%">Run ID</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase" style="width: 15%">ETL Job</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase" style="width: 18%">Connection</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase" style="width: 12%">Status</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase" style="width: 17%">Started</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase" style="width: 10%">Duration</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase" style="width: 8%">Rows</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase" style="width: 12%">Actions</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-gray-200">
-                    {% for run in page_obj.object_list %}
-                    <tr id="run-row-{{ run.id }}"
-                        data-run-id="{{ run.id }}"
-                        data-run-status="{{ run.status }}"
-                        class="{% if run.status == 'completed' %}bg-green-50{% elif run.status == 'failed' %}bg-red-50{% elif run.status == 'partial' %}bg-yellow-50{% elif run.status == 'running' %}bg-blue-50{% else %}bg-gray-50{% endif %}">
-                        <td class="px-4 py-3 text-sm font-medium text-gray-900">#{{ run.id }}</td>
-                        <td class="px-4 py-3 text-sm text-gray-900">
-                            {% if run.data_source %}
-                            <span class="font-medium block truncate" title="{{ run.data_source.name }}">{{ run.data_source.name }}</span>
-                            {% else %}
-                            <span class="text-gray-400 italic">Unknown</span>
-                            {% endif %}
-                        </td>
-                        <td class="px-4 py-3 text-sm text-gray-600">
-                            {% if run.data_source and run.data_source.connection %}
-                            <span class="inline-flex items-center">
-                                {% if run.data_source.source_type == 'postgresql' %}
-                                <i class="fas fa-elephant text-blue-600 mr-1" title="PostgreSQL"></i>
-                                {% elif run.data_source.source_type == 'mysql' %}
-                                <i class="fas fa-database text-orange-500 mr-1" title="MySQL"></i>
-                                {% elif run.data_source.source_type == 'bigquery' %}
-                                <i class="fas fa-cloud text-blue-500 mr-1" title="BigQuery"></i>
-                                {% elif run.data_source.source_type == 'gcs' %}
-                                <i class="fas fa-cloud-upload-alt text-yellow-500 mr-1" title="GCS"></i>
-                                {% elif run.data_source.source_type == 's3' %}
-                                <i class="fab fa-aws text-orange-600 mr-1" title="AWS S3"></i>
-                                {% elif run.data_source.source_type == 'firestore' %}
-                                <i class="fas fa-fire text-yellow-600 mr-1" title="Firestore"></i>
-                                {% else %}
-                                <i class="fas fa-database text-gray-500 mr-1"></i>
-                                {% endif %}
-                                {{ run.data_source.connection.name|truncatechars:20 }}
-                            </span>
-                            {% else %}
-                            <span class="text-gray-400">—</span>
-                            {% endif %}
-                        </td>
-                        <td id="run-status-{{ run.id }}" class="px-4 py-3">
-                            {% if run.status == 'completed' %}
-                            <span class="text-green-700 text-xs font-semibold">
-                                <i class="fas fa-check-circle mr-1"></i>Completed
-                            </span>
-                            {% elif run.status == 'failed' %}
-                            <span class="text-red-700 text-xs font-semibold">
-                                <i class="fas fa-times-circle mr-1"></i>Failed
-                            </span>
-                            {% elif run.status == 'cancelled' %}
-                            <span class="text-gray-600 text-xs font-semibold">
-                                <i class="fas fa-ban mr-1"></i>Cancelled
-                            </span>
-                            {% elif run.status == 'running' %}
-                            <span class="text-blue-700 text-xs font-semibold">
-                                <i class="fas fa-spinner fa-spin mr-1"></i>Running
-                            </span>
-                            {% elif run.status == 'partial' %}
-                            <span class="text-yellow-700 text-xs font-semibold">
-                                <i class="fas fa-exclamation-triangle mr-1"></i>Partial
-                            </span>
-                            {% else %}
-                            <span class="text-gray-700 text-xs font-semibold">
-                                {{ run.get_status_display }}
-                            </span>
-                            {% endif %}
-                        </td>
-                        <td class="px-4 py-3 text-sm text-gray-600">
-                            {% timezone "Europe/Kiev" %}{{ run.started_at|date:"M d, g:i A"|default:"—" }}{% endtimezone %}
-                        </td>
-                        <td id="run-duration-{{ run.id }}" class="px-4 py-3 text-sm text-gray-600">
-                            {% if run.get_duration_seconds %}
-                            {{ run.get_duration_seconds|floatformat:0 }}s
-                            {% else %}
-                            —
-                            {% endif %}
-                        </td>
-                        <td id="run-rows-{{ run.id }}" class="px-4 py-3 text-sm text-gray-600">
-                            {{ run.total_rows_extracted|intcomma|default:"0" }}
-                        </td>
-                        <td class="px-4 py-3">
-                            <button onclick="viewRunDetails({{ run.id }})" class="text-blue-600 hover:text-blue-800 font-semibold text-sm">
-                                View Details
-                            </button>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+                <!-- Filter Controls -->
+                <div class="flex flex-wrap items-center gap-3 mb-4 p-3 bg-white rounded-lg border border-black">
+                    <!-- Search Input -->
+                    <div class="relative flex-grow max-w-xs">
+                        <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                        <input type="search"
+                               id="runsSearchInput"
+                               placeholder="Search by job name..."
+                               value="{{ search_query }}"
+                               autocomplete="off"
+                               class="w-full pl-10 pr-4 py-2 border border-black rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+
+                    <!-- Clear Filters Button (hidden by default, shown via JS) -->
+                    <button type="button"
+                            id="clearRunsFiltersBtn"
+                            onclick="clearRunsFilters()"
+                            class="hidden px-3 py-1.5 text-xs font-semibold text-gray-600 hover:text-gray-800 hover:bg-gray-200 rounded-lg transition-all border border-black">
+                        <i class="fas fa-times mr-1"></i>Clear Filters
+                    </button>
+
+                    <!-- Spacer to push status buttons to the right -->
+                    <div class="flex-grow"></div>
+
+                    <!-- Status Filter Buttons (aligned right) -->
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs text-gray-500 mr-1">Status:</span>
+                        <button type="button"
+                                id="filterBtn-completed"
+                                onclick="toggleRunsStatusFilter('completed')"
+                                class="status-filter-btn w-28 py-1.5 rounded-lg text-xs font-semibold border border-black transition-all text-center bg-green-100 text-green-700 hover:bg-green-200"
+                                data-status="completed"
+                                data-selected="false">
+                            <i class="fas fa-check-circle mr-1"></i>Completed
+                        </button>
+                        <button type="button"
+                                id="filterBtn-failed"
+                                onclick="toggleRunsStatusFilter('failed')"
+                                class="status-filter-btn w-28 py-1.5 rounded-lg text-xs font-semibold border border-black transition-all text-center bg-red-100 text-red-700 hover:bg-red-200"
+                                data-status="failed"
+                                data-selected="false">
+                            <i class="fas fa-times-circle mr-1"></i>Failed
+                        </button>
+                        <button type="button"
+                                id="filterBtn-cancelled"
+                                onclick="toggleRunsStatusFilter('cancelled')"
+                                class="status-filter-btn w-28 py-1.5 rounded-lg text-xs font-semibold border border-black transition-all text-center bg-gray-200 text-gray-700 hover:bg-gray-300"
+                                data-status="cancelled"
+                                data-selected="false">
+                            <i class="fas fa-ban mr-1"></i>Cancelled
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Embedded JSON data for client-side filtering -->
+                <script id="allRunsData" type="application/json">{{ all_runs_json|safe }}</script>
+
+        <!-- Runs Table Container (rendered by JavaScript) -->
+        <div id="runsTableContainer">
+            <!-- Table will be rendered here by JavaScript -->
         </div>
 
-        <!-- Pagination Controls -->
-        {% if page_obj.paginator.num_pages > 1 %}
-        <div class="flex flex-col sm:flex-row items-center justify-between mt-4 pt-4 border-t border-gray-200 gap-4">
-            <div class="text-sm text-gray-600">
-                Showing <span class="font-semibold">{{ page_obj.start_index }}</span>-<span class="font-semibold">{{ page_obj.end_index }}</span>
-                of <span class="font-semibold">{{ page_obj.paginator.count }}</span> runs
-            </div>
-            <div class="flex items-center gap-2">
-                {% if page_obj.has_previous %}
-                <a href="?page={{ page_obj.previous_page_number }}{% if scheduled_jobs.number != 1 %}&sched_page={{ scheduled_jobs.number }}{% endif %}" class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold bg-white hover:bg-gray-50">Previous</a>
-                {% else %}
-                <span class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold opacity-50 cursor-not-allowed bg-gray-100">Previous</span>
-                {% endif %}
-
-                {% if page_obj.paginator.num_pages <= 7 %}
-                    {# Show all pages if 7 or fewer #}
-                    {% for num in page_obj.paginator.page_range %}
-                    <a href="?page={{ num }}{% if scheduled_jobs.number != 1 %}&sched_page={{ scheduled_jobs.number }}{% endif %}" class="w-10 h-10 flex items-center justify-center rounded-md text-sm font-semibold {% if page_obj.number == num %}bg-blue-600 text-white{% else %}border border-gray-300 text-gray-700 hover:bg-blue-50 hover:border-blue-500{% endif %}">{{ num }}</a>
-                    {% endfor %}
-                {% else %}
-                    {# Dynamic pagination for many pages #}
-                    {% if page_obj.number <= 4 %}
-                        {# Near the start: show 1,2,3,4,5 ... last #}
-                        {% for num in page_obj.paginator.page_range %}
-                            {% if num <= 5 %}
-                            <a href="?page={{ num }}{% if scheduled_jobs.number != 1 %}&sched_page={{ scheduled_jobs.number }}{% endif %}" class="w-10 h-10 flex items-center justify-center rounded-md text-sm font-semibold {% if page_obj.number == num %}bg-blue-600 text-white{% else %}border border-gray-300 text-gray-700 hover:bg-blue-50 hover:border-blue-500{% endif %}">{{ num }}</a>
-                            {% endif %}
-                        {% endfor %}
-                        <span class="px-2 text-gray-500">...</span>
-                        <a href="?page={{ page_obj.paginator.num_pages }}{% if scheduled_jobs.number != 1 %}&sched_page={{ scheduled_jobs.number }}{% endif %}" class="w-10 h-10 flex items-center justify-center rounded-md text-sm font-semibold border border-gray-300 text-gray-700 hover:bg-blue-50 hover:border-blue-500">{{ page_obj.paginator.num_pages }}</a>
-                    {% elif page_obj.number > page_obj.paginator.num_pages|add:"-4" %}
-                        {# Near the end: show 1 ... last-4,last-3,last-2,last-1,last #}
-                        <a href="?page=1{% if scheduled_jobs.number != 1 %}&sched_page={{ scheduled_jobs.number }}{% endif %}" class="w-10 h-10 flex items-center justify-center rounded-md text-sm font-semibold border border-gray-300 text-gray-700 hover:bg-blue-50 hover:border-blue-500">1</a>
-                        <span class="px-2 text-gray-500">...</span>
-                        {% for num in page_obj.paginator.page_range %}
-                            {% if num > page_obj.paginator.num_pages|add:"-5" %}
-                            <a href="?page={{ num }}{% if scheduled_jobs.number != 1 %}&sched_page={{ scheduled_jobs.number }}{% endif %}" class="w-10 h-10 flex items-center justify-center rounded-md text-sm font-semibold {% if page_obj.number == num %}bg-blue-600 text-white{% else %}border border-gray-300 text-gray-700 hover:bg-blue-50 hover:border-blue-500{% endif %}">{{ num }}</a>
-                            {% endif %}
-                        {% endfor %}
-                    {% else %}
-                        {# In the middle: show 1 ... current-1,current,current+1 ... last #}
-                        <a href="?page=1{% if scheduled_jobs.number != 1 %}&sched_page={{ scheduled_jobs.number }}{% endif %}" class="w-10 h-10 flex items-center justify-center rounded-md text-sm font-semibold border border-gray-300 text-gray-700 hover:bg-blue-50 hover:border-blue-500">1</a>
-                        <span class="px-2 text-gray-500">...</span>
-                        {% for num in page_obj.paginator.page_range %}
-                            {% with prev_page=page_obj.number|add:"-1" next_page=page_obj.number|add:"1" %}
-                            {% if num == prev_page or num == page_obj.number or num == next_page %}
-                            <a href="?page={{ num }}{% if scheduled_jobs.number != 1 %}&sched_page={{ scheduled_jobs.number }}{% endif %}" class="w-10 h-10 flex items-center justify-center rounded-md text-sm font-semibold {% if page_obj.number == num %}bg-blue-600 text-white{% else %}border border-gray-300 text-gray-700 hover:bg-blue-50 hover:border-blue-500{% endif %}">{{ num }}</a>
-                            {% endif %}
-                            {% endwith %}
-                        {% endfor %}
-                        <span class="px-2 text-gray-500">...</span>
-                        <a href="?page={{ page_obj.paginator.num_pages }}{% if scheduled_jobs.number != 1 %}&sched_page={{ scheduled_jobs.number }}{% endif %}" class="w-10 h-10 flex items-center justify-center rounded-md text-sm font-semibold border border-gray-300 text-gray-700 hover:bg-blue-50 hover:border-blue-500">{{ page_obj.paginator.num_pages }}</a>
-                    {% endif %}
-                {% endif %}
-
-                {% if page_obj.has_next %}
-                <a href="?page={{ page_obj.next_page_number }}{% if scheduled_jobs.number != 1 %}&sched_page={{ scheduled_jobs.number }}{% endif %}" class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold bg-white hover:bg-gray-50">Next</a>
-                {% else %}
-                <span class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold opacity-50 cursor-not-allowed bg-gray-100">Next</span>
-                {% endif %}
-            </div>
+        <!-- Pagination Container (rendered by JavaScript) -->
+        <div id="runsPaginationContainer">
+            <!-- Pagination will be rendered here by JavaScript -->
         </div>
-        {% endif %}
 
-        {% else %}
-        <div class="text-center py-8 bg-gray-50 rounded-lg">
-            {% if has_any_runs %}
-                <!-- Runs exist, but none in last 30 days -->
-                <i class="fas fa-calendar-times text-gray-400 text-3xl mb-3"></i>
-                <p class="text-gray-700 font-semibold">No runs in last 30 days</p>
-                <p class="text-gray-500 text-sm mt-1">All recent ETL runs are older than 30 days</p>
-            {% else %}
-                <!-- Truly no runs -->
-                <i class="fas fa-inbox text-gray-400 text-3xl mb-3"></i>
-                <p class="text-gray-600">No ETL runs yet</p>
-            {% endif %}
+        <!-- Empty State Container (shown/hidden by JavaScript) -->
+        <div id="runsEmptyState" class="hidden text-center py-8 bg-gray-50 rounded-lg">
+            <i id="runsEmptyIcon" class="fas fa-inbox text-gray-400 text-3xl mb-3"></i>
+            <p id="runsEmptyTitle" class="text-gray-700 font-semibold">No ETL runs yet</p>
+            <p id="runsEmptySubtitle" class="text-gray-500 text-sm mt-1"></p>
+            <button id="runsEmptyClearBtn" onclick="clearRunsFilters()" class="hidden mt-3 px-4 py-2 text-sm font-semibold text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-all">
+                <i class="fas fa-times mr-1"></i>Clear All Filters
+            </button>
         </div>
-        {% endif %}
             </div>
             <!-- End of etl-runs-section -->
         </div>
@@ -2833,15 +2727,27 @@ function hideBubbleTooltip() {
 // Initialize chart and KPIs when DOM is ready
 document.addEventListener('DOMContentLoaded', function() {
     // Clear search fields to prevent browser autofill (runs after browser autofill completes)
+    // But preserve the runsSearchInput value if it was set from URL params
+    const runsSearchInput = document.getElementById('runsSearchInput');
+    const preservedSearchValue = runsSearchInput ? runsSearchInput.value : '';
+
     setTimeout(function() {
         const searchFields = document.querySelectorAll('input[type="search"]');
         searchFields.forEach(function(field) {
-            field.value = '';
+            // Don't clear the runs search input - preserve it from URL params
+            if (field.id !== 'runsSearchInput') {
+                field.value = '';
+            }
         });
+        // Restore the preserved value
+        if (runsSearchInput && preservedSearchValue) {
+            runsSearchInput.value = preservedSearchValue;
+        }
     }, 50);
 
     initKPIValues();
     initBubbleChart();
+    initRunsFilters();
 
     // Redraw chart on window resize
     let resizeTimeout;
@@ -2855,6 +2761,396 @@ document.addEventListener('DOMContentLoaded', function() {
         }, 250);
     });
 });
+
+// ============================================================================
+// Recent Runs Client-Side Filtering
+// ============================================================================
+
+// Global state for runs filtering
+let allRunsData = [];
+let filteredRunsData = [];
+let runsCurrentPage = 1;
+const runsPerPage = 6;
+let runsActiveStatuses = [];
+let runsSearchQuery = '';
+
+function initRunsFilters() {
+    // Load runs data from embedded JSON
+    const dataScript = document.getElementById('allRunsData');
+    if (dataScript) {
+        try {
+            allRunsData = JSON.parse(dataScript.textContent);
+        } catch (e) {
+            console.error('Failed to parse runs data:', e);
+            allRunsData = [];
+        }
+    }
+
+    // Initialize search input listener
+    const searchInput = document.getElementById('runsSearchInput');
+    if (searchInput) {
+        // Set initial value from URL if present
+        const urlParams = new URLSearchParams(window.location.search);
+        const searchParam = urlParams.get('search');
+        if (searchParam) {
+            searchInput.value = searchParam;
+            runsSearchQuery = searchParam;
+        }
+
+        // Initialize status filters from URL
+        const statusParam = urlParams.get('status');
+        if (statusParam) {
+            runsActiveStatuses = statusParam.split(',').filter(s => s);
+            updateStatusButtonStyles();
+        }
+
+        // Debounced search on input
+        let searchTimeout;
+        searchInput.addEventListener('input', function() {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(function() {
+                runsSearchQuery = searchInput.value.trim();
+                runsCurrentPage = 1;
+                applyRunsFiltersAndRender();
+            }, 200);
+        });
+
+        // Immediate search on Enter key
+        searchInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                clearTimeout(searchTimeout);
+                runsSearchQuery = searchInput.value.trim();
+                runsCurrentPage = 1;
+                applyRunsFiltersAndRender();
+            }
+        });
+    }
+
+    // Initial render
+    applyRunsFiltersAndRender();
+}
+
+function toggleRunsStatusFilter(status) {
+    const index = runsActiveStatuses.indexOf(status);
+    if (index > -1) {
+        runsActiveStatuses.splice(index, 1);
+    } else {
+        runsActiveStatuses.push(status);
+    }
+    runsCurrentPage = 1;
+    updateStatusButtonStyles();
+    applyRunsFiltersAndRender();
+}
+
+function updateStatusButtonStyles() {
+    const statusConfigs = {
+        'completed': { selected: 'bg-green-500 text-white', unselected: 'bg-green-100 text-green-700 hover:bg-green-200' },
+        'failed': { selected: 'bg-red-500 text-white', unselected: 'bg-red-100 text-red-700 hover:bg-red-200' },
+        'cancelled': { selected: 'bg-gray-500 text-white', unselected: 'bg-gray-200 text-gray-700 hover:bg-gray-300' }
+    };
+
+    for (const [status, config] of Object.entries(statusConfigs)) {
+        const btn = document.getElementById(`filterBtn-${status}`);
+        if (btn) {
+            const isSelected = runsActiveStatuses.includes(status);
+            btn.dataset.selected = isSelected ? 'true' : 'false';
+            // Remove old classes and add new ones
+            btn.className = btn.className.replace(/bg-\S+/g, '').replace(/text-\S+/g, '').replace(/hover:\S+/g, '').trim();
+            btn.className = `status-filter-btn w-28 py-1.5 rounded-lg text-xs font-semibold border border-black transition-all text-center ${isSelected ? config.selected : config.unselected}`;
+        }
+    }
+}
+
+function clearRunsFilters() {
+    runsSearchQuery = '';
+    runsActiveStatuses = [];
+    runsCurrentPage = 1;
+
+    const searchInput = document.getElementById('runsSearchInput');
+    if (searchInput) {
+        searchInput.value = '';
+    }
+
+    updateStatusButtonStyles();
+    applyRunsFiltersAndRender();
+}
+
+function applyRunsFiltersAndRender() {
+    // Apply filters
+    filteredRunsData = allRunsData.filter(run => {
+        // Search filter
+        if (runsSearchQuery) {
+            const searchLower = runsSearchQuery.toLowerCase();
+            if (!run.job_name.toLowerCase().includes(searchLower)) {
+                return false;
+            }
+        }
+
+        // Status filter
+        if (runsActiveStatuses.length > 0) {
+            if (!runsActiveStatuses.includes(run.status)) {
+                return false;
+            }
+        }
+
+        return true;
+    });
+
+    // Show/hide clear filters button
+    const clearBtn = document.getElementById('clearRunsFiltersBtn');
+    if (clearBtn) {
+        if (runsSearchQuery || runsActiveStatuses.length > 0) {
+            clearBtn.classList.remove('hidden');
+        } else {
+            clearBtn.classList.add('hidden');
+        }
+    }
+
+    // Render table and pagination
+    renderRunsTable();
+    renderRunsPagination();
+}
+
+function renderRunsTable() {
+    const container = document.getElementById('runsTableContainer');
+    const emptyState = document.getElementById('runsEmptyState');
+
+    if (filteredRunsData.length === 0) {
+        container.innerHTML = '';
+        showRunsEmptyState();
+        return;
+    }
+
+    emptyState.classList.add('hidden');
+
+    // Calculate pagination
+    const startIndex = (runsCurrentPage - 1) * runsPerPage;
+    const endIndex = startIndex + runsPerPage;
+    const pageRuns = filteredRunsData.slice(startIndex, endIndex);
+
+    // Build table HTML
+    let html = `
+        <div class="overflow-x-auto">
+            <table class="w-full table-fixed">
+                <thead class="bg-gray-50 border-b border-gray-200">
+                    <tr>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase" style="width: 8%">Run ID</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase" style="width: 15%">ETL Job</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase" style="width: 18%">Connection</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase" style="width: 12%">Status</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase" style="width: 17%">Started</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase" style="width: 10%">Duration</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase" style="width: 8%">Rows</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase" style="width: 12%">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200">
+    `;
+
+    for (const run of pageRuns) {
+        const rowClass = getRunRowClass(run.status);
+        const statusHtml = getRunStatusHtml(run.status);
+        const connectionHtml = getConnectionHtml(run.source_type, run.connection_name);
+        const startedAt = formatRunDate(run.started_at);
+        const duration = run.duration_seconds ? `${Math.round(run.duration_seconds)}s` : '—';
+        const rows = run.rows_extracted ? run.rows_extracted.toLocaleString() : '0';
+
+        html += `
+            <tr id="run-row-${run.id}" data-run-id="${run.id}" data-run-status="${run.status}" class="${rowClass}">
+                <td class="px-4 py-3 text-sm font-medium text-gray-900">#${run.id}</td>
+                <td class="px-4 py-3 text-sm text-gray-900">
+                    <span class="font-medium block truncate" title="${escapeHtml(run.job_name)}">${escapeHtml(run.job_name)}</span>
+                </td>
+                <td class="px-4 py-3 text-sm text-gray-600">${connectionHtml}</td>
+                <td class="px-4 py-3">${statusHtml}</td>
+                <td class="px-4 py-3 text-sm text-gray-600">${startedAt}</td>
+                <td class="px-4 py-3 text-sm text-gray-600">${duration}</td>
+                <td class="px-4 py-3 text-sm text-gray-600">${rows}</td>
+                <td class="px-4 py-3">
+                    <button onclick="viewRunDetails(${run.id})" class="text-blue-600 hover:text-blue-800 font-semibold text-sm">
+                        View Details
+                    </button>
+                </td>
+            </tr>
+        `;
+    }
+
+    html += `
+                </tbody>
+            </table>
+        </div>
+    `;
+
+    container.innerHTML = html;
+}
+
+function showRunsEmptyState() {
+    const emptyState = document.getElementById('runsEmptyState');
+    const icon = document.getElementById('runsEmptyIcon');
+    const title = document.getElementById('runsEmptyTitle');
+    const subtitle = document.getElementById('runsEmptySubtitle');
+    const clearBtn = document.getElementById('runsEmptyClearBtn');
+
+    if (runsSearchQuery || runsActiveStatuses.length > 0) {
+        // Filters active but no results
+        icon.className = 'fas fa-filter text-gray-400 text-3xl mb-3';
+        title.textContent = 'No runs match your filters';
+        subtitle.textContent = 'Try adjusting your search or status filters';
+        clearBtn.classList.remove('hidden');
+    } else if (allRunsData.length > 0) {
+        // Runs exist but none in last 30 days
+        icon.className = 'fas fa-calendar-times text-gray-400 text-3xl mb-3';
+        title.textContent = 'No runs in last 30 days';
+        subtitle.textContent = 'All recent ETL runs are older than 30 days';
+        clearBtn.classList.add('hidden');
+    } else {
+        // Truly no runs
+        icon.className = 'fas fa-inbox text-gray-400 text-3xl mb-3';
+        title.textContent = 'No ETL runs yet';
+        subtitle.textContent = '';
+        clearBtn.classList.add('hidden');
+    }
+
+    emptyState.classList.remove('hidden');
+}
+
+function renderRunsPagination() {
+    const container = document.getElementById('runsPaginationContainer');
+    const totalPages = Math.ceil(filteredRunsData.length / runsPerPage);
+
+    if (totalPages <= 1) {
+        container.innerHTML = '';
+        return;
+    }
+
+    const startIndex = (runsCurrentPage - 1) * runsPerPage + 1;
+    const endIndex = Math.min(runsCurrentPage * runsPerPage, filteredRunsData.length);
+    const isFiltered = runsSearchQuery || runsActiveStatuses.length > 0;
+
+    let html = `
+        <div class="flex flex-col sm:flex-row items-center justify-between mt-4 pt-4 border-t border-gray-200 gap-4">
+            <div class="text-sm text-gray-600">
+                Showing <span class="font-semibold">${startIndex}</span>-<span class="font-semibold">${endIndex}</span>
+                of <span class="font-semibold">${filteredRunsData.length}</span> runs
+                ${isFiltered ? '<span class="text-blue-600">(filtered)</span>' : ''}
+            </div>
+            <div class="flex items-center gap-2">
+    `;
+
+    // Previous button
+    if (runsCurrentPage > 1) {
+        html += `<button onclick="goToRunsPage(${runsCurrentPage - 1})" class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold bg-white hover:bg-gray-50">Previous</button>`;
+    } else {
+        html += `<span class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold opacity-50 cursor-not-allowed bg-gray-100">Previous</span>`;
+    }
+
+    // Page numbers
+    const pageNumbers = getPageNumbers(runsCurrentPage, totalPages);
+    for (const num of pageNumbers) {
+        if (num === '...') {
+            html += `<span class="px-2 text-gray-500">...</span>`;
+        } else if (num === runsCurrentPage) {
+            html += `<button class="w-10 h-10 flex items-center justify-center rounded-md text-sm font-semibold bg-blue-600 text-white">${num}</button>`;
+        } else {
+            html += `<button onclick="goToRunsPage(${num})" class="w-10 h-10 flex items-center justify-center rounded-md text-sm font-semibold border border-gray-300 text-gray-700 hover:bg-blue-50 hover:border-blue-500">${num}</button>`;
+        }
+    }
+
+    // Next button
+    if (runsCurrentPage < totalPages) {
+        html += `<button onclick="goToRunsPage(${runsCurrentPage + 1})" class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold bg-white hover:bg-gray-50">Next</button>`;
+    } else {
+        html += `<span class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold opacity-50 cursor-not-allowed bg-gray-100">Next</span>`;
+    }
+
+    html += `
+            </div>
+        </div>
+    `;
+
+    container.innerHTML = html;
+}
+
+function goToRunsPage(page) {
+    runsCurrentPage = page;
+    renderRunsTable();
+    renderRunsPagination();
+    // Scroll to top of runs section
+    document.getElementById('runsTableContainer').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function getPageNumbers(current, total) {
+    if (total <= 7) {
+        return Array.from({ length: total }, (_, i) => i + 1);
+    }
+
+    if (current <= 4) {
+        return [1, 2, 3, 4, 5, '...', total];
+    }
+
+    if (current > total - 4) {
+        return [1, '...', total - 4, total - 3, total - 2, total - 1, total];
+    }
+
+    return [1, '...', current - 1, current, current + 1, '...', total];
+}
+
+// Helper functions for rendering
+function getRunRowClass(status) {
+    const classes = {
+        'completed': 'bg-green-50',
+        'failed': 'bg-red-50',
+        'partial': 'bg-yellow-50',
+        'running': 'bg-blue-50',
+        'pending': 'bg-gray-50',
+        'cancelled': 'bg-gray-50'
+    };
+    return classes[status] || 'bg-gray-50';
+}
+
+function getRunStatusHtml(status) {
+    const configs = {
+        'completed': { icon: 'fa-check-circle', text: 'Completed', class: 'text-green-700' },
+        'failed': { icon: 'fa-times-circle', text: 'Failed', class: 'text-red-700' },
+        'cancelled': { icon: 'fa-ban', text: 'Cancelled', class: 'text-gray-600' },
+        'running': { icon: 'fa-spinner fa-spin', text: 'Running', class: 'text-blue-700' },
+        'partial': { icon: 'fa-exclamation-triangle', text: 'Partial', class: 'text-yellow-700' },
+        'pending': { icon: 'fa-clock', text: 'Pending', class: 'text-gray-600' }
+    };
+    const config = configs[status] || { icon: 'fa-question', text: status, class: 'text-gray-700' };
+    return `<span class="${config.class} text-xs font-semibold"><i class="fas ${config.icon} mr-1"></i>${config.text}</span>`;
+}
+
+function getConnectionHtml(sourceType, connectionName) {
+    if (!connectionName) return '<span class="text-gray-400">—</span>';
+
+    const icons = {
+        'postgresql': '<i class="fas fa-elephant text-blue-600 mr-1" title="PostgreSQL"></i>',
+        'mysql': '<i class="fas fa-database text-orange-500 mr-1" title="MySQL"></i>',
+        'bigquery': '<i class="fas fa-cloud text-blue-500 mr-1" title="BigQuery"></i>',
+        'gcs': '<i class="fas fa-cloud-upload-alt text-yellow-500 mr-1" title="GCS"></i>',
+        's3': '<i class="fab fa-aws text-orange-600 mr-1" title="AWS S3"></i>',
+        'firestore': '<i class="fas fa-fire text-yellow-600 mr-1" title="Firestore"></i>'
+    };
+    const icon = icons[sourceType] || '<i class="fas fa-database text-gray-500 mr-1"></i>';
+    const truncatedName = connectionName.length > 20 ? connectionName.substring(0, 17) + '...' : connectionName;
+    return `<span class="inline-flex items-center">${icon}${escapeHtml(truncatedName)}</span>`;
+}
+
+function formatRunDate(isoString) {
+    if (!isoString) return '—';
+    const date = new Date(isoString);
+    // Format: "Dec 25, 3:45 PM"
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ', ' +
+           date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+}
+
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
 
 // ============================================================================
 // Original ETL Page Functions

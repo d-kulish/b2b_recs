@@ -215,6 +215,19 @@ def model_etl(request, model_id):
         Q(started_at__gte=cutoff_date) | Q(started_at__isnull=True)
     )
 
+    # Apply search filter (by ETL job name)
+    search_query = request.GET.get('search', '').strip()
+    if search_query:
+        filtered_runs = filtered_runs.filter(data_source__name__icontains=search_query)
+
+    # Apply status filter (comma-separated list of statuses)
+    status_filter = request.GET.get('status', '').strip()
+    active_statuses = []
+    if status_filter:
+        active_statuses = [s.strip() for s in status_filter.split(',') if s.strip()]
+        if active_statuses:
+            filtered_runs = filtered_runs.filter(status__in=active_statuses)
+
     # Sync any "running" or "pending" runs with Cloud Run to get actual status
     # This ensures cancelled/failed jobs in Cloud Run are reflected in our UI
     running_runs = model.etl_runs.filter(status__in=['running', 'pending'])
@@ -225,13 +238,44 @@ def model_etl(request, model_id):
         Q(started_at__gte=cutoff_date) | Q(started_at__isnull=True)
     )
 
+    # Re-apply search and status filters after sync
+    if search_query:
+        filtered_runs = filtered_runs.filter(data_source__name__icontains=search_query)
+    if active_statuses:
+        filtered_runs = filtered_runs.filter(status__in=active_statuses)
+
     # Check if any runs exist at all (for empty state differentiation)
     has_any_runs = model.etl_runs.exists()
+
+    # Check if filters are active (for empty state messaging)
+    has_active_filters = bool(search_query or active_statuses)
 
     # Pagination: 6 runs per page
     paginator = Paginator(filtered_runs, 6)
     page_number = request.GET.get('page', 1)
     page_obj = paginator.get_page(page_number)
+
+    # Build JSON data for all runs (for client-side filtering)
+    # Get all runs from last 30 days without server-side filtering
+    all_runs_for_js = model.etl_runs.filter(
+        Q(started_at__gte=cutoff_date) | Q(started_at__isnull=True)
+    ).select_related('data_source', 'data_source__connection').order_by('-started_at')
+
+    runs_json_list = []
+    for run in all_runs_for_js:
+        run_data = {
+            'id': run.id,
+            'status': run.status,
+            'job_name': run.data_source.name if run.data_source else 'Unknown',
+            'connection_name': run.data_source.connection.name if run.data_source and run.data_source.connection else None,
+            'source_type': run.data_source.source_type if run.data_source else None,
+            'started_at': run.started_at.isoformat() if run.started_at else None,
+            'duration_seconds': run.get_duration_seconds() if run.get_duration_seconds() else None,
+            'rows_extracted': run.total_rows_extracted or 0,
+        }
+        runs_json_list.append(run_data)
+
+    all_runs_json = json.dumps(runs_json_list)
 
     # Prepare bubble chart data for ETL Job Runs visualization
     # Shows individual runs as bubbles with size based on duration
@@ -450,11 +494,16 @@ def model_etl(request, model_id):
         'recent_runs': page_obj,
         'page_obj': page_obj,
         'has_any_runs': has_any_runs,
+        'has_active_filters': has_active_filters,
         'showing_last_30_days': True,
         'bubble_chart_data': bubble_chart_json,
         'kpi_data': kpi_data,
         'scheduled_jobs': scheduled_jobs_page,
         'has_scheduled_jobs': len(scheduled_jobs_list) > 0,
+        # Filter state for Recent Runs (client-side filtering)
+        'search_query': search_query,
+        'active_statuses': active_statuses,
+        'all_runs_json': all_runs_json,
     }
 
     return render(request, 'ml_platform/model_etl.html', context)

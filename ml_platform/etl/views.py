@@ -180,6 +180,96 @@ def sync_running_etl_runs_with_cloud_run(running_etl_runs):
     return updated_count
 
 
+def sync_running_etl_runs_with_dataflow(running_etl_runs):
+    """
+    Sync ETL run statuses with Dataflow job statuses.
+
+    For ETLRun records that have a dataflow_job_id and are in 'running' status,
+    query the Dataflow API to get the actual job status and update the database.
+
+    This provides accurate status tracking for large-scale ETL jobs that use
+    Dataflow instead of simple Cloud Run execution.
+
+    Args:
+        running_etl_runs: QuerySet of ETLRun objects with status 'running'
+
+    Returns:
+        int: Number of runs that were updated
+    """
+    from django.conf import settings
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    # Filter to only runs that have a dataflow_job_id
+    dataflow_runs = running_etl_runs.exclude(dataflow_job_id='').exclude(dataflow_job_id__isnull=True)
+
+    if not dataflow_runs.exists():
+        return 0
+
+    # Get GCP project ID
+    project_id = getattr(settings, 'GCP_PROJECT_ID', os.getenv('GCP_PROJECT_ID'))
+    if not project_id:
+        logger.warning("GCP_PROJECT_ID not configured, cannot sync Dataflow status")
+        return 0
+
+    region = getattr(settings, 'DATAFLOW_REGION', os.getenv('DATAFLOW_REGION', 'europe-central2'))
+
+    try:
+        from google.cloud import dataflow_v1beta3
+        client = dataflow_v1beta3.JobsV1Beta3Client()
+    except ImportError as e:
+        logger.warning(f"google-cloud-dataflow-client not installed: {e}")
+        return 0
+    except Exception as e:
+        logger.warning(f"Failed to initialize Dataflow client: {e}")
+        return 0
+
+    updated_count = 0
+
+    for etl_run in dataflow_runs:
+        try:
+            # Get the Dataflow job status
+            request = dataflow_v1beta3.GetJobRequest(
+                project_id=project_id,
+                location=region,
+                job_id=etl_run.dataflow_job_id
+            )
+            job = client.get_job(request=request)
+
+            current_state = job.current_state.name if hasattr(job.current_state, 'name') else str(job.current_state)
+            logger.debug(f"Dataflow job {etl_run.dataflow_job_id} state: {current_state}")
+
+            new_status = None
+            error_message = None
+
+            if current_state in ['JOB_STATE_DONE', 'DONE']:
+                new_status = 'completed'
+            elif current_state in ['JOB_STATE_FAILED', 'FAILED']:
+                new_status = 'failed'
+                error_message = f'Dataflow job failed with state: {current_state}'
+            elif current_state in ['JOB_STATE_CANCELLED', 'CANCELLED']:
+                new_status = 'cancelled'
+                error_message = 'Dataflow job was cancelled'
+            # For running states (JOB_STATE_RUNNING, JOB_STATE_PENDING, etc.), don't update
+
+            if new_status and new_status != etl_run.status:
+                etl_run.status = new_status
+                if error_message:
+                    etl_run.error_message = error_message
+                if new_status in ('completed', 'failed', 'cancelled') and not etl_run.completed_at:
+                    etl_run.completed_at = timezone.now()
+                etl_run.save()
+                updated_count += 1
+                logger.info(f"Updated ETL run {etl_run.id} status to '{new_status}' from Dataflow job {etl_run.dataflow_job_id}")
+
+        except Exception as e:
+            logger.warning(f"Failed to get Dataflow status for ETL run {etl_run.id}: {e}")
+            continue
+
+    return updated_count
+
+
 @login_required
 def model_etl(request, model_id):
     """
@@ -228,10 +318,17 @@ def model_etl(request, model_id):
         if active_statuses:
             filtered_runs = filtered_runs.filter(status__in=active_statuses)
 
-    # Sync any "running" or "pending" runs with Cloud Run to get actual status
-    # This ensures cancelled/failed jobs in Cloud Run are reflected in our UI
+    # Sync any "running" or "pending" runs with their actual status
+    # Priority: Dataflow jobs first (more accurate for large-scale ETL), then Cloud Run
     running_runs = model.etl_runs.filter(status__in=['running', 'pending'])
-    sync_running_etl_runs_with_cloud_run(running_runs)
+
+    # First, sync runs that have Dataflow job IDs (these are more accurate)
+    sync_running_etl_runs_with_dataflow(running_runs)
+
+    # Then, sync remaining runs via Cloud Run execution status
+    # (Re-filter to get only runs not yet updated by Dataflow sync)
+    remaining_running_runs = model.etl_runs.filter(status__in=['running', 'pending'])
+    sync_running_etl_runs_with_cloud_run(remaining_running_runs)
 
     # Re-fetch filtered runs after sync (to get updated statuses)
     filtered_runs = model.etl_runs.filter(

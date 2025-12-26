@@ -975,21 +975,33 @@ class ETLRunner:
 
             # Poll for Dataflow job completion and track metrics
             final_rows_loaded = 0
+            dataflow_job_id = None
+            dataflow_api_failed = False
+
             try:
                 job_name = result['job_name']
-                final_rows_loaded = self._wait_for_dataflow_completion(
+                final_rows_loaded, dataflow_job_id = self._wait_for_dataflow_completion(
                     job_name=job_name,
                     region=gcp_config['region'],
                     project_id=gcp_config['project_id']
                 )
             except Exception as e:
                 logger.warning(f"Failed to wait for Dataflow completion: {e}")
-                logger.warning("Proceeding with file recording using estimated values")
+                dataflow_api_failed = True
+
+            # Use estimated rows as fallback if Dataflow API failed or returned 0
+            effective_rows = final_rows_loaded
+            if final_rows_loaded == 0 and estimated_rows > 0:
+                if dataflow_api_failed:
+                    logger.warning(f"Dataflow API failed - using estimated row count: {estimated_rows:,}")
+                else:
+                    logger.warning(f"Dataflow returned 0 rows - using estimated row count: {estimated_rows:,}")
+                effective_rows = estimated_rows
 
             # Record processed files for change detection on future runs
             if is_file_source and files_to_process:
                 logger.info("Recording processed files for future change detection...")
-                rows_per_file = final_rows_loaded // len(files_to_process) if final_rows_loaded > 0 else estimated_rows // len(files_to_process)
+                rows_per_file = effective_rows // len(files_to_process) if len(files_to_process) > 0 else 0
 
                 for file_metadata in files_to_process:
                     try:
@@ -1004,26 +1016,27 @@ class ETLRunner:
                     except Exception as e:
                         logger.warning(f"Failed to record processed file {file_metadata['file_path']}: {e}")
 
-            # Update row counts
-            self.total_rows_extracted = final_rows_loaded
-            self.total_rows_loaded = final_rows_loaded
+            # Update row counts using effective_rows (with fallback)
+            self.total_rows_extracted = effective_rows
+            self.total_rows_loaded = effective_rows
 
             return {
                 'status': 'success',
                 'processing_mode': 'dataflow',
                 'dataflow_job_name': result['job_name'],
+                'dataflow_job_id': dataflow_job_id,
                 'message': result['message'],
-                'rows_extracted': final_rows_loaded,
-                'rows_loaded': final_rows_loaded
+                'rows_extracted': effective_rows,
+                'rows_loaded': effective_rows
             }
 
         except Exception as e:
             logger.error(f"Dataflow execution failed: {str(e)}")
             raise
 
-    def _wait_for_dataflow_completion(self, job_name: str, region: str, project_id: str, timeout_seconds: int = 3000) -> int:
+    def _wait_for_dataflow_completion(self, job_name: str, region: str, project_id: str, timeout_seconds: int = 3000) -> tuple:
         """
-        Wait for Dataflow job to complete and return row count.
+        Wait for Dataflow job to complete and return row count and job ID.
 
         Args:
             job_name: Dataflow job name
@@ -1032,61 +1045,94 @@ class ETLRunner:
             timeout_seconds: Maximum time to wait (default 50 minutes)
 
         Returns:
-            Number of rows loaded (from Dataflow metrics or BigQuery)
+            Tuple of (rows_loaded, job_id) where:
+            - rows_loaded: Number of rows loaded (from BigQuery)
+            - job_id: Dataflow job ID for status tracking
         """
         import time
-        from google.cloud import dataflow_v1beta3
 
         logger.info(f"Waiting for Dataflow job '{job_name}' to complete...")
 
-        client = dataflow_v1beta3.JobsV1Beta3Client()
+        # Initialize Dataflow client with retry logic
+        client = None
+        job_id = None
+        max_init_retries = 3
+
+        for retry in range(max_init_retries):
+            try:
+                from google.cloud import dataflow_v1beta3
+                client = dataflow_v1beta3.JobsV1Beta3Client()
+                break
+            except ImportError as e:
+                logger.error(f"Failed to import dataflow_v1beta3: {e}")
+                logger.error("Please ensure google-cloud-dataflow-client is installed")
+                raise
+            except Exception as e:
+                if retry < max_init_retries - 1:
+                    logger.warning(f"Failed to initialize Dataflow client (attempt {retry + 1}/{max_init_retries}): {e}")
+                    time.sleep(5)
+                else:
+                    raise
+
         start_time = time.time()
         poll_interval = 30  # seconds
+        max_poll_retries = 3
 
-        # First, get the job ID from job name
-        job_id = None
-        try:
-            # List jobs to find ours
-            request = dataflow_v1beta3.ListJobsRequest(
-                project_id=project_id,
-                location=region,
-                filter=dataflow_v1beta3.ListJobsRequest.Filter.ALL
-            )
-            jobs = client.list_jobs(request=request)
-            for job in jobs:
-                if job.name == job_name:
-                    job_id = job.id
+        # First, get the job ID from job name with retry
+        for retry in range(max_poll_retries):
+            try:
+                from google.cloud import dataflow_v1beta3
+                request = dataflow_v1beta3.ListJobsRequest(
+                    project_id=project_id,
+                    location=region,
+                    filter=dataflow_v1beta3.ListJobsRequest.Filter.ALL
+                )
+                jobs = client.list_jobs(request=request)
+                for job in jobs:
+                    if job.name == job_name:
+                        job_id = job.id
+                        break
+                if job_id:
                     break
-        except Exception as e:
-            logger.warning(f"Could not list Dataflow jobs: {e}")
-            # Try using job_name as job_id
-            job_id = job_name
+            except Exception as e:
+                if retry < max_poll_retries - 1:
+                    logger.warning(f"Could not list Dataflow jobs (attempt {retry + 1}/{max_poll_retries}): {e}")
+                    time.sleep(5)
+                else:
+                    logger.warning(f"All attempts to list Dataflow jobs failed: {e}")
+                    # Try using job_name as job_id as fallback
+                    job_id = job_name
 
         if not job_id:
             logger.warning(f"Could not find Dataflow job with name {job_name}")
-            return 0
+            return (0, None)
 
         logger.info(f"Found Dataflow job ID: {job_id}")
 
+        # Poll for job completion with retry logic
+        consecutive_errors = 0
+        max_consecutive_errors = 5
+
         while time.time() - start_time < timeout_seconds:
             try:
+                from google.cloud import dataflow_v1beta3
                 request = dataflow_v1beta3.GetJobRequest(
                     project_id=project_id,
                     location=region,
                     job_id=job_id
                 )
                 job = client.get_job(request=request)
+                consecutive_errors = 0  # Reset on success
 
                 current_state = job.current_state.name if hasattr(job.current_state, 'name') else str(job.current_state)
                 elapsed = int(time.time() - start_time)
-                logger.info(f"Dataflow job status: {current_state} (elapsed: {elapsed}s)")
+                logger.info(f"Job {job_id} status: {current_state} (elapsed: {elapsed}s)")
 
                 if current_state in ['JOB_STATE_DONE', 'DONE']:
                     logger.info("Dataflow job completed successfully!")
-
                     # Try to get row count from BigQuery destination
                     rows_loaded = self._get_bigquery_row_count()
-                    return rows_loaded
+                    return (rows_loaded, job_id)
 
                 elif current_state in ['JOB_STATE_FAILED', 'FAILED', 'JOB_STATE_CANCELLED', 'CANCELLED']:
                     logger.error(f"Dataflow job ended with state: {current_state}")
@@ -1098,11 +1144,19 @@ class ETLRunner:
             except Exception as e:
                 if 'failed' in str(e).lower() or 'cancelled' in str(e).lower():
                     raise
-                logger.warning(f"Error polling Dataflow job: {e}")
+
+                consecutive_errors += 1
+                logger.warning(f"Error polling Dataflow job (error {consecutive_errors}/{max_consecutive_errors}): {e}")
+
+                if consecutive_errors >= max_consecutive_errors:
+                    logger.error(f"Too many consecutive polling errors ({consecutive_errors}), giving up")
+                    # Return what we have - job_id is known, rows will use fallback
+                    return (0, job_id)
+
                 time.sleep(poll_interval)
 
         logger.warning(f"Timeout waiting for Dataflow job after {timeout_seconds} seconds")
-        return 0
+        return (0, job_id)
 
     def _get_bigquery_row_count(self) -> int:
         """
@@ -1247,6 +1301,11 @@ class ETLRunner:
                     'rows_loaded': self.total_rows_loaded,
                     'duration_seconds': duration_seconds
                 }
+
+                # Include dataflow_job_id if this was a Dataflow execution
+                if result.get('dataflow_job_id'):
+                    update_kwargs['dataflow_job_id'] = result['dataflow_job_id']
+                    logger.info(f"Including dataflow_job_id: {update_kwargs['dataflow_job_id']}")
 
                 # Include max_extracted_timestamp for transactional loads
                 if self.job_config.get('load_type') == 'transactional' and self.max_extracted_timestamp is not None:

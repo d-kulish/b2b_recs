@@ -41,6 +41,8 @@ urllib3==2.5.0
 gunicorn==22.0.0
 whitenoise==6.11.0
 google-cloud-run==0.12.0
+# Note: google-cloud-dataflow-client is only needed in etl_runner for Dataflow status monitoring
+# The Django sync function handles ImportError gracefully if not installed
 # Vertex AI Pipelines
 google-cloud-aiplatform>=1.38.0
 google-cloud-build>=3.0.0

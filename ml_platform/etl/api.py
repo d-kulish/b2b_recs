@@ -1100,6 +1100,7 @@ def run_status(request, run_id):
             'bytes_processed': etl_run.bytes_processed,
             'error_message': etl_run.error_message,
             'cloud_run_execution_id': etl_run.cloud_run_execution_id,
+            'dataflow_job_id': etl_run.dataflow_job_id if etl_run.dataflow_job_id else None,
             'logs_url': etl_run.logs_url,
             # Timing breakdown
             'extraction_started_at': etl_run.extraction_started_at.isoformat() if etl_run.extraction_started_at else None,
@@ -2127,6 +2128,8 @@ def run_update(request, run_id):
             etl_run.duration_seconds = data['duration_seconds']
         if 'error_message' in data:
             etl_run.error_message = data['error_message']
+        if 'dataflow_job_id' in data:
+            etl_run.dataflow_job_id = data['dataflow_job_id']
 
         # Update phase timestamps if provided
         if 'extraction_started_at' in data:

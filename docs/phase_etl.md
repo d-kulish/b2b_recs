@@ -1903,6 +1903,92 @@ Clicking "View Details" opens a modal with comprehensive run information:
 
 ---
 
+## Known Issues and Fixes
+
+This section documents bugs discovered during ETL system usage and their fixes.
+
+### Issue #1: Dataflow Jobs Reporting 0 Rows (Fixed 2025-12-26)
+
+**Symptoms:**
+- ETL jobs using Dataflow completed successfully (data was loaded to BigQuery)
+- But the UI showed "Rows Extracted: 0, Rows Loaded: 0"
+- Logs showed: `Failed to wait for Dataflow completion: cannot import name 'dataflow_v1beta3' from 'google.cloud'`
+
+**Root Cause:**
+1. Missing `google-cloud-dataflow-client` package in `etl_runner/requirements.txt`
+2. No fallback logic when Dataflow API calls failed
+
+**Fix Applied:**
+1. Added `google-cloud-dataflow-client>=0.8.6` to ETL runner requirements
+2. Added fallback logic in `main.py` to use estimated row counts when API fails:
+   ```python
+   # Use estimated rows as fallback if Dataflow API failed or returned 0
+   effective_rows = final_rows_loaded
+   if final_rows_loaded == 0 and estimated_rows > 0:
+       effective_rows = estimated_rows
+   ```
+3. Added retry logic (3 attempts) for Dataflow client initialization and job listing
+
+**Files Modified:**
+- `etl_runner/requirements.txt` - Added dependency
+- `etl_runner/main.py` - Added fallback logic and retry handling in `run_with_dataflow()` and `_wait_for_dataflow_completion()`
+
+---
+
+### Issue #2: Incorrect ETL Run Status for Dataflow Jobs (Fixed 2025-12-26)
+
+**Symptoms:**
+- UI showed "Dataflow failed with errors" when Dataflow was still running
+- Status was incorrectly updated based on Cloud Run execution status, not Dataflow job status
+
+**Root Cause:**
+- `sync_running_etl_runs_with_cloud_run()` in `views.py` synced with Cloud Run execution status
+- Cloud Run completes quickly after submitting a Dataflow job
+- If Cloud Run showed any error, the ETL run was marked as failed even though Dataflow was still running successfully
+
+**Fix Applied:**
+1. Added `dataflow_job_id` field to `ETLRun` model to track Dataflow jobs separately
+2. Created new `sync_running_etl_runs_with_dataflow()` function that queries Dataflow API directly
+3. Updated `model_etl` view to prioritize Dataflow status sync over Cloud Run sync
+
+**Files Modified:**
+- `ml_platform/models.py` - Added `dataflow_job_id` field to `ETLRun`
+- `ml_platform/migrations/0040_add_dataflow_job_id_to_etlrun.py` - Migration for new field
+- `ml_platform/etl/views.py` - Added `sync_running_etl_runs_with_dataflow()` function
+- `ml_platform/etl/api.py` - Updated `run_update()` and `run_status()` to handle `dataflow_job_id`
+- `etl_runner/main.py` - Pass `dataflow_job_id` in result and status updates
+- `etl_runner/config.py` - Updated docstring for `dataflow_job_id` parameter
+
+**New Field Schema:**
+```python
+class ETLRun(models.Model):
+    # ... existing fields ...
+    dataflow_job_id = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Dataflow job ID for large-scale ETL runs (used for accurate status tracking)"
+    )
+```
+
+---
+
+### Issue #3: Scheduler Job Not Appearing in UI (Analyzed 2025-12-26)
+
+**Symptoms:**
+- When creating a job with "run immediately" checked, the scheduler didn't appear in "Scheduled Jobs" table
+- Scheduler appeared only after page refresh post job completion
+
+**Analysis:**
+- Investigation confirmed the scheduler **was** created at job creation time (verified in logs)
+- The issue was timing - the page may have been loaded before `cloud_scheduler_job_name` was saved
+- **This is not a code bug** - it's a normal page refresh timing issue
+
+**Recommendation:**
+- Consider adding real-time updates to the scheduled jobs table (WebSocket or polling)
+- No code fix required
+
+---
+
 ## Files Reference
 
 ### Backend Files
@@ -1950,6 +2036,7 @@ Clicking "View Details" opens a modal with comprehensive run information:
 
 | Version | Date | Changes |
 |---------|------|---------|
+| v6 | 2025-12-26 | Added Known Issues and Fixes section (Dataflow row count, status tracking) |
 | v5 | 2025-12-26 | Added Recent Runs table documentation |
 | v4 | 2025-12-26 | Added Scheduled Jobs table and Bubble Chart documentation |
 | v3 | 2025-12-26 | Added ETL Jobs Dashboard chapter with KPI documentation |

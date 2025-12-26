@@ -530,6 +530,11 @@ class ETLRun(models.Model):
 
     # Job details
     cloud_run_execution_id = models.CharField(max_length=255, blank=True, help_text="Cloud Run Job execution ID")
+    dataflow_job_id = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Dataflow job ID for large-scale ETL runs (used for accurate status tracking)"
+    )
 
     # Detailed progress tracking (Phase 3)
     extraction_started_at = models.DateTimeField(null=True, blank=True, help_text="When data extraction started")

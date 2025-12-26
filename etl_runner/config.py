@@ -119,6 +119,7 @@ class Config:
                 - rows_loaded: Number of rows loaded
                 - error_message: Error message if failed
                 - duration_seconds: Duration in seconds
+                - dataflow_job_id: Dataflow job ID for status tracking
 
         Returns:
             True if update successful, False otherwise

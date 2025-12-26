@@ -3,6 +3,7 @@ google-cloud-bigquery==3.25.0
 google-cloud-secret-manager==2.20.2
 google-cloud-storage==2.18.2
 google-cloud-run==0.10.8
+google-cloud-dataflow-client>=0.8.6  # For Dataflow job status monitoring (flexible version for compatibility)
 
 # Apache Beam & Dataflow (for large-scale ETL)
 # This installs its own google-cloud dependencies

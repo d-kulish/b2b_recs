@@ -1989,6 +1989,118 @@ class ETLRun(models.Model):
 
 ---
 
+### Issue #4: Schema Detection 1GB File Size Limit (Fixed 2025-12-26)
+
+**Symptoms:**
+- ETL wizard refused to detect schema for CSV files larger than 1GB
+- Error message: "File size (3.74 GB) exceeds 1GB limit"
+- Files were visible in the wizard but "Detect Schema" button failed
+
+**Root Cause:**
+- Hardcoded 1GB limit in `detect_file_schema()` function in `ml_platform/connections/api.py`
+- The limit was unnecessary because schema detection only downloads first 5MB of the file
+- This was defensive code added before Dataflow support was implemented
+
+**Fix Applied:**
+Removed the arbitrary 1GB file size check. The 5MB sample download was already safe for files of any size:
+
+```python
+# REMOVED:
+if file_size > 1024 * 1024 * 1024:  # 1GB
+    return JsonResponse({'status': 'error', 'message': f'File size exceeds 1GB limit'})
+
+# KEPT (already safe):
+max_bytes_to_download = min(file_size, 5 * 1024 * 1024)  # 5MB max
+file_content = blob.download_as_bytes(end=max_bytes_to_download)
+```
+
+**Files Modified:**
+- `ml_platform/connections/api.py` - Removed 1GB limit in `detect_file_schema()` (lines 1330-1334)
+
+---
+
+### Issue #5: Dataflow Worker OOM with Large CSV Files (Fixed 2025-12-26)
+
+**Symptoms:**
+- Dataflow jobs failed when processing large CSV files (4GB+)
+- Error: "Timed out waiting for an update from the worker"
+- Error: "The worker has been reported dead"
+- Jobs failed after 4 retry attempts
+
+**Root Cause:**
+The Dataflow pipeline used **pandas inside workers** to process files, which loaded entire files into memory:
+
+```python
+# OLD (broken) - in UnifiedExtractor._process_file():
+df = extractor.extract_file(file_path)  # Downloads entire 4GB file
+for _, row in df.iterrows():            # Requires 12-15GB RAM
+    yield row
+```
+
+For a 4GB CSV file:
+- Pandas needs ~12-15GB RAM to load and parse
+- Workers were configured with `n1-standard-2` (7.5GB RAM)
+- Workers ran out of memory and were killed
+
+**Fix Applied:**
+Implemented **native Beam I/O** for file sources, replacing pandas with streaming:
+
+1. **New `ParseCSVLine` DoFn** - Parses CSV lines using Python's `csv` module (handles quotes, escapes)
+2. **New `ParseJSONLine` DoFn** - Parses JSON lines using `json.loads()`
+3. **New `run_file_pipeline()` function** - Uses `beam.io.ReadFromText` for streaming
+
+```python
+# NEW (fixed) - Native Beam I/O:
+pipeline
+| 'ReadCSV' >> beam.io.ReadFromText(
+    file_pattern='gs://bucket/file.csv',
+    skip_header_lines=1
+)
+# Beam automatically splits into ~64MB bundles
+# Each worker processes bundles in parallel
+# Memory usage: ~100-200MB per worker (not 12GB!)
+
+| 'ParseCSVLines' >> beam.ParDo(ParseCSVLine(column_names=schema_columns))
+| 'SerializeValues' >> beam.Map(...)
+| 'WriteToBigQuery' >> WriteToBigQuery(...)
+```
+
+**Key Benefits:**
+| Aspect | Before | After |
+|--------|--------|-------|
+| Memory per worker | 12-15GB | ~100-200MB |
+| File size limit | ~2GB | Unlimited |
+| Processing model | Load entire file | Stream line-by-line |
+| File splitting | Manual | Automatic (~64MB bundles) |
+
+**Pipeline Selection Logic:**
+```python
+# In main.py run_with_dataflow():
+if source_type == 'bigquery':
+    run_bigquery_native_pipeline(...)  # Native BigQuery I/O
+elif is_file_source:
+    run_file_pipeline(...)             # NEW - Native Beam I/O
+else:
+    run_scalable_pipeline(...)         # Database sources
+```
+
+**Error Handling:**
+- Bad CSV records (parsing errors, field count mismatch) are skipped and logged
+- Skipped records are counted in Dataflow metrics (visible in GCP Console)
+- Pipeline continues processing valid records
+
+**Files Modified:**
+- `etl_runner/dataflow_pipelines/etl_pipeline.py`:
+  - Added `ParseCSVLine` DoFn (lines 297-381)
+  - Added `ParseJSONLine` DoFn (lines 384-443)
+  - Added `run_file_pipeline()` function (lines 1343-1575)
+  - Added imports for `csv` and `io` modules
+- `etl_runner/main.py`:
+  - Updated `run_with_dataflow()` to use `run_file_pipeline()` for file sources
+  - Added full GCS path construction from bucket name and file paths
+
+---
+
 ## Files Reference
 
 ### Backend Files
@@ -2036,6 +2148,7 @@ class ETLRun(models.Model):
 
 | Version | Date | Changes |
 |---------|------|---------|
+| v7 | 2025-12-26 | Added Issue #4 (1GB schema limit) and Issue #5 (Dataflow OOM fix with native Beam I/O) |
 | v6 | 2025-12-26 | Added Known Issues and Fixes section (Dataflow row count, status tracking) |
 | v5 | 2025-12-26 | Added Recent Runs table documentation |
 | v4 | 2025-12-26 | Added Scheduled Jobs table and Bubble Chart documentation |

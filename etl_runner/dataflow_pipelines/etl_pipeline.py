@@ -14,6 +14,8 @@ from apache_beam.io.gcp.bigquery import WriteToBigQuery, BigQueryDisposition
 from apache_beam.io.gcp.internal.clients.bigquery import TableSchema, TableFieldSchema
 from typing import Dict, Any, List
 import json
+import csv
+import io
 from datetime import date, datetime
 from decimal import Decimal
 
@@ -290,6 +292,155 @@ class SchemaAwareConverter(beam.DoFn):
                 schema_matched_row[key] = value
 
         yield schema_matched_row
+
+
+class ParseCSVLine(beam.DoFn):
+    """
+    Parse CSV lines using Python's csv module for robust handling.
+
+    Handles:
+    - Quoted fields with commas inside (e.g., "Smith, John")
+    - Escaped quotes
+    - Custom delimiters and encodings
+
+    Skipped records (parsing errors, field count mismatch) are logged
+    and counted but don't fail the pipeline.
+    """
+
+    def __init__(self, column_names: List[str], delimiter: str = ',', encoding: str = 'utf-8'):
+        """
+        Initialize CSV parser with schema information.
+
+        Args:
+            column_names: List of column names from wizard schema
+            delimiter: CSV delimiter (default ',')
+            encoding: File encoding (default 'utf-8')
+        """
+        self.column_names = column_names
+        self.delimiter = delimiter
+        self.encoding = encoding
+
+    def setup(self):
+        """Initialize counters for monitoring."""
+        self.rows_parsed = 0
+        self.rows_skipped = 0
+
+    def process(self, line: str):
+        """
+        Parse a single CSV line and yield a dict.
+
+        Args:
+            line: Raw CSV line string
+
+        Yields:
+            Dict mapping column names to values
+        """
+        # Skip empty lines
+        if not line or not line.strip():
+            return
+
+        try:
+            # Use csv.reader for robust parsing (handles quotes, escapes)
+            reader = csv.reader([line], delimiter=self.delimiter)
+            fields = next(reader)
+
+            # Validate field count matches schema
+            if len(fields) != len(self.column_names):
+                self.rows_skipped += 1
+                logger.warning(
+                    f"Field count mismatch: expected {len(self.column_names)}, "
+                    f"got {len(fields)}. Line skipped."
+                )
+                # Increment Beam counter for visibility in Dataflow UI
+                from apache_beam.metrics import Metrics
+                Metrics.counter('ParseCSVLine', 'rows_skipped_field_mismatch').inc()
+                return
+
+            # Create dict mapping column names to values
+            row_dict = {}
+            for col_name, value in zip(self.column_names, fields):
+                # Handle empty strings as None
+                row_dict[col_name] = value if value != '' else None
+
+            self.rows_parsed += 1
+            yield row_dict
+
+        except csv.Error as e:
+            self.rows_skipped += 1
+            logger.warning(f"CSV parsing error: {e}. Line skipped.")
+            from apache_beam.metrics import Metrics
+            Metrics.counter('ParseCSVLine', 'rows_skipped_parse_error').inc()
+        except Exception as e:
+            self.rows_skipped += 1
+            logger.warning(f"Unexpected error parsing CSV line: {e}. Line skipped.")
+            from apache_beam.metrics import Metrics
+            Metrics.counter('ParseCSVLine', 'rows_skipped_unexpected_error').inc()
+
+    def teardown(self):
+        """Log final statistics."""
+        logger.info(f"ParseCSVLine complete: {self.rows_parsed} parsed, {self.rows_skipped} skipped")
+
+
+class ParseJSONLine(beam.DoFn):
+    """
+    Parse JSON Lines (JSONL) format - one JSON object per line.
+
+    Skipped records (invalid JSON) are logged and counted
+    but don't fail the pipeline.
+    """
+
+    def __init__(self, column_names: List[str] = None):
+        """
+        Initialize JSON parser.
+
+        Args:
+            column_names: Optional list of columns to extract (None = all)
+        """
+        self.column_names = column_names
+
+    def setup(self):
+        """Initialize counters for monitoring."""
+        self.rows_parsed = 0
+        self.rows_skipped = 0
+
+    def process(self, line: str):
+        """
+        Parse a single JSON line and yield a dict.
+
+        Args:
+            line: Raw JSON line string
+
+        Yields:
+            Dict from parsed JSON
+        """
+        # Skip empty lines
+        if not line or not line.strip():
+            return
+
+        try:
+            row_dict = json.loads(line)
+
+            # Filter to selected columns if specified
+            if self.column_names:
+                row_dict = {k: row_dict.get(k) for k in self.column_names}
+
+            self.rows_parsed += 1
+            yield row_dict
+
+        except json.JSONDecodeError as e:
+            self.rows_skipped += 1
+            logger.warning(f"JSON parsing error: {e}. Line skipped.")
+            from apache_beam.metrics import Metrics
+            Metrics.counter('ParseJSONLine', 'rows_skipped_json_error').inc()
+        except Exception as e:
+            self.rows_skipped += 1
+            logger.warning(f"Unexpected error parsing JSON line: {e}. Line skipped.")
+            from apache_beam.metrics import Metrics
+            Metrics.counter('ParseJSONLine', 'rows_skipped_unexpected_error').inc()
+
+    def teardown(self):
+        """Log final statistics."""
+        logger.info(f"ParseJSONLine complete: {self.rows_parsed} parsed, {self.rows_skipped} skipped")
 
 
 class UnifiedExtractor(beam.DoFn):
@@ -1186,4 +1337,235 @@ def run_bigquery_native_pipeline(
         'job_name': options.view_as(GoogleCloudOptions).job_name,
         'message': 'Dataflow job submitted - check GCP console for progress',
         'method': 'bigquery_native'
+    }
+
+
+def run_file_pipeline(
+    job_config: Dict[str, Any],
+    gcp_config: Dict[str, Any],
+    file_paths: List[str]
+) -> Dict[str, Any]:
+    """
+    Run Dataflow pipeline for file sources using native Beam I/O.
+
+    This is the NEW recommended pipeline for large files that:
+    1. Uses beam.io.ReadFromText for streaming (no pandas, no memory issues)
+    2. Automatically splits large files into ~64MB bundles
+    3. Processes files in parallel across workers
+    4. Handles files of ANY size efficiently
+
+    Args:
+        job_config: ETL job configuration including:
+            - file_format: 'csv', 'json', or 'parquet'
+            - file_format_options: {delimiter, encoding, has_header}
+            - selected_columns: List of column names from wizard schema
+            - dest_table_name: Destination BigQuery table
+            - load_type: 'catalog' or 'transactional'
+        gcp_config: GCP configuration (project, bucket, etc.)
+        file_paths: List of GCS file paths to process
+
+    Returns:
+        Dict with execution results
+    """
+
+    logger.info("=" * 80)
+    logger.info("STARTING FILE PIPELINE WITH NATIVE BEAM I/O")
+    logger.info("=" * 80)
+    logger.info(f"Files to process: {len(file_paths)}")
+    for fp in file_paths:
+        logger.info(f"  - {fp}")
+
+    file_format = job_config.get('file_format', 'csv')
+    format_options = job_config.get('file_format_options', {})
+    selected_columns = job_config.get('selected_columns', [])
+
+    delimiter = format_options.get('delimiter', ',')
+    encoding = format_options.get('encoding', 'utf-8')
+    has_header = format_options.get('has_header', True)
+
+    logger.info(f"File format: {file_format}")
+    logger.info(f"Delimiter: '{delimiter}', Encoding: {encoding}, Has header: {has_header}")
+    logger.info(f"Schema columns from config: {len(selected_columns)} columns")
+
+    # Create pipeline options
+    options = create_pipeline_options(job_config, gcp_config)
+
+    # Build BigQuery table reference
+    table_ref = f"{gcp_config['project_id']}:{gcp_config['dataset_id']}.{job_config['dest_table_name']}"
+
+    # Determine write disposition
+    write_disposition = (
+        BigQueryDisposition.WRITE_TRUNCATE if job_config['load_type'] == 'catalog'
+        else BigQueryDisposition.WRITE_APPEND
+    )
+
+    logger.info(f"Destination: {table_ref}")
+    logger.info(f"Write mode: {write_disposition}")
+    logger.info("=" * 80)
+
+    # Fetch destination schema for type conversion
+    table_schema = get_bq_table_schema(
+        project_id=gcp_config['project_id'],
+        dataset_id=gcp_config['dataset_id'],
+        table_name=job_config['dest_table_name']
+    )
+    schema_map = {field.name: field.type for field in table_schema.fields}
+    logger.info(f"Fetched BigQuery schema: {len(schema_map)} fields")
+
+    # If selected_columns is empty, derive from BigQuery destination schema
+    # This handles file sources where columns are defined in BigQuery but not in selected_columns
+    if not selected_columns:
+        # Get column names from BigQuery schema (excluding internal ETL columns)
+        internal_columns = {'_etl_loaded_at', '_etl_file_name', '_etl_file_path', '_etl_source'}
+        selected_columns = [field.name for field in table_schema.fields if field.name not in internal_columns]
+        logger.info(f"Derived {len(selected_columns)} columns from BigQuery schema: {selected_columns}")
+
+    # Validate we have column names for CSV
+    if file_format == 'csv' and not selected_columns:
+        raise ValueError("CSV processing requires columns - none found in config or BigQuery schema")
+
+    # Build file pattern for Beam
+    # For multiple files, we read them all and flatten
+    if len(file_paths) == 1:
+        file_pattern = file_paths[0]
+    else:
+        # Multiple files - we'll use beam.Flatten to combine
+        file_pattern = None  # Will handle multiple files differently
+
+    with beam.Pipeline(options=options) as pipeline:
+        if file_format == 'csv':
+            # CSV: Use ReadFromText with skip_header_lines + ParseCSVLine
+            if len(file_paths) == 1:
+                # Single file - simple case
+                rows = (
+                    pipeline
+                    | 'ReadCSV' >> beam.io.ReadFromText(
+                        file_pattern=file_paths[0],
+                        skip_header_lines=1 if has_header else 0
+                    )
+                    | 'ParseCSVLines' >> beam.ParDo(
+                        ParseCSVLine(
+                            column_names=selected_columns,
+                            delimiter=delimiter,
+                            encoding=encoding
+                        )
+                    )
+                )
+            else:
+                # Multiple files - read each and flatten
+                file_pcollections = []
+                for i, file_path in enumerate(file_paths):
+                    file_rows = (
+                        pipeline
+                        | f'ReadCSV_{i}' >> beam.io.ReadFromText(
+                            file_pattern=file_path,
+                            skip_header_lines=1 if has_header else 0
+                        )
+                    )
+                    file_pcollections.append(file_rows)
+
+                # Flatten all files into single PCollection, then parse
+                rows = (
+                    file_pcollections
+                    | 'FlattenFiles' >> beam.Flatten()
+                    | 'ParseCSVLines' >> beam.ParDo(
+                        ParseCSVLine(
+                            column_names=selected_columns,
+                            delimiter=delimiter,
+                            encoding=encoding
+                        )
+                    )
+                )
+
+        elif file_format == 'json':
+            # JSON Lines: Use ReadFromText + ParseJSONLine
+            if len(file_paths) == 1:
+                rows = (
+                    pipeline
+                    | 'ReadJSON' >> beam.io.ReadFromText(file_pattern=file_paths[0])
+                    | 'ParseJSONLines' >> beam.ParDo(
+                        ParseJSONLine(column_names=selected_columns if selected_columns else None)
+                    )
+                )
+            else:
+                file_pcollections = []
+                for i, file_path in enumerate(file_paths):
+                    file_rows = (
+                        pipeline
+                        | f'ReadJSON_{i}' >> beam.io.ReadFromText(file_pattern=file_path)
+                    )
+                    file_pcollections.append(file_rows)
+
+                rows = (
+                    file_pcollections
+                    | 'FlattenFiles' >> beam.Flatten()
+                    | 'ParseJSONLines' >> beam.ParDo(
+                        ParseJSONLine(column_names=selected_columns if selected_columns else None)
+                    )
+                )
+
+        elif file_format == 'parquet':
+            # Parquet: Use ReadFromParquet (native Beam support)
+            # Note: ReadFromParquet returns dicts directly, no parsing needed
+            if len(file_paths) == 1:
+                rows = (
+                    pipeline
+                    | 'ReadParquet' >> beam.io.ReadFromParquet(file_pattern=file_paths[0])
+                )
+            else:
+                file_pcollections = []
+                for i, file_path in enumerate(file_paths):
+                    file_rows = (
+                        pipeline
+                        | f'ReadParquet_{i}' >> beam.io.ReadFromParquet(file_pattern=file_path)
+                    )
+                    file_pcollections.append(file_rows)
+
+                rows = (
+                    file_pcollections
+                    | 'FlattenFiles' >> beam.Flatten()
+                )
+
+            # Filter to selected columns if specified
+            if selected_columns:
+                rows = rows | 'FilterColumns' >> beam.Map(
+                    lambda row: {k: row.get(k) for k in selected_columns}
+                )
+        else:
+            raise ValueError(f"Unsupported file format for native Beam I/O: {file_format}")
+
+        # Continue with common pipeline stages (same as other pipelines)
+        (
+            rows
+            # Normalize column names to lowercase (BigQuery schema uses lowercase)
+            | 'NormalizeColumnNames' >> beam.Map(
+                lambda row: {key.lower(): value for key, value in row.items()}
+            )
+
+            # Serialize values (handles any special types)
+            | 'SerializeValues' >> beam.Map(
+                lambda row: {key: _serialize_value(value) for key, value in row.items()}
+            )
+
+            # Convert types to match destination schema
+            | 'ConvertToSchema' >> beam.ParDo(SchemaAwareConverter(schema_map))
+
+            # Write to BigQuery
+            | 'WriteToBigQuery' >> WriteToBigQuery(
+                table=table_ref,
+                write_disposition=write_disposition,
+                create_disposition=BigQueryDisposition.CREATE_NEVER,
+                method='FILE_LOADS'
+            )
+        )
+
+    logger.info("File pipeline submitted successfully")
+    logger.info("=" * 80)
+
+    return {
+        'status': 'submitted',
+        'job_name': options.view_as(GoogleCloudOptions).job_name,
+        'message': 'Dataflow job submitted - check GCP console for progress',
+        'method': 'native_file_io',
+        'files_processed': len(file_paths)
     }

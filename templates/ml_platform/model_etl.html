@@ -472,7 +472,7 @@
         <div class="modal-footer-wizard-neu">
             <div class="footer-left"></div>
             <div class="footer-right">
-                <button onclick="closeNotification()" class="btn-neu btn-neu-action btn-neu-secondary">
+                <button onclick="closeNotification()" class="btn-neu btn-neu-action btn-neu-save">
                     <span class="btn-neu-inner">OK</span>
                 </button>
             </div>
@@ -1404,7 +1404,7 @@
 
             <!-- Right: Save and Cancel buttons -->
             <div class="footer-right">
-                <button id="createButton" onclick="createDataSource()" class="btn-neu btn-neu-action btn-neu-save hidden">
+                <button id="createButton" onclick="createDataSource()" class="btn-neu btn-neu-action btn-neu-save hidden" style="min-width: 120px;">
                     <span class="btn-neu-inner">Save</span>
                 </button>
                 <button onclick="hideAddSourceModal()" class="btn-neu btn-neu-action btn-neu-cancel">
@@ -6654,11 +6654,12 @@ async function createETLJob() {
         scheduleConfig.schedule_day_of_week = parseInt(document.getElementById('scheduleDayOfWeek')?.value || 0);
     }
 
-    // Disable create button to prevent double-clicks
+    // Disable create button to prevent double-clicks (keep original styling)
     const createButton = document.getElementById('createButton');
     if (createButton) {
         createButton.disabled = true;
-        createButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Creating...';
+        // Keep btn-neu-inner structure to preserve button size and green color
+        createButton.innerHTML = '<span class="btn-neu-inner"><i class="fas fa-spinner fa-spin"></i></span>';
     }
 
     // Build payload based on source type
@@ -6743,10 +6744,7 @@ async function createETLJob() {
             };
 
             if (enableImmediately && data.job_id) {
-                // Update button to show triggering status
-                if (createButton) {
-                    createButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Starting first run...';
-                }
+                // Button already shows spinner - no need to change text
 
                 // Trigger immediate run
                 try {
@@ -6764,7 +6762,8 @@ async function createETLJob() {
                             `BigQuery table: ${data.bigquery_table}\nSchedule: ${scheduleStatus}\nFirst run: Started`,
                             'success',
                             `ETL Job "${data.job_name}" Created`,
-                            onNotificationClose
+                            onNotificationClose,
+                            3000  // Auto-close after 3 seconds
                         );
                     } else {
                         showNotification(
@@ -6788,21 +6787,22 @@ async function createETLJob() {
                     `BigQuery table: ${data.bigquery_table}\nSchedule: ${scheduleStatus}`,
                     'success',
                     `ETL Job "${data.job_name}" Created`,
-                    onNotificationClose
+                    onNotificationClose,
+                    3000  // Auto-close after 3 seconds
                 );
             }
         } else {
             showNotification(data.message, 'error', 'Error Creating ETL Job');
             if (createButton) {
                 createButton.disabled = false;
-                createButton.innerHTML = 'Save';
+                createButton.innerHTML = '<span class="btn-neu-inner">Save</span>';
             }
         }
     } catch (error) {
         showNotification(error.message, 'error', 'Error Creating ETL Job');
         if (createButton) {
             createButton.disabled = false;
-            createButton.innerHTML = 'Save';
+            createButton.innerHTML = '<span class="btn-neu-inner">Save</span>';
         }
     }
 }

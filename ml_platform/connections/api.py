@@ -1323,15 +1323,9 @@ def detect_file_schema(request, connection_id):
             bucket = client.get_bucket(bucket_name)
             blob = bucket.blob(file_path)
 
-            # Check file size
-            blob.reload()  # Get metadata
+            # Get file metadata
+            blob.reload()
             file_size = blob.size
-
-            if file_size > 1024 * 1024 * 1024:  # 1GB
-                return JsonResponse({
-                    'status': 'error',
-                    'message': f'File size ({file_size / (1024**3):.2f} GB) exceeds 1GB limit',
-                }, status=400)
 
             # Download file content (limit to first 5MB for schema detection)
             max_bytes_to_download = min(file_size, 5 * 1024 * 1024)  # 5MB max

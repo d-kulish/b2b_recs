@@ -889,7 +889,8 @@ class ETLRunner:
         try:
             from dataflow_pipelines.etl_pipeline import (
                 run_scalable_pipeline,
-                run_bigquery_native_pipeline
+                run_bigquery_native_pipeline,
+                run_file_pipeline
             )
             from dataflow_pipelines.partitioning import calculate_work_units
 
@@ -955,15 +956,33 @@ class ETLRunner:
             logger.info(f"✓ Created {len(work_units)} work units for parallel processing")
             logger.info("=" * 80)
 
-            # Determine which pipeline to use based on work unit type
+            # Determine which pipeline to use based on source type and work unit type
             source_type = self.job_config['source_type']
 
             if work_units and work_units[0].get('type') == 'bigquery_native':
                 # Use BigQuery native I/O for BigQuery sources
                 logger.info("Launching BIGQUERY NATIVE Dataflow pipeline")
                 result = run_bigquery_native_pipeline(job_config_with_context, gcp_config, work_units)
+            elif is_file_source and files_to_process:
+                # Use native Beam I/O for file sources (NEW - no pandas, handles large files)
+                logger.info("Launching FILE PIPELINE with native Beam I/O")
+
+                # Build full GCS paths from bucket name and file paths
+                bucket_name = job_config_with_context['connection_params'].get('bucket', '')
+                file_paths = []
+                for f in files_to_process:
+                    file_path = f['file_path']
+                    # Construct full GCS path if not already present
+                    if not file_path.startswith('gs://'):
+                        full_path = f"gs://{bucket_name}/{file_path}"
+                    else:
+                        full_path = file_path
+                    file_paths.append(full_path)
+
+                logger.info(f"File paths for Beam: {file_paths}")
+                result = run_file_pipeline(job_config_with_context, gcp_config, file_paths)
             else:
-                # Use scalable pipeline for all other sources
+                # Use scalable pipeline for database sources
                 logger.info("Launching SCALABLE Dataflow pipeline")
                 result = run_scalable_pipeline(job_config_with_context, gcp_config, work_units)
 

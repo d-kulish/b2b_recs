@@ -3821,7 +3821,8 @@ async function deleteSource(sourceId) {
         'Delete this ETL job and all its configured tables?\n\nThis action cannot be undone.',
         'danger',
         'Delete ETL Job?',
-        'Delete'
+        'Ok',
+        'btn-neu-save'  // Green button
     );
 
     if (confirmed) {
@@ -3835,7 +3836,8 @@ async function deleteSource(sourceId) {
         .then(response => response.json())
         .then(data => {
             if (data.status === 'success') {
-                showNotification(data.message, 'success', 'ETL Job Deleted', () => location.reload());
+                // Auto-close after 2 seconds and reload the page
+                showNotification(data.message, 'success', 'ETL Job Deleted', () => location.reload(), 2000);
             } else {
                 showNotification('Error: ' + data.message, 'error', 'Failed to Delete');
             }
@@ -6237,6 +6239,12 @@ function nextStep() {
             currentWizardStep = 4;
             showStep(4);
             populateBigQuerySchemaFromDetected();
+
+            // Update load type preview for file sources (fix: was not being set)
+            const loadType = document.querySelector('input[name="loadType"]:checked').value;
+            document.getElementById('loadTypePreview').textContent =
+                loadType === 'transactional' ? 'Transactional (Append-Only)' : 'Catalog (Daily Snapshot)';
+
             return;
         }
 
@@ -9654,12 +9662,19 @@ document.addEventListener('DOMContentLoaded', function() {
 // Modern Notification Modal Functions
 // Store callback for notification close
 let notificationCloseCallback = null;
+let notificationAutoCloseTimer = null;
 
-function showNotification(message, type = 'info', title = null, onClose = null) {
+function showNotification(message, type = 'info', title = null, onClose = null, autoCloseMs = null) {
     const modal = document.getElementById('notificationModal');
     const icon = document.getElementById('notificationIcon');
     const titleEl = document.getElementById('notificationTitle');
     const messageEl = document.getElementById('notificationMessage');
+
+    // Clear any existing auto-close timer
+    if (notificationAutoCloseTimer) {
+        clearTimeout(notificationAutoCloseTimer);
+        notificationAutoCloseTimer = null;
+    }
 
     // Store callback
     notificationCloseCallback = onClose;
@@ -9684,6 +9699,13 @@ function showNotification(message, type = 'info', title = null, onClose = null) 
 
     // Show modal
     modal.classList.remove('hidden');
+
+    // Auto-close after specified duration
+    if (autoCloseMs && autoCloseMs > 0) {
+        notificationAutoCloseTimer = setTimeout(() => {
+            closeNotification();
+        }, autoCloseMs);
+    }
 }
 
 function closeNotification() {
@@ -9753,10 +9775,11 @@ function showConfirmation(message, type = 'info', title = null, confirmText = 'C
 
         // Set icon, colors, and button style based on type
         if (type === 'danger') {
-            // Red for Delete action
+            // Red warning icon for Delete action
             icon.className = 'fas fa-exclamation-triangle text-red-600 text-xl';
             titleEl.textContent = title || 'Confirm Delete';
-            confirmBtn.className = `${baseClasses} btn-neu-cancel`;
+            // Use custom class if provided, otherwise default to red
+            confirmBtn.className = confirmBtnClass ? `${baseClasses} ${confirmBtnClass}` : `${baseClasses} btn-neu-cancel`;
         } else if (type === 'warning') {
             // Orange/amber for Pause action
             icon.className = 'fas fa-exclamation-circle text-yellow-600 text-xl';

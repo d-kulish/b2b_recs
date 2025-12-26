@@ -354,7 +354,144 @@ class ETLRunner:
             # On error, return 0 (will fall back to standard processing)
             return 0
 
-    def determine_processing_mode(self) -> str:
+    def detect_file_changes(self) -> dict:
+        """
+        Detect which files have changed since last ETL run.
+
+        For file sources, this method:
+        1. Fetches previously processed files from Django API (ProcessedFile table)
+        2. Lists available files in cloud storage
+        3. Compares timestamps and sizes to detect changes
+        4. Returns change detection results
+
+        Returns:
+            Dict with:
+                - has_changes: bool - Whether any files have changed
+                - changed_files: list - Files that are new or modified
+                - all_files: list - All available files matching pattern
+                - processed_files: dict - Previously processed files metadata
+        """
+        source_type = self.job_config['source_type']
+
+        # Only applicable for file sources
+        if source_type not in ['gcs', 's3', 'azure_blob']:
+            return {
+                'has_changes': True,  # Database sources always "have changes"
+                'changed_files': [],
+                'all_files': [],
+                'processed_files': {}
+            }
+
+        logger.info("=" * 80)
+        logger.info("DETECTING FILE CHANGES")
+        logger.info("=" * 80)
+
+        # Fetch previously processed files from Django API
+        processed_files_list = self.config.get_processed_files(self.data_source_id)
+
+        # Convert to dict for easy lookup with parsed datetimes
+        from dateutil import parser as date_parser
+
+        processed_files = {}
+        for f in processed_files_list:
+            file_last_modified = f['file_last_modified']
+            if file_last_modified and isinstance(file_last_modified, str):
+                try:
+                    file_last_modified = date_parser.isoparse(file_last_modified)
+                except Exception as e:
+                    logger.warning(f"Failed to parse datetime for {f['file_path']}: {e}")
+                    file_last_modified = None
+
+            processed_files[f['file_path']] = {
+                'file_size_bytes': f['file_size_bytes'],
+                'file_last_modified': file_last_modified
+            }
+
+        logger.info(f"Found {len(processed_files)} previously processed files")
+
+        # List available files from cloud storage
+        all_files = self.extractor.list_files()
+        logger.info(f"Found {len(all_files)} files matching pattern in storage")
+
+        if not all_files:
+            logger.warning("No files found matching pattern")
+            return {
+                'has_changes': False,
+                'changed_files': [],
+                'all_files': [],
+                'processed_files': processed_files
+            }
+
+        # Detect changes
+        changed_files = []
+        for file in all_files:
+            file_path = file['file_path']
+
+            if file_path not in processed_files:
+                # New file
+                logger.info(f"  NEW: {file_path}")
+                changed_files.append(file)
+            else:
+                # Check if file has changed (size or modification time)
+                prev_metadata = processed_files[file_path]
+
+                # Compare file_last_modified timestamps
+                file_changed = False
+                current_modified = file['file_last_modified']
+                prev_modified = prev_metadata['file_last_modified']
+
+                # Handle timezone-aware/naive datetime comparison
+                if current_modified and prev_modified:
+                    # Normalize to comparable format
+                    if hasattr(current_modified, 'replace') and current_modified.tzinfo:
+                        current_ts = current_modified.timestamp()
+                    else:
+                        current_ts = current_modified.timestamp() if hasattr(current_modified, 'timestamp') else 0
+
+                    if hasattr(prev_modified, 'replace') and prev_modified.tzinfo:
+                        prev_ts = prev_modified.timestamp()
+                    else:
+                        prev_ts = prev_modified.timestamp() if hasattr(prev_modified, 'timestamp') else 0
+
+                    # Allow 1 second tolerance for timestamp comparison
+                    if abs(current_ts - prev_ts) > 1:
+                        file_changed = True
+                        logger.info(f"  MODIFIED (timestamp): {file_path}")
+                        logger.info(f"    Previous: {prev_modified}")
+                        logger.info(f"    Current:  {current_modified}")
+
+                # Also check size as a secondary indicator
+                if file['file_size_bytes'] != prev_metadata['file_size_bytes']:
+                    file_changed = True
+                    logger.info(f"  MODIFIED (size): {file_path}")
+                    logger.info(f"    Previous: {prev_metadata['file_size_bytes']} bytes")
+                    logger.info(f"    Current:  {file['file_size_bytes']} bytes")
+
+                if file_changed:
+                    changed_files.append(file)
+                else:
+                    logger.debug(f"  UNCHANGED: {file_path}")
+
+        has_changes = len(changed_files) > 0
+
+        logger.info("=" * 80)
+        if has_changes:
+            logger.info(f"✓ CHANGES DETECTED: {len(changed_files)} new/modified files")
+        else:
+            logger.info("✓ NO CHANGES: All files are unchanged since last run")
+        logger.info("=" * 80)
+
+        # Store for use by other methods
+        self._file_change_detection = {
+            'has_changes': has_changes,
+            'changed_files': changed_files,
+            'all_files': all_files,
+            'processed_files': processed_files
+        }
+
+        return self._file_change_detection
+
+    def determine_processing_mode(self, files_to_process: list = None) -> str:
         """
         Determine whether to use standard (pandas) or dataflow (Beam) processing.
 
@@ -362,6 +499,10 @@ class ETLRunner:
         1. If processing_mode is explicitly set to 'standard' or 'dataflow', use that
         2. If processing_mode is 'auto', estimate row count and compare to threshold
         3. Default to 'standard' if estimation fails
+
+        Args:
+            files_to_process: Optional list of files that will be processed
+                              (used for more accurate row estimation)
 
         Returns:
             'standard' or 'dataflow'
@@ -379,7 +520,19 @@ class ETLRunner:
         else:
             # Auto-detect based on row count
             threshold = self.job_config.get('row_count_threshold', 1_000_000)
-            estimated_rows = self.estimate_row_count()
+
+            # If we have a specific list of files, estimate based on those
+            if files_to_process:
+                total_size_bytes = sum(f['file_size_bytes'] for f in files_to_process)
+                total_size_mb = total_size_bytes / (1024 * 1024)
+                file_format = self.job_config.get('file_format', 'csv')
+
+                rows_per_mb = {'csv': 20000, 'parquet': 100000, 'json': 10000}
+                estimated_rows = int(total_size_mb * rows_per_mb.get(file_format, 20000))
+
+                logger.info(f"Estimating rows from {len(files_to_process)} files ({total_size_mb:.2f} MB)")
+            else:
+                estimated_rows = self.estimate_row_count()
 
             logger.info(f"Auto-detection: {estimated_rows:,} rows vs {threshold:,} threshold")
 
@@ -519,6 +672,7 @@ class ETLRunner:
         Run catalog load for file sources.
 
         Loads selected files (latest or all) and replaces BigQuery table.
+        Now uses pre-detected files from detect_file_changes() if available.
         """
         logger.info("Starting CATALOG load for FILES")
 
@@ -527,31 +681,43 @@ class ETLRunner:
             self.config.update_etl_run_status(self.etl_run_id, 'running')
 
         try:
-            # Get processed files from Django API (empty for catalog mode)
-            processed_files = {}
+            # Use pre-detected files if available (from detect_file_changes)
+            # Otherwise fall back to extracting all files
+            if hasattr(self, '_files_to_process') and self._files_to_process:
+                files_to_load = self._files_to_process
+                logger.info(f"Using {len(files_to_load)} pre-detected files for catalog load")
+            else:
+                # Fallback: load all files (backward compatibility)
+                files_to_load = self.extractor.list_files()
+                logger.info(f"Listing all {len(files_to_load)} files for catalog load")
 
-            # Extract files
-            logger.info("Starting file extraction...")
-            file_generator = self.extractor.extract_files(
-                processed_files=processed_files,
-                batch_size=self.config.batch_size
-            )
+            if not files_to_load:
+                logger.warning("No files to process")
+                return {'total_rows': 0, 'batches_loaded': 0, 'files_processed': 0}
 
             # Process files
             all_dataframes = []
             files_processed = []
 
-            for df, file_metadata in file_generator:
-                self.total_rows_extracted += len(df)
-                all_dataframes.append(df)
-                files_processed.append(file_metadata)
+            for file_metadata in files_to_load:
+                file_path = file_metadata['file_path']
+                logger.info(f"Extracting file: {file_path}")
 
-                logger.info(
-                    f"Extracted {len(df):,} rows from {file_metadata['file_path']}"
-                )
+                try:
+                    df = self.extractor.extract_file(file_path)
+                    self.total_rows_extracted += len(df)
+                    all_dataframes.append(df)
+                    files_processed.append(file_metadata)
+
+                    logger.info(
+                        f"Extracted {len(df):,} rows from {file_path}"
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to extract file {file_path}: {str(e)}")
+                    raise
 
             if not all_dataframes:
-                logger.warning("No files to process")
+                logger.warning("No data extracted from files")
                 return {'total_rows': 0, 'batches_loaded': 0, 'files_processed': 0}
 
             # Combine all dataframes
@@ -573,6 +739,21 @@ class ETLRunner:
             )
 
             result['files_processed'] = len(files_processed)
+
+            # Record processed files in ProcessedFile table
+            # This enables change detection for future runs
+            logger.info("Recording processed files for future change detection...")
+            for file_metadata in files_processed:
+                try:
+                    self.config.record_processed_file(
+                        data_source_id=self.data_source_id,
+                        file_path=file_metadata['file_path'],
+                        file_size_bytes=file_metadata['file_size_bytes'],
+                        file_last_modified=file_metadata['file_last_modified'].isoformat() if hasattr(file_metadata['file_last_modified'], 'isoformat') else str(file_metadata['file_last_modified']),
+                        rows_loaded=len(combined_df) // len(files_processed) if files_processed else 0  # Approximate per-file
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to record processed file {file_metadata['file_path']}: {e}")
 
             logger.info(
                 f"Catalog load completed: "
@@ -695,6 +876,9 @@ class ETLRunner:
         This method submits a Dataflow job to GCP and monitors its execution.
         Suitable for datasets with >= 1M rows.
 
+        Now uses pre-detected files from detect_file_changes() if available,
+        avoiding reprocessing unchanged files.
+
         Returns:
             Dict with execution results
         """
@@ -731,12 +915,42 @@ class ETLRunner:
             logger.info("CALCULATING WORK PARTITIONS")
             logger.info("=" * 80)
 
-            estimated_rows = self.estimate_row_count()
+            # Get pre-detected files if available (from detect_file_changes in run())
+            files_to_process = getattr(self, '_files_to_process', None)
+            source_type = self.job_config['source_type']
+            is_file_source = source_type in ['gcs', 's3', 'azure_blob']
+
+            # Calculate estimated rows based on files that will actually be processed
+            if files_to_process:
+                total_size_bytes = sum(f['file_size_bytes'] for f in files_to_process)
+                total_size_mb = total_size_bytes / (1024 * 1024)
+                file_format = self.job_config.get('file_format', 'csv')
+                rows_per_mb = {'csv': 20000, 'parquet': 100000, 'json': 10000}
+                estimated_rows = int(total_size_mb * rows_per_mb.get(file_format, 20000))
+                logger.info(f"Estimating {estimated_rows:,} rows from {len(files_to_process)} files ({total_size_mb:.2f} MB)")
+            else:
+                estimated_rows = self.estimate_row_count()
+
+            # Pass files_to_process to partitioning for file sources
             work_units = calculate_work_units(
                 job_config=job_config_with_context,
                 extractor=self.extractor,
-                estimated_rows=estimated_rows
+                estimated_rows=estimated_rows,
+                files_to_process=files_to_process if is_file_source else None
             )
+
+            # Handle empty work units (no changes detected)
+            if not work_units:
+                logger.info("=" * 80)
+                logger.info("NO WORK UNITS: Nothing to process via Dataflow")
+                logger.info("=" * 80)
+                return {
+                    'status': 'success',
+                    'processing_mode': 'dataflow',
+                    'message': 'No files to process - all files unchanged',
+                    'rows_extracted': 0,
+                    'rows_loaded': 0
+                }
 
             logger.info(f"✓ Created {len(work_units)} work units for parallel processing")
             logger.info("=" * 80)
@@ -759,22 +973,162 @@ class ETLRunner:
             logger.info(f"Monitor at: https://console.cloud.google.com/dataflow/jobs/{gcp_config['region']}/{result['job_name']}")
             logger.info("=" * 80)
 
-            # Note: Dataflow jobs run asynchronously
-            # For now, we mark as running and let GCP handle execution
-            # In production, you might want to poll job status and update Django accordingly
+            # Poll for Dataflow job completion and track metrics
+            final_rows_loaded = 0
+            try:
+                job_name = result['job_name']
+                final_rows_loaded = self._wait_for_dataflow_completion(
+                    job_name=job_name,
+                    region=gcp_config['region'],
+                    project_id=gcp_config['project_id']
+                )
+            except Exception as e:
+                logger.warning(f"Failed to wait for Dataflow completion: {e}")
+                logger.warning("Proceeding with file recording using estimated values")
+
+            # Record processed files for change detection on future runs
+            if is_file_source and files_to_process:
+                logger.info("Recording processed files for future change detection...")
+                rows_per_file = final_rows_loaded // len(files_to_process) if final_rows_loaded > 0 else estimated_rows // len(files_to_process)
+
+                for file_metadata in files_to_process:
+                    try:
+                        self.config.record_processed_file(
+                            data_source_id=self.data_source_id,
+                            file_path=file_metadata['file_path'],
+                            file_size_bytes=file_metadata['file_size_bytes'],
+                            file_last_modified=file_metadata['file_last_modified'].isoformat() if hasattr(file_metadata['file_last_modified'], 'isoformat') else str(file_metadata['file_last_modified']),
+                            rows_loaded=rows_per_file
+                        )
+                        logger.info(f"Recorded: {file_metadata['file_path']}")
+                    except Exception as e:
+                        logger.warning(f"Failed to record processed file {file_metadata['file_path']}: {e}")
+
+            # Update row counts
+            self.total_rows_extracted = final_rows_loaded
+            self.total_rows_loaded = final_rows_loaded
 
             return {
                 'status': 'success',
                 'processing_mode': 'dataflow',
                 'dataflow_job_name': result['job_name'],
                 'message': result['message'],
-                'rows_extracted': 0,  # Will be updated by Dataflow
-                'rows_loaded': 0      # Will be updated by Dataflow
+                'rows_extracted': final_rows_loaded,
+                'rows_loaded': final_rows_loaded
             }
 
         except Exception as e:
             logger.error(f"Dataflow execution failed: {str(e)}")
             raise
+
+    def _wait_for_dataflow_completion(self, job_name: str, region: str, project_id: str, timeout_seconds: int = 3000) -> int:
+        """
+        Wait for Dataflow job to complete and return row count.
+
+        Args:
+            job_name: Dataflow job name
+            region: GCP region
+            project_id: GCP project ID
+            timeout_seconds: Maximum time to wait (default 50 minutes)
+
+        Returns:
+            Number of rows loaded (from Dataflow metrics or BigQuery)
+        """
+        import time
+        from google.cloud import dataflow_v1beta3
+
+        logger.info(f"Waiting for Dataflow job '{job_name}' to complete...")
+
+        client = dataflow_v1beta3.JobsV1Beta3Client()
+        start_time = time.time()
+        poll_interval = 30  # seconds
+
+        # First, get the job ID from job name
+        job_id = None
+        try:
+            # List jobs to find ours
+            request = dataflow_v1beta3.ListJobsRequest(
+                project_id=project_id,
+                location=region,
+                filter=dataflow_v1beta3.ListJobsRequest.Filter.ALL
+            )
+            jobs = client.list_jobs(request=request)
+            for job in jobs:
+                if job.name == job_name:
+                    job_id = job.id
+                    break
+        except Exception as e:
+            logger.warning(f"Could not list Dataflow jobs: {e}")
+            # Try using job_name as job_id
+            job_id = job_name
+
+        if not job_id:
+            logger.warning(f"Could not find Dataflow job with name {job_name}")
+            return 0
+
+        logger.info(f"Found Dataflow job ID: {job_id}")
+
+        while time.time() - start_time < timeout_seconds:
+            try:
+                request = dataflow_v1beta3.GetJobRequest(
+                    project_id=project_id,
+                    location=region,
+                    job_id=job_id
+                )
+                job = client.get_job(request=request)
+
+                current_state = job.current_state.name if hasattr(job.current_state, 'name') else str(job.current_state)
+                elapsed = int(time.time() - start_time)
+                logger.info(f"Dataflow job status: {current_state} (elapsed: {elapsed}s)")
+
+                if current_state in ['JOB_STATE_DONE', 'DONE']:
+                    logger.info("Dataflow job completed successfully!")
+
+                    # Try to get row count from BigQuery destination
+                    rows_loaded = self._get_bigquery_row_count()
+                    return rows_loaded
+
+                elif current_state in ['JOB_STATE_FAILED', 'FAILED', 'JOB_STATE_CANCELLED', 'CANCELLED']:
+                    logger.error(f"Dataflow job ended with state: {current_state}")
+                    raise Exception(f"Dataflow job failed with state: {current_state}")
+
+                # Still running, wait and poll again
+                time.sleep(poll_interval)
+
+            except Exception as e:
+                if 'failed' in str(e).lower() or 'cancelled' in str(e).lower():
+                    raise
+                logger.warning(f"Error polling Dataflow job: {e}")
+                time.sleep(poll_interval)
+
+        logger.warning(f"Timeout waiting for Dataflow job after {timeout_seconds} seconds")
+        return 0
+
+    def _get_bigquery_row_count(self) -> int:
+        """
+        Get row count from BigQuery destination table.
+
+        Returns:
+            Number of rows in the destination table
+        """
+        from google.cloud import bigquery
+
+        try:
+            client = bigquery.Client(project=self.config.gcp_project_id)
+            table_ref = f"{self.config.gcp_project_id}.{self.config.bigquery_dataset}.{self.job_config['dest_table_name']}"
+
+            query = f"SELECT COUNT(*) as cnt FROM `{table_ref}`"
+            result = client.query(query).result()
+
+            for row in result:
+                count = row.cnt
+                logger.info(f"BigQuery destination table row count: {count:,}")
+                return count
+
+            return 0
+        except Exception as e:
+            logger.warning(f"Could not get BigQuery row count: {e}")
+            return 0
 
     def run(self):
         """
@@ -802,8 +1156,58 @@ class ETLRunner:
                     f"Please create the table first using the ETL wizard."
                 )
 
+            source_type = self.job_config['source_type']
+            load_type = self.job_config['load_type']
+            is_file_source = source_type in ['gcs', 's3', 'azure_blob']
+
+            # For file sources: detect changes FIRST before deciding processing mode
+            files_to_process = None
+            if is_file_source:
+                change_detection = self.detect_file_changes()
+
+                if not change_detection['has_changes']:
+                    # No files have changed - skip processing entirely
+                    logger.info("=" * 80)
+                    logger.info("SKIPPING ETL: No file changes detected")
+                    logger.info("=" * 80)
+
+                    # Update status to completed with 0 rows
+                    self.end_time = datetime.utcnow()
+                    duration_seconds = int((self.end_time - self.start_time).total_seconds())
+
+                    if self.etl_run_id:
+                        self.config.update_etl_run_status(
+                            etl_run_id=self.etl_run_id,
+                            status='completed',
+                            data_source_id=self.data_source_id,
+                            rows_extracted=0,
+                            rows_loaded=0,
+                            duration_seconds=duration_seconds
+                        )
+
+                    return {
+                        'status': 'success',
+                        'message': 'No file changes detected - skipping ETL',
+                        'rows_extracted': 0,
+                        'rows_loaded': 0,
+                        'duration_seconds': duration_seconds
+                    }
+
+                # For Catalog mode: process ALL files if ANY changed
+                # For Transactional mode: process only changed files
+                if load_type == 'catalog':
+                    files_to_process = change_detection['all_files']
+                    logger.info(f"Catalog mode: Will process ALL {len(files_to_process)} files")
+                else:
+                    files_to_process = change_detection['changed_files']
+                    logger.info(f"Transactional mode: Will process {len(files_to_process)} changed files")
+
+                # Store for use by processing methods
+                self._files_to_process = files_to_process
+                self._processed_files_metadata = change_detection['processed_files']
+
             # Determine processing mode (standard vs dataflow)
-            processing_mode = self.determine_processing_mode()
+            processing_mode = self.determine_processing_mode(files_to_process=files_to_process)
             logger.info(f"Selected processing mode: {processing_mode}")
 
             # Execute based on processing mode
@@ -812,10 +1216,6 @@ class ETLRunner:
                 result = self.run_with_dataflow()
             else:
                 # Use standard pandas processing for smaller datasets
-                source_type = self.job_config['source_type']
-                load_type = self.job_config['load_type']
-                is_file_source = source_type in ['gcs', 's3', 'azure_blob']
-
                 if is_file_source:
                     # File-based sources
                     if load_type == 'catalog':

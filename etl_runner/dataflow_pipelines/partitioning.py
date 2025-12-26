@@ -285,6 +285,9 @@ class FilePartitionCalculator(PartitionCalculator):
     This is the simplest and most efficient partitioning strategy for files,
     since files are already naturally partitioned.
 
+    Now supports pre-filtered file lists from change detection to avoid
+    reprocessing unchanged files.
+
     Example work unit:
     {
         'type': 'file',
@@ -298,14 +301,39 @@ class FilePartitionCalculator(PartitionCalculator):
         self,
         job_config: Dict[str, Any],
         extractor: Any,
-        estimated_rows: int
+        estimated_rows: int,
+        files_to_process: List[Dict[str, Any]] = None
     ) -> List[WorkUnit]:
-        """Calculate file partitions (one per file)"""
+        """
+        Calculate file partitions (one per file).
+
+        Args:
+            job_config: ETL job configuration
+            extractor: File extractor instance
+            estimated_rows: Estimated total rows
+            files_to_process: Optional pre-filtered list of files from change detection.
+                              If provided, only these files will be processed.
+                              If None, all files from extractor.list_files() are used.
+
+        Returns:
+            List of WorkUnit objects for parallel processing
+        """
 
         logger.info("Calculating file partitions")
 
-        # Get file list from extractor
-        file_list = extractor.list_files()
+        # Use pre-filtered files if provided (from change detection)
+        # Otherwise fall back to listing all files
+        if files_to_process is not None:
+            file_list = files_to_process
+            logger.info(f"Using {len(file_list)} pre-filtered files from change detection")
+        else:
+            # Fallback: get all files from extractor
+            file_list = extractor.list_files()
+            logger.info(f"Listing all {len(file_list)} files from storage")
+
+        if not file_list:
+            logger.warning("No files to process - returning empty work units")
+            return []
 
         work_units = []
         for file_metadata in file_list:
@@ -313,6 +341,8 @@ class FilePartitionCalculator(PartitionCalculator):
                 work_type='file',
                 params={
                     'file_path': file_metadata['file_path'],
+                    'file_size_bytes': file_metadata.get('file_size_bytes', 0),
+                    'file_last_modified': file_metadata['file_last_modified'].isoformat() if hasattr(file_metadata.get('file_last_modified'), 'isoformat') else str(file_metadata.get('file_last_modified', '')),
                     'file_format': job_config.get('file_format'),
                     'format_options': job_config.get('file_format_options', {}),
                     'selected_columns': job_config.get('selected_columns', []),
@@ -545,7 +575,8 @@ def get_partition_calculator(
 def calculate_work_units(
     job_config: Dict[str, Any],
     extractor: Any,
-    estimated_rows: int
+    estimated_rows: int,
+    files_to_process: List[Dict[str, Any]] = None
 ) -> List[Dict[str, Any]]:
     """
     Main entry point for partition calculation.
@@ -559,9 +590,12 @@ def calculate_work_units(
         job_config: ETL job configuration
         extractor: Database/file extractor instance
         estimated_rows: Estimated total rows
+        files_to_process: Optional pre-filtered list of files from change detection.
+                          Used by FilePartitionCalculator to only process changed files.
 
     Returns:
         List of work unit dicts (JSON-serializable for Beam)
+        Empty list if no work needs to be done (e.g., no file changes)
 
     Example:
         >>> work_units = calculate_work_units(job_config, extractor, 5000000)
@@ -580,15 +614,24 @@ def calculate_work_units(
     calculator = get_partition_calculator(job_config, estimated_rows)
     logger.info(f"Strategy: {calculator.get_strategy_name()}")
 
-    # Calculate partitions
-    work_units = calculator.calculate_partitions(job_config, extractor, estimated_rows)
+    # Calculate partitions - pass files_to_process for file sources
+    if isinstance(calculator, FilePartitionCalculator):
+        work_units = calculator.calculate_partitions(
+            job_config, extractor, estimated_rows,
+            files_to_process=files_to_process
+        )
+    else:
+        work_units = calculator.calculate_partitions(job_config, extractor, estimated_rows)
 
-    # Validate
+    # Return empty list if no work units (signals "nothing to do")
     if not work_units:
-        raise ValueError("Partition calculator returned empty work units list")
+        logger.info("✓ No work units generated - nothing to process")
+        logger.info("=" * 60)
+        return []
 
     logger.info(f"✓ Created {len(work_units)} work units")
-    logger.info(f"✓ Each worker will process ~{estimated_rows // len(work_units):,} rows")
+    if estimated_rows > 0 and len(work_units) > 0:
+        logger.info(f"✓ Each worker will process ~{estimated_rows // len(work_units):,} rows")
     logger.info("=" * 60)
 
     # Sample first 3 for logging

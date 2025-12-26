@@ -280,31 +280,56 @@ class CloudSchedulerManager:
                 'message': f'Failed to resume scheduler: {str(e)}'
             }
 
-    def get_schedule_status(self, data_source_id: int) -> Dict[str, Any]:
+    def get_schedule_status(self, job_name_or_id) -> Dict[str, Any]:
         """
         Get status of a Cloud Scheduler job.
 
         Args:
-            data_source_id: DataSource ID
+            job_name_or_id: Either full job name (string) or DataSource ID (int)
+                - Full name: "projects/{project}/locations/{region}/jobs/etl-job-{id}"
+                - ID: integer data_source_id
 
         Returns:
-            Dict with job status information
+            Dict with job status information including state and next_run_time
         """
         try:
-            scheduler_job_name = f"etl-job-{data_source_id}"
-            full_job_name = f"{self.parent}/jobs/{scheduler_job_name}"
+            # Determine if we got a full job name or just the ID
+            if isinstance(job_name_or_id, str) and job_name_or_id.startswith('projects/'):
+                full_job_name = job_name_or_id
+            else:
+                # It's a data_source_id (int or string representation)
+                data_source_id = int(job_name_or_id) if not isinstance(job_name_or_id, int) else job_name_or_id
+                scheduler_job_name = f"etl-job-{data_source_id}"
+                full_job_name = f"{self.parent}/jobs/{scheduler_job_name}"
 
             job = self.client.get_job(
                 request=scheduler_v1.GetJobRequest(name=full_job_name)
             )
+
+            # schedule_time and last_attempt_time are already DatetimeWithNanoseconds objects
+            # (Python datetime subclass from Google Cloud library)
+            # Convert to job's timezone for correct display
+            import pytz
+
+            next_run = job.schedule_time  # None for paused jobs
+            last_attempt = job.last_attempt_time
+
+            # Convert UTC times to job's configured timezone
+            # Then strip tzinfo so Django won't reconvert to server timezone
+            job_tz = pytz.timezone(job.time_zone) if job.time_zone else pytz.UTC
+            if next_run:
+                next_run = next_run.astimezone(job_tz).replace(tzinfo=None)
+            if last_attempt:
+                last_attempt = last_attempt.astimezone(job_tz).replace(tzinfo=None)
 
             return {
                 'success': True,
                 'exists': True,
                 'schedule': job.schedule,
                 'state': job.state.name,
-                'last_attempt_time': job.last_attempt_time,
-                'next_run_time': job.schedule_time
+                'time_zone': job.time_zone,
+                'last_attempt_time': last_attempt,
+                'next_run_time': next_run
             }
 
         except Exception as e:

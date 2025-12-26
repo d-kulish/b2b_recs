@@ -22,121 +22,213 @@
             </span>
         </div>
 
-        <!-- Dashboard Grid: 2 columns for KPIs + Chart, full width for table -->
+        <!-- Dashboard Grid: KPI row on top, then Scheduled Jobs + Chart side by side -->
         <div class="etl-dashboard-grid">
-            <!-- Row 1: KPIs (left) + Chart (right) -->
-            <div class="etl-dashboard-row-1">
-                <!-- Column 1: KPI Cards (3 rows × 2 columns) -->
-                <div class="etl-kpi-section">
-                    <!-- Row 1: Total Runs + Success Rate -->
-                    <div class="kpi-card">
-                        <div class="kpi-icon-wrapper kpi-icon-blue">
-                            <i class="fas fa-play-circle"></i>
-                        </div>
-                        <div class="kpi-content">
-                            <span class="kpi-value">{{ kpi_data.total_runs|default:0 }}</span>
-                            <span class="kpi-label">Total Runs</span>
-                        </div>
+            <!-- Row 1: KPI Cards in horizontal row -->
+            <div class="etl-kpi-row">
+                <div class="kpi-card">
+                    <div class="kpi-icon-wrapper kpi-icon-blue">
+                        <i class="fas fa-play-circle"></i>
                     </div>
-
-                    <div class="kpi-card">
-                        <div class="kpi-icon-wrapper {% if kpi_data.success_rate >= 90 %}kpi-icon-green{% elif kpi_data.success_rate >= 70 %}kpi-icon-yellow{% else %}kpi-icon-red{% endif %}">
-                            <i class="fas fa-check-circle"></i>
-                        </div>
-                        <div class="kpi-content">
-                            <span class="kpi-value">{{ kpi_data.success_rate|default:0 }}%</span>
-                            <span class="kpi-label">Success Rate</span>
-                        </div>
-                    </div>
-
-                    <!-- Row 2: Successful Runs + Failed Runs -->
-                    <div class="kpi-card">
-                        <div class="kpi-icon-wrapper kpi-icon-green">
-                            <i class="fas fa-check-double"></i>
-                        </div>
-                        <div class="kpi-content">
-                            <span class="kpi-value">{{ kpi_data.successful_runs|default:0 }}</span>
-                            <span class="kpi-label">Successful Runs</span>
-                        </div>
-                    </div>
-
-                    <div class="kpi-card">
-                        <div class="kpi-icon-wrapper {% if kpi_data.failed_runs > 0 %}kpi-icon-red{% else %}kpi-icon-green{% endif %}">
-                            <i class="fas fa-times-circle"></i>
-                        </div>
-                        <div class="kpi-content">
-                            <span class="kpi-value">{{ kpi_data.failed_runs|default:0 }}</span>
-                            <span class="kpi-label">Failed Runs</span>
-                        </div>
-                    </div>
-
-                    <!-- Row 3: Rows Migrated + Avg Duration -->
-                    <div class="kpi-card">
-                        <div class="kpi-icon-wrapper kpi-icon-purple">
-                            <i class="fas fa-database"></i>
-                        </div>
-                        <div class="kpi-content">
-                            <span class="kpi-value" data-raw-value="{{ kpi_data.total_rows_extracted|default:0 }}">{{ kpi_data.total_rows_extracted|default:0|intcomma }}</span>
-                            <span class="kpi-label">Rows Migrated</span>
-                        </div>
-                    </div>
-
-                    <div class="kpi-card">
-                        <div class="kpi-icon-wrapper kpi-icon-blue">
-                            <i class="fas fa-clock"></i>
-                        </div>
-                        <div class="kpi-content">
-                            <span class="kpi-value" data-duration-seconds="{{ kpi_data.avg_duration_seconds|default:0 }}">—</span>
-                            <span class="kpi-label">Avg Duration</span>
-                        </div>
+                    <div class="kpi-content">
+                        <span class="kpi-value">{{ kpi_data.total_runs|default:0 }}</span>
+                        <span class="kpi-label">Total Runs</span>
                     </div>
                 </div>
 
-                <!-- Column 2: ETL Duration Analysis Chart -->
+                <div class="kpi-card">
+                    <div class="kpi-icon-wrapper {% if kpi_data.success_rate >= 90 %}kpi-icon-green{% elif kpi_data.success_rate >= 70 %}kpi-icon-yellow{% else %}kpi-icon-red{% endif %}">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                    <div class="kpi-content">
+                        <span class="kpi-value">{{ kpi_data.success_rate|default:0 }}%</span>
+                        <span class="kpi-label">Success Rate</span>
+                    </div>
+                </div>
+
+                <div class="kpi-card">
+                    <div class="kpi-icon-wrapper kpi-icon-green">
+                        <i class="fas fa-check-double"></i>
+                    </div>
+                    <div class="kpi-content">
+                        <span class="kpi-value">{{ kpi_data.successful_runs|default:0 }}</span>
+                        <span class="kpi-label">Successful Runs</span>
+                    </div>
+                </div>
+
+                <div class="kpi-card">
+                    <div class="kpi-icon-wrapper {% if kpi_data.failed_runs > 0 %}kpi-icon-red{% else %}kpi-icon-green{% endif %}">
+                        <i class="fas fa-times-circle"></i>
+                    </div>
+                    <div class="kpi-content">
+                        <span class="kpi-value">{{ kpi_data.failed_runs|default:0 }}</span>
+                        <span class="kpi-label">Failed Runs</span>
+                    </div>
+                </div>
+
+                <div class="kpi-card">
+                    <div class="kpi-icon-wrapper kpi-icon-purple">
+                        <i class="fas fa-database"></i>
+                    </div>
+                    <div class="kpi-content">
+                        <span class="kpi-value" data-raw-value="{{ kpi_data.total_rows_extracted|default:0 }}">{{ kpi_data.total_rows_extracted|default:0|intcomma }}</span>
+                        <span class="kpi-label">Rows Migrated</span>
+                    </div>
+                </div>
+
+                <div class="kpi-card">
+                    <div class="kpi-icon-wrapper kpi-icon-blue">
+                        <i class="fas fa-clock"></i>
+                    </div>
+                    <div class="kpi-content">
+                        <span class="kpi-value" data-duration-seconds="{{ kpi_data.avg_duration_seconds|default:0 }}">—</span>
+                        <span class="kpi-label">Avg Duration</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Row 2: Scheduled Jobs (left) + Chart (right) -->
+            <div class="etl-dashboard-row-2">
+                <!-- Column 1: Scheduled Jobs Table -->
+                <div class="etl-scheduled-section">
+                    <h3><i class="fas fa-calendar-alt mr-2 text-gray-400"></i>Scheduled Jobs</h3>
+
+                    {% if has_scheduled_jobs %}
+                    <div class="scheduled-jobs-table-wrapper">
+                        <table class="scheduled-jobs-table">
+                            <thead>
+                                <tr>
+                                    <th>Job Name</th>
+                                    <th>Schedule</th>
+                                    <th>Next Run</th>
+                                    <th>State</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for job in scheduled_jobs %}
+                                <tr>
+                                    <td class="job-name" title="{{ job.name }}">{{ job.name|truncatechars:18 }}</td>
+                                    <td class="job-schedule">{{ job.schedule_display }}</td>
+                                    <td class="job-next-run">
+                                        {% if job.is_paused %}
+                                            <span class="text-gray-400">—</span>
+                                        {% elif job.next_run_time %}
+                                            {{ job.next_run_time|date:"M d, H:i" }}
+                                        {% else %}
+                                            <span class="text-gray-400">—</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if job.is_paused %}
+                                            <span class="badge-paused"><i class="fas fa-pause"></i> Paused</span>
+                                        {% else %}
+                                            <span class="badge-enabled"><i class="fas fa-check"></i> Enabled</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {% if scheduled_jobs.paginator.num_pages > 1 %}
+                    <div class="scheduled-pagination">
+                        <span class="page-info">
+                            {{ scheduled_jobs.start_index }}-{{ scheduled_jobs.end_index }} of {{ scheduled_jobs.paginator.count }}
+                        </span>
+                        <div class="page-controls">
+                            {% if scheduled_jobs.has_previous %}
+                            <a href="?sched_page={{ scheduled_jobs.previous_page_number }}{% if page_obj.number != 1 %}&page={{ page_obj.number }}{% endif %}" class="page-btn">Previous</a>
+                            {% else %}
+                            <span class="page-btn disabled">Previous</span>
+                            {% endif %}
+
+                            {% for num in scheduled_jobs.paginator.page_range %}
+                                {% if scheduled_jobs.paginator.num_pages <= 5 or num == 1 or num == scheduled_jobs.paginator.num_pages or num >= scheduled_jobs.number|add:"-1" and num <= scheduled_jobs.number|add:"1" %}
+                                <a href="?sched_page={{ num }}{% if page_obj.number != 1 %}&page={{ page_obj.number }}{% endif %}" class="page-btn {% if scheduled_jobs.number == num %}active{% endif %}">{{ num }}</a>
+                                {% elif num == scheduled_jobs.number|add:"-2" or num == scheduled_jobs.number|add:"2" %}
+                                <span class="text-gray-400">...</span>
+                                {% endif %}
+                            {% endfor %}
+
+                            {% if scheduled_jobs.has_next %}
+                            <a href="?sched_page={{ scheduled_jobs.next_page_number }}{% if page_obj.number != 1 %}&page={{ page_obj.number }}{% endif %}" class="page-btn">Next</a>
+                            {% else %}
+                            <span class="page-btn disabled">Next</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    {% else %}
+                    <div class="scheduled-empty-state">
+                        <i class="fas fa-calendar-times"></i>
+                        <p>No scheduled jobs</p>
+                        <p class="text-xs mt-1">Create ETL jobs with schedules to see them here</p>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <!-- Column 2: ETL Job Runs Bubble Chart -->
                 <div class="etl-chart-section">
                     <div class="flex items-center justify-between mb-3">
-                        <h3 class="text-sm font-semibold text-gray-700">ETL Job Runs (Last 5 Days - Hourly)</h3>
-                        <div class="flex items-center gap-3">
-                            <!-- Legend -->
+                        <h3 class="text-sm font-semibold text-gray-700">ETL Job Runs (Last 5 Days)</h3>
+                        <div class="flex items-center gap-4">
+                            <!-- Status Legend -->
                             <div class="flex items-center gap-3 text-xs">
                                 <div class="flex items-center gap-1">
-                                    <div class="w-2.5 h-2.5 rounded-sm bg-green-500"></div>
+                                    <div class="w-2.5 h-2.5 rounded-full bg-green-500"></div>
                                     <span class="text-gray-500">Success</span>
                                 </div>
                                 <div class="flex items-center gap-1">
-                                    <div class="w-2.5 h-2.5 rounded-sm bg-red-500"></div>
+                                    <div class="w-2.5 h-2.5 rounded-full bg-orange-400"></div>
+                                    <span class="text-gray-500">Partial</span>
+                                </div>
+                                <div class="flex items-center gap-1">
+                                    <div class="w-2.5 h-2.5 rounded-full bg-red-500"></div>
                                     <span class="text-gray-500">Failed</span>
+                                </div>
+                            </div>
+                            <!-- Fill Legend -->
+                            <div class="flex items-center gap-3 text-xs border-l border-gray-200 pl-4">
+                                <div class="flex items-center gap-1">
+                                    <div class="w-2.5 h-2.5 rounded-full bg-gray-400"></div>
+                                    <span class="text-gray-500">Data loaded</span>
+                                </div>
+                                <div class="flex items-center gap-1">
+                                    <div class="w-2.5 h-2.5 rounded-full border-2 border-gray-400 bg-white"></div>
+                                    <span class="text-gray-500">No data</span>
                                 </div>
                             </div>
                         </div>
                     </div>
 
                     <!-- Chart Container -->
-                    <div id="ridgeChartContainer" class="relative">
+                    <div id="bubbleChartContainer" class="relative">
                         <!-- Loading State -->
-                        <div id="ridgeChartLoading" class="flex items-center justify-center py-12">
+                        <div id="bubbleChartLoading" class="flex items-center justify-center py-12">
                             <i class="fas fa-spinner fa-spin text-gray-400 text-xl mr-2"></i>
                             <span class="text-gray-500 text-sm">Loading chart...</span>
                         </div>
 
                         <!-- Empty State -->
-                        <div id="ridgeChartEmpty" class="hidden text-center py-12 bg-gray-50 rounded-lg">
-                            <i class="fas fa-chart-line text-gray-400 text-2xl mb-2"></i>
-                            <p class="text-gray-600 text-sm font-medium">No duration data</p>
-                            <p class="text-gray-400 text-xs mt-1">Run ETL jobs to see analysis</p>
+                        <div id="bubbleChartEmpty" class="hidden text-center py-12 bg-gray-50 rounded-lg">
+                            <i class="fas fa-chart-scatter text-gray-400 text-2xl mb-2"></i>
+                            <p class="text-gray-600 text-sm font-medium">No job runs</p>
+                            <p class="text-gray-400 text-xs mt-1">Run ETL jobs to see visualization</p>
                         </div>
 
                         <!-- Chart SVG -->
-                        <svg id="ridgeChart" class="w-full hidden"></svg>
+                        <svg id="bubbleChart" class="w-full hidden"></svg>
 
                         <!-- Tooltip -->
-                        <div id="ridgeChartTooltip" class="absolute hidden bg-gray-900 text-white text-xs rounded-lg px-3 py-2 pointer-events-none shadow-lg z-10">
+                        <div id="bubbleChartTooltip" class="absolute hidden bg-gray-900 text-white text-xs rounded-lg px-3 py-2 pointer-events-none shadow-lg z-10">
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Row 2: Recent ETL Runs Table (full width) -->
+            <!-- Row 3: Recent ETL Runs Table (full width) -->
             <div class="etl-runs-section mt-6">
                 <div class="flex items-center justify-between mb-4">
                     <h3 class="text-sm font-semibold text-gray-700">Recent Runs</h3>
@@ -255,7 +347,7 @@
             </div>
             <div class="flex items-center gap-2">
                 {% if page_obj.has_previous %}
-                <a href="?page={{ page_obj.previous_page_number }}" class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold bg-white hover:bg-gray-50">Previous</a>
+                <a href="?page={{ page_obj.previous_page_number }}{% if scheduled_jobs.number != 1 %}&sched_page={{ scheduled_jobs.number }}{% endif %}" class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold bg-white hover:bg-gray-50">Previous</a>
                 {% else %}
                 <span class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold opacity-50 cursor-not-allowed bg-gray-100">Previous</span>
                 {% endif %}
@@ -263,7 +355,7 @@
                 {% if page_obj.paginator.num_pages <= 7 %}
                     {# Show all pages if 7 or fewer #}
                     {% for num in page_obj.paginator.page_range %}
-                    <a href="?page={{ num }}" class="w-10 h-10 flex items-center justify-center rounded-md text-sm font-semibold {% if page_obj.number == num %}bg-blue-600 text-white{% else %}border border-gray-300 text-gray-700 hover:bg-blue-50 hover:border-blue-500{% endif %}">{{ num }}</a>
+                    <a href="?page={{ num }}{% if scheduled_jobs.number != 1 %}&sched_page={{ scheduled_jobs.number }}{% endif %}" class="w-10 h-10 flex items-center justify-center rounded-md text-sm font-semibold {% if page_obj.number == num %}bg-blue-600 text-white{% else %}border border-gray-300 text-gray-700 hover:bg-blue-50 hover:border-blue-500{% endif %}">{{ num }}</a>
                     {% endfor %}
                 {% else %}
                     {# Dynamic pagination for many pages #}
@@ -271,38 +363,38 @@
                         {# Near the start: show 1,2,3,4,5 ... last #}
                         {% for num in page_obj.paginator.page_range %}
                             {% if num <= 5 %}
-                            <a href="?page={{ num }}" class="w-10 h-10 flex items-center justify-center rounded-md text-sm font-semibold {% if page_obj.number == num %}bg-blue-600 text-white{% else %}border border-gray-300 text-gray-700 hover:bg-blue-50 hover:border-blue-500{% endif %}">{{ num }}</a>
+                            <a href="?page={{ num }}{% if scheduled_jobs.number != 1 %}&sched_page={{ scheduled_jobs.number }}{% endif %}" class="w-10 h-10 flex items-center justify-center rounded-md text-sm font-semibold {% if page_obj.number == num %}bg-blue-600 text-white{% else %}border border-gray-300 text-gray-700 hover:bg-blue-50 hover:border-blue-500{% endif %}">{{ num }}</a>
                             {% endif %}
                         {% endfor %}
                         <span class="px-2 text-gray-500">...</span>
-                        <a href="?page={{ page_obj.paginator.num_pages }}" class="w-10 h-10 flex items-center justify-center rounded-md text-sm font-semibold border border-gray-300 text-gray-700 hover:bg-blue-50 hover:border-blue-500">{{ page_obj.paginator.num_pages }}</a>
+                        <a href="?page={{ page_obj.paginator.num_pages }}{% if scheduled_jobs.number != 1 %}&sched_page={{ scheduled_jobs.number }}{% endif %}" class="w-10 h-10 flex items-center justify-center rounded-md text-sm font-semibold border border-gray-300 text-gray-700 hover:bg-blue-50 hover:border-blue-500">{{ page_obj.paginator.num_pages }}</a>
                     {% elif page_obj.number > page_obj.paginator.num_pages|add:"-4" %}
                         {# Near the end: show 1 ... last-4,last-3,last-2,last-1,last #}
-                        <a href="?page=1" class="w-10 h-10 flex items-center justify-center rounded-md text-sm font-semibold border border-gray-300 text-gray-700 hover:bg-blue-50 hover:border-blue-500">1</a>
+                        <a href="?page=1{% if scheduled_jobs.number != 1 %}&sched_page={{ scheduled_jobs.number }}{% endif %}" class="w-10 h-10 flex items-center justify-center rounded-md text-sm font-semibold border border-gray-300 text-gray-700 hover:bg-blue-50 hover:border-blue-500">1</a>
                         <span class="px-2 text-gray-500">...</span>
                         {% for num in page_obj.paginator.page_range %}
                             {% if num > page_obj.paginator.num_pages|add:"-5" %}
-                            <a href="?page={{ num }}" class="w-10 h-10 flex items-center justify-center rounded-md text-sm font-semibold {% if page_obj.number == num %}bg-blue-600 text-white{% else %}border border-gray-300 text-gray-700 hover:bg-blue-50 hover:border-blue-500{% endif %}">{{ num }}</a>
+                            <a href="?page={{ num }}{% if scheduled_jobs.number != 1 %}&sched_page={{ scheduled_jobs.number }}{% endif %}" class="w-10 h-10 flex items-center justify-center rounded-md text-sm font-semibold {% if page_obj.number == num %}bg-blue-600 text-white{% else %}border border-gray-300 text-gray-700 hover:bg-blue-50 hover:border-blue-500{% endif %}">{{ num }}</a>
                             {% endif %}
                         {% endfor %}
                     {% else %}
                         {# In the middle: show 1 ... current-1,current,current+1 ... last #}
-                        <a href="?page=1" class="w-10 h-10 flex items-center justify-center rounded-md text-sm font-semibold border border-gray-300 text-gray-700 hover:bg-blue-50 hover:border-blue-500">1</a>
+                        <a href="?page=1{% if scheduled_jobs.number != 1 %}&sched_page={{ scheduled_jobs.number }}{% endif %}" class="w-10 h-10 flex items-center justify-center rounded-md text-sm font-semibold border border-gray-300 text-gray-700 hover:bg-blue-50 hover:border-blue-500">1</a>
                         <span class="px-2 text-gray-500">...</span>
                         {% for num in page_obj.paginator.page_range %}
                             {% with prev_page=page_obj.number|add:"-1" next_page=page_obj.number|add:"1" %}
                             {% if num == prev_page or num == page_obj.number or num == next_page %}
-                            <a href="?page={{ num }}" class="w-10 h-10 flex items-center justify-center rounded-md text-sm font-semibold {% if page_obj.number == num %}bg-blue-600 text-white{% else %}border border-gray-300 text-gray-700 hover:bg-blue-50 hover:border-blue-500{% endif %}">{{ num }}</a>
+                            <a href="?page={{ num }}{% if scheduled_jobs.number != 1 %}&sched_page={{ scheduled_jobs.number }}{% endif %}" class="w-10 h-10 flex items-center justify-center rounded-md text-sm font-semibold {% if page_obj.number == num %}bg-blue-600 text-white{% else %}border border-gray-300 text-gray-700 hover:bg-blue-50 hover:border-blue-500{% endif %}">{{ num }}</a>
                             {% endif %}
                             {% endwith %}
                         {% endfor %}
                         <span class="px-2 text-gray-500">...</span>
-                        <a href="?page={{ page_obj.paginator.num_pages }}" class="w-10 h-10 flex items-center justify-center rounded-md text-sm font-semibold border border-gray-300 text-gray-700 hover:bg-blue-50 hover:border-blue-500">{{ page_obj.paginator.num_pages }}</a>
+                        <a href="?page={{ page_obj.paginator.num_pages }}{% if scheduled_jobs.number != 1 %}&sched_page={{ scheduled_jobs.number }}{% endif %}" class="w-10 h-10 flex items-center justify-center rounded-md text-sm font-semibold border border-gray-300 text-gray-700 hover:bg-blue-50 hover:border-blue-500">{{ page_obj.paginator.num_pages }}</a>
                     {% endif %}
                 {% endif %}
 
                 {% if page_obj.has_next %}
-                <a href="?page={{ page_obj.next_page_number }}" class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold bg-white hover:bg-gray-50">Next</a>
+                <a href="?page={{ page_obj.next_page_number }}{% if scheduled_jobs.number != 1 %}&sched_page={{ scheduled_jobs.number }}{% endif %}" class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold bg-white hover:bg-gray-50">Next</a>
                 {% else %}
                 <span class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold opacity-50 cursor-not-allowed bg-gray-100">Next</span>
                 {% endif %}
@@ -2362,14 +2454,14 @@
     </div>
 </div>
 
-<!-- D3.js for Ridge Chart -->
+<!-- D3.js for Bubble Chart -->
 <script src="https://d3js.org/d3.v7.min.js"></script>
 
 <script>
 // ============================================================================
-// Ridge Chart Data and Configuration
+// Bubble Chart Data and Configuration
 // ============================================================================
-const ridgeChartData = {{ ridge_chart_data|safe }};
+const bubbleChartData = {{ bubble_chart_data|safe }};
 
 // ============================================================================
 // KPI Formatting Utilities
@@ -2475,17 +2567,30 @@ function initKPIValues() {
 }
 
 // ============================================================================
-// 3D Perspective Histogram Chart Implementation
+// Bubble Chart Implementation
 // ============================================================================
 
-function initRidgeChart() {
-    const container = document.getElementById('ridgeChartContainer');
-    const loading = document.getElementById('ridgeChartLoading');
-    const empty = document.getElementById('ridgeChartEmpty');
-    const svg = document.getElementById('ridgeChart');
+// Color palettes for status with gradient support (light to dark based on size)
+const statusColors = {
+    completed: { light: '#86EFAC', dark: '#166534' },  // green-300 → green-800
+    partial:   { light: '#FED7AA', dark: '#9A3412' },  // orange-200 → orange-800
+    failed:    { light: '#FCA5A5', dark: '#991B1B' },  // red-300 → red-800
+};
+
+// Get color based on status and normalized size (0-1)
+function getBubbleColor(status, normalizedSize) {
+    const palette = statusColors[status] || statusColors.completed;
+    return d3.interpolateRgb(palette.light, palette.dark)(normalizedSize);
+}
+
+function initBubbleChart() {
+    const container = document.getElementById('bubbleChartContainer');
+    const loading = document.getElementById('bubbleChartLoading');
+    const empty = document.getElementById('bubbleChartEmpty');
+    const svg = document.getElementById('bubbleChart');
 
     // Check if we have any data
-    const hasData = ridgeChartData.data.some(job => job.runs && job.runs.length > 0);
+    const hasData = bubbleChartData.runs && bubbleChartData.runs.length > 0;
 
     if (!hasData) {
         loading.classList.add('hidden');
@@ -2498,85 +2603,38 @@ function initRidgeChart() {
     empty.classList.add('hidden');
     svg.classList.remove('hidden');
 
-    renderRidgeChart();
+    renderBubbleChart();
 }
 
-function renderRidgeChart() {
-    const svgElement = d3.select('#ridgeChart');
+function renderBubbleChart() {
+    const svgElement = d3.select('#bubbleChart');
     svgElement.selectAll('*').remove();
 
-    const container = document.getElementById('ridgeChartContainer');
+    const container = document.getElementById('bubbleChartContainer');
     const containerWidth = container.clientWidth;
 
-    // Chart dimensions for 3D perspective histogram (adjusted for dashboard layout)
-    const margin = { top: 20, right: 30, bottom: 35, left: 120 };
+    // Chart dimensions - fixed height to fill the container (320px - padding - header)
+    const margin = { top: 15, right: 30, bottom: 40, left: 130 };
     const width = containerWidth - margin.left - margin.right;
-    const height = 160;
 
-    // 3D perspective parameters
-    const perspectiveSkew = 0.15; // Horizontal skew for depth effect
+    // Fixed height for consistent layout (matches scheduled jobs table)
+    const numJobs = bubbleChartData.job_names.length;
+    const height = 260;  // Fixed height to fill container (370px - padding - header - margins)
 
-    const jobNames = ridgeChartData.job_names;
-    const hours = ridgeChartData.hours;
-    const numJobs = jobNames.length;
-
-    // Calculate ridge spacing
-    const ridgeSpacing = height / (numJobs + 1);
-    const maxBarHeight = ridgeSpacing * 2; // Max height a bar can reach
+    // Bubble size constraints
+    const minRadius = 4;
+    const maxRadius = 14;
 
     svgElement
         .attr('width', containerWidth)
         .attr('height', height + margin.top + margin.bottom);
 
-    const defs = svgElement.append('defs');
-
-    // Create gradients for each job row with depth shading
-    jobNames.forEach((jobName, jobIndex) => {
-        const depthFactor = jobIndex / Math.max(numJobs - 1, 1);
-
-        // Success gradient (green) with depth shading
-        const successGrad = defs.append('linearGradient')
-            .attr('id', `successGradient-${jobIndex}`)
-            .attr('x1', '0%')
-            .attr('y1', '100%')
-            .attr('x2', '0%')
-            .attr('y2', '0%');
-
-        const successBaseColor = d3.interpolateRgb('#166534', '#22C55E')(depthFactor);
-        const successLightColor = d3.interpolateRgb('#15803d', '#86EFAC')(depthFactor);
-
-        successGrad.append('stop')
-            .attr('offset', '0%')
-            .attr('stop-color', successBaseColor)
-            .attr('stop-opacity', 0.95);
-        successGrad.append('stop')
-            .attr('offset', '100%')
-            .attr('stop-color', successLightColor)
-            .attr('stop-opacity', 0.8);
-
-        // Failed gradient (red) with depth shading
-        const failedGrad = defs.append('linearGradient')
-            .attr('id', `failedGradient-${jobIndex}`)
-            .attr('x1', '0%')
-            .attr('y1', '100%')
-            .attr('x2', '0%')
-            .attr('y2', '0%');
-
-        const failedBaseColor = d3.interpolateRgb('#991B1B', '#EF4444')(depthFactor);
-        const failedLightColor = d3.interpolateRgb('#B91C1C', '#FCA5A5')(depthFactor);
-
-        failedGrad.append('stop')
-            .attr('offset', '0%')
-            .attr('stop-color', failedBaseColor)
-            .attr('stop-opacity', 0.95);
-        failedGrad.append('stop')
-            .attr('offset', '100%')
-            .attr('stop-color', failedLightColor)
-            .attr('stop-opacity', 0.8);
-    });
-
     const svg = svgElement.append('g')
         .attr('transform', `translate(${margin.left},${margin.top})`);
+
+    const jobNames = bubbleChartData.job_names;
+    const runs = bubbleChartData.runs;
+    const durationStats = bubbleChartData.duration_stats;
 
     if (jobNames.length === 0) {
         svg.append('text')
@@ -2588,234 +2646,146 @@ function renderRidgeChart() {
         return;
     }
 
-    // X scale - hours (time series, oldest left, newest right)
-    const xScale = d3.scalePoint()
-        .domain(hours)
-        .range([0, width])
-        .padding(0.02);
+    // Parse date range
+    const startDate = new Date(bubbleChartData.date_range.start);
+    const endDate = new Date(bubbleChartData.date_range.end);
 
-    // Build aggregated data per hour for each job (sum success and failed separately)
-    // Structure: {job_name: {hour: {success: X, failed: Y}}}
-    const aggregatedData = {};
-    ridgeChartData.data.forEach(job => {
-        aggregatedData[job.job_name] = {};
-        hours.forEach(hour => {
-            aggregatedData[job.job_name][hour] = { success: 0, failed: 0 };
-        });
-        job.runs.forEach(run => {
-            if (aggregatedData[job.job_name][run.hour]) {
-                if (run.status === 'success') {
-                    aggregatedData[job.job_name][run.hour].success += run.duration;
-                } else {
-                    aggregatedData[job.job_name][run.hour].failed += run.duration;
-                }
-            }
-        });
-    });
+    // X scale - time (5 days)
+    const xScale = d3.scaleTime()
+        .domain([startDate, endDate])
+        .range([0, width]);
 
-    // Find max duration for scaling heights
-    let maxDuration = 0;
-    Object.values(aggregatedData).forEach(jobData => {
-        Object.values(jobData).forEach(hourData => {
-            const total = hourData.success + hourData.failed;
-            if (total > maxDuration) maxDuration = total;
-        });
-    });
-    maxDuration = maxDuration || 1;
+    // Y scale - job names (categorical with padding)
+    const yScale = d3.scaleBand()
+        .domain(jobNames)
+        .range([0, height])
+        .padding(0.3);
 
-    // Height scale using log transformation
-    const heightScale = d3.scaleLog()
-        .domain([1, Math.max(maxDuration, 2)])
-        .range([0, maxBarHeight])
+    // Size scale - log scale for duration to radius
+    const maxDuration = Math.max(durationStats.max, 1);
+    const sizeScale = d3.scaleLog()
+        .domain([1, maxDuration + 1])
+        .range([minRadius, maxRadius])
         .clamp(true);
 
-    const getScaledHeight = (duration) => {
-        if (duration <= 0) return 0;
-        return heightScale(1 + duration);
+    const getRadius = (duration) => sizeScale(Math.max(1, duration + 1));
+
+    // Normalized size for color gradient (0-1)
+    const getNormalizedSize = (duration) => {
+        if (maxDuration <= 1) return 0.5;
+        const logMin = Math.log(1);
+        const logMax = Math.log(maxDuration + 1);
+        const logVal = Math.log(Math.max(1, duration + 1));
+        return (logVal - logMin) / (logMax - logMin);
     };
 
-    // Area generator for smooth curves
-    const areaGenerator = d3.area()
-        .x(d => d.x)
-        .y0(d => d.y0)
-        .y1(d => d.y1)
-        .curve(d3.curveBasis); // Smooth curve like the reference
-
-    // Draw job rows from back to front (first job at back, last job at front)
-    ridgeChartData.data.forEach((job, jobIndex) => {
-        const depthFactor = jobIndex / Math.max(numJobs - 1, 1);
-
-        // Calculate baseline Y position for this job's row
-        const baselineY = margin.top + ridgeSpacing * (jobIndex + 1);
-
-        // Horizontal offset for perspective
-        const perspectiveOffset = (1 - depthFactor) * width * perspectiveSkew * 0.1;
-
-        // Create row group
-        const rowGroup = svg.append('g')
-            .attr('class', `row-${jobIndex}`)
-            .attr('transform', `translate(0, ${-margin.top})`);
-
-        // Draw baseline
-        rowGroup.append('line')
-            .attr('x1', -perspectiveOffset)
-            .attr('x2', width - perspectiveOffset)
-            .attr('y1', baselineY)
-            .attr('y2', baselineY)
-            .attr('stroke', d3.interpolateRgb('#9CA3AF', '#E5E7EB')(depthFactor))
-            .attr('stroke-width', 0.5);
-
-        // Build area data points for success and failed
-        const successAreaData = [];
-        const failedAreaData = [];
-        const jobAggData = aggregatedData[job.job_name];
-
-        hours.forEach(hour => {
-            const x = xScale(hour) - perspectiveOffset;
-            const hourData = jobAggData[hour];
-            const successHeight = getScaledHeight(hourData.success);
-            const failedHeight = getScaledHeight(hourData.failed);
-
-            successAreaData.push({
-                x: x,
-                y0: baselineY,
-                y1: baselineY - successHeight,
-                hour: hour,
-                duration: hourData.success
-            });
-
-            // Failed area stacks on top of success
-            failedAreaData.push({
-                x: x,
-                y0: baselineY - successHeight,
-                y1: baselineY - successHeight - failedHeight,
-                hour: hour,
-                duration: hourData.failed
-            });
-        });
-
-        // Draw success area (green)
-        const hasSuccessData = successAreaData.some(d => d.duration > 0);
-        if (hasSuccessData) {
-            rowGroup.append('path')
-                .datum(successAreaData)
-                .attr('fill', `url(#successGradient-${jobIndex})`)
-                .attr('stroke', d3.interpolateRgb('#166534', '#22C55E')(depthFactor))
-                .attr('stroke-width', 1)
-                .attr('d', areaGenerator)
-                .attr('opacity', 0.9)
-                .style('cursor', 'pointer')
-                .on('mousemove', function(event) {
-                    const [mouseX] = d3.pointer(event);
-                    const closestPoint = findClosestPoint(successAreaData, mouseX + perspectiveOffset);
-                    if (closestPoint && closestPoint.duration > 0) {
-                        const hourDate = new Date(closestPoint.hour.replace(' ', 'T'));
-                        const formattedTime = hourDate.toLocaleString('en-US', {
-                            month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'
-                        });
-                        showTooltip(event, `
-                            <div class="font-semibold">${job.job_name}</div>
-                            <div class="text-gray-300">${formattedTime}</div>
-                            <div class="text-green-400">Success: ${formatDuration(closestPoint.duration)}</div>
-                        `);
-                    }
-                })
-                .on('mouseleave', hideTooltip);
-        }
-
-        // Draw failed area (red) stacked on top
-        const hasFailedData = failedAreaData.some(d => d.duration > 0);
-        if (hasFailedData) {
-            rowGroup.append('path')
-                .datum(failedAreaData)
-                .attr('fill', `url(#failedGradient-${jobIndex})`)
-                .attr('stroke', d3.interpolateRgb('#991B1B', '#EF4444')(depthFactor))
-                .attr('stroke-width', 1)
-                .attr('d', areaGenerator)
-                .attr('opacity', 0.9)
-                .style('cursor', 'pointer')
-                .on('mousemove', function(event) {
-                    const [mouseX] = d3.pointer(event);
-                    const closestPoint = findClosestPoint(failedAreaData, mouseX + perspectiveOffset);
-                    if (closestPoint && closestPoint.duration > 0) {
-                        const hourDate = new Date(closestPoint.hour.replace(' ', 'T'));
-                        const formattedTime = hourDate.toLocaleString('en-US', {
-                            month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'
-                        });
-                        showTooltip(event, `
-                            <div class="font-semibold">${job.job_name}</div>
-                            <div class="text-gray-300">${formattedTime}</div>
-                            <div class="text-red-400">Failed: ${formatDuration(closestPoint.duration)}</div>
-                        `);
-                    }
-                })
-                .on('mouseleave', hideTooltip);
-        }
-
-        // Add job name label on the left
-        rowGroup.append('text')
-            .attr('x', -10 - perspectiveOffset)
-            .attr('y', baselineY)
-            .attr('text-anchor', 'end')
-            .attr('dominant-baseline', 'middle')
-            .attr('fill', d3.interpolateRgb('#4B5563', '#6B7280')(depthFactor))
-            .attr('font-size', `${10 + depthFactor * 2}px`)
-            .attr('font-weight', depthFactor > 0.5 ? '500' : '400')
-            .text(job.job_name.length > 18 ? job.job_name.substring(0, 16) + '...' : job.job_name);
+    // Draw horizontal baselines for each job
+    jobNames.forEach((jobName) => {
+        const y = yScale(jobName) + yScale.bandwidth() / 2;
+        svg.append('line')
+            .attr('x1', 0)
+            .attr('x2', width)
+            .attr('y1', y)
+            .attr('y2', y)
+            .attr('stroke', '#E5E7EB')
+            .attr('stroke-width', 1);
     });
 
-    // X axis at the bottom - show only day boundaries
-    const dayBoundaries = hours.filter(h => h.endsWith('00:00'));
-    const xAxis = d3.axisBottom(xScale)
-        .tickValues(dayBoundaries)
-        .tickFormat(d => {
-            const date = new Date(d.replace(' ', 'T'));
-            return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    // Draw job name labels on the left
+    jobNames.forEach((jobName) => {
+        const y = yScale(jobName) + yScale.bandwidth() / 2;
+        svg.append('text')
+            .attr('x', -10)
+            .attr('y', y)
+            .attr('text-anchor', 'end')
+            .attr('dominant-baseline', 'middle')
+            .attr('fill', '#4B5563')
+            .attr('font-size', '11px')
+            .text(jobName.length > 18 ? jobName.substring(0, 16) + '...' : jobName);
+    });
+
+    // Draw bubbles for each run
+    runs.forEach((run) => {
+        const runDate = new Date(run.started_at);
+        const x = xScale(runDate);
+        const y = yScale(run.job_name) + yScale.bandwidth() / 2;
+        const radius = getRadius(run.duration);
+        const normalizedSize = getNormalizedSize(run.duration);
+        const color = getBubbleColor(run.status, normalizedSize);
+        const hasData = run.rows_loaded > 0;
+
+        // Draw the bubble
+        const bubble = svg.append('circle')
+            .attr('cx', x)
+            .attr('cy', y)
+            .attr('r', radius)
+            .attr('fill', hasData ? color : 'white')
+            .attr('stroke', color)
+            .attr('stroke-width', hasData ? 1 : 2)
+            .attr('opacity', 0.9)
+            .style('cursor', 'pointer');
+
+        // Add hover events
+        bubble.on('mouseenter', function(event) {
+            d3.select(this)
+                .attr('opacity', 1)
+                .attr('stroke-width', hasData ? 2 : 3);
+
+            const formattedTime = runDate.toLocaleString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit'
+            });
+
+            const statusLabel = run.status.charAt(0).toUpperCase() + run.status.slice(1);
+            const statusColorClass = run.status === 'completed' ? 'text-green-400' :
+                                    run.status === 'partial' ? 'text-orange-400' : 'text-red-400';
+
+            showBubbleTooltip(event, `
+                <div class="font-semibold">${run.job_name}</div>
+                <div class="text-gray-300">${formattedTime}</div>
+                <div class="mt-1">Duration: ${formatDuration(run.duration)}</div>
+                <div>Rows: ${run.rows_loaded.toLocaleString()}</div>
+                <div class="${statusColorClass}">Status: ${statusLabel}</div>
+            `);
+        })
+        .on('mouseleave', function() {
+            d3.select(this)
+                .attr('opacity', 0.9)
+                .attr('stroke-width', hasData ? 1 : 2);
+            hideBubbleTooltip();
         });
+    });
+
+    // X axis at the bottom - show day boundaries
+    const xAxis = d3.axisBottom(xScale)
+        .ticks(d3.timeDay.every(1))
+        .tickFormat(d3.timeFormat('%b %d'));
 
     svg.append('g')
-        .attr('transform', `translate(0,${height - 10})`)
+        .attr('transform', `translate(0,${height})`)
         .call(xAxis)
         .selectAll('text')
         .style('text-anchor', 'middle')
-        .style('font-size', '10px');
+        .style('font-size', '10px')
+        .attr('fill', '#6B7280');
 
-    // Add hour markers (every 6 hours)
-    const hourMarkers = hours.filter(h => {
-        const hour = parseInt(h.split(' ')[1].split(':')[0]);
-        return hour % 6 === 0 && hour !== 0;
-    });
+    // Add hour markers (every 6 hours) as minor ticks
+    const hourTicks = d3.timeHour.range(startDate, endDate, 6);
 
     svg.append('g')
-        .attr('transform', `translate(0,${height - 10})`)
+        .attr('transform', `translate(0,${height})`)
         .selectAll('.hour-tick')
-        .data(hourMarkers)
+        .data(hourTicks.filter(d => d.getHours() !== 0)) // Exclude midnight (already shown)
         .enter()
         .append('text')
         .attr('x', d => xScale(d))
-        .attr('y', 25)
+        .attr('y', 28)
         .attr('text-anchor', 'middle')
         .attr('fill', '#9CA3AF')
         .attr('font-size', '8px')
-        .text(d => {
-            const hour = parseInt(d.split(' ')[1].split(':')[0]);
-            return `${hour}:00`;
-        });
-
-}
-
-// Helper function to find closest data point to mouse X position
-function findClosestPoint(data, mouseX) {
-    let closest = null;
-    let minDist = Infinity;
-    data.forEach(d => {
-        const dist = Math.abs(d.x - mouseX);
-        if (dist < minDist) {
-            minDist = dist;
-            closest = d;
-        }
-    });
-    return minDist < 30 ? closest : null; // Only return if within 30px
+        .text(d => d3.timeFormat('%H:00')(d));
 }
 
 function formatDuration(seconds) {
@@ -2831,12 +2801,12 @@ function formatDuration(seconds) {
     return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
 }
 
-function showTooltip(event, html) {
-    const tooltip = document.getElementById('ridgeChartTooltip');
+function showBubbleTooltip(event, html) {
+    const tooltip = document.getElementById('bubbleChartTooltip');
     tooltip.innerHTML = html;
     tooltip.classList.remove('hidden');
 
-    const container = document.getElementById('ridgeChartContainer');
+    const container = document.getElementById('bubbleChartContainer');
     const containerRect = container.getBoundingClientRect();
     const tooltipRect = tooltip.getBoundingClientRect();
 
@@ -2855,8 +2825,8 @@ function showTooltip(event, html) {
     tooltip.style.top = `${y}px`;
 }
 
-function hideTooltip() {
-    const tooltip = document.getElementById('ridgeChartTooltip');
+function hideBubbleTooltip() {
+    const tooltip = document.getElementById('bubbleChartTooltip');
     tooltip.classList.add('hidden');
 }
 
@@ -2871,16 +2841,16 @@ document.addEventListener('DOMContentLoaded', function() {
     }, 50);
 
     initKPIValues();
-    initRidgeChart();
+    initBubbleChart();
 
     // Redraw chart on window resize
     let resizeTimeout;
     window.addEventListener('resize', function() {
         clearTimeout(resizeTimeout);
         resizeTimeout = setTimeout(function() {
-            const hasData = ridgeChartData.data.some(job => job.runs && job.runs.length > 0);
+            const hasData = bubbleChartData.runs && bubbleChartData.runs.length > 0;
             if (hasData) {
-                renderRidgeChart();
+                renderBubbleChart();
             }
         }, 250);
     });

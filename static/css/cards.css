@@ -374,18 +374,198 @@
 .etl-dashboard-grid {
     display: flex;
     flex-direction: column;
-    gap: 0;
+    gap: 16px;
 }
 
-/* Row 1: KPIs + Chart side by side (35% / 65% split) */
-.etl-dashboard-row-1 {
+/* Row 1: KPI Cards in horizontal row (6 cards) */
+.etl-kpi-row {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 12px;
+}
+
+/* Row 2: Scheduled Jobs (left) + Chart (right) side by side (35% / 65% split) */
+.etl-dashboard-row-2 {
     display: grid;
     grid-template-columns: 35fr 65fr;
     gap: 24px;
     align-items: stretch;
 }
 
-/* KPI Section: 3 rows × 2 columns grid of cards */
+/* Scheduled Jobs Section */
+.etl-scheduled-section {
+    display: flex;
+    flex-direction: column;
+    background-color: #ffffff;
+    border-radius: 8px;
+    padding: 16px;
+    border: 1px solid #e5e7eb;
+    height: 370px;  /* Fixed height to fit 5 jobs + pagination */
+}
+
+.etl-scheduled-section h3 {
+    font-size: 14px;
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 12px;
+}
+
+/* Scheduled Jobs Table */
+.scheduled-jobs-table {
+    width: 100%;
+    font-size: 12px;
+    flex: 1;
+}
+
+.scheduled-jobs-table-wrapper {
+    flex: 1;
+    overflow-y: auto;
+}
+
+.scheduled-jobs-table thead th {
+    text-align: left;
+    font-weight: 600;
+    color: #6b7280;
+    padding: 8px 6px;
+    border-bottom: 1px solid #e5e7eb;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+}
+
+.scheduled-jobs-table tbody td {
+    padding: 10px 6px;
+    border-bottom: 1px solid #f3f4f6;
+    color: #374151;
+    vertical-align: middle;
+}
+
+.scheduled-jobs-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.scheduled-jobs-table tbody tr:hover {
+    background-color: #f9fafb;
+}
+
+/* Job name column */
+.scheduled-jobs-table .job-name {
+    font-weight: 500;
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Schedule column */
+.scheduled-jobs-table .job-schedule {
+    color: #6b7280;
+    font-size: 11px;
+}
+
+/* Next run column */
+.scheduled-jobs-table .job-next-run {
+    color: #374151;
+    font-size: 11px;
+}
+
+/* State badges */
+.badge-enabled {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 500;
+    background-color: #d1fae5;
+    color: #065f46;
+}
+
+.badge-paused {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 500;
+    background-color: #f3f4f6;
+    color: #6b7280;
+}
+
+/* Scheduled Jobs Pagination (compact) */
+.scheduled-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: 12px;
+    margin-top: auto;
+    border-top: 1px solid #e5e7eb;
+    font-size: 11px;
+}
+
+.scheduled-pagination .page-info {
+    color: #6b7280;
+}
+
+.scheduled-pagination .page-controls {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.scheduled-pagination .page-btn {
+    padding: 4px 8px;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    background: white;
+    color: #374151;
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    text-decoration: none;
+}
+
+.scheduled-pagination .page-btn:hover {
+    background-color: #f3f4f6;
+    border-color: #9ca3af;
+}
+
+.scheduled-pagination .page-btn.active {
+    background-color: #2563eb;
+    color: white;
+    border-color: #2563eb;
+}
+
+.scheduled-pagination .page-btn.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+/* Empty state for scheduled jobs */
+.scheduled-empty-state {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 24px;
+    color: #9ca3af;
+}
+
+.scheduled-empty-state i {
+    font-size: 24px;
+    margin-bottom: 8px;
+}
+
+.scheduled-empty-state p {
+    font-size: 12px;
+}
+
+/* DEPRECATED: Old KPI section layout (kept for backward compatibility) */
 .etl-kpi-section {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
@@ -393,11 +573,19 @@
     gap: 10px;
 }
 
+/* DEPRECATED: Old row layout */
+.etl-dashboard-row-1 {
+    display: grid;
+    grid-template-columns: 35fr 65fr;
+    gap: 24px;
+    align-items: stretch;
+}
+
 /* Chart Section */
 .etl-chart-section {
     display: flex;
     flex-direction: column;
-    min-height: 240px;
+    height: 370px;  /* Fixed height to match scheduled jobs */
     background-color: #ffffff;
     border-radius: 8px;
     padding: 16px;
@@ -504,10 +692,11 @@
    RESPONSIVE STYLES
    ============================================================================ */
 
-/* Tablet breakpoint */
-@media (max-width: 1280px) {
-    .etl-dashboard-row-1 {
-        grid-template-columns: 40fr 60fr;
+/* Large screens */
+@media (max-width: 1400px) {
+    .etl-kpi-row {
+        grid-template-columns: repeat(6, 1fr);
+        gap: 10px;
     }
 
     .kpi-card {
@@ -530,16 +719,31 @@
     }
 }
 
+/* Tablet breakpoint */
+@media (max-width: 1280px) {
+    .etl-dashboard-row-2 {
+        grid-template-columns: 40fr 60fr;
+    }
+
+    .etl-kpi-row {
+        grid-template-columns: repeat(3, 1fr);
+    }
+
+    /* Deprecated */
+    .etl-dashboard-row-1 {
+        grid-template-columns: 40fr 60fr;
+    }
+}
+
 /* Stack layout on smaller screens */
 @media (max-width: 1024px) {
-    .etl-dashboard-row-1 {
+    .etl-dashboard-row-2 {
         grid-template-columns: 1fr;
         gap: 20px;
     }
 
-    .etl-kpi-section {
+    .etl-kpi-row {
         grid-template-columns: repeat(3, 1fr);
-        grid-template-rows: repeat(2, 1fr);
     }
 
     .kpi-card {
@@ -564,13 +768,27 @@
     .etl-chart-section {
         min-height: 280px;
     }
+
+    .etl-scheduled-section {
+        min-height: auto;
+    }
+
+    /* Deprecated */
+    .etl-dashboard-row-1 {
+        grid-template-columns: 1fr;
+        gap: 20px;
+    }
+
+    .etl-kpi-section {
+        grid-template-columns: repeat(3, 1fr);
+        grid-template-rows: repeat(2, 1fr);
+    }
 }
 
 /* Mobile: 2 columns for KPIs */
 @media (max-width: 768px) {
-    .etl-kpi-section {
+    .etl-kpi-row {
         grid-template-columns: repeat(2, 1fr);
-        grid-template-rows: repeat(3, 1fr);
     }
 
     .kpi-card {
@@ -590,5 +808,11 @@
 
     .kpi-label {
         font-size: 9px;
+    }
+
+    /* Deprecated */
+    .etl-kpi-section {
+        grid-template-columns: repeat(2, 1fr);
+        grid-template-rows: repeat(3, 1fr);
     }
 }

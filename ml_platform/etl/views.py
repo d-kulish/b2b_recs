@@ -22,6 +22,40 @@ from ml_platform.models import (
 )
 
 
+def _get_schedule_display(source):
+    """
+    Convert schedule_type and related fields to human-readable format.
+    Examples: "Daily 08:00", "Hourly :15", "Weekly Mon 09:00"
+    """
+    schedule_type = source.schedule_type
+
+    # Try to get schedule details from first table
+    first_table = source.tables.first()
+    time_str = ""
+    if first_table and first_table.schedule_time:
+        time_str = first_table.schedule_time.strftime('%H:%M')
+
+    if schedule_type == 'hourly':
+        minute = first_table.schedule_minute if first_table and first_table.schedule_minute is not None else 0
+        return f"Hourly :{minute:02d}"
+    elif schedule_type == 'daily':
+        return f"Daily {time_str}" if time_str else "Daily"
+    elif schedule_type == 'weekly':
+        day = first_table.schedule_day_of_week if first_table and first_table.schedule_day_of_week is not None else 0
+        days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+        day_name = days[day] if 0 <= day <= 6 else 'Mon'
+        return f"Weekly {day_name} {time_str}" if time_str else f"Weekly {day_name}"
+    elif schedule_type == 'monthly':
+        day = first_table.schedule_day_of_month if first_table and first_table.schedule_day_of_month is not None else 1
+        # Add ordinal suffix
+        if 10 <= day % 100 <= 20:
+            suffix = 'th'
+        else:
+            suffix = {1: 'st', 2: 'nd', 3: 'rd'}.get(day % 10, 'th')
+        return f"Monthly {day}{suffix} {time_str}" if time_str else f"Monthly {day}{suffix}"
+    return "Manual"
+
+
 def sync_running_etl_runs_with_cloud_run(running_etl_runs):
     """
     Sync ETL run statuses with Cloud Run execution statuses.
@@ -199,65 +233,71 @@ def model_etl(request, model_id):
     page_number = request.GET.get('page', 1)
     page_obj = paginator.get_page(page_number)
 
-    # Prepare ridge chart data for ETL Duration Analysis (3D histogram view)
-    # Get all runs from the last 5 days with hourly granularity
-    # Each individual run is shown as a separate histogram bar (not aggregated)
-    ridge_cutoff_date = timezone.now() - timedelta(days=5)
-    all_runs_3_days = model.etl_runs.filter(
-        started_at__gte=ridge_cutoff_date,
+    # Prepare bubble chart data for ETL Job Runs visualization
+    # Shows individual runs as bubbles with size based on duration
+    bubble_cutoff_date = timezone.now() - timedelta(days=5)
+    all_runs_5_days = model.etl_runs.filter(
+        started_at__gte=bubble_cutoff_date,
         status__in=['completed', 'partial', 'failed']
     ).select_related('data_source').order_by('started_at')
 
-    # Build data structure for ridge chart - grouped by job name
-    # Each job has a list of individual runs with their exact hour timestamp
-    # Structure: {job_name: [{hour: 'YYYY-MM-DD HH:00', duration: X, status: 'success'|'failed'}, ...]}
-    ridge_data_by_job = defaultdict(list)
-
-    # Collect all unique job names for Y-axis
+    # Build data structure for bubble chart
+    # Each run is an individual bubble with position, size, color, and fill
+    bubble_runs = []
     all_job_names = set()
+    durations = []
 
-    for run in all_runs_3_days:
+    for run in all_runs_5_days:
         # Skip runs without a data source (Unknown jobs)
         if not run.data_source or not run.started_at:
             continue
 
-        # Format hour as 'YYYY-MM-DD HH:00'
-        hour_str = run.started_at.strftime('%Y-%m-%d %H:00')
         job_name = run.data_source.name
         duration = run.get_duration_seconds() or 0
-        is_success = run.status in ['completed', 'partial']
+        rows_loaded = run.total_rows_extracted or 0
+
+        # Map status to category: completed, partial, failed
+        if run.status == 'completed':
+            status = 'completed'
+        elif run.status == 'partial':
+            status = 'partial'
+        else:
+            status = 'failed'
 
         all_job_names.add(job_name)
-        ridge_data_by_job[job_name].append({
-            'hour': hour_str,
+        if duration > 0:
+            durations.append(duration)
+
+        bubble_runs.append({
+            'job_name': job_name,
+            'started_at': run.started_at.isoformat(),
             'duration': duration,
-            'status': 'success' if is_success else 'failed',
+            'status': status,
+            'rows_loaded': rows_loaded,
         })
 
-    # Generate all 120 hours (5 days * 24 hours) for consistent X-axis
-    all_hours = []
-    now = timezone.now()
-    # Start from 5 days ago at hour 0
-    start_time = now.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=4)
-    for i in range(120):  # 5 days * 24 hours
-        hour_time = start_time + timedelta(hours=i)
-        hour_str = hour_time.strftime('%Y-%m-%d %H:00')
-        all_hours.append(hour_str)
+    # Calculate duration statistics for frontend scaling
+    min_duration = min(durations) if durations else 1
+    max_duration = max(durations) if durations else 1
 
-    # Format data for frontend - grouped by job name with individual runs
-    ridge_chart_data = []
+    # Generate date range for X-axis
+    now = timezone.now()
+    start_date = (now - timedelta(days=4)).replace(hour=0, minute=0, second=0, microsecond=0)
+    end_date = now.replace(hour=23, minute=59, second=59, microsecond=0)
+
     sorted_job_names = sorted(list(all_job_names))
 
-    for job_name in sorted_job_names:
-        ridge_chart_data.append({
-            'job_name': job_name,
-            'runs': ridge_data_by_job[job_name],  # List of individual runs
-        })
-
-    ridge_chart_json = json.dumps({
-        'data': ridge_chart_data,
-        'hours': all_hours,
+    bubble_chart_json = json.dumps({
+        'runs': bubble_runs,
         'job_names': sorted_job_names,
+        'date_range': {
+            'start': start_date.isoformat(),
+            'end': end_date.isoformat(),
+        },
+        'duration_stats': {
+            'min': min_duration,
+            'max': max_duration,
+        },
     })
 
     # =========================================================================
@@ -322,6 +362,84 @@ def model_etl(request, model_id):
         'avg_duration_seconds': round(avg_duration_seconds),
     }
 
+    # =========================================================================
+    # Scheduled Jobs: Fetch Cloud Scheduler status for dashboard display
+    # =========================================================================
+    scheduled_jobs_list = []
+
+    # Get all scheduled data sources (non-manual with scheduler job name)
+    scheduled_sources = data_sources.filter(
+        schedule_type__in=['hourly', 'daily', 'weekly', 'monthly'],
+        cloud_scheduler_job_name__isnull=False
+    ).exclude(cloud_scheduler_job_name='')
+
+    if scheduled_sources.exists():
+        from django.conf import settings
+        import logging
+        logger = logging.getLogger(__name__)
+
+        project_id = getattr(settings, 'GCP_PROJECT_ID', os.getenv('GCP_PROJECT_ID'))
+        region = os.getenv('CLOUD_SCHEDULER_REGION', 'europe-central2')
+
+        if project_id:
+            try:
+                from ml_platform.utils.cloud_scheduler import CloudSchedulerManager
+                scheduler_manager = CloudSchedulerManager(project_id=project_id, region=region)
+
+                enabled_jobs = []
+                paused_jobs = []
+
+                for source in scheduled_sources:
+                    # Get schedule display string
+                    schedule_display = _get_schedule_display(source)
+
+                    # Fetch status from Cloud Scheduler
+                    try:
+                        status = scheduler_manager.get_schedule_status(source.cloud_scheduler_job_name)
+                        next_run_time = status.get('next_run_time') if status.get('success') else None
+                        state = status.get('state', 'UNKNOWN') if status.get('success') else 'UNKNOWN'
+                        is_paused = state == 'PAUSED'
+                    except Exception as e:
+                        logger.warning(f"Failed to get scheduler status for {source.name}: {e}")
+                        next_run_time = None
+                        state = 'UNKNOWN'
+                        is_paused = not source.is_enabled
+
+                    job_info = {
+                        'id': source.id,
+                        'name': source.name,
+                        'schedule_type': source.schedule_type,
+                        'schedule_display': schedule_display,
+                        'next_run_time': next_run_time,
+                        'state': state,
+                        'is_paused': is_paused,
+                    }
+
+                    if is_paused:
+                        paused_jobs.append(job_info)
+                    else:
+                        enabled_jobs.append(job_info)
+
+                # Sort: enabled by next_run_time, paused alphabetically
+                # Use naive datetime for fallback since next_run_time is now naive
+                from datetime import datetime as dt
+                far_future = dt(2099, 12, 31)
+                enabled_jobs.sort(key=lambda x: x['next_run_time'] or far_future)
+                paused_jobs.sort(key=lambda x: x['name'].lower())
+
+                # Combine: enabled first, then paused
+                scheduled_jobs_list = enabled_jobs + paused_jobs
+
+            except ImportError as e:
+                logger.warning(f"CloudSchedulerManager not available: {e}")
+            except Exception as e:
+                logger.warning(f"Failed to fetch Cloud Scheduler status: {e}")
+
+    # Paginate scheduled jobs (5 per page)
+    scheduled_paginator = Paginator(scheduled_jobs_list, 5)
+    sched_page_number = request.GET.get('sched_page', 1)
+    scheduled_jobs_page = scheduled_paginator.get_page(sched_page_number)
+
     context = {
         'model': model,
         'etl_config': etl_config,
@@ -333,8 +451,10 @@ def model_etl(request, model_id):
         'page_obj': page_obj,
         'has_any_runs': has_any_runs,
         'showing_last_30_days': True,
-        'ridge_chart_data': ridge_chart_json,
+        'bubble_chart_data': bubble_chart_json,
         'kpi_data': kpi_data,
+        'scheduled_jobs': scheduled_jobs_page,
+        'has_scheduled_jobs': len(scheduled_jobs_list) > 0,
     }
 
     return render(request, 'ml_platform/model_etl.html', context)

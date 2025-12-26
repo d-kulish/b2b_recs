@@ -543,10 +543,11 @@ def delete_source(request, source_id):
 
             delete_result = scheduler_manager.delete_etl_schedule(source.id)
             if not delete_result['success']:
-                # Log warning but don't block deletion - scheduler might already be gone
-                import logging
-                logger = logging.getLogger(__name__)
-                logger.warning(f"Failed to delete Cloud Scheduler job for source {source_id}: {delete_result['message']}")
+                # Scheduler deletion failed - block DataSource deletion to prevent orphaned jobs
+                return JsonResponse({
+                    'status': 'error',
+                    'message': f'Cannot delete ETL job: failed to delete scheduler. {delete_result["message"]}',
+                }, status=500)
 
         source.delete()
 
@@ -696,7 +697,14 @@ def edit_source(request, source_id):
             elif new_schedule_type != 'manual':
                 # Delete existing scheduler first
                 if source.cloud_scheduler_job_name:
-                    scheduler_manager.delete_etl_schedule(source.id)
+                    delete_result = scheduler_manager.delete_etl_schedule(source.id)
+                    if not delete_result['success']:
+                        return JsonResponse({
+                            'status': 'error',
+                            'message': f"Failed to update schedule: could not delete existing scheduler. {delete_result['message']}",
+                        }, status=500)
+                    # Clear the reference immediately after successful deletion
+                    source.cloud_scheduler_job_name = ''
 
                 # Build webhook URL
                 django_base_url = f"{request.scheme}://{request.get_host()}"

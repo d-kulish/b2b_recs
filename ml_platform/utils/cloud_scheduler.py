@@ -7,6 +7,7 @@ Manages Cloud Scheduler jobs for automated ETL execution.
 import logging
 from typing import Dict, Any, Optional
 from google.cloud import scheduler_v1
+from google.api_core import exceptions as google_exceptions
 from google.protobuf import duration_pb2
 import json
 
@@ -192,7 +193,10 @@ class CloudSchedulerManager:
             data_source_id: DataSource ID
 
         Returns:
-            Dict with success status and message
+            Dict with:
+                - success: bool
+                - not_found: bool (True if job was already deleted)
+                - message: str
         """
         try:
             scheduler_job_name = f"etl-job-{data_source_id}"
@@ -206,13 +210,24 @@ class CloudSchedulerManager:
 
             return {
                 'success': True,
+                'not_found': False,
                 'message': 'Scheduler deleted successfully'
+            }
+
+        except google_exceptions.NotFound:
+            # Job already deleted - this is acceptable
+            logger.info(f"Cloud Scheduler job already deleted: etl-job-{data_source_id}")
+            return {
+                'success': True,
+                'not_found': True,
+                'message': 'Scheduler already deleted'
             }
 
         except Exception as e:
             logger.error(f"Failed to delete Cloud Scheduler job: {str(e)}")
             return {
                 'success': False,
+                'not_found': False,
                 'message': f'Failed to delete scheduler: {str(e)}'
             }
 

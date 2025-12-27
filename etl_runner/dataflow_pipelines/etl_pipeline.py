@@ -266,11 +266,19 @@ class SchemaAwareConverter(beam.DoFn):
                     schema_matched_row[key] = float(value) if value is not None else None
 
             elif target_type == 'TIMESTAMP':
-                # Convert date strings to timestamp format for BigQuery
-                if isinstance(value, str):
-                    # If it's a date-only string (YYYY-MM-DD), add time component
+                # Convert various date/time strings to timestamp format for BigQuery
+                if isinstance(value, str) and value:
+                    value = value.strip()
+                    # Date-only string (YYYY-MM-DD) - add time component
                     if len(value) == 10 and '-' in value:
                         schema_matched_row[key] = f"{value}T00:00:00"
+                    # Time-only string (HH:MM:SS) - prefix with default date
+                    elif len(value) == 8 and ':' in value and value.count(':') == 2:
+                        schema_matched_row[key] = f"1970-01-01T{value}"
+                    # Time with microseconds (HH:MM:SS.ffffff) - prefix with default date
+                    elif len(value) > 8 and ':' in value and '.' in value and '-' not in value:
+                        schema_matched_row[key] = f"1970-01-01T{value}"
+                    # Already valid timestamp or datetime - pass through
                     else:
                         schema_matched_row[key] = value
                 else:
@@ -379,6 +387,172 @@ class ParseCSVLine(beam.DoFn):
     def teardown(self):
         """Log final statistics."""
         logger.info(f"ParseCSVLine complete: {self.rows_parsed} parsed, {self.rows_skipped} skipped")
+
+
+def read_csv_header_from_gcs(
+    file_path: str,
+    connection_params: Dict[str, Any],
+    delimiter: str = ',',
+    encoding: str = 'utf-8'
+) -> List[str]:
+    """
+    Read the header line from a CSV file in GCS before pipeline execution.
+
+    This function reads ONLY the first line of the file to extract column names
+    in their correct order. This is critical because BigQuery schema order
+    does NOT match CSV file column order.
+
+    Args:
+        file_path: Full GCS path (gs://bucket/path/to/file.csv)
+        connection_params: Connection parameters including credentials
+        delimiter: CSV delimiter (default ',')
+        encoding: File encoding (default 'utf-8')
+
+    Returns:
+        List of column names in CSV file order
+
+    Raises:
+        ValueError: If file_path is not a valid GCS path or header is empty
+        Exception: If file cannot be read
+    """
+    from google.cloud import storage
+    from google.oauth2 import service_account
+
+    # Parse GCS path
+    if not file_path.startswith('gs://'):
+        raise ValueError(f"Expected GCS path starting with 'gs://', got: {file_path}")
+
+    # Extract bucket and blob path from gs://bucket/path/to/file.csv
+    path_without_prefix = file_path[5:]  # Remove 'gs://'
+    parts = path_without_prefix.split('/', 1)
+    bucket_name = parts[0]
+    blob_path = parts[1] if len(parts) > 1 else ''
+
+    logger.info(f"Reading CSV header from: gs://{bucket_name}/{blob_path}")
+
+    # Create GCS client with credentials from connection_params
+    credentials_dict = connection_params.get('credentials', {})
+    service_account_json = credentials_dict.get('service_account_json', '')
+
+    if service_account_json:
+        try:
+            credentials_info = json.loads(service_account_json)
+            creds = service_account.Credentials.from_service_account_info(credentials_info)
+            project_id = credentials_info.get('project_id')
+            storage_client = storage.Client(credentials=creds, project=project_id)
+            logger.info(f"Using service account credentials (project: {project_id})")
+        except (json.JSONDecodeError, KeyError) as e:
+            logger.warning(f"Failed to parse service account JSON: {e}, falling back to ADC")
+            storage_client = storage.Client()
+    else:
+        # Fallback to Application Default Credentials
+        storage_client = storage.Client()
+        logger.info("Using Application Default Credentials for GCS access")
+
+    # Download first 64KB of the file (should be enough for any reasonable header)
+    bucket = storage_client.bucket(bucket_name)
+    blob = bucket.blob(blob_path)
+
+    MAX_HEADER_BYTES = 65536
+    try:
+        header_bytes = blob.download_as_bytes(start=0, end=MAX_HEADER_BYTES)
+    except Exception as e:
+        logger.error(f"Failed to download header from {file_path}: {e}")
+        raise
+
+    # Decode and extract first line
+    try:
+        header_text = header_bytes.decode(encoding)
+    except UnicodeDecodeError as e:
+        logger.warning(f"Failed to decode with {encoding}, trying utf-8: {e}")
+        header_text = header_bytes.decode('utf-8', errors='replace')
+
+    # Get first line (header)
+    first_line = header_text.split('\n')[0].strip()
+
+    if not first_line:
+        raise ValueError(f"Empty header line in file: {file_path}")
+
+    # Handle tab delimiter notation
+    if delimiter == '\\t':
+        delimiter = '\t'
+
+    # Parse header using csv module (handles quoted fields, etc.)
+    reader = csv.reader([first_line], delimiter=delimiter)
+    column_names = next(reader)
+
+    logger.info(f"Read {len(column_names)} columns from CSV header: {column_names[:5]}{'...' if len(column_names) > 5 else ''}")
+
+    return column_names
+
+
+def apply_column_mapping(
+    original_columns: List[str],
+    column_mapping: Dict[str, str],
+    bq_schema_columns: List[str] = None
+) -> List[str]:
+    """
+    Convert original column names to sanitized BigQuery column names.
+
+    Preserves the ORDER of columns from the original list while replacing
+    names using the column_mapping dictionary.
+
+    Args:
+        original_columns: List of original column names from CSV header
+        column_mapping: Dict mapping original_name -> sanitized_name
+        bq_schema_columns: Optional list of BigQuery column names to match against
+                          when column_mapping is empty or incomplete
+
+    Returns:
+        List of sanitized column names in the same order
+    """
+    sanitized_columns = []
+
+    # Build a lookup of sanitized forms to actual BigQuery column names
+    # This helps match CSV headers to BQ columns when column_mapping is empty
+    bq_sanitized_lookup = {}
+    if bq_schema_columns:
+        for bq_col in bq_schema_columns:
+            # Create sanitized version of BQ column name for matching
+            sanitized_bq = bq_col.lower()
+            bq_sanitized_lookup[sanitized_bq] = bq_col
+            # Also store without underscores for fuzzy matching
+            bq_sanitized_lookup[sanitized_bq.replace('_', '')] = bq_col
+
+    for original in original_columns:
+        if original in column_mapping:
+            # Explicit mapping exists - use it
+            sanitized_columns.append(column_mapping[original])
+        else:
+            # No explicit mapping - try to match against BigQuery schema
+            # First, create a sanitized version of the original column name
+            sanitized = original.lower()
+            sanitized = ''.join(c if c.isalnum() or c == '_' else '_' for c in sanitized)
+            sanitized = sanitized.strip('_')
+
+            # Try to find matching BQ column
+            matched_bq_col = None
+
+            # Try exact match first
+            if sanitized in bq_sanitized_lookup:
+                matched_bq_col = bq_sanitized_lookup[sanitized]
+            # Try without underscores (handles "Invoice ID" -> "invoiceid" vs "invoice_id")
+            elif sanitized.replace('_', '') in bq_sanitized_lookup:
+                matched_bq_col = bq_sanitized_lookup[sanitized.replace('_', '')]
+
+            if matched_bq_col:
+                sanitized_columns.append(matched_bq_col)
+                logger.info(f"Matched CSV column '{original}' to BQ column '{matched_bq_col}'")
+            else:
+                # Last resort: use our sanitized version
+                sanitized_columns.append(sanitized)
+                logger.warning(
+                    f"Column '{original}' not found in column_mapping or BQ schema, "
+                    f"using sanitized: '{sanitized}'"
+                )
+
+    logger.info(f"Applied column mapping: {len(sanitized_columns)} columns")
+    return sanitized_columns
 
 
 class ParseJSONLine(beam.DoFn):
@@ -1412,17 +1586,63 @@ def run_file_pipeline(
     schema_map = {field.name: field.type for field in table_schema.fields}
     logger.info(f"Fetched BigQuery schema: {len(schema_map)} fields")
 
-    # If selected_columns is empty, derive from BigQuery destination schema
-    # This handles file sources where columns are defined in BigQuery but not in selected_columns
-    if not selected_columns:
-        # Get column names from BigQuery schema (excluding internal ETL columns)
-        internal_columns = {'_etl_loaded_at', '_etl_file_name', '_etl_file_path', '_etl_source'}
-        selected_columns = [field.name for field in table_schema.fields if field.name not in internal_columns]
-        logger.info(f"Derived {len(selected_columns)} columns from BigQuery schema: {selected_columns}")
+    # Determine column names for CSV parsing
+    # For CSV files, we read the header from the actual file to get correct column order
+    column_mapping = job_config.get('column_mapping', {})
+    connection_params = job_config.get('connection_params', {})
 
-    # Validate we have column names for CSV
-    if file_format == 'csv' and not selected_columns:
-        raise ValueError("CSV processing requires columns - none found in config or BigQuery schema")
+    # Get BigQuery column names for fallback matching (exclude internal ETL columns)
+    internal_columns = {'_etl_loaded_at', '_etl_file_name', '_etl_file_path', '_etl_source'}
+    bq_schema_columns = [name for name in schema_map.keys() if name not in internal_columns]
+    logger.info(f"BigQuery schema columns for matching: {bq_schema_columns}")
+
+    # Track which columns to keep after parsing (for filtering)
+    columns_to_keep = set(bq_schema_columns)
+
+    if file_format == 'csv':
+        if has_header and file_paths:
+            # Read header from first file to get column names in correct order
+            try:
+                original_columns = read_csv_header_from_gcs(
+                    file_path=file_paths[0],
+                    connection_params=connection_params,
+                    delimiter=delimiter,
+                    encoding=encoding
+                )
+                logger.info(f"Read {len(original_columns)} columns from CSV header: {original_columns}")
+
+                # Apply column mapping to convert to sanitized BigQuery names
+                # Pass BQ schema columns for fallback matching when column_mapping is empty
+                # IMPORTANT: Parse ALL columns to preserve positional mapping
+                selected_columns = apply_column_mapping(original_columns, column_mapping, bq_schema_columns)
+                logger.info(f"All mapped columns (for parsing): {selected_columns}")
+
+                # Log which columns will be kept vs excluded after parsing
+                excluded = [col for col in selected_columns if col not in columns_to_keep]
+                if excluded:
+                    logger.warning(f"Will exclude {len(excluded)} columns not in BQ schema: {excluded}")
+                logger.info(f"Columns to keep for BigQuery: {[c for c in selected_columns if c in columns_to_keep]}")
+
+            except Exception as e:
+                logger.error(f"Failed to read CSV header: {e}")
+                raise ValueError(f"Could not read CSV header from {file_paths[0]}: {e}")
+
+        elif not has_header:
+            # No header - use column_mapping values (preserves insertion order in Python 3.7+)
+            if column_mapping:
+                selected_columns = list(column_mapping.values())
+                logger.info(f"Using column_mapping values for headerless CSV: {selected_columns}")
+            else:
+                raise ValueError("CSV without header requires column_mapping to define column names")
+
+        # Final validation
+        if not selected_columns:
+            raise ValueError("CSV processing requires columns - could not determine from header or mapping")
+
+    elif not selected_columns:
+        # For JSON/Parquet: fallback to BigQuery schema is OK (they preserve column names in data)
+        selected_columns = bq_schema_columns
+        logger.info(f"Derived {len(selected_columns)} columns from BigQuery schema (non-CSV): {selected_columns}")
 
     # Build file pattern for Beam
     # For multiple files, we read them all and flatten
@@ -1540,6 +1760,12 @@ def run_file_pipeline(
             # Normalize column names to lowercase (BigQuery schema uses lowercase)
             | 'NormalizeColumnNames' >> beam.Map(
                 lambda row: {key.lower(): value for key, value in row.items()}
+            )
+
+            # CRITICAL: Filter to only columns that exist in BigQuery schema
+            # This removes any CSV columns that weren't selected in the wizard
+            | 'FilterToSchemaColumns' >> beam.Map(
+                lambda row, keep_cols=columns_to_keep: {k: v for k, v in row.items() if k in keep_cols}
             )
 
             # Serialize values (handles any special types)

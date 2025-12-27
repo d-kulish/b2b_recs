@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides detailed specifications for the **ETL (Extract, Transform, Load)** domain in the ML Platform. The ETL domain manages data ingestion from external sources into BigQuery for model training.
 
-**Last Updated**: 2025-12-26 (v5 - Added Recent Runs table documentation)
+**Last Updated**: 2025-12-27 (v8 - Added Issue #6: CSV column mapping and TIMESTAMP parsing fixes)
 
 ---
 
@@ -2101,6 +2101,92 @@ else:
 
 ---
 
+### Issue #6: CSV Column Mapping and TIMESTAMP Parsing Failures (Fixed 2025-12-27)
+
+**Symptoms:**
+- Dataflow job fails with: "JSON table encountered too many errors, giving up. Rows: 1; errors: 1"
+- Error occurs at BigQuery FILE_LOADS stage (not during CSV parsing)
+- All rows fail with the same error
+
+**Root Causes:**
+
+1. **Empty `column_mapping` for legacy ETL jobs:**
+   - The `column_mapping` field was added to `DataSourceTable` model after some ETL jobs were created
+   - Legacy jobs have `column_mapping = NULL`
+   - When empty, the code fell back to BigQuery schema column order (wrong order for CSV positional parsing)
+
+2. **Time-only values in TIMESTAMP columns:**
+   - CSV had `invoice_time` column with values like `"18:53:06"` (time only, no date)
+   - BigQuery TIMESTAMP requires full datetime format
+   - The `SchemaAwareConverter` only handled date-only strings (`"YYYY-MM-DD"`), not time-only
+
+3. **Extra CSV columns not in BigQuery schema:**
+   - CSV may have more columns than BigQuery table (user selected subset in wizard)
+   - All CSV columns were included in JSON output, causing BigQuery load failures
+
+**Solution:**
+
+1. **Read CSV header at runtime (`read_csv_header_from_gcs`):**
+   ```python
+   # Read first 64KB from GCS file to get header
+   # Parse with csv.reader for proper handling of quoted fields
+   # Returns column names in correct file order
+   ```
+
+2. **Smart column matching (`apply_column_mapping`):**
+   ```python
+   # If column_mapping exists: use it
+   # If empty: match CSV columns to BigQuery schema by sanitized name
+   # Fuzzy matching handles "CHANNEL_DESC" -> "channel_desc"
+   ```
+
+3. **Filter to BigQuery schema columns:**
+   ```python
+   # After parsing, remove any columns not in BigQuery schema
+   | 'FilterToSchemaColumns' >> beam.Map(
+       lambda row, keep_cols=columns_to_keep: {k: v for k, v in row.items() if k in keep_cols}
+   )
+   ```
+
+4. **Handle time-only TIMESTAMP values:**
+   ```python
+   # In SchemaAwareConverter:
+   # "18:53:06" (time-only) -> "1970-01-01T18:53:06"
+   # "2024-02-22" (date-only) -> "2024-02-22T00:00:00"
+   ```
+
+**Files Modified:**
+- `etl_runner/dataflow_pipelines/etl_pipeline.py`:
+  - Added `read_csv_header_from_gcs()` function (lines 384-478)
+  - Added `apply_column_mapping()` function with BQ schema fallback (lines 481-547)
+  - Updated `run_file_pipeline()` to read header and filter columns (lines 1591-1617)
+  - Added `FilterToSchemaColumns` pipeline step (lines 1757-1761)
+  - Enhanced `SchemaAwareConverter` for time-only timestamps (lines 268-285)
+
+**Verification:**
+```bash
+# Check CSV header
+gsutil cat -r 0-500 gs://bucket/file.csv | head -1
+
+# Check BigQuery schema
+bq show --schema --format=prettyjson project:dataset.table
+
+# Check ETL job config
+python manage.py shell -c "
+from ml_platform.models import DataSourceTable
+t = DataSourceTable.objects.get(dest_table_name='table_name')
+print(f'column_mapping: {t.column_mapping}')
+print(f'selected_columns: {t.selected_columns}')
+"
+```
+
+**Prevention:**
+- New ETL jobs created after fix will have `column_mapping` populated
+- Consider backfilling `column_mapping` for existing jobs
+- Add validation in wizard for ambiguous timestamp formats
+
+---
+
 ## Files Reference
 
 ### Backend Files
@@ -2148,6 +2234,7 @@ else:
 
 | Version | Date | Changes |
 |---------|------|---------|
+| v8 | 2025-12-27 | Added Issue #6 (CSV column mapping and TIMESTAMP parsing fixes for Dataflow) |
 | v7 | 2025-12-26 | Added Issue #4 (1GB schema limit) and Issue #5 (Dataflow OOM fix with native Beam I/O) |
 | v6 | 2025-12-26 | Added Known Issues and Fixes section (Dataflow row count, status tracking) |
 | v5 | 2025-12-26 | Added Recent Runs table documentation |

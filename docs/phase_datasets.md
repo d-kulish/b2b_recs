@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides detailed specifications for implementing the **Datasets** domain in the ML Platform. The Datasets domain defines WHAT data goes into model training.
 
-**Last Updated**: 2025-12-08 (v11 - Added Product Metrics filters, View SQL functionality, fixed date filter persistence)
+**Last Updated**: 2025-12-28 (v12 - Added column renaming/aliases feature in Schema Builder)
 
 ---
 
@@ -38,7 +38,7 @@ A Dataset definition (JSON stored in Django) that is used by:
 Dataset (Django Model)
 ├── Metadata: name, description
 ├── Tables: primary_table, secondary_tables
-├── Schema: selected_columns, join_config, column_mapping
+├── Schema: selected_columns, join_config, column_mapping, column_aliases
 ├── Filters: date_filter, customer_filter, product_filter
 ├── BigQuery: bq_location (region where BQ dataset exists, e.g., 'US', 'EU')
 ├── Cached: row_count_estimate, summary_snapshot (not versioned)
@@ -546,6 +546,15 @@ The Schema Builder provides a visual, drag-and-drop interface for connecting tab
    - Sample data preview updates when columns are selected/deselected
    - Shows joined result based on current connections
    - Stats display (row count, columns)
+
+7. **Column Renaming (Aliases)**:
+   - Double-click any column header in the preview table to rename it
+   - An inline input field appears with the current name selected
+   - Press Enter or click outside to save the alias
+   - Press Escape to cancel
+   - Aliases are displayed throughout the wizard (preview, filter dropdowns, summary)
+   - Generated SQL uses aliases via AS clauses
+   - Aliases are persisted with the dataset and restored when editing
 
 **Column Info Popover:**
 

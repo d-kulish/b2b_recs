@@ -1709,6 +1709,29 @@
     white-space: nowrap;
 }
 
+/* Editable column headers */
+.schema-preview-table th.editable-header {
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+}
+
+.schema-preview-table th.editable-header:hover {
+    background-color: #e0e7ff;
+}
+
+.column-rename-input {
+    width: 100%;
+    min-width: 80px;
+    padding: 2px 4px;
+    border: 1px solid #3b82f6;
+    border-radius: 3px;
+    font-size: inherit;
+    font-weight: inherit;
+    font-family: inherit;
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
 .schema-preview-table td {
     padding: 5px 10px;
     border-bottom: 1px solid #f3f4f6;

@@ -1494,6 +1494,7 @@ let wizardData = {
     secondaryTables: [],
     joinConfig: {},
     selectedColumns: {},
+    columnAliases: {},  // Maps prefixed column names to user-friendly aliases
     filters: {}
 };
 
@@ -1508,6 +1509,7 @@ let schemaBuilderState = {
     sessionId: null,
     tables: {},           // table metadata from load-samples
     selectedColumns: {},  // table -> [columns]
+    columnAliases: {},    // prefixed_column_name -> alias (for display in preview)
     joins: [],            // [{leftTable, leftCol, rightTable, rightCol, type}]
     connectMode: null,    // {table, column} when awaiting second click
     previewData: null,    // cached preview response
@@ -1715,6 +1717,7 @@ function openWizard(datasetId = null) {
         secondaryTables: [],
         joinConfig: {},
         selectedColumns: {},
+        columnAliases: {},
         filters: {}
     };
 
@@ -1758,6 +1761,7 @@ function resetWizard() {
         secondaryTables: [],
         joinConfig: {},
         selectedColumns: {},
+        columnAliases: {},
         filters: {}
     };
 
@@ -1766,6 +1770,7 @@ function resetWizard() {
         sessionId: null,
         tables: {},
         selectedColumns: {},
+        columnAliases: {},
         joins: [],
         connectMode: null,
         previewData: null,
@@ -3557,13 +3562,15 @@ function renderPreview(data) {
     table.style.display = 'table';
     empty.style.display = 'none';
 
-    // Headers
-    thead.innerHTML = '<tr>' + (data.column_order || []).map(col =>
-        `<th>${col}</th>`
-    ).join('') + '</tr>';
+    // Headers (editable via double-click)
+    const aliases = schemaBuilderState.columnAliases || {};
+    thead.innerHTML = '<tr>' + (data.column_order || []).map(col => {
+        const alias = aliases[col] || col;
+        return `<th class="editable-header" data-original="${col}" title="Double-click to rename" ondblclick="startColumnRename(this, '${col}')">${alias}</th>`;
+    }).join('') + '</tr>';
 
     // Rows
-    tbody.innerHTML = data.preview_rows.map(row => {
+    tbody.innerHTML = (data.preview_rows || []).filter(row => row != null).map(row => {
         return '<tr>' + (data.column_order || []).map(col => {
             const val = row[col];
             if (val === null || val === undefined) {
@@ -3574,6 +3581,85 @@ function renderPreview(data) {
     }).join('');
 
     validateCurrentStep();
+}
+
+// Column renaming functions
+function startColumnRename(th, originalName) {
+    // Prevent double-click text selection
+    if (th.querySelector('input')) return;
+
+    // Ensure columnAliases exists
+    if (!schemaBuilderState.columnAliases) {
+        schemaBuilderState.columnAliases = {};
+    }
+
+    const currentAlias = schemaBuilderState.columnAliases[originalName] || originalName;
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'column-rename-input';
+    input.value = currentAlias;
+    input.dataset.original = originalName;
+
+    input.onblur = () => finishColumnRename(input, th, originalName);
+    input.onkeydown = (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            input.blur();
+        }
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            input.value = currentAlias;
+            input.blur();
+        }
+    };
+
+    th.innerHTML = '';
+    th.appendChild(input);
+    input.focus();
+    input.select();
+}
+
+function finishColumnRename(input, th, originalName) {
+    const newAlias = input.value.trim();
+
+    // Ensure columnAliases exists
+    if (!schemaBuilderState.columnAliases) {
+        schemaBuilderState.columnAliases = {};
+    }
+
+    // Update state: if alias is same as original, remove it; otherwise save it
+    if (newAlias && newAlias !== originalName) {
+        schemaBuilderState.columnAliases[originalName] = newAlias;
+    } else {
+        delete schemaBuilderState.columnAliases[originalName];
+    }
+
+    // Update display
+    const displayName = schemaBuilderState.columnAliases[originalName] || originalName;
+    th.textContent = displayName;
+}
+
+// Helper function to get column display name (alias or original)
+// Handles both formats: "table.column" (dropdowns) and "table_column" (preview)
+function getColumnDisplayName(columnName) {
+    if (!schemaBuilderState.columnAliases) {
+        return columnName;
+    }
+    // Try direct match first
+    if (schemaBuilderState.columnAliases[columnName]) {
+        return schemaBuilderState.columnAliases[columnName];
+    }
+    // Try converting dot to underscore (dropdown format -> preview format)
+    const underscoreFormat = columnName.replace('.', '_');
+    if (schemaBuilderState.columnAliases[underscoreFormat]) {
+        return schemaBuilderState.columnAliases[underscoreFormat];
+    }
+    // Try converting underscore to dot (preview format -> dropdown format)
+    const dotFormat = columnName.replace('_', '.');
+    if (schemaBuilderState.columnAliases[dotFormat]) {
+        return schemaBuilderState.columnAliases[dotFormat];
+    }
+    return columnName;
 }
 
 function renderPreviewError(message) {
@@ -3616,6 +3702,9 @@ function collectSchemaBuilderData() {
             wizardData.selectedColumns[table] = [...schemaBuilderState.selectedColumns[table]];
         }
     });
+
+    // Transfer column aliases
+    wizardData.columnAliases = {...schemaBuilderState.columnAliases};
 }
 
 function getTypeAbbrev(type) {
@@ -4167,7 +4256,7 @@ function populateTopCustomersDropdowns() {
 
         const option = document.createElement('option');
         option.value = col.fullName;
-        option.textContent = col.fullName;
+        option.textContent = getColumnDisplayName(col.fullName);
         customerIdSelect.appendChild(option);
     });
 
@@ -4177,7 +4266,7 @@ function populateTopCustomersDropdowns() {
     numericColumns.forEach(col => {
         const option = document.createElement('option');
         option.value = col.fullName;
-        option.textContent = col.fullName;
+        option.textContent = getColumnDisplayName(col.fullName);
         revenueSelect.appendChild(option);
     });
 }
@@ -4575,7 +4664,7 @@ function populateCustomerMetricsDropdowns() {
 
         const option = document.createElement('option');
         option.value = col.fullName;
-        option.textContent = col.fullName;
+        option.textContent = getColumnDisplayName(col.fullName);
         txnCountCustomerSelect.appendChild(option);
     });
 
@@ -4589,7 +4678,7 @@ function populateCustomerMetricsDropdowns() {
 
         const option = document.createElement('option');
         option.value = col.fullName;
-        option.textContent = col.fullName;
+        option.textContent = getColumnDisplayName(col.fullName);
         spendingCustomerSelect.appendChild(option);
     });
 
@@ -4607,7 +4696,7 @@ function populateCustomerMetricsDropdowns() {
         if (!isUsedInPending && !isUsedAsRevenue) {
             const option = document.createElement('option');
             option.value = col.fullName;
-            option.textContent = col.fullName;
+            option.textContent = getColumnDisplayName(col.fullName);
             spendingAmountSelect.appendChild(option);
         }
     });
@@ -4925,7 +5014,7 @@ function populateProductMetricsDropdowns() {
 
         const option = document.createElement('option');
         option.value = col.fullName;
-        option.textContent = col.fullName;
+        option.textContent = getColumnDisplayName(col.fullName);
         txnCountProductSelect.appendChild(option);
     });
 
@@ -4939,7 +5028,7 @@ function populateProductMetricsDropdowns() {
 
         const option = document.createElement('option');
         option.value = col.fullName;
-        option.textContent = col.fullName;
+        option.textContent = getColumnDisplayName(col.fullName);
         revenueProductSelect.appendChild(option);
     });
 
@@ -4957,7 +5046,7 @@ function populateProductMetricsDropdowns() {
         if (!isUsedInPending && !isUsedAsRevenue) {
             const option = document.createElement('option');
             option.value = col.fullName;
-            option.textContent = col.fullName;
+            option.textContent = getColumnDisplayName(col.fullName);
             revenueAmountSelect.appendChild(option);
         }
     });
@@ -6741,7 +6830,7 @@ function openAddFilterModal() {
     allColumns.forEach(c => {
         const option = document.createElement('option');
         option.value = c.fullName;
-        option.textContent = c.fullName;
+        option.textContent = getColumnDisplayName(c.fullName);
         select.appendChild(option);
     });
 
@@ -7687,7 +7776,7 @@ function populateFilterColumnDropdowns() {
 
         const option = document.createElement('option');
         option.value = c.fullName;
-        option.textContent = c.fullName;
+        option.textContent = getColumnDisplayName(c.fullName);
         // Restore previous selection if it exists
         if (c.fullName === currentTimestamp) option.selected = true;
         timestampSelect.appendChild(option);
@@ -7737,7 +7826,7 @@ function populateProductFilterDropdowns(allColumns = null) {
 
         const option = document.createElement('option');
         option.value = c.fullName;
-        option.textContent = c.fullName;
+        option.textContent = getColumnDisplayName(c.fullName);
         if (c.fullName === currentProduct) option.selected = true;
         productSelect.appendChild(option);
     });
@@ -7769,7 +7858,7 @@ function populateProductFilterDropdowns(allColumns = null) {
 
         const option = document.createElement('option');
         option.value = c.fullName;
-        option.textContent = c.fullName;
+        option.textContent = getColumnDisplayName(c.fullName);
         if (c.fullName === currentRevenue) option.selected = true;
         revenueSelect.appendChild(option);
     });
@@ -8474,9 +8563,9 @@ function populateDatasetSummary(data) {
     for (const [columnName, stats] of Object.entries(columnStats)) {
         const row = document.createElement('tr');
 
-        // Column name cell
+        // Column name cell (show alias if available)
         const nameCell = document.createElement('td');
-        nameCell.innerHTML = `<span class="column-name">${columnName}</span>`;
+        nameCell.innerHTML = `<span class="column-name">${getColumnDisplayName(columnName)}</span>`;
         row.appendChild(nameCell);
 
         // Data type cell
@@ -9088,6 +9177,7 @@ function saveDataset() {
         secondary_tables: wizardData.secondaryTables,
         join_config: wizardData.joinConfig,
         selected_columns: wizardData.selectedColumns,
+        column_aliases: wizardData.columnAliases || {},
         filters: wizardData.filters,
         summary_snapshot: summarySnapshot
     };
@@ -9164,6 +9254,10 @@ function renderDatasetDetail(summary) {
     const columnStats = snapshot.column_stats || {};
     const joinConfig = summary.join_config || {};
     const filtersConfig = summary.filters?.config || {};
+    const columnAliases = summary.column_aliases || {};
+
+    // Helper to get display name for saved dataset
+    const getDisplayName = (colName) => columnAliases[colName] || colName;
 
     // Build join configuration display
     const joinRows = Object.entries(joinConfig).map(([table, config]) => {
@@ -9267,7 +9361,7 @@ function renderDatasetDetail(summary) {
     const columnStatsRows = Object.entries(columnStats).map(([colName, stats]) => {
         return `
             <tr>
-                <td class="px-3 py-2 text-sm text-gray-900">${colName}</td>
+                <td class="px-3 py-2 text-sm text-gray-900">${getDisplayName(colName)}</td>
                 <td class="px-3 py-2"><span class="inline-block px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700">${stats.type || 'UNKNOWN'}</span></td>
                 <td class="px-3 py-2 text-sm text-gray-600">${formatDetailColumnStats(stats)}</td>
             </tr>
@@ -9384,7 +9478,11 @@ function loadDatasetForEdit(datasetId) {
             wizardData.secondaryTables = ds.secondary_tables || [];
             wizardData.joinConfig = ds.join_config || {};
             wizardData.selectedColumns = ds.selected_columns || {};
+            wizardData.columnAliases = ds.column_aliases || {};
             wizardData.filters = ds.filters || {};
+
+            // Restore column aliases to schema builder state
+            schemaBuilderState.columnAliases = {...wizardData.columnAliases};
 
             // Update form fields
             document.getElementById('datasetName').value = ds.name;

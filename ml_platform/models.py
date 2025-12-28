@@ -1004,6 +1004,18 @@ class Dataset(models.Model):
         help_text="Maps ML concepts to actual column names"
     )
 
+    # Column display aliases (user-defined friendly names)
+    # Example: {
+    #   "transactions_customer_id": "customer_id",
+    #   "transactions_date": "date",
+    #   "products_name": "product_name"
+    # }
+    column_aliases = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Column display aliases. Maps prefixed column names to user-friendly aliases"
+    )
+
     # Data filters
     # Example: {
     #   "date_range": {"type": "rolling", "months": 6},

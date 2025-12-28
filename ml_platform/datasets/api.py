@@ -49,6 +49,7 @@ def create_dataset_version(dataset, user=None):
         'join_config': dataset.join_config,
         'selected_columns': dataset.selected_columns,
         'column_mapping': dataset.column_mapping,
+        'column_aliases': dataset.column_aliases,
         'filters': dataset.filters,
     }
 
@@ -105,6 +106,7 @@ def serialize_dataset(ds, include_details=False):
             'join_config': ds.join_config,
             'selected_columns': ds.selected_columns,
             'column_mapping': ds.column_mapping,
+            'column_aliases': ds.column_aliases,
             'filters': ds.filters,
             'date_range_start': ds.date_range_start.isoformat() if ds.date_range_start else None,
             'date_range_end': ds.date_range_end.isoformat() if ds.date_range_end else None,
@@ -284,6 +286,7 @@ def create_dataset(request, model_id):
             join_config=data.get('join_config', {}),
             selected_columns=data.get('selected_columns', {}),
             column_mapping=data.get('column_mapping', {}),
+            column_aliases=data.get('column_aliases', {}),
             filters=data.get('filters', {}),
             summary_snapshot=data.get('summary_snapshot', {}),
             bq_location=bq_location,
@@ -388,7 +391,7 @@ def update_dataset(request, dataset_id):
         # Check if any configuration fields are being changed (not just metadata)
         # These are the fields that affect SQL generation and should trigger versioning
         config_fields = ['name', 'description', 'primary_table', 'secondary_tables',
-                         'join_config', 'selected_columns', 'column_mapping', 'filters']
+                         'join_config', 'selected_columns', 'column_mapping', 'column_aliases', 'filters']
         config_changed = any(field in data for field in config_fields)
 
         # Update fields if provided (split_config removed - handled by Training domain)
@@ -412,6 +415,9 @@ def update_dataset(request, dataset_id):
 
         if 'column_mapping' in data:
             dataset.column_mapping = data['column_mapping']
+
+        if 'column_aliases' in data:
+            dataset.column_aliases = data['column_aliases']
 
         if 'filters' in data:
             dataset.filters = data['filters']

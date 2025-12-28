@@ -908,6 +908,7 @@ class BigQueryService:
         try:
             selected_columns = dataset.selected_columns or {}
             column_mapping = dataset.column_mapping or {}
+            column_aliases = dataset.column_aliases or {}  # User-defined display aliases
             filters = dataset.filters or {}
             primary_table = dataset.primary_table
 
@@ -961,11 +962,17 @@ class BigQueryService:
                             output_name = col
                             seen_cols.add(col)
 
+                        # Check if user has defined an alias for this column
+                        # Alias keys are in format: "tablename_column" or "tablename.column"
+                        alias_key = f"{table_alias}_{col}"
+                        alias_key_dot = f"{table_alias}.{col}"
+                        final_name = column_aliases.get(alias_key) or column_aliases.get(alias_key_dot) or output_name
+
                         if needs_conversion:
                             # Convert TIMESTAMP to Unix epoch seconds (INT64)
-                            select_cols.append(f"UNIX_SECONDS(CAST({table_alias}.{col} AS TIMESTAMP)) AS {output_name}")
+                            select_cols.append(f"UNIX_SECONDS(CAST({table_alias}.{col} AS TIMESTAMP)) AS {final_name}")
                         else:
-                            select_cols.append(f"{table_alias}.{col} AS {output_name}")
+                            select_cols.append(f"{table_alias}.{col} AS {final_name}")
 
             if not select_cols:
                 select_cols = ['*']

@@ -4307,6 +4307,13 @@ async function analyzeCustomerRevenue() {
     analyzeBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Analyzing...';
     analyzeBtn.disabled = true;
 
+    // Collect committed filters from other sub-chapters (Dates, Products)
+    // Don't include customer_filter.top_revenue since we're analyzing customers
+    const committedFilters = getCommittedFiltersForAnalysis();
+    if (committedFilters.customer_filter) {
+        delete committedFilters.customer_filter.top_revenue;
+    }
+
     try {
         // Call the customer revenue analysis API
         const response = await fetch(`/api/models/{{ model.id }}/datasets/analyze-customer-revenue/`, {
@@ -4318,7 +4325,10 @@ async function analyzeCustomerRevenue() {
             body: JSON.stringify({
                 session_id: schemaBuilderState.sessionId,
                 customer_column: customerCol,
-                revenue_column: revenueCol
+                revenue_column: revenueCol,
+                timestamp_column: committedFilters.timestamp_column || null,
+                rolling_days: committedFilters.date_filter?.days || null,
+                filters: committedFilters
             })
         });
 
@@ -8753,6 +8763,118 @@ function resetProductAnalysis() {
     validateCurrentStep();
 }
 
+/**
+ * Collect committed filters from all sub-chapters for analysis endpoints.
+ * This ensures Top Products/Customers analysis respects filters applied in other sub-chapters.
+ * @returns {Object} Filters object ready to send to API
+ */
+function getCommittedFiltersForAnalysis() {
+    const filters = {};
+
+    // Date filters (from Dates sub-chapter)
+    if (dateFiltersApplied && datesFilterState.committed.timestampColumn) {
+        filters.timestamp_column = datesFilterState.committed.timestampColumn;
+        if (datesFilterState.committed.mode === 'rolling') {
+            filters.date_filter = {
+                type: 'rolling',
+                days: datesFilterState.committed.rollingDays || 30
+            };
+        } else if (datesFilterState.committed.startDate) {
+            filters.date_filter = {
+                type: 'fixed',
+                start_date: datesFilterState.committed.startDate
+            };
+        }
+    }
+
+    // Customer filters (from Customers sub-chapter)
+    if (customerFiltersApplied) {
+        const cf = customerFiltersState.committed;
+        filters.customer_filter = {};
+
+        if (cf.topRevenue?.enabled) {
+            filters.customer_filter.top_revenue = {
+                customer_column: cf.topRevenue.customerColumn,
+                revenue_column: cf.topRevenue.revenueColumn,
+                percent: cf.topRevenue.thresholdPercent
+            };
+        }
+        if (cf.categoryFilters?.length > 0) {
+            filters.customer_filter.category_filters = cf.categoryFilters.map(f => ({
+                column: f.column,
+                mode: f.mode,
+                values: f.values
+            }));
+        }
+        if (cf.numericFilters?.length > 0) {
+            filters.customer_filter.numeric_filters = cf.numericFilters.map(f => ({
+                column: f.column,
+                filter_type: f.type,
+                min: f.min,
+                max: f.max,
+                value: f.value,
+                include_nulls: f.includeNulls || false
+            }));
+        }
+        if (cf.aggregationFilters?.length > 0) {
+            filters.customer_filter.aggregation_filters = cf.aggregationFilters.map(f => ({
+                type: f.type,
+                customer_column: f.customerColumn,
+                amount_column: f.amountColumn,
+                filter_type: f.filterType,
+                value: f.value,
+                min: f.min,
+                max: f.max
+            }));
+        }
+    }
+
+    // Product filters (from Products sub-chapter)
+    if (productFiltersApplied) {
+        const pf = productFiltersState.committed;
+        filters.product_filter = {};
+
+        if (pf.topRevenue?.enabled) {
+            filters.product_filter.top_revenue = {
+                enabled: true,
+                product_column: pf.topRevenue.productColumn,
+                revenue_column: pf.topRevenue.revenueColumn,
+                threshold_percent: pf.topRevenue.thresholdPercent
+            };
+        }
+        if (pf.categoryFilters?.length > 0) {
+            filters.product_filter.category_filters = pf.categoryFilters.map(f => ({
+                column: f.column,
+                mode: f.mode,
+                values: f.values
+            }));
+        }
+        if (pf.numericFilters?.length > 0) {
+            filters.product_filter.numeric_filters = pf.numericFilters.map(f => ({
+                column: f.column,
+                filter_type: f.type,
+                min: f.min,
+                max: f.max,
+                value: f.value,
+                include_nulls: f.includeNulls || false
+            }));
+        }
+        if (pf.aggregationFilters?.length > 0) {
+            filters.product_filter.aggregation_filters = pf.aggregationFilters.map(f => ({
+                type: f.type,
+                product_column: f.productColumn,
+                amount_column: f.amountColumn,
+                filter_type: f.filterType,
+                value: f.value,
+                min: f.min,
+                max: f.max
+            }));
+        }
+    }
+
+    return filters;
+}
+
 async function analyzeProductRevenue() {
     const productCol = document.getElementById('productIdColumn')?.value;
     const revenueCol = document.getElementById('revenueColumn')?.value;
@@ -8769,6 +8891,11 @@ async function analyzeProductRevenue() {
     analyzeBtn.classList.add('filter-button-disabled');
     analyzeBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>Analyzing...</span>';
 
+    // Collect committed filters from other sub-chapters (Dates, Customers)
+    // Don't include product_filter since we're analyzing products
+    const committedFilters = getCommittedFiltersForAnalysis();
+    delete committedFilters.product_filter;
+
     try {
         const response = await fetch(`/api/models/${modelId}/datasets/analyze-product-revenue/`, {
             method: 'POST',
@@ -8780,8 +8907,9 @@ async function analyzeProductRevenue() {
                 primary_table: wizardData.primaryTable,
                 product_column: productCol,
                 revenue_column: revenueCol,
-                timestamp_column: timestampCol || null,
-                rolling_days: timestampCol ? rollingDays : null
+                timestamp_column: timestampCol || committedFilters.timestamp_column || null,
+                rolling_days: timestampCol ? rollingDays : (committedFilters.date_filter?.days || null),
+                filters: committedFilters
             })
         });
 

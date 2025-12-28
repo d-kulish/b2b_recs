@@ -1443,7 +1443,12 @@ def analyze_product_revenue(request, model_id):
             "product_column": "transactions.product_id",
             "revenue_column": "transactions.amount",
             "timestamp_column": "transactions.transaction_date",  // optional
-            "rolling_days": 30  // optional, requires timestamp_column
+            "rolling_days": 30,  // optional, requires timestamp_column
+            "filters": {  // optional, filters from other sub-chapters
+                "customer_filter": {
+                    "category_filters": [{"column": "city", "mode": "include", "values": ["VINNYTSYA"]}]
+                }
+            }
         }
 
     Returns:
@@ -1495,6 +1500,7 @@ def analyze_product_revenue(request, model_id):
         # Optional fields
         timestamp_column = data.get('timestamp_column')
         rolling_days = data.get('rolling_days')
+        filters = data.get('filters', {})
 
         # Validate rolling_days requires timestamp_column
         if rolling_days and not timestamp_column:
@@ -1510,7 +1516,8 @@ def analyze_product_revenue(request, model_id):
             product_column=product_column,
             revenue_column=revenue_column,
             timestamp_column=timestamp_column,
-            rolling_days=rolling_days
+            rolling_days=rolling_days,
+            filters=filters
         )
 
         return JsonResponse(result)
@@ -1850,7 +1857,14 @@ def analyze_customer_revenue(request, model_id):
         {
             "session_id": "abc12345",
             "customer_column": "transactions.customer_id",
-            "revenue_column": "transactions.amount"
+            "revenue_column": "transactions.amount",
+            "timestamp_column": "transactions.trans_date",  // optional
+            "rolling_days": 30,  // optional, requires timestamp_column
+            "filters": {  // optional, filters from other sub-chapters
+                "product_filter": {
+                    "category_filters": [{"column": "category", "mode": "include", "values": ["Electronics"]}]
+                }
+            }
         }
 
     Returns:
@@ -1932,6 +1946,7 @@ def analyze_customer_revenue(request, model_id):
         # Get optional date filter params
         timestamp_column = data.get('timestamp_column')
         rolling_days = data.get('rolling_days')
+        filters = data.get('filters', {})
 
         # Run the analysis using BigQuery
         analysis_service = CustomerRevenueAnalysisService(model)
@@ -1940,7 +1955,8 @@ def analyze_customer_revenue(request, model_id):
             customer_column=customer_column,
             revenue_column=revenue_column,
             timestamp_column=timestamp_column,
-            rolling_days=rolling_days
+            rolling_days=rolling_days,
+            filters=filters
         )
 
         return JsonResponse(result)

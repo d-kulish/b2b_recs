@@ -2346,7 +2346,8 @@ class ProductRevenueAnalysisService:
         rolling_days: int = None,
         selected_columns: dict = None,
         join_config: dict = None,
-        secondary_tables: list = None
+        secondary_tables: list = None,
+        filters: dict = None
     ) -> dict:
         """
         Analyze product revenue distribution.
@@ -2360,6 +2361,7 @@ class ProductRevenueAnalysisService:
             selected_columns: Dict of table -> columns selected in schema builder
             join_config: Join configuration for secondary tables
             secondary_tables: List of secondary tables
+            filters: Dict of filters from other sub-chapters (customer_filter, etc.)
 
         Returns:
             Dict with distribution analysis:
@@ -2381,6 +2383,8 @@ class ProductRevenueAnalysisService:
             }
         """
         try:
+            filters = filters or {}
+
             # Extract just the column name from "table.column" format
             product_col = self._extract_column_name(product_column)
             revenue_col = self._extract_column_name(revenue_column)
@@ -2388,28 +2392,100 @@ class ProductRevenueAnalysisService:
 
             # Get the table alias for the primary table
             primary_alias = primary_table.split('.')[-1]
+            full_table_ref = self.bq_service._get_full_table_ref(primary_table)
 
-            # Build the base query with optional date filter
-            date_filter_clause = ""
+            # Build WHERE clauses
+            where_clauses = []
             date_range_query = ""
 
+            # Date filter
             if timestamp_col and rolling_days:
-                date_filter_clause = f"""
-                WHERE `{primary_alias}`.`{timestamp_col}` >= DATE_SUB(
-                    (SELECT MAX(`{timestamp_col}`) FROM `{self.bq_service._get_full_table_ref(primary_table)}`),
-                    INTERVAL {rolling_days} DAY
-                )
-                """
+                where_clauses.append(f"""
+                    `{primary_alias}`.`{timestamp_col}` >= DATE_SUB(
+                        (SELECT MAX(`{timestamp_col}`) FROM `{full_table_ref}`),
+                        INTERVAL {rolling_days} DAY
+                    )
+                """)
                 date_range_query = f"""
                 SELECT
                     MIN(`{timestamp_col}`) as min_date,
                     MAX(`{timestamp_col}`) as max_date
-                FROM `{self.bq_service._get_full_table_ref(primary_table)}`
+                FROM `{full_table_ref}`
                 WHERE `{timestamp_col}` >= DATE_SUB(
-                    (SELECT MAX(`{timestamp_col}`) FROM `{self.bq_service._get_full_table_ref(primary_table)}`),
+                    (SELECT MAX(`{timestamp_col}`) FROM `{full_table_ref}`),
                     INTERVAL {rolling_days} DAY
                 )
                 """
+
+            # Customer category filters (e.g., city = 'VINNYTSYA')
+            customer_filter = filters.get('customer_filter', {})
+            if customer_filter.get('category_filters'):
+                for cat_filter in customer_filter['category_filters']:
+                    col_ref = cat_filter.get('column', '')
+                    col_name = self._extract_column_name(col_ref)
+                    # Determine table alias from column reference or use primary
+                    if '.' in col_ref:
+                        table_alias = col_ref.split('.')[0]
+                    else:
+                        table_alias = primary_alias
+
+                    values = cat_filter.get('values', [])
+                    if values and col_name:
+                        # Escape single quotes in values
+                        escaped = [v.replace("'", "''") for v in values]
+                        values_sql = ", ".join(f"'{v}'" for v in escaped)
+
+                        if cat_filter.get('mode') == 'exclude':
+                            where_clauses.append(f"`{table_alias}`.`{col_name}` NOT IN ({values_sql})")
+                        else:
+                            where_clauses.append(f"`{table_alias}`.`{col_name}` IN ({values_sql})")
+
+            # Customer numeric filters
+            if customer_filter.get('numeric_filters'):
+                for num_filter in customer_filter['numeric_filters']:
+                    col_ref = num_filter.get('column', '')
+                    col_name = self._extract_column_name(col_ref)
+                    if '.' in col_ref:
+                        table_alias = col_ref.split('.')[0]
+                    else:
+                        table_alias = primary_alias
+
+                    filter_type = num_filter.get('filter_type', 'range')
+                    include_nulls = num_filter.get('include_nulls', False)
+
+                    if col_name:
+                        conditions = []
+                        if filter_type == 'range':
+                            min_val = num_filter.get('min')
+                            max_val = num_filter.get('max')
+                            if min_val is not None:
+                                conditions.append(f"`{table_alias}`.`{col_name}` >= {min_val}")
+                            if max_val is not None:
+                                conditions.append(f"`{table_alias}`.`{col_name}` <= {max_val}")
+                        elif filter_type == 'greater_than':
+                            val = num_filter.get('value')
+                            if val is not None:
+                                conditions.append(f"`{table_alias}`.`{col_name}` > {val}")
+                        elif filter_type == 'less_than':
+                            val = num_filter.get('value')
+                            if val is not None:
+                                conditions.append(f"`{table_alias}`.`{col_name}` < {val}")
+                        elif filter_type == 'equals':
+                            val = num_filter.get('value')
+                            if val is not None:
+                                conditions.append(f"`{table_alias}`.`{col_name}` = {val}")
+
+                        if conditions:
+                            cond_str = " AND ".join(conditions)
+                            if include_nulls:
+                                where_clauses.append(f"(({cond_str}) OR `{table_alias}`.`{col_name}` IS NULL)")
+                            else:
+                                where_clauses.append(f"({cond_str})")
+
+            # Build the final WHERE clause
+            where_clause = ""
+            if where_clauses:
+                where_clause = "WHERE " + " AND ".join(where_clauses)
 
             # Main analysis query
             analysis_query = f"""
@@ -2417,8 +2493,8 @@ class ProductRevenueAnalysisService:
                 SELECT
                     `{primary_alias}`.`{product_col}` as product_id,
                     `{primary_alias}`.`{revenue_col}` as revenue
-                FROM `{self.bq_service._get_full_table_ref(primary_table)}` AS `{primary_alias}`
-                {date_filter_clause}
+                FROM `{full_table_ref}` AS `{primary_alias}`
+                {where_clause}
             ),
             product_revenues AS (
                 SELECT
@@ -2519,7 +2595,7 @@ class ProductRevenueAnalysisService:
             # Get distribution curve points (sampled for chart)
             distribution, _, _ = self._get_distribution_curve(
                 primary_table, primary_alias, product_col, revenue_col,
-                timestamp_col, rolling_days
+                timestamp_col, rolling_days, filters=filters
             )
 
             # Get date range if timestamp filter was applied
@@ -2559,7 +2635,8 @@ class ProductRevenueAnalysisService:
         revenue_col: str,
         timestamp_col: str = None,
         rolling_days: int = None,
-        num_points: int = 50
+        num_points: int = 50,
+        filters: dict = None
     ) -> list:
         """
         Get sampled distribution curve points for charting.
@@ -2567,14 +2644,88 @@ class ProductRevenueAnalysisService:
         Returns list of {percent_products, cumulative_revenue_percent} points.
         """
         try:
-            date_filter_clause = ""
+            filters = filters or {}
+            full_table_ref = self.bq_service._get_full_table_ref(primary_table)
+
+            # Build WHERE clauses (same logic as analyze_distribution)
+            where_clauses = []
+
+            # Date filter
             if timestamp_col and rolling_days:
-                date_filter_clause = f"""
-                WHERE `{primary_alias}`.`{timestamp_col}` >= DATE_SUB(
-                    (SELECT MAX(`{timestamp_col}`) FROM `{self.bq_service._get_full_table_ref(primary_table)}`),
-                    INTERVAL {rolling_days} DAY
-                )
-                """
+                where_clauses.append(f"""
+                    `{primary_alias}`.`{timestamp_col}` >= DATE_SUB(
+                        (SELECT MAX(`{timestamp_col}`) FROM `{full_table_ref}`),
+                        INTERVAL {rolling_days} DAY
+                    )
+                """)
+
+            # Customer category filters
+            customer_filter = filters.get('customer_filter', {})
+            if customer_filter.get('category_filters'):
+                for cat_filter in customer_filter['category_filters']:
+                    col_ref = cat_filter.get('column', '')
+                    col_name = self._extract_column_name(col_ref)
+                    if '.' in col_ref:
+                        table_alias = col_ref.split('.')[0]
+                    else:
+                        table_alias = primary_alias
+
+                    values = cat_filter.get('values', [])
+                    if values and col_name:
+                        escaped = [v.replace("'", "''") for v in values]
+                        values_sql = ", ".join(f"'{v}'" for v in escaped)
+
+                        if cat_filter.get('mode') == 'exclude':
+                            where_clauses.append(f"`{table_alias}`.`{col_name}` NOT IN ({values_sql})")
+                        else:
+                            where_clauses.append(f"`{table_alias}`.`{col_name}` IN ({values_sql})")
+
+            # Customer numeric filters
+            if customer_filter.get('numeric_filters'):
+                for num_filter in customer_filter['numeric_filters']:
+                    col_ref = num_filter.get('column', '')
+                    col_name = self._extract_column_name(col_ref)
+                    if '.' in col_ref:
+                        table_alias = col_ref.split('.')[0]
+                    else:
+                        table_alias = primary_alias
+
+                    filter_type = num_filter.get('filter_type', 'range')
+                    include_nulls = num_filter.get('include_nulls', False)
+
+                    if col_name:
+                        conditions = []
+                        if filter_type == 'range':
+                            min_val = num_filter.get('min')
+                            max_val = num_filter.get('max')
+                            if min_val is not None:
+                                conditions.append(f"`{table_alias}`.`{col_name}` >= {min_val}")
+                            if max_val is not None:
+                                conditions.append(f"`{table_alias}`.`{col_name}` <= {max_val}")
+                        elif filter_type == 'greater_than':
+                            val = num_filter.get('value')
+                            if val is not None:
+                                conditions.append(f"`{table_alias}`.`{col_name}` > {val}")
+                        elif filter_type == 'less_than':
+                            val = num_filter.get('value')
+                            if val is not None:
+                                conditions.append(f"`{table_alias}`.`{col_name}` < {val}")
+                        elif filter_type == 'equals':
+                            val = num_filter.get('value')
+                            if val is not None:
+                                conditions.append(f"`{table_alias}`.`{col_name}` = {val}")
+
+                        if conditions:
+                            cond_str = " AND ".join(conditions)
+                            if include_nulls:
+                                where_clauses.append(f"(({cond_str}) OR `{table_alias}`.`{col_name}` IS NULL)")
+                            else:
+                                where_clauses.append(f"({cond_str})")
+
+            # Build the final WHERE clause
+            where_clause = ""
+            if where_clauses:
+                where_clause = "WHERE " + " AND ".join(where_clauses)
 
             # Query to get distribution curve with sampling
             curve_query = f"""
@@ -2582,8 +2733,8 @@ class ProductRevenueAnalysisService:
                 SELECT
                     `{primary_alias}`.`{product_col}` as product_id,
                     `{primary_alias}`.`{revenue_col}` as revenue
-                FROM `{self.bq_service._get_full_table_ref(primary_table)}` AS `{primary_alias}`
-                {date_filter_clause}
+                FROM `{full_table_ref}` AS `{primary_alias}`
+                {where_clause}
             ),
             product_revenues AS (
                 SELECT
@@ -2613,22 +2764,33 @@ class ProductRevenueAnalysisService:
                     ROUND(cumulative_revenue * 100.0 / grand_total, 2) as cumulative_revenue_percent
                 FROM ranked_products
             ),
-            -- Sample points: get every Nth row plus key thresholds
+            -- Find exact threshold crossing points
+            threshold_points AS (
+                SELECT MIN(rank) as threshold_rank, 'p70' as threshold_type
+                FROM distribution_points WHERE cumulative_revenue_percent >= 70
+                UNION ALL
+                SELECT MIN(rank), 'p80' FROM distribution_points WHERE cumulative_revenue_percent >= 80
+                UNION ALL
+                SELECT MIN(rank), 'p90' FROM distribution_points WHERE cumulative_revenue_percent >= 90
+                UNION ALL
+                SELECT MIN(rank), 'p95' FROM distribution_points WHERE cumulative_revenue_percent >= 95
+                UNION ALL
+                SELECT MIN(rank), 'p100' FROM distribution_points WHERE cumulative_revenue_percent >= 99.9
+            ),
+            -- Sample points: evenly distributed plus critical points
             sampled AS (
-                SELECT *
-                FROM distribution_points
+                SELECT DISTINCT dp.*
+                FROM distribution_points dp
                 WHERE
-                    rank = 1  -- First point
-                    OR rank = total_products  -- Last point
-                    OR MOD(rank, GREATEST(1, CAST(total_products / {num_points} AS INT64))) = 0  -- Evenly sampled
-                    OR cumulative_revenue_percent BETWEEN 79 AND 81  -- Around 80% threshold
-                    OR cumulative_revenue_percent BETWEEN 89 AND 91  -- Around 90% threshold
-                    OR cumulative_revenue_percent BETWEEN 69 AND 71  -- Around 70% threshold
+                    dp.rank = 1  -- First point
+                    OR dp.rank = dp.total_products  -- Last point (100%)
+                    OR dp.rank IN (SELECT threshold_rank FROM threshold_points WHERE threshold_rank IS NOT NULL)  -- Threshold crossings
+                    OR MOD(dp.rank, GREATEST(1, CAST(dp.total_products / {num_points} AS INT64))) = 0  -- Evenly sampled
             )
             SELECT rank as product_count, cumulative_revenue, total_products, grand_total as total_revenue, percent_products, cumulative_revenue_percent
             FROM sampled
             ORDER BY rank
-            LIMIT 100
+            LIMIT 150
             """
 
             result = self.bq_service.client.query(curve_query).result()
@@ -2803,7 +2965,8 @@ class CustomerRevenueAnalysisService:
         customer_column: str,
         revenue_column: str,
         timestamp_column: str = None,
-        rolling_days: int = None
+        rolling_days: int = None,
+        filters: dict = None
     ) -> dict:
         """
         Analyze customer revenue distribution using BigQuery.
@@ -2814,6 +2977,7 @@ class CustomerRevenueAnalysisService:
             revenue_column: Column name for revenue (e.g., "transactions.amount")
             timestamp_column: Column name for timestamp filtering (optional)
             rolling_days: Number of days for rolling window (optional)
+            filters: Dict of filters from other sub-chapters (product_filter, etc.)
 
         Returns:
             Dict with distribution analysis:
@@ -2835,6 +2999,8 @@ class CustomerRevenueAnalysisService:
             }
         """
         try:
+            filters = filters or {}
+
             # Extract just the column name from "table.column" format
             customer_col = self._extract_column_name(customer_column)
             revenue_col = self._extract_column_name(revenue_column)
@@ -2842,17 +3008,108 @@ class CustomerRevenueAnalysisService:
 
             # Get the table alias for the primary table
             primary_alias = primary_table.split('.')[-1]
+            full_table_ref = self.bq_service._get_full_table_ref(primary_table)
 
-            # Build the base query with optional date filter
-            date_filter_clause = ""
+            # Build WHERE clauses
+            where_clauses = []
 
+            # Date filter
             if timestamp_col and rolling_days:
-                date_filter_clause = f"""
-                WHERE `{primary_alias}`.`{timestamp_col}` >= DATE_SUB(
-                    (SELECT MAX(`{timestamp_col}`) FROM `{self.bq_service._get_full_table_ref(primary_table)}`),
-                    INTERVAL {rolling_days} DAY
-                )
-                """
+                where_clauses.append(f"""
+                    `{primary_alias}`.`{timestamp_col}` >= DATE_SUB(
+                        (SELECT MAX(`{timestamp_col}`) FROM `{full_table_ref}`),
+                        INTERVAL {rolling_days} DAY
+                    )
+                """)
+
+            # Product category filters (e.g., category = 'Electronics')
+            product_filter = filters.get('product_filter', {})
+            if product_filter.get('category_filters'):
+                for cat_filter in product_filter['category_filters']:
+                    col_ref = cat_filter.get('column', '')
+                    col_name = self._extract_column_name(col_ref)
+                    if '.' in col_ref:
+                        table_alias = col_ref.split('.')[0]
+                    else:
+                        table_alias = primary_alias
+
+                    values = cat_filter.get('values', [])
+                    if values and col_name:
+                        escaped = [v.replace("'", "''") for v in values]
+                        values_sql = ", ".join(f"'{v}'" for v in escaped)
+
+                        if cat_filter.get('mode') == 'exclude':
+                            where_clauses.append(f"`{table_alias}`.`{col_name}` NOT IN ({values_sql})")
+                        else:
+                            where_clauses.append(f"`{table_alias}`.`{col_name}` IN ({values_sql})")
+
+            # Product numeric filters
+            if product_filter.get('numeric_filters'):
+                for num_filter in product_filter['numeric_filters']:
+                    col_ref = num_filter.get('column', '')
+                    col_name = self._extract_column_name(col_ref)
+                    if '.' in col_ref:
+                        table_alias = col_ref.split('.')[0]
+                    else:
+                        table_alias = primary_alias
+
+                    filter_type = num_filter.get('filter_type', 'range')
+                    include_nulls = num_filter.get('include_nulls', False)
+
+                    if col_name:
+                        conditions = []
+                        if filter_type == 'range':
+                            min_val = num_filter.get('min')
+                            max_val = num_filter.get('max')
+                            if min_val is not None:
+                                conditions.append(f"`{table_alias}`.`{col_name}` >= {min_val}")
+                            if max_val is not None:
+                                conditions.append(f"`{table_alias}`.`{col_name}` <= {max_val}")
+                        elif filter_type == 'greater_than':
+                            val = num_filter.get('value')
+                            if val is not None:
+                                conditions.append(f"`{table_alias}`.`{col_name}` > {val}")
+                        elif filter_type == 'less_than':
+                            val = num_filter.get('value')
+                            if val is not None:
+                                conditions.append(f"`{table_alias}`.`{col_name}` < {val}")
+                        elif filter_type == 'equals':
+                            val = num_filter.get('value')
+                            if val is not None:
+                                conditions.append(f"`{table_alias}`.`{col_name}` = {val}")
+
+                        if conditions:
+                            cond_str = " AND ".join(conditions)
+                            if include_nulls:
+                                where_clauses.append(f"(({cond_str}) OR `{table_alias}`.`{col_name}` IS NULL)")
+                            else:
+                                where_clauses.append(f"({cond_str})")
+
+            # Customer category filters (from already committed customer filters, not top_revenue)
+            customer_filter = filters.get('customer_filter', {})
+            if customer_filter.get('category_filters'):
+                for cat_filter in customer_filter['category_filters']:
+                    col_ref = cat_filter.get('column', '')
+                    col_name = self._extract_column_name(col_ref)
+                    if '.' in col_ref:
+                        table_alias = col_ref.split('.')[0]
+                    else:
+                        table_alias = primary_alias
+
+                    values = cat_filter.get('values', [])
+                    if values and col_name:
+                        escaped = [v.replace("'", "''") for v in values]
+                        values_sql = ", ".join(f"'{v}'" for v in escaped)
+
+                        if cat_filter.get('mode') == 'exclude':
+                            where_clauses.append(f"`{table_alias}`.`{col_name}` NOT IN ({values_sql})")
+                        else:
+                            where_clauses.append(f"`{table_alias}`.`{col_name}` IN ({values_sql})")
+
+            # Build the final WHERE clause
+            where_clause = ""
+            if where_clauses:
+                where_clause = "WHERE " + " AND ".join(where_clauses)
 
             # Main analysis query - similar structure to ProductRevenueAnalysisService
             analysis_query = f"""
@@ -2860,8 +3117,8 @@ class CustomerRevenueAnalysisService:
                 SELECT
                     `{primary_alias}`.`{customer_col}` as customer_id,
                     `{primary_alias}`.`{revenue_col}` as revenue
-                FROM `{self.bq_service._get_full_table_ref(primary_table)}` AS `{primary_alias}`
-                {date_filter_clause}
+                FROM `{full_table_ref}` AS `{primary_alias}`
+                {where_clause}
             ),
             customer_revenues AS (
                 SELECT

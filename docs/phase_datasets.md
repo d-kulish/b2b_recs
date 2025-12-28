@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides detailed specifications for implementing the **Datasets** domain in the ML Platform. The Datasets domain defines WHAT data goes into model training.
 
-**Last Updated**: 2025-12-28 (v12 - Added column renaming/aliases feature in Schema Builder)
+**Last Updated**: 2025-12-28 (v13 - Fixed Top Products/Customers analysis to respect cross-sub-chapter filters)
 
 ---
 
@@ -1815,3 +1815,69 @@ class TestQueryGeneration:
 - [Implementation Overview](../implementation.md)
 - [Modeling Phase](phase_modeling.md)
 - [Training Phase](phase_training.md)
+
+---
+
+## Changelog
+
+### v13 (2025-12-28) - Cross-Sub-Chapter Filter Fix
+
+**Bug Fixed:** Top Products/Customers analysis was ignoring filters from other sub-chapters.
+
+**Problem Description:**
+When users applied filters in one sub-chapter (e.g., city = 'VINNYTSYA' in Customers) and then ran "Top Products" analysis, the analysis would run against the full dataset instead of the filtered subset.
+
+**Example:**
+1. User applies 30-day rolling window in Dates sub-chapter
+2. User filters by city = 'VINNYTSYA' in Customers sub-chapter
+3. User clicks "Refresh Dataset" to commit the customer filter
+4. User opens "Top Products" modal and clicks "Analyze"
+5. **Before fix:** Analysis shows total products from entire dataset (ignoring city filter)
+6. **After fix:** Analysis shows only products sold in VINNYTSYA within the date range
+
+**Root Cause:**
+The `analyzeProductRevenue()` and `analyzeCustomerRevenue()` frontend functions were not passing committed filters from other sub-chapters to the backend API. The backend services only applied the date filter, ignoring customer/product category filters.
+
+**Files Modified:**
+
+1. **Frontend** (`templates/ml_platform/model_dataset.html`):
+   - Added `getCommittedFiltersForAnalysis()` helper function to collect all committed filters
+   - Updated `analyzeProductRevenue()` to pass committed date and customer filters
+   - Updated `analyzeCustomerRevenue()` to pass committed date and product filters
+
+2. **Backend API** (`ml_platform/datasets/api.py`):
+   - Updated `analyze_product_revenue` endpoint to accept `filters` parameter
+   - Updated `analyze_customer_revenue` endpoint to accept `filters` parameter
+
+3. **Backend Services** (`ml_platform/datasets/services.py`):
+   - Updated `ProductRevenueAnalysisService.analyze_distribution()` to apply customer category/numeric filters
+   - Updated `ProductRevenueAnalysisService._get_distribution_curve()` to apply same filters
+   - Updated `CustomerRevenueAnalysisService.analyze_distribution()` to apply product and customer filters
+   - Fixed distribution curve sampling to guarantee inclusion of 70%, 80%, 90%, 95%, 100% threshold points
+
+**Additional Bug Fixed:**
+The distribution curve query was using `ORDER BY rank LIMIT 100` which cut off data before reaching the 80% revenue threshold. Fixed by using a `threshold_points` CTE to explicitly find and include threshold crossing points.
+
+**Technical Details:**
+
+Filter flow after fix:
+```
+Frontend: getCommittedFiltersForAnalysis()
+    ↓
+Collects: datesFilterState.committed + customerFiltersState.committed + productFiltersState.committed
+    ↓
+API: analyze-product-revenue/ receives filters parameter
+    ↓
+Service: ProductRevenueAnalysisService.analyze_distribution(filters=filters)
+    ↓
+SQL: WHERE clause includes date filter AND customer category filters
+```
+
+Example generated WHERE clause:
+```sql
+WHERE `tfrs_training_examples`.`date` >= DATE_SUB(
+        (SELECT MAX(`date`) FROM `b2b-recs.raw_data.tfrs_training_examples`),
+        INTERVAL 30 DAY
+    )
+  AND `tfrs_training_examples`.`city` IN ('VINNYTSYA')
+```

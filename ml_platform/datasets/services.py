@@ -881,6 +881,155 @@ class BigQueryService:
     # QUERY GENERATION
     # =========================================================================
 
+    def _build_cross_filter_where_clauses(self, filters, primary_alias, exclude_filter=None):
+        """
+        Build WHERE clauses from cross-sub-chapter filters (category and numeric).
+
+        This method extracts category and numeric filters from customer_filter and
+        product_filter, converting them to SQL WHERE clauses. These clauses are used
+        to filter the base data BEFORE calculating top products/customers.
+
+        Args:
+            filters: Full filters dict from dataset config
+            primary_alias: Table alias for column references
+            exclude_filter: 'customer' or 'product' - skip this filter type
+                           (used when we don't want to apply filters from a specific sub-chapter)
+
+        Returns:
+            List of WHERE clause strings
+        """
+        where_clauses = []
+
+        # Process customer_filter (category and numeric filters only, not top_revenue or aggregations)
+        if exclude_filter != 'customer':
+            customer_filter = filters.get('customer_filter', {})
+
+            # Customer category filters (e.g., city IN ('CHERNIGIV'))
+            for cat_filter in customer_filter.get('category_filters', []):
+                col_ref = cat_filter.get('column', '')
+                col_name = col_ref.split('.')[-1] if '.' in col_ref else col_ref
+                if '.' in col_ref:
+                    table_alias = col_ref.split('.')[0]
+                else:
+                    table_alias = primary_alias
+
+                values = cat_filter.get('values', [])
+                if values and col_name:
+                    escaped = [v.replace("'", "''") for v in values]
+                    values_sql = ", ".join(f"'{v}'" for v in escaped)
+
+                    if cat_filter.get('mode') == 'exclude':
+                        where_clauses.append(f"{table_alias}.{col_name} NOT IN ({values_sql})")
+                    else:
+                        where_clauses.append(f"{table_alias}.{col_name} IN ({values_sql})")
+
+            # Customer numeric filters
+            for num_filter in customer_filter.get('numeric_filters', []):
+                col_ref = num_filter.get('column', '')
+                col_name = col_ref.split('.')[-1] if '.' in col_ref else col_ref
+                if '.' in col_ref:
+                    table_alias = col_ref.split('.')[0]
+                else:
+                    table_alias = primary_alias
+
+                filter_type = num_filter.get('filter_type', num_filter.get('type', 'range'))
+                include_nulls = num_filter.get('include_nulls', False)
+
+                if col_name:
+                    conditions = []
+                    if filter_type == 'range':
+                        min_val = num_filter.get('min')
+                        max_val = num_filter.get('max')
+                        if min_val is not None:
+                            conditions.append(f"{table_alias}.{col_name} >= {min_val}")
+                        if max_val is not None:
+                            conditions.append(f"{table_alias}.{col_name} <= {max_val}")
+                    elif filter_type == 'greater_than':
+                        val = num_filter.get('value')
+                        if val is not None:
+                            conditions.append(f"{table_alias}.{col_name} > {val}")
+                    elif filter_type == 'less_than':
+                        val = num_filter.get('value')
+                        if val is not None:
+                            conditions.append(f"{table_alias}.{col_name} < {val}")
+                    elif filter_type == 'equals':
+                        val = num_filter.get('value')
+                        if val is not None:
+                            conditions.append(f"{table_alias}.{col_name} = {val}")
+
+                    if conditions:
+                        cond_str = " AND ".join(conditions)
+                        if include_nulls:
+                            where_clauses.append(f"(({cond_str}) OR {table_alias}.{col_name} IS NULL)")
+                        else:
+                            where_clauses.append(f"({cond_str})")
+
+        # Process product_filter (category and numeric filters only, not top_revenue or aggregations)
+        if exclude_filter != 'product':
+            product_filter = filters.get('product_filter', {})
+
+            # Product category filters
+            for cat_filter in product_filter.get('category_filters', []):
+                col_ref = cat_filter.get('column', '')
+                col_name = col_ref.split('.')[-1] if '.' in col_ref else col_ref
+                if '.' in col_ref:
+                    table_alias = col_ref.split('.')[0]
+                else:
+                    table_alias = primary_alias
+
+                values = cat_filter.get('values', [])
+                if values and col_name:
+                    escaped = [v.replace("'", "''") for v in values]
+                    values_sql = ", ".join(f"'{v}'" for v in escaped)
+
+                    if cat_filter.get('mode') == 'exclude':
+                        where_clauses.append(f"{table_alias}.{col_name} NOT IN ({values_sql})")
+                    else:
+                        where_clauses.append(f"{table_alias}.{col_name} IN ({values_sql})")
+
+            # Product numeric filters
+            for num_filter in product_filter.get('numeric_filters', []):
+                col_ref = num_filter.get('column', '')
+                col_name = col_ref.split('.')[-1] if '.' in col_ref else col_ref
+                if '.' in col_ref:
+                    table_alias = col_ref.split('.')[0]
+                else:
+                    table_alias = primary_alias
+
+                filter_type = num_filter.get('filter_type', num_filter.get('type', 'range'))
+                include_nulls = num_filter.get('include_nulls', False)
+
+                if col_name:
+                    conditions = []
+                    if filter_type == 'range':
+                        min_val = num_filter.get('min')
+                        max_val = num_filter.get('max')
+                        if min_val is not None:
+                            conditions.append(f"{table_alias}.{col_name} >= {min_val}")
+                        if max_val is not None:
+                            conditions.append(f"{table_alias}.{col_name} <= {max_val}")
+                    elif filter_type == 'greater_than':
+                        val = num_filter.get('value')
+                        if val is not None:
+                            conditions.append(f"{table_alias}.{col_name} > {val}")
+                    elif filter_type == 'less_than':
+                        val = num_filter.get('value')
+                        if val is not None:
+                            conditions.append(f"{table_alias}.{col_name} < {val}")
+                    elif filter_type == 'equals':
+                        val = num_filter.get('value')
+                        if val is not None:
+                            conditions.append(f"{table_alias}.{col_name} = {val}")
+
+                    if conditions:
+                        cond_str = " AND ".join(conditions)
+                        if include_nulls:
+                            where_clauses.append(f"(({cond_str}) OR {table_alias}.{col_name} IS NULL)")
+                        else:
+                            where_clauses.append(f"({cond_str})")
+
+        return where_clauses
+
     def generate_query(self, dataset, for_analysis=False, for_tfx=False):
         """
         Generate BigQuery SQL from dataset configuration.
@@ -1041,30 +1190,50 @@ class BigQueryService:
 
                 join_clause_str = '\n'.join(filtered_data_joins) if filtered_data_joins else ''
 
+                # Build complete WHERE clause including cross-sub-chapter filters
+                # This ensures top_products and top_customers are calculated from the
+                # correctly filtered subset (e.g., only CHERNIGIV data, not all cities)
+                all_where_clauses = [date_filter_clause]
+
+                # Add cross-sub-chapter category and numeric filters
+                cross_filter_clauses = self._build_cross_filter_where_clauses(
+                    filters, primary_alias, exclude_filter=None
+                )
+                all_where_clauses.extend(cross_filter_clauses)
+
+                # Combine all WHERE clauses
+                combined_where_clause = ' AND\n        '.join(all_where_clauses)
+
                 filtered_data_cte = f"""
     SELECT
         {filtered_select_str}
     FROM `{self.project_id}.{primary_table}` AS {primary_alias}
 {join_clause_str}
-    WHERE {date_filter_clause}"""
+    WHERE {combined_where_clause}"""
                 ctes.append(('filtered_data', filtered_data_cte))
 
             # 3. Product filters - use filtered_data if available
+            # When using filtered_data, skip row filters (category/numeric/date) as they're
+            # already applied in the CTE. Only generate CTEs for top_revenue and aggregations.
             product_filter = filters.get('product_filter', {})
             if product_filter:
                 source_table = 'filtered_data' if has_date_filter else f'`{self.project_id}.{primary_table}`'
                 product_ctes, product_wheres = self._generate_product_filter_clauses_v2(
-                    product_filter, source_table, primary_table
+                    product_filter, source_table, primary_table,
+                    skip_row_filters=has_date_filter  # Skip if filters already in filtered_data
                 )
                 ctes.extend(product_ctes)
                 final_where_clauses.extend(product_wheres)
 
             # 4. Customer filters - use filtered_data if available
+            # When using filtered_data, skip row filters (category/numeric/date) as they're
+            # already applied in the CTE. Only generate CTEs for top_revenue and aggregations.
             customer_filter = filters.get('customer_filter', {})
             if customer_filter:
                 source_table = 'filtered_data' if has_date_filter else f'`{self.project_id}.{primary_table}`'
                 customer_ctes, customer_wheres = self._generate_customer_filter_clauses_v2(
-                    customer_filter, source_table, primary_table
+                    customer_filter, source_table, primary_table,
+                    skip_row_filters=has_date_filter  # Skip if filters already in filtered_data
                 )
                 ctes.extend(customer_ctes)
                 final_where_clauses.extend(customer_wheres)
@@ -1838,7 +2007,7 @@ class BigQueryService:
     # V2 FILTER METHODS - Use source_table parameter for filtered_data CTE support
     # =========================================================================
 
-    def _generate_product_filter_clauses_v2(self, product_filter, source_table, primary_table):
+    def _generate_product_filter_clauses_v2(self, product_filter, source_table, primary_table, skip_row_filters=False):
         """
         Generate CTEs and WHERE clauses for product filters.
         V2: Accepts source_table parameter to use filtered_data CTE when date filter is applied.
@@ -1848,6 +2017,9 @@ class BigQueryService:
                            numeric_filters, date_filters
             source_table: Either 'filtered_data' or full table reference
             primary_table: Original primary table name (for column references)
+            skip_row_filters: If True, skip category/numeric/date filters (they're already
+                             in filtered_data CTE). Only process top_revenue and aggregation
+                             filters which need separate CTEs.
 
         Returns:
             Tuple of (list of CTE tuples, list of WHERE clauses)
@@ -1856,9 +2028,9 @@ class BigQueryService:
             - top_revenue: Top N% products by revenue
             - aggregation_filters: Filter by aggregated metrics per product
               (transaction_count, total_revenue)
-            - category_filters: Include/exclude specific categorical values
-            - numeric_filters: Range, greater_than, less_than, equals for numeric columns
-            - date_filters: Per-column date filtering (relative or fixed date ranges)
+            - category_filters: Include/exclude specific categorical values (skipped if skip_row_filters)
+            - numeric_filters: Range, greater_than, less_than, equals for numeric columns (skipped if skip_row_filters)
+            - date_filters: Per-column date filtering (relative or fixed date ranges) (skipped if skip_row_filters)
         """
         ctes = []
         where_clauses = []
@@ -1949,58 +2121,65 @@ class BigQueryService:
             )
 
         # Category filters (include/exclude specific values)
-        category_filters = product_filter.get('category_filters', [])
-        for cf in category_filters:
-            column = cf.get('column')
-            mode = cf.get('mode', 'include')
-            values = cf.get('values', [])
+        # Skip if already applied in filtered_data CTE
+        if not skip_row_filters:
+            category_filters = product_filter.get('category_filters', [])
+            for cf in category_filters:
+                column = cf.get('column')
+                mode = cf.get('mode', 'include')
+                values = cf.get('values', [])
 
-            if column and values:
-                col_name = column.split('.')[-1] if '.' in column else column
-                escaped_values = [f"'{v}'" for v in values]
-                values_str = ', '.join(escaped_values)
+                if column and values:
+                    col_name = column.split('.')[-1] if '.' in column else column
+                    escaped_values = [f"'{v}'" for v in values]
+                    values_str = ', '.join(escaped_values)
 
-                if mode == 'include':
-                    where_clauses.append(f"{col_name} IN ({values_str})")
-                else:
-                    where_clauses.append(f"{col_name} NOT IN ({values_str})")
+                    if mode == 'include':
+                        where_clauses.append(f"{col_name} IN ({values_str})")
+                    else:
+                        where_clauses.append(f"{col_name} NOT IN ({values_str})")
 
         # Numeric filters
-        numeric_filters = product_filter.get('numeric_filters', [])
-        for nf in numeric_filters:
-            column = nf.get('column')
-            filter_type = nf.get('type', 'range')
-            min_val = nf.get('min')
-            max_val = nf.get('max')
-            value = nf.get('value')
-            include_nulls = nf.get('include_nulls', False)
+        # Skip if already applied in filtered_data CTE
+        if not skip_row_filters:
+            numeric_filters = product_filter.get('numeric_filters', [])
+            for nf in numeric_filters:
+                column = nf.get('column')
+                filter_type = nf.get('type', 'range')
+                min_val = nf.get('min')
+                max_val = nf.get('max')
+                value = nf.get('value')
+                include_nulls = nf.get('include_nulls', False)
 
-            if not column:
-                continue
+                if not column:
+                    continue
 
-            col_name = column.split('.')[-1] if '.' in column else column
-            condition = None
+                col_name = column.split('.')[-1] if '.' in column else column
+                condition = None
 
-            if filter_type == 'range' and min_val is not None and max_val is not None:
-                condition = f"{col_name} BETWEEN {min_val} AND {max_val}"
-            elif filter_type == 'greater_than' and value is not None:
-                condition = f"{col_name} > {value}"
-            elif filter_type == 'less_than' and value is not None:
-                condition = f"{col_name} < {value}"
-            elif filter_type == 'equals' and value is not None:
-                condition = f"{col_name} = {value}"
-            elif min_val is not None:
-                condition = f"{col_name} >= {min_val}"
-            elif max_val is not None:
-                condition = f"{col_name} <= {max_val}"
+                if filter_type == 'range' and min_val is not None and max_val is not None:
+                    condition = f"{col_name} BETWEEN {min_val} AND {max_val}"
+                elif filter_type == 'greater_than' and value is not None:
+                    condition = f"{col_name} > {value}"
+                elif filter_type == 'less_than' and value is not None:
+                    condition = f"{col_name} < {value}"
+                elif filter_type == 'equals' and value is not None:
+                    condition = f"{col_name} = {value}"
+                elif min_val is not None:
+                    condition = f"{col_name} >= {min_val}"
+                elif max_val is not None:
+                    condition = f"{col_name} <= {max_val}"
 
-            if condition:
-                if include_nulls:
-                    where_clauses.append(f"({condition} OR {col_name} IS NULL)")
-                else:
-                    where_clauses.append(condition)
+                if condition:
+                    if include_nulls:
+                        where_clauses.append(f"({condition} OR {col_name} IS NULL)")
+                    else:
+                        where_clauses.append(condition)
 
         # Date filters (per-column date filtering)
+        # Skip if already applied in filtered_data CTE
+        if skip_row_filters:
+            return ctes, where_clauses
         date_filters = product_filter.get('date_filters', [])
         for df in date_filters:
             column = df.get('column')
@@ -2051,7 +2230,7 @@ class BigQueryService:
 
         return ctes, where_clauses
 
-    def _generate_customer_filter_clauses_v2(self, customer_filter, source_table, primary_table):
+    def _generate_customer_filter_clauses_v2(self, customer_filter, source_table, primary_table, skip_row_filters=False):
         """
         Generate CTEs and WHERE clauses for customer filters.
         V2: Accepts source_table parameter to use filtered_data CTE when date filter is applied.
@@ -2061,6 +2240,9 @@ class BigQueryService:
                            numeric_filters, date_filters
             source_table: Either 'filtered_data' or full table reference
             primary_table: Original primary table name (for column references)
+            skip_row_filters: If True, skip category/numeric/date filters (they're already
+                             in filtered_data CTE). Only process top_revenue and aggregation
+                             filters which need separate CTEs.
 
         Returns:
             Tuple of (list of CTE tuples, list of WHERE clauses)
@@ -2069,9 +2251,9 @@ class BigQueryService:
             - top_revenue: Top N% customers by revenue
             - aggregation_filters: Filter by aggregated metrics per customer
               (transaction_count, total_spend, avg_spend)
-            - category_filters: Include/exclude specific categorical values
-            - numeric_filters: Range, greater_than, less_than, equals for numeric columns
-            - date_filters: Per-column date filtering (relative or fixed date ranges)
+            - category_filters: Include/exclude specific categorical values (skipped if skip_row_filters)
+            - numeric_filters: Range, greater_than, less_than, equals for numeric columns (skipped if skip_row_filters)
+            - date_filters: Per-column date filtering (relative or fixed date ranges) (skipped if skip_row_filters)
         """
         ctes = []
         where_clauses = []
@@ -2161,58 +2343,65 @@ class BigQueryService:
             where_clauses.append(f"{customer_col_name} IN (SELECT customer_id FROM {cte_name})")
 
         # Category filters
-        category_filters = customer_filter.get('category_filters', [])
-        for cf in category_filters:
-            column = cf.get('column')
-            mode = cf.get('mode', 'include')
-            values = cf.get('values', [])
+        # Skip if already applied in filtered_data CTE
+        if not skip_row_filters:
+            category_filters = customer_filter.get('category_filters', [])
+            for cf in category_filters:
+                column = cf.get('column')
+                mode = cf.get('mode', 'include')
+                values = cf.get('values', [])
 
-            if column and values:
-                col_name = column.split('.')[-1] if '.' in column else column
-                escaped_values = [f"'{v}'" for v in values]
-                values_str = ', '.join(escaped_values)
+                if column and values:
+                    col_name = column.split('.')[-1] if '.' in column else column
+                    escaped_values = [f"'{v}'" for v in values]
+                    values_str = ', '.join(escaped_values)
 
-                if mode == 'include':
-                    where_clauses.append(f"{col_name} IN ({values_str})")
-                else:
-                    where_clauses.append(f"{col_name} NOT IN ({values_str})")
+                    if mode == 'include':
+                        where_clauses.append(f"{col_name} IN ({values_str})")
+                    else:
+                        where_clauses.append(f"{col_name} NOT IN ({values_str})")
 
         # Numeric filters
-        numeric_filters = customer_filter.get('numeric_filters', [])
-        for nf in numeric_filters:
-            column = nf.get('column')
-            filter_type = nf.get('type', 'range')
-            min_val = nf.get('min')
-            max_val = nf.get('max')
-            value = nf.get('value')
-            include_nulls = nf.get('include_nulls', False)
+        # Skip if already applied in filtered_data CTE
+        if not skip_row_filters:
+            numeric_filters = customer_filter.get('numeric_filters', [])
+            for nf in numeric_filters:
+                column = nf.get('column')
+                filter_type = nf.get('type', 'range')
+                min_val = nf.get('min')
+                max_val = nf.get('max')
+                value = nf.get('value')
+                include_nulls = nf.get('include_nulls', False)
 
-            if not column:
-                continue
+                if not column:
+                    continue
 
-            col_name = column.split('.')[-1] if '.' in column else column
-            condition = None
+                col_name = column.split('.')[-1] if '.' in column else column
+                condition = None
 
-            if filter_type == 'range' and min_val is not None and max_val is not None:
-                condition = f"{col_name} BETWEEN {min_val} AND {max_val}"
-            elif filter_type == 'greater_than' and value is not None:
-                condition = f"{col_name} > {value}"
-            elif filter_type == 'less_than' and value is not None:
-                condition = f"{col_name} < {value}"
-            elif filter_type == 'equals' and value is not None:
-                condition = f"{col_name} = {value}"
-            elif min_val is not None:
-                condition = f"{col_name} >= {min_val}"
-            elif max_val is not None:
-                condition = f"{col_name} <= {max_val}"
+                if filter_type == 'range' and min_val is not None and max_val is not None:
+                    condition = f"{col_name} BETWEEN {min_val} AND {max_val}"
+                elif filter_type == 'greater_than' and value is not None:
+                    condition = f"{col_name} > {value}"
+                elif filter_type == 'less_than' and value is not None:
+                    condition = f"{col_name} < {value}"
+                elif filter_type == 'equals' and value is not None:
+                    condition = f"{col_name} = {value}"
+                elif min_val is not None:
+                    condition = f"{col_name} >= {min_val}"
+                elif max_val is not None:
+                    condition = f"{col_name} <= {max_val}"
 
-            if condition:
-                if include_nulls:
-                    where_clauses.append(f"({condition} OR {col_name} IS NULL)")
-                else:
-                    where_clauses.append(condition)
+                if condition:
+                    if include_nulls:
+                        where_clauses.append(f"({condition} OR {col_name} IS NULL)")
+                    else:
+                        where_clauses.append(condition)
 
         # Date filters (per-column date filtering)
+        # Skip if already applied in filtered_data CTE
+        if skip_row_filters:
+            return ctes, where_clauses
         date_filters = customer_filter.get('date_filters', [])
         for df in date_filters:
             column = df.get('column')

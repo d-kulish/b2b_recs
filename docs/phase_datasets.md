@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides detailed specifications for implementing the **Datasets** domain in the ML Platform. The Datasets domain defines WHAT data goes into model training.
 
-**Last Updated**: 2025-12-28 (v13 - Fixed Top Products/Customers analysis to respect cross-sub-chapter filters)
+**Last Updated**: 2025-12-28 (v14 - Fixed query generator to apply cross-sub-chapter filters before top products/customers calculation)
 
 ---
 
@@ -1819,6 +1819,74 @@ class TestQueryGeneration:
 ---
 
 ## Changelog
+
+### v14 (2025-12-28) - Query Generator Cross-Filter Fix
+
+**Bug Fixed:** Generated SQL query was calculating top products/customers globally instead of respecting cross-sub-chapter filters.
+
+**Problem Description:**
+While v13 fixed the UI analysis (Pareto chart), the final generated SQL query used for training still had a bug: the `filtered_data` CTE only included the date filter, not category/numeric filters from other sub-chapters. This meant top products/customers were calculated from all data, not the filtered subset.
+
+**Example:**
+1. User applies 60-day rolling window in Dates sub-chapter
+2. User filters by city = 'CHERNIGIV' in Customers sub-chapter
+3. User enables Top 80% products by revenue in Products sub-chapter
+4. User saves the dataset
+5. **Before fix:** Top 80% products calculated from ALL cities (4,554 products), then city filter applied → 87% revenue coverage
+6. **After fix:** Top 80% products calculated from CHERNIGIV only (1,054 products) → 80% revenue coverage (as expected)
+
+**Impact:**
+| Metric | Before (Bug) | After (Fixed) |
+|--------|--------------|---------------|
+| Products in top 80% | 4,554 (global) | 1,054 (CHERNIGIV) |
+| Total rows | 107,692 | 88,082 |
+| Revenue coverage | 86.98% | 80.01% |
+
+**Root Cause:**
+In `BigQueryService.generate_query()`, the `filtered_data` CTE was only applying the date filter:
+```python
+# Before (buggy):
+filtered_data_cte = f"... WHERE {date_filter_clause}"
+```
+
+The category/numeric filters from `customer_filter` and `product_filter` were only applied in the final WHERE clause, AFTER the top products/customers CTEs were calculated.
+
+**Files Modified:**
+
+1. **Backend Services** (`ml_platform/datasets/services.py`):
+   - Added `_build_cross_filter_where_clauses()` helper method (lines 884-1031)
+   - Modified `filtered_data` CTE construction to include all cross-sub-chapter filters (lines 1193-1213)
+   - Updated `_generate_product_filter_clauses_v2()` with `skip_row_filters` parameter
+   - Updated `_generate_customer_filter_clauses_v2()` with `skip_row_filters` parameter
+
+**Technical Details:**
+
+Before fix - Generated query structure:
+```sql
+WITH filtered_data AS (
+    SELECT ... WHERE date >= ...  -- Only date filter!
+),
+top_products AS (
+    ... FROM filtered_data ...    -- Calculated from ALL cities
+)
+SELECT ... WHERE product_id IN (...) AND city IN ('CHERNIGIV')  -- Too late!
+```
+
+After fix - Generated query structure:
+```sql
+WITH filtered_data AS (
+    SELECT ... WHERE date >= ... AND city IN ('CHERNIGIV')  -- All filters applied
+),
+top_products AS (
+    ... FROM filtered_data ...    -- Correctly scoped to CHERNIGIV
+)
+SELECT ... WHERE product_id IN (...)  -- No duplicate filter
+```
+
+**Verification:**
+Test query in `sql/chernigiv_verification.sql` confirms the fix works correctly.
+
+---
 
 ### v13 (2025-12-28) - Cross-Sub-Chapter Filter Fix
 

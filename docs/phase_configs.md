@@ -10,6 +10,78 @@ This document provides detailed specifications for implementing the **Configs** 
 
 ## Recent Updates (December 2025)
 
+### Embedding Recommendations & OOV Info for All Features (2025-12-29)
+
+**Feature Added:** Extended cardinality-based embedding recommendations and OOV information to all feature types (Primary IDs and Context Features).
+
+**Changes Made:**
+
+#### 1. Display Name (Alias) Preservation Fix
+
+**Problem:** When columns with renamed aliases (from Dataset Config) were dragged to Context Features, the original BigQuery column names appeared instead of the user-friendly aliases.
+
+**Root Cause:** The `createDefaultFeature()` and `dropPrimaryId()` functions were not preserving the `display_name` field from the column object.
+
+**Fix:** Added `display_name` preservation throughout the feature creation pipeline:
+- `createDefaultFeature()` - Now includes `display_name: col.display_name || col.name`
+- `dropPrimaryId()` - Now includes `display_name` for primary ID features
+- Cross-feature modal - Now shows aliases in selection list and preview
+- `addCrossFeature()` - Now preserves `display_name` in cross feature config
+
+#### 2. Cardinality-Based Recommendations for Context Features
+
+**Problem:** Text features in Context Features had no guidance on embedding dimension selection, unlike Primary IDs which showed cardinality and recommendations.
+
+**Implementation:**
+
+**A. Feature Card Display** (`createAssignedFeatureElement()`):
+After embedding is configured, shows cardinality info:
+```
+category
+STRING → Text • Embed: 8D
+📊 ~15 unique → ✓ 8D recommended     (green if matches)
+```
+
+**B. Settings Modal** (`renderFeatureConfigForm()`):
+- Cardinality banner with recommendation status (green/amber)
+- Visual indicator (★ and green ring) on recommended dimension button
+- Auto-selects recommended dimension when first opening unconfigured feature
+
+#### 3. OOV + Vocabulary Info for Primary IDs
+
+**Problem:** Primary ID modals didn't show OOV (Out-of-Vocabulary) handling information, leaving users unaware of cold start handling.
+
+**Implementation** (`renderPrimaryIdConfigForm()`):
+- Added cardinality banner with recommendation (same as Context Features)
+- Added vocabulary info section:
+  ```
+  🗄️ Vocabulary: Auto-detected from training data
+  ➕ +1 OOV: New customers not in training data will use a learned "cold start" embedding
+  ```
+- Contextual messaging: "customers" for Customer ID, "products" for Product ID
+
+**Files Modified:**
+- `templates/ml_platform/model_configs.html`:
+  - `createDefaultFeature()` - Added display_name preservation
+  - `dropPrimaryId()` - Added display_name preservation
+  - `createAssignedFeatureElement()` - Added cardinality info for text features
+  - `renderFeatureConfigForm()` - Added cardinality banner and highlighted button for text features
+  - `renderPrimaryIdConfigForm()` - Added cardinality banner, OOV info, highlighted button
+  - Cross-feature modal functions - Added display_name support throughout
+
+**Consistency Achieved:**
+
+| Feature | Context Features | Primary IDs |
+|---------|-----------------|-------------|
+| Cardinality display | ✅ | ✅ |
+| Recommended dimension | ✅ | ✅ |
+| Highlighted button (★) | ✅ | ✅ |
+| Auto-select recommended | ✅ | ✅ |
+| Vocabulary info | ✅ | ✅ |
+| +1 OOV info | ✅ | ✅ |
+
+---
+
 ### Dynamic Embedding Dimensions for Primary IDs (2025-12-29)
 
 **Feature Added:** Automatic embedding dimension assignment based on column cardinality for primary ID columns (customer_id, product_id).

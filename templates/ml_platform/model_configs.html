@@ -6232,6 +6232,26 @@ function createAssignedFeatureElement(feature, model, idx) {
 
     // Use display_name (alias) if available
     const displayName = feature.display_name || feature.column;
+
+    // Build cardinality info line for text features with embedding
+    let cardinalityInfo = '';
+    if (feature.data_type === 'text' && feature.transforms?.embedding?.enabled) {
+        const cardinality = feature.stats?.cardinality || feature.stats?.unique_count;
+        if (cardinality) {
+            const cardinalityText = formatCardinality(cardinality);
+            const recommendedDim = getRecommendedEmbedDim(cardinality);
+            const currentDim = feature.transforms.embedding.embedding_dim;
+            const dimStatus = currentDim === recommendedDim
+                ? `<span class="text-green-600">✓ ${recommendedDim}D recommended</span>`
+                : `<span class="text-amber-600">${recommendedDim}D recommended</span>`;
+            cardinalityInfo = `
+                <div class="text-xs mt-1" style="color: #6b7280;">
+                    <i class="fas fa-chart-bar mr-1"></i>${cardinalityText} unique → ${dimStatus}
+                </div>
+            `;
+        }
+    }
+
     div.innerHTML = `
         <div class="flex items-center justify-between">
             <div class="flex-1">
@@ -6239,6 +6259,7 @@ function createAssignedFeatureElement(feature, model, idx) {
                 <div class="text-xs ${displayInfo.hasTransforms ? 'text-gray-500' : 'text-amber-600'}">
                     ${bqType} → ${displayInfo.dataTypeLabel} • ${displayInfo.transformStr}
                 </div>
+                ${cardinalityInfo}
             </div>
             <div class="flex flex-col gap-1 ml-2">
                 <button type="button" class="feature-config-btn settings ${displayInfo.hasTransforms ? '' : 'needs-attention'}" onclick="openFeatureConfig('${model}', ${idx})" title="Configure transforms">
@@ -6413,6 +6434,7 @@ function dropPrimaryId(e, model) {
 
     const primaryIdFeature = {
         column: colData.name,
+        display_name: colData.display_name || colData.name,  // Preserve alias for UI display
         bq_type: colData.bq_type || colData.type || 'STRING',
         data_type: 'text',  // Force to text regardless of original type
         is_primary_id: true,
@@ -6465,11 +6487,39 @@ function openPrimaryIdConfig(model) {
 
 function renderPrimaryIdConfigForm() {
     const body = document.getElementById('featureModalBody');
-    const embedDim = editingFeature.transforms?.embedding?.embedding_dim || 32;
     const presetDims = [8, 16, 32, 64, 128, 256];
-    const isCustom = !presetDims.includes(embedDim);
     // Use display_name (alias) if available
     const displayName = editingFeature.display_name || editingFeature.column;
+
+    // Calculate cardinality-based recommendation
+    const cardinality = editingFeature.stats?.cardinality || editingFeature.stats?.unique_count;
+    const recommendedDim = cardinality ? getRecommendedEmbedDim(cardinality) : 32;
+    const cardinalityText = cardinality ? formatCardinality(cardinality) : null;
+
+    // Use existing value if configured, otherwise use recommendation
+    const embedDim = editingFeature.transforms?.embedding?.embedding_dim || recommendedDim;
+    const isCustom = !presetDims.includes(embedDim);
+
+    // Determine if this is Customer ID or Product ID for contextual messaging
+    const isCustomerId = editingFeature._model === 'buyer';
+    const idTypeLabel = isCustomerId ? 'customers' : 'products';
+
+    // Build cardinality recommendation banner
+    let cardinalityBannerHtml = '';
+    if (cardinalityText) {
+        const isRecommended = embedDim === recommendedDim;
+        cardinalityBannerHtml = `
+            <div class="flex items-center justify-center gap-2 p-3 rounded-lg mb-4 ${isRecommended ? 'bg-green-50 border border-green-200' : 'bg-amber-50 border border-amber-200'}">
+                <i class="fas fa-chart-bar ${isRecommended ? 'text-green-600' : 'text-amber-600'}"></i>
+                <span class="text-sm ${isRecommended ? 'text-green-700' : 'text-amber-700'}">
+                    ${cardinalityText} unique ${idTypeLabel} →
+                    ${isRecommended
+                        ? `<strong>✓ ${recommendedDim}D recommended</strong>`
+                        : `<strong>${recommendedDim}D recommended</strong>`}
+                </span>
+            </div>
+        `;
+    }
 
     body.innerHTML = `
         <div class="mb-4">
@@ -6488,6 +6538,8 @@ function renderPrimaryIdConfigForm() {
             </div>
         </div>
 
+        ${cardinalityBannerHtml}
+
         <div class="modal-form-group">
             <label class="modal-form-label">Embedding Dimension</label>
             <div class="flex gap-2 flex-wrap items-center justify-center">
@@ -6495,13 +6547,15 @@ function renderPrimaryIdConfigForm() {
                     <button type="button"
                             class="primary-id-dim-btn px-3 py-2 rounded-lg border transition-all ${embedDim === dim && !isCustom
                                 ? 'bg-blue-500 text-white border-blue-500'
-                                : 'bg-white text-gray-700 border-gray-300 hover:border-blue-400'}"
-                            onclick="selectPrimaryIdDim(${dim})">
-                        ${dim}D
+                                : 'bg-white text-gray-700 border-gray-300 hover:border-blue-400'}
+                            ${dim === recommendedDim ? 'ring-2 ring-offset-1 ring-green-400' : ''}"
+                            onclick="selectPrimaryIdDim(${dim})"
+                            title="${dim === recommendedDim ? 'Recommended based on cardinality' : ''}">
+                        ${dim}D${dim === recommendedDim ? ' ★' : ''}
                     </button>
                 `).join('')}
             </div>
-            <div class="flex items-center gap-3 mt-3">
+            <div class="flex items-center gap-3 mt-3 justify-center">
                 <span class="text-sm text-gray-600">Custom:</span>
                 <input type="number"
                        id="customEmbedDimInput"
@@ -6516,10 +6570,17 @@ function renderPrimaryIdConfigForm() {
                        oninput="onCustomDimInput(this.value)">
                 <span class="text-xs text-gray-500">Range: 4 - 1024</span>
             </div>
-            <p class="modal-form-hint mt-2">
-                <i class="fas fa-lightbulb text-amber-500 mr-1"></i>
-                Tip: Use larger dimensions (256-512) for millions of unique IDs, smaller (8-32) for few unique values
-            </p>
+        </div>
+
+        <div class="border-t border-gray-200 pt-4 mt-4 space-y-2">
+            <div class="flex items-start gap-2 text-xs text-gray-600">
+                <i class="fas fa-database text-blue-500 mt-0.5"></i>
+                <span><strong>Vocabulary:</strong> Auto-detected from training data</span>
+            </div>
+            <div class="flex items-start gap-2 text-xs text-gray-600">
+                <i class="fas fa-plus-circle text-green-500 mt-0.5"></i>
+                <span><strong>+1 OOV:</strong> New ${idTypeLabel} not in training data will use a learned "cold start" embedding</span>
+            </div>
         </div>
 
         <input type="hidden" id="primaryIdEmbedDim" value="${embedDim}">
@@ -6666,6 +6727,7 @@ function createDefaultFeature(col) {
 
     return {
         column: col.name,
+        display_name: col.display_name || col.name,  // Preserve alias for UI display
         bq_type: bqType,
         data_type: dataType,  // Numeric, Text, or Temporal
         stats: col.stats || {},
@@ -6920,9 +6982,32 @@ function renderFeatureConfigForm() {
             </div>
         `;
     } else if (dataType === 'text') {
-        const embedDim = t.embedding?.embedding_dim || 32;
+        // Calculate cardinality-based recommendation
+        const cardinality = editingFeature.stats?.cardinality || editingFeature.stats?.unique_count;
+        const recommendedDim = cardinality ? getRecommendedEmbedDim(cardinality) : 32;
+
+        // Use existing value if configured, otherwise use recommendation (or 32 as fallback)
+        const embedDim = t.embedding?.embedding_dim || recommendedDim;
         const presetDims = [8, 16, 32, 64, 128, 256];
         const isCustomDim = !presetDims.includes(embedDim);
+        const cardinalityText = cardinality ? formatCardinality(cardinality) : null;
+
+        // Build cardinality info line
+        let cardinalityInfoHtml = '';
+        if (cardinalityText && recommendedDim) {
+            const isRecommended = embedDim === recommendedDim;
+            cardinalityInfoHtml = `
+                <div class="flex items-center justify-center gap-2 mb-3 p-2 rounded-lg ${isRecommended ? 'bg-green-50 border border-green-200' : 'bg-amber-50 border border-amber-200'}">
+                    <i class="fas fa-chart-bar ${isRecommended ? 'text-green-600' : 'text-amber-600'}"></i>
+                    <span class="text-sm ${isRecommended ? 'text-green-700' : 'text-amber-700'}">
+                        ${cardinalityText} unique values →
+                        ${isRecommended
+                            ? `<strong>✓ ${recommendedDim}D recommended</strong>`
+                            : `<strong>${recommendedDim}D recommended</strong>`}
+                    </span>
+                </div>
+            `;
+        }
 
         transformsHtml = `
             <div class="p-4 bg-gray-50 border border-gray-200 rounded-lg">
@@ -6934,6 +7019,8 @@ function renderFeatureConfigForm() {
                     <span class="text-blue-600 font-medium" id="embeddingDimLabel">+${embedDim}D</span>
                 </div>
 
+                ${cardinalityInfoHtml}
+
                 <div class="mb-3">
                     <label class="text-xs text-gray-600 font-medium mb-2 block">Embedding Dimension</label>
                     <div class="flex gap-2 flex-wrap items-center justify-center">
@@ -6941,9 +7028,11 @@ function renderFeatureConfigForm() {
                             <button type="button"
                                     class="text-embed-dim-btn px-3 py-2 rounded-lg border transition-all ${embedDim === dim && !isCustomDim
                                         ? 'bg-blue-500 text-white border-blue-500'
-                                        : 'bg-white text-gray-700 border-gray-300 hover:border-blue-400'}"
-                                    onclick="selectTextEmbedDim(${dim})">
-                                ${dim}D
+                                        : 'bg-white text-gray-700 border-gray-300 hover:border-blue-400'}
+                                    ${dim === recommendedDim ? 'ring-2 ring-offset-1 ring-green-400' : ''}"
+                                    onclick="selectTextEmbedDim(${dim})"
+                                    title="${dim === recommendedDim ? 'Recommended based on cardinality' : ''}">
+                                ${dim}D${dim === recommendedDim ? ' ★' : ''}
                             </button>
                         `).join('')}
                     </div>
@@ -7189,10 +7278,11 @@ function openCrossModal(model) {
         }
 
         label.className = 'flex items-center gap-2 p-2 border rounded cursor-pointer hover:bg-gray-50';
+        const displayName = f.display_name || f.column;
         label.innerHTML = `
             <input type="checkbox" class="cross-feature-checkbox" value="${f.column}"
-                   data-type="${dataType}" onchange="updateCrossPreview()">
-            <span class="text-sm flex-1">${f.column}</span>
+                   data-type="${dataType}" data-display-name="${displayName}" onchange="updateCrossPreview()">
+            <span class="text-sm flex-1">${displayName}</span>
             ${typeBadge}
         `;
         container.appendChild(label);
@@ -7212,10 +7302,10 @@ function closeCrossModal() {
 
 function updateCrossPreview() {
     const checkedInputs = Array.from(document.querySelectorAll('.cross-feature-checkbox:checked'));
-    const checked = checkedInputs.map(cb => cb.value);
+    const checkedDisplayNames = checkedInputs.map(cb => cb.dataset.displayName || cb.value);
 
-    if (checked.length >= 2) {
-        document.getElementById('crossPreviewText').textContent = checked.join(' × ');
+    if (checkedDisplayNames.length >= 2) {
+        document.getElementById('crossPreviewText').textContent = checkedDisplayNames.join(' × ');
         document.getElementById('crossPreview').classList.remove('hidden');
     } else {
         document.getElementById('crossPreview').classList.add('hidden');
@@ -7235,6 +7325,7 @@ function updateCrossPreview() {
 
         numericTemporalFeatures.forEach(cb => {
             const column = cb.value;
+            const displayName = cb.dataset.displayName || column;
             const dataType = cb.dataset.type;
             const typeLabel = dataType === 'numeric' ? 'Numeric' : 'Temporal';
             const typeColor = dataType === 'numeric' ? 'blue' : 'purple';
@@ -7244,7 +7335,7 @@ function updateCrossPreview() {
             div.innerHTML = `
                 <div class="flex-1">
                     <div class="flex items-center gap-2">
-                        <span class="text-sm font-medium">${column}</span>
+                        <span class="text-sm font-medium">${displayName}</span>
                         <span class="text-xs bg-${typeColor}-100 text-${typeColor}-700 px-1 rounded">${typeLabel}</span>
                     </div>
                     <div class="text-xs text-gray-500 mt-1">Buckets for crossing (coarse granularity recommended)</div>
@@ -7285,10 +7376,12 @@ function addCrossFeature() {
     // Build features array with type and bucket info
     const features = checkedInputs.map(cb => {
         const column = cb.value;
+        const displayName = cb.dataset.displayName || column;
         const dataType = cb.dataset.type;
 
         const featureConfig = {
             column: column,
+            display_name: displayName,  // Preserve alias for UI display
             type: dataType
         };
 

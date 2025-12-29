@@ -4497,22 +4497,15 @@
                 <!-- Start From Options -->
                 <div class="wizard-field-group">
                     <label class="wizard-field-label">Start From</label>
-                    <div class="flex flex-wrap gap-3 mt-2">
-                        <label class="flex items-center gap-2 p-3 border rounded-lg cursor-pointer hover:bg-gray-50 transition">
-                            <input type="radio" name="startFrom" value="blank" checked onchange="onStartFromChange()">
-                            <div>
-                                <div class="font-medium text-sm">Blank</div>
-                                <div class="text-xs text-gray-500">Start from scratch</div>
-                            </div>
-                        </label>
-                        <label class="flex items-center gap-2 p-3 border rounded-lg cursor-pointer hover:bg-gray-50 transition">
-                            <input type="radio" name="startFrom" value="clone" onchange="onStartFromChange()">
-                            <div>
-                                <div class="font-medium text-sm">Clone Existing</div>
-                                <div class="text-xs text-gray-500">Copy from another config</div>
-                            </div>
-                        </label>
+                    <div class="wizard-tab-group" style="display: flex; gap: 0.5rem; width: 100%; margin-top: 8px;">
+                        <button type="button" onclick="selectStartFrom('blank')" id="startFromBlank" class="wizard-tab active" style="flex: 1; text-align: center;">
+                            Blank
+                        </button>
+                        <button type="button" onclick="selectStartFrom('clone')" id="startFromClone" class="wizard-tab" style="flex: 1; text-align: center;">
+                            Clone Existing
+                        </button>
                     </div>
+                    <input type="hidden" name="startFrom" id="startFromValue" value="blank">
                 </div>
 
                 <!-- Clone Selection (hidden by default) -->
@@ -5359,8 +5352,7 @@ function openWizard(configId = null) {
     document.getElementById('configDescription').value = '';
     document.getElementById('configDataset').value = '';
     document.getElementById('datasetInfo').classList.add('hidden');
-    document.querySelector('input[name="startFrom"][value="blank"]').checked = true;
-    document.getElementById('cloneSelection').classList.add('hidden');
+    selectStartFrom('blank');  // Reset to blank and hide clone selection
 
     // Reset name validation state
     configNameIsValid = false;
@@ -5527,7 +5519,7 @@ function nextStep() {
         configState.name = name;
         configState.description = document.getElementById('configDescription').value.trim();
         configState.datasetId = parseInt(datasetId);
-        configState.startFrom = document.querySelector('input[name="startFrom"]:checked').value;
+        configState.startFrom = document.getElementById('startFromValue').value;
 
         // Load columns and initialize step 2
         loadColumnsForStep2();
@@ -5666,8 +5658,21 @@ function onDatasetChange() {
     }
 }
 
+function selectStartFrom(value) {
+    // Update hidden input value
+    document.getElementById('startFromValue').value = value;
+
+    // Toggle active class on buttons
+    document.getElementById('startFromBlank').classList.toggle('active', value === 'blank');
+    document.getElementById('startFromClone').classList.toggle('active', value === 'clone');
+
+    // Show/hide clone selection dropdown
+    document.getElementById('cloneSelection').classList.toggle('hidden', value !== 'clone');
+}
+
+// Legacy function for backwards compatibility
 function onStartFromChange() {
-    const startFrom = document.querySelector('input[name="startFrom"]:checked').value;
+    const startFrom = document.getElementById('startFromValue').value;
     document.getElementById('cloneSelection').classList.toggle('hidden', startFrom !== 'clone');
 }
 
@@ -5803,6 +5808,25 @@ function renderPrimaryIdZone(model) {
         const embedDim = idFeature.transforms?.embedding?.embedding_dim || 32;
         // Use display_name (alias) if available
         const displayName = idFeature.display_name || idFeature.column;
+
+        // Get cardinality info for display
+        const cardinality = idFeature.stats?.cardinality || idFeature.stats?.unique_count;
+        const recommendedDim = cardinality ? getRecommendedEmbedDim(cardinality) : null;
+        const cardinalityText = cardinality ? formatCardinality(cardinality) : null;
+
+        // Build cardinality info line
+        let cardinalityInfo = '';
+        if (cardinalityText) {
+            const dimStatus = embedDim === recommendedDim
+                ? `<span class="text-green-600">✓ ${recommendedDim}D recommended</span>`
+                : `<span class="text-amber-600">${recommendedDim}D recommended</span>`;
+            cardinalityInfo = `
+                <div class="text-xs mt-1" style="color: #6b7280;">
+                    <i class="fas fa-chart-bar mr-1"></i>${cardinalityText} unique → ${dimStatus}
+                </div>
+            `;
+        }
+
         contentContainer.innerHTML = `
             <div class="primary-id-assigned">
                 <div class="flex items-center justify-between">
@@ -5811,6 +5835,7 @@ function renderPrimaryIdZone(model) {
                         <div class="text-xs text-gray-500">
                             ${idFeature.bq_type || 'STRING'} → Text • Embed: ${embedDim}D
                         </div>
+                        ${cardinalityInfo}
                     </div>
                     <div class="flex flex-col gap-1 ml-2">
                         <button type="button" class="feature-config-btn settings" onclick="openPrimaryIdConfig('${model}')" title="Configure embedding">
@@ -6383,6 +6408,9 @@ function dropPrimaryId(e, model) {
     const colData = JSON.parse(e.dataTransfer.getData('text/plain'));
 
     // Create primary ID feature with forced text type and embedding transform
+    const cardinality = colData.stats?.cardinality || colData.stats?.unique_count;
+    const recommendedDim = getRecommendedEmbedDim(cardinality || 10000);  // Default assumes medium cardinality
+
     const primaryIdFeature = {
         column: colData.name,
         bq_type: colData.bq_type || colData.type || 'STRING',
@@ -6392,7 +6420,7 @@ function dropPrimaryId(e, model) {
         transforms: {
             embedding: {
                 enabled: true,
-                embedding_dim: 32,  // Default 32D
+                embedding_dim: recommendedDim,  // Auto-apply based on cardinality
                 vocab_size: 100000
             }
         }
@@ -6676,6 +6704,22 @@ function getRecommendedEmbedDim(cardinality) {
     if (cardinality < 50000) return 64;
     if (cardinality < 500000) return 96;
     return 128;
+}
+
+/**
+ * Format cardinality number for display (e.g., 200000 → "~200K", 3500000 → "~3.5M")
+ */
+function formatCardinality(num) {
+    if (num == null) return null;
+    if (num >= 1000000) {
+        const millions = num / 1000000;
+        return `~${millions >= 10 ? Math.round(millions) : millions.toFixed(1).replace(/\.0$/, '')}M`;
+    }
+    if (num >= 1000) {
+        const thousands = num / 1000;
+        return `~${thousands >= 10 ? Math.round(thousands) : thousands.toFixed(1).replace(/\.0$/, '')}K`;
+    }
+    return `~${num}`;
 }
 
 function removeFeature(model, idx) {

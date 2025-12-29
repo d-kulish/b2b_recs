@@ -776,6 +776,67 @@ def get_schema_with_sample(request, dataset_id):
         # Get column mapping for role detection
         column_mapping_reverse = {v: k for k, v in (dataset.column_mapping or {}).items()}
 
+        # Get column aliases for display names
+        column_aliases = dataset.column_aliases or {}
+
+        def get_display_name(col_name):
+            """Get display name from column_aliases, trying multiple key formats."""
+            if not column_aliases:
+                return col_name
+            # Try direct match
+            if column_aliases.get(col_name):
+                return column_aliases[col_name]
+            # Try with table prefix formats (dot and underscore)
+            for table in (dataset.selected_columns or {}).keys():
+                full_key = f"{table}.{col_name}"
+                underscore_key = full_key.replace('.', '_')
+                if column_aliases.get(full_key):
+                    return column_aliases[full_key]
+                if column_aliases.get(underscore_key):
+                    return column_aliases[underscore_key]
+            # Fallback: search all aliases for keys ending with the column name
+            for key, alias in column_aliases.items():
+                if key.endswith(col_name) or key.endswith(f'.{col_name}') or key.endswith(f'_{col_name}'):
+                    return alias
+            return col_name
+
+        # Check which INTEGER columns are missing cardinality and compute on-the-fly
+        int_cols_missing_cardinality = []
+        for field in schema_fields:
+            if field.field_type in ('INT64', 'INTEGER', 'FLOAT64', 'NUMERIC'):
+                col_name = field.name
+                # Check if cardinality is in any stats source
+                has_cardinality = False
+                for table in (dataset.selected_columns or {}).keys():
+                    stats_key = f"{table.replace('raw_data.', '')}.{col_name}"
+                    if stats_key in merged_stats:
+                        stats = merged_stats[stats_key]
+                        if stats.get('cardinality') or stats.get('unique_count'):
+                            has_cardinality = True
+                            break
+                    if col_name in merged_stats:
+                        stats = merged_stats[col_name]
+                        if stats.get('cardinality') or stats.get('unique_count'):
+                            has_cardinality = True
+                            break
+                if not has_cardinality:
+                    int_cols_missing_cardinality.append(col_name)
+
+        # Compute cardinality for INTEGER columns missing it
+        computed_cardinality = {}
+        if int_cols_missing_cardinality:
+            logger.info(f"Computing cardinality on-the-fly for columns: {int_cols_missing_cardinality}")
+            try:
+                count_parts = [f"COUNT(DISTINCT `{col}`) AS `{col}`" for col in int_cols_missing_cardinality]
+                cardinality_query = f"SELECT {', '.join(count_parts)} FROM ({base_query})"
+                cardinality_result = bq_service.client.query(cardinality_query).result()
+                cardinality_row = list(cardinality_result)[0]
+                for col in int_cols_missing_cardinality:
+                    computed_cardinality[col] = getattr(cardinality_row, col, 0) or 0
+                logger.info(f"Computed cardinality: {computed_cardinality}")
+            except Exception as e:
+                logger.warning(f"Failed to compute cardinality on-the-fly: {e}")
+
         # Build columns with semantic types
         columns = []
         for field in schema_fields:
@@ -812,14 +873,22 @@ def get_schema_with_sample(request, dataset_id):
             # Get available options for this BigQuery type
             semantic_type_options = SemanticTypeService.get_type_options(bq_type)
 
+            # Get cardinality from stats or computed on-the-fly
+            cardinality = (
+                stats.get('cardinality') or
+                stats.get('unique_count') or
+                computed_cardinality.get(col_name)
+            )
+
             columns.append({
                 'name': col_name,
+                'display_name': get_display_name(col_name),
                 'bq_type': bq_type,
                 'semantic_type': semantic_type,
                 'semantic_type_options': semantic_type_options,
                 'mapping_role': column_mapping_reverse.get(col_name),
                 'stats': {
-                    'cardinality': stats.get('cardinality') or stats.get('unique_count'),
+                    'cardinality': cardinality,
                     'null_percent': stats.get('null_percent'),
                     'min': stats.get('min'),
                     'max': stats.get('max'),
@@ -834,6 +903,7 @@ def get_schema_with_sample(request, dataset_id):
                 'sample_rows': sample_rows,
                 'column_order': column_order,
                 'row_count': len(sample_rows),
+                'column_aliases': column_aliases,
             },
         })
 

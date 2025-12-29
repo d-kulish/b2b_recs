@@ -446,6 +446,7 @@ class BigQueryService:
                     stats_parts.append(f"MAX(`{col_name}`) AS `{col_name}__max`")
                     stats_parts.append(f"AVG(CAST(`{col_name}` AS FLOAT64)) AS `{col_name}__mean`")
                     stats_parts.append(f"STDDEV(CAST(`{col_name}` AS FLOAT64)) AS `{col_name}__stddev`")
+                    stats_parts.append(f"COUNT(DISTINCT `{col_name}`) AS `{col_name}__cardinality`")  # For ID columns
                 elif col_type in ('DATE', 'DATETIME', 'TIMESTAMP'):
                     stats_parts.append(f"MIN(`{col_name}`) AS `{col_name}__min`")
                     stats_parts.append(f"MAX(`{col_name}`) AS `{col_name}__max`")
@@ -497,6 +498,7 @@ class BigQueryService:
                     col_stats['max'] = float(max_val) if max_val is not None else None
                     col_stats['mean'] = round(float(mean_val), 2) if mean_val is not None else None
                     col_stats['stddev'] = round(float(stddev_val), 2) if stddev_val is not None else None
+                    col_stats['cardinality'] = getattr(row, f'{col_name}__cardinality', 0) or 0  # For ID columns
 
                 elif col_type in ('DATE', 'DATETIME', 'TIMESTAMP'):
                     min_val = getattr(row, f'{col_name}__min', None)
@@ -4640,6 +4642,7 @@ class DatasetStatsService:
                     stats_parts.append(f"MIN(`{alias}`) AS `{alias}__min`")
                     stats_parts.append(f"MAX(`{alias}`) AS `{alias}__max`")
                     stats_parts.append(f"AVG(CAST(`{alias}` AS FLOAT64)) AS `{alias}__avg`")
+                    stats_parts.append(f"COUNT(DISTINCT `{alias}`) AS `{alias}__unique_count`")  # For ID columns
                 elif col_type in ('DATE', 'DATETIME', 'TIMESTAMP'):
                     stats_parts.append(f"MIN(`{alias}`) AS `{alias}__min`")
                     stats_parts.append(f"MAX(`{alias}`) AS `{alias}__max`")
@@ -4690,6 +4693,7 @@ class DatasetStatsService:
                     stats['min'] = float(min_val) if min_val is not None else None
                     stats['max'] = float(max_val) if max_val is not None else None
                     stats['avg'] = round(float(avg_val), 2) if avg_val is not None else None
+                    stats['unique_count'] = getattr(row, f'{alias}__unique_count', 0) or 0  # For ID columns
 
                 elif col_type in ('DATE', 'DATETIME', 'TIMESTAMP'):
                     min_val = getattr(row, f'{alias}__min', None)

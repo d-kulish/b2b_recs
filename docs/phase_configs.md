@@ -4,11 +4,57 @@
 ## Document Purpose
 This document provides detailed specifications for implementing the **Configs** domain in the ML Platform. This domain defines HOW data is transformed for training (Feature Configs) and the neural network architecture (Model Configs).
 
-**Last Updated**: 2025-12-14
+**Last Updated**: 2025-12-29
 
 ---
 
 ## Recent Updates (December 2025)
+
+### Dynamic Embedding Dimensions for Primary IDs (2025-12-29)
+
+**Feature Added:** Automatic embedding dimension assignment based on column cardinality for primary ID columns (customer_id, product_id).
+
+**Problem Solved:**
+Previously, when users dragged columns to the Customer ID or Product ID zones, the embedding dimension defaulted to 32D regardless of the column's cardinality. This was suboptimal because:
+- A column with 1M+ unique values needs larger embeddings (128D+) to capture diversity
+- A column with only 1K unique values wastes parameters with 128D embeddings
+
+**Implementation:**
+
+1. **Cardinality-Based Dimension Heuristic** (`model_configs.html`):
+   ```javascript
+   function getRecommendedEmbedDim(cardinality) {
+       if (cardinality < 100) return 8;
+       if (cardinality < 1000) return 16;
+       if (cardinality < 10000) return 32;
+       if (cardinality < 100000) return 64;
+       if (cardinality < 1000000) return 128;
+       return 256;  // 1M+ unique values
+   }
+   ```
+
+2. **Auto-Apply on Drop**: When a column is dropped into the primary ID zone, the recommended embedding dimension is automatically applied based on the column's cardinality from stats.
+
+3. **Cardinality Display**: The primary ID zone now shows:
+   - Formatted cardinality (e.g., "~287K unique")
+   - Recommendation status (green checkmark if using recommended, amber if custom)
+
+4. **Backend Support** (`ml_platform/datasets/services.py`, `ml_platform/configs/api.py`):
+   - Added `COUNT(DISTINCT)` for INTEGER columns in stats computation
+   - Added on-the-fly cardinality computation for existing datasets with stale stats
+
+**Files Modified:**
+- `templates/ml_platform/model_configs.html` - Auto-apply logic, cardinality display, `getRecommendedEmbedDim()`, `formatCardinality()`
+- `ml_platform/datasets/services.py` - Added cardinality computation for INTEGER columns
+- `ml_platform/configs/api.py` - Added on-the-fly cardinality computation fallback
+
+**Example:**
+| Column | Cardinality | Old Default | New Auto |
+|--------|-------------|-------------|----------|
+| customer_id | ~287K | 32D | 64D |
+| product_id | ~4.5K | 32D | 32D |
+
+---
 
 ### Multitask Model Config Support (2025-12-14)
 

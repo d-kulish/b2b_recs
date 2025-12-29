@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides detailed specifications for implementing the **Datasets** domain in the ML Platform. The Datasets domain defines WHAT data goes into model training.
 
-**Last Updated**: 2025-12-29 (v15 - Fixed column aliases not displaying in View modal and other UI locations)
+**Last Updated**: 2025-12-29 (v16 - Fixed column aliases not displaying in Feature Config wizard)
 
 ---
 
@@ -1819,6 +1819,67 @@ class TestQueryGeneration:
 ---
 
 ## Changelog
+
+### v16 (2025-12-29) - Feature Config Wizard Column Aliases Fix
+
+**Bug Fixed:** Column aliases were not displaying in the Feature Config wizard's "Available Columns" panel.
+
+**Problem Description:**
+While v15 fixed column aliases display in the Dataset View modal and other UI locations, the Feature Config wizard (Step 2 - "Available Columns") was still showing original BigQuery column names instead of user-defined aliases.
+
+**Example:**
+- Dataset View modal (correct): Shows `sub_category`, `category`
+- Feature Config wizard (broken): Shows `division_desc`, `mge_cat_desc`
+
+**Root Cause:**
+The `get_schema_with_sample()` API endpoint in `ml_platform/configs/api.py` was not updated in v15. It was missing:
+1. `column_aliases` retrieval from the dataset
+2. `display_name` field for each column
+3. The suffix-matching fallback logic to handle key format mismatches
+
+**Files Modified:**
+
+1. **Backend API** (`ml_platform/configs/api.py`):
+   - Added `column_aliases = dataset.column_aliases or {}` to retrieve aliases
+   - Added `get_display_name()` helper function with suffix-matching fallback
+   - Added `display_name` field to each column in the response
+   - Added `column_aliases` to the response data
+
+**Technical Details:**
+
+The key fix was adding the suffix-matching fallback that searches through all `column_aliases` keys:
+
+```python
+def get_display_name(col_name):
+    """Get display name from column_aliases, trying multiple key formats."""
+    if not column_aliases:
+        return col_name
+    # Try direct match
+    if column_aliases.get(col_name):
+        return column_aliases[col_name]
+    # Try with table prefix formats (dot and underscore)
+    for table in (dataset.selected_columns or {}).keys():
+        full_key = f"{table}.{col_name}"
+        underscore_key = full_key.replace('.', '_')
+        if column_aliases.get(full_key):
+            return column_aliases[full_key]
+        if column_aliases.get(underscore_key):
+            return column_aliases[underscore_key]
+    # Fallback: search all aliases for keys ending with the column name
+    for key, alias in column_aliases.items():
+        if key.endswith(col_name) or key.endswith(f'.{col_name}') or key.endswith(f'_{col_name}'):
+            return alias
+    return col_name
+```
+
+The suffix-matching fallback is critical because:
+- Column names from BigQuery result are plain names: `division_desc`
+- But `column_aliases` keys may have table prefixes: `raw_data.tablename.division_desc` or `raw_data_tablename_division_desc`
+
+**Verification:**
+After fix, the Feature Config wizard "Available Columns" panel correctly shows aliased names like `sub_category` and `category` instead of original BQ names.
+
+---
 
 ### v15 (2025-12-29) - Column Aliases Display Fix
 

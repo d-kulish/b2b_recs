@@ -1068,7 +1068,7 @@ class BigQueryService:
 
         return where_clauses
 
-    def generate_query(self, dataset, for_analysis=False, for_tfx=False):
+    def generate_query(self, dataset, for_analysis=False, for_tfx=False, return_structured=False):
         """
         Generate BigQuery SQL from dataset configuration.
 
@@ -1077,9 +1077,11 @@ class BigQueryService:
             for_analysis: If True, use mapped column names (user_id, product_id, etc.)
             for_tfx: If True, convert TIMESTAMP/DATE/DATETIME columns to INT64 (Unix epoch)
                      for TFX BigQueryExampleGen compatibility
+            return_structured: If True, return dict with 'ctes' and 'main_select' separately
+                              (used by generate_training_query to avoid nested WITH)
 
         Returns:
-            SQL query string
+            SQL query string, or dict if return_structured=True
 
         Note: Train/eval split is now handled by the Training domain (TFX ExampleGen).
         This method generates the base query without split logic.
@@ -1184,6 +1186,7 @@ class BigQueryService:
             # This CTE includes the primary table with JOINs, filtered by date
             if has_date_filter:
                 # Build SELECT clause for filtered_data with unique aliases to avoid ambiguity
+                # IMPORTANT: Apply column_aliases here same as non-date-filter path
                 filtered_select_cols = []
                 seen_cols = set()
                 for table, columns in selected_columns.items():
@@ -1194,18 +1197,22 @@ class BigQueryService:
                         col_type = column_types.get(col_key, 'STRING')
                         needs_conversion = for_tfx and col_type in ('TIMESTAMP', 'DATE', 'DATETIME')
 
-                        # Use table_col as alias if column name is duplicated
+                        # Handle duplicate column names across tables
                         if col in seen_cols:
-                            if needs_conversion:
-                                filtered_select_cols.append(f"UNIX_SECONDS(CAST({table_alias}.{col} AS TIMESTAMP)) AS {table_alias}_{col}")
-                            else:
-                                filtered_select_cols.append(f"{table_alias}.{col} AS {table_alias}_{col}")
+                            output_name = f"{table_alias}_{col}"
                         else:
-                            if needs_conversion:
-                                filtered_select_cols.append(f"UNIX_SECONDS(CAST({table_alias}.{col} AS TIMESTAMP)) AS {col}")
-                            else:
-                                filtered_select_cols.append(f"{table_alias}.{col}")
+                            output_name = col
                             seen_cols.add(col)
+
+                        # Apply column aliases (user-defined display names)
+                        alias_key = f"{table_alias}_{col}"
+                        alias_key_dot = f"{table_alias}.{col}"
+                        final_name = column_aliases.get(alias_key) or column_aliases.get(alias_key_dot) or output_name
+
+                        if needs_conversion:
+                            filtered_select_cols.append(f"UNIX_SECONDS(CAST({table_alias}.{col} AS TIMESTAMP)) AS {final_name}")
+                        else:
+                            filtered_select_cols.append(f"{table_alias}.{col} AS {final_name}")
 
                 if not filtered_select_cols:
                     filtered_select_cols = [f"{primary_alias}.*"]
@@ -1325,20 +1332,28 @@ class BigQueryService:
                 cte_joined = ',\n'.join(cte_strs)
                 query_parts.append(f"WITH {cte_joined}")
 
-            # Main SELECT - when using filtered_data, use plain column names (with aliases for duplicates)
+            # Main SELECT - when using filtered_data, use the aliased column names from the CTE
             if has_date_filter:
                 # Build SELECT with same aliasing used in filtered_data CTE
+                # This must match the column names output by filtered_data (which now applies column_aliases)
                 plain_select_cols = []
                 seen_cols = set()
                 for table, columns in selected_columns.items():
                     table_alias = table.split('.')[-1]
                     for col in columns:
+                        # Handle duplicate column names
                         if col in seen_cols:
-                            # Use the aliased name from filtered_data
-                            plain_select_cols.append(f"{table_alias}_{col}")
+                            output_name = f"{table_alias}_{col}"
                         else:
-                            plain_select_cols.append(col)
+                            output_name = col
                             seen_cols.add(col)
+
+                        # Apply column aliases (must match filtered_data CTE output)
+                        alias_key = f"{table_alias}_{col}"
+                        alias_key_dot = f"{table_alias}.{col}"
+                        final_name = column_aliases.get(alias_key) or column_aliases.get(alias_key_dot) or output_name
+                        plain_select_cols.append(final_name)
+
                 if not plain_select_cols:
                     plain_select_cols = ['*']
                 select_joined = ',\n  '.join(plain_select_cols)
@@ -1375,6 +1390,39 @@ class BigQueryService:
             if final_where_clauses:
                 where_joined = ' AND\n  '.join(final_where_clauses)
                 query_parts.append(f"WHERE\n  {where_joined}")
+
+            # Return structured data if requested (for generate_training_query)
+            if return_structured:
+                # Build main SELECT without CTEs
+                main_select_parts = []
+                main_select_parts.append(f"SELECT\n  {select_joined}")
+                if has_date_filter:
+                    main_select_parts.append("FROM filtered_data")
+                else:
+                    from_clause = f"`{self.project_id}.{primary_table}` AS {primary_alias}"
+                    main_select_parts.append(f"FROM {from_clause}")
+                    # Add JOINs
+                    join_clauses = []
+                    for secondary_table in (dataset.secondary_tables or []):
+                        join_config = dataset.join_config.get(secondary_table, {})
+                        join_key = join_config.get('join_key', 'id')
+                        join_type = join_config.get('join_type', 'LEFT').upper()
+                        secondary_col = join_config.get('secondary_column', join_key)
+                        secondary_alias = secondary_table.split('.')[-1]
+                        join_clauses.append(
+                            f"{join_type} JOIN `{self.project_id}.{secondary_table}` AS {secondary_alias} "
+                            f"ON {primary_alias}.{join_key} = {secondary_alias}.{secondary_col}"
+                        )
+                    if join_clauses:
+                        main_select_parts.append("\n".join(join_clauses))
+                if final_where_clauses:
+                    where_joined = ' AND\n  '.join(final_where_clauses)
+                    main_select_parts.append(f"WHERE\n  {where_joined}")
+
+                return {
+                    'ctes': ctes,  # List of (name, body) tuples
+                    'main_select': "\n".join(main_select_parts)
+                }
 
             return "\n".join(query_parts)
 
@@ -1430,23 +1478,28 @@ class BigQueryService:
             WHERE RAND() < 0.1
         """
         try:
-            # Get base query with TFX-compatible type conversions (TIMESTAMP -> INT64)
-            base_query = self.generate_query(dataset, for_analysis=False, for_tfx=True)
-
-            # If no modifications needed, return base query
+            # If no modifications needed (random split, 100% sample), return base query directly
             if split_strategy == 'random' and sample_percent >= 100:
-                return base_query
+                return self.generate_query(dataset, for_analysis=False, for_tfx=True)
 
-            # Build CTEs for holdout and sampling
-            query_parts = []
+            # Get structured query data to avoid nested WITH clauses
+            # This returns {'ctes': [...], 'main_select': '...'} instead of full SQL
+            structured = self.generate_query(
+                dataset, for_analysis=False, for_tfx=True, return_structured=True
+            )
+
+            # Collect all CTEs at the top level (no nesting)
+            all_ctes = list(structured['ctes'])  # Copy base CTEs (e.g., filtered_data)
+
+            # Add base_data CTE wrapping the main SELECT
+            all_ctes.append(('base_data', structured['main_select']))
+
+            # Determine final source for SELECT
             current_source = 'base_data'
-
-            # Wrap base query in CTE
-            query_parts.append(f"WITH base_data AS (\n{base_query}\n)")
 
             # Apply holdout filter for time-based strategies
             if split_strategy in ('time_holdout', 'strict_time') and date_column:
-                holdout_cte = self._generate_holdout_cte(
+                holdout_ctes = self._generate_holdout_ctes(
                     source_table=current_source,
                     date_column=date_column,
                     holdout_days=holdout_days,
@@ -1455,28 +1508,27 @@ class BigQueryService:
                     val_days=val_days,
                     test_days=test_days,
                 )
-                query_parts[0] += f",\nholdout_filtered AS (\n{holdout_cte}\n)"
+                all_ctes.extend(holdout_ctes)
                 current_source = 'holdout_filtered'
+
+            # Build final query with all CTEs at the same level
+            cte_strs = [f"{name} AS (\n{body}\n)" for name, body in all_ctes]
+            query = f"WITH {','.join(cte_strs)}\n"
 
             # Apply sampling if needed
             if sample_percent < 100:
-                # Final SELECT with sampling
                 sample_fraction = sample_percent / 100.0
-                query_parts.append(
-                    f"SELECT * FROM {current_source}\n"
-                    f"WHERE RAND() < {sample_fraction}"
-                )
+                query += f"SELECT * FROM {current_source}\nWHERE RAND() < {sample_fraction}"
             else:
-                # No sampling, just select all
-                query_parts.append(f"SELECT * FROM {current_source}")
+                query += f"SELECT * FROM {current_source}"
 
-            return "\n".join(query_parts)
+            return query
 
         except Exception as e:
             logger.error(f"Error generating training query: {e}")
             raise BigQueryServiceError(f"Failed to generate training query: {e}")
 
-    def _generate_holdout_cte(
+    def _generate_holdout_ctes(
         self,
         source_table: str,
         date_column: str,
@@ -1485,9 +1537,9 @@ class BigQueryService:
         train_days: int = 60,
         val_days: int = 7,
         test_days: int = 7,
-    ) -> str:
+    ) -> list:
         """
-        Generate CTE for temporal splitting based on date column.
+        Generate CTEs for temporal splitting based on date column.
 
         All date calculations are relative to the MAX date in the dataset,
         NOT CURRENT_DATE(). This ensures splits work correctly with historical data.
@@ -1504,7 +1556,7 @@ class BigQueryService:
             test_days: Number of days for test data (strict_time only)
 
         Returns:
-            SQL for the holdout CTE body (without the AS wrapper)
+            List of (cte_name, cte_body) tuples - all CTEs at the same level (no nesting)
 
         For time_holdout:
             - Last N days (holdout_days) → 'test' split (temporal)
@@ -1517,15 +1569,16 @@ class BigQueryService:
             - Each section assigned to corresponding split
             Pure temporal ordering, no random component.
         """
+        ctes = []
+
         if strategy == 'time_holdout':
-            # Time holdout: last N days = test, remaining = 80/20 train/eval (random)
-            # Note: date_column is already converted to Unix epoch (INT64) by for_tfx=True
-            # We use FARM_FINGERPRINT for deterministic 80/20 split on non-test data
-            return f"""    WITH max_date_ref AS (
-        SELECT DATE(TIMESTAMP_SECONDS(MAX({date_column}))) AS ref_date
-        FROM {source_table}
-    )
-    SELECT
+            # CTE 1: Calculate max date reference
+            max_date_cte = f"""    SELECT DATE(TIMESTAMP_SECONDS(MAX({date_column}))) AS ref_date
+    FROM {source_table}"""
+            ctes.append(('max_date_ref', max_date_cte))
+
+            # CTE 2: Apply holdout split
+            holdout_cte = f"""    SELECT
         base.*,
         CASE
             -- Last {holdout_days} days = test (temporal)
@@ -1537,20 +1590,19 @@ class BigQueryService:
             ELSE 'eval'
         END AS split
     FROM {source_table} base, max_date_ref"""
+            ctes.append(('holdout_filtered', holdout_cte))
 
         elif strategy == 'strict_time':
-            # Strict temporal: explicit day-based splits
-            # Timeline (relative to MAX date):
-            #   |<-- train_days -->|<-- val_days -->|<-- test_days -->| MAX_DATE
-            #
-            # All data in the window gets a split assignment based on date
             total_window = train_days + val_days + test_days
             val_test_days = val_days + test_days
-            return f"""    WITH max_date_ref AS (
-        SELECT DATE(TIMESTAMP_SECONDS(MAX({date_column}))) AS ref_date
-        FROM {source_table}
-    )
-    SELECT
+
+            # CTE 1: Calculate max date reference
+            max_date_cte = f"""    SELECT DATE(TIMESTAMP_SECONDS(MAX({date_column}))) AS ref_date
+    FROM {source_table}"""
+            ctes.append(('max_date_ref', max_date_cte))
+
+            # CTE 2: Apply strict time split
+            holdout_cte = f"""    SELECT
         base.*,
         CASE
             -- Last {test_days} days = test
@@ -1567,10 +1619,15 @@ class BigQueryService:
         END AS split
     FROM {source_table} base, max_date_ref
     WHERE base.{date_column} >= UNIX_SECONDS(TIMESTAMP(DATE_SUB(max_date_ref.ref_date, INTERVAL {total_window} DAY)))"""
+            ctes.append(('holdout_filtered', holdout_cte))
 
         else:
             # Random - no holdout filter, no split column (TFX does hash-based split)
-            return f"    SELECT * FROM {source_table}"
+            # Just pass through the source
+            pass_through_cte = f"    SELECT * FROM {source_table}"
+            ctes.append(('holdout_filtered', pass_through_cte))
+
+        return ctes
 
     def _generate_top_products_cte(self, primary_alias, product_col, revenue_col, percent):
         """

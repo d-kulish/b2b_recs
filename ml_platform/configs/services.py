@@ -320,7 +320,7 @@ class SmartDefaultsService:
             List of cross feature configurations
         """
         crosses = []
-        feature_names = [f['column'] for f in features]
+        feature_names = [f.get('display_name') or f['column'] for f in features]
 
         if model_type == 'buyer':
             # Customer × City cross
@@ -400,7 +400,7 @@ class TensorDimensionCalculator:
             Dict mapping feature name variants to their dimensions
         """
         result = {}
-        col = feature.get('column', 'unknown')
+        col = feature.get('display_name') or feature.get('column', 'unknown')
         transforms = feature.get('transforms', {})
 
         # Check for new data_type format first, fall back to old type format
@@ -903,7 +903,7 @@ class PreprocessingFnGenerator:
         seen_columns = set()
 
         for feature in self.buyer_features + self.product_features:
-            col = feature.get('column')
+            col = feature.get('display_name') or feature.get('column')
             if col in seen_columns:
                 continue
             seen_columns.add(col)
@@ -923,14 +923,14 @@ class PreprocessingFnGenerator:
 
     def _generate_header(self) -> str:
         """Generate file header with metadata."""
-        buyer_cols = [f.get('column', '?') for f in self.buyer_features]
-        product_cols = [f.get('column', '?') for f in self.product_features]
+        buyer_cols = [f.get('display_name') or f.get('column', '?') for f in self.buyer_features]
+        product_cols = [f.get('display_name') or f.get('column', '?') for f in self.product_features]
 
         buyer_cross_desc = []
         for c in self.buyer_crosses:
             features = c.get('features', [])
             if isinstance(features[0], dict):
-                names = [f.get('column', '?') for f in features]
+                names = [f.get('display_name') or f.get('column', '?') for f in features]
             else:
                 names = features
             buyer_cross_desc.append(' × '.join(names))
@@ -939,7 +939,7 @@ class PreprocessingFnGenerator:
         for c in self.product_crosses:
             features = c.get('features', [])
             if isinstance(features[0], dict):
-                names = [f.get('column', '?') for f in features]
+                names = [f.get('display_name') or f.get('column', '?') for f in features]
             else:
                 names = features
             product_cross_desc.append(' × '.join(names))
@@ -1008,7 +1008,7 @@ def preprocessing_fn(inputs):
         ]
 
         for feature in features:
-            col = feature.get('column')
+            col = feature.get('display_name') or feature.get('column')
             bq_type = feature.get('bq_type', 'STRING')
 
             # Get embedding dim for comment (used in Trainer, not here)
@@ -1049,7 +1049,7 @@ def preprocessing_fn(inputs):
         ]
 
         for feature in features:
-            col = feature.get('column')
+            col = feature.get('display_name') or feature.get('column')
             bq_type = feature.get('bq_type', 'FLOAT64')
             transforms = feature.get('transforms', {})
 
@@ -1106,7 +1106,7 @@ def preprocessing_fn(inputs):
         ]
 
         for feature in features:
-            col = feature.get('column')
+            col = feature.get('display_name') or feature.get('column')
             bq_type = feature.get('bq_type', 'TIMESTAMP')
             transforms = feature.get('transforms', {})
 
@@ -1251,7 +1251,7 @@ def preprocessing_fn(inputs):
                     f_type = 'text'
                     crossing_buckets = None
                 else:
-                    col = f.get('column', '')
+                    col = f.get('display_name') or f.get('column', '')
                     f_type = f.get('type', 'text')
                     crossing_buckets = f.get('crossing_buckets')
 
@@ -1454,8 +1454,8 @@ class TrainerModuleGenerator:
 
     def _generate_header(self) -> str:
         """Generate file header with metadata from both configs."""
-        buyer_cols = [f.get('column', '?') for f in self.buyer_features]
-        product_cols = [f.get('column', '?') for f in self.product_features]
+        buyer_cols = [f.get('display_name') or f.get('column', '?') for f in self.buyer_features]
+        product_cols = [f.get('display_name') or f.get('column', '?') for f in self.product_features]
 
         # Format tower layers for header
         buyer_layer_summary = self._summarize_layers(self.buyer_tower_layers)
@@ -1938,7 +1938,7 @@ def _input_fn(
 
         # Generate embedding layers for text features
         for feature in features_by_type['text']:
-            col = feature.get('column')
+            col = feature.get('display_name') or feature.get('column')
             transforms = feature.get('transforms', {})
             if transforms.get('embedding', {}).get('embedding_dim'):
                 embed_dim = transforms['embedding']['embedding_dim']
@@ -1953,7 +1953,7 @@ def _input_fn(
 
         # Generate embedding layers for numeric bucket features
         for feature in features_by_type['numeric']:
-            col = feature.get('column')
+            col = feature.get('display_name') or feature.get('column')
             transforms = feature.get('transforms', {})
             bucketize = transforms.get('bucketize', {})
 
@@ -1966,7 +1966,7 @@ def _input_fn(
 
         # Generate embedding layers for temporal bucket features
         for feature in features_by_type['temporal']:
-            col = feature.get('column')
+            col = feature.get('display_name') or feature.get('column')
             transforms = feature.get('transforms', {})
             bucketize = transforms.get('bucketize', {})
 
@@ -1985,7 +1985,7 @@ def _input_fn(
 
             # Build cross name
             if isinstance(features[0], dict):
-                feature_names = [f.get('column', '') for f in features]
+                feature_names = [f.get('display_name') or f.get('column', '') for f in features]
             else:
                 feature_names = features
             cross_name = '_x_'.join(feature_names) + '_cross'
@@ -2002,14 +2002,14 @@ def _input_fn(
 
         # Text features - use vocab index from transform
         for feature in features_by_type['text']:
-            col = feature.get('column')
+            col = feature.get('display_name') or feature.get('column')
             lines.append(f"        # {col}: lookup embedding from vocab index")
             lines.append(f"        features.append(self.{col}_embedding(inputs['{col}']))")
             lines.append('')
 
         # Numeric features - normalized value + optional bucket embedding
         for feature in features_by_type['numeric']:
-            col = feature.get('column')
+            col = feature.get('display_name') or feature.get('column')
             transforms = feature.get('transforms', {})
             normalize = transforms.get('normalize', {})
             bucketize = transforms.get('bucketize', {})
@@ -2025,7 +2025,7 @@ def _input_fn(
 
         # Temporal features - normalized + cyclical + optional bucket
         for feature in features_by_type['temporal']:
-            col = feature.get('column')
+            col = feature.get('display_name') or feature.get('column')
             transforms = feature.get('transforms', {})
             normalize = transforms.get('normalize', {})
             cyclical = transforms.get('cyclical', {})
@@ -2058,7 +2058,7 @@ def _input_fn(
         for cross in self.buyer_crosses:
             features = cross.get('features', [])
             if isinstance(features[0], dict):
-                feature_names = [f.get('column', '') for f in features]
+                feature_names = [f.get('display_name') or f.get('column', '') for f in features]
             else:
                 feature_names = features
             cross_name = '_x_'.join(feature_names) + '_cross'
@@ -2108,7 +2108,7 @@ def _input_fn(
 
         # Generate embedding layers for text features
         for feature in features_by_type['text']:
-            col = feature.get('column')
+            col = feature.get('display_name') or feature.get('column')
             transforms = feature.get('transforms', {})
             if transforms.get('embedding', {}).get('embedding_dim'):
                 embed_dim = transforms['embedding']['embedding_dim']
@@ -2123,7 +2123,7 @@ def _input_fn(
 
         # Generate embedding layers for numeric bucket features
         for feature in features_by_type['numeric']:
-            col = feature.get('column')
+            col = feature.get('display_name') or feature.get('column')
             transforms = feature.get('transforms', {})
             bucketize = transforms.get('bucketize', {})
 
@@ -2136,7 +2136,7 @@ def _input_fn(
 
         # Generate embedding layers for temporal bucket features
         for feature in features_by_type['temporal']:
-            col = feature.get('column')
+            col = feature.get('display_name') or feature.get('column')
             transforms = feature.get('transforms', {})
             bucketize = transforms.get('bucketize', {})
 
@@ -2154,7 +2154,7 @@ def _input_fn(
             embed_dim = cross.get('embedding_dim', 16)
 
             if isinstance(features[0], dict):
-                feature_names = [f.get('column', '') for f in features]
+                feature_names = [f.get('display_name') or f.get('column', '') for f in features]
             else:
                 feature_names = features
             cross_name = '_x_'.join(feature_names) + '_cross'
@@ -2171,14 +2171,14 @@ def _input_fn(
 
         # Text features
         for feature in features_by_type['text']:
-            col = feature.get('column')
+            col = feature.get('display_name') or feature.get('column')
             lines.append(f"        # {col}: lookup embedding from vocab index")
             lines.append(f"        features.append(self.{col}_embedding(inputs['{col}']))")
             lines.append('')
 
         # Numeric features
         for feature in features_by_type['numeric']:
-            col = feature.get('column')
+            col = feature.get('display_name') or feature.get('column')
             transforms = feature.get('transforms', {})
             normalize = transforms.get('normalize', {})
             bucketize = transforms.get('bucketize', {})
@@ -2194,7 +2194,7 @@ def _input_fn(
 
         # Temporal features
         for feature in features_by_type['temporal']:
-            col = feature.get('column')
+            col = feature.get('display_name') or feature.get('column')
             transforms = feature.get('transforms', {})
             normalize = transforms.get('normalize', {})
             cyclical = transforms.get('cyclical', {})
@@ -2226,7 +2226,7 @@ def _input_fn(
         for cross in self.product_crosses:
             features = cross.get('features', [])
             if isinstance(features[0], dict):
-                feature_names = [f.get('column', '') for f in features]
+                feature_names = [f.get('display_name') or f.get('column', '') for f in features]
             else:
                 feature_names = features
             cross_name = '_x_'.join(feature_names) + '_cross'
@@ -2378,13 +2378,13 @@ class RetrievalModel(tfrs.Model):
         # Get primary product ID column for candidate indexing
         product_id_col = None
         for feature in self.product_features:
-            col = feature.get('column', '')
+            col = feature.get('display_name') or feature.get('column', '')
             if 'product' in col.lower() or 'item' in col.lower() or 'sku' in col.lower():
                 product_id_col = col
                 break
 
         if not product_id_col and self.product_features:
-            product_id_col = self.product_features[0].get('column', 'product_id')
+            product_id_col = self.product_features[0].get('display_name') or self.product_features[0].get('column', 'product_id')
 
         return f'''
 # =============================================================================

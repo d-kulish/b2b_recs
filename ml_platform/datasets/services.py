@@ -58,6 +58,42 @@ class BigQueryServiceError(Exception):
     pass
 
 
+def apply_column_aliases(columns, column_aliases):
+    """
+    Apply column aliases to a list of column dicts, adding 'display_name' field.
+
+    Args:
+        columns: List of column dicts with 'name' or 'full_name' fields
+        column_aliases: Dict mapping original column names to aliases
+
+    Returns:
+        The same list with 'display_name' field added to each column
+    """
+    if not column_aliases:
+        for col in columns:
+            original = col.get('name') or col.get('full_name', '')
+            col['display_name'] = original
+        return columns
+
+    for col in columns:
+        original = col.get('name') or col.get('full_name', '')
+        # Try multiple key formats (table.column, table_column, just column)
+        alias = (
+            column_aliases.get(original) or
+            column_aliases.get(original.replace('.', '_')) or
+            column_aliases.get(original.replace('_', '.'))
+        )
+        # Also try with just the column name part
+        if not alias and '.' in original:
+            col_name = original.split('.')[-1]
+            for key, value in column_aliases.items():
+                if key.endswith(col_name) or key.endswith(f'.{col_name}') or key.endswith(f'_{col_name}'):
+                    alias = value
+                    break
+        col['display_name'] = alias or original
+    return columns
+
+
 class BigQueryService:
     """
     Service class for BigQuery operations related to datasets.

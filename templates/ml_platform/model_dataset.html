@@ -2367,7 +2367,8 @@ function loadSchemaBuilder() {
         </div>
     `;
 
-    // Reset schema builder state
+    // Reset schema builder state, preserving column aliases in edit mode
+    const existingAliases = wizardEditMode ? (wizardData.columnAliases || {}) : {};
     schemaBuilderState = {
         sessionId: null,
         tables: {},
@@ -2375,7 +2376,8 @@ function loadSchemaBuilder() {
         joins: [],
         connectMode: null,
         previewData: null,
-        selectedJoinIndex: null
+        selectedJoinIndex: null,
+        columnAliases: existingAliases
     };
 
     // Reset card positions so tables are re-positioned fresh
@@ -5337,7 +5339,7 @@ function populateCustomerFilterColumnDropdown() {
                            productFiltersState.columnAnalysis[col.fullName];
             const option = document.createElement('option');
             option.value = col.fullName;
-            option.textContent = `${col.column} (${colInfo?.type || 'unknown'})`;
+            option.textContent = `${getColumnDisplayName(col.fullName)} (${colInfo?.type || 'unknown'})`;
             optgroup.appendChild(option);
         });
         select.appendChild(optgroup);
@@ -5857,7 +5859,7 @@ function populateFilterColumnDropdown() {
     availableColumns.forEach(col => {
         const option = document.createElement('option');
         option.value = col.fullName;
-        option.textContent = `${col.fullName} (${col.type || 'unknown'})`;
+        option.textContent = `${getColumnDisplayName(col.fullName)} (${col.type || 'unknown'})`;
         select.appendChild(option);
     });
 }
@@ -5964,7 +5966,7 @@ function showFilterConfigForType(columnName, colInfo) {
 
 function showCategoryFilterConfig(columnName, colInfo) {
     const config = document.getElementById('categoryFilterConfig');
-    document.getElementById('categoryFilterColumnName').textContent = `${columnName} - ${colInfo.unique_count} unique values`;
+    document.getElementById('categoryFilterColumnName').textContent = `${getColumnDisplayName(columnName)} - ${colInfo.unique_count} unique values`;
 
     // Render values list
     const valuesContainer = document.getElementById('newCategoryValuesContainer');
@@ -6006,7 +6008,7 @@ function showCategoryFilterConfig(columnName, colInfo) {
 
 function showNumericFilterConfig(columnName, colInfo) {
     const config = document.getElementById('numericFilterConfig');
-    document.getElementById('numericFilterColumnName').textContent = columnName;
+    document.getElementById('numericFilterColumnName').textContent = getColumnDisplayName(columnName);
     document.getElementById('numericFilterTypeBadge').textContent = colInfo.type;
     document.getElementById('numericFilterStats').textContent =
         `Range: ${colInfo.min} - ${colInfo.max} | Nulls: ${colInfo.null_percent || 0}%`;
@@ -6036,7 +6038,7 @@ function showNumericFilterConfig(columnName, colInfo) {
 
 function showDateFilterConfig(columnName, colInfo) {
     const config = document.getElementById('dateFilterConfig');
-    document.getElementById('dateFilterColumnName').textContent = columnName;
+    document.getElementById('dateFilterColumnName').textContent = getColumnDisplayName(columnName);
     document.getElementById('dateFilterStats').textContent =
         `Range: ${colInfo.min_date || 'N/A'} - ${colInfo.max_date || 'N/A'}`;
 
@@ -9385,7 +9387,19 @@ function renderDatasetDetail(summary) {
     const columnAliases = summary.column_aliases || {};
 
     // Helper to get display name for saved dataset
-    const getDisplayName = (colName) => columnAliases[colName] || colName;
+    // Handles key format mismatch: column_stats uses dots (table.col), aliases use underscores (table_col)
+    const getDisplayName = (colName) => {
+        if (!columnAliases || Object.keys(columnAliases).length === 0) return colName;
+        // Try direct match
+        if (columnAliases[colName]) return columnAliases[colName];
+        // Try underscore format (dot → underscore)
+        const underscoreFormat = colName.replace(/\./g, '_');
+        if (columnAliases[underscoreFormat]) return columnAliases[underscoreFormat];
+        // Try dot format (underscore → dot)
+        const dotFormat = colName.replace(/_/g, '.');
+        if (columnAliases[dotFormat]) return columnAliases[dotFormat];
+        return colName;
+    };
 
     // Build join configuration display
     const joinRows = Object.entries(joinConfig).map(([table, config]) => {

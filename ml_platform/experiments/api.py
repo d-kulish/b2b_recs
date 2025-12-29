@@ -449,6 +449,20 @@ def get_date_columns(request, dataset_id):
         date_columns = []
         date_types = {'TIMESTAMP', 'DATETIME', 'DATE'}
         seen_columns = set()
+        column_aliases = dataset.column_aliases or {}
+
+        def get_display_name(col_name, full_key=None):
+            """Get display name from column_aliases, trying multiple key formats."""
+            if not column_aliases:
+                return col_name
+            # Try full key first (e.g., "raw_data.transactions_date")
+            if full_key and column_aliases.get(full_key):
+                return column_aliases[full_key]
+            # Try with underscores
+            for key, alias in column_aliases.items():
+                if key.endswith(col_name) or key.endswith(f'.{col_name}') or key.endswith(f'_{col_name}'):
+                    return alias
+            return col_name
 
         # 1. Primary source: dataset.filters['history']['timestamp_column']
         # This is the actual configuration used to generate the dataset query
@@ -462,15 +476,18 @@ def get_date_columns(request, dataset_id):
 
             # Try to get type from column_stats
             col_type = 'DATE'  # default
+            full_key = None
             column_stats = dataset.column_stats or {}
             for key, stats in column_stats.items():
                 col_name = key.split('.')[-1] if '.' in key else key
                 if col_name == primary_date_column:
                     col_type = stats.get('type', 'DATE').upper()
+                    full_key = key
                     break
 
             date_columns.append({
                 'name': primary_date_column,
+                'display_name': get_display_name(primary_date_column, full_key),
                 'type': col_type,
                 'primary': True
             })
@@ -485,6 +502,7 @@ def get_date_columns(request, dataset_id):
                 if col_name not in seen_columns:
                     date_columns.append({
                         'name': col_name,
+                        'display_name': get_display_name(col_name, key),
                         'type': col_type,
                         'primary': False
                     })

@@ -102,11 +102,27 @@ def serialize_dataset(ds, include_details=False):
     }
 
     if include_details:
+        # Build columns_with_display_names for easy frontend consumption
+        column_aliases = ds.column_aliases or {}
+        columns_with_display_names = {}
+        for table, cols in (ds.selected_columns or {}).items():
+            for col in cols:
+                full_key = f"{table}.{col}"
+                underscore_key = f"{table}_{col}"
+                # Try different key formats to find the alias
+                display_name = (
+                    column_aliases.get(full_key) or
+                    column_aliases.get(underscore_key) or
+                    col
+                )
+                columns_with_display_names[full_key] = display_name
+
         data.update({
             'join_config': ds.join_config,
             'selected_columns': ds.selected_columns,
             'column_mapping': ds.column_mapping,
             'column_aliases': ds.column_aliases,
+            'columns_with_display_names': columns_with_display_names,
             'filters': ds.filters,
             'date_range_start': ds.date_range_start.isoformat() if ds.date_range_start else None,
             'date_range_end': ds.date_range_end.isoformat() if ds.date_range_end else None,
@@ -599,6 +615,7 @@ def clone_dataset(request, dataset_id):
             join_config=original.join_config,
             selected_columns=original.selected_columns,
             column_mapping=original.column_mapping,
+            column_aliases=original.column_aliases,
             filters=original.filters,
             created_by=request.user,
         )
@@ -1039,6 +1056,8 @@ def get_dataset_summary(request, dataset_id):
                 'selected': dataset.selected_columns or {},
                 'mapping': dataset.column_mapping or {},
             },
+            # Column aliases for display names
+            'column_aliases': dataset.column_aliases or {},
             # Join configuration for connecting tables
             'join_config': dataset.join_config or {},
             'filters': {

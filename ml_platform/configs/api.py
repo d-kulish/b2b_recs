@@ -655,17 +655,38 @@ def get_dataset_columns(request, dataset_id):
 
         columns = []
         column_mapping_reverse = {v: k for k, v in (dataset.column_mapping or {}).items()}
+        column_aliases = dataset.column_aliases or {}
+
+        def get_display_name(col_name, full_key):
+            """Get display name from column_aliases, trying multiple key formats."""
+            if not column_aliases:
+                return col_name
+            # Try full key first (e.g., "raw_data.transactions_date")
+            if column_aliases.get(full_key):
+                return column_aliases[full_key]
+            # Try underscore format
+            underscore_key = full_key.replace('.', '_')
+            if column_aliases.get(underscore_key):
+                return column_aliases[underscore_key]
+            # Try matching by column name suffix
+            for key, alias in column_aliases.items():
+                if key.endswith(col_name) or key.endswith(f'.{col_name}') or key.endswith(f'_{col_name}'):
+                    return alias
+            return col_name
 
         for table, cols in (dataset.selected_columns or {}).items():
             for col in cols:
                 stats_key = f"{table}.{col}"
                 stats = (dataset.column_stats or {}).get(stats_key, {})
+                col_type = stats.get('type', 'STRING')
 
                 columns.append({
                     'name': col,
                     'table': table,
                     'full_name': stats_key,
-                    'type': stats.get('type', 'STRING'),
+                    'type': col_type,
+                    'dtype': col_type,  # Alias for compatibility with experiments wizard
+                    'display_name': get_display_name(col, stats_key),
                     'mapping_role': column_mapping_reverse.get(col),
                     'stats': {
                         'cardinality': stats.get('cardinality', stats.get('unique_count')),
@@ -681,6 +702,7 @@ def get_dataset_columns(request, dataset_id):
             'data': {
                 'columns': columns,
                 'column_mapping': dataset.column_mapping,
+                'column_aliases': column_aliases,
             },
         })
 

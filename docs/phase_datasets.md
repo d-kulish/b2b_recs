@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides detailed specifications for implementing the **Datasets** domain in the ML Platform. The Datasets domain defines WHAT data goes into model training.
 
-**Last Updated**: 2025-12-28 (v14 - Fixed query generator to apply cross-sub-chapter filters before top products/customers calculation)
+**Last Updated**: 2025-12-29 (v15 - Fixed column aliases not displaying in View modal and other UI locations)
 
 ---
 
@@ -1819,6 +1819,80 @@ class TestQueryGeneration:
 ---
 
 ## Changelog
+
+### v15 (2025-12-29) - Column Aliases Display Fix
+
+**Bug Fixed:** Column aliases (renamed columns) were not displaying correctly throughout the system.
+
+**Problem Description:**
+Users could rename verbose column names (e.g., `tfrs_training_examples.customer_id` → `customer_id`) in the Schema Builder (Step 3), but the aliases would not appear in:
+1. The View modal showing saved dataset configuration
+2. Various other UI locations across the system
+
+**Root Causes Identified:**
+
+1. **View Modal API Gap**: The `get_dataset_summary` API endpoint was not returning `column_aliases` field. The frontend expected `summary.column_aliases` but the API never sent it.
+
+2. **Key Format Mismatch**: Even after adding `column_aliases` to the API, the View modal's `getDisplayName()` function did a simple direct lookup, but there was a format mismatch:
+   - `column_stats` keys used dot notation: `tfrs_training_examples.date`
+   - `column_aliases` keys used underscore notation: `tfrs_training_examples_date`
+
+3. **State Reset Bug (already fixed in Phase 1)**: The `loadSchemaBuilder()` function was resetting `schemaBuilderState` without preserving `columnAliases` when editing existing datasets.
+
+**Files Modified:**
+
+1. **Backend API** (`ml_platform/datasets/api.py`):
+   - Added `column_aliases` to `get_dataset_summary()` response (line 1060)
+   - Added `column_aliases` to `clone_dataset()` to preserve aliases when cloning
+   - Added `columns_with_display_names` to `serialize_dataset()` for convenience
+   - Updated `get_dataset_columns()` in configs API to return `display_name` field
+
+2. **Backend Services** (`ml_platform/datasets/services.py`):
+   - Added `apply_column_aliases()` helper function for consistent alias application
+
+3. **Frontend Dataset Wizard** (`templates/ml_platform/model_dataset.html`):
+   - Fixed `loadSchemaBuilder()` to preserve `columnAliases` in edit mode
+   - Updated View modal's `getDisplayName()` to try multiple key formats (dot and underscore)
+   - Updated filter dropdowns and displays to use `getColumnDisplayName()`
+
+4. **Frontend Configs Page** (`templates/ml_platform/model_configs.html`):
+   - Updated column cards, feature cards, and modals to use `display_name`
+
+5. **Frontend Experiments Page** (`templates/ml_platform/model_experiments.html`):
+   - Updated tensor breakdown functions to use `display_name`
+   - Updated date/rating column dropdowns to use `display_name`
+
+**Technical Details:**
+
+The View modal fix required updating the `getDisplayName` helper to handle key format differences:
+
+```javascript
+// Before (broken - simple lookup):
+const getDisplayName = (colName) => columnAliases[colName] || colName;
+
+// After (fixed - tries multiple formats):
+const getDisplayName = (colName) => {
+    if (!columnAliases || Object.keys(columnAliases).length === 0) return colName;
+    if (columnAliases[colName]) return columnAliases[colName];
+    // Try underscore format (dot → underscore)
+    const underscoreFormat = colName.replace(/\./g, '_');
+    if (columnAliases[underscoreFormat]) return columnAliases[underscoreFormat];
+    // Try dot format (underscore → dot)
+    const dotFormat = colName.replace(/_/g, '.');
+    if (columnAliases[dotFormat]) return columnAliases[dotFormat];
+    return colName;
+};
+```
+
+**Verification:**
+After fix, column aliases are correctly displayed in:
+- View modal column statistics table
+- Schema Builder preview table (edit mode)
+- Filter dropdowns in Step 4
+- Model Configs page feature cards
+- Experiments page tensor displays
+
+---
 
 ### v14 (2025-12-28) - Query Generator Cross-Filter Fix
 

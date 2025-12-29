@@ -4133,11 +4133,12 @@ function getFeatureDisplayInfo(feature) {
 }
 
 function getCrossFeatureNames(cross) {
+    // Use display_name (alias) if available
     if (!cross.features || cross.features.length === 0) return [];
     if (typeof cross.features[0] === 'string') {
         return cross.features;
     }
-    return cross.features.map(f => f.column);
+    return cross.features.map(f => f.display_name || f.column);
 }
 
 function calculateTensorBreakdown(features, crosses) {
@@ -4147,7 +4148,8 @@ function calculateTensorBreakdown(features, crosses) {
     (features || []).forEach(feature => {
         const info = getFeatureDisplayInfo(feature);
         if (info.totalDim > 0) {
-            breakdown.push({ name: feature.column, dim: info.totalDim });
+            // Use display_name (alias) if available
+            breakdown.push({ name: feature.display_name || feature.column, dim: info.totalDim });
             total += info.totalDim;
         }
     });
@@ -5120,10 +5122,12 @@ async function loadWizardDateColumns(datasetId) {
             data.date_columns.forEach(col => {
                 const option = document.createElement('option');
                 option.value = col.name;
+                // Use display_name (alias) if available, fallback to name
+                const displayName = col.display_name || col.name;
                 // Show (recommended) for primary date column from dataset config
                 const label = col.primary
-                    ? `${col.name} (${col.type}) - recommended`
-                    : `${col.name} (${col.type})`;
+                    ? `${displayName} (${col.type}) - recommended`
+                    : `${displayName} (${col.type})`;
                 option.textContent = label;
                 select.appendChild(option);
 
@@ -5160,7 +5164,9 @@ async function loadWizardRatingColumns(datasetId) {
             numericCols.forEach(col => {
                 const option = document.createElement('option');
                 option.value = col.name;
-                option.textContent = `${col.name} (${col.dtype})`;
+                // Use display_name (alias) if available, fallback to name
+                const displayName = col.display_name || col.name;
+                option.textContent = `${displayName} (${col.dtype})`;
                 select.appendChild(option);
             });
         }
@@ -5636,7 +5642,8 @@ function calculateExpTensorBreakdown(features, crosses) {
     (features || []).forEach(feature => {
         const dim = getExpFeatureDimension(feature);
         if (dim > 0) {
-            breakdown.push({ name: feature.column, dim: dim });
+            // Use display_name (alias) if available
+            breakdown.push({ name: feature.display_name || feature.column, dim: dim });
             total += dim;
         }
     });
@@ -5689,9 +5696,10 @@ function getExpDataTypeFromBqType(bqType) {
 }
 
 function getExpCrossFeatureNames(cross) {
+    // Use display_name (alias) if available
     if (!cross.features || cross.features.length === 0) return [];
     if (typeof cross.features[0] === 'string') return cross.features;
-    return cross.features.map(f => f.column);
+    return cross.features.map(f => f.display_name || f.column);
 }
 
 function renderExpTensorBar(model, total, breakdown, maxTotal) {

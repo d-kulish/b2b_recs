@@ -5801,11 +5801,13 @@ function renderPrimaryIdZone(model) {
     } else {
         // Assigned state - show the feature card
         const embedDim = idFeature.transforms?.embedding?.embedding_dim || 32;
+        // Use display_name (alias) if available
+        const displayName = idFeature.display_name || idFeature.column;
         contentContainer.innerHTML = `
             <div class="primary-id-assigned">
                 <div class="flex items-center justify-between">
                     <div class="flex-1">
-                        <div class="font-medium text-sm">${escapeHtml(idFeature.column)}</div>
+                        <div class="font-medium text-sm">${escapeHtml(displayName)}</div>
                         <div class="text-xs text-gray-500">
                             ${idFeature.bq_type || 'STRING'} → Text • Embed: ${embedDim}D
                         </div>
@@ -5930,9 +5932,11 @@ function renderAvailableColumns() {
         }
 
         // Simple layout: drag handle | name | BQ type badge
+        // Use display_name (alias) if available, fallback to raw name
+        const displayName = col.display_name || col.name;
         card.innerHTML = `
             <i class="fas fa-grip-vertical drag-handle"></i>
-            <span class="column-name" title="${escapeHtml(col.name)}">${escapeHtml(col.name)}</span>
+            <span class="column-name" title="${escapeHtml(displayName)}">${escapeHtml(displayName)}</span>
             <span class="column-bq-type">${formatBqType(col.bq_type || 'STRING')}</span>
         `;
 
@@ -6201,10 +6205,12 @@ function createAssignedFeatureElement(feature, model, idx) {
     // Apply warning class to the outer div if no transforms selected
     div.className = displayInfo.hasTransforms ? 'assigned-feature' : 'assigned-feature feature-needs-config';
 
+    // Use display_name (alias) if available
+    const displayName = feature.display_name || feature.column;
     div.innerHTML = `
         <div class="flex items-center justify-between">
             <div class="flex-1">
-                <div class="font-medium text-sm">${escapeHtml(feature.column)}</div>
+                <div class="font-medium text-sm">${escapeHtml(displayName)}</div>
                 <div class="text-xs ${displayInfo.hasTransforms ? 'text-gray-500' : 'text-amber-600'}">
                     ${bqType} → ${displayInfo.dataTypeLabel} • ${displayInfo.transformStr}
                 </div>
@@ -6225,15 +6231,17 @@ function createAssignedFeatureElement(feature, model, idx) {
 
 function getCrossFeatureNames(cross) {
     // Handle both old format (array of strings) and new format (array of objects)
+    // Use display_name (alias) if available
     if (!cross.features || cross.features.length === 0) return [];
     if (typeof cross.features[0] === 'string') {
         return cross.features;
     }
-    return cross.features.map(f => f.column);
+    return cross.features.map(f => f.display_name || f.column);
 }
 
 function getCrossFeatureDetails(cross) {
     // Build detailed description including bucket info for numeric/temporal
+    // Use display_name (alias) if available
     if (!cross.features || cross.features.length === 0) return '';
     if (typeof cross.features[0] === 'string') {
         return ''; // Old format, no bucket details
@@ -6241,7 +6249,7 @@ function getCrossFeatureDetails(cross) {
 
     const details = cross.features
         .filter(f => f.crossing_buckets)
-        .map(f => `${f.column}: ${f.crossing_buckets} buckets`);
+        .map(f => `${f.display_name || f.column}: ${f.crossing_buckets} buckets`);
 
     return details.length > 0 ? details.join(', ') : '';
 }
@@ -6432,11 +6440,13 @@ function renderPrimaryIdConfigForm() {
     const embedDim = editingFeature.transforms?.embedding?.embedding_dim || 32;
     const presetDims = [8, 16, 32, 64, 128, 256];
     const isCustom = !presetDims.includes(embedDim);
+    // Use display_name (alias) if available
+    const displayName = editingFeature.display_name || editingFeature.column;
 
     body.innerHTML = `
         <div class="mb-4">
             <div class="text-sm text-gray-600 mb-2">
-                <strong>Column:</strong> ${escapeHtml(editingFeature.column)}
+                <strong>Column:</strong> ${escapeHtml(displayName)}
             </div>
             <div class="text-sm text-gray-500">
                 Original type: ${editingFeature.bq_type || 'STRING'} → <span class="text-blue-600 font-medium">Text (forced)</span>
@@ -6807,7 +6817,9 @@ function openFeatureConfig(model, idx) {
     const features = model === 'buyer' ? configState.buyerFeatures : configState.productFeatures;
     editingFeature = {...features[idx], _idx: idx};
 
-    document.getElementById('featureModalTitle').textContent = `Configure: ${editingFeature.column}`;
+    // Use display_name (alias) if available
+    const displayName = editingFeature.display_name || editingFeature.column;
+    document.getElementById('featureModalTitle').textContent = `Configure: ${displayName}`;
     renderFeatureConfigForm();
     document.getElementById('featureConfigModal').classList.remove('hidden');
 }

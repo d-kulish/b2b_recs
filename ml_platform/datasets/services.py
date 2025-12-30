@@ -1265,7 +1265,8 @@ class BigQueryService:
                 source_table = 'filtered_data' if has_date_filter else f'`{self.project_id}.{primary_table}`'
                 product_ctes, product_wheres = self._generate_product_filter_clauses_v2(
                     product_filter, source_table, primary_table,
-                    skip_row_filters=has_date_filter  # Skip if filters already in filtered_data
+                    skip_row_filters=has_date_filter,  # Skip if filters already in filtered_data
+                    column_aliases=column_aliases  # Pass aliases for column name translation
                 )
                 ctes.extend(product_ctes)
                 final_where_clauses.extend(product_wheres)
@@ -1278,7 +1279,8 @@ class BigQueryService:
                 source_table = 'filtered_data' if has_date_filter else f'`{self.project_id}.{primary_table}`'
                 customer_ctes, customer_wheres = self._generate_customer_filter_clauses_v2(
                     customer_filter, source_table, primary_table,
-                    skip_row_filters=has_date_filter  # Skip if filters already in filtered_data
+                    skip_row_filters=has_date_filter,  # Skip if filters already in filtered_data
+                    column_aliases=column_aliases  # Pass aliases for column name translation
                 )
                 ctes.extend(customer_ctes)
                 final_where_clauses.extend(customer_wheres)
@@ -2102,7 +2104,31 @@ class BigQueryService:
     # V2 FILTER METHODS - Use source_table parameter for filtered_data CTE support
     # =========================================================================
 
-    def _generate_product_filter_clauses_v2(self, product_filter, source_table, primary_table, skip_row_filters=False):
+    def _translate_column_to_alias(self, col_name, table_ref, column_aliases):
+        """
+        Translate a column name to its aliased name if an alias exists.
+
+        Args:
+            col_name: Original column name (e.g., 'product_id')
+            table_ref: Table reference (e.g., 'transactions' or 'raw_data.transactions')
+            column_aliases: Dict mapping 'table_col' or 'table.col' to alias
+
+        Returns:
+            Aliased column name if found, otherwise original col_name
+        """
+        if not column_aliases:
+            return col_name
+
+        # Extract table alias (last part of table reference)
+        table_alias = table_ref.split('.')[-1] if '.' in table_ref else table_ref
+
+        # Try multiple key formats (same logic as generate_query)
+        alias_key = f"{table_alias}_{col_name}"
+        alias_key_dot = f"{table_alias}.{col_name}"
+
+        return column_aliases.get(alias_key) or column_aliases.get(alias_key_dot) or col_name
+
+    def _generate_product_filter_clauses_v2(self, product_filter, source_table, primary_table, skip_row_filters=False, column_aliases=None):
         """
         Generate CTEs and WHERE clauses for product filters.
         V2: Accepts source_table parameter to use filtered_data CTE when date filter is applied.
@@ -2115,6 +2141,8 @@ class BigQueryService:
             skip_row_filters: If True, skip category/numeric/date filters (they're already
                              in filtered_data CTE). Only process top_revenue and aggregation
                              filters which need separate CTEs.
+            column_aliases: Dict mapping original column names to aliases. Required when
+                           source_table is 'filtered_data' to translate column references.
 
         Returns:
             Tuple of (list of CTE tuples, list of WHERE clauses)
@@ -2133,6 +2161,10 @@ class BigQueryService:
         if not product_filter:
             return ctes, where_clauses
 
+        # Determine if we need to translate column names to aliases
+        # This is needed when source_table is 'filtered_data' because the CTE outputs aliased names
+        use_aliases = (source_table == 'filtered_data' and column_aliases)
+
         # Top revenue filter (top N% products by revenue)
         top_revenue = product_filter.get('top_revenue', {})
         if top_revenue.get('enabled'):
@@ -2144,6 +2176,14 @@ class BigQueryService:
                 # Extract just the column names
                 product_col_name = product_col.split('.')[-1] if '.' in product_col else product_col
                 revenue_col_name = revenue_col.split('.')[-1] if '.' in revenue_col else revenue_col
+
+                # Translate to aliased names when querying filtered_data
+                if use_aliases:
+                    # Get table from column reference (e.g., 'transactions.product_id' -> 'transactions')
+                    product_table = product_col.rsplit('.', 1)[0] if '.' in product_col else primary_table
+                    revenue_table = revenue_col.rsplit('.', 1)[0] if '.' in revenue_col else primary_table
+                    product_col_name = self._translate_column_to_alias(product_col_name, product_table, column_aliases)
+                    revenue_col_name = self._translate_column_to_alias(revenue_col_name, revenue_table, column_aliases)
 
                 cte = f"""
     SELECT {product_col_name} as product_id
@@ -2179,11 +2219,20 @@ class BigQueryService:
 
             product_col_name = product_col.split('.')[-1] if '.' in product_col else product_col
 
+            # Translate to aliased names when querying filtered_data
+            if use_aliases:
+                product_table = product_col.rsplit('.', 1)[0] if '.' in product_col else primary_table
+                product_col_name = self._translate_column_to_alias(product_col_name, product_table, column_aliases)
+
             # Determine aggregation function
             if agg_type == 'transaction_count':
                 agg_expr = 'COUNT(*)'
             elif agg_type == 'total_revenue' and amount_col:
                 amount_col_name = amount_col.split('.')[-1] if '.' in amount_col else amount_col
+                # Translate amount column too
+                if use_aliases:
+                    amount_table = amount_col.rsplit('.', 1)[0] if '.' in amount_col else primary_table
+                    amount_col_name = self._translate_column_to_alias(amount_col_name, amount_table, column_aliases)
                 agg_expr = f'SUM({amount_col_name})'
             else:
                 continue
@@ -2325,7 +2374,7 @@ class BigQueryService:
 
         return ctes, where_clauses
 
-    def _generate_customer_filter_clauses_v2(self, customer_filter, source_table, primary_table, skip_row_filters=False):
+    def _generate_customer_filter_clauses_v2(self, customer_filter, source_table, primary_table, skip_row_filters=False, column_aliases=None):
         """
         Generate CTEs and WHERE clauses for customer filters.
         V2: Accepts source_table parameter to use filtered_data CTE when date filter is applied.
@@ -2338,6 +2387,8 @@ class BigQueryService:
             skip_row_filters: If True, skip category/numeric/date filters (they're already
                              in filtered_data CTE). Only process top_revenue and aggregation
                              filters which need separate CTEs.
+            column_aliases: Dict mapping original column names to aliases. Required when
+                           source_table is 'filtered_data' to translate column references.
 
         Returns:
             Tuple of (list of CTE tuples, list of WHERE clauses)
@@ -2356,6 +2407,10 @@ class BigQueryService:
         if not customer_filter:
             return ctes, where_clauses
 
+        # Determine if we need to translate column names to aliases
+        # This is needed when source_table is 'filtered_data' because the CTE outputs aliased names
+        use_aliases = (source_table == 'filtered_data' and column_aliases)
+
         # Top revenue filter (top N% customers by revenue)
         top_revenue = customer_filter.get('top_revenue', {})
         if top_revenue.get('enabled'):
@@ -2366,6 +2421,13 @@ class BigQueryService:
             if customer_col and revenue_col:
                 customer_col_name = customer_col.split('.')[-1] if '.' in customer_col else customer_col
                 revenue_col_name = revenue_col.split('.')[-1] if '.' in revenue_col else revenue_col
+
+                # Translate to aliased names when querying filtered_data
+                if use_aliases:
+                    customer_table = customer_col.rsplit('.', 1)[0] if '.' in customer_col else primary_table
+                    revenue_table = revenue_col.rsplit('.', 1)[0] if '.' in revenue_col else primary_table
+                    customer_col_name = self._translate_column_to_alias(customer_col_name, customer_table, column_aliases)
+                    revenue_col_name = self._translate_column_to_alias(revenue_col_name, revenue_table, column_aliases)
 
                 cte = f"""
     SELECT {customer_col_name} as customer_id
@@ -2401,6 +2463,14 @@ class BigQueryService:
 
             customer_col_name = customer_col.split('.')[-1] if '.' in customer_col else customer_col
             amount_col_name = amount_col.split('.')[-1] if amount_col and '.' in amount_col else amount_col
+
+            # Translate to aliased names when querying filtered_data
+            if use_aliases:
+                customer_table = customer_col.rsplit('.', 1)[0] if '.' in customer_col else primary_table
+                customer_col_name = self._translate_column_to_alias(customer_col_name, customer_table, column_aliases)
+                if amount_col:
+                    amount_table = amount_col.rsplit('.', 1)[0] if '.' in amount_col else primary_table
+                    amount_col_name = self._translate_column_to_alias(amount_col_name, amount_table, column_aliases)
 
             # Determine aggregation expression
             if agg_type == 'transaction_count':

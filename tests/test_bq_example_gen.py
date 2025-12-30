@@ -113,6 +113,7 @@ def create_bq_example_gen_pipeline(
         '--runner=DataflowRunner',
         f'--project={project_id}',
         f'--region={region}',
+        f'--zone={region}-b',  # Explicitly set zone to avoid exhausted zones (a and c are exhausted)
         f'--temp_location=gs://{staging_bucket}/dataflow_temp',
         f'--staging_location=gs://{staging_bucket}/dataflow_staging',
         '--machine_type=n1-standard-4',

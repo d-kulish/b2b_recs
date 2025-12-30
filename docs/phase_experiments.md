@@ -1937,6 +1937,25 @@ MLFLOW_TRACKING_URI = os.environ.get('MLFLOW_TRACKING_URI', 'http://mlflow-serve
 
 **Result:** Pipeline DAG visualization is now a reusable component that can be included on both Quick Test and Full Training pages.
 
+### Phase 22: Dataflow Zone Fix & Column Alias Filter Support ✅ DONE (2025-12-30)
+> **Fix Dataflow zone exhaustion and add column alias support in SQL filters**
+
+- [x] **Dataflow zone configuration**: Added explicit `--zone={region}-b` to beam_pipeline_args to avoid exhausted zones
+- [x] **Zone exhaustion diagnosis**: Identified `europe-central2-a` and `europe-central2-c` as exhausted zones causing BigQueryExampleGen failures
+- [x] **Column alias translation helper**: Added `_translate_column_to_alias()` method in `datasets/services.py`
+- [x] **Product filter alias support**: Updated `_generate_product_filter_clauses_v2()` to translate column names when querying `filtered_data` CTE
+- [x] **Customer filter alias support**: Updated `_generate_customer_filter_clauses_v2()` similarly
+- [x] **BigQueryExampleGen isolated test**: Created `tests/test_bq_example_gen.py` for testing BigQueryExampleGen independently
+
+**Files Changed:**
+- `ml_platform/experiments/services.py`: Added `--zone={region}-b` to Dataflow beam_pipeline_args (line 650)
+- `ml_platform/datasets/services.py`: Added `_translate_column_to_alias()` helper and updated filter functions
+- `tests/test_bq_example_gen.py`: New isolated test for BigQueryExampleGen with column aliases
+
+**Note:** The column alias translation in product/customer filters may not have been strictly necessary for the tested dataset (Dataset 14). Further testing is needed with datasets that use product_filter or customer_filter configurations with aliased columns to confirm these changes are required.
+
+**Result:** QuickTest #58 succeeded after zone fix. Experiments using Dataset 14 with column aliases now complete successfully.
+
 ### Previously Completed ✅
 - [x] Create `model_experiments.html` page (placeholder)
 - [x] Feature Config dropdown

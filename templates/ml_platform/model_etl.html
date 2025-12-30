@@ -2516,8 +2516,8 @@ function renderBubbleChart() {
     const height = 260;  // Fixed height to fill container (370px - padding - header - margins)
 
     // Bubble size constraints
-    const minRadius = 4;
-    const maxRadius = 14;
+    const minRadius = 3;
+    const maxRadius = 16;
 
     svgElement
         .attr('width', containerWidth)
@@ -2525,6 +2525,17 @@ function renderBubbleChart() {
 
     const svg = svgElement.append('g')
         .attr('transform', `translate(${margin.left},${margin.top})`);
+
+    // Add clip path to prevent bubbles from overflowing into the Y axis area
+    const clipId = 'bubble-chart-clip';
+    svgElement.append('defs')
+        .append('clipPath')
+        .attr('id', clipId)
+        .append('rect')
+        .attr('x', 0)
+        .attr('y', -maxRadius)  // Allow some vertical overflow for bubbles near top
+        .attr('width', width)
+        .attr('height', height + maxRadius * 2);  // Allow some vertical overflow
 
     const jobNames = bubbleChartData.job_names;
     const runs = bubbleChartData.runs;
@@ -2598,6 +2609,10 @@ function renderBubbleChart() {
             .text(jobName.length > 18 ? jobName.substring(0, 16) + '...' : jobName);
     });
 
+    // Create a clipped group for bubbles to prevent overflow into Y axis
+    const bubblesGroup = svg.append('g')
+        .attr('clip-path', `url(#${clipId})`);
+
     // Draw bubbles for each run
     runs.forEach((run) => {
         const runDate = new Date(run.started_at);
@@ -2609,7 +2624,7 @@ function renderBubbleChart() {
         const hasData = run.rows_loaded > 0;
 
         // Draw the bubble
-        const bubble = svg.append('circle')
+        const bubble = bubblesGroup.append('circle')
             .attr('cx', x)
             .attr('cy', y)
             .attr('r', radius)

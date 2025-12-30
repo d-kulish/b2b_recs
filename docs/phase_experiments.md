@@ -37,6 +37,52 @@ This document provides **high-level specifications** for the Experiments domain.
 
 ## Recent Updates (December 2025)
 
+### Cancel Button Bug Fix for Compile Phase (2025-12-30)
+
+**Bug Fix:** Cancel button now properly cancels experiments during the Compile (Cloud Build) phase.
+
+#### The Problem
+
+The Cancel button only worked when experiments were in the RUNNING phase (Vertex AI pipeline execution). When cancelling during the SUBMITTING phase (Compile), the following occurred:
+
+1. **Database updated** - Status changed to "cancelled" ✓
+2. **Cloud Build continued** - Compilation kept running ✗
+3. **Pipeline submitted** - Vertex AI pipeline was submitted after Cloud Build completed ✗
+4. **Resources wasted** - Orphaned pipeline consumed compute resources ✗
+
+**Root Cause:** The `cancel_quick_test()` method in `services.py` only handled Vertex AI pipeline cancellation. When `vertex_pipeline_job_name` was empty (during Compile phase), it returned early without cancelling Cloud Build.
+
+#### Two-Phase Execution Architecture
+
+```
+SUBMITTING ─── Cloud Build Phase (1-2 min)
+    │           └─ Compiles TFX pipeline, submits to Vertex AI
+    │           └─ cloud_build_id stored, vertex_pipeline_job_name NOT YET available
+    ▼
+RUNNING ────── Vertex AI Pipeline Phase (5-15 min)
+    │           └─ Examples → Stats → Schema → Transform → Train
+    │           └─ vertex_pipeline_job_name now available
+    ▼
+COMPLETED/FAILED/CANCELLED
+```
+
+#### The Fix
+
+Updated `cancel_quick_test()` in `ml_platform/experiments/services.py` to handle both phases:
+
+| Phase | Condition | Action |
+|-------|-----------|--------|
+| Compile | `cloud_build_id` exists, no `vertex_pipeline_job_name` | Cancel via `cloudbuild_v1.CloudBuildClient().cancel_build()` |
+| Pipeline | `vertex_pipeline_job_name` exists | Cancel via `aiplatform.PipelineJob.cancel()` |
+| Race condition | Cloud Build completes during cancel | Check for result, then cancel Vertex pipeline if submitted |
+
+**Key Changes:**
+- Added Cloud Build cancellation using `google.cloud.devtools.cloudbuild_v1`
+- Handle race condition where Cloud Build completes between cancel request and API call
+- Comprehensive logging for debugging which phase was cancelled
+
+---
+
 ### MLflow Training Metrics Enhancement (2025-12-25)
 
 **Major Enhancement:** Expanded training metrics collection and visualization in the Training tab.

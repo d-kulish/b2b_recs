@@ -1312,37 +1312,78 @@ if __name__ == "__main__":
         """
         Cancel a running Quick Test pipeline.
 
+        Handles two phases:
+        1. SUBMITTING phase: Cancel Cloud Build (compilation)
+        2. RUNNING phase: Cancel Vertex AI pipeline
+
         Args:
             quick_test: QuickTest instance
 
         Returns:
             Updated QuickTest instance
         """
-        if not quick_test.vertex_pipeline_job_name:
-            quick_test.status = quick_test.STATUS_CANCELLED
-            quick_test.save(update_fields=['status'])
-            return quick_test
+        cloud_build_cancelled = False
+        vertex_pipeline_cancelled = False
 
-        self._init_aiplatform()
+        # Phase 1: Cancel Cloud Build if still in compilation phase
+        if quick_test.cloud_build_id and not quick_test.vertex_pipeline_job_name:
+            try:
+                from google.cloud.devtools import cloudbuild_v1
 
-        try:
-            from google.cloud import aiplatform
+                client = cloudbuild_v1.CloudBuildClient()
+                client.cancel_build(
+                    project_id=self.project_id,
+                    id=quick_test.cloud_build_id
+                )
+                cloud_build_cancelled = True
+                logger.info(
+                    f"Cancelled Cloud Build {quick_test.cloud_build_id} for "
+                    f"{quick_test.display_name} (id={quick_test.id})"
+                )
+            except Exception as e:
+                # Cloud Build may have already completed or failed
+                logger.warning(
+                    f"Could not cancel Cloud Build {quick_test.cloud_build_id} for "
+                    f"{quick_test.display_name} (id={quick_test.id}): {e}"
+                )
+                # Check if Vertex pipeline was submitted in the meantime
+                self._check_cloud_build_result(quick_test)
+                quick_test.refresh_from_db()
 
-            pipeline_job = aiplatform.PipelineJob.get(
-                quick_test.vertex_pipeline_job_name
-            )
-            pipeline_job.cancel()
+        # Phase 2: Cancel Vertex AI pipeline if it exists
+        if quick_test.vertex_pipeline_job_name:
+            self._init_aiplatform()
+            try:
+                from google.cloud import aiplatform
 
-            quick_test.status = quick_test.STATUS_CANCELLED
-            quick_test.completed_at = timezone.now()
-            quick_test.save(update_fields=['status', 'completed_at'])
+                pipeline_job = aiplatform.PipelineJob.get(
+                    quick_test.vertex_pipeline_job_name
+                )
+                pipeline_job.cancel()
+                vertex_pipeline_cancelled = True
+                logger.info(
+                    f"Cancelled Vertex AI pipeline {quick_test.vertex_pipeline_job_name} for "
+                    f"{quick_test.display_name} (id={quick_test.id})"
+                )
+            except Exception as e:
+                logger.warning(
+                    f"Error cancelling Vertex AI pipeline for "
+                    f"{quick_test.display_name} (id={quick_test.id}): {e}"
+                )
 
-            logger.info(f"Cancelled {quick_test.display_name} (id={quick_test.id})")
+        # Update status
+        quick_test.status = quick_test.STATUS_CANCELLED
+        quick_test.completed_at = timezone.now()
+        quick_test.save(update_fields=['status', 'completed_at'])
 
-        except Exception as e:
-            logger.warning(f"Error cancelling {quick_test.display_name} (id={quick_test.id}): {e}")
-            quick_test.status = quick_test.STATUS_CANCELLED
-            quick_test.error_message = f"Cancel error: {str(e)}"
-            quick_test.save(update_fields=['status', 'error_message'])
+        # Log summary
+        if cloud_build_cancelled and vertex_pipeline_cancelled:
+            logger.info(f"Cancelled both Cloud Build and Vertex AI pipeline for {quick_test.display_name}")
+        elif cloud_build_cancelled:
+            logger.info(f"Cancelled during compilation phase for {quick_test.display_name}")
+        elif vertex_pipeline_cancelled:
+            logger.info(f"Cancelled during pipeline execution phase for {quick_test.display_name}")
+        else:
+            logger.warning(f"No active jobs found to cancel for {quick_test.display_name}")
 
         return quick_test

@@ -460,6 +460,10 @@
 }
 
 /* Save button - Dark green gradient (matches progress bar pill) */
+.btn-neu-save {
+    width: 120px;  /* Fixed width to prevent resizing during state changes */
+}
+
 .btn-neu-save .btn-neu-inner {
     background: linear-gradient(145deg, #22c55e, #16a34a);
 }

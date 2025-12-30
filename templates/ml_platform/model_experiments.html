@@ -1077,7 +1077,8 @@
        Experiment View Modal Styles (Tabbed Design)
        ========================================================================= */
     .exp-view-modal {
-        max-width: 720px;
+        width: 780px;
+        max-width: 780px;
         height: 600px;
     }
 
@@ -1231,6 +1232,7 @@
     /* Tab Content */
     .exp-view-body {
         overflow-y: auto;
+        overflow-x: hidden;
         flex: 1;
         padding: 0;
     }
@@ -3916,9 +3918,6 @@
         <div class="modal-footer-wizard-neu">
             <div class="footer-left"></div>
             <div class="footer-right">
-                <button type="button" id="expViewCancelBtn" class="btn-neu btn-neu-action btn-neu-secondary" onclick="cancelFromViewModal()" style="display: none;">
-                    <span class="btn-neu-inner"><i class="fas fa-stop mr-2"></i>Cancel</span>
-                </button>
                 <button type="button" class="btn-neu btn-neu-action btn-neu-cancel" onclick="closeExpViewModal()">
                     <span class="btn-neu-inner">Close</span>
                 </button>
@@ -5302,10 +5301,10 @@ async function submitExperiment() {
         payload.rating_column = document.getElementById('wizardRatingColumn').value;
     }
 
-    // Disable run button
+    // Disable run button and show spinner
     const runBtn = document.getElementById('wizardRunBtn');
     runBtn.disabled = true;
-    runBtn.querySelector('.btn-neu-inner').innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Submitting...';
+    runBtn.querySelector('.btn-neu-inner').innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
 
     try {
         const response = await fetch(`/api/feature-configs/${selectedFeatureConfig.id}/quick-test/`, {
@@ -5341,7 +5340,7 @@ async function submitExperiment() {
         showError('Failed to submit experiment: ' + error.message);
     } finally {
         runBtn.disabled = false;
-        runBtn.querySelector('.btn-neu-inner').innerHTML = '<i class="fas fa-play mr-2"></i>Run Experiment';
+        runBtn.querySelector('.btn-neu-inner').innerHTML = 'Run';
     }
 }
 
@@ -6143,9 +6142,6 @@ function populateExpViewModal(exp) {
     } else {
         vocabSection.classList.add('hidden');
     }
-
-    // Cancel button
-    document.getElementById('expViewCancelBtn').style.display = isRunning ? '' : 'none';
 }
 
 function renderMetricsSummary(metrics) {
@@ -7261,43 +7257,6 @@ function stopViewModalPolling() {
     if (viewModalPollInterval) {
         clearInterval(viewModalPollInterval);
         viewModalPollInterval = null;
-    }
-}
-
-async function cancelFromViewModal() {
-    if (!viewModalExpId) return;
-
-    const btn = document.getElementById('expViewCancelBtn');
-    btn.disabled = true;
-    btn.querySelector('.btn-neu-inner').innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Cancelling...';
-
-    try {
-        const response = await fetch(`/api/quick-tests/${viewModalExpId}/cancel/`, {
-            method: 'POST',
-            headers: {
-                'X-CSRFToken': getCookie('csrftoken')
-            }
-        });
-
-        const data = await response.json();
-
-        if (data.success) {
-            stopViewModalPolling();
-            const refreshResponse = await fetch(`/api/quick-tests/${viewModalExpId}/`);
-            const refreshData = await refreshResponse.json();
-            if (refreshData.success) {
-                populateExpViewModal(refreshData.quick_test);
-                updateExpCard(refreshData.quick_test);
-            }
-            showSuccess('Experiment cancelled');
-        } else {
-            showError(data.error || 'Failed to cancel experiment');
-        }
-    } catch (error) {
-        showError('Failed to cancel: ' + error.message);
-    } finally {
-        btn.disabled = false;
-        btn.querySelector('.btn-neu-inner').innerHTML = '<i class="fas fa-stop mr-2"></i>Cancel';
     }
 }
 

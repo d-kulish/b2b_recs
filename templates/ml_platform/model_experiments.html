@@ -3894,6 +3894,23 @@
                             <canvas id="trainingWeightStatsChart" height="180"></canvas>
                         </div>
                     </div>
+                    <!-- Third row: 3D Weight Distribution Histogram (full width) -->
+                    <div class="training-charts-container" style="margin-top: 16px;">
+                        <div class="training-chart-wrapper" style="grid-column: span 2;">
+                            <h5 class="training-chart-title">Weight Distribution (3D Histogram)</h5>
+                            <div class="weight-stats-controls">
+                                <select id="weightHistogramTower" class="weight-stats-select" onchange="updateWeightHistogramChart()">
+                                    <option value="query">Query Tower</option>
+                                    <option value="candidate">Candidate Tower</option>
+                                </select>
+                            </div>
+                            <div id="trainingWeightHistogramChart" style="height: 400px; width: 100%;">
+                                <p class="text-gray-500" style="text-align: center; padding-top: 180px;">
+                                    Histogram data not available for this experiment
+                                </p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Final Metrics -->
@@ -6627,6 +6644,7 @@ let trainingMetricsChart = null;
 let trainingGradientChart = null;
 let trainingWeightStatsChart = null;
 let currentWeightStatsData = null;  // Store for tower switching
+let currentWeightHistogramData = null;  // Store for 3D histogram tower switching
 
 // Lazy load training history and render charts
 async function loadTrainingHistory() {
@@ -6693,12 +6711,13 @@ async function loadTrainingHistory() {
     }
 }
 
-// Render training charts with Chart.js
+// Render training charts with Chart.js and Plotly
 function renderTrainingCharts(history) {
     renderLossChart(history);
     renderMetricsChart(history);
     renderGradientChart(history);
     renderWeightStatsChart(history);
+    renderWeightHistogramChart(history);  // 3D histogram (Plotly)
     renderFinalMetricsTable(history);
 }
 
@@ -7189,6 +7208,116 @@ function updateWeightStatsChart() {
     if (!currentWeightStatsData) return;
     const tower = document.getElementById('weightStatsTower').value;
     renderWeightStatsChart(currentWeightStatsData, tower);
+}
+
+// Render 3D weight distribution histogram (TensorBoard-style)
+function renderWeightHistogramChart(history, tower = 'query') {
+    const container = document.getElementById('trainingWeightHistogramChart');
+    if (!container) return;
+
+    // Store data for tower switching
+    currentWeightHistogramData = history;
+
+    const weightStats = history.weight_stats || {};
+    const towerStats = weightStats[tower] || {};
+    const histogram = towerStats.histogram;
+
+    // Check if histogram data is available
+    if (!histogram || !histogram.bin_edges || !histogram.counts || histogram.counts.length === 0) {
+        container.innerHTML = `
+            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 380px; color: #9ca3af; text-align: center;">
+                <i class="fas fa-chart-area" style="font-size: 32px; margin-bottom: 12px; opacity: 0.5;"></i>
+                <span style="font-size: 14px;">Histogram data not available for this experiment</span>
+                <span style="font-size: 12px; margin-top: 6px; max-width: 400px;">
+                    Run a new experiment to collect weight distribution histograms.<br>
+                    This feature requires experiments run after the histogram logging update.
+                </span>
+            </div>
+        `;
+        return;
+    }
+
+    const { bin_edges, counts } = histogram;
+    const epochs = history.epochs || [];
+
+    // Calculate bin centers for X axis
+    const binCenters = bin_edges.slice(0, -1).map((e, i) => ((e + bin_edges[i + 1]) / 2).toFixed(3));
+
+    // Create 3D surface plot (ridge plot style like TensorBoard)
+    const data = [{
+        z: counts,
+        x: binCenters,
+        y: epochs.map(e => e + 1),
+        type: 'surface',
+        colorscale: [
+            [0, 'rgb(255,245,235)'],
+            [0.2, 'rgb(254,230,206)'],
+            [0.4, 'rgb(253,174,107)'],
+            [0.6, 'rgb(241,105,19)'],
+            [0.8, 'rgb(217,72,1)'],
+            [1, 'rgb(140,45,4)']
+        ],
+        showscale: true,
+        colorbar: {
+            title: 'Count',
+            titleside: 'right',
+            len: 0.8
+        },
+        contours: {
+            z: {
+                show: true,
+                usecolormap: true,
+                highlightcolor: "#42f462",
+                project: { z: true }
+            }
+        }
+    }];
+
+    const towerTitle = tower.charAt(0).toUpperCase() + tower.slice(1);
+    const layout = {
+        title: {
+            text: `${towerTitle} Tower - Weight Distribution Over Training`,
+            font: { size: 14, color: '#374151' }
+        },
+        scene: {
+            xaxis: {
+                title: { text: 'Weight Value', font: { size: 11 } },
+                tickfont: { size: 9 }
+            },
+            yaxis: {
+                title: { text: 'Epoch', font: { size: 11 } },
+                tickfont: { size: 9 }
+            },
+            zaxis: {
+                title: { text: 'Count', font: { size: 11 } },
+                tickfont: { size: 9 }
+            },
+            camera: {
+                eye: { x: 1.8, y: -1.8, z: 0.8 }
+            },
+            aspectratio: { x: 1.2, y: 1, z: 0.6 }
+        },
+        height: 380,
+        margin: { l: 0, r: 0, t: 40, b: 0 },
+        paper_bgcolor: 'rgba(0,0,0,0)',
+        plot_bgcolor: 'rgba(0,0,0,0)'
+    };
+
+    const config = {
+        responsive: true,
+        displayModeBar: true,
+        modeBarButtonsToRemove: ['toImage', 'sendDataToCloud', 'lasso2d', 'select2d'],
+        displaylogo: false
+    };
+
+    Plotly.newPlot(container, data, layout, config);
+}
+
+// Update 3D histogram chart when tower selection changes
+function updateWeightHistogramChart() {
+    if (!currentWeightHistogramData) return;
+    const tower = document.getElementById('weightHistogramTower').value;
+    renderWeightHistogramChart(currentWeightHistogramData, tower);
 }
 
 function toggleErrorDetails() {
@@ -8290,6 +8419,9 @@ function renderHeatmapChart(canvas, heatmap) {
 
 <!-- Chart.js for training curves visualization -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+<!-- Plotly.js for 3D weight distribution histogram -->
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
 
 <!-- Pipeline DAG Visualization (extracted component) -->
 <script src="{% static 'js/pipeline_dag.js' %}?v=1"></script>

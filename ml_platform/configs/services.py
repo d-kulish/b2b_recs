@@ -2676,11 +2676,14 @@ class WeightStatsCallback(tf.keras.callbacks.Callback):
     Log weight statistics per epoch for each tower.
 
     Tracks min, max, mean, std of weights for the query and candidate towers.
+    Also logs histogram bins for TensorBoard-style weight distribution visualization.
 
     Tower categorization:
     - Query tower: variables containing 'query' or 'buyer' in name
     - Candidate tower: variables containing 'candidate' or 'product' in name
     """
+
+    NUM_HISTOGRAM_BINS = 25
 
     def on_epoch_end(self, epoch, logs=None):
         if not _mlflow_client:
@@ -2704,10 +2707,25 @@ class WeightStatsCallback(tf.keras.callbacks.Callback):
         for tower, weights in tower_stats.items():
             if weights:
                 weights_arr = np.array(weights)
+
+                # Existing summary statistics
                 _mlflow_client.log_metric(tower + '_weights_mean', float(np.mean(weights_arr)), step=epoch)
                 _mlflow_client.log_metric(tower + '_weights_std', float(np.std(weights_arr)), step=epoch)
                 _mlflow_client.log_metric(tower + '_weights_min', float(np.min(weights_arr)), step=epoch)
                 _mlflow_client.log_metric(tower + '_weights_max', float(np.max(weights_arr)), step=epoch)
+
+                # NEW: Histogram bins for 3D weight distribution visualization
+                # Compute histogram with fixed bin count
+                counts, bin_edges = np.histogram(weights_arr, bins=self.NUM_HISTOGRAM_BINS)
+
+                # Log bin edges once (epoch 0 only) as a parameter
+                if epoch == 0:
+                    edges_str = ','.join([f'{e:.6f}' for e in bin_edges])
+                    _mlflow_client.log_param(f'{tower}_hist_bin_edges', edges_str)
+
+                # Log bin counts per epoch as metrics
+                for i, count in enumerate(counts):
+                    _mlflow_client.log_metric(f'{tower}_hist_bin_{i}', int(count), step=epoch)
 
 
 def _write_mlflow_info(gcs_output_path: str, run_id: str):

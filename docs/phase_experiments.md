@@ -5,7 +5,7 @@ This document provides **high-level specifications** for the Experiments domain.
 
 👉 **[phase_experiments_implementation.md](phase_experiments_implementation.md)** - Complete implementation guide with code examples
 
-**Last Updated**: 2025-12-25
+**Last Updated**: 2025-12-30
 
 ---
 
@@ -80,6 +80,131 @@ Updated `cancel_quick_test()` in `ml_platform/experiments/services.py` to handle
 - Added Cloud Build cancellation using `google.cloud.devtools.cloudbuild_v1`
 - Handle race condition where Cloud Build completes between cancel request and API call
 - Comprehensive logging for debugging which phase was cancelled
+
+---
+
+### 3D Weight Distribution Histogram (2025-12-30)
+
+**Major Enhancement:** Added TensorBoard-style 3D ridge plot for weight distribution visualization in the Training tab.
+
+#### The Problem
+
+The existing Weight Distribution chart showed only summary statistics (mean, std, min, max) as line charts. While useful, this didn't show the full distribution of weights - making it difficult to:
+- See if weights are normally distributed or skewed
+- Detect bimodal distributions
+- Visualize how the entire distribution evolves over training (not just extremes)
+
+TensorBoard's weight histogram visualization solves this by showing stacked "ridge" distributions per epoch, but TensorBoard is expensive and requires separate infrastructure.
+
+#### The Solution
+
+Implemented a custom 3D surface plot using Plotly.js that mimics TensorBoard's weight histogram visualization.
+
+**Data Collection (Trainer Callback):**
+
+```python
+class WeightStatsCallback(tf.keras.callbacks.Callback):
+    NUM_HISTOGRAM_BINS = 25
+
+    def on_epoch_end(self, epoch, logs=None):
+        # ... existing mean/std/min/max logging ...
+
+        # NEW: Histogram bins
+        counts, bin_edges = np.histogram(weights_arr, bins=self.NUM_HISTOGRAM_BINS)
+
+        # Log bin edges once (epoch 0 only) as parameter
+        if epoch == 0:
+            edges_str = ','.join([f'{e:.6f}' for e in bin_edges])
+            _mlflow_client.log_param(f'{tower}_hist_bin_edges', edges_str)
+
+        # Log bin counts per epoch as metrics
+        for i, count in enumerate(counts):
+            _mlflow_client.log_metric(f'{tower}_hist_bin_{i}', int(count), step=epoch)
+```
+
+**New Metrics Logged:**
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| `{tower}_hist_bin_edges` | Parameter | Comma-separated bin edges (26 values for 25 bins) |
+| `{tower}_hist_bin_0` ... `{tower}_hist_bin_24` | Metric (per epoch) | Count of weights in each bin |
+
+**Visualization:**
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Weight Distribution (3D Histogram)                                           │
+│ [Query Tower ▼]                                                              │
+│                                                                              │
+│         ╱╲                                                                   │
+│        ╱  ╲    Epoch 25                                                      │
+│       ╱    ╲                                                                 │
+│      ╱      ╲   Epoch 20                                                     │
+│     ╱   ╱╲   ╲                                                               │
+│    ╱   ╱  ╲   ╲  Epoch 15                                                    │
+│   ╱   ╱    ╲   ╲                                                             │
+│  ╱   ╱  ╱╲  ╲   ╲ Epoch 10                                                   │
+│ ╱___╱__╱__╲__╲___╲                                                           │
+│ -0.3  -0.1  0.1  0.3  (Weight Value)                                         │
+│                                                                              │
+│ [Interactive: rotate, zoom, pan]                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Chart Features:**
+- **3D Surface Plot**: Plotly.js surface plot with orange-red colorscale
+- **Interactive**: Users can rotate, zoom, and pan the 3D visualization
+- **Tower Selector**: Dropdown to switch between Query and Candidate tower
+- **Contour Lines**: Z-axis contours for better depth perception
+- **Responsive**: Adapts to container width
+
+#### Files Modified
+
+| File | Change |
+|------|--------|
+| `ml_platform/configs/services.py` | Added histogram logging to `WeightStatsCallback` |
+| `ml_platform/experiments/mlflow_service.py` | Added histogram parsing in `get_training_history()` |
+| `templates/ml_platform/model_experiments.html` | Added Plotly.js, new 3D chart, tower selector |
+
+#### Data Structure
+
+**MLflow Service returns:**
+
+```python
+'weight_stats': {
+    'query': {
+        'mean': [...],
+        'std': [...],
+        'min': [...],
+        'max': [...],
+        'histogram': {
+            'bin_edges': [-0.31, -0.28, ..., 0.28, 0.31],  # 26 edges
+            'counts': [
+                [5, 120, 890, ...],   # epoch 0: 25 counts
+                [4, 115, 920, ...],   # epoch 1: 25 counts
+                ...
+            ]
+        }
+    },
+    'candidate': { ... }
+}
+```
+
+#### Backward Compatibility
+
+- **Existing experiments**: Show "Histogram data not available for this experiment" placeholder
+- **New experiments**: Collect and display full histogram data
+- **Existing charts**: Weight Distribution (mean/std/min/max) chart preserved alongside new 3D chart
+
+#### Interpretation Guide
+
+| Pattern | Meaning |
+|---------|---------|
+| Distribution narrows over epochs | Weights converging (good) |
+| Distribution spreads out | Weights diverging (potential overfitting) |
+| Distribution shifts left/right | Systematic bias developing |
+| Multiple peaks (bimodal) | May indicate separate weight populations |
+| Flat distribution | Weights not learning structure |
 
 ---
 

@@ -311,6 +311,7 @@ class MLflowService:
             }
 
         metrics = self.get_run_metrics(run_id)
+        params = self.get_run_params(run_id)
 
         if not metrics:
             return {
@@ -335,8 +336,8 @@ class MLflowService:
                 'weight_norm': []
             },
             'weight_stats': {
-                'query': {'mean': [], 'std': [], 'min': [], 'max': []},
-                'candidate': {'mean': [], 'std': [], 'min': [], 'max': []}
+                'query': {'mean': [], 'std': [], 'min': [], 'max': [], 'histogram': None},
+                'candidate': {'mean': [], 'std': [], 'min': [], 'max': [], 'histogram': None}
             },
             'metrics': {},
             'final_metrics': {}
@@ -387,6 +388,47 @@ class MLflowService:
                     result['weight_stats'][tower][stat] = [
                         m['value'] for m in sorted(history, key=lambda x: x['step'])
                     ]
+
+        # Weight histogram data (for 3D distribution visualization)
+        NUM_HISTOGRAM_BINS = 25
+        for tower in ['query', 'candidate']:
+            # Get bin edges from params (logged once at epoch 0)
+            edges_param = params.get(f'{tower}_hist_bin_edges', '')
+            if edges_param:
+                try:
+                    bin_edges = [float(e) for e in edges_param.split(',')]
+
+                    # Get bin counts per epoch
+                    epoch_counts = []
+                    num_epochs = len(result['epochs']) if result['epochs'] else 0
+
+                    # If no epochs extracted yet, try to get from histogram metrics
+                    if num_epochs == 0:
+                        first_bin_history = metrics.get(f'{tower}_hist_bin_0', [])
+                        if first_bin_history:
+                            num_epochs = len(first_bin_history)
+
+                    for epoch in range(num_epochs):
+                        counts_for_epoch = []
+                        for bin_idx in range(NUM_HISTOGRAM_BINS):
+                            metric_key = f'{tower}_hist_bin_{bin_idx}'
+                            history = metrics.get(metric_key, [])
+                            if history:
+                                # Find value for this epoch (step)
+                                for m in history:
+                                    if m['step'] == epoch:
+                                        counts_for_epoch.append(int(m['value']))
+                                        break
+                        if len(counts_for_epoch) == NUM_HISTOGRAM_BINS:
+                            epoch_counts.append(counts_for_epoch)
+
+                    if epoch_counts:
+                        result['weight_stats'][tower]['histogram'] = {
+                            'bin_edges': bin_edges,
+                            'counts': epoch_counts
+                        }
+                except (ValueError, AttributeError) as e:
+                    logger.warning(f"Failed to parse histogram data for {tower}: {e}")
 
         # Recall metrics (may have various naming patterns)
         recall_patterns = ['recall_at_10', 'recall_at_50', 'recall_at_100',

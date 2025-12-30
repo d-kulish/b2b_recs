@@ -6125,14 +6125,9 @@ function populateExpViewModal(exp) {
         errorSection.classList.add('hidden');
     }
 
-    // Training Tab - Final Metrics
-    const finalMetrics = document.getElementById('expViewFinalMetrics');
-    if (exp.status === 'completed' && exp.metrics) {
-        finalMetrics.classList.remove('hidden');
-        renderFinalMetrics(exp.metrics);
-    } else {
-        finalMetrics.classList.add('hidden');
-    }
+    // Training Tab - Final Metrics (populated by MLflow data via renderFinalMetricsTable)
+    // Keep hidden until MLflow data loads
+    document.getElementById('expViewFinalMetrics').classList.add('hidden');
 
     // Training Tab - Vocabulary
     const vocabSection = document.getElementById('expViewVocabSection');
@@ -6170,22 +6165,6 @@ function renderMetricsSummary(metrics) {
 // - refreshComponentLogs(experimentId)
 // - resetDagState()
 // - formatDuration(seconds)
-
-function renderFinalMetrics(metrics) {
-    const container = document.getElementById('expViewMetricsRows');
-    const items = [
-        { label: 'Loss', value: metrics.loss?.toFixed(4) || 'N/A' },
-        { label: 'Recall@10', value: metrics.recall_at_10 != null ? (metrics.recall_at_10 * 100).toFixed(2) + '%' : 'N/A' },
-        { label: 'Recall@50', value: metrics.recall_at_50 != null ? (metrics.recall_at_50 * 100).toFixed(2) + '%' : 'N/A' },
-        { label: 'Recall@100', value: metrics.recall_at_100 != null ? (metrics.recall_at_100 * 100).toFixed(2) + '%' : 'N/A' }
-    ];
-    container.innerHTML = items.map(item => `
-        <div class="exp-view-row">
-            <span class="exp-view-row-label">${item.label}</span>
-            <span class="exp-view-row-value">${item.value}</span>
-        </div>
-    `).join('');
-}
 
 function renderVocabRows(vocabStats) {
     const container = document.getElementById('expViewVocabRows');

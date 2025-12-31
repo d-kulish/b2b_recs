@@ -208,6 +208,127 @@ class WeightStatsCallback(tf.keras.callbacks.Callback):
 
 ---
 
+### Gradient Distribution Histogram (2025-12-31)
+
+**Major Enhancement:** Added gradient distribution visualization alongside weight distribution in the Training tab, enabling diagnosis of vanishing/exploding gradients.
+
+#### The Problem
+
+The existing weight distribution histogram showed how weights evolve during training, but didn't capture gradient dynamics. Without gradient visibility, it's difficult to diagnose:
+- Vanishing gradients (distribution collapsing to zero)
+- Exploding gradients (distribution spreading wildly)
+- Dead neurons (spike at exactly zero)
+- Layer-specific training issues
+
+#### The Solution
+
+Extended the training pipeline to capture gradient statistics using a custom `train_step` override and new `GradientStatsCallback`. The UI now supports switching between weight and gradient histograms.
+
+**Custom train_step (RetrievalModel):**
+
+```python
+def train_step(self, data):
+    """Custom train_step that captures gradient statistics."""
+    with tf.GradientTape() as tape:
+        loss = self.compute_loss(data, training=True)
+        total_loss = loss + sum(self.losses)
+
+    gradients = tape.gradient(total_loss, self.trainable_variables)
+    self.optimizer.apply_gradients(zip(gradients, self.trainable_variables))
+
+    # Store gradient samples for histogram (sampled to limit memory)
+    for grad, var in zip(gradients, self.trainable_variables):
+        if grad is not None:
+            var_name = var.name.lower()
+            grad_sample = ...  # Sample up to 10,000 values per variable
+            if 'query' in var_name or 'buyer' in var_name:
+                self._gradient_stats['query'].append(grad_sample.numpy())
+            elif 'candidate' in var_name or 'product' in var_name:
+                self._gradient_stats['candidate'].append(grad_sample.numpy())
+
+    return dict(loss=loss, total_loss=total_loss)
+```
+
+**GradientStatsCallback:**
+
+```python
+class GradientStatsCallback(tf.keras.callbacks.Callback):
+    NUM_HISTOGRAM_BINS = 25
+
+    def on_epoch_end(self, epoch, logs=None):
+        for tower in ['query', 'candidate']:
+            grads = self.model._gradient_stats.get(tower, [])
+            all_grads = np.concatenate(grads)
+
+            # Summary statistics
+            _mlflow_client.log_metric(f'{tower}_grad_mean', np.mean(all_grads), step=epoch)
+            _mlflow_client.log_metric(f'{tower}_grad_std', np.std(all_grads), step=epoch)
+            _mlflow_client.log_metric(f'{tower}_grad_min', np.min(all_grads), step=epoch)
+            _mlflow_client.log_metric(f'{tower}_grad_max', np.max(all_grads), step=epoch)
+            _mlflow_client.log_metric(f'{tower}_grad_norm', np.sqrt(np.sum(all_grads**2)), step=epoch)
+
+            # Histogram bins
+            counts, bin_edges = np.histogram(all_grads, bins=self.NUM_HISTOGRAM_BINS)
+            if epoch == 0:
+                _mlflow_client.log_param(f'{tower}_grad_hist_bin_edges', edges_str)
+            for i, count in enumerate(counts):
+                _mlflow_client.log_metric(f'{tower}_grad_hist_bin_{i}', int(count), step=epoch)
+
+        # Clear for next epoch
+        self.model._gradient_stats = dict(query=[], candidate=[])
+```
+
+**New Metrics Logged:**
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| `{tower}_grad_mean` | Metric | Mean gradient value per epoch |
+| `{tower}_grad_std` | Metric | Gradient standard deviation |
+| `{tower}_grad_min` | Metric | Minimum gradient value |
+| `{tower}_grad_max` | Metric | Maximum gradient value |
+| `{tower}_grad_norm` | Metric | L2 norm of gradients |
+| `{tower}_grad_hist_bin_edges` | Parameter | Comma-separated bin edges (26 values) |
+| `{tower}_grad_hist_bin_{0-24}` | Metric | Bin counts per epoch |
+
+**UI Enhancement:**
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Weight Distribution Histogram              [Weights ▼] [Query Tower ▼]     │
+│                                            [Gradients]                      │
+│     ___/\___                                                          1     │
+│    ___/  \___                                                         5     │
+│   (ridgeline chart - same D3.js visualization)                              │
+│ -0.01    0.00    0.01  (Gradient Value)                                    │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+#### Files Modified
+
+| File | Change |
+|------|--------|
+| `ml_platform/configs/services.py` | Added `_gradient_stats` storage, custom `train_step()` in RetrievalModel, new `GradientStatsCallback` |
+| `ml_platform/experiments/mlflow_service.py` | Added `gradient_stats` parsing in `get_training_history()` |
+| `templates/ml_platform/model_experiments.html` | Added Weights/Gradients dropdown, dynamic chart title and x-axis label |
+
+#### Gradient Interpretation Guide
+
+| Pattern | Meaning |
+|---------|---------|
+| Stable, centered at 0 | Healthy training |
+| Narrowing to zero | Vanishing gradients - reduce regularization |
+| Spreading out | Exploding gradients - add gradient clipping, lower LR |
+| Spike at exactly 0 | Dead ReLU neurons - use LeakyReLU |
+| Shift away from 0 | Bias in updates - check data/architecture |
+
+#### Backward Compatibility
+
+- **Existing experiments**: Show "Gradient histogram data not available" placeholder
+- **New experiments**: Collect and display both weight and gradient histograms
+- **Default selection**: Weights (preserves current behavior)
+
+---
+
 ### MLflow Training Metrics Enhancement (2025-12-25)
 
 **Major Enhancement:** Expanded training metrics collection and visualization in the Training tab.

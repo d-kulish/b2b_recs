@@ -2271,6 +2271,9 @@ class RetrievalModel(tfrs.Model):
     ):
         super().__init__()
 
+        # Gradient stats storage for histogram visualization (reset each epoch by callback)
+        self._gradient_stats = dict(query=[], candidate=[])
+
         # Feature extraction models
         self.buyer_model = BuyerModel(tf_transform_output)
         self.product_model = ProductModel(tf_transform_output)
@@ -2295,6 +2298,42 @@ class RetrievalModel(tfrs.Model):
         query_embeddings = self.query_tower(features)
         candidate_embeddings = self.candidate_tower(features)
         return self.task(query_embeddings, candidate_embeddings)
+
+    def train_step(self, data):
+        """
+        Custom train_step that captures gradient statistics for visualization.
+
+        Stores gradient values per batch so GradientStatsCallback can compute
+        histograms at epoch end.
+        """
+        with tf.GradientTape() as tape:
+            loss = self.compute_loss(data, training=True)
+            # Add regularization losses if any
+            total_loss = loss + sum(self.losses)
+
+        gradients = tape.gradient(total_loss, self.trainable_variables)
+        self.optimizer.apply_gradients(zip(gradients, self.trainable_variables))
+
+        # Store gradient values for histogram (sample to avoid memory issues)
+        for grad, var in zip(gradients, self.trainable_variables):
+            if grad is not None:
+                var_name = var.name.lower()
+                # Sample gradients to limit memory usage (take every Nth value)
+                grad_flat = tf.reshape(grad, [-1])
+                sample_size = min(10000, grad_flat.shape[0])
+                if grad_flat.shape[0] > sample_size:
+                    indices = tf.random.uniform([sample_size], 0, grad_flat.shape[0], dtype=tf.int32)
+                    grad_sample = tf.gather(grad_flat, indices)
+                else:
+                    grad_sample = grad_flat
+
+                if 'query' in var_name or 'buyer' in var_name:
+                    self._gradient_stats['query'].append(grad_sample.numpy())
+                elif 'candidate' in var_name or 'product' in var_name:
+                    self._gradient_stats['candidate'].append(grad_sample.numpy())
+
+        # Update metrics
+        return dict(loss=loss, total_loss=total_loss)
 '''
 
     def _generate_tower_layers_code(self, layers: List[Dict], tower_name: str) -> str:
@@ -2728,6 +2767,67 @@ class WeightStatsCallback(tf.keras.callbacks.Callback):
                     _mlflow_client.log_metric(f'{tower}_hist_bin_{i}', int(count), step=epoch)
 
 
+class GradientStatsCallback(tf.keras.callbacks.Callback):
+    """
+    Log gradient statistics and histogram to MLflow for training dynamics visualization.
+
+    Reads accumulated gradient samples from model._gradient_stats (populated by train_step)
+    and computes summary statistics and histogram bins for each tower.
+
+    This enables TensorBoard-style gradient distribution visualization alongside
+    weight distribution, helping diagnose:
+    - Vanishing gradients (distribution collapsing to zero)
+    - Exploding gradients (distribution spreading widely)
+    - Dead neurons (spike at exactly zero)
+    - Layer-specific training issues
+
+    Tower categorization follows same pattern as WeightStatsCallback.
+    """
+
+    NUM_HISTOGRAM_BINS = 25
+
+    def on_epoch_end(self, epoch, logs=None):
+        if not _mlflow_client:
+            return
+
+        # Check if model has gradient stats (populated by custom train_step)
+        if not hasattr(self.model, '_gradient_stats'):
+            return
+
+        for tower in ['query', 'candidate']:
+            grads_list = self.model._gradient_stats.get(tower, [])
+            if not grads_list:
+                continue
+
+            # Concatenate all batch gradient samples
+            all_grads = np.concatenate(grads_list)
+
+            if len(all_grads) == 0:
+                continue
+
+            # Summary statistics
+            _mlflow_client.log_metric(tower + '_grad_mean', float(np.mean(all_grads)), step=epoch)
+            _mlflow_client.log_metric(tower + '_grad_std', float(np.std(all_grads)), step=epoch)
+            _mlflow_client.log_metric(tower + '_grad_min', float(np.min(all_grads)), step=epoch)
+            _mlflow_client.log_metric(tower + '_grad_max', float(np.max(all_grads)), step=epoch)
+            _mlflow_client.log_metric(tower + '_grad_norm', float(np.sqrt(np.sum(all_grads ** 2))), step=epoch)
+
+            # Histogram bins for ridgeline visualization
+            counts, bin_edges = np.histogram(all_grads, bins=self.NUM_HISTOGRAM_BINS)
+
+            # Log bin edges once (epoch 0 only) as a parameter
+            if epoch == 0:
+                edges_str = ','.join([f'{e:.8f}' for e in bin_edges])
+                _mlflow_client.log_param(f'{tower}_grad_hist_bin_edges', edges_str)
+
+            # Log bin counts per epoch as metrics
+            for i, count in enumerate(counts):
+                _mlflow_client.log_metric(f'{tower}_grad_hist_bin_{i}', int(count), step=epoch)
+
+        # Clear gradient storage for next epoch
+        self.model._gradient_stats = dict(query=[], candidate=[])
+
+
 def _write_mlflow_info(gcs_output_path: str, run_id: str):
     """Write MLflow run ID to GCS for Django to retrieve."""
     if not gcs_output_path or not gcs_output_path.startswith('gs://'):
@@ -3011,6 +3111,7 @@ def run_fn(fn_args: tfx.components.FnArgs):
         # Weight monitoring callbacks for debugging training issues
         callbacks.append(WeightNormCallback())
         callbacks.append(WeightStatsCallback())
+        callbacks.append(GradientStatsCallback())
 
         # TensorBoard logging
         if fn_args.model_run_dir:

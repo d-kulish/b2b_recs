@@ -3905,15 +3905,21 @@
                             <canvas id="trainingWeightStatsChart" height="180"></canvas>
                         </div>
                     </div>
-                    <!-- Third row: Weight Distribution Histogram (TensorBoard-style ridgeline) -->
+                    <!-- Third row: Distribution Histogram (TensorBoard-style ridgeline) - Weights or Gradients -->
                     <div class="training-charts-container" style="margin-top: 16px;">
                         <div class="training-chart-wrapper" style="grid-column: span 2;">
                             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
-                                <h5 class="training-chart-title" style="margin: 0;">Weight Distribution Histogram</h5>
-                                <select id="weightHistogramTower" class="weight-stats-select" onchange="updateWeightHistogramChart()">
-                                    <option value="query">Query Tower</option>
-                                    <option value="candidate">Candidate Tower</option>
-                                </select>
+                                <h5 id="histogramChartTitle" class="training-chart-title" style="margin: 0;">Weight Distribution Histogram</h5>
+                                <div style="display: flex; gap: 8px;">
+                                    <select id="histogramDataType" class="weight-stats-select" onchange="updateWeightHistogramChart()">
+                                        <option value="weights">Weights</option>
+                                        <option value="gradients">Gradients</option>
+                                    </select>
+                                    <select id="weightHistogramTower" class="weight-stats-select" onchange="updateWeightHistogramChart()">
+                                        <option value="query">Query Tower</option>
+                                        <option value="candidate">Candidate Tower</option>
+                                    </select>
+                                </div>
                             </div>
                             <div id="trainingWeightHistogramChart" style="width: 100%;"></div>
                         </div>
@@ -7218,6 +7224,7 @@ function updateWeightStatsChart() {
 }
 
 // Render TensorBoard-style ridgeline plot using D3.js
+// Supports both weight and gradient histograms
 function renderWeightHistogramChart(history, tower = 'query') {
     const container = document.getElementById('trainingWeightHistogramChart');
     if (!container) return;
@@ -7225,19 +7232,33 @@ function renderWeightHistogramChart(history, tower = 'query') {
     // Store data for tower switching
     currentWeightHistogramData = history;
 
-    const weightStats = history.weight_stats || {};
-    const towerStats = weightStats[tower] || {};
+    // Get data type (weights or gradients)
+    const dataType = document.getElementById('histogramDataType')?.value || 'weights';
+    const isGradients = dataType === 'gradients';
+
+    // Select appropriate data source
+    const statsSource = isGradients ? (history.gradient_stats || {}) : (history.weight_stats || {});
+    const towerStats = statsSource[tower] || {};
     const histogram = towerStats.histogram;
+
+    // Update chart title
+    const titleEl = document.getElementById('histogramChartTitle');
+    if (titleEl) {
+        titleEl.textContent = isGradients ? 'Gradient Distribution Histogram' : 'Weight Distribution Histogram';
+    }
 
     // Check if histogram data is available
     if (!histogram || !histogram.bin_edges || !histogram.counts || histogram.counts.length === 0) {
+        const dataTypeName = isGradients ? 'Gradient' : 'Weight';
+        const featureNote = isGradients
+            ? 'Run a new experiment to collect gradient distribution histograms.<br>This feature requires experiments run after the gradient logging update.'
+            : 'Run a new experiment to collect weight distribution histograms.<br>This feature requires experiments run after the histogram logging update.';
         container.innerHTML = `
             <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: #9ca3af; text-align: center;">
                 <i class="fas fa-chart-area" style="font-size: 32px; margin-bottom: 12px; opacity: 0.5;"></i>
-                <span style="font-size: 14px;">Histogram data not available for this experiment</span>
+                <span style="font-size: 14px;">${dataTypeName} histogram data not available for this experiment</span>
                 <span style="font-size: 12px; margin-top: 6px; max-width: 400px;">
-                    Run a new experiment to collect weight distribution histograms.<br>
-                    This feature requires experiments run after the histogram logging update.
+                    ${featureNote}
                 </span>
             </div>
         `;
@@ -7346,14 +7367,15 @@ function renderWeightHistogramChart(history, tower = 'query') {
         .style('font-size', '11px')
         .style('fill', '#6b7280');
 
-    // X-axis label
+    // X-axis label (dynamic based on data type)
+    const xAxisLabel = isGradients ? 'Gradient Value' : 'Weight Value';
     svg.append('text')
         .attr('x', width / 2)
         .attr('y', height + 35)
         .attr('text-anchor', 'middle')
         .style('font-size', '12px')
         .style('fill', '#374151')
-        .text('Weight Value');
+        .text(xAxisLabel);
 
     // Epoch labels on right side
     const epochStep = Math.max(1, Math.ceil(numEpochs / 15));

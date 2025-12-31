@@ -2062,6 +2062,17 @@
     .training-chart-wrapper canvas {
         max-height: 200px;
     }
+    /* Override for weight histogram - ridgeline chart container */
+    #trainingWeightHistogramChart {
+        position: relative;
+        height: 300px;
+        min-height: 300px;
+        width: 100%;
+    }
+    #trainingWeightHistogramChart canvas {
+        display: block;
+        max-height: none !important;
+    }
 
     /* Final Metrics Table */
     .final-metrics-table {
@@ -3894,21 +3905,17 @@
                             <canvas id="trainingWeightStatsChart" height="180"></canvas>
                         </div>
                     </div>
-                    <!-- Third row: 3D Weight Distribution Histogram (full width) -->
+                    <!-- Third row: Weight Distribution Histogram (TensorBoard-style ridgeline) -->
                     <div class="training-charts-container" style="margin-top: 16px;">
                         <div class="training-chart-wrapper" style="grid-column: span 2;">
-                            <h5 class="training-chart-title">Weight Distribution (3D Histogram)</h5>
-                            <div class="weight-stats-controls">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                                <h5 class="training-chart-title" style="margin: 0;">Weight Distribution Histogram</h5>
                                 <select id="weightHistogramTower" class="weight-stats-select" onchange="updateWeightHistogramChart()">
                                     <option value="query">Query Tower</option>
                                     <option value="candidate">Candidate Tower</option>
                                 </select>
                             </div>
-                            <div id="trainingWeightHistogramChart" style="height: 400px; width: 100%;">
-                                <p class="text-gray-500" style="text-align: center; padding-top: 180px;">
-                                    Histogram data not available for this experiment
-                                </p>
-                            </div>
+                            <div id="trainingWeightHistogramChart" style="width: 100%;"></div>
                         </div>
                     </div>
                 </div>
@@ -7210,7 +7217,7 @@ function updateWeightStatsChart() {
     renderWeightStatsChart(currentWeightStatsData, tower);
 }
 
-// Render 3D weight distribution histogram (TensorBoard-style)
+// Render TensorBoard-style ridgeline plot using D3.js
 function renderWeightHistogramChart(history, tower = 'query') {
     const container = document.getElementById('trainingWeightHistogramChart');
     if (!container) return;
@@ -7225,7 +7232,7 @@ function renderWeightHistogramChart(history, tower = 'query') {
     // Check if histogram data is available
     if (!histogram || !histogram.bin_edges || !histogram.counts || histogram.counts.length === 0) {
         container.innerHTML = `
-            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 380px; color: #9ca3af; text-align: center;">
+            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: #9ca3af; text-align: center;">
                 <i class="fas fa-chart-area" style="font-size: 32px; margin-bottom: 12px; opacity: 0.5;"></i>
                 <span style="font-size: 14px;">Histogram data not available for this experiment</span>
                 <span style="font-size: 12px; margin-top: 6px; max-width: 400px;">
@@ -7237,83 +7244,136 @@ function renderWeightHistogramChart(history, tower = 'query') {
         return;
     }
 
+    // Check if container is visible (has dimensions)
+    const rect = container.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) {
+        requestAnimationFrame(() => renderWeightHistogramChart(history, tower));
+        return;
+    }
+
+    // Clear container
+    container.innerHTML = '';
+
     const { bin_edges, counts } = histogram;
     const epochs = history.epochs || [];
+    const numEpochs = counts.length;
+    const numBins = bin_edges.length - 1;
 
-    // Calculate bin centers for X axis
-    const binCenters = bin_edges.slice(0, -1).map((e, i) => ((e + bin_edges[i + 1]) / 2).toFixed(3));
+    // Dimensions - reduced top margin since title is now in HTML header
+    const margin = { top: 10, right: 50, bottom: 40, left: 50 };
+    const width = Math.floor(rect.width) - margin.left - margin.right;
+    const height = Math.floor(rect.height) - margin.top - margin.bottom;
 
-    // Create 3D surface plot (ridge plot style like TensorBoard)
-    const data = [{
-        z: counts,
-        x: binCenters,
-        y: epochs.map(e => e + 1),
-        type: 'surface',
-        colorscale: [
-            [0, 'rgb(255,245,235)'],
-            [0.2, 'rgb(254,230,206)'],
-            [0.4, 'rgb(253,174,107)'],
-            [0.6, 'rgb(241,105,19)'],
-            [0.8, 'rgb(217,72,1)'],
-            [1, 'rgb(140,45,4)']
-        ],
-        showscale: true,
-        colorbar: {
-            title: 'Count',
-            titleside: 'right',
-            len: 0.8
-        },
-        contours: {
-            z: {
-                show: true,
-                usecolormap: true,
-                highlightcolor: "#42f462",
-                project: { z: true }
-            }
-        }
-    }];
+    // Create SVG
+    const svg = d3.select(container)
+        .append('svg')
+        .attr('width', width + margin.left + margin.right)
+        .attr('height', height + margin.top + margin.bottom)
+        .append('g')
+        .attr('transform', `translate(${margin.left},${margin.top})`);
 
-    const towerTitle = tower.charAt(0).toUpperCase() + tower.slice(1);
-    const layout = {
-        title: {
-            text: `${towerTitle} Tower - Weight Distribution Over Training`,
-            font: { size: 14, color: '#374151' }
-        },
-        scene: {
-            xaxis: {
-                title: { text: 'Weight Value', font: { size: 11 } },
-                tickfont: { size: 9 }
-            },
-            yaxis: {
-                title: { text: 'Epoch', font: { size: 11 } },
-                tickfont: { size: 9 }
-            },
-            zaxis: {
-                title: { text: 'Count', font: { size: 11 } },
-                tickfont: { size: 9 }
-            },
-            camera: {
-                eye: { x: 1.8, y: -1.8, z: 0.8 }
-            },
-            aspectratio: { x: 1.2, y: 1, z: 0.6 }
-        },
-        height: 380,
-        margin: { l: 0, r: 0, t: 40, b: 0 },
-        paper_bgcolor: 'rgba(0,0,0,0)',
-        plot_bgcolor: 'rgba(0,0,0,0)'
-    };
+    // Data range
+    const maxCount = Math.max(...counts.flat());
+    const xMin = bin_edges[0];
+    const xMax = bin_edges[bin_edges.length - 1];
 
-    const config = {
-        responsive: true,
-        displayModeBar: true,
-        modeBarButtonsToRemove: ['toImage', 'sendDataToCloud', 'lasso2d', 'select2d'],
-        displaylogo: false
-    };
+    // X scale: weight values
+    const xScale = d3.scaleLinear()
+        .domain([xMin, xMax])
+        .range([0, width]);
 
-    Plotly.newPlot(container, data, layout, config);
+    // Y scale for density (height of each ridge)
+    const yDensity = d3.scaleLinear()
+        .domain([0, maxCount])
+        .range([0, height * 0.15]);  // Max ridge height is 15% of chart height
+
+    // Y scale for epoch positioning (band scale)
+    const yEpoch = d3.scaleBand()
+        .domain(d3.range(numEpochs))
+        .range([0, height])
+        .paddingInner(0);
+
+    // Color scale: light orange (old) to dark orange (new)
+    const colorScale = d3.scaleLinear()
+        .domain([0, numEpochs - 1])
+        .range(['#fdd4b3', '#e25822']);
+
+    // Prepare data for each epoch
+    const ridgeData = counts.map((epochCounts, epochIdx) => {
+        const points = epochCounts.map((count, binIdx) => ({
+            x: (bin_edges[binIdx] + bin_edges[binIdx + 1]) / 2,
+            y: count
+        }));
+        // Add endpoints at baseline
+        return {
+            epochIdx,
+            points: [
+                { x: bin_edges[0], y: 0 },
+                ...points,
+                { x: bin_edges[numBins], y: 0 }
+            ]
+        };
+    });
+
+    // Area generator
+    const area = d3.area()
+        .x(d => xScale(d.x))
+        .y0(0)
+        .y1(d => -yDensity(d.y))
+        .curve(d3.curveBasis);  // Smooth curves
+
+    // Draw ridges from back to front (oldest first)
+    svg.selectAll('.ridge')
+        .data(ridgeData)
+        .join('path')
+        .attr('class', 'ridge')
+        .attr('transform', d => `translate(0, ${yEpoch(d.epochIdx) + yEpoch.bandwidth()})`)
+        .attr('d', d => area(d.points))
+        .attr('fill', d => colorScale(d.epochIdx))
+        .attr('fill-opacity', d => 0.7 + (d.epochIdx / Math.max(numEpochs - 1, 1)) * 0.25)
+        .attr('stroke', '#fff')
+        .attr('stroke-width', 1);
+
+    // X-axis
+    const xAxis = d3.axisBottom(xScale)
+        .ticks(8)
+        .tickFormat(d => (xMax - xMin) > 1 ? d.toFixed(1) : d.toFixed(2));
+
+    svg.append('g')
+        .attr('transform', `translate(0, ${height})`)
+        .call(xAxis)
+        .selectAll('text')
+        .style('font-size', '11px')
+        .style('fill', '#6b7280');
+
+    // X-axis label
+    svg.append('text')
+        .attr('x', width / 2)
+        .attr('y', height + 35)
+        .attr('text-anchor', 'middle')
+        .style('font-size', '12px')
+        .style('fill', '#374151')
+        .text('Weight Value');
+
+    // Epoch labels on right side
+    const epochStep = Math.max(1, Math.ceil(numEpochs / 15));
+    const epochLabels = d3.range(0, numEpochs, epochStep);
+    if ((numEpochs - 1) % epochStep !== 0) epochLabels.push(numEpochs - 1);
+
+    svg.selectAll('.epoch-label')
+        .data(epochLabels)
+        .join('text')
+        .attr('class', 'epoch-label')
+        .attr('x', width + 8)
+        .attr('y', d => yEpoch(d) + yEpoch.bandwidth())
+        .attr('dy', '0.35em')
+        .style('font-size', '10px')
+        .style('fill', '#9ca3af')
+        .text(d => epochs[d] !== undefined ? epochs[d] + 1 : d + 1);
+
 }
 
-// Update 3D histogram chart when tower selection changes
+// Update histogram chart when tower selection changes
 function updateWeightHistogramChart() {
     if (!currentWeightHistogramData) return;
     const tower = document.getElementById('weightHistogramTower').value;
@@ -8420,8 +8480,8 @@ function renderHeatmapChart(canvas, heatmap) {
 <!-- Chart.js for training curves visualization -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 
-<!-- Plotly.js for 3D weight distribution histogram -->
-<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+<!-- D3.js for ridgeline histogram -->
+<script src="https://d3js.org/d3.v7.min.js"></script>
 
 <!-- Pipeline DAG Visualization (extracted component) -->
 <script src="{% static 'js/pipeline_dag.js' %}?v=1"></script>

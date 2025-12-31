@@ -83,9 +83,9 @@ Updated `cancel_quick_test()` in `ml_platform/experiments/services.py` to handle
 
 ---
 
-### 3D Weight Distribution Histogram (2025-12-30)
+### Weight Distribution Histogram - Ridgeline Chart (2025-12-30, Updated 2025-12-31)
 
-**Major Enhancement:** Added TensorBoard-style 3D ridge plot for weight distribution visualization in the Training tab.
+**Major Enhancement:** Added TensorBoard-style ridgeline plot for weight distribution visualization in the Training tab using D3.js.
 
 #### The Problem
 
@@ -98,7 +98,7 @@ TensorBoard's weight histogram visualization solves this by showing stacked "rid
 
 #### The Solution
 
-Implemented a custom 3D surface plot using Plotly.js that mimics TensorBoard's weight histogram visualization.
+Implemented a ridgeline plot (also known as joyplot) using D3.js that mimics TensorBoard's weight histogram visualization. This approach uses SVG for reliable rendering and follows the D3 Graph Gallery ridgeline pattern.
 
 **Data Collection (Trainer Callback):**
 
@@ -109,7 +109,7 @@ class WeightStatsCallback(tf.keras.callbacks.Callback):
     def on_epoch_end(self, epoch, logs=None):
         # ... existing mean/std/min/max logging ...
 
-        # NEW: Histogram bins
+        # Histogram bins
         counts, bin_edges = np.histogram(weights_arr, bins=self.NUM_HISTOGRAM_BINS)
 
         # Log bin edges once (epoch 0 only) as parameter
@@ -133,30 +133,30 @@ class WeightStatsCallback(tf.keras.callbacks.Callback):
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│ Weight Distribution (3D Histogram)                                           │
-│ [Query Tower ▼]                                                              │
+│ Weight Distribution Histogram                              [Query Tower ▼]  │
 │                                                                              │
-│         ╱╲                                                                   │
-│        ╱  ╲    Epoch 25                                                      │
-│       ╱    ╲                                                                 │
-│      ╱      ╲   Epoch 20                                                     │
-│     ╱   ╱╲   ╲                                                               │
-│    ╱   ╱  ╲   ╲  Epoch 15                                                    │
-│   ╱   ╱    ╲   ╲                                                             │
-│  ╱   ╱  ╱╲  ╲   ╲ Epoch 10                                                   │
-│ ╱___╱__╱__╲__╲___╲                                                           │
-│ -0.3  -0.1  0.1  0.3  (Weight Value)                                         │
-│                                                                              │
-│ [Interactive: rotate, zoom, pan]                                             │
+│     ___/\___                                                          1     │
+│    ___/  \___                                                         5     │
+│   ___/    \___                                                        9     │
+│  ___/  /\  \___                                                      13     │
+│ ___/__/  \__\___                                                     17     │
+│ -0.08  -0.04   0   0.04  0.08  (Weight Value)                              │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 **Chart Features:**
-- **3D Surface Plot**: Plotly.js surface plot with orange-red colorscale
-- **Interactive**: Users can rotate, zoom, and pan the 3D visualization
-- **Tower Selector**: Dropdown to switch between Query and Candidate tower
-- **Contour Lines**: Z-axis contours for better depth perception
-- **Responsive**: Adapts to container width
+- **D3.js Ridgeline Plot**: SVG-based visualization with smooth curves (`d3.curveBasis`)
+- **Two Y Scales**: `yDensity` for ridge height, `yEpoch` (scaleBand) for vertical positioning
+- **Color Gradient**: Light orange (#fdd4b3) for older epochs → Dark orange (#e25822) for newer epochs
+- **Tower Selector**: Dropdown in header row to switch between Query and Candidate tower
+- **Responsive**: Adapts to container width using `getBoundingClientRect()`
+- **Epoch Labels**: Step numbers displayed on the right side
+
+**Implementation Details:**
+- Uses D3.js v7 (`d3.area()` with `curveBasis` for smooth curves)
+- Each ridge is positioned using SVG transforms based on `scaleBand`
+- Ridges drawn back-to-front (oldest first) so newer epochs overlap older ones
+- Container height: 300px with 10px top margin, 40px bottom margin
 
 #### Files Modified
 
@@ -164,7 +164,7 @@ class WeightStatsCallback(tf.keras.callbacks.Callback):
 |------|--------|
 | `ml_platform/configs/services.py` | Added histogram logging to `WeightStatsCallback` |
 | `ml_platform/experiments/mlflow_service.py` | Added histogram parsing in `get_training_history()` |
-| `templates/ml_platform/model_experiments.html` | Added Plotly.js, new 3D chart, tower selector |
+| `templates/ml_platform/model_experiments.html` | Added D3.js v7, ridgeline chart with SVG rendering |
 
 #### Data Structure
 

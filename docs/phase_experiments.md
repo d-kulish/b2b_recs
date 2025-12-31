@@ -2202,6 +2202,74 @@ MLFLOW_TRACKING_URI = os.environ.get('MLFLOW_TRACKING_URI', 'http://mlflow-serve
 
 **Result:** QuickTest #58 succeeded after zone fix. Experiments using Dataset 14 with column aliases now complete successfully.
 
+### Phase 23: Gradient Statistics MLflow Logging ✅ DONE (2025-12-31)
+> **Fix graph-mode gradient collection and add histogram logging to MLflow**
+
+**Problem:** Training failed with `AttributeError: 'SymbolicTensor' object has no attribute 'numpy'` in the custom `train_step`. The gradient collection code was calling `.numpy()` inside `train_step`, which runs in TensorFlow graph mode where tensors are symbolic.
+
+**Root Cause:** The `train_step` method is traced by TensorFlow and runs in graph mode, not eager mode. Calling `.numpy()` on symbolic tensors is not allowed.
+
+**Solution:** Implemented `tf.Variable` accumulators that are updated with pure TensorFlow operations in `train_step`, then read in the eager-mode callback (`on_epoch_end`).
+
+**Changes to `ml_platform/configs/services.py`:**
+
+1. **RetrievalModel `__init__`** (lines 2274-2286): Changed from Python dict to `tf.Variable` accumulators:
+   ```python
+   self._grad_accum = {}
+   for tower in ['query', 'candidate']:
+       self._grad_accum[tower] = {
+           'sum': tf.Variable(0.0, trainable=False, name=f'{tower}_grad_sum'),
+           'sum_sq': tf.Variable(0.0, trainable=False, name=f'{tower}_grad_sum_sq'),
+           'count': tf.Variable(0.0, trainable=False, name=f'{tower}_grad_count'),
+           'min': tf.Variable(float('inf'), trainable=False, name=f'{tower}_grad_min'),
+           'max': tf.Variable(float('-inf'), trainable=False, name=f'{tower}_grad_max'),
+           'hist_counts': tf.Variable(tf.zeros(25, dtype=tf.int32), ...),
+       }
+   ```
+
+2. **`train_step`** (lines 2313-2363): Uses pure TF ops for gradient accumulation:
+   ```python
+   accum['sum'].assign_add(tf.reduce_sum(grad_flat))
+   accum['sum_sq'].assign_add(tf.reduce_sum(tf.square(grad_flat)))
+   accum['count'].assign_add(tf.cast(tf.size(grad_flat), tf.float32))
+   accum['min'].assign(tf.minimum(accum['min'], tf.reduce_min(grad_flat)))
+   accum['max'].assign(tf.maximum(accum['max'], tf.reduce_max(grad_flat)))
+   hist = tf.histogram_fixed_width(grad_clipped, [-1.0, 1.0], nbins=25)
+   accum['hist_counts'].assign_add(hist)
+   ```
+
+3. **`GradientStatsCallback.on_epoch_end`** (lines 2814-2867): Reads `tf.Variable` values (which works in eager callback context), computes statistics, logs to MLflow, and resets accumulators.
+
+4. **Template escaping fix**: Since `services.py` is a code generator template, curly braces must be escaped (`{{` and `}}`) for literal braces in f-strings. For metric names, changed from f-strings to string concatenation:
+   ```python
+   # Wrong (breaks in template):
+   _mlflow_client.log_metric(f'{tower}_grad_hist_bin_{i}', ...)
+
+   # Correct:
+   _mlflow_client.log_metric(tower + '_grad_hist_bin_' + str(i), ...)
+   ```
+
+**New Files:**
+- `scripts/test_services_trainer.py`: Standalone Custom Job test that uses actual `services.py` code generation
+- `scripts/run_trainer_only.py`: Custom Job test with regex patching (for testing existing trainer code)
+- `docs/custom_job_test.md`: Documentation for running standalone Custom Jobs
+
+**MLflow Metrics Added:**
+- `{tower}_grad_mean` - Mean gradient value per tower
+- `{tower}_grad_std` - Standard deviation of gradients
+- `{tower}_grad_min` - Minimum gradient value
+- `{tower}_grad_max` - Maximum gradient value
+- `{tower}_grad_norm` - L2 norm of gradients
+- `{tower}_grad_hist_bin_{0-24}` - 25-bin histogram counts (range: -1.0 to 1.0)
+- `{tower}_grad_hist_bin_edges` - Histogram bin edges (logged once as param)
+
+**Testing:**
+1. Created `scripts/test_services_trainer.py` to test actual code generation from `services.py`
+2. Custom Job `1235854368155107328` succeeded with no HTTP 400 errors
+3. Full pipeline experiment verified end-to-end
+
+**Result:** Gradient statistics are now correctly collected during training and logged to MLflow for visualization in the Training tab.
+
 ### Previously Completed ✅
 - [x] Create `model_experiments.html` page (placeholder)
 - [x] Feature Config dropdown

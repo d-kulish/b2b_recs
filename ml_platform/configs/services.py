@@ -2271,8 +2271,19 @@ class RetrievalModel(tfrs.Model):
     ):
         super().__init__()
 
-        # Gradient stats storage for histogram visualization (reset each epoch by callback)
-        self._gradient_stats = dict(query=[], candidate=[])
+        # Gradient statistics accumulators (tf.Variables for graph-mode updates)
+        # These are updated in train_step and read/reset by GradientStatsCallback
+        self._grad_accum = {{}}
+        for tower in ['query', 'candidate']:
+            self._grad_accum[tower] = {{
+                'sum': tf.Variable(0.0, trainable=False, name=f'{{tower}}_grad_sum'),
+                'sum_sq': tf.Variable(0.0, trainable=False, name=f'{{tower}}_grad_sum_sq'),
+                'count': tf.Variable(0.0, trainable=False, name=f'{{tower}}_grad_count'),
+                'min': tf.Variable(float('inf'), trainable=False, name=f'{{tower}}_grad_min'),
+                'max': tf.Variable(float('-inf'), trainable=False, name=f'{{tower}}_grad_max'),
+                # Histogram bins (25 bins, range will be determined dynamically)
+                'hist_counts': tf.Variable(tf.zeros(25, dtype=tf.int32), trainable=False, name=f'{{tower}}_grad_hist'),
+            }}
 
         # Feature extraction models
         self.buyer_model = BuyerModel(tf_transform_output)
@@ -2303,8 +2314,8 @@ class RetrievalModel(tfrs.Model):
         """
         Custom train_step that captures gradient statistics for visualization.
 
-        Stores gradient values per batch so GradientStatsCallback can compute
-        histograms at epoch end.
+        Updates tf.Variable accumulators for gradient stats (graph-compatible).
+        GradientStatsCallback reads these at epoch end.
         """
         with tf.GradientTape() as tape:
             loss = self.compute_loss(data, training=True)
@@ -2314,23 +2325,39 @@ class RetrievalModel(tfrs.Model):
         gradients = tape.gradient(total_loss, self.trainable_variables)
         self.optimizer.apply_gradients(zip(gradients, self.trainable_variables))
 
-        # Store gradient values for histogram (sample to avoid memory issues)
+        # Accumulate gradient statistics using tf ops (no numpy - graph compatible)
         for grad, var in zip(gradients, self.trainable_variables):
             if grad is not None:
                 var_name = var.name.lower()
-                # Sample gradients to limit memory usage (take every Nth value)
-                grad_flat = tf.reshape(grad, [-1])
-                sample_size = min(10000, grad_flat.shape[0])
-                if grad_flat.shape[0] > sample_size:
-                    indices = tf.random.uniform([sample_size], 0, grad_flat.shape[0], dtype=tf.int32)
-                    grad_sample = tf.gather(grad_flat, indices)
-                else:
-                    grad_sample = grad_flat
+                grad_flat = tf.reshape(tf.cast(grad, tf.float32), [-1])
 
+                # Determine tower
                 if 'query' in var_name or 'buyer' in var_name:
-                    self._gradient_stats['query'].append(grad_sample.numpy())
+                    tower = 'query'
                 elif 'candidate' in var_name or 'product' in var_name:
-                    self._gradient_stats['candidate'].append(grad_sample.numpy())
+                    tower = 'candidate'
+                else:
+                    continue
+
+                accum = self._grad_accum[tower]
+
+                # Update running statistics
+                batch_sum = tf.reduce_sum(grad_flat)
+                batch_sum_sq = tf.reduce_sum(tf.square(grad_flat))
+                batch_count = tf.cast(tf.size(grad_flat), tf.float32)
+                batch_min = tf.reduce_min(grad_flat)
+                batch_max = tf.reduce_max(grad_flat)
+
+                accum['sum'].assign_add(batch_sum)
+                accum['sum_sq'].assign_add(batch_sum_sq)
+                accum['count'].assign_add(batch_count)
+                accum['min'].assign(tf.minimum(accum['min'], batch_min))
+                accum['max'].assign(tf.maximum(accum['max'], batch_max))
+
+                # Update histogram (fixed range for stability: -1 to 1, clipped)
+                grad_clipped = tf.clip_by_value(grad_flat, -1.0, 1.0)
+                hist = tf.histogram_fixed_width(grad_clipped, [-1.0, 1.0], nbins=25)
+                accum['hist_counts'].assign_add(hist)
 
         # Update metrics
         return dict(loss=loss, total_loss=total_loss)
@@ -2771,8 +2798,8 @@ class GradientStatsCallback(tf.keras.callbacks.Callback):
     """
     Log gradient statistics and histogram to MLflow for training dynamics visualization.
 
-    Reads accumulated gradient samples from model._gradient_stats (populated by train_step)
-    and computes summary statistics and histogram bins for each tower.
+    Reads tf.Variable accumulators from model._grad_accum (updated by train_step in graph mode)
+    and logs computed statistics. This approach is graph-compatible - no numpy in train_step.
 
     This enables TensorBoard-style gradient distribution visualization alongside
     weight distribution, helping diagnose:
@@ -2780,8 +2807,6 @@ class GradientStatsCallback(tf.keras.callbacks.Callback):
     - Exploding gradients (distribution spreading widely)
     - Dead neurons (spike at exactly zero)
     - Layer-specific training issues
-
-    Tower categorization follows same pattern as WeightStatsCallback.
     """
 
     NUM_HISTOGRAM_BINS = 25
@@ -2790,42 +2815,56 @@ class GradientStatsCallback(tf.keras.callbacks.Callback):
         if not _mlflow_client:
             return
 
-        # Check if model has gradient stats (populated by custom train_step)
-        if not hasattr(self.model, '_gradient_stats'):
+        # Check if model has gradient accumulators
+        if not hasattr(self.model, '_grad_accum'):
             return
 
         for tower in ['query', 'candidate']:
-            grads_list = self.model._gradient_stats.get(tower, [])
-            if not grads_list:
+            accum = self.model._grad_accum.get(tower)
+            if accum is None:
                 continue
 
-            # Concatenate all batch gradient samples
-            all_grads = np.concatenate(grads_list)
-
-            if len(all_grads) == 0:
+            # Read accumulated values (tf.Variable.numpy() works in eager callback)
+            count = float(accum['count'].numpy())
+            if count == 0:
                 continue
 
-            # Summary statistics
-            _mlflow_client.log_metric(tower + '_grad_mean', float(np.mean(all_grads)), step=epoch)
-            _mlflow_client.log_metric(tower + '_grad_std', float(np.std(all_grads)), step=epoch)
-            _mlflow_client.log_metric(tower + '_grad_min', float(np.min(all_grads)), step=epoch)
-            _mlflow_client.log_metric(tower + '_grad_max', float(np.max(all_grads)), step=epoch)
-            _mlflow_client.log_metric(tower + '_grad_norm', float(np.sqrt(np.sum(all_grads ** 2))), step=epoch)
+            total_sum = float(accum['sum'].numpy())
+            total_sum_sq = float(accum['sum_sq'].numpy())
+            grad_min = float(accum['min'].numpy())
+            grad_max = float(accum['max'].numpy())
+            hist_counts = accum['hist_counts'].numpy()
 
-            # Histogram bins for ridgeline visualization
-            counts, bin_edges = np.histogram(all_grads, bins=self.NUM_HISTOGRAM_BINS)
+            # Compute statistics
+            mean = total_sum / count
+            variance = (total_sum_sq / count) - (mean ** 2)
+            std = float(np.sqrt(max(0, variance)))  # Avoid negative due to float precision
+            norm = float(np.sqrt(total_sum_sq))
 
-            # Log bin edges once (epoch 0 only) as a parameter
+            # Log summary statistics
+            _mlflow_client.log_metric(tower + '_grad_mean', mean, step=epoch)
+            _mlflow_client.log_metric(tower + '_grad_std', std, step=epoch)
+            _mlflow_client.log_metric(tower + '_grad_min', grad_min, step=epoch)
+            _mlflow_client.log_metric(tower + '_grad_max', grad_max, step=epoch)
+            _mlflow_client.log_metric(tower + '_grad_norm', norm, step=epoch)
+
+            # Log histogram bin edges once (fixed range: -1 to 1)
             if epoch == 0:
-                edges_str = ','.join([f'{e:.8f}' for e in bin_edges])
-                _mlflow_client.log_param(f'{tower}_grad_hist_bin_edges', edges_str)
+                bin_edges = np.linspace(-1.0, 1.0, self.NUM_HISTOGRAM_BINS + 1)
+                edges_str = ','.join([str(round(e, 8)) for e in bin_edges])
+                _mlflow_client.log_param(tower + '_grad_hist_bin_edges', edges_str)
 
-            # Log bin counts per epoch as metrics
-            for i, count in enumerate(counts):
-                _mlflow_client.log_metric(f'{tower}_grad_hist_bin_{i}', int(count), step=epoch)
+            # Log bin counts per epoch
+            for i, count_val in enumerate(hist_counts):
+                _mlflow_client.log_metric(tower + '_grad_hist_bin_' + str(i), int(count_val), step=epoch)
 
-        # Clear gradient storage for next epoch
-        self.model._gradient_stats = dict(query=[], candidate=[])
+            # Reset accumulators for next epoch
+            accum['sum'].assign(0.0)
+            accum['sum_sq'].assign(0.0)
+            accum['count'].assign(0.0)
+            accum['min'].assign(float('inf'))
+            accum['max'].assign(float('-inf'))
+            accum['hist_counts'].assign(tf.zeros(self.NUM_HISTOGRAM_BINS, dtype=tf.int32))
 
 
 def _write_mlflow_info(gcs_output_path: str, run_id: str):

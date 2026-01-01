@@ -2065,8 +2065,8 @@
     /* Override for weight histogram - ridgeline chart container */
     #trainingWeightHistogramChart {
         position: relative;
-        height: 300px;
-        min-height: 300px;
+        height: 250px;
+        min-height: 250px;
         width: 100%;
     }
     #trainingWeightHistogramChart canvas {
@@ -2076,45 +2076,48 @@
 
     /* Final Metrics Table */
     .final-metrics-table {
-        display: flex;
-        flex-direction: column;
-        gap: 16px;
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
     }
-    .final-metrics-category {
-        background: #f9fafb;
-        border: 1px solid #e5e7eb;
-        border-radius: 8px;
-        padding: 12px 16px;
-    }
-    .final-metrics-category-title {
-        font-size: 12px;
+    .final-metrics-table th {
+        text-align: left;
+        padding: 8px 12px;
+        font-size: 11px;
         font-weight: 600;
         color: #6b7280;
         text-transform: uppercase;
         letter-spacing: 0.05em;
-        margin: 0 0 12px 0;
+        border-bottom: 2px solid #e5e7eb;
     }
-    .final-metrics-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-        gap: 12px;
+    .final-metrics-table th:not(:first-child) {
+        text-align: right;
     }
-    .final-metric-item {
-        display: flex;
-        flex-direction: column;
-        gap: 2px;
+    .final-metrics-table td {
+        padding: 10px 12px;
+        border-bottom: 1px solid #f3f4f6;
     }
-    .final-metric-label {
-        font-size: 11px;
-        color: #6b7280;
+    .final-metrics-table td:first-child {
+        font-weight: 500;
+        color: #374151;
     }
-    .final-metric-value {
-        font-size: 14px;
+    .final-metrics-table td:not(:first-child) {
+        text-align: right;
+        font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+        font-size: 13px;
+    }
+    .final-metrics-table .val-train {
+        color: #1d4ed8;
+    }
+    .final-metrics-table .val-val {
+        color: #047857;
+    }
+    .final-metrics-table .val-test {
+        color: #b45309;
         font-weight: 600;
-        color: #111827;
     }
-    .final-metric-value.metric-value-highlight {
-        color: #059669;
+    .final-metrics-table tr:last-child td {
+        border-bottom: none;
     }
 
     /* Weight Stats Controls */
@@ -2128,6 +2131,8 @@
         font-size: 12px;
         background: white;
         cursor: pointer;
+        width: 130px;
+        min-width: 130px;
     }
     .weight-stats-select:focus {
         outline: none;
@@ -5435,6 +5440,11 @@ function openExpViewModal(exp) {
     // This runs silently so data is ready when user clicks the Data Insights tab
     preloadDataInsights();
 
+    // Preload training history for completed experiments to show accurate recall metrics
+    if (exp.status === 'completed') {
+        preloadTrainingHistory();
+    }
+
     // Start polling if experiment is running
     if (exp.status === 'running' || exp.status === 'submitting') {
         startViewModalPolling(exp.id);
@@ -6172,13 +6182,17 @@ function populateExpViewModal(exp) {
     }
 }
 
-function renderMetricsSummary(metrics) {
+function renderMetricsSummary(metrics, useTestPrefix = false) {
     const container = document.getElementById('expViewMetricsSummary');
+    const formatRecall = v => v != null ? (v * 100).toFixed(2) + '%' : 'N/A';
+
+    // Support both 'recall_at_*' (from exp.metrics) and 'test_recall_at_*' (from final_metrics)
+    const prefix = useTestPrefix ? 'test_' : '';
     const items = [
-        { label: 'Loss', value: metrics.loss, format: v => v?.toFixed(4) || 'N/A' },
-        { label: 'Recall@10', value: metrics.recall_at_10, format: v => v != null ? (v * 100).toFixed(1) + '%' : 'N/A' },
-        { label: 'Recall@50', value: metrics.recall_at_50, format: v => v != null ? (v * 100).toFixed(1) + '%' : 'N/A' },
-        { label: 'Recall@100', value: metrics.recall_at_100, format: v => v != null ? (v * 100).toFixed(1) + '%' : 'N/A' }
+        { label: 'Recall@5', value: metrics[prefix + 'recall_at_5'], format: formatRecall },
+        { label: 'Recall@10', value: metrics[prefix + 'recall_at_10'], format: formatRecall },
+        { label: 'Recall@50', value: metrics[prefix + 'recall_at_50'], format: formatRecall },
+        { label: 'Recall@100', value: metrics[prefix + 'recall_at_100'], format: formatRecall }
     ];
     container.innerHTML = items.map(item => `
         <div class="exp-view-metric-card">
@@ -6268,6 +6282,27 @@ async function preloadDataInsights() {
         console.log('[DataInsights] Preload FAILED:', error.message);
     } finally {
         viewModalDataCache._loadingInsights = false;
+    }
+}
+
+// Preload training history to show accurate recall metrics in Overview tab
+async function preloadTrainingHistory() {
+    if (!viewModalExpId || viewModalDataCache.trainingHistory) return;
+
+    try {
+        const response = await fetch(`/api/quick-tests/${viewModalExpId}/training-history/`);
+        const data = await response.json();
+
+        if (data.success && data.training_history?.available) {
+            viewModalDataCache.trainingHistory = data.training_history;
+
+            // Update Overview metrics with accurate test_recall values
+            if (data.training_history.final_metrics) {
+                renderMetricsSummary(data.training_history.final_metrics, true);
+            }
+        }
+    } catch (error) {
+        console.log('[TrainingHistory] Preload failed:', error.message);
     }
 }
 
@@ -6754,6 +6789,11 @@ async function loadTrainingHistory() {
         renderTrainingCharts(history);
         chartsEl.classList.remove('hidden');
 
+        // Update Overview tab metrics with accurate test_recall values from final_metrics
+        if (history.final_metrics) {
+            renderMetricsSummary(history.final_metrics, true);
+        }
+
     } catch (error) {
         console.error('Error loading training history:', error);
         loadingEl.classList.add('hidden');
@@ -6790,71 +6830,61 @@ function renderFinalMetricsTable(history) {
         return;
     }
 
-    // Group metrics by category
-    const categories = {
-        'Test Metrics': [],
-        'Final Training Metrics': []
+    // Define table rows: Name, Train, Val, Test
+    const tableRows = [
+        {
+            name: 'Loss',
+            train: finalMetrics['final_loss'],
+            val: finalMetrics['final_val_loss'],
+            test: finalMetrics['test_loss']
+        },
+        {
+            name: 'Reg. Loss',
+            train: finalMetrics['final_regularization_loss'],
+            val: finalMetrics['final_val_regularization_loss'],
+            test: finalMetrics['test_regularization_loss']
+        },
+        {
+            name: 'Total Loss',
+            train: finalMetrics['final_total_loss'],
+            val: finalMetrics['final_val_total_loss'],
+            test: finalMetrics['test_total_loss']
+        }
+    ];
+
+    // Helper to format loss values
+    const formatValue = (value) => {
+        if (value == null) return '—';
+        return value.toFixed(2);
     };
 
-    // Define metric display config
-    const metricConfig = {
-        'test_loss': { label: 'Test Loss', format: 'loss', category: 'Test Metrics' },
-        'test_total_loss': { label: 'Test Total Loss', format: 'loss', category: 'Test Metrics' },
-        'test_regularization_loss': { label: 'Test Reg. Loss', format: 'loss', category: 'Test Metrics' },
-        'test_recall_at_5': { label: 'Test Recall@5', format: 'percent', category: 'Test Metrics' },
-        'test_recall_at_10': { label: 'Test Recall@10', format: 'percent', category: 'Test Metrics' },
-        'test_recall_at_50': { label: 'Test Recall@50', format: 'percent', category: 'Test Metrics' },
-        'test_recall_at_100': { label: 'Test Recall@100', format: 'percent', category: 'Test Metrics' },
-        'final_loss': { label: 'Final Training Loss', format: 'loss', category: 'Final Training Metrics' },
-        'final_val_loss': { label: 'Final Val. Loss', format: 'loss', category: 'Final Training Metrics' },
-        'final_total_loss': { label: 'Final Total Loss', format: 'loss', category: 'Final Training Metrics' },
-        'final_val_total_loss': { label: 'Final Val. Total Loss', format: 'loss', category: 'Final Training Metrics' },
-        'final_regularization_loss': { label: 'Final Reg. Loss', format: 'loss', category: 'Final Training Metrics' },
-    };
+    // Build simple table HTML
+    let html = `
+        <table class="final-metrics-table">
+            <thead>
+                <tr>
+                    <th>Metric</th>
+                    <th>Train</th>
+                    <th>Val</th>
+                    <th>Test</th>
+                </tr>
+            </thead>
+            <tbody>`;
 
-    // Process metrics
-    Object.entries(finalMetrics).forEach(([key, value]) => {
-        const config = metricConfig[key];
-        if (config) {
-            let formattedValue;
-            if (config.format === 'percent') {
-                formattedValue = value != null ? (value * 100).toFixed(2) + '%' : 'N/A';
-            } else {
-                formattedValue = value != null ? value.toFixed(4) : 'N/A';
-            }
-            categories[config.category].push({
-                label: config.label,
-                value: formattedValue,
-                rawValue: value
-            });
+    tableRows.forEach(row => {
+        // Only show row if at least one value exists
+        if (row.train != null || row.val != null || row.test != null) {
+            html += `
+                <tr>
+                    <td>${row.name}</td>
+                    <td class="val-train">${formatValue(row.train)}</td>
+                    <td class="val-val">${formatValue(row.val)}</td>
+                    <td class="val-test">${formatValue(row.test)}</td>
+                </tr>`;
         }
     });
 
-    // Build HTML
-    let html = '<div class="final-metrics-table">';
-
-    Object.entries(categories).forEach(([category, metrics]) => {
-        if (metrics.length > 0) {
-            html += `<div class="final-metrics-category">
-                <h5 class="final-metrics-category-title">${category}</h5>
-                <div class="final-metrics-grid">`;
-
-            metrics.forEach(metric => {
-                // Highlight recall metrics
-                const isRecall = metric.label.includes('Recall');
-                const valueClass = isRecall ? 'metric-value-highlight' : '';
-                html += `
-                    <div class="final-metric-item">
-                        <span class="final-metric-label">${metric.label}</span>
-                        <span class="final-metric-value ${valueClass}">${metric.value}</span>
-                    </div>`;
-            });
-
-            html += '</div></div>';
-        }
-    });
-
-    html += '</div>';
+    html += '</tbody></table>';
     container.innerHTML = html;
     section.classList.remove('hidden');
 }
@@ -6948,13 +6978,14 @@ function renderMetricsChart(history) {
 
     const finalMetrics = history.final_metrics || {};
 
-    // Extract recall metrics from final_metrics (test_recall_at_10, test_recall_at_50, test_recall_at_100)
+    // Extract recall metrics from final_metrics (test_recall_at_5, test_recall_at_10, test_recall_at_50, test_recall_at_100)
     const recallLabels = [];
     const recallValues = [];
-    const colors = ['#10b981', '#8b5cf6', '#ec4899'];
+    const colors = ['#06b6d4', '#10b981', '#8b5cf6', '#ec4899'];
 
     // Define the recall metrics we want to show (in order)
     const recallKeys = [
+        { key: 'test_recall_at_5', label: 'Recall@5' },
         { key: 'test_recall_at_10', label: 'Recall@10' },
         { key: 'test_recall_at_50', label: 'Recall@50' },
         { key: 'test_recall_at_100', label: 'Recall@100' }
@@ -6987,6 +7018,7 @@ function renderMetricsChart(history) {
 
     trainingMetricsChart = new Chart(ctx, {
         type: 'bar',
+        plugins: [ChartDataLabels],
         data: {
             labels: recallLabels,
             datasets: [{
@@ -7010,6 +7042,19 @@ function renderMetricsChart(history) {
                         label: function(context) {
                             return `${(context.parsed.y * 100).toFixed(2)}%`;
                         }
+                    }
+                },
+                datalabels: {
+                    anchor: 'end',
+                    align: 'end',
+                    offset: 4,
+                    color: '#374151',
+                    font: {
+                        size: 12,
+                        weight: '600'
+                    },
+                    formatter: function(value) {
+                        return (value * 100).toFixed(2) + '%';
                     }
                 }
             },
@@ -7291,9 +7336,36 @@ function renderWeightHistogramChart(history, tower = 'query') {
     const numEpochs = counts.length;
     const numBins = bin_edges.length - 1;
 
-    // Dimensions - reduced top margin since title is now in HTML header
-    const margin = { top: 10, right: 50, bottom: 40, left: 50 };
-    const width = Math.floor(rect.width) - margin.left - margin.right;
+    // Dimensions - dynamic top margin to prevent clipping of ridges
+    // Step 1: Calculate preliminary dimensions to determine bandwidth
+    const baseMargin = { top: 10, right: 50, bottom: 40, left: 50 };
+    const width = Math.floor(rect.width) - baseMargin.left - baseMargin.right;
+    const prelimHeight = Math.floor(rect.height) - baseMargin.top - baseMargin.bottom;
+
+    // Step 2: Calculate bandwidth from preliminary yEpoch scale
+    const prelimYEpoch = d3.scaleBand()
+        .domain(d3.range(numEpochs))
+        .range([0, prelimHeight])
+        .paddingInner(0);
+    const bandWidth = prelimYEpoch.bandwidth();
+
+    // Step 3: Calculate dynamic ridge height
+    // Ridge height scales inversely with number of epochs
+    // More epochs = shorter ridges to prevent excessive overlap
+    const baseRidgeHeight = prelimHeight * 0.15;  // Original 15%
+    const scaledRidgeHeight = bandWidth * 2.5;    // 2.5x band height
+    const maxRidgeHeight = Math.min(baseRidgeHeight, scaledRidgeHeight);
+
+    // Step 4: Calculate dynamic top margin to accommodate ridge overflow
+    const dynamicTopMargin = maxRidgeHeight + 15;
+    const margin = {
+        top: dynamicTopMargin,
+        right: baseMargin.right,
+        bottom: baseMargin.bottom,
+        left: baseMargin.left
+    };
+
+    // Step 5: Recalculate final height with dynamic margin
     const height = Math.floor(rect.height) - margin.top - margin.bottom;
 
     // Create SVG
@@ -7314,10 +7386,10 @@ function renderWeightHistogramChart(history, tower = 'query') {
         .domain([xMin, xMax])
         .range([0, width]);
 
-    // Y scale for density (height of each ridge)
+    // Y scale for density (height of each ridge) - uses dynamic maxRidgeHeight
     const yDensity = d3.scaleLinear()
         .domain([0, maxCount])
-        .range([0, height * 0.15]);  // Max ridge height is 15% of chart height
+        .range([0, maxRidgeHeight]);
 
     // Y scale for epoch positioning (band scale)
     const yEpoch = d3.scaleBand()
@@ -7392,6 +7464,19 @@ function renderWeightHistogramChart(history, tower = 'query') {
     const epochStep = Math.max(1, Math.ceil(numEpochs / 15));
     const epochLabels = d3.range(0, numEpochs, epochStep);
     if ((numEpochs - 1) % epochStep !== 0) epochLabels.push(numEpochs - 1);
+
+    // Horizontal grid lines for major epochs (barely visible)
+    svg.selectAll('.epoch-grid-line')
+        .data(epochLabels)
+        .join('line')
+        .attr('class', 'epoch-grid-line')
+        .attr('x1', 0)
+        .attr('x2', width)
+        .attr('y1', d => yEpoch(d) + yEpoch.bandwidth())
+        .attr('y2', d => yEpoch(d) + yEpoch.bandwidth())
+        .attr('stroke', '#e5e7eb')
+        .attr('stroke-width', 1)
+        .attr('stroke-opacity', 0.4);
 
     svg.selectAll('.epoch-label')
         .data(epochLabels)
@@ -8512,6 +8597,8 @@ function renderHeatmapChart(canvas, heatmap) {
 
 <!-- Chart.js for training curves visualization -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<!-- Chart.js datalabels plugin for showing values on bars -->
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 
 <!-- D3.js for ridgeline histogram -->
 <script src="https://d3js.org/d3.v7.min.js"></script>

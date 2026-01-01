@@ -577,6 +577,7 @@ def _serialize_quick_test(quick_test, include_details=False):
         # Include full results and metrics
         data['metrics'] = {
             'loss': quick_test.loss,
+            'recall_at_5': getattr(quick_test, 'recall_at_5', None),
             'recall_at_10': quick_test.recall_at_10,
             'recall_at_50': quick_test.recall_at_50,
             'recall_at_100': quick_test.recall_at_100,

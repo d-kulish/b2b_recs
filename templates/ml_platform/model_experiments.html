@@ -2048,19 +2048,19 @@
         }
     }
     .training-chart-wrapper {
-        background: #f9fafb;
-        border: 1px solid #e5e7eb;
+        background: #ffffff;
+        border: 1px solid #000000;
         border-radius: 8px;
-        padding: 16px;
+        padding: 8px;
     }
     .training-chart-title {
         font-size: 13px;
         font-weight: 600;
         color: #374151;
-        margin: 0 0 12px 0;
+        margin: 0 0 4px 0;
     }
     .training-chart-wrapper canvas {
-        max-height: 200px;
+        max-height: 170px;
     }
     /* Override for weight histogram - ridgeline chart container */
     #trainingWeightHistogramChart {
@@ -3881,28 +3881,31 @@
                     <div class="training-charts-container">
                         <div class="training-chart-wrapper">
                             <h5 class="training-chart-title">Loss</h5>
-                            <canvas id="trainingLossChart" height="200"></canvas>
+                            <canvas id="trainingLossChart" height="170"></canvas>
                         </div>
                         <div class="training-chart-wrapper">
                             <h5 class="training-chart-title">Recall Metrics</h5>
-                            <canvas id="trainingMetricsChart" height="200"></canvas>
+                            <canvas id="trainingMetricsChart" height="170"></canvas>
                         </div>
                     </div>
-                    <!-- Second row: Weight Norms and Weight Distribution -->
-                    <div class="training-charts-container" style="margin-top: 16px;">
-                        <div class="training-chart-wrapper">
-                            <h5 class="training-chart-title">Weight Norms (L2)</h5>
-                            <canvas id="trainingGradientChart" height="200"></canvas>
+                    <!-- Second row: Combined Weight Analysis (Norm + Distribution) -->
+                    <div class="training-chart-wrapper" style="margin-top: 16px;">
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                            <h5 class="training-chart-title" style="margin: 0;">Weight Analysis</h5>
+                            <select id="weightAnalysisTower" class="weight-stats-select" onchange="updateWeightAnalysisCharts()">
+                                <option value="query">Query Tower</option>
+                                <option value="candidate">Candidate Tower</option>
+                            </select>
                         </div>
-                        <div class="training-chart-wrapper">
-                            <h5 class="training-chart-title">Weight Distribution</h5>
-                            <div class="weight-stats-controls">
-                                <select id="weightStatsTower" class="weight-stats-select" onchange="updateWeightStatsChart()">
-                                    <option value="query">Query Tower</option>
-                                    <option value="candidate">Candidate Tower</option>
-                                </select>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                            <div>
+                                <h6 style="font-size: 12px; font-weight: 500; color: #6b7280; margin: 0 0 4px 0;">Weight Norm (L1/L2)</h6>
+                                <canvas id="trainingGradientChart" height="150"></canvas>
                             </div>
-                            <canvas id="trainingWeightStatsChart" height="180"></canvas>
+                            <div>
+                                <h6 style="font-size: 12px; font-weight: 500; color: #6b7280; margin: 0 0 4px 0;">Weight Distribution</h6>
+                                <canvas id="trainingWeightStatsChart" height="150"></canvas>
+                            </div>
                         </div>
                     </div>
                     <!-- Third row: Distribution Histogram (TensorBoard-style ridgeline) - Weights or Gradients -->
@@ -6657,7 +6660,42 @@ let trainingMetricsChart = null;
 let trainingGradientChart = null;
 let trainingWeightStatsChart = null;
 let currentWeightStatsData = null;  // Store for tower switching
+let currentWeightNormData = null;  // Store for weight norm tower switching
 let currentWeightHistogramData = null;  // Store for 3D histogram tower switching
+
+// Shared Chart.js configuration for consistent styling across all training charts
+const trainingChartDefaults = {
+    layout: {
+        padding: { top: 0, right: 0, bottom: 0, left: 0 }
+    },
+    font: {
+        axis: { size: 9 },
+        axisTitle: { size: 10 },
+        legend: { size: 10 }
+    },
+    ticks: {
+        padding: 2
+    },
+    scales: {
+        y: {
+            grace: '2%',
+            title: { font: { size: 10 } },
+            ticks: { font: { size: 9 }, padding: 2 }
+        },
+        x: {
+            ticks: { font: { size: 9 }, padding: 2, maxRotation: 0 }
+        }
+    },
+    legend: {
+        labels: {
+            boxWidth: 8,
+            boxHeight: 8,
+            padding: 6,
+            font: { size: 10 },
+            usePointStyle: true
+        }
+    }
+};
 
 // Lazy load training history and render charts
 async function loadTrainingHistory() {
@@ -6728,8 +6766,12 @@ async function loadTrainingHistory() {
 function renderTrainingCharts(history) {
     renderLossChart(history);
     renderMetricsChart(history);
-    renderGradientChart(history);
-    renderWeightStatsChart(history);
+
+    // Get selected tower for weight analysis charts
+    const tower = document.getElementById('weightAnalysisTower')?.value || 'query';
+    renderGradientChart(history, tower);
+    renderWeightStatsChart(history, tower);
+
     renderWeightHistogramChart(history);  // 3D histogram (Plotly)
     renderFinalMetricsTable(history);
 }
@@ -6833,13 +6875,11 @@ function renderLossChart(history) {
     const datasets = [];
 
     // Define loss types with their display config
-    // Primary losses (solid lines, filled)
+    // Primary losses (solid lines, filled) - visible by default
+    // Regularization losses (dashed lines, no fill) - hidden by default
     const lossConfig = [
-        { key: 'train', label: 'Training Loss', color: '#3b82f6', dash: [], fill: true },
-        { key: 'val', label: 'Validation Loss', color: '#f59e0b', dash: [], fill: true },
-        // Secondary losses (dashed lines, no fill) - hidden by default
-        { key: 'total', label: 'Total Loss', color: '#8b5cf6', dash: [5, 5], fill: false, hidden: true },
-        { key: 'val_total', label: 'Val Total Loss', color: '#a78bfa', dash: [5, 5], fill: false, hidden: true },
+        { key: 'train', label: 'Train Loss', color: '#3b82f6', dash: [], fill: true },
+        { key: 'val', label: 'Val Loss', color: '#f59e0b', dash: [], fill: true },
         { key: 'regularization', label: 'Reg Loss', color: '#6b7280', dash: [2, 2], fill: false, hidden: true },
         { key: 'val_regularization', label: 'Val Reg Loss', color: '#9ca3af', dash: [2, 2], fill: false, hidden: true },
     ];
@@ -6865,22 +6905,18 @@ function renderLossChart(history) {
     trainingLossChart = new Chart(ctx, {
         type: 'line',
         data: {
-            labels: epochs.map(e => `Epoch ${e + 1}`),
+            labels: epochs.map(e => e + 1),
             datasets: datasets
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
+            layout: trainingChartDefaults.layout,
             plugins: {
                 legend: {
                     position: 'top',
-                    labels: {
-                        boxWidth: 12,
-                        font: { size: 11 },
-                        usePointStyle: true
-                    },
+                    labels: trainingChartDefaults.legend.labels,
                     onClick: function(e, legendItem, legend) {
-                        // Toggle visibility when clicking legend
                         const index = legendItem.datasetIndex;
                         const ci = legend.chart;
                         const meta = ci.getDatasetMeta(index);
@@ -6888,30 +6924,20 @@ function renderLossChart(history) {
                         ci.update();
                     }
                 },
-                tooltip: {
-                    mode: 'index',
-                    intersect: false
-                }
+                tooltip: { mode: 'index', intersect: false }
             },
             scales: {
                 y: {
                     beginAtZero: false,
-                    title: {
-                        display: true,
-                        text: 'Loss',
-                        font: { size: 11 }
-                    },
-                    ticks: { font: { size: 10 } }
+                    grace: trainingChartDefaults.scales.y.grace,
+                    title: { display: true, text: 'Loss', ...trainingChartDefaults.scales.y.title },
+                    ticks: trainingChartDefaults.scales.y.ticks
                 },
                 x: {
-                    ticks: { font: { size: 10 } }
+                    ticks: { ...trainingChartDefaults.scales.x.ticks, maxRotation: 0 }
                 }
             },
-            interaction: {
-                mode: 'nearest',
-                axis: 'x',
-                intersect: false
-            }
+            interaction: { mode: 'nearest', axis: 'x', intersect: false }
         }
     });
 }
@@ -6976,15 +7002,13 @@ function renderMetricsChart(history) {
         options: {
             responsive: true,
             maintainAspectRatio: false,
+            layout: trainingChartDefaults.layout,
             plugins: {
-                legend: {
-                    display: false
-                },
+                legend: { display: false },
                 tooltip: {
                     callbacks: {
                         label: function(context) {
-                            const value = context.parsed.y;
-                            return `${(value * 100).toFixed(2)}%`;
+                            return `${(context.parsed.y * 100).toFixed(2)}%`;
                         }
                     }
                 }
@@ -6993,114 +7017,85 @@ function renderMetricsChart(history) {
                 y: {
                     beginAtZero: true,
                     max: 1,
-                    title: {
-                        display: true,
-                        text: 'Recall Rate',
-                        font: { size: 11 }
-                    },
+                    title: { display: true, text: 'Recall Rate', ...trainingChartDefaults.scales.y.title },
                     ticks: {
-                        font: { size: 10 },
+                        ...trainingChartDefaults.scales.y.ticks,
                         callback: function(value) {
                             return (value * 100).toFixed(0) + '%';
                         }
                     }
                 },
                 x: {
-                    ticks: { font: { size: 11 } }
+                    ticks: trainingChartDefaults.scales.x.ticks
                 }
             }
         }
     });
 }
 
-// Render weight norms chart (tracks L2 norm of weights per tower)
-function renderGradientChart(history) {
+// Render weight norms chart for selected tower
+function renderGradientChart(history, tower = 'query') {
     const ctx = document.getElementById('trainingGradientChart');
     if (!ctx) return;
+
+    // Store data for tower switching
+    currentWeightNormData = history;
 
     const weightNorms = history.gradient || {};
     const epochs = history.epochs || [];
 
-    // Check if we have weight norm data
-    const hasTotal = weightNorms.total && weightNorms.total.length > 0;
-    const hasQuery = weightNorms.query && weightNorms.query.length > 0;
-    const hasCandidate = weightNorms.candidate && weightNorms.candidate.length > 0;
+    // Check if we have data for selected tower
+    const towerData = weightNorms[tower];
+    const hasData = towerData && towerData.length > 0;
 
-    if (!hasTotal && !hasQuery && !hasCandidate) {
-        // Show placeholder
-        ctx.parentElement.innerHTML = `
-            <h5 class="training-chart-title">Weight Norms (L2)</h5>
-            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 180px; color: #9ca3af; text-align: center;">
-                <i class="fas fa-chart-line" style="font-size: 24px; margin-bottom: 8px; opacity: 0.5;"></i>
-                <span style="font-size: 13px;">Weight norm data not available</span>
-                <span style="font-size: 11px; margin-top: 4px;">Run a new experiment to collect weight norms</span>
-            </div>
-        `;
+    if (!hasData) {
         return;
     }
 
-    const datasets = [];
-
-    if (hasTotal) {
-        datasets.push({
-            label: 'Total',
-            data: weightNorms.total,
-            borderColor: '#6b7280',
-            backgroundColor: 'rgba(107, 114, 128, 0.1)',
-            fill: false,
-            tension: 0.3,
-            pointRadius: 3,
-            borderDash: [5, 5]
-        });
+    // Destroy existing chart
+    if (trainingGradientChart) {
+        trainingGradientChart.destroy();
     }
 
-    if (hasQuery) {
-        datasets.push({
-            label: 'Query Tower',
-            data: weightNorms.query,
-            borderColor: '#3b82f6',
-            backgroundColor: 'rgba(59, 130, 246, 0.1)',
-            fill: true,
-            tension: 0.3,
-            pointRadius: 3
-        });
-    }
+    // Tower display config
+    const towerConfig = {
+        query: { label: 'Query Tower', color: '#3b82f6' },
+        candidate: { label: 'Candidate Tower', color: '#10b981' }
+    };
 
-    if (hasCandidate) {
-        datasets.push({
-            label: 'Candidate Tower',
-            data: weightNorms.candidate,
-            borderColor: '#10b981',
-            backgroundColor: 'rgba(16, 185, 129, 0.1)',
-            fill: true,
-            tension: 0.3,
-            pointRadius: 3
-        });
-    }
+    const config = towerConfig[tower];
 
     trainingGradientChart = new Chart(ctx, {
         type: 'line',
         data: {
-            labels: epochs.map(e => `Epoch ${e + 1}`),
-            datasets: datasets
+            labels: epochs.map(e => e + 1),
+            datasets: [{
+                label: config.label,
+                data: towerData,
+                borderColor: config.color,
+                backgroundColor: `${config.color}1a`,
+                fill: true,
+                tension: 0.3,
+                pointRadius: 3
+            }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
+            layout: trainingChartDefaults.layout,
             plugins: {
-                legend: {
-                    position: 'top',
-                    labels: { boxWidth: 12, font: { size: 11 } }
-                },
+                legend: { display: false },
                 tooltip: { mode: 'index', intersect: false }
             },
             scales: {
                 y: {
-                    beginAtZero: true,
-                    title: { display: true, text: 'L2 Norm', font: { size: 11 } },
-                    ticks: { font: { size: 10 } }
+                    grace: trainingChartDefaults.scales.y.grace,
+                    title: { display: true, text: 'L1/L2 Norm', ...trainingChartDefaults.scales.y.title },
+                    ticks: trainingChartDefaults.scales.y.ticks
                 },
-                x: { ticks: { font: { size: 10 } } }
+                x: {
+                    ticks: trainingChartDefaults.scales.x.ticks
+                }
             }
         }
     });
@@ -7192,35 +7187,51 @@ function renderWeightStatsChart(history, tower = 'query') {
     trainingWeightStatsChart = new Chart(ctx, {
         type: 'line',
         data: {
-            labels: epochs.map(e => `Epoch ${e + 1}`),
+            labels: epochs.map(e => e + 1),
             datasets: datasets
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
+            layout: trainingChartDefaults.layout,
             plugins: {
                 legend: {
                     position: 'top',
-                    labels: { boxWidth: 12, font: { size: 10 } }
+                    labels: trainingChartDefaults.legend.labels
                 },
                 tooltip: { mode: 'index', intersect: false }
             },
             scales: {
                 y: {
-                    title: { display: true, text: 'Value', font: { size: 10 } },
-                    ticks: { font: { size: 9 } }
+                    grace: trainingChartDefaults.scales.y.grace,
+                    title: { display: true, text: 'Value', ...trainingChartDefaults.scales.y.title },
+                    ticks: trainingChartDefaults.scales.y.ticks
                 },
-                x: { ticks: { font: { size: 9 } } }
+                x: {
+                    ticks: trainingChartDefaults.scales.x.ticks
+                }
             }
         }
     });
 }
 
-// Update weight stats chart when tower selection changes
+// Update weight stats chart when tower selection changes (legacy - kept for compatibility)
 function updateWeightStatsChart() {
     if (!currentWeightStatsData) return;
-    const tower = document.getElementById('weightStatsTower').value;
+    const tower = document.getElementById('weightAnalysisTower')?.value || 'query';
     renderWeightStatsChart(currentWeightStatsData, tower);
+}
+
+// Update both Weight Norm and Weight Distribution charts together
+function updateWeightAnalysisCharts() {
+    const tower = document.getElementById('weightAnalysisTower')?.value || 'query';
+
+    if (currentWeightNormData) {
+        renderGradientChart(currentWeightNormData, tower);
+    }
+    if (currentWeightStatsData) {
+        renderWeightStatsChart(currentWeightStatsData, tower);
+    }
 }
 
 // Render TensorBoard-style ridgeline plot using D3.js

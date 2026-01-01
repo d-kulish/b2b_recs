@@ -2319,8 +2319,9 @@ class RetrievalModel(tfrs.Model):
         """
         with tf.GradientTape() as tape:
             loss = self.compute_loss(data, training=True)
-            # Add regularization losses if any
-            total_loss = loss + sum(self.losses)
+            # Extract regularization losses separately for monitoring
+            regularization_loss = sum(self.losses) if self.losses else tf.constant(0.0)
+            total_loss = loss + regularization_loss
 
         gradients = tape.gradient(total_loss, self.trainable_variables)
         self.optimizer.apply_gradients(zip(gradients, self.trainable_variables))
@@ -2359,8 +2360,8 @@ class RetrievalModel(tfrs.Model):
                 hist = tf.histogram_fixed_width(grad_clipped, [-1.0, 1.0], nbins=25)
                 accum['hist_counts'].assign_add(hist)
 
-        # Update metrics
-        return dict(loss=loss, total_loss=total_loss)
+        # Update metrics (regularization_loss logged separately for monitoring)
+        return dict(loss=loss, regularization_loss=regularization_loss, total_loss=total_loss)
 '''
 
     def _generate_tower_layers_code(self, layers: List[Dict], tower_name: str) -> str:

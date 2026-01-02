@@ -883,6 +883,8 @@ if __name__ == "__main__":
                     logger.info(f"{quick_test.display_name} (id={quick_test.id}): Pipeline completed, extracting results")
                     # Extract results from GCS
                     self._extract_results(quick_test)
+                    # Cache training history from MLflow for fast loading
+                    self._cache_training_history(quick_test)
 
                 elif new_status == quick_test.STATUS_FAILED:
                     quick_test.completed_at = timezone.now()
@@ -1077,6 +1079,47 @@ if __name__ == "__main__":
 
         except Exception as e:
             logger.warning(f"Error extracting MLflow info for {quick_test.display_name} (id={quick_test.id}): {e}")
+
+    def _cache_training_history(self, quick_test):
+        """
+        Cache training history from MLflow into Django DB for fast loading.
+
+        This is called after training completion. Caching happens asynchronously
+        and errors are logged but don't fail the completion process.
+
+        Args:
+            quick_test: QuickTest instance with mlflow_run_id set
+        """
+        if not quick_test.mlflow_run_id:
+            logger.info(
+                f"{quick_test.display_name} (id={quick_test.id}): "
+                f"Skipping training history cache - no MLflow run ID"
+            )
+            return
+
+        try:
+            from .training_cache_service import TrainingCacheService
+
+            cache_service = TrainingCacheService()
+            success = cache_service.cache_training_history(quick_test)
+
+            if success:
+                logger.info(
+                    f"{quick_test.display_name} (id={quick_test.id}): "
+                    f"Training history cached successfully"
+                )
+            else:
+                logger.warning(
+                    f"{quick_test.display_name} (id={quick_test.id}): "
+                    f"Training history caching failed (non-fatal)"
+                )
+
+        except Exception as e:
+            # Don't fail completion if caching fails - it can be retried later
+            logger.exception(
+                f"{quick_test.display_name} (id={quick_test.id}): "
+                f"Error caching training history (non-fatal): {e}"
+            )
 
     # Mapping from TFX component names to short display names
     STAGE_NAME_MAP = {

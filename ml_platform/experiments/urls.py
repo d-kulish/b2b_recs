@@ -59,6 +59,11 @@ urlpatterns = [
         name='quick_test_training_history'
     ),
     path(
+        'api/quick-tests/<int:quick_test_id>/histogram-data/',
+        api.quick_test_histogram_data,
+        name='quick_test_histogram_data'
+    ),
+    path(
         'api/quick-tests/<int:quick_test_id>/logs/<str:component>/',
         api.quick_test_component_logs,
         name='quick_test_component_logs'

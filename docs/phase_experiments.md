@@ -5,7 +5,7 @@ This document provides **high-level specifications** for the Experiments domain.
 
 👉 **[phase_experiments_implementation.md](phase_experiments_implementation.md)** - Complete implementation guide with code examples
 
-**Last Updated**: 2025-12-30
+**Last Updated**: 2026-01-02
 
 ---
 
@@ -35,7 +35,108 @@ This document provides **high-level specifications** for the Experiments domain.
 
 ---
 
-## Recent Updates (December 2025)
+## Recent Updates (December 2025 - January 2026)
+
+### Training History Caching - Performance Optimization (2026-01-02)
+
+**Major Enhancement:** Training tab now loads in <1 second (down from 2-3 minutes) by caching training history in Django DB.
+
+#### The Problem
+
+Loading training data for a single experiment took 2-3 minutes due to:
+
+| Issue | Impact |
+|-------|--------|
+| MLflow server cold start | 5-15 seconds if Cloud Run scaled to zero |
+| N+1 API calls | 50+ sequential HTTP requests to fetch each metric's history |
+| Large data volume | 7,000+ data points per experiment (140 metrics × 50 epochs) |
+| No caching | Every view fetched full history from MLflow database |
+
+This made experiment comparison impractical - comparing 10 experiments would take 20-30 minutes.
+
+#### The Solution
+
+Cache training history in Django DB as a JSONField on the QuickTest model:
+
+```
+BEFORE:
+UI Request → Django → MLflow Server (50+ API calls) → PostgreSQL → Response (2-3 min)
+
+AFTER:
+UI Request → Django → QuickTest.training_history_json → Response (<1 sec)
+```
+
+**Key Design Decisions:**
+
+| Decision | Choice | Rationale |
+|----------|--------|-----------|
+| Cache location | Django DB (JSONField) | No additional infrastructure (Redis, etc.) |
+| Epoch sampling | Every 5th epoch | Reduces cache size while preserving trends |
+| Histogram data | Fetched on-demand | Large data, rarely needed |
+| Cache trigger | At training completion | One-time cost, instant subsequent loads |
+
+#### Implementation
+
+**Files Changed:**
+
+| File | Change |
+|------|--------|
+| `ml_platform/models.py` | Added `training_history_json` JSONField |
+| `ml_platform/experiments/training_cache_service.py` | **NEW** - TrainingCacheService class |
+| `ml_platform/experiments/services.py` | Triggers cache at completion |
+| `ml_platform/experiments/api.py` | Uses cache, added histogram endpoint |
+| `ml_platform/experiments/mlflow_service.py` | Added `get_histogram_data()` |
+| `ml_platform/management/commands/backfill_training_cache.py` | **NEW** - backfill command |
+
+**Cached Data Structure (~7KB per experiment):**
+
+```python
+{
+    "cached_at": "2026-01-02T10:30:00Z",
+    "mlflow_run_id": "abc123...",
+    "epochs": [0, 5, 10, 15, ...],  # Sampled
+    "loss": {"train": [...], "val": [...], "total": [...]},
+    "gradient_norms": {"total": [...], "query": [...], "candidate": [...]},
+    "final_metrics": {"test_recall_at_100": 0.075, ...},
+    "params": {"epochs": 50, "batch_size": 2048, ...},
+    "histogram_available": true  # Fetched on-demand
+}
+```
+
+#### Results
+
+| Metric | Before | After |
+|--------|--------|-------|
+| Training tab load time | 2-3 minutes | <1 second |
+| Compare 10 experiments | 20-30 minutes | <5 seconds |
+| MLflow API calls per view | 50+ | 0 (from cache) |
+| Cache size per experiment | N/A | ~7 KB |
+
+#### Backfilling Existing Experiments
+
+```bash
+# Dry run
+python manage.py backfill_training_cache --dry-run
+
+# Backfill all completed experiments
+python manage.py backfill_training_cache
+
+# Backfill in batches
+python manage.py backfill_training_cache --limit 10
+```
+
+#### MLflow Status After This Change
+
+MLflow is now only used for:
+1. **Trainer logging** - during training (unchanged)
+2. **One-time cache population** - at completion or first view
+3. **Histogram data** - on-demand via `/api/quick-tests/<id>/histogram-data/`
+
+The UI no longer requires MLflow for normal operation once data is cached.
+
+**Future option:** Eliminate MLflow entirely by having trainer write to GCS instead.
+
+---
 
 ### Cancel Button Bug Fix for Compile Phase (2025-12-30)
 

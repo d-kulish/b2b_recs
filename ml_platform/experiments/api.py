@@ -1070,10 +1070,10 @@ def quick_test_component_logs(request, quick_test_id, component):
 @require_http_methods(["GET"])
 def quick_test_training_history(request, quick_test_id):
     """
-    Get training history (per-epoch metrics).
+    Get training history (per-epoch metrics) with caching.
 
-    Currently returns a placeholder response.
-    Will be implemented with MLflow integration.
+    Uses cached training history from Django DB for fast loading (<1 second).
+    Falls back to MLflow if cache is empty, and caches the result.
 
     GET /api/quick-tests/<id>/training-history/
 
@@ -1081,13 +1081,87 @@ def quick_test_training_history(request, quick_test_id):
     {
         "success": true,
         "training_history": {
-            "available": false,
-            "placeholder": true,
-            "message": "Training curves will be available when MLflow integration is complete",
-            "final_metrics": {
-                "loss": 0.0234,
-                "recall_at_10": 0.125,
-                ...
+            "available": true,
+            "cached_at": "2024-12-30T10:30:00Z",
+            "epochs": [0, 5, 10, ...],
+            "loss": {"train": [...], "val": [...]},
+            "final_metrics": {...},
+            ...
+        },
+        "source": "cache" | "mlflow"
+    }
+    """
+    try:
+        model_endpoint = _get_model_endpoint(request)
+        if not model_endpoint:
+            return JsonResponse({
+                'success': False,
+                'error': 'No model endpoint selected'
+            }, status=400)
+
+        try:
+            quick_test = QuickTest.objects.get(
+                id=quick_test_id,
+                feature_config__dataset__model_endpoint=model_endpoint
+            )
+        except QuickTest.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': f'QuickTest {quick_test_id} not found'
+            }, status=404)
+
+        # Use cache for fast loading
+        from .training_cache_service import TrainingCacheService
+
+        cache_service = TrainingCacheService()
+
+        # Check if cache exists
+        if quick_test.training_history_json:
+            return JsonResponse({
+                'success': True,
+                'training_history': quick_test.training_history_json,
+                'source': 'cache'
+            })
+
+        # Cache miss - fetch from MLflow and cache
+        training_history = cache_service.get_training_history(quick_test)
+
+        return JsonResponse({
+            'success': True,
+            'training_history': training_history,
+            'source': 'mlflow'
+        })
+
+    except Exception as e:
+        logger.exception(f"Error getting training history: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def quick_test_histogram_data(request, quick_test_id):
+    """
+    Get histogram data (weight/gradient distributions) on demand.
+
+    This endpoint fetches histogram data directly from MLflow.
+    It's called only when the user expands the Weight Analysis section.
+
+    GET /api/quick-tests/<id>/histogram-data/
+
+    Returns:
+    {
+        "success": true,
+        "histogram_data": {
+            "weight_stats": {
+                "query": {"histogram": {"bin_edges": [...], "counts": [[...], ...]}},
+                "candidate": {...}
+            },
+            "gradient_stats": {
+                "query": {"histogram": {...}},
+                "candidate": {...}
             }
         }
     }
@@ -1111,17 +1185,25 @@ def quick_test_training_history(request, quick_test_id):
                 'error': f'QuickTest {quick_test_id} not found'
             }, status=404)
 
-        # Get training history (placeholder for MLflow)
-        artifact_service = ArtifactService(project_id=model_endpoint.gcp_project_id)
-        training_history = artifact_service.get_training_history(quick_test)
+        if not quick_test.mlflow_run_id:
+            return JsonResponse({
+                'success': False,
+                'error': 'No MLflow run ID - histogram data not available'
+            }, status=404)
+
+        # Fetch histogram data from MLflow
+        from .mlflow_service import MLflowService
+
+        mlflow_service = MLflowService()
+        histogram_data = mlflow_service.get_histogram_data(quick_test.mlflow_run_id)
 
         return JsonResponse({
             'success': True,
-            'training_history': training_history
+            'histogram_data': histogram_data
         })
 
     except Exception as e:
-        logger.exception(f"Error getting training history: {e}")
+        logger.exception(f"Error getting histogram data: {e}")
         return JsonResponse({
             'success': False,
             'error': str(e)

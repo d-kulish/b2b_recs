@@ -1780,6 +1780,11 @@ class QuickTest(models.Model):
         blank=True,
         help_text="MLflow experiment name"
     )
+    training_history_json = models.JSONField(
+        null=True,
+        blank=True,
+        help_text="Cached training history data for fast loading (loss curves, metrics, params)"
+    )
 
     # =========================================================================
     # Timestamps

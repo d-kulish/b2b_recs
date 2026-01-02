@@ -508,6 +508,117 @@ class MLflowService:
 
         return result
 
+    def get_histogram_data(self, run_id: str) -> Dict:
+        """
+        Get histogram data (weight/gradient distributions) for a run.
+
+        This is fetched on-demand when the user expands the Weight Analysis section,
+        as histogram data is large and not cached.
+
+        Args:
+            run_id: MLflow run ID
+
+        Returns:
+            {
+                'weight_stats': {
+                    'query': {'histogram': {'bin_edges': [...], 'counts': [[...], ...]}},
+                    'candidate': {...}
+                },
+                'gradient_stats': {
+                    'query': {'histogram': {...}},
+                    'candidate': {...}
+                }
+            }
+        """
+        if not run_id:
+            return {'weight_stats': {}, 'gradient_stats': {}}
+
+        metrics = self.get_run_metrics(run_id)
+        params = self.get_run_params(run_id)
+
+        if not metrics:
+            return {'weight_stats': {}, 'gradient_stats': {}}
+
+        result = {
+            'weight_stats': {
+                'query': {'histogram': None},
+                'candidate': {'histogram': None}
+            },
+            'gradient_stats': {
+                'query': {'histogram': None},
+                'candidate': {'histogram': None}
+            }
+        }
+
+        NUM_HISTOGRAM_BINS = 25
+
+        # Weight histogram data
+        for tower in ['query', 'candidate']:
+            edges_param = params.get(f'{tower}_hist_bin_edges', '')
+            if edges_param:
+                try:
+                    bin_edges = [float(e) for e in edges_param.split(',')]
+
+                    # Count epochs from first bin metric
+                    first_bin_history = metrics.get(f'{tower}_hist_bin_0', [])
+                    num_epochs = len(first_bin_history) if first_bin_history else 0
+
+                    epoch_counts = []
+                    for epoch in range(num_epochs):
+                        counts_for_epoch = []
+                        for bin_idx in range(NUM_HISTOGRAM_BINS):
+                            metric_key = f'{tower}_hist_bin_{bin_idx}'
+                            history = metrics.get(metric_key, [])
+                            if history:
+                                for m in history:
+                                    if m['step'] == epoch:
+                                        counts_for_epoch.append(int(m['value']))
+                                        break
+                        if len(counts_for_epoch) == NUM_HISTOGRAM_BINS:
+                            epoch_counts.append(counts_for_epoch)
+
+                    if epoch_counts:
+                        result['weight_stats'][tower]['histogram'] = {
+                            'bin_edges': bin_edges,
+                            'counts': epoch_counts
+                        }
+                except (ValueError, AttributeError) as e:
+                    logger.warning(f"Failed to parse weight histogram for {tower}: {e}")
+
+        # Gradient histogram data
+        for tower in ['query', 'candidate']:
+            edges_param = params.get(f'{tower}_grad_hist_bin_edges', '')
+            if edges_param:
+                try:
+                    bin_edges = [float(e) for e in edges_param.split(',')]
+
+                    first_bin_history = metrics.get(f'{tower}_grad_hist_bin_0', [])
+                    num_epochs = len(first_bin_history) if first_bin_history else 0
+
+                    epoch_counts = []
+                    for epoch in range(num_epochs):
+                        counts_for_epoch = []
+                        for bin_idx in range(NUM_HISTOGRAM_BINS):
+                            metric_key = f'{tower}_grad_hist_bin_{bin_idx}'
+                            history = metrics.get(metric_key, [])
+                            if history:
+                                for m in history:
+                                    if m['step'] == epoch:
+                                        counts_for_epoch.append(int(m['value']))
+                                        break
+                        if len(counts_for_epoch) == NUM_HISTOGRAM_BINS:
+                            epoch_counts.append(counts_for_epoch)
+
+                    if epoch_counts:
+                        result['gradient_stats'][tower]['histogram'] = {
+                            'bin_edges': bin_edges,
+                            'counts': epoch_counts
+                        }
+                except (ValueError, AttributeError) as e:
+                    logger.warning(f"Failed to parse gradient histogram for {tower}: {e}")
+
+        return result
+
     # =========================================================================
     # Experiment Methods
     # =========================================================================

@@ -141,8 +141,8 @@ class TrainingCacheService:
             # Loss curves (sampled)
             'loss': self._sample_dict_values(full_history.get('loss', {}), sampled_indices),
 
-            # Gradient norms (sampled) - mapped from 'gradient' key
-            'gradient_norms': self._sample_dict_values(
+            # Gradient/weight norms (sampled) - keep same key as MLflow service
+            'gradient': self._sample_dict_values(
                 full_history.get('gradient', {}),
                 sampled_indices
             ),
@@ -272,7 +272,7 @@ class TrainingCacheService:
             'message': 'Training history not available',
             'epochs': [],
             'loss': {},
-            'gradient_norms': {},
+            'gradient': {},
             'weight_stats': {},
             'gradient_stats': {},
             'final_metrics': {},

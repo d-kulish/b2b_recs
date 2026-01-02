@@ -6050,8 +6050,14 @@ function switchExpViewTab(tabName) {
     if (tabName === 'data') {
         loadDataInsights();
     }
-    if (tabName === 'training' && !viewModalDataCache.trainingHistory) {
-        loadTrainingHistory();
+    if (tabName === 'training') {
+        if (viewModalDataCache.trainingHistory) {
+            // Cache exists (from preload) - render charts directly
+            renderCachedTrainingHistory();
+        } else {
+            // Cache miss - fetch from API
+            loadTrainingHistory();
+        }
     }
     if (tabName === 'pipeline' && !viewModalDataCache.errorDetails) {
         loadErrorDetails();
@@ -6732,6 +6738,40 @@ const trainingChartDefaults = {
     }
 };
 
+// Render training history from cache (when preload completed before tab switch)
+function renderCachedTrainingHistory() {
+    const loadingEl = document.getElementById('expViewTrainingLoading');
+    const placeholderEl = document.getElementById('expViewTrainingPlaceholder');
+    const chartsEl = document.getElementById('expViewTrainingCharts');
+    const messageEl = document.getElementById('expViewTrainingMessage');
+
+    const history = viewModalDataCache.trainingHistory;
+
+    // Hide loading spinner
+    loadingEl.classList.add('hidden');
+
+    if (!history || !history.available) {
+        messageEl.textContent = history?.message || 'Training data not available';
+        placeholderEl.classList.remove('hidden');
+        chartsEl.classList.add('hidden');
+        return;
+    }
+
+    // Destroy existing charts before re-rendering
+    if (trainingLossChart) { trainingLossChart.destroy(); trainingLossChart = null; }
+    if (trainingMetricsChart) { trainingMetricsChart.destroy(); trainingMetricsChart = null; }
+    if (trainingGradientChart) { trainingGradientChart.destroy(); trainingGradientChart = null; }
+    if (trainingWeightStatsChart) { trainingWeightStatsChart.destroy(); trainingWeightStatsChart = null; }
+    currentWeightStatsData = null;
+
+    // Render charts from cached data
+    renderTrainingCharts(history);
+    placeholderEl.classList.add('hidden');
+    chartsEl.classList.remove('hidden');
+
+    console.log('[TrainingHistory] Rendered from cache (instant)');
+}
+
 // Lazy load training history and render charts
 async function loadTrainingHistory() {
     if (!viewModalExpId) return;
@@ -7279,6 +7319,62 @@ function updateWeightAnalysisCharts() {
     }
 }
 
+// Fetch histogram data on-demand from MLflow (not cached due to size)
+async function fetchHistogramData(history, tower, isGradients) {
+    try {
+        console.log('[Histogram] Fetching on-demand from MLflow...');
+        const response = await fetch(`/api/quick-tests/${viewModalExpId}/histogram-data/`);
+        const data = await response.json();
+
+        // Mark fetch attempted to prevent infinite loops
+        history._histogramFetchAttempted = true;
+
+        if (data.success && data.histogram_data) {
+            // Merge histogram data into history
+            const histData = data.histogram_data;
+
+            // Merge weight_stats histograms
+            if (histData.weight_stats) {
+                for (const t of ['query', 'candidate']) {
+                    if (histData.weight_stats[t]?.histogram) {
+                        if (!history.weight_stats) history.weight_stats = {};
+                        if (!history.weight_stats[t]) history.weight_stats[t] = {};
+                        history.weight_stats[t].histogram = histData.weight_stats[t].histogram;
+                    }
+                }
+            }
+
+            // Merge gradient_stats histograms
+            if (histData.gradient_stats) {
+                for (const t of ['query', 'candidate']) {
+                    if (histData.gradient_stats[t]?.histogram) {
+                        if (!history.gradient_stats) history.gradient_stats = {};
+                        if (!history.gradient_stats[t]) history.gradient_stats[t] = {};
+                        history.gradient_stats[t].histogram = histData.gradient_stats[t].histogram;
+                    }
+                }
+            }
+
+            console.log('[Histogram] Data fetched and merged successfully');
+
+            // Update cache
+            viewModalDataCache.trainingHistory = history;
+            currentWeightHistogramData = history;
+
+            // Re-render chart with new data
+            renderWeightHistogramChart(history, tower);
+        } else {
+            console.log('[Histogram] No histogram data available from MLflow');
+            // Re-render to show "not available" message
+            renderWeightHistogramChart(history, tower);
+        }
+    } catch (error) {
+        console.error('[Histogram] Failed to fetch:', error);
+        history._histogramFetchAttempted = true;
+        renderWeightHistogramChart(history, tower);
+    }
+}
+
 // Render TensorBoard-style ridgeline plot using D3.js
 // Supports both weight and gradient histograms
 function renderWeightHistogramChart(history, tower = 'query') {
@@ -7305,6 +7401,21 @@ function renderWeightHistogramChart(history, tower = 'query') {
 
     // Check if histogram data is available
     if (!histogram || !histogram.bin_edges || !histogram.counts || histogram.counts.length === 0) {
+        // Check if histogram data is available via on-demand fetch
+        if (history.histogram_available && viewModalExpId && !history._histogramFetchAttempted) {
+            // Show loading state
+            container.innerHTML = `
+                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: #9ca3af; text-align: center;">
+                    <i class="fas fa-spinner fa-spin" style="font-size: 32px; margin-bottom: 12px; opacity: 0.5;"></i>
+                    <span style="font-size: 14px;">Loading histogram data from MLflow...</span>
+                    <span style="font-size: 12px; margin-top: 6px;">This may take a moment</span>
+                </div>
+            `;
+            // Fetch histogram data on-demand
+            fetchHistogramData(history, tower, isGradients);
+            return;
+        }
+
         const dataTypeName = isGradients ? 'Gradient' : 'Weight';
         const featureNote = isGradients
             ? 'Run a new experiment to collect gradient distribution histograms.<br>This feature requires experiments run after the gradient logging update.'

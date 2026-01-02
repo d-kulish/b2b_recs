@@ -446,8 +446,8 @@
         cursor: not-allowed;
     }
     .exp-pagination-btn.active {
-        background: #f59e0b;
-        border-color: #f59e0b;
+        background: #2563eb;
+        border-color: #2563eb;
         color: white;
     }
 
@@ -4586,10 +4586,10 @@ function renderPagination() {
     const buttonsContainer = document.getElementById('expPaginationButtons');
     let buttonsHtml = '';
 
-    // Prev button
+    // Previous button
     buttonsHtml += `
         <button class="exp-pagination-btn" onclick="goToPage(${pagination.page - 1})" ${!pagination.has_prev ? 'disabled' : ''}>
-            <i class="fas fa-chevron-left"></i>
+            Previous
         </button>
     `;
 
@@ -4610,7 +4610,7 @@ function renderPagination() {
     // Next button
     buttonsHtml += `
         <button class="exp-pagination-btn" onclick="goToPage(${pagination.page + 1})" ${!pagination.has_next ? 'disabled' : ''}>
-            <i class="fas fa-chevron-right"></i>
+            Next
         </button>
     `;
 

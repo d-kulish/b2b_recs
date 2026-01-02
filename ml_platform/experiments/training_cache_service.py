@@ -180,8 +180,8 @@ class TrainingCacheService:
             # Sampled epochs
             'epochs': sampled_epochs,
 
-            # Loss curves (sampled)
-            'loss': self._sample_dict_values(full_history.get('loss', {}), sampled_indices),
+            # Loss curves (sampled) - remap keys for UI compatibility
+            'loss': self._remap_and_sample_loss(full_history.get('loss', {}), sampled_indices),
 
             # Gradient/weight norms (sampled) - keep same key as MLflow service
             'gradient': self._sample_dict_values(
@@ -266,6 +266,38 @@ class TrainingCacheService:
             for key, values in data.items()
             if isinstance(values, list)
         }
+
+    def _remap_and_sample_loss(self, loss_data: Dict[str, List], indices: List[int]) -> Dict[str, List]:
+        """
+        Remap loss keys from MetricsCollector format to UI-expected format and sample.
+
+        MetricsCollector (Keras native):    UI expects (legacy MLflow format):
+        - loss                              → train
+        - val_loss                          → val
+        - total_loss                        → total
+        - val_total_loss                    → val_total
+        - regularization_loss               → regularization
+        - val_regularization_loss           → val_regularization
+        """
+        # Key mapping: new_key → old_key
+        key_mapping = {
+            'loss': 'train',
+            'val_loss': 'val',
+            'total_loss': 'total',
+            'val_total_loss': 'val_total',
+            'regularization_loss': 'regularization',
+            'val_regularization_loss': 'val_regularization',
+        }
+
+        result = {}
+        for old_key, values in loss_data.items():
+            if not isinstance(values, list):
+                continue
+            # Remap key if it's in the mapping, otherwise keep as-is
+            new_key = key_mapping.get(old_key, old_key)
+            result[new_key] = self._sample_list(values, indices)
+
+        return result
 
     def _extract_weight_stats(self, weight_stats: Dict, indices: List[int]) -> Dict:
         """Extract weight stats without histogram data (sampled)."""

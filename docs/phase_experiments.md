@@ -37,6 +37,63 @@ This document provides **high-level specifications** for the Experiments domain.
 
 ## Recent Updates (December 2025 - January 2026)
 
+### MLflow Removed - Direct GCS Storage (2026-01-02)
+
+**Major Change:** MLflow has been completely removed from the training pipeline and replaced with direct GCS storage.
+
+#### Why MLflow Was Removed
+
+| Issue | Impact |
+|-------|--------|
+| Infrastructure overhead | Separate Cloud Run + Cloud SQL (~$50/month) |
+| Cold start latency | 5-15 seconds before trainer could log metrics |
+| 7,000+ API calls per training | Each metric logged via HTTP POST |
+| No real value | MLflow UI was never used; caching solved query performance |
+
+#### New Architecture
+
+```
+BEFORE (MLflow):
+Trainer → MLflowRestClient → MLflow Server (Cloud Run) → PostgreSQL
+                              ↓
+Django → MLflowService → MLflow Server → PostgreSQL → UI
+
+AFTER (GCS):
+Trainer → MetricsCollector (in-memory) → training_metrics.json (GCS)
+                              ↓
+Django → TrainingCacheService → GCS file → training_history_json (DB) → UI
+```
+
+#### Implementation
+
+**Trainer Side (`ml_platform/configs/services.py`):**
+- `MLflowRestClient` → `MetricsCollector` (in-memory collection)
+- `MLflowCallback` → `MetricsCallback`
+- Training completion: `_metrics_collector.save_to_gcs()` writes `training_metrics.json`
+
+**Django Side (`ml_platform/experiments/training_cache_service.py`):**
+- Primary: Reads `training_metrics.json` from GCS
+- Fallback: MLflow (for historical experiments with `mlflow_run_id`)
+
+#### Backward Compatibility
+
+Historical experiments with `mlflow_run_id` continue to work:
+1. `training_cache_service.py` falls back to MLflow if GCS file not found
+2. `mlflow_service.py` kept but marked as DEPRECATED
+3. Once all historical experiments are cached, MLflow infrastructure can be deleted
+
+#### Next Steps (Manual)
+
+1. **Run backfill** to cache all historical experiments
+2. **Test new experiment** to verify GCS-based flow
+3. **Delete MLflow infrastructure** (Cloud Run, Cloud SQL) to stop costs
+
+**Documentation:**
+- See `docs/mlflow.md` for complete implementation reference
+- See `docs/mlflow_out.md` for detailed migration plan
+
+---
+
 ### Training History Caching - Performance Optimization (2026-01-02)
 
 **Major Enhancement:** Training tab now loads in <1 second (down from 2-3 minutes) by caching training history in Django DB.
@@ -125,16 +182,18 @@ python manage.py backfill_training_cache
 python manage.py backfill_training_cache --limit 10
 ```
 
-#### MLflow Status After This Change
+#### MLflow Status After This Change (UPDATED 2026-01-02)
 
-MLflow is now only used for:
-1. **Trainer logging** - during training (unchanged)
-2. **One-time cache population** - at completion or first view
-3. **Histogram data** - on-demand via `/api/quick-tests/<id>/histogram-data/`
+~~MLflow is now only used for:~~
+~~1. **Trainer logging** - during training (unchanged)~~
+~~2. **One-time cache population** - at completion or first view~~
+~~3. **Histogram data** - on-demand via `/api/quick-tests/<id>/histogram-data/`~~
 
-The UI no longer requires MLflow for normal operation once data is cached.
+~~The UI no longer requires MLflow for normal operation once data is cached.~~
 
-**Future option:** Eliminate MLflow entirely by having trainer write to GCS instead.
+~~**Future option:** Eliminate MLflow entirely by having trainer write to GCS instead.~~
+
+**UPDATE:** MLflow has been completely removed. See [MLflow Removed - Direct GCS Storage](#mlflow-removed---direct-gcs-storage-2026-01-02) above.
 
 ---
 

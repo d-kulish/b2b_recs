@@ -2,7 +2,14 @@
 
 ## Executive Summary
 
-This document outlines the plan to remove MLflow from the B2B Recommendations system and replace it with direct GCS-based metrics storage. This simplification will reduce infrastructure costs, eliminate cold-start latency, and streamline the architecture without losing any functionality.
+This document outlines the plan to **completely remove MLflow** from the B2B Recommendations system and replace it with direct GCS-based metrics storage. This includes:
+
+1. **Migrating all historical data** from MLflow PostgreSQL to Django DB cache
+2. **Replacing trainer callbacks** with in-memory collection + GCS upload
+3. **Deleting all MLflow infrastructure** (Cloud Run, Cloud SQL, GCS bucket)
+4. **Removing all associated costs** (~$50/month savings)
+
+**Related Documentation:** See `docs/mlflow.md` for complete implementation reference if you need to restore this architecture.
 
 ---
 
@@ -13,9 +20,15 @@ This document outlines the plan to remove MLflow from the B2B Recommendations sy
 3. [Target Architecture](#target-architecture)
 4. [Benefits](#benefits)
 5. [Migration Steps](#migration-steps)
+   - [Phase 0: Data Migration & Verification](#phase-0-data-migration--verification)
+   - [Phase 1: Create MetricsCollector](#phase-1-create-metricscollector-trainer-side)
+   - [Phase 2: Update Django](#phase-2-update-django-to-read-from-gcs)
+   - [Phase 3: Remove MLflow Infrastructure](#phase-3-remove-mlflow-infrastructure)
+   - [Phase 4: Update Documentation](#phase-4-update-documentation)
+   - [Phase 5: Cost Verification & Closure](#phase-5-cost-verification--closure)
 6. [File Reference](#file-reference)
 7. [Rollback Plan](#rollback-plan)
-8. [Timeline](#timeline)
+8. [Checklist](#checklist)
 
 ---
 
@@ -240,6 +253,146 @@ After implementing the training history caching system (see `docs/phase_experime
 ---
 
 ## Migration Steps
+
+### Phase 0: Data Migration & Verification
+
+**Goal:** Migrate all historical training data from MLflow to Django DB before removing MLflow infrastructure.
+
+**CRITICAL:** This phase must be completed before any infrastructure deletion. Once MLflow is deleted, historical data is unrecoverable.
+
+#### Step 0.1: Database Backup (Safety)
+
+Export MLflow PostgreSQL database before any migration:
+
+```bash
+# Connect to Cloud SQL and create a backup
+gcloud sql backups create \
+    --instance=mlflow-db \
+    --description="Pre-migration backup $(date +%Y%m%d)"
+
+# Or export to GCS
+gcloud sql export sql mlflow-db \
+    gs://b2b-recs-backups/mlflow-db-export-$(date +%Y%m%d).sql.gz \
+    --database=mlflow
+```
+
+#### Step 0.2: Verify Current Cache State
+
+Check how many experiments need caching:
+
+```bash
+# Dry run to see what needs caching
+python manage.py backfill_training_cache --dry-run
+
+# Expected output shows experiments without training_history_json
+```
+
+**Django Shell verification:**
+```python
+from ml_platform.models import QuickTest
+
+# Total completed experiments
+total = QuickTest.objects.filter(status='completed').count()
+
+# Experiments with MLflow run ID
+with_mlflow = QuickTest.objects.filter(
+    status='completed',
+    mlflow_run_id__isnull=False
+).exclude(mlflow_run_id='').count()
+
+# Already cached
+cached = QuickTest.objects.filter(
+    status='completed',
+    training_history_json__isnull=False
+).count()
+
+print(f"Total completed: {total}")
+print(f"With MLflow ID: {with_mlflow}")
+print(f"Already cached: {cached}")
+print(f"Need caching: {with_mlflow - cached}")
+```
+
+#### Step 0.3: Backfill All Historical Data
+
+Run the backfill command to cache all MLflow data to Django:
+
+```bash
+# Cache all completed experiments (may take several minutes)
+python manage.py backfill_training_cache
+
+# If many experiments, run in batches
+python manage.py backfill_training_cache --limit 50
+# ... repeat until all done
+
+# Force re-cache if needed (overwrites existing)
+python manage.py backfill_training_cache --force
+```
+
+**Monitor progress:**
+- Each experiment takes ~30-60 seconds (MLflow API calls)
+- Total time depends on number of experiments
+- Errors are logged but don't stop the process
+
+#### Step 0.4: Cache Histogram Data (Optional)
+
+Histogram data is currently fetched on-demand. If you want to preserve it permanently, extend the backfill to include histograms:
+
+**Option A:** Accept histogram data loss (recommended)
+- Histograms rarely used
+- Reduces cache size significantly
+- New experiments will store histograms in GCS
+
+**Option B:** Extend backfill to include histograms
+- Modify `training_cache_service.py` to include histogram data
+- Significantly increases cache size per experiment
+- Run extended backfill
+
+#### Step 0.5: Verify Migration Completeness
+
+```python
+from ml_platform.models import QuickTest
+
+# Verify all MLflow experiments are cached
+uncached = QuickTest.objects.filter(
+    status='completed',
+    mlflow_run_id__isnull=False,
+    training_history_json__isnull=True
+).exclude(mlflow_run_id='')
+
+if uncached.exists():
+    print(f"WARNING: {uncached.count()} experiments still uncached!")
+    for qt in uncached[:10]:
+        print(f"  - QuickTest {qt.id}: {qt.display_name}")
+else:
+    print("SUCCESS: All MLflow experiments are cached!")
+```
+
+#### Step 0.6: Export Raw MLflow Data (Optional Backup)
+
+For additional safety, export raw MLflow data to GCS:
+
+```bash
+# Export experiments and runs via MLflow CLI (if accessible)
+# Or query directly from Cloud SQL:
+
+gcloud sql connect mlflow-db --user=mlflow
+
+# In psql:
+\copy experiments TO '/tmp/experiments.csv' CSV HEADER;
+\copy runs TO '/tmp/runs.csv' CSV HEADER;
+\copy metrics TO '/tmp/metrics.csv' CSV HEADER;
+\copy params TO '/tmp/params.csv' CSV HEADER;
+
+# Upload to GCS
+gsutil cp /tmp/*.csv gs://b2b-recs-backups/mlflow-export/
+```
+
+**Checkpoint:** Only proceed to Phase 1 when:
+- [ ] All completed experiments with `mlflow_run_id` have `training_history_json`
+- [ ] Database backup exists in Cloud SQL or GCS
+- [ ] You've verified sample experiments display correctly in Training tab
+
+---
 
 ### Phase 1: Create MetricsCollector (Trainer Side)
 
@@ -480,9 +633,97 @@ def _extract_results(self, quick_test):
 
 ### Phase 3: Remove MLflow Infrastructure
 
-**Goal:** Delete all MLflow-related code and infrastructure.
+**Goal:** Delete all MLflow-related code and cloud infrastructure to eliminate costs.
 
-#### Step 3.1: Delete MLflow Server
+**CRITICAL:** Only proceed after:
+- Phase 0 complete (all data migrated)
+- Phase 1-2 complete (new data flow tested)
+- At least 2-3 new experiments run successfully with GCS-based metrics
+
+#### Step 3.1: Delete Cloud Run Service
+
+```bash
+# Delete MLflow Cloud Run service
+gcloud run services delete mlflow-server \
+    --region=europe-central2 \
+    --quiet
+
+# Verify deletion
+gcloud run services list --region=europe-central2
+# Should NOT show mlflow-server
+```
+
+#### Step 3.2: Delete Cloud SQL Instance
+
+```bash
+# List existing backups before deletion
+gcloud sql backups list --instance=mlflow-db
+
+# Delete the Cloud SQL instance
+# WARNING: This permanently deletes all data!
+gcloud sql instances delete mlflow-db --quiet
+
+# Verify deletion
+gcloud sql instances list
+# Should NOT show mlflow-db
+```
+
+#### Step 3.3: Delete Cloud Build Trigger
+
+```bash
+# List Cloud Build triggers
+gcloud builds triggers list
+
+# Delete MLflow build trigger (find exact name first)
+gcloud builds triggers delete mlflow-server --quiet
+
+# Or delete by trigger ID if name differs
+gcloud builds triggers delete TRIGGER_ID --quiet
+```
+
+#### Step 3.4: Delete GCS Artifacts Bucket (Optional)
+
+If MLflow artifacts bucket exists and is no longer needed:
+
+```bash
+# List bucket contents first
+gsutil ls -la gs://PROJECT-mlflow-artifacts/
+
+# Delete bucket and all contents
+gsutil rm -r gs://PROJECT-mlflow-artifacts/
+
+# Verify deletion
+gsutil ls gs://PROJECT-mlflow-artifacts/
+# Should show "BucketNotFoundException"
+```
+
+#### Step 3.5: Remove IAM Service Account
+
+```bash
+# List service accounts
+gcloud iam service-accounts list | grep mlflow
+
+# Delete MLflow service account
+gcloud iam service-accounts delete \
+    mlflow-server@PROJECT_ID.iam.gserviceaccount.com \
+    --quiet
+
+# Remove any remaining IAM bindings
+# (Usually cleaned up with service account deletion)
+```
+
+#### Step 3.6: Delete Secret Manager Secrets (if any)
+
+```bash
+# List secrets related to MLflow
+gcloud secrets list | grep -i mlflow
+
+# Delete each MLflow-related secret
+gcloud secrets delete MLFLOW_DB_PASSWORD --quiet
+# ... repeat for other secrets
+```
+
+#### Step 3.7: Delete Code Files
 
 **Files to delete:**
 ```
@@ -494,19 +735,18 @@ mlflow_server/
 └── requirements.txt    ✗ DELETE
 ```
 
-**Cloud resources to delete:**
-- Cloud Run service: `mlflow-server`
-- Cloud SQL instance: (MLflow PostgreSQL database)
-- IAM service account permissions for MLflow
+```bash
+# Remove mlflow_server directory
+rm -rf mlflow_server/
 
-#### Step 3.2: Delete MLflow Service
+# Remove MLflow service file
+rm ml_platform/experiments/mlflow_service.py
 
-**File to delete:**
+# Remove integration test
+rm tests/test_mlflow_integration.py
 ```
-ml_platform/experiments/mlflow_service.py  ✗ DELETE (entire file)
-```
 
-#### Step 3.3: Clean Up Code References
+#### Step 3.8: Clean Up Code References
 
 **Files to modify:**
 
@@ -518,26 +758,34 @@ ml_platform/experiments/mlflow_service.py  ✗ DELETE (entire file)
 | `ml_platform/experiments/artifact_service.py` | Remove MLflow references |
 | `ml_platform/models.py` | Keep `mlflow_run_id` field (for backward compatibility) or remove |
 | `config/settings.py` | Remove `MLFLOW_TRACKING_URI` setting |
-| `tests/test_mlflow_integration.py` | Delete entire file |
 
-#### Step 3.4: Update Model Fields
+#### Step 3.9: Update Model Fields
 
 **File:** `ml_platform/models.py`
 
-Option A: Keep field for backward compatibility:
+**Option A: Keep fields for backward compatibility (recommended):**
 ```python
-# QuickTest model
+# QuickTest model - keep for historical reference
 mlflow_run_id = models.CharField(
     max_length=255,
     blank=True,
     help_text="Deprecated: MLflow run ID (kept for historical data)"
 )
+mlflow_experiment_name = models.CharField(
+    max_length=255,
+    blank=True,
+    help_text="Deprecated: MLflow experiment name"
+)
 ```
 
-Option B: Create migration to remove field (if no historical data needed):
+**Option B: Remove fields completely:**
 ```bash
+# Create migration to remove fields
 python manage.py makemigrations ml_platform --name remove_mlflow_fields
+python manage.py migrate
 ```
+
+---
 
 ### Phase 4: Update Documentation
 
@@ -546,9 +794,98 @@ python manage.py makemigrations ml_platform --name remove_mlflow_fields
 | File | Changes |
 |------|---------|
 | `README.md` | Remove MLflow setup instructions |
-| `docs/phase_experiments.md` | Update architecture diagrams |
+| `docs/phase_experiments.md` | Update architecture diagrams, remove MLflow references |
 | `docs/phase_training.md` | Update training flow documentation |
 | `implementation.md` | Remove MLflow references |
+
+**Important:** Keep `docs/mlflow.md` as historical reference in case architecture needs to be restored.
+
+---
+
+### Phase 5: Cost Verification & Closure
+
+**Goal:** Verify all MLflow-related costs are eliminated and document completion.
+
+#### Step 5.1: Verify Cloud Resources Deleted
+
+```bash
+# Verify Cloud Run service deleted
+gcloud run services list --region=europe-central2 | grep mlflow
+# Should return nothing
+
+# Verify Cloud SQL instance deleted
+gcloud sql instances list | grep mlflow
+# Should return nothing
+
+# Verify service account deleted
+gcloud iam service-accounts list | grep mlflow
+# Should return nothing
+
+# Verify Cloud Build triggers deleted
+gcloud builds triggers list | grep mlflow
+# Should return nothing
+```
+
+#### Step 5.2: Check Billing Report
+
+1. Go to GCP Console → Billing → Reports
+2. Filter by:
+   - Time range: Last 7 days
+   - Services: Cloud Run, Cloud SQL, Cloud Storage
+3. Verify no charges for:
+   - `mlflow-server` Cloud Run service
+   - `mlflow-db` Cloud SQL instance
+   - MLflow artifacts bucket
+
+#### Step 5.3: Remove Environment Variables
+
+Check and remove MLflow-related environment variables from:
+
+```bash
+# Cloud Run Django service
+gcloud run services describe django-app --region=europe-central2 --format='yaml' | grep -i mlflow
+
+# If found, update to remove:
+gcloud run services update django-app \
+    --region=europe-central2 \
+    --remove-env-vars=MLFLOW_TRACKING_URI
+```
+
+#### Step 5.4: Update CI/CD Configuration
+
+Check and remove MLflow-related configuration from:
+- `.github/workflows/` (if using GitHub Actions)
+- `cloudbuild.yaml` files
+- Any deployment scripts
+
+#### Step 5.5: Final Verification
+
+Run this checklist to confirm complete removal:
+
+```python
+# In Django shell
+from django.conf import settings
+
+# Should raise AttributeError or return None/empty
+try:
+    print(f"MLFLOW_TRACKING_URI: {settings.MLFLOW_TRACKING_URI}")
+except AttributeError:
+    print("MLFLOW_TRACKING_URI not found (good!)")
+
+# Verify mlflow_service import fails
+try:
+    from ml_platform.experiments import mlflow_service
+    print("WARNING: mlflow_service still importable!")
+except ImportError:
+    print("mlflow_service not found (good!)")
+```
+
+#### Step 5.6: Document Completion
+
+Update this document with:
+- Completion date
+- Final cost savings achieved
+- Any issues encountered
 
 ---
 
@@ -576,11 +913,14 @@ python manage.py makemigrations ml_platform --name remove_mlflow_fields
 
 ### Cloud Resources to Delete
 
-| Resource | Type | Location |
-|----------|------|----------|
-| `mlflow-server` | Cloud Run Service | europe-central2 |
-| MLflow PostgreSQL | Cloud SQL Instance | europe-central2 |
-| `mlflow-server` | Cloud Build Trigger | Global |
+| Resource | Type | Location | Est. Monthly Cost |
+|----------|------|----------|-------------------|
+| `mlflow-server` | Cloud Run Service | europe-central2 | ~$20 |
+| `mlflow-db` | Cloud SQL Instance | europe-central2 | ~$30 |
+| `mlflow-server` | Cloud Build Trigger | Global | ~$0 |
+| `PROJECT-mlflow-artifacts` | GCS Bucket | europe-central2 | ~$1 |
+| `mlflow-server@PROJECT` | Service Account | Global | $0 |
+| **Total Savings** | | | **~$50/month** |
 
 ---
 
@@ -588,33 +928,27 @@ python manage.py makemigrations ml_platform --name remove_mlflow_fields
 
 If issues arise during migration:
 
-### Immediate Rollback (Phase 1-2)
+### Immediate Rollback (Phase 0-2)
 - Revert code changes via git
 - Existing experiments continue to work (cached data preserved)
 - MLflow server still running (not deleted until Phase 3)
 
-### Phase 3 Rollback
+### Phase 3 Rollback (Before Infrastructure Deletion)
 - Re-deploy MLflow server from git history
 - Restore Cloud SQL from backup
 - Update environment variables
 
+### Post-Infrastructure Deletion Rollback
+If MLflow infrastructure is already deleted:
+1. Use `docs/mlflow.md` to recreate architecture
+2. Redeploy MLflow server using saved `mlflow_server/` from git history
+3. Create new Cloud SQL instance (data will be lost unless backup exists)
+4. Historical data still available in `QuickTest.training_history_json`
+
 ### Data Preservation
-- All historical training data remains in `QuickTest.training_history_json`
-- New experiments use GCS-based metrics
-- No data loss during migration
-
----
-
-## Timeline
-
-| Phase | Description | Dependencies |
-|-------|-------------|--------------|
-| Phase 1 | Create MetricsCollector, update callbacks | None |
-| Phase 2 | Update Django to read from GCS | Phase 1 complete |
-| Phase 3 | Delete MLflow infrastructure | Phase 2 tested |
-| Phase 4 | Update documentation | Phase 3 complete |
-
-**Recommended approach:** Complete Phase 1-2, run several test experiments, verify data flow works correctly, then proceed with Phase 3.
+- All historical training data preserved in `QuickTest.training_history_json`
+- Phase 0 creates database backup before any deletion
+- New experiments use GCS-based metrics (independent of MLflow)
 
 ---
 
@@ -692,3 +1026,145 @@ If issues arise during migration:
 ```
 
 This schema is compatible with the existing `training_history_json` field structure, ensuring seamless integration with the current caching system.
+
+---
+
+## Checklist
+
+### Phase 0: Data Migration & Verification
+- [ ] Create Cloud SQL backup
+- [ ] Run `python manage.py backfill_training_cache --dry-run` to assess scope
+- [ ] Run `python manage.py backfill_training_cache` to migrate all data
+- [ ] Verify all completed experiments have `training_history_json`
+- [ ] Test Training tab displays correctly for migrated experiments
+- [ ] (Optional) Export raw MLflow data to GCS backup
+
+### Phase 1: Create MetricsCollector ✅ COMPLETED
+- [x] Create `MetricsCollector` class in `configs/services.py`
+- [x] Create `MetricsCallback` to replace `MLflowCallback`
+- [x] Update `WeightStatsCallback` to use `MetricsCollector`
+- [x] Update `GradientStatsCallback` to use `MetricsCollector`
+- [x] Update `run_fn()` to initialize `MetricsCollector` instead of `MLflowRestClient`
+- [x] Update training completion to call `metrics_collector.save_to_gcs()`
+- [ ] Test locally with a sample training run
+
+### Phase 2: Update Django ✅ COMPLETED
+- [x] Modify `training_cache_service.py` to read from GCS instead of MLflow
+- [x] MLflow fallback kept for historical experiments
+- [ ] Deploy Django changes
+- [ ] Run 2-3 new experiments with GCS-based metrics
+- [ ] Verify Training tab works for new experiments
+
+### Phase 3: Remove MLflow Infrastructure (Partial - backward compat kept)
+- [ ] Delete Cloud Run service: `mlflow-server`
+- [ ] Delete Cloud SQL instance: `mlflow-db`
+- [ ] Delete Cloud Build trigger
+- [ ] Delete GCS artifacts bucket (if exists)
+- [ ] Delete service account: `mlflow-server@PROJECT`
+- [ ] Delete Secret Manager secrets (if any)
+- [ ] Delete `mlflow_server/` directory
+- [x] `ml_platform/experiments/mlflow_service.py` - KEPT for backward compatibility (deprecated)
+- [ ] Delete `tests/test_mlflow_integration.py`
+- [x] Clean up code references in other files
+- [x] `MLFLOW_TRACKING_URI` - marked as deprecated in settings
+
+### Phase 4: Update Documentation
+- [ ] Update `README.md` to remove MLflow instructions
+- [ ] Update `docs/phase_experiments.md` to reflect new architecture
+- [x] Keep `docs/mlflow.md` for historical reference
+
+### Phase 5: Cost Verification & Closure
+- [ ] Verify no MLflow resources in `gcloud` commands
+- [ ] Check GCP Billing for zero MLflow-related charges
+- [ ] Remove `MLFLOW_TRACKING_URI` from Cloud Run environment
+- [ ] Update CI/CD configuration if needed
+- [ ] Run final verification script
+- [ ] Document completion date and savings
+
+---
+
+## Next Steps (Action Required)
+
+The code changes are complete. The following actions require manual execution:
+
+### Immediate (Before Next Deployment)
+
+1. **Run data migration backfill**
+   ```bash
+   # Activate virtualenv, then:
+   python manage.py backfill_training_cache --dry-run  # Check scope
+   python manage.py backfill_training_cache            # Migrate all
+   ```
+
+2. **Deploy Django changes**
+   - Deploy the updated code to Cloud Run
+   - Verify Training tab works for existing experiments (cached data)
+
+3. **Test with a new experiment**
+   - Run a new QuickTest to verify the GCS-based metrics flow
+   - Check that `training_metrics.json` is created in GCS
+   - Verify Training tab shows data for the new experiment
+
+### After Verification (To Stop Costs)
+
+4. **Delete MLflow Cloud Run service**
+   ```bash
+   gcloud run services delete mlflow-server --region=europe-central2 --quiet
+   ```
+
+5. **Delete MLflow Cloud SQL instance**
+   ```bash
+   # CAUTION: This permanently deletes all MLflow data!
+   # Only run after verifying all experiments have cached data
+   gcloud sql instances delete mlflow-db --quiet
+   ```
+
+6. **Delete MLflow service account**
+   ```bash
+   gcloud iam service-accounts delete mlflow-server@PROJECT_ID.iam.gserviceaccount.com --quiet
+   ```
+
+7. **Remove `MLFLOW_TRACKING_URI` from Cloud Run environment**
+   ```bash
+   gcloud run services update django-app --region=europe-central2 --remove-env-vars=MLFLOW_TRACKING_URI
+   ```
+
+### Cleanup (Optional)
+
+8. **Delete MLflow server code** (once infrastructure deleted)
+   ```bash
+   rm -rf mlflow_server/
+   rm tests/test_mlflow_integration.py
+   ```
+
+9. **Remove MLflow service** (once all experiments cached)
+   - Delete `ml_platform/experiments/mlflow_service.py`
+   - Update `training_cache_service.py` to remove MLflow fallback
+
+### Verification Commands
+
+```bash
+# Verify Cloud Run service deleted
+gcloud run services list --region=europe-central2 | grep mlflow
+
+# Verify Cloud SQL instance deleted
+gcloud sql instances list | grep mlflow
+
+# Check billing (in GCP Console)
+# Billing → Reports → Filter by Cloud Run, Cloud SQL
+```
+
+---
+
+## Completion Record
+
+| Field | Value |
+|-------|-------|
+| Migration Started | 2026-01-02 |
+| Phase 1-2 Completed | 2026-01-02 |
+| Phase 0 Completed | _pending backfill_ |
+| Infrastructure Deleted | _pending_ |
+| Migration Completed | _pending_ |
+| Experiments Migrated | _N_ |
+| Monthly Savings | _~$50_ |
+| Issues Encountered | _None_ |

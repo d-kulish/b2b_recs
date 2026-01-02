@@ -1420,7 +1420,7 @@ class TrainerModuleGenerator:
             self._generate_product_model(product_by_type),
             self._generate_retrieval_model(),
             self._generate_serve_fn(),
-            self._generate_mlflow_callback(),
+            self._generate_metrics_callback(),
             self._generate_run_fn(),
         ]
 
@@ -1528,307 +1528,207 @@ from tfx_bsl.public import tfxio
 
 from absl import logging
 
-# MLflow tracking via direct REST API (no mlflow library needed - zero dependencies)
-# Includes GCP identity token authentication for Cloud Run services
+# =============================================================================
+# METRICS COLLECTOR (replaces MLflow - direct GCS storage)
+# =============================================================================
+# Collects training metrics in-memory and saves to GCS as JSON at training end.
+# No external dependencies, no network calls during training, zero latency.
 import time
-import urllib.request
-import urllib.error
-import urllib.parse
+from datetime import datetime
 
-class MLflowRestClient:
-    """Lightweight MLflow client using REST API with GCP identity token auth."""
+class MetricsCollector:
+    """
+    In-memory metrics collector that saves to GCS at training completion.
 
-    def __init__(self, tracking_uri):
-        self.tracking_uri = tracking_uri.rstrip('/')
-        self.run_id = None
-        self.experiment_id = None
-        self._token = None
-        self._token_expiry = 0
+    Replaces MLflow with direct JSON storage for simplicity and performance.
+    All metrics are collected in memory during training, then written as a
+    single JSON file to GCS at the end.
+    """
 
-    def _get_identity_token(self):
+    def __init__(self, gcs_output_path: str = None):
         """
-        Fetch identity token for Cloud Run service authentication.
+        Initialize the metrics collector.
 
-        Uses GCP metadata server (available on all GCP compute).
-        Tokens are cached for ~1 hour and auto-refreshed.
+        Args:
+            gcs_output_path: GCS path for output (e.g., gs://bucket/quick-tests/qt-XX)
         """
-        # Return cached token if still valid (with 60s buffer)
-        if self._token and time.time() < self._token_expiry - 60:
-            return self._token
+        self.gcs_output_path = gcs_output_path
+        self._current_epoch = -1
 
-        # Method 1: Try google-auth library (preferred, handles token refresh)
-        try:
-            import google.auth.transport.requests
-            import google.oauth2.id_token
-            auth_req = google.auth.transport.requests.Request()
-            self._token = google.oauth2.id_token.fetch_id_token(auth_req, self.tracking_uri)
-            self._token_expiry = time.time() + 3600
-            logging.info("MLflow: Got identity token via google-auth")
-            return self._token
-        except ImportError:
-            pass  # google-auth not available, try metadata server
-        except Exception as e:
-            logging.debug(f"MLflow: google-auth failed ({e}), trying metadata server")
+        # Initialize metrics structure matching training_history_json schema
+        self.metrics = {
+            'epochs': [],
 
-        # Method 2: GCP metadata server (always available on Vertex AI)
-        try:
-            audience = self.tracking_uri
-            url = f"http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/identity?audience={urllib.parse.quote(audience)}"
-            req = urllib.request.Request(url, headers={"Metadata-Flavor": "Google"})
-            with urllib.request.urlopen(req, timeout=5) as resp:
-                self._token = resp.read().decode()
-                self._token_expiry = time.time() + 3600
-                logging.info("MLflow: Got identity token via metadata server")
-                return self._token
-        except Exception as e:
-            logging.warning(f"MLflow: Could not get identity token: {e}")
-            return None
+            # Loss curves
+            'loss': {},
 
-    def _get_auth_headers(self):
-        """Get headers with authentication for API requests."""
-        headers = {"Content-Type": "application/json"}
-        token = self._get_identity_token()
-        if token:
-            headers["Authorization"] = f"Bearer {token}"
-        return headers
+            # Weight norms (gradient key for backward compat with UI)
+            'gradient': {},
 
-    def _request(self, endpoint, data, timeout=30):
-        """Make authenticated POST request to MLflow API with retry."""
-        url = f"{self.tracking_uri}/api/2.0/mlflow/{endpoint}"
-        headers = self._get_auth_headers()
-        last_error = None
-        for attempt in range(3):
-            try:
-                req = urllib.request.Request(url, data=json.dumps(data).encode(), headers=headers, method="POST")
-                with urllib.request.urlopen(req, timeout=timeout) as resp:
-                    return json.loads(resp.read().decode())
-            except urllib.error.HTTPError as e:
-                logging.warning(f"MLflow API error ({endpoint}): HTTP {e.code} - {e.reason}")
-                return None  # Don't retry HTTP errors
-            except Exception as e:
-                last_error = e
-                if attempt < 2:
-                    wait = (attempt + 1) * 5  # 5s, 10s
-                    logging.info(f"MLflow request failed ({e}), retrying in {wait}s...")
-                    time.sleep(wait)
-        logging.warning(f"MLflow API error ({endpoint}): {last_error}")
-        return None
+            # Weight statistics per tower
+            'weight_stats': {
+                'query': {'mean': [], 'std': [], 'min': [], 'max': [], 'histogram': {'bin_edges': [], 'counts': []}},
+                'candidate': {'mean': [], 'std': [], 'min': [], 'max': [], 'histogram': {'bin_edges': [], 'counts': []}}
+            },
 
-    def set_experiment(self, name):
-        """Get or create experiment by name with retry for cold starts."""
-        logging.info(f"MLFLOW: Setting experiment '{name}'")
-        last_error = None
+            # Gradient statistics per tower
+            'gradient_stats': {
+                'query': {'mean': [], 'std': [], 'min': [], 'max': [], 'norm': [], 'histogram': {'bin_edges': [], 'counts': []}},
+                'candidate': {'mean': [], 'std': [], 'min': [], 'max': [], 'norm': [], 'histogram': {'bin_edges': [], 'counts': []}}
+            },
 
-        for attempt in range(3):
-            try:
-                url = f"{self.tracking_uri}/api/2.0/mlflow/experiments/get-by-name?experiment_name={urllib.parse.quote(name)}"
-                headers = self._get_auth_headers()
-                req = urllib.request.Request(url, headers=headers)
-                # Use 60s timeout on first attempt (cold start), 30s after
-                timeout = 60 if attempt == 0 else 30
+            # Final/test metrics (single values)
+            'final_metrics': {},
 
-                logging.info(f"  Attempt {attempt + 1}/3: Looking up experiment...")
-                request_start = time.time()
-                with urllib.request.urlopen(req, timeout=timeout) as resp:
-                    request_time = time.time() - request_start
-                    result = json.loads(resp.read().decode())
-                    self.experiment_id = result.get("experiment", {}).get("experiment_id")
-                    logging.info(f"  Found existing experiment: id={self.experiment_id} ({request_time:.2f}s)")
-                    return self.experiment_id
+            # Training parameters
+            'params': {},
 
-            except urllib.error.HTTPError as e:
-                if e.code == 404:
-                    # Create new experiment
-                    logging.info(f"  Experiment not found, creating new one...")
-                    result = self._request("experiments/create", {"name": name}, timeout=60)
-                    if result:
-                        self.experiment_id = result.get("experiment_id")
-                        logging.info(f"  Created new experiment: id={self.experiment_id}")
-                    else:
-                        logging.error(f"  Failed to create experiment")
-                    return self.experiment_id
-                logging.warning(f"  HTTP Error: {e.code} - {e.reason}")
-                return None
+            # Metadata
+            'available': True,
+        }
 
-            except Exception as e:
-                last_error = e
-                logging.warning(f"  Attempt {attempt + 1} failed: {type(e).__name__}: {e}")
-                if attempt < 2:
-                    wait = (attempt + 1) * 10  # 10s, 20s backoff
-                    logging.info(f"  Retrying in {wait}s...")
-                    time.sleep(wait)
+    def log_param(self, key: str, value) -> None:
+        """Log a training parameter."""
+        self.metrics['params'][key] = value
 
-        logging.error(f"MLFLOW: set_experiment FAILED after 3 attempts: {last_error}")
-        return None
-
-    def start_run(self, run_name=None):
-        """Start a new run."""
-        logging.info(f"MLFLOW: Starting run")
-        logging.info(f"  Experiment ID: {self.experiment_id}")
-        logging.info(f"  Run name: {run_name}")
-
-        if not self.experiment_id:
-            logging.error("  Cannot start run: experiment_id is None")
-            return None
-
-        data = {"experiment_id": self.experiment_id}
-        if run_name:
-            data["run_name"] = run_name
-
-        result = self._request("runs/create", data)
-        if result:
-            self.run_id = result.get("run", {}).get("info", {}).get("run_id")
-            logging.info(f"  Run started successfully: {self.run_id}")
-        else:
-            logging.error(f"  Failed to start run - no response from server")
-
-        return self.run_id
-
-    def log_param(self, key, value):
-        """Log a parameter."""
-        if self.run_id:
-            self._request("runs/log-parameter", {"run_id": self.run_id, "key": key, "value": str(value)})
-
-    def log_params(self, params):
-        """Log multiple parameters."""
+    def log_params(self, params: dict) -> None:
+        """Log multiple training parameters."""
         for key, value in params.items():
             self.log_param(key, value)
 
-    def log_metric(self, key, value, step=None):
-        """Log a metric."""
-        if self.run_id:
-            data = {"run_id": self.run_id, "key": key, "value": float(value), "timestamp": int(time.time() * 1000)}
-            if step is not None:
-                data["step"] = step
-            self._request("runs/log-metric", data)
-
-    def set_tag(self, key, value):
-        """Set a tag."""
-        if self.run_id:
-            self._request("runs/set-tag", {"run_id": self.run_id, "key": key, "value": str(value)})
-
-    def set_tags(self, tags):
-        """Set multiple tags."""
-        for key, value in tags.items():
-            self.set_tag(key, value)
-
-    def end_run(self, status="FINISHED"):
-        """End the run."""
-        if self.run_id:
-            self._request("runs/update", {"run_id": self.run_id, "status": status, "end_time": int(time.time() * 1000)})
-
-    def wait_for_ready(self, max_wait_seconds=120):
+    def log_metric(self, key: str, value: float, step: int = None) -> None:
         """
-        Wait for MLflow server to be ready (handles cold starts).
+        Log a metric value with optional epoch step.
 
-        Pings the health endpoint with exponential backoff until the server
-        responds. This ensures the server is fully initialized before
-        attempting any MLflow operations.
+        Metrics are categorized by prefix:
+        - loss, val_loss, etc. -> loss dict
+        - weight_norm, query_weight_norm -> gradient dict (for UI compat)
+        - final_*, test_* -> final_metrics dict
+        """
+        value = float(value)
+
+        # Track epochs
+        if step is not None and step > self._current_epoch:
+            self._current_epoch = step
+            if step not in self.metrics['epochs']:
+                self.metrics['epochs'].append(step)
+
+        # Categorize metric
+        if key.startswith('final_') or key.startswith('test_'):
+            # Final/test metrics - single values
+            self.metrics['final_metrics'][key] = value
+        elif 'weight_norm' in key:
+            # Weight norms go in 'gradient' dict for UI compatibility
+            norm_key = key.replace('_weight_norm', '').replace('weight_norm', 'total')
+            if norm_key not in self.metrics['gradient']:
+                self.metrics['gradient'][norm_key] = []
+            self.metrics['gradient'][norm_key].append(value)
+        elif 'loss' in key:
+            # Loss metrics
+            if key not in self.metrics['loss']:
+                self.metrics['loss'][key] = []
+            self.metrics['loss'][key].append(value)
+        else:
+            # Other metrics go to loss dict (recall, etc.)
+            if key not in self.metrics['loss']:
+                self.metrics['loss'][key] = []
+            self.metrics['loss'][key].append(value)
+
+    def log_weight_stats(self, tower: str, stats: dict, histogram: dict = None) -> None:
+        """
+        Log weight statistics for a tower.
 
         Args:
-            max_wait_seconds: Maximum time to wait for server (default 120s)
+            tower: 'query' or 'candidate'
+            stats: dict with mean, std, min, max values
+            histogram: optional dict with bin_edges (once) and counts (per epoch)
+        """
+        tower_stats = self.metrics['weight_stats'].get(tower, {})
+
+        for stat_name in ['mean', 'std', 'min', 'max']:
+            if stat_name in stats:
+                if stat_name not in tower_stats:
+                    tower_stats[stat_name] = []
+                tower_stats[stat_name].append(float(stats[stat_name]))
+
+        if histogram:
+            if 'bin_edges' in histogram and not tower_stats.get('histogram', {}).get('bin_edges'):
+                tower_stats['histogram']['bin_edges'] = histogram['bin_edges']
+            if 'counts' in histogram:
+                tower_stats['histogram']['counts'].append(histogram['counts'])
+
+        self.metrics['weight_stats'][tower] = tower_stats
+
+    def log_gradient_stats(self, tower: str, stats: dict, histogram: dict = None) -> None:
+        """
+        Log gradient statistics for a tower.
+
+        Args:
+            tower: 'query' or 'candidate'
+            stats: dict with mean, std, min, max, norm values
+            histogram: optional dict with bin_edges (once) and counts (per epoch)
+        """
+        tower_stats = self.metrics['gradient_stats'].get(tower, {})
+
+        for stat_name in ['mean', 'std', 'min', 'max', 'norm']:
+            if stat_name in stats:
+                if stat_name not in tower_stats:
+                    tower_stats[stat_name] = []
+                tower_stats[stat_name].append(float(stats[stat_name]))
+
+        if histogram:
+            if 'bin_edges' in histogram and not tower_stats.get('histogram', {}).get('bin_edges'):
+                tower_stats['histogram']['bin_edges'] = histogram['bin_edges']
+            if 'counts' in histogram:
+                tower_stats['histogram']['counts'].append(histogram['counts'])
+
+        self.metrics['gradient_stats'][tower] = tower_stats
+
+    def save_to_gcs(self) -> bool:
+        """
+        Save all collected metrics to GCS as training_metrics.json.
 
         Returns:
-            True if server is ready
-
-        Raises:
-            RuntimeError if server is not ready after max_wait_seconds
+            True if saved successfully, False otherwise
         """
-        health_url = f"{self.tracking_uri}/health"
-        start_time = time.time()
-        attempt = 0
+        if not self.gcs_output_path:
+            logging.warning("MetricsCollector: No GCS output path - metrics not saved")
+            return False
 
-        logging.info("-" * 50)
-        logging.info("MLFLOW CONNECTION: Starting server health check")
-        logging.info(f"  Server URL: {self.tracking_uri}")
-        logging.info(f"  Health endpoint: {health_url}")
-        logging.info(f"  Max wait time: {max_wait_seconds}s")
-        logging.info("-" * 50)
+        if not self.gcs_output_path.startswith('gs://'):
+            logging.warning(f"MetricsCollector: Invalid GCS path: {self.gcs_output_path}")
+            return False
 
-        while (time.time() - start_time) < max_wait_seconds:
-            attempt += 1
-            elapsed = time.time() - start_time
-            remaining = max_wait_seconds - elapsed
+        try:
+            from google.cloud import storage
 
-            logging.info(f"MLFLOW CONNECTION: Attempt {attempt}")
-            logging.info(f"  Elapsed: {elapsed:.1f}s | Remaining: {remaining:.1f}s")
+            # Add metadata
+            self.metrics['saved_at'] = datetime.utcnow().isoformat() + 'Z'
 
-            try:
-                # Get auth token
-                logging.info("  Getting authentication token...")
-                headers = self._get_auth_headers()
-                has_auth = "Authorization" in headers
-                logging.info(f"  Auth token obtained: {has_auth}")
+            # Parse GCS path
+            path = self.gcs_output_path[5:]  # Remove 'gs://'
+            bucket_name = path.split('/')[0]
+            blob_path = '/'.join(path.split('/')[1:]) + '/training_metrics.json'
 
-                req = urllib.request.Request(health_url, headers=headers)
-                # Use longer timeout for cold start (first attempt)
-                timeout = 60 if attempt == 1 else 30
-                logging.info(f"  Sending health check request (timeout={timeout}s)...")
+            # Upload to GCS
+            client = storage.Client()
+            bucket = client.bucket(bucket_name)
+            blob = bucket.blob(blob_path)
+            blob.upload_from_string(
+                json.dumps(self.metrics, indent=2),
+                content_type='application/json'
+            )
 
-                request_start = time.time()
-                with urllib.request.urlopen(req, timeout=timeout) as resp:
-                    request_time = time.time() - request_start
-                    total_elapsed = time.time() - start_time
-                    logging.info(f"  Response received: HTTP {resp.status}")
-                    logging.info(f"  Request time: {request_time:.2f}s")
-                    logging.info("-" * 50)
-                    logging.info(f"MLFLOW CONNECTION: SUCCESS after {total_elapsed:.1f}s ({attempt} attempts)")
-                    logging.info("-" * 50)
-                    return True
+            logging.info(f"MetricsCollector: Saved training metrics to gs://{bucket_name}/{blob_path}")
+            return True
 
-            except urllib.error.HTTPError as e:
-                request_time = time.time() - request_start if 'request_start' in dir() else 0
-                logging.warning(f"  HTTP Error: {e.code} - {e.reason}")
-                logging.warning(f"  Request time: {request_time:.2f}s")
+        except Exception as e:
+            logging.warning(f"MetricsCollector: Could not save metrics to GCS: {e}")
+            return False
 
-                # Server responded but with error - still means it's up
-                if e.code in (401, 403):
-                    logging.warning(f"  Server is UP but has authentication issues")
-                    logging.warning(f"  This may indicate IAM permission problems")
-                    return True
-                elif e.code >= 500:
-                    logging.warning(f"  Server error (5xx) - may be starting up")
 
-            except urllib.error.URLError as e:
-                logging.warning(f"  Connection failed: {e.reason}")
-                if "timed out" in str(e.reason).lower():
-                    logging.warning(f"  TIMEOUT - Server may be experiencing cold start")
-                elif "refused" in str(e.reason).lower():
-                    logging.warning(f"  CONNECTION REFUSED - Server may not be running")
-                elif "name or service not known" in str(e.reason).lower():
-                    logging.error(f"  DNS RESOLUTION FAILED - Check server URL")
-
-            except Exception as e:
-                logging.warning(f"  Unexpected error: {type(e).__name__}: {e}")
-
-            # Exponential backoff: 5s, 10s, 15s, 20s, then cap at 20s
-            wait_time = min(20, 5 * attempt)
-            if (time.time() - start_time + wait_time) < max_wait_seconds:
-                logging.info(f"  Waiting {wait_time}s before next attempt...")
-                time.sleep(wait_time)
-            else:
-                logging.warning(f"  No time remaining for another attempt")
-                break
-
-        # Final failure
-        total_elapsed = time.time() - start_time
-        logging.error("-" * 50)
-        logging.error("MLFLOW CONNECTION: FAILED")
-        logging.error(f"  Total time: {total_elapsed:.1f}s")
-        logging.error(f"  Attempts: {attempt}")
-        logging.error(f"  Server URL: {self.tracking_uri}")
-        logging.error("-" * 50)
-
-        raise RuntimeError(
-            f"MLflow server not ready after {total_elapsed:.0f}s ({attempt} attempts). "
-            f"Training cannot proceed without MLflow tracking. "
-            f"Server URL: {self.tracking_uri}. "
-            f"Check Cloud Run logs for mlflow-server service."
-        )
-
-# Global MLflow client instance (initialized in run_fn)
-_mlflow_client = None
-MLFLOW_AVAILABLE = True  # Always available - uses REST API with no dependencies
+# Global metrics collector instance (initialized in run_fn)
+_metrics_collector = None
 '''
 
     def _generate_constants(self) -> str:
@@ -1839,9 +1739,6 @@ MLFLOW_AVAILABLE = True  # Always available - uses REST API with no dependencies
             if layer.get('type') == 'dense' and 'l2_reg' in layer:
                 l2_reg = layer.get('l2_reg', 0.0)
                 break
-
-        # Get model endpoint name for MLflow experiment
-        model_endpoint_name = self.feature_config.dataset.model_endpoint.name
 
         return f'''
 # =============================================================================
@@ -1864,14 +1761,6 @@ TOP_K = {self.top_k}
 
 # OOV buckets (must match Transform preprocessing)
 NUM_OOV_BUCKETS = 1
-
-# =============================================================================
-# MLFLOW CONFIGURATION
-# =============================================================================
-
-MLFLOW_TRACKING_URI = os.environ.get('MLFLOW_TRACKING_URI', '')
-MLFLOW_EXPERIMENT_NAME = '{model_endpoint_name}'
-MLFLOW_RUN_NAME = os.environ.get('MLFLOW_RUN_NAME', 'quick-test')
 '''
 
     def _generate_input_fn(self) -> str:
@@ -2682,38 +2571,35 @@ def _evaluate_recall_on_test_set(model, test_dataset, product_ids, product_embed
         return {{}}
 '''
 
-    def _generate_mlflow_callback(self) -> str:
-        """Generate MLflow callback class for per-epoch metric logging."""
+    def _generate_metrics_callback(self) -> str:
+        """Generate metrics callback classes for per-epoch metric logging to MetricsCollector."""
         return '''
 # =============================================================================
-# MLFLOW CALLBACK
+# TRAINING CALLBACKS (using MetricsCollector - no MLflow)
 # =============================================================================
 
-class MLflowCallback(tf.keras.callbacks.Callback):
-    """Log metrics to MLflow after each epoch using REST API."""
+class MetricsCallback(tf.keras.callbacks.Callback):
+    """Log Keras metrics to MetricsCollector after each epoch."""
 
     def on_epoch_end(self, epoch, logs=None):
-        if _mlflow_client and logs:
+        if _metrics_collector and logs:
             for metric_name, value in logs.items():
-                _mlflow_client.log_metric(metric_name, float(value), step=epoch)
+                _metrics_collector.log_metric(metric_name, float(value), step=epoch)
 
 
 class WeightNormCallback(tf.keras.callbacks.Callback):
     """
-    Log weight L2 norms to MLflow for monitoring training dynamics.
+    Log weight L2 norms for monitoring training dynamics.
 
     Tracks the total L2 norm of all trainable weights per epoch.
     Useful for detecting:
     - Weight explosion (norms growing unboundedly)
     - Weight collapse (norms shrinking to zero)
     - Training stability
-
-    Note: This tracks WEIGHT norms, not gradient norms. True gradient norms
-    require custom training loops with tf.GradientTape.
     """
 
     def on_epoch_end(self, epoch, logs=None):
-        if not _mlflow_client:
+        if not _metrics_collector:
             return
 
         # Compute total weight norm (L2 norm of all trainable weights)
@@ -2733,9 +2619,9 @@ class WeightNormCallback(tf.keras.callbacks.Callback):
                 candidate_norm_sq += var_norm_sq
 
         # Log norms
-        _mlflow_client.log_metric('weight_norm', float(np.sqrt(total_norm_sq)), step=epoch)
-        _mlflow_client.log_metric('query_weight_norm', float(np.sqrt(query_norm_sq)), step=epoch)
-        _mlflow_client.log_metric('candidate_weight_norm', float(np.sqrt(candidate_norm_sq)), step=epoch)
+        _metrics_collector.log_metric('weight_norm', float(np.sqrt(total_norm_sq)), step=epoch)
+        _metrics_collector.log_metric('query_weight_norm', float(np.sqrt(query_norm_sq)), step=epoch)
+        _metrics_collector.log_metric('candidate_weight_norm', float(np.sqrt(candidate_norm_sq)), step=epoch)
 
 
 class WeightStatsCallback(tf.keras.callbacks.Callback):
@@ -2743,7 +2629,7 @@ class WeightStatsCallback(tf.keras.callbacks.Callback):
     Log weight statistics per epoch for each tower.
 
     Tracks min, max, mean, std of weights for the query and candidate towers.
-    Also logs histogram bins for TensorBoard-style weight distribution visualization.
+    Also logs histogram bins for weight distribution visualization.
 
     Tower categorization:
     - Query tower: variables containing 'query' or 'buyer' in name
@@ -2753,67 +2639,62 @@ class WeightStatsCallback(tf.keras.callbacks.Callback):
     NUM_HISTOGRAM_BINS = 25
 
     def on_epoch_end(self, epoch, logs=None):
-        if not _mlflow_client:
+        if not _metrics_collector:
             return
 
         # Collect weight stats per tower
-        tower_stats = dict(query=[], candidate=[])
+        tower_weights = dict(query=[], candidate=[])
 
         for var in self.model.trainable_variables:
             var_name = var.name.lower()
             weights = var.numpy().flatten()
 
-            # Query tower includes BuyerModel (buyer_model/) and query_tower/
             if 'query' in var_name or 'buyer' in var_name:
-                tower_stats['query'].extend(weights)
-            # Candidate tower includes ProductModel (product_model/) and candidate_tower/
+                tower_weights['query'].extend(weights)
             elif 'candidate' in var_name or 'product' in var_name:
-                tower_stats['candidate'].extend(weights)
+                tower_weights['candidate'].extend(weights)
 
         # Log stats for each tower
-        for tower, weights in tower_stats.items():
+        for tower, weights in tower_weights.items():
             if weights:
                 weights_arr = np.array(weights)
 
-                # Existing summary statistics
-                _mlflow_client.log_metric(tower + '_weights_mean', float(np.mean(weights_arr)), step=epoch)
-                _mlflow_client.log_metric(tower + '_weights_std', float(np.std(weights_arr)), step=epoch)
-                _mlflow_client.log_metric(tower + '_weights_min', float(np.min(weights_arr)), step=epoch)
-                _mlflow_client.log_metric(tower + '_weights_max', float(np.max(weights_arr)), step=epoch)
+                # Summary statistics
+                stats = {
+                    'mean': float(np.mean(weights_arr)),
+                    'std': float(np.std(weights_arr)),
+                    'min': float(np.min(weights_arr)),
+                    'max': float(np.max(weights_arr)),
+                }
 
-                # NEW: Histogram bins for 3D weight distribution visualization
-                # Compute histogram with fixed bin count
+                # Histogram
                 counts, bin_edges = np.histogram(weights_arr, bins=self.NUM_HISTOGRAM_BINS)
+                histogram = {
+                    'bin_edges': [float(e) for e in bin_edges] if epoch == 0 else None,
+                    'counts': [int(c) for c in counts],
+                }
 
-                # Log bin edges once (epoch 0 only) as a parameter
-                if epoch == 0:
-                    edges_str = ','.join([f'{e:.6f}' for e in bin_edges])
-                    _mlflow_client.log_param(f'{tower}_hist_bin_edges', edges_str)
-
-                # Log bin counts per epoch as metrics
-                for i, count in enumerate(counts):
-                    _mlflow_client.log_metric(f'{tower}_hist_bin_{i}', int(count), step=epoch)
+                _metrics_collector.log_weight_stats(tower, stats, histogram)
 
 
 class GradientStatsCallback(tf.keras.callbacks.Callback):
     """
-    Log gradient statistics and histogram to MLflow for training dynamics visualization.
+    Log gradient statistics and histogram for training dynamics visualization.
 
-    Reads tf.Variable accumulators from model._grad_accum (updated by train_step in graph mode)
-    and logs computed statistics. This approach is graph-compatible - no numpy in train_step.
+    Reads tf.Variable accumulators from model._grad_accum (updated by train_step)
+    and logs computed statistics.
 
-    This enables TensorBoard-style gradient distribution visualization alongside
-    weight distribution, helping diagnose:
+    This enables gradient distribution visualization alongside weight distribution,
+    helping diagnose:
     - Vanishing gradients (distribution collapsing to zero)
     - Exploding gradients (distribution spreading widely)
     - Dead neurons (spike at exactly zero)
-    - Layer-specific training issues
     """
 
     NUM_HISTOGRAM_BINS = 25
 
     def on_epoch_end(self, epoch, logs=None):
-        if not _mlflow_client:
+        if not _metrics_collector:
             return
 
         # Check if model has gradient accumulators
@@ -2825,7 +2706,7 @@ class GradientStatsCallback(tf.keras.callbacks.Callback):
             if accum is None:
                 continue
 
-            # Read accumulated values (tf.Variable.numpy() works in eager callback)
+            # Read accumulated values
             count = float(accum['count'].numpy())
             if count == 0:
                 continue
@@ -2839,25 +2720,26 @@ class GradientStatsCallback(tf.keras.callbacks.Callback):
             # Compute statistics
             mean = total_sum / count
             variance = (total_sum_sq / count) - (mean ** 2)
-            std = float(np.sqrt(max(0, variance)))  # Avoid negative due to float precision
+            std = float(np.sqrt(max(0, variance)))
             norm = float(np.sqrt(total_sum_sq))
 
-            # Log summary statistics
-            _mlflow_client.log_metric(tower + '_grad_mean', mean, step=epoch)
-            _mlflow_client.log_metric(tower + '_grad_std', std, step=epoch)
-            _mlflow_client.log_metric(tower + '_grad_min', grad_min, step=epoch)
-            _mlflow_client.log_metric(tower + '_grad_max', grad_max, step=epoch)
-            _mlflow_client.log_metric(tower + '_grad_norm', norm, step=epoch)
+            # Summary statistics
+            stats = {
+                'mean': mean,
+                'std': std,
+                'min': grad_min,
+                'max': grad_max,
+                'norm': norm,
+            }
 
-            # Log histogram bin edges once (fixed range: -1 to 1)
-            if epoch == 0:
-                bin_edges = np.linspace(-1.0, 1.0, self.NUM_HISTOGRAM_BINS + 1)
-                edges_str = ','.join([str(round(e, 8)) for e in bin_edges])
-                _mlflow_client.log_param(tower + '_grad_hist_bin_edges', edges_str)
+            # Histogram (fixed range: -1 to 1)
+            bin_edges = np.linspace(-1.0, 1.0, self.NUM_HISTOGRAM_BINS + 1)
+            histogram = {
+                'bin_edges': [float(e) for e in bin_edges] if epoch == 0 else None,
+                'counts': [int(c) for c in hist_counts],
+            }
 
-            # Log bin counts per epoch
-            for i, count_val in enumerate(hist_counts):
-                _mlflow_client.log_metric(tower + '_grad_hist_bin_' + str(i), int(count_val), step=epoch)
+            _metrics_collector.log_gradient_stats(tower, stats, histogram)
 
             # Reset accumulators for next epoch
             accum['sum'].assign(0.0)
@@ -2868,78 +2750,14 @@ class GradientStatsCallback(tf.keras.callbacks.Callback):
             accum['hist_counts'].assign(tf.zeros(self.NUM_HISTOGRAM_BINS, dtype=tf.int32))
 
 
-def _write_mlflow_info(gcs_output_path: str, run_id: str):
-    """Write MLflow run ID to GCS for Django to retrieve."""
-    if not gcs_output_path or not gcs_output_path.startswith('gs://'):
-        logging.warning(f"Cannot write MLflow info: invalid GCS path: {gcs_output_path}")
-        return
-
-    try:
-        from google.cloud import storage
-
-        path = gcs_output_path[5:]  # Remove 'gs://'
-        bucket_name = path.split('/')[0]
-        blob_path = '/'.join(path.split('/')[1:]) + '/mlflow_info.json'
-
-        client = storage.Client()
-        bucket = client.bucket(bucket_name)
-        blob = bucket.blob(blob_path)
-        blob.upload_from_string(json.dumps({
-            'run_id': run_id,
-            'experiment_name': MLFLOW_EXPERIMENT_NAME,
-        }))
-        logging.info(f"Wrote MLflow info to gs://{bucket_name}/{blob_path}")
-    except Exception as e:
-        logging.warning(f"Could not write MLflow info: {e}")
-
-
-def _write_mlflow_status(gcs_output_path: str, status: str, details: dict = None):
-    """
-    Write MLflow initialization status to GCS for Django diagnostics.
-
-    This file is written at various stages of MLflow initialization so Django
-    can understand exactly what happened if something goes wrong.
-
-    Args:
-        gcs_output_path: GCS path for artifacts (e.g., gs://bucket/qt-XX-YYYYMMDD-HHMMSS)
-        status: One of 'starting', 'waiting', 'connected', 'ready', 'failed'
-        details: Optional dict with additional status information
-    """
-    if not gcs_output_path or not gcs_output_path.startswith('gs://'):
-        return
-
-    try:
-        from google.cloud import storage
-        from datetime import datetime
-
-        path = gcs_output_path[5:]  # Remove 'gs://'
-        bucket_name = path.split('/')[0]
-        blob_path = '/'.join(path.split('/')[1:]) + '/mlflow_status.json'
-
-        status_data = {
-            'status': status,
-            'timestamp': datetime.utcnow().isoformat() + 'Z',
-            'tracking_uri': MLFLOW_TRACKING_URI,
-        }
-        if details:
-            status_data.update(details)
-
-        client = storage.Client()
-        bucket = client.bucket(bucket_name)
-        blob = bucket.blob(blob_path)
-        blob.upload_from_string(json.dumps(status_data, indent=2))
-
-        logging.info(f"MLflow status [{status}] written to gs://{bucket_name}/{blob_path}")
-    except Exception as e:
-        logging.debug(f"Could not write MLflow status: {e}")
 '''
 
     def _generate_run_fn(self) -> str:
-        """Generate run_fn() - the TFX Trainer entry point with configurable optimizer and MLflow tracking."""
+        """Generate run_fn() - the TFX Trainer entry point with MetricsCollector (no MLflow)."""
         # Get optimizer code
         optimizer_class = self.OPTIMIZER_CODE.get(self.optimizer, 'tf.keras.optimizers.Adam')
 
-        # Get IDs for MLflow parameter logging
+        # Get IDs for parameter logging
         feature_config_id = self.feature_config.id
         model_config_id = self.model_config.id
         dataset_id = self.feature_config.dataset.id
@@ -2955,7 +2773,10 @@ def _write_mlflow_status(gcs_output_path: str, status: str, details: dict = None
 
 def run_fn(fn_args: tfx.components.FnArgs):
     """
-    TFX Trainer entry point with MLflow tracking.
+    TFX Trainer entry point with MetricsCollector for training metrics.
+
+    Metrics are collected in-memory during training and saved to GCS as
+    training_metrics.json at the end. No external dependencies.
 
     Args:
         fn_args: Training arguments from TFX including:
@@ -2978,9 +2799,6 @@ def run_fn(fn_args: tfx.components.FnArgs):
     batch_size = custom_config.get('batch_size', BATCH_SIZE)
     gcs_output_path = custom_config.get('gcs_output_path', '')
 
-    # MLflow tracking URI - prefer custom_config (for Vertex AI) over env var
-    mlflow_tracking_uri = custom_config.get('mlflow_tracking_uri', MLFLOW_TRACKING_URI)
-
     logging.info(f"Training config: epochs={{epochs}}, lr={{learning_rate}}, batch={{batch_size}}")
     logging.info(f"Output embedding dim: {{OUTPUT_EMBEDDING_DIM}}")
 
@@ -3000,102 +2818,18 @@ def run_fn(fn_args: tfx.components.FnArgs):
     )
 
     # =========================================================================
-    # MLflow Initialization (MANDATORY - training will not proceed without it)
+    # Initialize MetricsCollector (replaces MLflow - no external dependencies)
     # =========================================================================
-    global _mlflow_client
-    mlflow_run_id = None
+    global _metrics_collector
+    _metrics_collector = MetricsCollector(gcs_output_path=gcs_output_path)
 
-    if not mlflow_tracking_uri:
-        _write_mlflow_status(gcs_output_path, 'failed', {{
-            'error': 'MLflow tracking URI not configured',
-            'stage': 'config_check'
-        }})
-        raise RuntimeError(
-            "MLflow tracking URI not configured. "
-            "Training cannot proceed without experiment tracking. "
-            "Set mlflow_tracking_uri in custom_config or MLFLOW_TRACKING_URI env var."
-        )
-
-    # Write initial status
-    _write_mlflow_status(gcs_output_path, 'starting', {{
-        'stage': 'initialization',
-        'experiment_name': MLFLOW_EXPERIMENT_NAME,
-        'run_name': MLFLOW_RUN_NAME
-    }})
-
-    # Step 1: Wait for MLflow server to be ready (handles cold starts)
     logging.info("=" * 60)
-    logging.info("MLflow Initialization")
+    logging.info("MetricsCollector initialized")
+    logging.info(f"  Output path: {{gcs_output_path}}")
     logging.info("=" * 60)
 
-    try:
-        _mlflow_client = MLflowRestClient(mlflow_tracking_uri)
-
-        _write_mlflow_status(gcs_output_path, 'waiting', {{
-            'stage': 'health_check',
-            'message': 'Waiting for MLflow server to be ready (may take up to 120s for cold start)'
-        }})
-
-        _mlflow_client.wait_for_ready(max_wait_seconds=120)
-
-        _write_mlflow_status(gcs_output_path, 'connected', {{
-            'stage': 'server_ready',
-            'message': 'MLflow server is ready'
-        }})
-
-    except Exception as e:
-        _write_mlflow_status(gcs_output_path, 'failed', {{
-            'error': str(e),
-            'stage': 'health_check'
-        }})
-        raise
-
-    # Step 2: Create/get experiment
-    try:
-        experiment_id = _mlflow_client.set_experiment(MLFLOW_EXPERIMENT_NAME)
-        if not experiment_id:
-            _write_mlflow_status(gcs_output_path, 'failed', {{
-                'error': f"Failed to create/get experiment '{{MLFLOW_EXPERIMENT_NAME}}'",
-                'stage': 'set_experiment'
-            }})
-            raise RuntimeError(
-                f"Failed to create/get MLflow experiment '{{MLFLOW_EXPERIMENT_NAME}}'. "
-                f"Training cannot proceed without experiment tracking."
-            )
-        logging.info(f"MLflow experiment: {{MLFLOW_EXPERIMENT_NAME}} (id={{experiment_id}})")
-    except RuntimeError:
-        raise
-    except Exception as e:
-        _write_mlflow_status(gcs_output_path, 'failed', {{
-            'error': str(e),
-            'stage': 'set_experiment'
-        }})
-        raise
-
-    # Step 3: Start run
-    try:
-        mlflow_run_id = _mlflow_client.start_run(run_name=MLFLOW_RUN_NAME)
-        if not mlflow_run_id:
-            _write_mlflow_status(gcs_output_path, 'failed', {{
-                'error': f"Failed to start run. experiment_id={{experiment_id}}",
-                'stage': 'start_run'
-            }})
-            raise RuntimeError(
-                f"Failed to start MLflow run. experiment_id={{experiment_id}}. "
-                f"Training cannot proceed without experiment tracking."
-            )
-        logging.info(f"MLflow run started: {{mlflow_run_id}}")
-    except RuntimeError:
-        raise
-    except Exception as e:
-        _write_mlflow_status(gcs_output_path, 'failed', {{
-            'error': str(e),
-            'stage': 'start_run'
-        }})
-        raise
-
-    # Step 4: Log parameters
-    _mlflow_client.log_params({{
+    # Log training parameters
+    _metrics_collector.log_params({{
         'epochs': epochs,
         'batch_size': batch_size,
         'learning_rate': learning_rate,
@@ -3104,29 +2838,13 @@ def run_fn(fn_args: tfx.components.FnArgs):
         'feature_config_id': {feature_config_id},
         'model_config_id': {model_config_id},
         'dataset_id': {dataset_id},
-    }})
-
-    # Step 5: Log tags for filtering
-    _mlflow_client.set_tags({{
         'feature_config_name': '{feature_config_name}',
         'model_config_name': '{model_config_name}',
         'dataset_name': '{dataset_name}',
         'model_type': '{model_type}',
     }})
 
-    # Write ready status - MLflow is fully initialized
-    _write_mlflow_status(gcs_output_path, 'ready', {{
-        'stage': 'initialized',
-        'experiment_id': experiment_id,
-        'run_id': mlflow_run_id,
-        'message': 'MLflow fully initialized, training may proceed'
-    }})
-
-    logging.info("MLflow initialization complete - training may proceed")
-    logging.info("=" * 60)
-
     try:
-
         # Build model
         logging.info("Building RetrievalModel...")
         model = RetrievalModel(
@@ -3145,8 +2863,8 @@ def run_fn(fn_args: tfx.components.FnArgs):
         # Training callbacks
         callbacks = []
 
-        # MLflow callback for per-epoch metrics (always added - MLflow is mandatory)
-        callbacks.append(MLflowCallback())
+        # Metrics callback for per-epoch logging to MetricsCollector
+        callbacks.append(MetricsCallback())
 
         # Weight monitoring callbacks for debugging training issues
         callbacks.append(WeightNormCallback())
@@ -3173,10 +2891,10 @@ def run_fn(fn_args: tfx.components.FnArgs):
         )
         logging.info("Training completed.")
 
-        # Log final metrics to MLflow
-        if _mlflow_client:
+        # Log final metrics
+        if _metrics_collector:
             for metric_name, values in history.history.items():
-                _mlflow_client.log_metric(f'final_{{metric_name}}', float(values[-1]))
+                _metrics_collector.log_metric(f'final_{{metric_name}}', float(values[-1]))
 
         # Pre-compute candidate embeddings (needed for both test eval and serving)
         logging.info("Pre-computing candidate embeddings...")
@@ -3217,8 +2935,8 @@ def run_fn(fn_args: tfx.components.FnArgs):
                     logging.info("=== TEST SET LOSS ===")
                     for metric_name, metric_value in test_loss_results.items():
                         logging.info(f"  test_{{metric_name}}: {{metric_value:.6f}}")
-                        if _mlflow_client:
-                            _mlflow_client.log_metric(f'test_{{metric_name}}', float(metric_value))
+                        if _metrics_collector:
+                            _metrics_collector.log_metric(f'test_{{metric_name}}', float(metric_value))
 
                     # 2. Recall evaluation (Recall@5, @10, @50, @100)
                     # Reload test dataset for recall evaluation
@@ -3236,10 +2954,10 @@ def run_fn(fn_args: tfx.components.FnArgs):
                         steps=50
                     )
 
-                    # Log recall metrics to MLflow
-                    if _mlflow_client and recall_results:
+                    # Log recall metrics
+                    if _metrics_collector and recall_results:
                         for metric_name, metric_value in recall_results.items():
-                            _mlflow_client.log_metric(f'test_{{metric_name}}', float(metric_value))
+                            _metrics_collector.log_metric(f'test_{{metric_name}}', float(metric_value))
                 else:
                     logging.info("Test split directory exists but is empty - skipping test evaluation")
             else:
@@ -3267,18 +2985,14 @@ def run_fn(fn_args: tfx.components.FnArgs):
         )
         logging.info("Model saved successfully!")
 
-        # Write MLflow run ID to GCS for Django to retrieve
-        if mlflow_run_id and gcs_output_path:
-            _write_mlflow_info(gcs_output_path, mlflow_run_id)
-
     finally:
-        # Clean up MLflow run
-        if _mlflow_client:
+        # Save all collected metrics to GCS
+        if _metrics_collector:
             try:
-                _mlflow_client.end_run()
-                logging.info("MLflow run completed successfully")
+                _metrics_collector.save_to_gcs()
+                logging.info("Training metrics saved to GCS successfully")
             except Exception as e:
-                logging.warning(f"Error closing MLflow run: {{e}}")
+                logging.warning(f"Error saving metrics to GCS: {{e}}")
 '''
 
     def generate_and_validate(self) -> Tuple[str, bool, Optional[str], Optional[int]]:

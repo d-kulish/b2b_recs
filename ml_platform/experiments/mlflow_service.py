@@ -1,11 +1,19 @@
 """
-MLflow Service Client
+MLflow Service Client (DEPRECATED)
 
-Provides Django interface to MLflow Tracking Server REST API for experiment
-tracking, training history, and comparison features.
+This module is DEPRECATED and kept only for backward compatibility with
+historical experiments that have mlflow_run_id stored.
 
-Follows same authentication pattern as artifact_service.py for Cloud Run
-service-to-service calls.
+New experiments use direct GCS storage (training_metrics.json) instead of MLflow.
+The TrainingCacheService in training_cache_service.py falls back to this
+service only when:
+1. The experiment has mlflow_run_id set
+2. No training_metrics.json exists in GCS
+
+For new experiments, this service is not used.
+
+See docs/mlflow.md for the full MLflow implementation reference.
+See docs/mlflow_out.md for the migration plan.
 """
 import json
 import logging

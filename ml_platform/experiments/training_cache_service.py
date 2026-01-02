@@ -1,8 +1,11 @@
 """
 Training Cache Service
 
-Caches training history from MLflow into Django database for fast loading.
-This reduces Training tab load time from 2-3 minutes to <1 second.
+Caches training history from GCS (training_metrics.json) into Django database for fast loading.
+This reduces Training tab load time from minutes to <1 second.
+
+The trainer saves metrics to GCS as training_metrics.json at training completion.
+This service reads that file and caches it in Django DB.
 
 Usage:
     from ml_platform.experiments.training_cache_service import TrainingCacheService
@@ -15,6 +18,7 @@ Usage:
     # Get cached or fetch fresh
     history = cache_service.get_training_history(quick_test)
 """
+import json
 import logging
 from datetime import datetime
 from typing import Dict, List, Optional, Any
@@ -28,9 +32,9 @@ class TrainingCacheService:
     """
     Service to cache and retrieve training history from Django DB.
 
-    Caches essential training data (loss curves, final metrics, params)
-    but skips histogram data to keep cache size small (~5-10KB per experiment).
-    Histogram data is fetched on-demand from MLflow when needed.
+    Reads training metrics from GCS (training_metrics.json) and caches
+    essential data (loss curves, final metrics, params) in Django DB.
+    Histogram data is included in the cache for visualization.
     """
 
     # Epoch sampling interval (e.g., 5 = keep every 5th epoch)
@@ -39,7 +43,9 @@ class TrainingCacheService:
 
     def cache_training_history(self, quick_test) -> bool:
         """
-        Fetch training history from MLflow and store in quick_test.training_history_json.
+        Fetch training history from GCS and store in quick_test.training_history_json.
+
+        Reads training_metrics.json from the quick_test's GCS artifacts path.
 
         Args:
             quick_test: QuickTest model instance
@@ -47,12 +53,94 @@ class TrainingCacheService:
         Returns:
             True if caching succeeded, False otherwise
         """
-        if not quick_test.mlflow_run_id:
-            logger.warning(
-                f"QuickTest {quick_test.id}: Cannot cache training history - no mlflow_run_id"
+        # First try GCS-based metrics (new approach)
+        if quick_test.gcs_artifacts_path:
+            success = self._cache_from_gcs(quick_test)
+            if success:
+                return True
+
+        # Fallback to MLflow for historical experiments (if mlflow_run_id exists)
+        if quick_test.mlflow_run_id:
+            return self._cache_from_mlflow(quick_test)
+
+        logger.warning(
+            f"QuickTest {quick_test.id}: Cannot cache training history - "
+            f"no GCS artifacts path or MLflow run ID"
+        )
+        return False
+
+    def _cache_from_gcs(self, quick_test) -> bool:
+        """
+        Read training_metrics.json from GCS and cache it.
+
+        Args:
+            quick_test: QuickTest model instance
+
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            from google.cloud import storage
+
+            gcs_path = quick_test.gcs_artifacts_path
+            if not gcs_path or not gcs_path.startswith('gs://'):
+                return False
+
+            # Parse GCS path
+            path = gcs_path[5:]  # Remove 'gs://'
+            bucket_name = path.split('/')[0]
+            blob_path = '/'.join(path.split('/')[1:]) + '/training_metrics.json'
+
+            # Read from GCS
+            client = storage.Client()
+            bucket = client.bucket(bucket_name)
+            blob = bucket.blob(blob_path)
+
+            if not blob.exists():
+                logger.debug(
+                    f"QuickTest {quick_test.id}: training_metrics.json not found at "
+                    f"gs://{bucket_name}/{blob_path}"
+                )
+                return False
+
+            content = blob.download_as_string().decode('utf-8')
+            full_history = json.loads(content)
+
+            if not full_history.get('available', False):
+                logger.warning(
+                    f"QuickTest {quick_test.id}: GCS metrics not available"
+                )
+                return False
+
+            # Extract and cache essential data
+            cached_data = self._extract_cacheable_data(full_history, quick_test)
+
+            # Store in database
+            quick_test.training_history_json = cached_data
+            quick_test.save(update_fields=['training_history_json', 'updated_at'])
+
+            logger.info(
+                f"QuickTest {quick_test.id}: Cached training history from GCS "
+                f"({len(cached_data.get('epochs', []))} epochs)"
+            )
+            return True
+
+        except Exception as e:
+            logger.debug(
+                f"QuickTest {quick_test.id}: Could not read from GCS: {e}"
             )
             return False
 
+    def _cache_from_mlflow(self, quick_test) -> bool:
+        """
+        Fallback: Read training history from MLflow (for historical experiments).
+
+        Args:
+            quick_test: QuickTest model instance
+
+        Returns:
+            True if successful, False otherwise
+        """
         try:
             from .mlflow_service import MLflowService
 
@@ -66,7 +154,7 @@ class TrainingCacheService:
                 )
                 return False
 
-            # Extract and cache essential data (without histograms)
+            # Extract and cache essential data
             cached_data = self._extract_cacheable_data(full_history, quick_test)
 
             # Store in database
@@ -74,14 +162,14 @@ class TrainingCacheService:
             quick_test.save(update_fields=['training_history_json', 'updated_at'])
 
             logger.info(
-                f"QuickTest {quick_test.id}: Cached training history "
+                f"QuickTest {quick_test.id}: Cached training history from MLflow "
                 f"({len(cached_data.get('epochs', []))} epochs)"
             )
             return True
 
         except Exception as e:
             logger.exception(
-                f"QuickTest {quick_test.id}: Failed to cache training history: {e}"
+                f"QuickTest {quick_test.id}: Failed to cache from MLflow: {e}"
             )
             return False
 
@@ -90,7 +178,7 @@ class TrainingCacheService:
         Get training history, using cache if available.
 
         If cache exists, returns cached data immediately.
-        If cache is missing, fetches from MLflow, caches it, and returns.
+        If cache is missing, fetches from GCS (or MLflow fallback), caches it, and returns.
 
         Args:
             quick_test: QuickTest model instance
@@ -104,7 +192,7 @@ class TrainingCacheService:
             return quick_test.training_history_json
 
         # Cache miss - fetch and cache
-        logger.info(f"QuickTest {quick_test.id}: Cache miss, fetching from MLflow")
+        logger.info(f"QuickTest {quick_test.id}: Cache miss, fetching from GCS/MLflow")
 
         if self.cache_training_history(quick_test):
             # Refresh from DB to get cached data

@@ -521,11 +521,50 @@ def get_date_columns(request, dataset_id):
         }, status=500)
 
 
+def _get_recall_metrics(quick_test):
+    """
+    Extract recall metrics from QuickTest.
+
+    First tries model fields, then falls back to training_history_json.final_metrics.
+    Returns dict with recall_at_5, recall_at_10, recall_at_50, recall_at_100.
+    """
+    # Try model fields first
+    metrics = {
+        'recall_at_5': None,
+        'recall_at_10': quick_test.recall_at_10,
+        'recall_at_50': quick_test.recall_at_50,
+        'recall_at_100': quick_test.recall_at_100,
+    }
+
+    # If any are missing, try training_history_json.final_metrics
+    if any(v is None for v in metrics.values()):
+        try:
+            history = quick_test.training_history_json or {}
+            final_metrics = history.get('final_metrics', {})
+            if final_metrics:
+                # Keys in final_metrics are prefixed with 'test_'
+                if metrics['recall_at_5'] is None:
+                    metrics['recall_at_5'] = final_metrics.get('test_recall_at_5')
+                if metrics['recall_at_10'] is None:
+                    metrics['recall_at_10'] = final_metrics.get('test_recall_at_10')
+                if metrics['recall_at_50'] is None:
+                    metrics['recall_at_50'] = final_metrics.get('test_recall_at_50')
+                if metrics['recall_at_100'] is None:
+                    metrics['recall_at_100'] = final_metrics.get('test_recall_at_100')
+        except Exception:
+            pass  # Keep None values if extraction fails
+
+    return metrics
+
+
 def _serialize_quick_test(quick_test, include_details=False):
     """Serialize a QuickTest model to dict."""
     # Build stage_details for the response
     # Handle different statuses appropriately
     stage_details = _get_stage_details_for_status(quick_test)
+
+    # Get recall metrics (from model fields or training_history_json)
+    recall_metrics = _get_recall_metrics(quick_test)
 
     data = {
         'id': quick_test.id,
@@ -539,6 +578,7 @@ def _serialize_quick_test(quick_test, include_details=False):
         'dataset_name': quick_test.feature_config.dataset.name if quick_test.feature_config.dataset else None,
         'model_config_id': quick_test.model_config_id,
         'model_config_name': quick_test.model_config.name if quick_test.model_config else None,
+        'model_type': quick_test.model_config.get_model_type_display() if quick_test.model_config else None,
         'status': quick_test.status,
         'current_stage': quick_test.current_stage,
         'progress_percent': quick_test.progress_percent,
@@ -558,8 +598,11 @@ def _serialize_quick_test(quick_test, include_details=False):
         'learning_rate': quick_test.learning_rate,
         'machine_type': quick_test.machine_type,
 
-        # Key metrics for card display
-        'recall_at_100': quick_test.recall_at_100,
+        # Key metrics for card display (from model fields or training_history_json)
+        'recall_at_5': recall_metrics['recall_at_5'],
+        'recall_at_10': recall_metrics['recall_at_10'],
+        'recall_at_50': recall_metrics['recall_at_50'],
+        'recall_at_100': recall_metrics['recall_at_100'],
 
         # Vertex AI info
         'vertex_pipeline_job_id': quick_test.vertex_pipeline_job_id,

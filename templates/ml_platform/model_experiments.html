@@ -382,11 +382,41 @@
         font-weight: 600;
         color: #6b7280;
     }
-    /* Column 3: Training Params (30%) */
+    /* Column 3: Training Params / Metrics (30%) */
     .exp-card-col-params {
         width: 30%;
         min-width: 0;
         font-size: 12px;
+        color: #9ca3af;
+        display: flex;
+        align-items: center;
+    }
+    /* Metrics row within Column 3 */
+    .exp-card-metrics-row {
+        display: flex;
+        gap: 8px;
+        width: 100%;
+    }
+    .exp-card-metric {
+        text-align: center;
+        flex: 1;
+        padding: 6px 4px;
+        background: #ffffff;
+        border: 1px solid #1f2937;
+        border-radius: 6px;
+    }
+    .exp-card-metric-label {
+        font-size: 10px;
+        color: #1f2937;
+        font-weight: 500;
+        margin-bottom: 2px;
+    }
+    .exp-card-metric-value {
+        font-size: 13px;
+        font-weight: 600;
+        color: #1f2937;
+    }
+    .exp-card-metric-value.empty {
         color: #9ca3af;
     }
     /* Column 4: Actions (20%) */
@@ -1403,11 +1433,11 @@
         color: #111827;
     }
 
-    /* Results Summary (Overview tab) */
+    /* Results Summary (Overview tab) - moved to top */
     .exp-view-results-summary {
-        margin-top: 24px;
-        padding-top: 20px;
-        border-top: 1px solid #e5e7eb;
+        margin-bottom: 24px;
+        padding-bottom: 20px;
+        border-bottom: 1px solid #e5e7eb;
     }
     .exp-view-metrics-row {
         display: grid;
@@ -1417,18 +1447,20 @@
     .exp-view-metric-card {
         text-align: center;
         padding: 12px 8px;
-        background: #f9fafb;
+        background: #ffffff;
+        border: 1px solid #1f2937;
         border-radius: 8px;
     }
     .exp-view-metric-card-label {
         font-size: 11px;
-        color: #6b7280;
+        color: #1f2937;
+        font-weight: 500;
         margin-bottom: 4px;
     }
     .exp-view-metric-card-value {
         font-size: 18px;
         font-weight: 600;
-        color: #059669;
+        color: #1f2937;
     }
 
     /* Features Config (Tensor Visualization) */
@@ -3700,6 +3732,14 @@
         <div class="modal-body exp-view-body">
             <!-- Overview Tab -->
             <div id="expViewTabOverview" class="exp-view-tab-content active">
+                <!-- Results Summary (at top for completed experiments) -->
+                <div id="expViewResultsSummary" class="exp-view-results-summary hidden">
+                    <h4 class="exp-view-group-title">Results</h4>
+                    <div class="exp-view-metrics-row" id="expViewMetricsSummary">
+                        <!-- Populated by JavaScript -->
+                    </div>
+                </div>
+
                 <!-- Dataset Section -->
                 <div class="exp-view-section-group">
                     <h4 class="exp-view-group-title">
@@ -3740,14 +3780,6 @@
                 <div class="exp-view-section-group">
                     <h4 class="exp-view-group-title">Training Parameters</h4>
                     <div id="expViewTrainingParamsChips" class="exp-view-training-params">
-                        <!-- Populated by JavaScript -->
-                    </div>
-                </div>
-
-                <!-- Results Summary (only for completed) -->
-                <div id="expViewResultsSummary" class="exp-view-results-summary hidden">
-                    <h4 class="exp-view-group-title">Results</h4>
-                    <div class="exp-view-metrics-row" id="expViewMetricsSummary">
                         <!-- Populated by JavaScript -->
                     </div>
                 </div>
@@ -4385,7 +4417,15 @@ async function loadInitialData() {
         const expData = await expResponse.json();
 
         if (fcData.success) {
-            allFeatureConfigs = fcData.data.filter(c => c.has_transform_code);
+            // Filter out test/draft configs (names starting with 'test_' or 'old_')
+            // but keep all configs that have transform code generated
+            allFeatureConfigs = fcData.data.filter(c => {
+                if (!c.has_transform_code) return false;
+                const name = (c.name || '').toLowerCase();
+                // Exclude test/draft configs by name pattern
+                if (name.startsWith('test_') || name.startsWith('old_')) return false;
+                return true;
+            });
         }
         if (mcData.success) {
             allModelConfigs = mcData.data;
@@ -4470,6 +4510,27 @@ function renderExperiments() {
     renderPagination();
 }
 
+function renderMetricsRow(exp) {
+    const formatRecall = v => v != null ? (v * 100).toFixed(1) + '%' : '--';
+    const metrics = [
+        { label: 'R@5', value: exp.recall_at_5 },
+        { label: 'R@10', value: exp.recall_at_10 },
+        { label: 'R@50', value: exp.recall_at_50 },
+        { label: 'R@100', value: exp.recall_at_100 }
+    ];
+
+    return `
+        <div class="exp-card-metrics-row">
+            ${metrics.map(m => `
+                <div class="exp-card-metric">
+                    <div class="exp-card-metric-label">${m.label}</div>
+                    <div class="exp-card-metric-value ${m.value == null ? 'empty' : ''}">${formatRecall(m.value)}</div>
+                </div>
+            `).join('')}
+        </div>
+    `;
+}
+
 function renderExpCard(exp) {
     const statusIcons = {
         'submitting': 'fa-spinner fa-spin',
@@ -4530,10 +4591,11 @@ function renderExpCard(exp) {
                     <div class="exp-card-config-item"><span class="exp-card-config-label">Dataset:</span> ${exp.dataset_name || '-'}</div>
                     <div class="exp-card-config-item"><span class="exp-card-config-label">Features:</span> ${exp.feature_config_name || '-'}</div>
                     <div class="exp-card-config-item"><span class="exp-card-config-label">Model:</span> ${exp.model_config_name || '-'}</div>
+                    <div class="exp-card-config-item"><span class="exp-card-config-label">Type:</span> ${exp.model_type || '-'}</div>
                 </div>
-                <!-- Column 3: Training Params (30%) - placeholder -->
+                <!-- Column 3: Accuracy Metrics (30%) -->
                 <div class="exp-card-col-params">
-                    <!-- Training params will be added later -->
+                    ${renderMetricsRow(exp)}
                 </div>
                 <!-- Column 4: Actions (20%) -->
                 <div class="exp-card-col-actions">

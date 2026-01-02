@@ -1073,7 +1073,7 @@ def quick_test_training_history(request, quick_test_id):
     Get training history (per-epoch metrics) with caching.
 
     Uses cached training history from Django DB for fast loading (<1 second).
-    Falls back to MLflow if cache is empty, and caches the result.
+    Falls back to GCS if cache is empty, and caches the result.
 
     GET /api/quick-tests/<id>/training-history/
 
@@ -1088,7 +1088,7 @@ def quick_test_training_history(request, quick_test_id):
             "final_metrics": {...},
             ...
         },
-        "source": "cache" | "mlflow"
+        "source": "cache" | "gcs"
     }
     """
     try:
@@ -1123,13 +1123,13 @@ def quick_test_training_history(request, quick_test_id):
                 'source': 'cache'
             })
 
-        # Cache miss - fetch from MLflow and cache
+        # Cache miss - fetch from GCS and cache
         training_history = cache_service.get_training_history(quick_test)
 
         return JsonResponse({
             'success': True,
             'training_history': training_history,
-            'source': 'mlflow'
+            'source': 'gcs'
         })
 
     except Exception as e:
@@ -1146,7 +1146,7 @@ def quick_test_histogram_data(request, quick_test_id):
     """
     Get histogram data (weight/gradient distributions) on demand.
 
-    This endpoint fetches histogram data directly from MLflow.
+    This endpoint fetches histogram data from GCS (training_metrics.json).
     It's called only when the user expands the Weight Analysis section.
 
     GET /api/quick-tests/<id>/histogram-data/
@@ -1185,22 +1185,63 @@ def quick_test_histogram_data(request, quick_test_id):
                 'error': f'QuickTest {quick_test_id} not found'
             }, status=404)
 
-        if not quick_test.mlflow_run_id:
+        if not quick_test.gcs_artifacts_path:
             return JsonResponse({
                 'success': False,
-                'error': 'No MLflow run ID - histogram data not available'
+                'error': 'No GCS artifacts path - histogram data not available'
             }, status=404)
 
-        # Fetch histogram data from MLflow
-        from .mlflow_service import MLflowService
+        # Fetch histogram data from GCS (training_metrics.json)
+        try:
+            from google.cloud import storage
+            import json
 
-        mlflow_service = MLflowService()
-        histogram_data = mlflow_service.get_histogram_data(quick_test.mlflow_run_id)
+            gcs_path = quick_test.gcs_artifacts_path
+            path = gcs_path[5:]  # Remove 'gs://'
+            bucket_name = path.split('/')[0]
+            blob_path = '/'.join(path.split('/')[1:]) + '/training_metrics.json'
 
-        return JsonResponse({
-            'success': True,
-            'histogram_data': histogram_data
-        })
+            client = storage.Client()
+            bucket = client.bucket(bucket_name)
+            blob = bucket.blob(blob_path)
+
+            if not blob.exists():
+                return JsonResponse({
+                    'success': False,
+                    'error': 'training_metrics.json not found in GCS'
+                }, status=404)
+
+            content = blob.download_as_string().decode('utf-8')
+            metrics = json.loads(content)
+
+            # Extract histogram data
+            histogram_data = {
+                'weight_stats': {},
+                'gradient_stats': {}
+            }
+
+            for tower in ['query', 'candidate']:
+                if tower in metrics.get('weight_stats', {}):
+                    tower_data = metrics['weight_stats'][tower]
+                    if 'histogram' in tower_data:
+                        histogram_data['weight_stats'][tower] = {'histogram': tower_data['histogram']}
+
+                if tower in metrics.get('gradient_stats', {}):
+                    tower_data = metrics['gradient_stats'][tower]
+                    if 'histogram' in tower_data:
+                        histogram_data['gradient_stats'][tower] = {'histogram': tower_data['histogram']}
+
+            return JsonResponse({
+                'success': True,
+                'histogram_data': histogram_data
+            })
+
+        except Exception as e:
+            logger.warning(f"Could not read histogram data from GCS: {e}")
+            return JsonResponse({
+                'success': False,
+                'error': 'Could not read histogram data from GCS'
+            }, status=500)
 
     except Exception as e:
         logger.exception(f"Error getting histogram data: {e}")
@@ -1211,7 +1252,7 @@ def quick_test_histogram_data(request, quick_test_id):
 
 
 # =============================================================================
-# MLflow Comparison and Leaderboard Endpoints
+# Experiment Comparison and Leaderboard Endpoints
 # =============================================================================
 
 @csrf_exempt

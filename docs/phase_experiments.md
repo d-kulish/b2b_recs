@@ -72,25 +72,45 @@ Django → TrainingCacheService → GCS file → training_history_json (DB) → 
 - Training completion: `_metrics_collector.save_to_gcs()` writes `training_metrics.json`
 
 **Django Side (`ml_platform/experiments/training_cache_service.py`):**
-- Primary: Reads `training_metrics.json` from GCS
-- Fallback: MLflow (for historical experiments with `mlflow_run_id`)
+- Reads `training_metrics.json` from GCS
+- Caches in `QuickTest.training_history_json` for instant access
 
 #### Backward Compatibility
 
-Historical experiments with `mlflow_run_id` continue to work:
-1. `training_cache_service.py` falls back to MLflow if GCS file not found
-2. `mlflow_service.py` kept but marked as DEPRECATED
-3. Once all historical experiments are cached, MLflow infrastructure can be deleted
+Historical experiments with `mlflow_run_id` are supported through cached data:
+1. All 12 experiments with MLflow run IDs were pre-cached in `training_history_json`
+2. `mlflow_service.py` has been **DELETED** (MLflow server is gone)
+3. DB fields `mlflow_run_id` and `mlflow_experiment_name` retained for reference only
 
-#### Next Steps (Manual)
+#### Completed Steps (2026-01-02)
 
-1. **Run backfill** to cache all historical experiments
-2. **Test new experiment** to verify GCS-based flow
-3. **Delete MLflow infrastructure** (Cloud Run, Cloud SQL) to stop costs
+| Step | Status | Details |
+|------|--------|---------|
+| Run backfill | ✅ Done | All 12 historical experiments cached |
+| Test new experiment | ✅ Done | Custom Job test verified `training_metrics.json` creation |
+| Delete MLflow infrastructure | ✅ Done | See deleted resources below |
+
+#### Deleted GCP Resources
+
+| Resource | Type |
+|----------|------|
+| `mlflow-server` | Cloud Run Service |
+| `mlflow-server@b2b-recs.iam.gserviceaccount.com` | Service Account |
+| `mlflow-db-uri` | Secret Manager Secret |
+| `gs://b2b-recs-mlflow-artifacts/` | GCS Bucket |
+
+#### Deleted Code Files
+
+| File | Purpose |
+|------|---------|
+| `mlflow_server/` | MLflow server deployment |
+| `ml_platform/experiments/mlflow_service.py` | Django MLflow client |
+| `tests/test_mlflow_integration.py` | MLflow integration tests |
+| `scripts/run_trainer_only.py` | Old test script |
 
 **Documentation:**
-- See `docs/mlflow.md` for complete implementation reference
-- See `docs/mlflow_out.md` for detailed migration plan
+- See `docs/mlflow.md` for archived MLflow implementation reference
+- See `docs/mlflow_out.md` for migration plan details
 
 ---
 

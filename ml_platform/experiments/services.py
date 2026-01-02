@@ -614,18 +614,11 @@ def create_tfx_pipeline(
     train_args = trainer_pb2.TrainArgs(num_steps=train_steps)
     eval_args = trainer_pb2.EvalArgs(num_steps=eval_steps)
 
-    # Get MLflow tracking URI from environment or use default
-    mlflow_tracking_uri = os.environ.get(
-        'MLFLOW_TRACKING_URI',
-        'https://mlflow-server-555035914949.europe-central2.run.app'
-    )
-
     custom_config = {
         "epochs": epochs,
         "batch_size": batch_size,
         "learning_rate": learning_rate,
-        "gcs_output_path": output_path,  # For MLflow info file
-        "mlflow_tracking_uri": mlflow_tracking_uri,  # For MLflow experiment tracking
+        "gcs_output_path": output_path,  # For MetricsCollector to save training_metrics.json
     }
 
     trainer = Trainer(

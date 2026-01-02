@@ -200,18 +200,6 @@ TFX_COMPILER_IMAGE = os.environ.get(
     'europe-central2-docker.pkg.dev/b2b-recs/tfx-builder/tfx-compiler:latest'
 )
 
-# =============================================================================
-# MLFLOW CONFIGURATION (DEPRECATED - kept for backward compatibility)
-# =============================================================================
-# MLflow has been replaced with direct GCS storage for training metrics.
-# This setting is only used for historical experiments that have mlflow_run_id.
-# New experiments use training_metrics.json in GCS instead.
-
-MLFLOW_TRACKING_URI = os.environ.get(
-    'MLFLOW_TRACKING_URI',
-    'https://mlflow-server-555035914949.europe-central2.run.app'
-)
-
 # Logging Configuration
 # Ensures exceptions are logged to stdout/stderr for Cloud Run visibility
 LOGGING = {

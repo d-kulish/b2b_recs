@@ -1,10 +1,24 @@
 # MLflow Integration Documentation
 
+> ⚠️ **ARCHIVED DOCUMENTATION**
+>
+> **Status:** MLflow was **REMOVED** on 2026-01-02.
+>
+> This document is preserved as a historical reference for how MLflow was implemented.
+> If you need to re-implement experiment tracking with MLflow in the future, this document
+> contains all the architectural decisions, code patterns, and configuration details.
+>
+> **Current Implementation:** Training metrics are now stored directly to GCS as `training_metrics.json`
+> using `MetricsCollector`. See `docs/mlflow_out.md` for the migration details.
+
+---
+
 ## Document Purpose
 
-This document provides a **complete reference** of the MLflow integration in the B2B Recommendations system. It captures all implementation details, data flows, and configuration so that if this approach is ever needed again, it can be reconstructed without reinventing the architecture.
+This document provides a **complete reference** of the MLflow integration that **was** in the B2B Recommendations system. It captures all implementation details, data flows, and configuration so that if this approach is ever needed again, it can be reconstructed without reinventing the architecture.
 
-**Last Updated**: 2026-01-02
+**Originally Implemented**: December 2025
+**Removed**: January 2, 2026
 
 ---
 
@@ -1246,34 +1260,49 @@ postgresql://mlflow:PASSWORD@/mlflow?host=/cloudsql/PROJECT:europe-central2:mlfl
 
 ## File Reference
 
-### Files to Keep for Reference
+### Files Deleted on 2026-01-02
+
+| File | Purpose | Status |
+|------|---------|--------|
+| `mlflow_server/` | MLflow server deployment (Dockerfile, entrypoint.sh, etc.) | **DELETED** |
+| `ml_platform/experiments/mlflow_service.py` | Django MLflow client (~800 lines) | **DELETED** |
+| `tests/test_mlflow_integration.py` | Integration tests | **DELETED** |
+| `scripts/run_trainer_only.py` | Old test script using MLflow | **DELETED** |
+
+### GCP Resources Deleted on 2026-01-02
+
+| Resource | Type | Status |
+|----------|------|--------|
+| `mlflow-server` | Cloud Run Service | **DELETED** |
+| `mlflow-server@b2b-recs.iam.gserviceaccount.com` | Service Account | **DELETED** |
+| `mlflow-db-uri` | Secret Manager Secret | **DELETED** |
+| `gs://b2b-recs-mlflow-artifacts/` | GCS Bucket | **DELETED** |
+
+### Files Still Present (for backward compatibility)
 
 | File | Purpose |
 |------|---------|
-| `mlflow_server/Dockerfile` | MLflow server container definition |
-| `mlflow_server/entrypoint.sh` | Server startup script |
-| `mlflow_server/requirements.txt` | Python dependencies |
-| `mlflow_server/README.md` | Setup and deployment instructions |
-| `ml_platform/experiments/mlflow_service.py` | Django MLflow client (~800 lines) |
-| `ml_platform/configs/services.py` | Trainer callbacks and REST client |
-| `ml_platform/experiments/training_cache_service.py` | Caching layer |
-| `tests/test_mlflow_integration.py` | Integration tests |
+| `ml_platform/models.py` | Contains `mlflow_run_id`, `mlflow_experiment_name` fields (for historical data) |
+| `ml_platform/experiments/training_cache_service.py` | Now reads from GCS instead of MLflow |
+| `ml_platform/configs/services.py` | Now uses `MetricsCollector` instead of `MLflowRestClient` |
+| `ml_platform/migrations/0039_add_mlflow_tracking_fields.py` | Migration that added MLflow fields (kept for DB history) |
 
-### Key Code Locations
+### Key Code Locations (Historical - Code Has Changed)
 
-| Component | File | Lines |
-|-----------|------|-------|
-| MLflowRestClient | `ml_platform/configs/services.py` | 1538-1827 |
-| MLflowCallback | `ml_platform/configs/services.py` | 2692-2698 |
-| WeightNormCallback | `ml_platform/configs/services.py` | 2701-2738 |
-| WeightStatsCallback | `ml_platform/configs/services.py` | 2741-2795 |
-| GradientStatsCallback | `ml_platform/configs/services.py` | 2798-2868 |
-| _write_mlflow_info | `ml_platform/configs/services.py` | 2871-2891 |
-| run_fn MLflow setup | `ml_platform/configs/services.py` | 2956-3105 |
-| MLflowService class | `ml_platform/experiments/mlflow_service.py` | 36-826 |
-| TrainingCacheService | `ml_platform/experiments/training_cache_service.py` | All |
-| QuickTest MLflow fields | `ml_platform/models.py` | 1773-1787 |
-| MLFLOW_TRACKING_URI setting | `config/settings.py` | 203-211 |
+These were the locations before MLflow was removed:
+
+| Component | File | Lines (Historical) |
+|-----------|------|-------------------|
+| MLflowRestClient | `ml_platform/configs/services.py` | 1538-1827 → **Replaced with MetricsCollector** |
+| MLflowCallback | `ml_platform/configs/services.py` | 2692-2698 → **Replaced with MetricsCallback** |
+| WeightNormCallback | `ml_platform/configs/services.py` | 2701-2738 → **Updated to use MetricsCollector** |
+| WeightStatsCallback | `ml_platform/configs/services.py` | 2741-2795 → **Updated to use MetricsCollector** |
+| GradientStatsCallback | `ml_platform/configs/services.py` | 2798-2868 → **Updated to use MetricsCollector** |
+| _write_mlflow_info | `ml_platform/configs/services.py` | 2871-2891 → **REMOVED** |
+| MLflowService class | `ml_platform/experiments/mlflow_service.py` | 36-826 → **FILE DELETED** |
+| TrainingCacheService | `ml_platform/experiments/training_cache_service.py` | All → **Updated to read from GCS** |
+| QuickTest MLflow fields | `ml_platform/models.py` | 1773-1787 → **Still present for historical data** |
+| MLFLOW_TRACKING_URI setting | `config/settings.py` | 203-211 → **REMOVED** |
 
 ---
 
@@ -1315,4 +1344,77 @@ If re-implementing experiment tracking:
 
 ---
 
-*This document captures the complete MLflow integration as of January 2026. Use it as a reference if this architecture needs to be reconstructed.*
+---
+
+## Current Implementation (Post-MLflow Removal)
+
+MLflow was replaced with a simpler GCS-based approach on 2026-01-02:
+
+### New Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           TRAINING (Vertex AI)                               │
+├─────────────────────────────────────────────────────────────────────────────┤
+│   trainer.py (generated from ml_platform/configs/services.py)                │
+│       │                                                                      │
+│       ├── MetricsCollector (in-memory)                                       │
+│       │       ├── log_metric()         ──────┐                               │
+│       │       ├── log_weight_stats()   ──────┤                               │
+│       │       └── log_gradient_stats() ──────┤                               │
+│       │                                      │  Collected in-memory          │
+│       ├── MetricsCallback                    │                               │
+│       ├── WeightNormCallback                 │                               │
+│       ├── WeightStatsCallback                │                               │
+│       └── GradientStatsCallback              │                               │
+│                                              │                               │
+│   At training completion (finally block):    │                               │
+│       └── MetricsCollector.save_to_gcs() ────┴──► GCS: training_metrics.json │
+└──────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           DJANGO APP (Cloud Run)                             │
+├─────────────────────────────────────────────────────────────────────────────┤
+│   ml_platform/experiments/                                                   │
+│       └── training_cache_service.py                                          │
+│               ├── Reads training_metrics.json from GCS                       │
+│               └── Caches in QuickTest.training_history_json                  │
+│                                                                              │
+│   Result: Training tab loads in <1 second (no external service calls)        │
+└──────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Key Files in New Implementation
+
+| File | Purpose |
+|------|---------|
+| `ml_platform/configs/services.py` | Contains `MetricsCollector` class and updated callbacks |
+| `ml_platform/experiments/training_cache_service.py` | Reads from GCS, caches in Django DB |
+| `ml_platform/experiments/api.py` | API endpoints read from cache/GCS |
+
+### Benefits of New Approach
+
+| Aspect | MLflow | GCS Direct |
+|--------|--------|------------|
+| Infrastructure | Cloud Run + Cloud SQL | None (just GCS) |
+| API calls during training | 7,000+ REST calls | 0 (in-memory) |
+| API calls at completion | 0 | 1 (single JSON upload) |
+| Monthly cost | ~$50 | ~$0.01 |
+| Cold start issues | Yes (5-15s) | None |
+| Complexity | High | Low |
+
+### Re-implementing MLflow
+
+If you decide to re-implement MLflow in the future:
+
+1. **Review this document** for all architectural decisions and code patterns
+2. **Deploy MLflow server** using the Dockerfile and entrypoint.sh examples above
+3. **Re-create MLflowRestClient** class in services.py (code documented above)
+4. **Re-create mlflow_service.py** for Django-side queries (code documented above)
+5. **Update callbacks** to use MLflowRestClient instead of MetricsCollector
+6. **Consider alternatives**: Weights & Biases, Neptune.ai, or Vertex AI Experiments
+
+---
+
+*This document captures the complete MLflow integration as it existed through January 2026. Use it as a reference if this architecture needs to be reconstructed.*

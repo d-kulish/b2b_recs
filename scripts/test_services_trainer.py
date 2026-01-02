@@ -76,7 +76,7 @@ def find_artifacts(source_exp: str) -> dict:
     }
 
 
-def create_runner_script(artifacts: dict, trainer_gcs_path: str, output_path: str, epochs: int) -> str:
+def create_runner_script(artifacts: dict, trainer_gcs_path: str, output_path: str, gcs_output_path: str, epochs: int) -> str:
     """Create the script that will run inside the CustomJob."""
 
     return f'''#!/usr/bin/env python3
@@ -114,10 +114,6 @@ def main():
     logger.info(f"Downloading schema from {artifacts['schema']}")
     subprocess.run(['gsutil', 'cp', '{artifacts['schema']}', schema_local], check=True)
 
-    # Set environment
-    os.environ['MLFLOW_TRACKING_URI'] = 'https://mlflow-server-3dmqemfmxq-lm.a.run.app'
-    os.environ['MLFLOW_RUN_NAME'] = 'services-trainer-test'
-
     # Import trainer module
     logger.info("Importing trainer module...")
     sys.path.insert(0, work_dir)
@@ -143,6 +139,7 @@ def main():
         'epochs': {epochs},
         'batch_size': 4096,
         'learning_rate': 0.1,
+        'gcs_output_path': '{gcs_output_path}',  # For MetricsCollector to save training_metrics.json
     }}
 
     # Create data accessor
@@ -255,8 +252,9 @@ def main():
     logger.info(f"Uploaded trainer to {trainer_gcs_path}")
 
     # Create runner script
-    output_path = f'gs://{ARTIFACTS_BUCKET}/{run_id}/model'
-    runner_script = create_runner_script(artifacts, trainer_gcs_path, output_path, args.epochs)
+    gcs_output_path = f'gs://{ARTIFACTS_BUCKET}/{run_id}'  # Base path for MetricsCollector
+    output_path = f'{gcs_output_path}/model'  # Model output subdirectory
+    runner_script = create_runner_script(artifacts, trainer_gcs_path, output_path, gcs_output_path, args.epochs)
 
     # Upload runner script
     runner_blob_path = f'{run_id}/runner.py'
@@ -307,7 +305,11 @@ Generated trainer:
   gsutil cat {trainer_gcs_path}
 
 Output:
-  {output_path}
+  Model: {output_path}
+  Metrics: {gcs_output_path}/training_metrics.json
+
+Verify metrics after completion:
+  gsutil cat {gcs_output_path}/training_metrics.json | python -m json.tool | head -50
 ================================================================================
 """)
 

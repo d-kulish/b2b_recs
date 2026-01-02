@@ -44,7 +44,7 @@ class ArtifactService:
     - Get detailed error information from Vertex AI
     - Parse TFDV statistics from GCS
     - Parse TFMD schema from GCS
-    - Get training history (placeholder for MLflow integration)
+    - Get training history from GCS
     """
 
     # GCS bucket names (must match ExperimentService)
@@ -474,64 +474,15 @@ class ArtifactService:
         return response.get('schema', {})
 
     # =========================================================================
-    # MLflow Status (Diagnostic Artifact)
-    # =========================================================================
-
-    def get_mlflow_status(self, quick_test) -> Optional[Dict]:
-        """
-        Get MLflow initialization status from GCS diagnostic artifact.
-
-        The trainer writes mlflow_status.json at various stages of initialization.
-        This helps diagnose why MLflow tracking may have failed.
-
-        Args:
-            quick_test: QuickTest instance
-
-        Returns:
-            Dict with status info or None if not available:
-            {
-                "status": "ready" | "failed" | "waiting" | etc,
-                "timestamp": "...",
-                "tracking_uri": "...",
-                "stage": "...",
-                "error": "..." (if failed),
-                ...
-            }
-        """
-        if not quick_test.gcs_artifacts_path:
-            return None
-
-        try:
-            gcs_path = quick_test.gcs_artifacts_path
-            if not gcs_path.startswith('gs://'):
-                return None
-
-            path = gcs_path[5:]  # Remove 'gs://'
-            bucket_name = path.split('/')[0]
-            blob_path = '/'.join(path.split('/')[1:]) + '/mlflow_status.json'
-
-            bucket = self.storage_client.bucket(bucket_name)
-            blob = bucket.blob(blob_path)
-
-            if blob.exists():
-                content = blob.download_as_string().decode('utf-8')
-                return json.loads(content)
-
-        except Exception as e:
-            logger.debug(f"Could not read mlflow_status.json: {e}")
-
-        return None
-
-    # =========================================================================
-    # Training History (MLflow Integration)
+    # Training History (GCS-based)
     # =========================================================================
 
     def get_training_history(self, quick_test) -> Dict:
         """
-        Get training history (per-epoch metrics) from MLflow.
+        Get training history (per-epoch metrics) from GCS cache.
 
-        Fetches training curves and metrics from MLflow Tracking Server
-        for visualization in the UI.
+        Training metrics are stored in training_metrics.json by the trainer
+        and cached in Django DB for fast access.
 
         Args:
             quick_test: QuickTest instance
@@ -548,7 +499,7 @@ class ArtifactService:
             }
         """
         from ml_platform.models import QuickTest
-        from .mlflow_service import MLflowService
+        from .training_cache_service import TrainingCacheService
 
         # Check if experiment completed
         if quick_test.status != QuickTest.STATUS_COMPLETED:
@@ -557,54 +508,19 @@ class ArtifactService:
                 'message': 'Training history only available for completed experiments'
             }
 
-        # Check if MLflow run ID is available
-        if not quick_test.mlflow_run_id:
-            logger.info(f"No MLflow run ID for {quick_test.display_name} (id={quick_test.id})")
-
-            # Try to get diagnostic info from mlflow_status.json
-            mlflow_status = self.get_mlflow_status(quick_test)
-
-            response = {
-                'available': False,
-                'message': 'No MLflow tracking data available for this experiment',
-                'final_metrics': {
-                    'loss': quick_test.loss,
-                    'recall_at_10': quick_test.recall_at_10,
-                    'recall_at_50': quick_test.recall_at_50,
-                    'recall_at_100': quick_test.recall_at_100,
-                }
-            }
-
-            # Include diagnostic info if available
-            if mlflow_status:
-                response['mlflow_status'] = mlflow_status
-                if mlflow_status.get('status') == 'failed':
-                    response['message'] = (
-                        f"MLflow initialization failed at stage '{mlflow_status.get('stage', 'unknown')}': "
-                        f"{mlflow_status.get('error', 'Unknown error')}"
-                    )
-                elif mlflow_status.get('status') == 'waiting':
-                    response['message'] = (
-                        f"MLflow was waiting for server at stage '{mlflow_status.get('stage', 'unknown')}'. "
-                        "Training may have timed out waiting for cold start."
-                    )
-
-            return response
-
-        # Fetch training history from MLflow
+        # Use TrainingCacheService to get history
         try:
-            mlflow_service = MLflowService()
-            history = mlflow_service.get_training_history(quick_test.mlflow_run_id)
+            cache_service = TrainingCacheService()
+            history = cache_service.get_training_history(quick_test)
 
             if history.get('available'):
-                logger.info(f"Retrieved MLflow training history for {quick_test.display_name} (id={quick_test.id})")
+                logger.info(f"Retrieved training history for {quick_test.display_name} (id={quick_test.id})")
                 return history
             else:
-                # MLflow run exists but no metrics found
-                logger.warning(f"MLflow run {quick_test.mlflow_run_id} has no metrics")
+                logger.info(f"No training history available for {quick_test.display_name} (id={quick_test.id})")
                 return {
                     'available': False,
-                    'message': history.get('message', 'No training metrics found in MLflow'),
+                    'message': 'No training metrics available for this experiment',
                     'final_metrics': {
                         'loss': quick_test.loss,
                         'recall_at_10': quick_test.recall_at_10,
@@ -614,7 +530,7 @@ class ArtifactService:
                 }
 
         except Exception as e:
-            logger.exception(f"Error fetching MLflow training history for {quick_test.display_name}: {e}")
+            logger.exception(f"Error fetching training history for {quick_test.display_name}: {e}")
             return {
                 'available': False,
                 'message': f'Error retrieving training history: {str(e)}',

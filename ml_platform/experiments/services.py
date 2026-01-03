@@ -319,7 +319,9 @@ class ExperimentService:
 
         # Calculate expected BigQuery output column names
         # This mirrors the logic in BigQueryService.generate_query()
+        # IMPORTANT: Must apply column_aliases since the SQL outputs aliased names
         selected_columns = dataset.selected_columns or {}
+        column_aliases = dataset.column_aliases or {}
         seen_cols = set()
         expected_columns = set()
 
@@ -333,7 +335,17 @@ class ExperimentService:
                     # First occurrence - uses raw column name
                     output_name = col
                     seen_cols.add(col)
-                expected_columns.add(output_name)
+
+                # Apply column aliases (same logic as generate_query in datasets/services.py)
+                # The SQL outputs columns with aliased names via AS clause
+                alias_key = f"{table_alias}_{col}"
+                alias_key_dot = f"{table_alias}.{col}"
+                final_name = (
+                    column_aliases.get(alias_key) or
+                    column_aliases.get(alias_key_dot) or
+                    output_name
+                )
+                expected_columns.add(final_name)
 
         # Check if all FeatureConfig columns exist in BigQuery output
         missing_columns = feature_columns - expected_columns
@@ -341,9 +353,20 @@ class ExperimentService:
             # Provide helpful error message with suggestions
             suggestions = []
             for missing in missing_columns:
+                # Check if this column was renamed via column_aliases (original name used instead of alias)
+                # Look through all aliases to find if the missing column is an original name
+                alias_match = None
+                for alias_key, alias_value in column_aliases.items():
+                    # alias_key format is "table_col" or "table.col", check if it ends with the missing column
+                    if alias_key.endswith(f"_{missing}") or alias_key.endswith(f".{missing}"):
+                        alias_match = alias_value
+                        break
+
+                if alias_match:
+                    suggestions.append(f"  - '{missing}' -> try '{alias_match}' (column was renamed in Dataset)")
                 # Check if this column exists with a table alias prefix
-                aliased_versions = [c for c in expected_columns if c.endswith(f"_{missing}")]
-                if aliased_versions:
+                elif any(c.endswith(f"_{missing}") for c in expected_columns):
+                    aliased_versions = [c for c in expected_columns if c.endswith(f"_{missing}")]
                     suggestions.append(f"  - '{missing}' -> try '{aliased_versions[0]}' (column exists in multiple tables)")
                 else:
                     # Check for case-insensitive match
@@ -362,7 +385,7 @@ class ExperimentService:
                 f"\n\nThis usually happens when:\n"
                 f"1. A column name appears in multiple tables (gets prefixed with table name)\n"
                 f"2. The FeatureConfig was created before changes to the Dataset\n"
-                f"3. Manual column name edits don't match the Dataset structure\n"
+                f"3. Column names were renamed in the Dataset but FeatureConfig uses old names\n"
                 f"\nPlease update the FeatureConfig to use the correct column names."
             )
 

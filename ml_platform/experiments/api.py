@@ -29,6 +29,55 @@ def _get_model_endpoint(request):
         return None
 
 
+def _validate_experiment_params(model_config, params):
+    """
+    Validate experiment parameters and return warnings.
+
+    Returns a list of warning dictionaries, or empty list if no warnings.
+    Warnings are informational only - they don't block experiment submission.
+    """
+    warnings = []
+
+    learning_rate = params.get('learning_rate', model_config.learning_rate)
+
+    # Count dense layers in architecture
+    buyer_layers = model_config.buyer_tower_layers or []
+    num_dense_layers = len([l for l in buyer_layers if l.get('type') == 'dense'])
+
+    # Learning rate validation
+    if learning_rate >= 0.1:
+        if num_dense_layers >= 3:
+            warnings.append({
+                'type': 'learning_rate',
+                'severity': 'high',
+                'message': (
+                    f'Learning rate {learning_rate} is very high for a {num_dense_layers}-layer architecture. '
+                    f'This combination often causes gradient collapse where training fails to learn. '
+                    f'Recommended: 0.01-0.05 for deep architectures.'
+                )
+            })
+        elif num_dense_layers >= 2:
+            warnings.append({
+                'type': 'learning_rate',
+                'severity': 'medium',
+                'message': (
+                    f'Learning rate {learning_rate} may be aggressive for this architecture. '
+                    f'Consider 0.01-0.05 for more stable training.'
+                )
+            })
+    elif learning_rate >= 0.05 and num_dense_layers >= 4:
+        warnings.append({
+            'type': 'learning_rate',
+            'severity': 'low',
+            'message': (
+                f'Learning rate {learning_rate} with {num_dense_layers} dense layers - '
+                f'monitor training closely for gradient instability.'
+            )
+        })
+
+    return warnings
+
+
 @csrf_exempt
 @require_http_methods(["POST"])
 def start_quick_test(request, feature_config_id):
@@ -131,6 +180,9 @@ def start_quick_test(request, feature_config_id):
                     'error': 'date_column is required for time-based split strategies'
                 }, status=400)
 
+        # Validate learning rate and generate warnings
+        warnings = _validate_experiment_params(model_config, params)
+
         # Initialize experiment service
         service = ExperimentService(model_endpoint)
 
@@ -142,10 +194,16 @@ def start_quick_test(request, feature_config_id):
             **params
         )
 
-        return JsonResponse({
+        response = {
             'success': True,
             'quick_test': _serialize_quick_test(quick_test)
-        })
+        }
+
+        # Include warnings if any (informational, doesn't block submission)
+        if warnings:
+            response['warnings'] = warnings
+
+        return JsonResponse(response)
 
     except Exception as e:
         logger.exception(f"Error starting quick test: {e}")

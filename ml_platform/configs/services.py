@@ -535,6 +535,29 @@ def validate_feature_config(data: Dict, dataset, exclude_config_id: Optional[int
                 if not f.get('type') and not f.get('data_type'):
                     errors[f'{feature_list_key}[{i}]'] = 'Feature must have a type'
 
+    # Check for duplicate columns within each feature list
+    for feature_list_key in ['buyer_model_features', 'product_model_features']:
+        features = data.get(feature_list_key, [])
+        if features:
+            # Get column names (support both 'column' and 'display_name' formats)
+            columns = [f.get('column') or f.get('display_name') for f in features]
+            columns = [c for c in columns if c]  # Filter out None/empty
+
+            # Find duplicates
+            seen = set()
+            duplicates = set()
+            for col in columns:
+                if col in seen:
+                    duplicates.add(col)
+                seen.add(col)
+
+            if duplicates:
+                tower_name = 'BuyerModel' if 'buyer' in feature_list_key else 'ProductModel'
+                errors[feature_list_key] = (
+                    f'Duplicate column(s) found in {tower_name}: {", ".join(sorted(duplicates))}. '
+                    f'Each column can only be used once per tower.'
+                )
+
     # Validate crosses have required fields
     for cross_list_key in ['buyer_model_crosses', 'product_model_crosses']:
         crosses = data.get(cross_list_key, [])
@@ -2332,15 +2355,28 @@ class RetrievalModel(tfrs.Model):
     def _generate_serve_fn(self) -> str:
         """Generate serving function for inference."""
         # Get primary product ID column for candidate indexing
+        # PRIORITY: Use is_primary_id flag from FeatureConfig (set by UI wizard)
         product_id_col = None
         for feature in self.product_features:
-            col = feature.get('display_name') or feature.get('column', '')
-            if 'product' in col.lower() or 'item' in col.lower() or 'sku' in col.lower():
-                product_id_col = col
+            if feature.get('is_primary_id'):
+                product_id_col = feature.get('display_name') or feature.get('column')
+                logger.info(f"Using product ID column from is_primary_id flag: {product_id_col}")
                 break
 
+        # FALLBACK: Auto-detection for backward compatibility with old configs
+        if not product_id_col:
+            logger.warning("No is_primary_id feature found in product_features, using auto-detection")
+            for feature in self.product_features:
+                col = feature.get('display_name') or feature.get('column', '')
+                if 'product' in col.lower() or 'item' in col.lower() or 'sku' in col.lower():
+                    product_id_col = col
+                    logger.info(f"Auto-detected product ID column by name pattern: {product_id_col}")
+                    break
+
+        # LAST RESORT: Use first product feature
         if not product_id_col and self.product_features:
             product_id_col = self.product_features[0].get('display_name') or self.product_features[0].get('column', 'product_id')
+            logger.warning(f"Falling back to first product feature as ID: {product_id_col}")
 
         return f'''
 # =============================================================================
@@ -2409,7 +2445,11 @@ class ServingModel(tf.keras.Model):
 
 def _precompute_candidate_embeddings(model, candidates_dataset, batch_size=128):
     """
-    Pre-compute embeddings for all candidates.
+    Pre-compute embeddings for UNIQUE candidates only.
+
+    The dataset typically contains transaction data with duplicate products.
+    This function deduplicates by product ID to ensure each product appears
+    exactly once in the candidate index.
 
     Args:
         model: RetrievalModel with candidate_tower
@@ -2417,37 +2457,49 @@ def _precompute_candidate_embeddings(model, candidates_dataset, batch_size=128):
         batch_size: Batch size for embedding computation
 
     Returns:
-        Tuple of (product_ids, embeddings tensor)
+        Tuple of (unique_product_ids, embeddings tensor)
     """
-    product_ids = []
-    embeddings = []
+    seen_products = set()
+    unique_product_ids = []
+    unique_embeddings = []
+    total_processed = 0
 
     for batch in candidates_dataset.batch(batch_size):
-        # Get product ID from batch
+        # Compute embeddings for the batch
+        batch_embeddings = model.candidate_tower(batch)
+
+        # Get product IDs from batch
         if '{product_id_col}' in batch:
             batch_ids = batch['{product_id_col}'].numpy()
             # Flatten if needed (handle shape [batch, 1] -> [batch])
             if len(batch_ids.shape) > 1:
                 batch_ids = batch_ids.flatten()
-            # Convert to Python scalars (handles both string and numeric types)
-            converted_ids = []
-            for b in batch_ids:
-                if hasattr(b, 'decode'):
-                    # Bytes -> string
-                    converted_ids.append(b.decode())
-                elif hasattr(b, 'item'):
-                    # Numpy scalar -> Python scalar
-                    converted_ids.append(b.item())
+
+            # Process each item, keeping only unique products
+            for i, raw_id in enumerate(batch_ids):
+                total_processed += 1
+
+                # Convert to Python hashable type
+                if hasattr(raw_id, 'decode'):
+                    pid = raw_id.decode()
+                elif hasattr(raw_id, 'item'):
+                    pid = raw_id.item()
                 else:
-                    # Already a Python type
-                    converted_ids.append(b)
-            product_ids.extend(converted_ids)
+                    pid = raw_id
 
-        # Compute embeddings
-        batch_embeddings = model.candidate_tower(batch)
-        embeddings.append(batch_embeddings)
+                # Only keep first occurrence of each product
+                if pid not in seen_products:
+                    seen_products.add(pid)
+                    unique_product_ids.append(pid)
+                    unique_embeddings.append(batch_embeddings[i])
 
-    return product_ids, tf.concat(embeddings, axis=0)
+    logging.info(f"Candidate deduplication: {{len(unique_product_ids)}} unique products from {{total_processed}} transactions")
+
+    if unique_embeddings:
+        return unique_product_ids, tf.stack(unique_embeddings)
+    else:
+        logging.warning("No candidate embeddings computed - returning empty tensors")
+        return [], tf.zeros((0, OUTPUT_EMBEDDING_DIM))
 
 
 def _evaluate_recall_on_test_set(model, test_dataset, product_ids, product_embeddings, steps=50):
@@ -2750,6 +2802,88 @@ class GradientStatsCallback(tf.keras.callbacks.Callback):
             accum['hist_counts'].assign(tf.zeros(self.NUM_HISTOGRAM_BINS, dtype=tf.int32))
 
 
+class GradientCollapseCallback(tf.keras.callbacks.Callback):
+    """
+    Detects gradient collapse and stops training early with clear error message.
+
+    Gradient collapse occurs when gradients become effectively zero, typically due to:
+    - Learning rate too high for the architecture
+    - Numerical overflow causing NaN/Inf gradients
+    - Dead neurons (all activations zero)
+
+    This callback monitors gradient norms from _grad_accum and stops training
+    if gradients collapse to near-zero for multiple consecutive epochs.
+    """
+
+    def __init__(self, min_grad_norm=1e-7, patience=3):
+        """
+        Args:
+            min_grad_norm: Minimum acceptable gradient L2 norm
+            patience: Number of consecutive epochs with collapsed gradients before stopping
+        """
+        super().__init__()
+        self.min_grad_norm = min_grad_norm
+        self.patience = patience
+        self.collapse_count = 0
+        self.collapsed_towers = set()
+
+    def on_epoch_end(self, epoch, logs=None):
+        if not hasattr(self.model, '_grad_accum'):
+            return
+
+        epoch_collapsed = False
+
+        for tower in ['query', 'candidate']:
+            accum = self.model._grad_accum.get(tower)
+            if accum is None:
+                continue
+
+            # Check if any gradients were accumulated this epoch
+            count = float(accum['count'].numpy())
+            if count == 0:
+                # No gradients accumulated yet - skip this tower
+                continue
+
+            # Get gradient norm from accumulator
+            total_sum_sq = float(accum['sum_sq'].numpy())
+            grad_norm = np.sqrt(total_sum_sq)
+
+            if grad_norm < self.min_grad_norm:
+                epoch_collapsed = True
+                self.collapsed_towers.add(tower)
+                logging.warning(
+                    f"Epoch {epoch}: {tower} tower gradient norm = {grad_norm:.2e} "
+                    f"(below threshold {self.min_grad_norm:.2e})"
+                )
+
+        if epoch_collapsed:
+            self.collapse_count += 1
+            logging.warning(f"Gradient collapse detected for {self.collapse_count}/{self.patience} epochs")
+
+            if self.collapse_count >= self.patience:
+                logging.error("=" * 70)
+                logging.error("GRADIENT COLLAPSE DETECTED - TRAINING STOPPED")
+                logging.error("=" * 70)
+                logging.error(f"Affected towers: {', '.join(self.collapsed_towers)}")
+                logging.error(f"Gradients collapsed to near-zero for {self.patience} consecutive epochs.")
+                logging.error("")
+                logging.error("LIKELY CAUSE: Learning rate too high for this architecture.")
+                logging.error("RECOMMENDATION: Try a lower learning rate (0.01 - 0.05)")
+                logging.error("=" * 70)
+
+                # Log to metrics for UI visibility
+                if _metrics_collector:
+                    _metrics_collector.log_metric('gradient_collapse_epoch', float(epoch))
+                    _metrics_collector.log_param('gradient_collapse_detected', True)
+                    _metrics_collector.log_param('collapsed_towers', ','.join(self.collapsed_towers))
+
+                self.model.stop_training = True
+        else:
+            # Gradients recovered - reset counter
+            self.collapse_count = 0
+            self.collapsed_towers.clear()
+
+
 '''
 
     def _generate_run_fn(self) -> str:
@@ -2852,9 +2986,10 @@ def run_fn(fn_args: tfx.components.FnArgs):
         )
 
         # Compile with configured optimizer: {self.optimizer}
-        optimizer = {optimizer_class}(learning_rate=learning_rate)
+        # clipnorm=1.0 prevents gradient explosion with high learning rates
+        optimizer = {optimizer_class}(learning_rate=learning_rate, clipnorm=1.0)
         model.compile(optimizer=optimizer)
-        logging.info(f"Using optimizer: {self.optimizer} with lr={{learning_rate}}")
+        logging.info(f"Using optimizer: {self.optimizer} with lr={{learning_rate}}, clipnorm=1.0")
 
         # Calculate steps
         train_steps = custom_config.get('train_steps', fn_args.train_steps)
@@ -2869,6 +3004,12 @@ def run_fn(fn_args: tfx.components.FnArgs):
         # Weight monitoring callbacks for debugging training issues
         callbacks.append(WeightNormCallback())
         callbacks.append(WeightStatsCallback())
+
+        # Gradient collapse early stopping (detects LR too high)
+        # IMPORTANT: Must run BEFORE GradientStatsCallback which resets accumulators
+        callbacks.append(GradientCollapseCallback(min_grad_norm=1e-7, patience=3))
+
+        # Gradient stats logging (resets accumulators after reading)
         callbacks.append(GradientStatsCallback())
 
         # TensorBoard logging

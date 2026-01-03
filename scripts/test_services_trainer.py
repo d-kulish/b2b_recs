@@ -76,7 +76,7 @@ def find_artifacts(source_exp: str) -> dict:
     }
 
 
-def create_runner_script(artifacts: dict, trainer_gcs_path: str, output_path: str, gcs_output_path: str, epochs: int) -> str:
+def create_runner_script(artifacts: dict, trainer_gcs_path: str, output_path: str, gcs_output_path: str, epochs: int, learning_rate: float) -> str:
     """Create the script that will run inside the CustomJob."""
 
     return f'''#!/usr/bin/env python3
@@ -138,7 +138,7 @@ def main():
     fn_args.custom_config = {{
         'epochs': {epochs},
         'batch_size': 4096,
-        'learning_rate': 0.1,
+        'learning_rate': {learning_rate},
         'gcs_output_path': '{gcs_output_path}',  # For MetricsCollector to save training_metrics.json
     }}
 
@@ -198,6 +198,7 @@ def main():
     parser.add_argument('--model-config-id', type=int, default=6, help='ModelConfig ID')
     parser.add_argument('--source-exp', default='qt-62-20251231-154907', help='Source experiment for artifacts')
     parser.add_argument('--epochs', type=int, default=2, help='Training epochs')
+    parser.add_argument('--learning-rate', type=float, default=0.1, help='Learning rate')
     parser.add_argument('--dry-run', action='store_true', help='Generate code but do not submit job')
 
     args = parser.parse_args()
@@ -215,6 +216,8 @@ def main():
 
     logger.info(f"  FeatureConfig: {feature_config.name}")
     logger.info(f"  ModelConfig: {model_config.name}")
+    logger.info(f"  Epochs: {args.epochs}")
+    logger.info(f"  Learning Rate: {args.learning_rate}")
 
     # Generate trainer code using services.py
     logger.info("Generating trainer_module.py using TrainerModuleGenerator...")
@@ -233,9 +236,10 @@ def main():
 
     logger.info("Generated code is syntactically valid")
 
-    # Override epochs in the generated code
+    # Override epochs and learning rate in the generated code
     import re
     trainer_code = re.sub(r'EPOCHS = \d+', f'EPOCHS = {args.epochs}', trainer_code)
+    trainer_code = re.sub(r'LEARNING_RATE = [\d.]+', f'LEARNING_RATE = {args.learning_rate}', trainer_code)
 
     # Find artifacts
     logger.info(f"Finding artifacts from {args.source_exp}...")
@@ -254,7 +258,7 @@ def main():
     # Create runner script
     gcs_output_path = f'gs://{ARTIFACTS_BUCKET}/{run_id}'  # Base path for MetricsCollector
     output_path = f'{gcs_output_path}/model'  # Model output subdirectory
-    runner_script = create_runner_script(artifacts, trainer_gcs_path, output_path, gcs_output_path, args.epochs)
+    runner_script = create_runner_script(artifacts, trainer_gcs_path, output_path, gcs_output_path, args.epochs, args.learning_rate)
 
     # Upload runner script
     runner_blob_path = f'{run_id}/runner.py'

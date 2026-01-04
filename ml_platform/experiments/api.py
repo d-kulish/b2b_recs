@@ -1941,41 +1941,37 @@ def experiment_dashboard_stats(request):
         success_rate = round((completed / finished) * 100, 1) if finished > 0 else None
 
         # Get metrics for completed experiments
-        # Note: recall_at_100 direct field may be NULL, metrics are in training_history_json
+        # Note: recall fields may be NULL, metrics are in training_history_json
         completed_qs = base_qs.filter(status=QuickTest.STATUS_COMPLETED)
 
-        # Try to get metrics from training_history_json if direct fields are empty
-        recall_values = []
-        for qt in completed_qs:
-            recall = qt.recall_at_100
-            if recall is None and qt.training_history_json:
-                hist = qt.training_history_json if isinstance(qt.training_history_json, dict) else {}
-                final_metrics = hist.get('final_metrics', {})
-                recall = final_metrics.get('test_recall_at_100')
-            if recall is not None:
-                recall_values.append(recall)
-
-        metrics = {
-            'best_recall_100': max(recall_values) if recall_values else None,
-            'avg_recall_100': sum(recall_values) / len(recall_values) if recall_values else None,
+        # Track best values for all recall metrics
+        best_metrics = {
+            'recall_5': None,
+            'recall_10': None,
+            'recall_50': None,
+            'recall_100': None,
         }
 
-        # Calculate average duration for completed experiments
-        avg_duration_minutes = None
-        completed_with_times = base_qs.filter(
-            status=QuickTest.STATUS_COMPLETED,
-            submitted_at__isnull=False,
-            completed_at__isnull=False
-        )
-        if completed_with_times.exists():
-            # Calculate duration manually since Django's Avg on duration can be tricky
-            durations = []
-            for qt in completed_with_times:
-                if qt.submitted_at and qt.completed_at:
-                    duration = (qt.completed_at - qt.submitted_at).total_seconds() / 60
-                    durations.append(duration)
-            if durations:
-                avg_duration_minutes = round(sum(durations) / len(durations), 1)
+        for qt in completed_qs:
+            # Get recall values from direct fields or training_history_json
+            # Note: QuickTest model only has recall_at_50 and recall_at_100 fields
+            hist = qt.training_history_json if isinstance(qt.training_history_json, dict) else {}
+            final_metrics = hist.get('final_metrics', {})
+
+            recall_5 = final_metrics.get('test_recall_at_5')
+            recall_10 = final_metrics.get('test_recall_at_10')
+            recall_50 = qt.recall_at_50 if qt.recall_at_50 is not None else final_metrics.get('test_recall_at_50')
+            recall_100 = qt.recall_at_100 if qt.recall_at_100 is not None else final_metrics.get('test_recall_at_100')
+
+            # Update best values
+            if recall_5 is not None and (best_metrics['recall_5'] is None or recall_5 > best_metrics['recall_5']):
+                best_metrics['recall_5'] = recall_5
+            if recall_10 is not None and (best_metrics['recall_10'] is None or recall_10 > best_metrics['recall_10']):
+                best_metrics['recall_10'] = recall_10
+            if recall_50 is not None and (best_metrics['recall_50'] is None or recall_50 > best_metrics['recall_50']):
+                best_metrics['recall_50'] = recall_50
+            if recall_100 is not None and (best_metrics['recall_100'] is None or recall_100 > best_metrics['recall_100']):
+                best_metrics['recall_100'] = recall_100
 
         return JsonResponse({
             'success': True,
@@ -1984,10 +1980,10 @@ def experiment_dashboard_stats(request):
                 'completed': completed,
                 'running': running,
                 'failed': failed,
-                'best_recall_100': round(metrics['best_recall_100'], 4) if metrics['best_recall_100'] else None,
-                'avg_recall_100': round(metrics['avg_recall_100'], 4) if metrics['avg_recall_100'] else None,
-                'success_rate': success_rate,
-                'avg_duration_minutes': avg_duration_minutes,
+                'best_recall_5': round(best_metrics['recall_5'], 4) if best_metrics['recall_5'] else None,
+                'best_recall_10': round(best_metrics['recall_10'], 4) if best_metrics['recall_10'] else None,
+                'best_recall_50': round(best_metrics['recall_50'], 4) if best_metrics['recall_50'] else None,
+                'best_recall_100': round(best_metrics['recall_100'], 4) if best_metrics['recall_100'] else None,
             }
         })
 
@@ -2092,7 +2088,7 @@ def selectable_experiments(request):
 @require_http_methods(["GET"])
 def metrics_trend(request):
     """
-    Get metrics trend data showing best recall@100 over time.
+    Get metrics trend data showing best recall metrics over time.
 
     GET /api/experiments/metrics-trend/
 
@@ -2100,7 +2096,11 @@ def metrics_trend(request):
     {
         "success": true,
         "trend": [
-            {"date": "2025-12-01", "best_recall": 0.42, "avg_recall": 0.38, "experiment_count": 5},
+            {
+                "date": "2025-12-01",
+                "best_r100": 0.42, "best_r50": 0.35, "best_r10": 0.20, "best_r5": 0.15,
+                "experiment_count": 5
+            },
             ...
         ]
     }
@@ -2120,15 +2120,29 @@ def metrics_trend(request):
             completed_at__isnull=False
         ).order_by('completed_at')
 
-        # Extract metrics and filter those with recall
+        # Extract metrics for all recall values
         experiments = []
         for qt in queryset:
-            exp_metrics = _get_experiment_metrics(qt)
-            recall = exp_metrics.get('recall_at_100')
-            if recall is not None and qt.completed_at:
+            if not qt.completed_at:
+                continue
+
+            # Get recall values from direct fields or training_history_json
+            hist = qt.training_history_json if isinstance(qt.training_history_json, dict) else {}
+            final_metrics = hist.get('final_metrics', {})
+
+            recall_5 = final_metrics.get('test_recall_at_5')
+            recall_10 = final_metrics.get('test_recall_at_10')
+            recall_50 = qt.recall_at_50 if qt.recall_at_50 is not None else final_metrics.get('test_recall_at_50')
+            recall_100 = qt.recall_at_100 if qt.recall_at_100 is not None else final_metrics.get('test_recall_at_100')
+
+            # Only include if at least one recall metric exists
+            if any(r is not None for r in [recall_5, recall_10, recall_50, recall_100]):
                 experiments.append({
                     'completed_at': qt.completed_at,
-                    'recall_at_100': recall
+                    'recall_5': recall_5,
+                    'recall_10': recall_10,
+                    'recall_50': recall_50,
+                    'recall_100': recall_100
                 })
 
         if not experiments:
@@ -2137,24 +2151,31 @@ def metrics_trend(request):
                 'trend': []
             })
 
-        # Build cumulative best tracking
+        # Build cumulative best tracking for all metrics
         trend_data = []
-        cumulative_best = 0
-        running_sum = 0
+        cumulative_best = {'r5': 0, 'r10': 0, 'r50': 0, 'r100': 0}
         count = 0
 
         for exp in experiments:
             count += 1
-            recall = exp['recall_at_100']
-            running_sum += recall
-            if recall > cumulative_best:
-                cumulative_best = recall
+
+            # Update cumulative best for each metric
+            if exp['recall_5'] is not None and exp['recall_5'] > cumulative_best['r5']:
+                cumulative_best['r5'] = exp['recall_5']
+            if exp['recall_10'] is not None and exp['recall_10'] > cumulative_best['r10']:
+                cumulative_best['r10'] = exp['recall_10']
+            if exp['recall_50'] is not None and exp['recall_50'] > cumulative_best['r50']:
+                cumulative_best['r50'] = exp['recall_50']
+            if exp['recall_100'] is not None and exp['recall_100'] > cumulative_best['r100']:
+                cumulative_best['r100'] = exp['recall_100']
 
             trend_data.append({
                 'date': exp['completed_at'].strftime('%Y-%m-%d'),
                 'datetime': exp['completed_at'].isoformat(),
-                'best_recall': round(cumulative_best, 4),
-                'avg_recall': round(running_sum / count, 4),
+                'best_r100': round(cumulative_best['r100'], 4) if cumulative_best['r100'] else None,
+                'best_r50': round(cumulative_best['r50'], 4) if cumulative_best['r50'] else None,
+                'best_r10': round(cumulative_best['r10'], 4) if cumulative_best['r10'] else None,
+                'best_r5': round(cumulative_best['r5'], 4) if cumulative_best['r5'] else None,
                 'experiment_count': count
             })
 
@@ -2316,7 +2337,7 @@ def top_configurations(request):
         queryset = QuickTest.objects.filter(
             feature_config__dataset__model_endpoint=model_endpoint,
             status=QuickTest.STATUS_COMPLETED
-        ).select_related('feature_config', 'model_config')
+        ).select_related('feature_config', 'feature_config__dataset', 'model_config')
 
         # Build list with extracted metrics
         experiments_with_metrics = []
@@ -2343,6 +2364,7 @@ def top_configurations(request):
                 'experiment_id': qt.id,
                 'experiment_number': qt.experiment_number,
                 'display_name': qt.display_name,
+                'dataset': qt.feature_config.dataset.name if qt.feature_config and qt.feature_config.dataset else None,
                 'feature_config': qt.feature_config.name if qt.feature_config else None,
                 'feature_config_id': qt.feature_config.id if qt.feature_config else None,
                 'model_config': qt.model_config.name if qt.model_config else None,

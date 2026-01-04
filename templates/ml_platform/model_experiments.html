@@ -2722,39 +2722,47 @@
         margin-top: 2px;
     }
 
-    /* Dashboard Summary Cards */
-    .dashboard-summary {
-        display: grid;
-        grid-template-columns: repeat(4, 1fr);
-        gap: 16px;
+    /* Dashboard KPI Row - styled like accuracy metrics */
+    .dashboard-kpi-row {
+        display: flex;
+        gap: 8px;
         margin-bottom: 24px;
     }
-    @media (max-width: 768px) {
-        .dashboard-summary {
-            grid-template-columns: repeat(2, 1fr);
-        }
-    }
-    .dashboard-card {
-        background: #f9fafb;
-        border: 1px solid #e5e7eb;
-        border-radius: 10px;
-        padding: 16px;
+    .dashboard-kpi {
+        flex: 1 1 0;
+        min-width: 0;
         text-align: center;
+        padding: 10px 6px;
+        background: #ffffff;
+        border: 1px solid #1f2937;
+        border-radius: 6px;
+        box-sizing: border-box;
     }
-    .dashboard-card-value {
-        font-size: 28px;
-        font-weight: 700;
-        color: #111827;
-        line-height: 1.2;
+    .dashboard-kpi-label {
+        font-size: 10px;
+        color: #1f2937;
+        font-weight: 500;
+        margin-bottom: 4px;
+        text-transform: uppercase;
     }
-    .dashboard-card-value.highlight {
+    .dashboard-kpi-value {
+        font-size: 16px;
+        font-weight: 600;
+        color: #1f2937;
+    }
+    .dashboard-kpi-value.highlight {
         color: #10b981;
     }
-    .dashboard-card-label {
-        font-size: 12px;
-        color: #6b7280;
-        margin-top: 4px;
-        font-weight: 500;
+    .dashboard-kpi-value.empty {
+        color: #9ca3af;
+    }
+    @media (max-width: 768px) {
+        .dashboard-kpi-row {
+            flex-wrap: wrap;
+        }
+        .dashboard-kpi {
+            flex: 1 1 calc(33.333% - 6px);
+        }
     }
 
     /* Dashboard Section */
@@ -3214,9 +3222,8 @@
                     <p class="chapter-subtitle">Analyze and compare experiment results</p>
                 </div>
             </div>
-            <button id="dashboardRefreshBtn" class="btn-secondary" onclick="refreshDashboard()" title="Refresh dashboard data">
-                <i class="fas fa-sync-alt" id="dashboardRefreshIcon"></i>
-                <span>Refresh</span>
+            <button id="dashboardRefreshBtn" class="btn btn-secondary btn-sm" onclick="refreshDashboard()" title="Refresh dashboard data" style="width: 150px;">
+                <i class="fas fa-sync-alt mr-1" id="dashboardRefreshIcon"></i>Refresh
             </button>
         </div>
 
@@ -3228,42 +3235,31 @@
 
         <!-- Dashboard Content (hidden until loaded) -->
         <div id="dashboardContent" class="hidden">
-            <!-- Summary Cards - Row 1 -->
-            <div class="dashboard-summary">
-                <div class="dashboard-card">
-                    <div class="dashboard-card-value" id="dashboardTotalExp">-</div>
-                    <div class="dashboard-card-label">Total Experiments</div>
+            <!-- Summary KPIs - Single Row -->
+            <div class="dashboard-kpi-row">
+                <div class="dashboard-kpi">
+                    <div class="dashboard-kpi-label">Total Experiments</div>
+                    <div class="dashboard-kpi-value" id="dashboardTotalExp">-</div>
                 </div>
-                <div class="dashboard-card">
-                    <div class="dashboard-card-value" id="dashboardCompleted">-</div>
-                    <div class="dashboard-card-label">Completed</div>
+                <div class="dashboard-kpi">
+                    <div class="dashboard-kpi-label">Best R@100</div>
+                    <div class="dashboard-kpi-value highlight" id="dashboardBestR100">-</div>
                 </div>
-                <div class="dashboard-card">
-                    <div class="dashboard-card-value" id="dashboardRunning">-</div>
-                    <div class="dashboard-card-label">Running</div>
+                <div class="dashboard-kpi">
+                    <div class="dashboard-kpi-label">Best R@50</div>
+                    <div class="dashboard-kpi-value highlight" id="dashboardBestR50">-</div>
                 </div>
-                <div class="dashboard-card">
-                    <div class="dashboard-card-value" id="dashboardFailed">-</div>
-                    <div class="dashboard-card-label">Failed</div>
+                <div class="dashboard-kpi">
+                    <div class="dashboard-kpi-label">Best R@10</div>
+                    <div class="dashboard-kpi-value highlight" id="dashboardBestR10">-</div>
                 </div>
-            </div>
-            <!-- Summary Cards - Row 2 -->
-            <div class="dashboard-summary" style="margin-top: -8px;">
-                <div class="dashboard-card">
-                    <div class="dashboard-card-value highlight" id="dashboardBestRecall">-</div>
-                    <div class="dashboard-card-label">Best Recall@100</div>
+                <div class="dashboard-kpi">
+                    <div class="dashboard-kpi-label">Best R@5</div>
+                    <div class="dashboard-kpi-value highlight" id="dashboardBestR5">-</div>
                 </div>
-                <div class="dashboard-card">
-                    <div class="dashboard-card-value" id="dashboardAvgRecall">-</div>
-                    <div class="dashboard-card-label">Avg Recall@100</div>
-                </div>
-                <div class="dashboard-card">
-                    <div class="dashboard-card-value" id="dashboardSuccessRate">-</div>
-                    <div class="dashboard-card-label">Success Rate</div>
-                </div>
-                <div class="dashboard-card">
-                    <div class="dashboard-card-value" id="dashboardAvgDuration">-</div>
-                    <div class="dashboard-card-label">Avg Duration</div>
+                <div class="dashboard-kpi">
+                    <div class="dashboard-kpi-label">Best Ranking</div>
+                    <div class="dashboard-kpi-value" id="dashboardBestRanking">-</div>
                 </div>
             </div>
 
@@ -3271,7 +3267,7 @@
             <div class="dashboard-section">
                 <div class="dashboard-section-header">
                     <span class="dashboard-section-title">Metrics Trend</span>
-                    <span class="text-xs text-gray-400">Best Recall@100 improvement over time</span>
+                    <span class="text-xs text-gray-400">Best Recall metrics improvement over time</span>
                 </div>
                 <div id="trendChartContainer" style="height: 250px; position: relative;">
                     <canvas id="trendChartCanvas"></canvas>
@@ -3293,14 +3289,15 @@
                         <thead>
                             <tr>
                                 <th style="width: 40px;">#</th>
-                                <th>Experiment</th>
-                                <th>Feature Config</th>
-                                <th>Model Config</th>
-                                <th>LR</th>
-                                <th>Batch</th>
-                                <th>Epochs</th>
-                                <th style="text-align: right;">R@100</th>
-                                <th style="text-align: right;">Loss</th>
+                                <th style="text-align: center;">Experiment</th>
+                                <th>Dataset</th>
+                                <th>Feature</th>
+                                <th>Model</th>
+                                <th style="text-align: center;">LR</th>
+                                <th style="text-align: center;">Batch</th>
+                                <th style="text-align: center;">Epochs</th>
+                                <th style="text-align: center;">R@100</th>
+                                <th style="text-align: center;">Loss</th>
                             </tr>
                         </thead>
                         <tbody id="topConfigsBody">
@@ -8920,21 +8917,18 @@ async function loadExperimentsDashboard() {
             return;
         }
 
-        // Render summary cards - Row 1
+        // Render KPI row
         document.getElementById('dashboardTotalExp').textContent = stats.total;
-        document.getElementById('dashboardCompleted').textContent = stats.completed;
-        document.getElementById('dashboardRunning').textContent = stats.running || 0;
-        document.getElementById('dashboardFailed').textContent = stats.failed || 0;
-
-        // Render summary cards - Row 2
-        document.getElementById('dashboardBestRecall').textContent =
+        document.getElementById('dashboardBestR100').textContent =
             stats.best_recall_100 !== null ? stats.best_recall_100.toFixed(3) : '-';
-        document.getElementById('dashboardAvgRecall').textContent =
-            stats.avg_recall_100 !== null ? stats.avg_recall_100.toFixed(3) : '-';
-        document.getElementById('dashboardSuccessRate').textContent =
-            stats.success_rate !== null ? stats.success_rate.toFixed(1) + '%' : '-';
-        document.getElementById('dashboardAvgDuration').textContent =
-            stats.avg_duration_minutes !== null ? formatDuration(stats.avg_duration_minutes) : '-';
+        document.getElementById('dashboardBestR50').textContent =
+            stats.best_recall_50 !== null ? stats.best_recall_50.toFixed(3) : '-';
+        document.getElementById('dashboardBestR10').textContent =
+            stats.best_recall_10 !== null ? stats.best_recall_10.toFixed(3) : '-';
+        document.getElementById('dashboardBestR5').textContent =
+            stats.best_recall_5 !== null ? stats.best_recall_5.toFixed(3) : '-';
+        // Best Ranking - placeholder for future implementation
+        document.getElementById('dashboardBestRanking').textContent = '-';
 
         // Show content, hide loading
         loadingEl.classList.add('hidden');
@@ -9237,24 +9231,45 @@ async function loadMetricsTrend() {
                 labels: data.trend.map(d => d.date),
                 datasets: [
                     {
-                        label: 'Best Recall@100',
-                        data: data.trend.map(d => d.best_recall),
+                        label: 'Best R@100',
+                        data: data.trend.map(d => d.best_r100),
                         borderColor: '#10b981',
                         backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                        fill: true,
-                        tension: 0.3,
-                        pointRadius: 3,
-                        pointHoverRadius: 5
-                    },
-                    {
-                        label: 'Avg Recall@100',
-                        data: data.trend.map(d => d.avg_recall),
-                        borderColor: '#6b7280',
-                        borderDash: [5, 5],
                         fill: false,
                         tension: 0.3,
-                        pointRadius: 2,
-                        pointHoverRadius: 4
+                        pointRadius: 3,
+                        pointHoverRadius: 5,
+                        borderWidth: 2
+                    },
+                    {
+                        label: 'Best R@50',
+                        data: data.trend.map(d => d.best_r50),
+                        borderColor: '#3b82f6',
+                        fill: false,
+                        tension: 0.3,
+                        pointRadius: 3,
+                        pointHoverRadius: 5,
+                        borderWidth: 2
+                    },
+                    {
+                        label: 'Best R@10',
+                        data: data.trend.map(d => d.best_r10),
+                        borderColor: '#f59e0b',
+                        fill: false,
+                        tension: 0.3,
+                        pointRadius: 3,
+                        pointHoverRadius: 5,
+                        borderWidth: 2
+                    },
+                    {
+                        label: 'Best R@5',
+                        data: data.trend.map(d => d.best_r5),
+                        borderColor: '#ef4444',
+                        fill: false,
+                        tension: 0.3,
+                        pointRadius: 3,
+                        pointHoverRadius: 5,
+                        borderWidth: 2
                     }
                 ]
             },
@@ -9307,7 +9322,7 @@ async function loadTopConfigurations() {
         if (!data.success || !data.configurations || data.configurations.length === 0) {
             tbody.innerHTML = `
                 <tr>
-                    <td colspan="9" class="text-center text-gray-400 py-4">
+                    <td colspan="10" class="text-center text-gray-400 py-4">
                         No completed experiments yet
                     </td>
                 </tr>
@@ -9324,17 +9339,18 @@ async function loadTopConfigurations() {
             return `
                 <tr onclick="openExpViewModal(${cfg.experiment_id})" style="cursor: pointer;" title="Click to view details">
                     <td class="rank-cell ${rankClass}">${cfg.rank}</td>
-                    <td>${cfg.display_name || 'Exp #' + cfg.experiment_number}</td>
+                    <td style="text-align: center;">${cfg.display_name || 'Exp #' + cfg.experiment_number}</td>
+                    <td>${cfg.dataset || '-'}</td>
                     <td>${cfg.feature_config || '-'}</td>
                     <td>${cfg.model_config || '-'}</td>
-                    <td>${cfg.learning_rate}</td>
-                    <td>${cfg.batch_size}</td>
-                    <td>${cfg.epochs}</td>
-                    <td style="text-align: right;" class="${isBest ? 'metric-best' : ''}">
-                        ${cfg.recall_at_100 !== null ? cfg.recall_at_100.toFixed(4) : '-'}
+                    <td style="text-align: center;">${cfg.learning_rate}</td>
+                    <td style="text-align: center;">${cfg.batch_size}</td>
+                    <td style="text-align: center;">${cfg.epochs}</td>
+                    <td style="text-align: center;" class="${isBest ? 'metric-best' : ''}">
+                        ${cfg.recall_at_100 !== null ? cfg.recall_at_100.toFixed(3) : '-'}
                     </td>
-                    <td style="text-align: right;">
-                        ${cfg.loss !== null ? cfg.loss.toFixed(4) : '-'}
+                    <td style="text-align: center;">
+                        ${cfg.loss !== null ? cfg.loss.toFixed(1) : '-'}
                     </td>
                 </tr>
             `;
@@ -9344,7 +9360,7 @@ async function loadTopConfigurations() {
         console.error('Failed to load top configurations:', error);
         tbody.innerHTML = `
             <tr>
-                <td colspan="9" class="text-center text-red-400 py-4">
+                <td colspan="10" class="text-center text-red-400 py-4">
                     Failed to load configurations
                 </td>
             </tr>

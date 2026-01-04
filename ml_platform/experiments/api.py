@@ -29,6 +29,37 @@ def _get_model_endpoint(request):
         return None
 
 
+def _get_experiment_metrics(qt):
+    """
+    Extract metrics from a QuickTest object.
+    Tries direct fields first, falls back to training_history_json.
+
+    Returns dict with: recall_at_100, recall_at_50, recall_at_10, loss
+    """
+    metrics = {
+        'recall_at_100': qt.recall_at_100,
+        'recall_at_50': qt.recall_at_50,
+        'recall_at_10': qt.recall_at_10,
+        'loss': qt.loss,
+    }
+
+    # If direct fields are empty, try training_history_json
+    if qt.training_history_json:
+        hist = qt.training_history_json if isinstance(qt.training_history_json, dict) else {}
+        final_metrics = hist.get('final_metrics', {})
+
+        if metrics['recall_at_100'] is None:
+            metrics['recall_at_100'] = final_metrics.get('test_recall_at_100')
+        if metrics['recall_at_50'] is None:
+            metrics['recall_at_50'] = final_metrics.get('test_recall_at_50')
+        if metrics['recall_at_10'] is None:
+            metrics['recall_at_10'] = final_metrics.get('test_recall_at_10')
+        if metrics['loss'] is None:
+            metrics['loss'] = final_metrics.get('test_loss') or final_metrics.get('final_loss')
+
+    return metrics
+
+
 def _validate_experiment_params(model_config, params):
     """
     Validate experiment parameters and return warnings.
@@ -1673,35 +1704,35 @@ def experiment_leaderboard(request):
         except ValueError:
             limit = 20
 
-        # Map metric name to model field
-        metric_field_map = {
-            'recall_at_100': 'recall_at_100',
-            'recall_at_50': 'recall_at_50',
-            'recall_at_10': 'recall_at_10',
-            'loss': 'loss',
-        }
-
-        order_field = metric_field_map.get(metric, 'recall_at_100')
-
-        # For loss, lower is better; for recall, higher is better
-        if metric == 'loss':
-            order_by = order_field  # Ascending
-        else:
-            order_by = f'-{order_field}'  # Descending
-
-        # Query completed experiments with the metric
+        # Query all completed experiments
         queryset = QuickTest.objects.filter(
             feature_config__dataset__model_endpoint=model_endpoint,
             status=QuickTest.STATUS_COMPLETED
-        ).exclude(
-            **{f'{order_field}__isnull': True}
         ).select_related(
             'feature_config', 'model_config', 'feature_config__dataset'
-        ).order_by(order_by)[:limit]
+        )
+
+        # Build list with extracted metrics
+        experiments_with_metrics = []
+        for qt in queryset:
+            exp_metrics = _get_experiment_metrics(qt)
+            metric_value = exp_metrics.get(metric)
+            if metric_value is not None:
+                experiments_with_metrics.append({
+                    'qt': qt,
+                    'metrics': exp_metrics,
+                    'sort_value': metric_value,
+                })
+
+        # Sort by metric (loss: ascending, recall: descending)
+        reverse = metric != 'loss'
+        experiments_with_metrics.sort(key=lambda x: x['sort_value'], reverse=reverse)
 
         # Build leaderboard
         leaderboard = []
-        for i, qt in enumerate(queryset):
+        for i, item in enumerate(experiments_with_metrics[:limit]):
+            qt = item['qt']
+            exp_metrics = item['metrics']
             leaderboard.append({
                 'rank': i + 1,
                 'quick_test_id': qt.id,
@@ -1711,12 +1742,7 @@ def experiment_leaderboard(request):
                 'model_config': qt.model_config.name if qt.model_config else None,
                 'dataset': qt.feature_config.dataset.name if qt.feature_config.dataset else None,
                 'mlflow_run_id': qt.mlflow_run_id,
-                'metrics': {
-                    'loss': qt.loss,
-                    'recall_at_10': qt.recall_at_10,
-                    'recall_at_50': qt.recall_at_50,
-                    'recall_at_100': qt.recall_at_100,
-                },
+                'metrics': exp_metrics,
                 'created_at': qt.created_at.isoformat() if qt.created_at else None,
             })
 
@@ -1773,23 +1799,10 @@ def experiment_heatmap(request):
         # Parse query params
         metric = request.GET.get('metric', 'recall_at_100')
 
-        # Map metric name to model field
-        metric_field_map = {
-            'recall_at_100': 'recall_at_100',
-            'recall_at_50': 'recall_at_50',
-            'recall_at_10': 'recall_at_10',
-        }
-
-        metric_field = metric_field_map.get(metric, 'recall_at_100')
-
-        # Get all completed experiments with the metric
-        from django.db.models import Max
-
+        # Get all completed experiments
         queryset = QuickTest.objects.filter(
             feature_config__dataset__model_endpoint=model_endpoint,
             status=QuickTest.STATUS_COMPLETED
-        ).exclude(
-            **{f'{metric_field}__isnull': True}
         ).select_related('feature_config', 'model_config')
 
         # Build a mapping of (feature_config_id, model_config_id) -> best experiment
@@ -1801,7 +1814,9 @@ def experiment_heatmap(request):
             if mc_id is None:
                 continue
 
-            metric_value = getattr(qt, metric_field)
+            # Get metrics using helper
+            exp_metrics = _get_experiment_metrics(qt)
+            metric_value = exp_metrics.get(metric)
             if metric_value is None:
                 continue
 
@@ -1890,7 +1905,9 @@ def experiment_dashboard_stats(request):
             "running": 2,
             "failed": 5,
             "best_recall_100": 0.473,
-            "avg_recall_100": 0.412
+            "avg_recall_100": 0.412,
+            "success_rate": 72.0,
+            "avg_duration_minutes": 45.5
         }
     }
     """
@@ -1902,7 +1919,7 @@ def experiment_dashboard_stats(request):
                 'error': 'No model endpoint selected'
             }, status=400)
 
-        from django.db.models import Count, Max, Avg
+        from django.db.models import Count, Max, Avg, F, ExpressionWrapper, DurationField
 
         # Base queryset
         base_qs = QuickTest.objects.filter(
@@ -1919,14 +1936,46 @@ def experiment_dashboard_stats(request):
                   counts_by_status.get(QuickTest.STATUS_SUBMITTING, 0)
         failed = counts_by_status.get(QuickTest.STATUS_FAILED, 0)
 
+        # Calculate success rate (completed / (completed + failed))
+        finished = completed + failed
+        success_rate = round((completed / finished) * 100, 1) if finished > 0 else None
+
         # Get metrics for completed experiments
-        metrics = base_qs.filter(
+        # Note: recall_at_100 direct field may be NULL, metrics are in training_history_json
+        completed_qs = base_qs.filter(status=QuickTest.STATUS_COMPLETED)
+
+        # Try to get metrics from training_history_json if direct fields are empty
+        recall_values = []
+        for qt in completed_qs:
+            recall = qt.recall_at_100
+            if recall is None and qt.training_history_json:
+                hist = qt.training_history_json if isinstance(qt.training_history_json, dict) else {}
+                final_metrics = hist.get('final_metrics', {})
+                recall = final_metrics.get('test_recall_at_100')
+            if recall is not None:
+                recall_values.append(recall)
+
+        metrics = {
+            'best_recall_100': max(recall_values) if recall_values else None,
+            'avg_recall_100': sum(recall_values) / len(recall_values) if recall_values else None,
+        }
+
+        # Calculate average duration for completed experiments
+        avg_duration_minutes = None
+        completed_with_times = base_qs.filter(
             status=QuickTest.STATUS_COMPLETED,
-            recall_at_100__isnull=False
-        ).aggregate(
-            best_recall_100=Max('recall_at_100'),
-            avg_recall_100=Avg('recall_at_100')
+            submitted_at__isnull=False,
+            completed_at__isnull=False
         )
+        if completed_with_times.exists():
+            # Calculate duration manually since Django's Avg on duration can be tricky
+            durations = []
+            for qt in completed_with_times:
+                if qt.submitted_at and qt.completed_at:
+                    duration = (qt.completed_at - qt.submitted_at).total_seconds() / 60
+                    durations.append(duration)
+            if durations:
+                avg_duration_minutes = round(sum(durations) / len(durations), 1)
 
         return JsonResponse({
             'success': True,
@@ -1937,6 +1986,8 @@ def experiment_dashboard_stats(request):
                 'failed': failed,
                 'best_recall_100': round(metrics['best_recall_100'], 4) if metrics['best_recall_100'] else None,
                 'avg_recall_100': round(metrics['avg_recall_100'], 4) if metrics['avg_recall_100'] else None,
+                'success_rate': success_rate,
+                'avg_duration_minutes': avg_duration_minutes,
             }
         })
 
@@ -2031,6 +2082,544 @@ def selectable_experiments(request):
 
     except Exception as e:
         logger.exception(f"Error getting selectable experiments: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def metrics_trend(request):
+    """
+    Get metrics trend data showing best recall@100 over time.
+
+    GET /api/experiments/metrics-trend/
+
+    Returns:
+    {
+        "success": true,
+        "trend": [
+            {"date": "2025-12-01", "best_recall": 0.42, "avg_recall": 0.38, "experiment_count": 5},
+            ...
+        ]
+    }
+    """
+    try:
+        model_endpoint = _get_model_endpoint(request)
+        if not model_endpoint:
+            return JsonResponse({
+                'success': False,
+                'error': 'No model endpoint selected'
+            }, status=400)
+
+        # Get all completed experiments ordered by date
+        queryset = QuickTest.objects.filter(
+            feature_config__dataset__model_endpoint=model_endpoint,
+            status=QuickTest.STATUS_COMPLETED,
+            completed_at__isnull=False
+        ).order_by('completed_at')
+
+        # Extract metrics and filter those with recall
+        experiments = []
+        for qt in queryset:
+            exp_metrics = _get_experiment_metrics(qt)
+            recall = exp_metrics.get('recall_at_100')
+            if recall is not None and qt.completed_at:
+                experiments.append({
+                    'completed_at': qt.completed_at,
+                    'recall_at_100': recall
+                })
+
+        if not experiments:
+            return JsonResponse({
+                'success': True,
+                'trend': []
+            })
+
+        # Build cumulative best tracking
+        trend_data = []
+        cumulative_best = 0
+        running_sum = 0
+        count = 0
+
+        for exp in experiments:
+            count += 1
+            recall = exp['recall_at_100']
+            running_sum += recall
+            if recall > cumulative_best:
+                cumulative_best = recall
+
+            trend_data.append({
+                'date': exp['completed_at'].strftime('%Y-%m-%d'),
+                'datetime': exp['completed_at'].isoformat(),
+                'best_recall': round(cumulative_best, 4),
+                'avg_recall': round(running_sum / count, 4),
+                'experiment_count': count
+            })
+
+        return JsonResponse({
+            'success': True,
+            'trend': trend_data
+        })
+
+    except Exception as e:
+        logger.exception(f"Error getting metrics trend: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def hyperparameter_analysis(request):
+    """
+    Get hyperparameter analysis showing which values correlate with best results.
+
+    GET /api/experiments/hyperparameter-analysis/
+
+    Returns:
+    {
+        "success": true,
+        "analysis": {
+            "learning_rate": [
+                {"value": "0.01", "avg_recall": 0.465, "best_recall": 0.473, "count": 12},
+                ...
+            ],
+            "batch_size": [...],
+            "epochs": [...],
+            "data_sample_percent": [...],
+            "split_strategy": [...]
+        }
+    }
+    """
+    try:
+        model_endpoint = _get_model_endpoint(request)
+        if not model_endpoint:
+            return JsonResponse({
+                'success': False,
+                'error': 'No model endpoint selected'
+            }, status=400)
+
+        from collections import defaultdict
+
+        # Get all completed experiments
+        queryset = QuickTest.objects.filter(
+            feature_config__dataset__model_endpoint=model_endpoint,
+            status=QuickTest.STATUS_COMPLETED
+        )
+
+        # Collect experiments with their metrics
+        experiments_data = []
+        for qt in queryset:
+            exp_metrics = _get_experiment_metrics(qt)
+            recall = exp_metrics.get('recall_at_100')
+            if recall is not None:
+                experiments_data.append({
+                    'learning_rate': qt.learning_rate,
+                    'batch_size': qt.batch_size,
+                    'epochs': qt.epochs,
+                    'data_sample_percent': qt.data_sample_percent,
+                    'split_strategy': qt.split_strategy,
+                    'recall_at_100': recall,
+                })
+
+        def analyze_param(experiments, param_name, format_value=None):
+            """Group experiments by param and compute stats."""
+            groups = defaultdict(list)
+            for exp in experiments:
+                value = exp.get(param_name)
+                if value is not None:
+                    groups[value].append(exp['recall_at_100'])
+
+            results = []
+            for value, recalls in groups.items():
+                display_value = format_value(value) if format_value else str(value)
+                results.append({
+                    'value': display_value,
+                    'avg_recall': round(sum(recalls) / len(recalls), 4),
+                    'best_recall': round(max(recalls), 4),
+                    'count': len(recalls)
+                })
+
+            # Sort by avg_recall descending
+            results.sort(key=lambda x: x['avg_recall'], reverse=True)
+            return results
+
+        analysis = {
+            'learning_rate': analyze_param(experiments_data, 'learning_rate'),
+            'batch_size': analyze_param(experiments_data, 'batch_size'),
+            'epochs': analyze_param(experiments_data, 'epochs'),
+            'data_sample_percent': analyze_param(
+                experiments_data, 'data_sample_percent',
+                format_value=lambda v: f"{v}%"
+            ),
+            'split_strategy': analyze_param(experiments_data, 'split_strategy'),
+        }
+
+        return JsonResponse({
+            'success': True,
+            'analysis': analysis
+        })
+
+    except Exception as e:
+        logger.exception(f"Error getting hyperparameter analysis: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def top_configurations(request):
+    """
+    Get top experiment configurations ranked by recall@100.
+
+    GET /api/experiments/top-configurations/?limit=10
+
+    Returns:
+    {
+        "success": true,
+        "configurations": [
+            {
+                "rank": 1,
+                "experiment_id": 123,
+                "experiment_name": "Exp #45",
+                "feature_config": "Q4 v2",
+                "model_config": "Deep Tower",
+                "learning_rate": 0.01,
+                "batch_size": 4096,
+                "epochs": 15,
+                "data_sample_percent": 100,
+                "split_strategy": "time_holdout",
+                "recall_at_100": 0.473,
+                "recall_at_50": 0.412,
+                "loss": 0.034
+            },
+            ...
+        ]
+    }
+    """
+    try:
+        model_endpoint = _get_model_endpoint(request)
+        if not model_endpoint:
+            return JsonResponse({
+                'success': False,
+                'error': 'No model endpoint selected'
+            }, status=400)
+
+        limit = int(request.GET.get('limit', 10))
+
+        # Get all completed experiments
+        queryset = QuickTest.objects.filter(
+            feature_config__dataset__model_endpoint=model_endpoint,
+            status=QuickTest.STATUS_COMPLETED
+        ).select_related('feature_config', 'model_config')
+
+        # Build list with extracted metrics
+        experiments_with_metrics = []
+        for qt in queryset:
+            exp_metrics = _get_experiment_metrics(qt)
+            recall = exp_metrics.get('recall_at_100')
+            if recall is not None:
+                experiments_with_metrics.append({
+                    'qt': qt,
+                    'metrics': exp_metrics,
+                    'recall': recall,
+                })
+
+        # Sort by recall descending
+        experiments_with_metrics.sort(key=lambda x: x['recall'], reverse=True)
+
+        # Build configurations list
+        configurations = []
+        for i, item in enumerate(experiments_with_metrics[:limit]):
+            qt = item['qt']
+            exp_metrics = item['metrics']
+            configurations.append({
+                'rank': i + 1,
+                'experiment_id': qt.id,
+                'experiment_number': qt.experiment_number,
+                'display_name': qt.display_name,
+                'feature_config': qt.feature_config.name if qt.feature_config else None,
+                'feature_config_id': qt.feature_config.id if qt.feature_config else None,
+                'model_config': qt.model_config.name if qt.model_config else None,
+                'model_config_id': qt.model_config.id if qt.model_config else None,
+                'learning_rate': qt.learning_rate,
+                'batch_size': qt.batch_size,
+                'epochs': qt.epochs,
+                'data_sample_percent': qt.data_sample_percent,
+                'split_strategy': qt.split_strategy,
+                'recall_at_100': round(exp_metrics['recall_at_100'], 4) if exp_metrics['recall_at_100'] else None,
+                'recall_at_50': round(exp_metrics['recall_at_50'], 4) if exp_metrics['recall_at_50'] else None,
+                'recall_at_10': round(exp_metrics['recall_at_10'], 4) if exp_metrics['recall_at_10'] else None,
+                'loss': round(exp_metrics['loss'], 4) if exp_metrics['loss'] else None,
+            })
+
+        return JsonResponse({
+            'success': True,
+            'configurations': configurations
+        })
+
+    except Exception as e:
+        logger.exception(f"Error getting top configurations: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def experiment_suggestions(request):
+    """
+    Get suggestions for next experiments based on gaps in coverage.
+
+    GET /api/experiments/suggestions/
+
+    Returns:
+    {
+        "success": true,
+        "suggestions": [
+            {
+                "type": "untested_combination",
+                "title": "Try Q4 v2 + Wide Tower",
+                "description": "This Feature Config + Model Config combination hasn't been tested yet",
+                "feature_config_id": 5,
+                "feature_config_name": "Q4 v2",
+                "model_config_id": 3,
+                "model_config_name": "Wide Tower"
+            },
+            {
+                "type": "hyperparameter_variation",
+                "title": "Best config with lower learning rate",
+                "description": "Try LR=0.005 with your best performing configuration",
+                "base_experiment_id": 123,
+                "suggested_params": {"learning_rate": 0.005}
+            },
+            ...
+        ]
+    }
+    """
+    try:
+        model_endpoint = _get_model_endpoint(request)
+        if not model_endpoint:
+            return JsonResponse({
+                'success': False,
+                'error': 'No model endpoint selected'
+            }, status=400)
+
+        from ml_platform.models import FeatureConfig, ModelConfig
+
+        suggestions = []
+
+        # Get all feature configs for this model endpoint
+        feature_configs = FeatureConfig.objects.filter(
+            dataset__model_endpoint=model_endpoint
+        ).values('id', 'name')
+
+        # ModelConfig is global (not tied to model_endpoint), get all of them
+        # or filter to those that have been used in experiments for this endpoint
+        model_configs = ModelConfig.objects.all().values('id', 'name')
+
+        # Get tested combinations
+        tested_combinations = set(
+            QuickTest.objects.filter(
+                feature_config__dataset__model_endpoint=model_endpoint,
+                status__in=[QuickTest.STATUS_COMPLETED, QuickTest.STATUS_RUNNING, QuickTest.STATUS_SUBMITTING]
+            ).values_list('feature_config_id', 'model_config_id')
+        )
+
+        # Find untested combinations
+        untested_count = 0
+        for fc in feature_configs:
+            for mc in model_configs:
+                if (fc['id'], mc['id']) not in tested_combinations:
+                    if untested_count < 3:  # Limit to 3 suggestions
+                        suggestions.append({
+                            'type': 'untested_combination',
+                            'title': f"Try {fc['name']} + {mc['name']}",
+                            'description': "This Feature Config + Model Config combination hasn't been tested yet",
+                            'feature_config_id': fc['id'],
+                            'feature_config_name': fc['name'],
+                            'model_config_id': mc['id'],
+                            'model_config_name': mc['name'],
+                        })
+                    untested_count += 1
+
+        # Get the best experiment for hyperparameter variation suggestions
+        best_experiment = QuickTest.objects.filter(
+            feature_config__dataset__model_endpoint=model_endpoint,
+            status=QuickTest.STATUS_COMPLETED,
+            recall_at_100__isnull=False
+        ).select_related('feature_config', 'model_config').order_by('-recall_at_100').first()
+
+        if best_experiment:
+            # Suggest variations of the best experiment
+            current_lr = best_experiment.learning_rate
+            current_epochs = best_experiment.epochs
+
+            # Suggest lower learning rate
+            if current_lr > 0.001:
+                suggestions.append({
+                    'type': 'hyperparameter_variation',
+                    'title': 'Try lower learning rate',
+                    'description': f"Your best config uses LR={current_lr}. Try LR={current_lr/2} for potentially better convergence",
+                    'base_experiment_id': best_experiment.id,
+                    'feature_config_id': best_experiment.feature_config.id,
+                    'feature_config_name': best_experiment.feature_config.name,
+                    'model_config_id': best_experiment.model_config.id if best_experiment.model_config else None,
+                    'model_config_name': best_experiment.model_config.name if best_experiment.model_config else None,
+                    'suggested_params': {
+                        'learning_rate': current_lr / 2,
+                        'batch_size': best_experiment.batch_size,
+                        'epochs': best_experiment.epochs,
+                    }
+                })
+
+            # Suggest more epochs
+            if current_epochs < 20:
+                suggestions.append({
+                    'type': 'hyperparameter_variation',
+                    'title': 'Try more training epochs',
+                    'description': f"Your best config uses {current_epochs} epochs. Try {current_epochs + 5} epochs for potentially better results",
+                    'base_experiment_id': best_experiment.id,
+                    'feature_config_id': best_experiment.feature_config.id,
+                    'feature_config_name': best_experiment.feature_config.name,
+                    'model_config_id': best_experiment.model_config.id if best_experiment.model_config else None,
+                    'model_config_name': best_experiment.model_config.name if best_experiment.model_config else None,
+                    'suggested_params': {
+                        'learning_rate': best_experiment.learning_rate,
+                        'batch_size': best_experiment.batch_size,
+                        'epochs': current_epochs + 5,
+                    }
+                })
+
+            # Suggest 100% data if not already using it
+            if best_experiment.data_sample_percent < 100:
+                suggestions.append({
+                    'type': 'hyperparameter_variation',
+                    'title': 'Try with full dataset',
+                    'description': f"Your best config uses {best_experiment.data_sample_percent}% of data. Try 100% for better accuracy",
+                    'base_experiment_id': best_experiment.id,
+                    'feature_config_id': best_experiment.feature_config.id,
+                    'feature_config_name': best_experiment.feature_config.name,
+                    'model_config_id': best_experiment.model_config.id if best_experiment.model_config else None,
+                    'model_config_name': best_experiment.model_config.name if best_experiment.model_config else None,
+                    'suggested_params': {
+                        'learning_rate': best_experiment.learning_rate,
+                        'batch_size': best_experiment.batch_size,
+                        'epochs': best_experiment.epochs,
+                        'data_sample_percent': 100,
+                    }
+                })
+
+        return JsonResponse({
+            'success': True,
+            'suggestions': suggestions[:6],  # Limit total suggestions
+            'untested_combinations_count': untested_count
+        })
+
+    except Exception as e:
+        logger.exception(f"Error getting experiment suggestions: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def dataset_comparison(request):
+    """
+    Get dataset performance comparison.
+
+    GET /api/experiments/dataset-comparison/
+
+    Returns:
+    {
+        "success": true,
+        "datasets": [
+            {
+                "id": 1,
+                "name": "Q4 Data",
+                "experiment_count": 25,
+                "avg_recall": 0.45,
+                "best_recall": 0.473,
+                "avg_loss": 0.035
+            },
+            ...
+        ]
+    }
+    """
+    try:
+        model_endpoint = _get_model_endpoint(request)
+        if not model_endpoint:
+            return JsonResponse({
+                'success': False,
+                'error': 'No model endpoint selected'
+            }, status=400)
+
+        from collections import defaultdict
+        from ml_platform.models import Dataset
+
+        # Get all datasets for this model endpoint
+        datasets = {ds['id']: ds['name'] for ds in Dataset.objects.filter(
+            model_endpoint=model_endpoint
+        ).values('id', 'name')}
+
+        # Get all completed experiments and group by dataset
+        queryset = QuickTest.objects.filter(
+            feature_config__dataset__model_endpoint=model_endpoint,
+            status=QuickTest.STATUS_COMPLETED
+        ).select_related('feature_config__dataset')
+
+        dataset_experiments = defaultdict(list)
+        for qt in queryset:
+            ds_id = qt.feature_config.dataset_id if qt.feature_config else None
+            if ds_id is None:
+                continue
+
+            exp_metrics = _get_experiment_metrics(qt)
+            recall = exp_metrics.get('recall_at_100')
+            loss = exp_metrics.get('loss')
+
+            if recall is not None:
+                dataset_experiments[ds_id].append({
+                    'recall': recall,
+                    'loss': loss,
+                })
+
+        # Build stats for each dataset
+        dataset_stats = []
+        for ds_id, experiments in dataset_experiments.items():
+            ds_name = datasets.get(ds_id, f'Dataset {ds_id}')
+            recalls = [e['recall'] for e in experiments if e['recall'] is not None]
+            losses = [e['loss'] for e in experiments if e['loss'] is not None]
+
+            if recalls:
+                dataset_stats.append({
+                    'id': ds_id,
+                    'name': ds_name,
+                    'experiment_count': len(experiments),
+                    'avg_recall': round(sum(recalls) / len(recalls), 4),
+                    'best_recall': round(max(recalls), 4),
+                    'avg_loss': round(sum(losses) / len(losses), 4) if losses else None,
+                    'min_loss': round(min(losses), 4) if losses else None,
+                })
+
+        # Sort by best_recall descending
+        dataset_stats.sort(key=lambda x: x['best_recall'] or 0, reverse=True)
+
+        return JsonResponse({
+            'success': True,
+            'datasets': dataset_stats
+        })
+
+    except Exception as e:
+        logger.exception(f"Error getting dataset comparison: {e}")
         return JsonResponse({
             'success': False,
             'error': str(e)

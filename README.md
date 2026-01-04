@@ -305,6 +305,7 @@ gcloud run jobs execute django-migrate-and-createsuperuser --region europe-centr
 - **Quick Test Pipeline** - ✅ **Fully working!** TFX pipeline on Vertex AI with TFRS model training and SavedModel export
 - **Model Structure** - Tower architecture builder with presets, layer configuration, training params (9 endpoints)
 - **MLflow Integration** - ✅ **Complete!** Experiment tracking, per-epoch charts, leaderboard, configuration heatmaps
+- **Experiments Dashboard** - ✅ **Enhanced!** 8 analytical components, AI-powered suggestions, hyperparameter insights
 
 ### **🔮 Next Up**
 1. Full Training Pipeline - Extended training with checkpointing
@@ -386,6 +387,17 @@ WHERE source_type='gcs';
 ---
 
 ## 📝 Recent Updates
+
+**January 4, 2026 - Experiments Dashboard Enhanced**
+- ✅ **8 analytical components** - Complete dashboard overhaul with metrics trend, top configs, hyperparameter insights
+- ✅ **Metrics Trend Chart** - Line chart showing cumulative best Recall@100 improvement over time
+- ✅ **Top Configurations Table** - Top 5 experiments ranked by R@100 with full hyperparameter details
+- ✅ **Hyperparameter Insights** - Grid showing which LR, batch size, epochs values perform best
+- ✅ **Dataset Performance** - Compare results across different datasets
+- ✅ **Suggested Next Experiments** - AI-powered recommendations with "Run Experiment" buttons
+- ✅ **Enhanced Summary Cards** - 8 KPIs: Total, Completed, Running, Failed, Best R@100, Avg R@100, Success Rate, Avg Duration
+- ✅ **5 new API endpoints** - metrics-trend, hyperparameter-analysis, top-configurations, suggestions, dataset-comparison
+- See [Phase: Experiments docs](docs/phase_experiments.md) for details
 
 **December 22, 2025 - Enhanced Pipeline DAG Visualization (Phase 20)**
 - ✅ **8-node TFX pipeline** - Pipeline Compile, Examples Gen, Stats Gen, Schema Gen, Transform, Trainer, Evaluator, Pusher

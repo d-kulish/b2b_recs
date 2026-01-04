@@ -865,6 +865,95 @@ Returns experiments available for comparison (excludes running/submitting/pendin
 
 ---
 
+### Experiments Dashboard Enhanced (2026-01-04)
+
+**Major Feature:** Complete overhaul of Experiments Dashboard with 8 new analytical components and 5 new API endpoints.
+
+**New Dashboard Layout (Single-Column Scrollable):**
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Experiments Dashboard                                    [🔄 Refresh]       │
+│ Analyze and compare experiment results                                      │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│ Summary Cards Row 1: [Total] [Completed] [Running] [Failed]                 │
+│ Summary Cards Row 2: [Best R@100] [Avg R@100] [Success Rate] [Avg Duration] │
+│                                                                             │
+│ ═══════════════════════════════════════════════════════════════════════════ │
+│ METRICS TREND - Line chart showing Best R@100 improvement over time         │
+│ ═══════════════════════════════════════════════════════════════════════════ │
+│ TOP CONFIGURATIONS - Table of top 5 experiments with full params            │
+│ ═══════════════════════════════════════════════════════════════════════════ │
+│ HYPERPARAMETER INSIGHTS - Grid showing best values per hyperparameter       │
+│ ═══════════════════════════════════════════════════════════════════════════ │
+│ LEADERBOARD - Sortable ranked list by metric (existing)                     │
+│ ═══════════════════════════════════════════════════════════════════════════ │
+│ CONFIGURATION HEATMAP - FeatureConfig × ModelConfig matrix (existing)       │
+│ ═══════════════════════════════════════════════════════════════════════════ │
+│ DATASET PERFORMANCE - Compare results across different datasets             │
+│ ═══════════════════════════════════════════════════════════════════════════ │
+│ SUGGESTED NEXT EXPERIMENTS - AI-powered recommendations with Run buttons    │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**New UI Components:**
+
+1. **Refresh Button** - Manual refresh with spinning animation
+2. **Enhanced Summary Cards (8 total)** - Two rows of KPI cards
+   - Row 1: Total Experiments, Completed, Running, Failed
+   - Row 2: Best R@100, Avg R@100, Success Rate (%), Avg Duration
+3. **Metrics Trend Chart** - Line chart (Chart.js) showing:
+   - Cumulative best Recall@100 over time (green line)
+   - Running average Recall@100 (dashed gray line)
+   - Experiment count in tooltips
+4. **Top Configurations Table** - Top 5 experiments ranked by R@100
+   - Shows: Rank, Name, Feature Config, Model Config, LR, Batch, Epochs, R@100, Loss
+   - Clickable rows open experiment View modal
+   - Gold/silver/bronze rank highlighting
+5. **Hyperparameter Insights Grid** - Cards showing best values per parameter
+   - Learning Rate, Batch Size, Epochs, Data Sample %, Split Strategy
+   - Shows avg recall and experiment count per value
+   - Best value highlighted in green
+6. **Dataset Performance Table** - Compare datasets
+   - Columns: Dataset Name, Experiment Count, Best R@100, Avg R@100, Avg Loss
+   - Best dataset highlighted
+7. **Suggested Next Experiments** - AI-powered recommendations
+   - **Untested Combinations**: FeatureConfig × ModelConfig pairs not yet tested
+   - **Hyperparameter Variations**: Lower LR, more epochs, full dataset suggestions
+   - **"Run Experiment" buttons**: Opens wizard pre-filled with suggested params
+
+**New API Endpoints:**
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/experiments/metrics-trend/` | GET | Cumulative best recall over time |
+| `/api/experiments/hyperparameter-analysis/` | GET | Best values per hyperparameter |
+| `/api/experiments/top-configurations/?limit=N` | GET | Top N experiments by recall |
+| `/api/experiments/suggestions/` | GET | AI-powered next experiment suggestions |
+| `/api/experiments/dataset-comparison/` | GET | Performance comparison by dataset |
+
+**Enhanced Existing Endpoints:**
+
+| Endpoint | Enhancement |
+|----------|-------------|
+| `/api/experiments/dashboard-stats/` | Added: running, failed, success_rate, avg_duration_minutes |
+| `/api/experiments/leaderboard/` | Now reads metrics from training_history_json |
+| `/api/experiments/heatmap/` | Now reads metrics from training_history_json |
+
+**Technical Implementation:**
+
+- **Helper Function**: `_get_experiment_metrics(qt)` extracts metrics from either direct fields or `training_history_json['final_metrics']`
+- **Backward Compatibility**: Falls back to JSON data when direct `recall_at_100` field is NULL
+- **Parallel Loading**: All dashboard sections load concurrently via `Promise.all()`
+
+**Files Modified:**
+- `ml_platform/experiments/api.py` - 5 new endpoints, 1 helper function, 3 enhanced endpoints
+- `ml_platform/experiments/urls.py` - 5 new URL routes
+- `templates/ml_platform/model_experiments.html` - ~400 lines of new HTML, CSS, JavaScript
+
+---
+
 ### Experiments Dashboard Chapter - MLflow Integration (2025-12-23)
 
 **Major Feature:** Added complete Experiments Dashboard chapter to `model_experiments.html` for MLflow-based experiment analysis.

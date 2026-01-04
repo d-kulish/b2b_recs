@@ -114,4 +114,31 @@ urlpatterns = [
         api.experiment_dashboard_stats,
         name='experiment_dashboard_stats'
     ),
+
+    # New Dashboard Analytics Endpoints
+    path(
+        'api/experiments/metrics-trend/',
+        api.metrics_trend,
+        name='metrics_trend'
+    ),
+    path(
+        'api/experiments/hyperparameter-analysis/',
+        api.hyperparameter_analysis,
+        name='hyperparameter_analysis'
+    ),
+    path(
+        'api/experiments/top-configurations/',
+        api.top_configurations,
+        name='top_configurations'
+    ),
+    path(
+        'api/experiments/suggestions/',
+        api.experiment_suggestions,
+        name='experiment_suggestions'
+    ),
+    path(
+        'api/experiments/dataset-comparison/',
+        api.dataset_comparison,
+        name='dataset_comparison'
+    ),
 ]

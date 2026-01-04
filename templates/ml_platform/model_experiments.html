@@ -2909,6 +2909,196 @@
     .dashboard-loading i {
         margin-right: 8px;
     }
+
+    /* Dashboard Table Styles */
+    .dashboard-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+    }
+    .dashboard-table th {
+        text-align: left;
+        padding: 10px 12px;
+        font-weight: 600;
+        color: #374151;
+        background: #f9fafb;
+        border-bottom: 2px solid #e5e7eb;
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .dashboard-table td {
+        padding: 10px 12px;
+        border-bottom: 1px solid #f3f4f6;
+        color: #4b5563;
+    }
+    .dashboard-table tr:hover {
+        background: #f9fafb;
+    }
+    .dashboard-table tr:last-child td {
+        border-bottom: none;
+    }
+    .dashboard-table .rank-cell {
+        font-weight: 700;
+        color: #6b7280;
+    }
+    .dashboard-table .rank-1 {
+        color: #f59e0b;
+    }
+    .dashboard-table .rank-2 {
+        color: #9ca3af;
+    }
+    .dashboard-table .rank-3 {
+        color: #b45309;
+    }
+    .dashboard-table .metric-best {
+        color: #10b981;
+        font-weight: 600;
+    }
+
+    /* Dashboard Empty Section */
+    .dashboard-empty-section {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 32px;
+        color: #9ca3af;
+        text-align: center;
+    }
+    .dashboard-empty-section i {
+        font-size: 32px;
+        margin-bottom: 12px;
+        opacity: 0.5;
+    }
+    .dashboard-empty-section p {
+        font-size: 13px;
+    }
+
+    /* Hyperparameter Grid */
+    .hyperparam-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 16px;
+    }
+    .hyperparam-card {
+        background: #f9fafb;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        padding: 12px;
+    }
+    .hyperparam-card-title {
+        font-size: 12px;
+        font-weight: 600;
+        color: #6b7280;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 8px;
+    }
+    .hyperparam-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 6px 0;
+        border-bottom: 1px solid #e5e7eb;
+        font-size: 13px;
+    }
+    .hyperparam-item:last-child {
+        border-bottom: none;
+    }
+    .hyperparam-value {
+        font-weight: 600;
+        color: #374151;
+    }
+    .hyperparam-recall {
+        color: #10b981;
+        font-weight: 500;
+    }
+    .hyperparam-count {
+        font-size: 11px;
+        color: #9ca3af;
+        margin-left: 4px;
+    }
+    .hyperparam-best {
+        background: #ecfdf5;
+        border-color: #10b981;
+    }
+
+    /* Suggestions Grid */
+    .suggestions-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 12px;
+    }
+    .suggestion-card {
+        background: #fffbeb;
+        border: 1px solid #fbbf24;
+        border-radius: 8px;
+        padding: 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+    .suggestion-card.variation {
+        background: #eff6ff;
+        border-color: #3b82f6;
+    }
+    .suggestion-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .suggestion-icon {
+        width: 28px;
+        height: 28px;
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        color: white;
+        background: #f59e0b;
+        flex-shrink: 0;
+    }
+    .suggestion-card.variation .suggestion-icon {
+        background: #3b82f6;
+    }
+    .suggestion-title {
+        font-weight: 600;
+        font-size: 14px;
+        color: #374151;
+    }
+    .suggestion-description {
+        font-size: 12px;
+        color: #6b7280;
+        line-height: 1.4;
+    }
+    .suggestion-action {
+        margin-top: auto;
+    }
+    .suggestion-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        font-size: 12px;
+        font-weight: 500;
+        color: white;
+        background: #f59e0b;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: background 0.15s ease;
+    }
+    .suggestion-btn:hover {
+        background: #d97706;
+    }
+    .suggestion-card.variation .suggestion-btn {
+        background: #3b82f6;
+    }
+    .suggestion-card.variation .suggestion-btn:hover {
+        background: #2563eb;
+    }
 </style>
 {% endblock %}
 
@@ -3014,14 +3204,20 @@
          Experiments Dashboard Chapter
          ========================================================================= -->
     <div class="chapter-section" id="experimentsDashboard">
-        <div class="chapter-header">
-            <div class="chapter-icon dashboard">
-                <i class="fas fa-chart-bar"></i>
+        <div class="chapter-header" style="justify-content: space-between;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <div class="chapter-icon dashboard">
+                    <i class="fas fa-chart-bar"></i>
+                </div>
+                <div>
+                    <h2 class="chapter-title">Experiments Dashboard</h2>
+                    <p class="chapter-subtitle">Analyze and compare experiment results</p>
+                </div>
             </div>
-            <div>
-                <h2 class="chapter-title">Experiments Dashboard</h2>
-                <p class="chapter-subtitle">Analyze and compare experiment results</p>
-            </div>
+            <button id="dashboardRefreshBtn" class="btn-secondary" onclick="refreshDashboard()" title="Refresh dashboard data">
+                <i class="fas fa-sync-alt" id="dashboardRefreshIcon"></i>
+                <span>Refresh</span>
+            </button>
         </div>
 
         <!-- Loading State -->
@@ -3032,7 +3228,7 @@
 
         <!-- Dashboard Content (hidden until loaded) -->
         <div id="dashboardContent" class="hidden">
-            <!-- Summary Cards -->
+            <!-- Summary Cards - Row 1 -->
             <div class="dashboard-summary">
                 <div class="dashboard-card">
                     <div class="dashboard-card-value" id="dashboardTotalExp">-</div>
@@ -3043,12 +3239,85 @@
                     <div class="dashboard-card-label">Completed</div>
                 </div>
                 <div class="dashboard-card">
+                    <div class="dashboard-card-value" id="dashboardRunning">-</div>
+                    <div class="dashboard-card-label">Running</div>
+                </div>
+                <div class="dashboard-card">
+                    <div class="dashboard-card-value" id="dashboardFailed">-</div>
+                    <div class="dashboard-card-label">Failed</div>
+                </div>
+            </div>
+            <!-- Summary Cards - Row 2 -->
+            <div class="dashboard-summary" style="margin-top: -8px;">
+                <div class="dashboard-card">
                     <div class="dashboard-card-value highlight" id="dashboardBestRecall">-</div>
                     <div class="dashboard-card-label">Best Recall@100</div>
                 </div>
                 <div class="dashboard-card">
                     <div class="dashboard-card-value" id="dashboardAvgRecall">-</div>
                     <div class="dashboard-card-label">Avg Recall@100</div>
+                </div>
+                <div class="dashboard-card">
+                    <div class="dashboard-card-value" id="dashboardSuccessRate">-</div>
+                    <div class="dashboard-card-label">Success Rate</div>
+                </div>
+                <div class="dashboard-card">
+                    <div class="dashboard-card-value" id="dashboardAvgDuration">-</div>
+                    <div class="dashboard-card-label">Avg Duration</div>
+                </div>
+            </div>
+
+            <!-- Metrics Trend Section -->
+            <div class="dashboard-section">
+                <div class="dashboard-section-header">
+                    <span class="dashboard-section-title">Metrics Trend</span>
+                    <span class="text-xs text-gray-400">Best Recall@100 improvement over time</span>
+                </div>
+                <div id="trendChartContainer" style="height: 250px; position: relative;">
+                    <canvas id="trendChartCanvas"></canvas>
+                    <div id="trendChartEmpty" class="dashboard-empty-section hidden">
+                        <i class="fas fa-chart-line"></i>
+                        <p>Not enough data for trend analysis</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Top Configurations Section -->
+            <div class="dashboard-section">
+                <div class="dashboard-section-header">
+                    <span class="dashboard-section-title">Top Configurations</span>
+                    <span class="text-xs text-gray-400">Best performing experiment configurations</span>
+                </div>
+                <div id="topConfigsContainer">
+                    <table class="dashboard-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 40px;">#</th>
+                                <th>Experiment</th>
+                                <th>Feature Config</th>
+                                <th>Model Config</th>
+                                <th>LR</th>
+                                <th>Batch</th>
+                                <th>Epochs</th>
+                                <th style="text-align: right;">R@100</th>
+                                <th style="text-align: right;">Loss</th>
+                            </tr>
+                        </thead>
+                        <tbody id="topConfigsBody">
+                            <!-- Populated by JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Hyperparameter Analysis Section -->
+            <div class="dashboard-section">
+                <div class="dashboard-section-header">
+                    <span class="dashboard-section-title">Hyperparameter Insights</span>
+                    <span class="text-xs text-gray-400">Which parameter values work best</span>
+                </div>
+                <div id="hyperparamContainer" class="hyperparam-grid">
+                    <!-- Populated by JavaScript -->
                 </div>
             </div>
 
@@ -3119,6 +3388,49 @@
                         <div class="heatmap-legend-color" style="background: #e5e7eb;"></div>
                         <span>No data</span>
                     </div>
+                </div>
+            </div>
+
+            <!-- Dataset Comparison Section -->
+            <div class="dashboard-section">
+                <div class="dashboard-section-header">
+                    <span class="dashboard-section-title">Dataset Performance</span>
+                    <span class="text-xs text-gray-400">Compare results across different datasets</span>
+                </div>
+                <div id="datasetComparisonContainer">
+                    <table class="dashboard-table">
+                        <thead>
+                            <tr>
+                                <th>Dataset</th>
+                                <th style="text-align: center;">Experiments</th>
+                                <th style="text-align: right;">Best R@100</th>
+                                <th style="text-align: right;">Avg R@100</th>
+                                <th style="text-align: right;">Avg Loss</th>
+                            </tr>
+                        </thead>
+                        <tbody id="datasetComparisonBody">
+                            <!-- Populated by JavaScript -->
+                        </tbody>
+                    </table>
+                    <div id="datasetComparisonEmpty" class="dashboard-empty-section hidden">
+                        <i class="fas fa-database"></i>
+                        <p>No dataset comparison data available</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Experiment Suggestions Section -->
+            <div class="dashboard-section">
+                <div class="dashboard-section-header">
+                    <span class="dashboard-section-title">Suggested Next Experiments</span>
+                    <span class="text-xs text-gray-400">Recommendations based on gaps in your experiment coverage</span>
+                </div>
+                <div id="suggestionsContainer" class="suggestions-grid">
+                    <!-- Populated by JavaScript -->
+                </div>
+                <div id="suggestionsEmpty" class="dashboard-empty-section hidden">
+                    <i class="fas fa-lightbulb"></i>
+                    <p>No suggestions available yet</p>
                 </div>
             </div>
         </div>
@@ -8549,6 +8861,38 @@ function showSuccess(message) {
 // EXPERIMENTS DASHBOARD
 // =============================================================================
 let heatmapChart = null;
+let trendChart = null;
+let datasetChart = null;
+
+function formatDuration(minutes) {
+    if (minutes === null || minutes === undefined) return '-';
+    if (minutes < 60) {
+        return Math.round(minutes) + 'm';
+    } else {
+        const hours = Math.floor(minutes / 60);
+        const mins = Math.round(minutes % 60);
+        return hours + 'h ' + mins + 'm';
+    }
+}
+
+async function refreshDashboard() {
+    const btn = document.getElementById('dashboardRefreshBtn');
+    const icon = document.getElementById('dashboardRefreshIcon');
+
+    // Disable button and show spinning
+    btn.disabled = true;
+    icon.classList.add('fa-spin');
+
+    try {
+        await loadExperimentsDashboard();
+        showSuccess('Dashboard refreshed');
+    } catch (error) {
+        showError('Failed to refresh dashboard');
+    } finally {
+        btn.disabled = false;
+        icon.classList.remove('fa-spin');
+    }
+}
 
 async function loadExperimentsDashboard() {
     const loadingEl = document.getElementById('dashboardLoading');
@@ -8576,22 +8920,35 @@ async function loadExperimentsDashboard() {
             return;
         }
 
-        // Render summary cards
+        // Render summary cards - Row 1
         document.getElementById('dashboardTotalExp').textContent = stats.total;
         document.getElementById('dashboardCompleted').textContent = stats.completed;
+        document.getElementById('dashboardRunning').textContent = stats.running || 0;
+        document.getElementById('dashboardFailed').textContent = stats.failed || 0;
+
+        // Render summary cards - Row 2
         document.getElementById('dashboardBestRecall').textContent =
             stats.best_recall_100 !== null ? stats.best_recall_100.toFixed(3) : '-';
         document.getElementById('dashboardAvgRecall').textContent =
             stats.avg_recall_100 !== null ? stats.avg_recall_100.toFixed(3) : '-';
+        document.getElementById('dashboardSuccessRate').textContent =
+            stats.success_rate !== null ? stats.success_rate.toFixed(1) + '%' : '-';
+        document.getElementById('dashboardAvgDuration').textContent =
+            stats.avg_duration_minutes !== null ? formatDuration(stats.avg_duration_minutes) : '-';
 
         // Show content, hide loading
         loadingEl.classList.add('hidden');
         contentEl.classList.remove('hidden');
 
-        // Load leaderboard and heatmap
+        // Load all dashboard sections in parallel
         await Promise.all([
+            loadMetricsTrend(),
+            loadTopConfigurations(),
+            loadHyperparameterAnalysis(),
             loadLeaderboard(),
-            loadHeatmap()
+            loadHeatmap(),
+            loadDatasetComparison(),
+            loadSuggestions()
         ]);
 
     } catch (error) {
@@ -8844,6 +9201,350 @@ function renderHeatmapChart(canvas, heatmap) {
             }
         }
     });
+}
+
+// =============================================================================
+// NEW DASHBOARD SECTIONS
+// =============================================================================
+
+async function loadMetricsTrend() {
+    const canvas = document.getElementById('trendChartCanvas');
+    const emptyEl = document.getElementById('trendChartEmpty');
+
+    try {
+        const response = await fetch('/api/experiments/metrics-trend/');
+        const data = await response.json();
+
+        if (!data.success || !data.trend || data.trend.length < 2) {
+            canvas.style.display = 'none';
+            emptyEl.classList.remove('hidden');
+            return;
+        }
+
+        canvas.style.display = 'block';
+        emptyEl.classList.add('hidden');
+
+        // Destroy existing chart
+        if (trendChart) {
+            trendChart.destroy();
+            trendChart = null;
+        }
+
+        const ctx = canvas.getContext('2d');
+        trendChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: data.trend.map(d => d.date),
+                datasets: [
+                    {
+                        label: 'Best Recall@100',
+                        data: data.trend.map(d => d.best_recall),
+                        borderColor: '#10b981',
+                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                        fill: true,
+                        tension: 0.3,
+                        pointRadius: 3,
+                        pointHoverRadius: 5
+                    },
+                    {
+                        label: 'Avg Recall@100',
+                        data: data.trend.map(d => d.avg_recall),
+                        borderColor: '#6b7280',
+                        borderDash: [5, 5],
+                        fill: false,
+                        tension: 0.3,
+                        pointRadius: 2,
+                        pointHoverRadius: 4
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'top',
+                        align: 'end',
+                        labels: { boxWidth: 12, font: { size: 11 } }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            afterLabel: (context) => {
+                                const idx = context.dataIndex;
+                                return `Experiments: ${data.trend[idx].experiment_count}`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: { display: false },
+                        ticks: { font: { size: 10 }, maxTicksLimit: 10 }
+                    },
+                    y: {
+                        beginAtZero: false,
+                        grid: { color: 'rgba(0,0,0,0.05)' },
+                        ticks: { font: { size: 10 } }
+                    }
+                }
+            }
+        });
+
+    } catch (error) {
+        console.error('Failed to load metrics trend:', error);
+        canvas.style.display = 'none';
+        emptyEl.classList.remove('hidden');
+    }
+}
+
+async function loadTopConfigurations() {
+    const tbody = document.getElementById('topConfigsBody');
+
+    try {
+        const response = await fetch('/api/experiments/top-configurations/?limit=5');
+        const data = await response.json();
+
+        if (!data.success || !data.configurations || data.configurations.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="9" class="text-center text-gray-400 py-4">
+                        No completed experiments yet
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
+        const bestRecall = data.configurations[0]?.recall_at_100;
+
+        tbody.innerHTML = data.configurations.map((cfg, index) => {
+            const rankClass = index < 3 ? `rank-${index + 1}` : '';
+            const isBest = cfg.recall_at_100 === bestRecall;
+
+            return `
+                <tr onclick="openExpViewModal(${cfg.experiment_id})" style="cursor: pointer;" title="Click to view details">
+                    <td class="rank-cell ${rankClass}">${cfg.rank}</td>
+                    <td>${cfg.display_name || 'Exp #' + cfg.experiment_number}</td>
+                    <td>${cfg.feature_config || '-'}</td>
+                    <td>${cfg.model_config || '-'}</td>
+                    <td>${cfg.learning_rate}</td>
+                    <td>${cfg.batch_size}</td>
+                    <td>${cfg.epochs}</td>
+                    <td style="text-align: right;" class="${isBest ? 'metric-best' : ''}">
+                        ${cfg.recall_at_100 !== null ? cfg.recall_at_100.toFixed(4) : '-'}
+                    </td>
+                    <td style="text-align: right;">
+                        ${cfg.loss !== null ? cfg.loss.toFixed(4) : '-'}
+                    </td>
+                </tr>
+            `;
+        }).join('');
+
+    } catch (error) {
+        console.error('Failed to load top configurations:', error);
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="9" class="text-center text-red-400 py-4">
+                    Failed to load configurations
+                </td>
+            </tr>
+        `;
+    }
+}
+
+async function loadHyperparameterAnalysis() {
+    const container = document.getElementById('hyperparamContainer');
+
+    try {
+        const response = await fetch('/api/experiments/hyperparameter-analysis/');
+        const data = await response.json();
+
+        if (!data.success || !data.analysis) {
+            container.innerHTML = '<div class="dashboard-empty-section"><i class="fas fa-cogs"></i><p>No hyperparameter data available</p></div>';
+            return;
+        }
+
+        const paramLabels = {
+            'learning_rate': 'Learning Rate',
+            'batch_size': 'Batch Size',
+            'epochs': 'Epochs',
+            'data_sample_percent': 'Data Sample',
+            'split_strategy': 'Split Strategy'
+        };
+
+        let html = '';
+        for (const [param, values] of Object.entries(data.analysis)) {
+            if (!values || values.length === 0) continue;
+
+            const label = paramLabels[param] || param;
+            const topValues = values.slice(0, 4); // Show top 4 values
+
+            html += `
+                <div class="hyperparam-card ${topValues.length > 0 ? '' : 'hidden'}">
+                    <div class="hyperparam-card-title">${label}</div>
+                    ${topValues.map((item, idx) => `
+                        <div class="hyperparam-item ${idx === 0 ? 'hyperparam-best' : ''}">
+                            <span class="hyperparam-value">${item.value}</span>
+                            <span>
+                                <span class="hyperparam-recall">${item.avg_recall !== null ? item.avg_recall.toFixed(3) : '-'}</span>
+                                <span class="hyperparam-count">(${item.count})</span>
+                            </span>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        container.innerHTML = html || '<div class="dashboard-empty-section"><i class="fas fa-cogs"></i><p>No hyperparameter data available</p></div>';
+
+    } catch (error) {
+        console.error('Failed to load hyperparameter analysis:', error);
+        container.innerHTML = '<div class="dashboard-empty-section text-red-400"><i class="fas fa-exclamation-triangle"></i><p>Failed to load analysis</p></div>';
+    }
+}
+
+async function loadSuggestions() {
+    const container = document.getElementById('suggestionsContainer');
+    const emptyEl = document.getElementById('suggestionsEmpty');
+
+    try {
+        const response = await fetch('/api/experiments/suggestions/');
+        const data = await response.json();
+
+        if (!data.success || !data.suggestions || data.suggestions.length === 0) {
+            container.innerHTML = '';
+            emptyEl.classList.remove('hidden');
+            return;
+        }
+
+        emptyEl.classList.add('hidden');
+
+        container.innerHTML = data.suggestions.map(suggestion => {
+            const isVariation = suggestion.type === 'hyperparameter_variation';
+            const cardClass = isVariation ? 'suggestion-card variation' : 'suggestion-card';
+            const icon = isVariation ? 'fa-sliders-h' : 'fa-flask';
+
+            // Build the onclick handler for running the experiment
+            let onclickHandler = '';
+            if (suggestion.feature_config_id && suggestion.model_config_id) {
+                const params = suggestion.suggested_params || {};
+                onclickHandler = `openWizardWithSuggestion(${suggestion.feature_config_id}, ${suggestion.model_config_id}, ${JSON.stringify(params).replace(/"/g, '&quot;')})`;
+            }
+
+            return `
+                <div class="${cardClass}">
+                    <div class="suggestion-header">
+                        <div class="suggestion-icon">
+                            <i class="fas ${icon}"></i>
+                        </div>
+                        <span class="suggestion-title">${suggestion.title}</span>
+                    </div>
+                    <p class="suggestion-description">${suggestion.description}</p>
+                    ${onclickHandler ? `
+                        <div class="suggestion-action">
+                            <button class="suggestion-btn" onclick="${onclickHandler}">
+                                <i class="fas fa-play"></i>
+                                Run Experiment
+                            </button>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }).join('');
+
+    } catch (error) {
+        console.error('Failed to load suggestions:', error);
+        container.innerHTML = '';
+        emptyEl.classList.remove('hidden');
+    }
+}
+
+async function loadDatasetComparison() {
+    const tbody = document.getElementById('datasetComparisonBody');
+    const emptyEl = document.getElementById('datasetComparisonEmpty');
+
+    try {
+        const response = await fetch('/api/experiments/dataset-comparison/');
+        const data = await response.json();
+
+        if (!data.success || !data.datasets || data.datasets.length === 0) {
+            tbody.parentElement.style.display = 'none';
+            emptyEl.classList.remove('hidden');
+            return;
+        }
+
+        tbody.parentElement.style.display = 'table';
+        emptyEl.classList.add('hidden');
+
+        const bestRecall = Math.max(...data.datasets.map(d => d.best_recall || 0));
+
+        tbody.innerHTML = data.datasets.map(ds => {
+            const isBest = ds.best_recall === bestRecall;
+            return `
+                <tr>
+                    <td><strong>${ds.name}</strong></td>
+                    <td style="text-align: center;">${ds.experiment_count}</td>
+                    <td style="text-align: right;" class="${isBest ? 'metric-best' : ''}">
+                        ${ds.best_recall !== null ? ds.best_recall.toFixed(4) : '-'}
+                    </td>
+                    <td style="text-align: right;">
+                        ${ds.avg_recall !== null ? ds.avg_recall.toFixed(4) : '-'}
+                    </td>
+                    <td style="text-align: right;">
+                        ${ds.avg_loss !== null ? ds.avg_loss.toFixed(4) : '-'}
+                    </td>
+                </tr>
+            `;
+        }).join('');
+
+    } catch (error) {
+        console.error('Failed to load dataset comparison:', error);
+        tbody.parentElement.style.display = 'none';
+        emptyEl.classList.remove('hidden');
+    }
+}
+
+// Function to open wizard with pre-filled suggestion params
+function openWizardWithSuggestion(featureConfigId, modelConfigId, suggestedParams) {
+    // Open the wizard modal
+    openNewExpWizard();
+
+    // Wait for the modal to load, then set the values
+    setTimeout(() => {
+        // Set feature config
+        const fcSelect = document.getElementById('wizardFeatureConfigSelect');
+        if (fcSelect) {
+            fcSelect.value = featureConfigId;
+            fcSelect.dispatchEvent(new Event('change'));
+        }
+
+        // Set model config
+        const mcSelect = document.getElementById('wizardModelConfigSelect');
+        if (mcSelect) {
+            mcSelect.value = modelConfigId;
+            mcSelect.dispatchEvent(new Event('change'));
+        }
+
+        // Apply suggested params after a small delay to let model config load its defaults
+        setTimeout(() => {
+            if (suggestedParams.learning_rate !== undefined) {
+                const lrInput = document.getElementById('wizardLearningRate');
+                if (lrInput) lrInput.value = suggestedParams.learning_rate;
+            }
+            if (suggestedParams.batch_size !== undefined) {
+                const bsSelect = document.getElementById('wizardBatchSize');
+                if (bsSelect) bsSelect.value = suggestedParams.batch_size;
+            }
+            if (suggestedParams.epochs !== undefined) {
+                const epochsSelect = document.getElementById('wizardEpochs');
+                if (epochsSelect) epochsSelect.value = suggestedParams.epochs;
+            }
+            if (suggestedParams.data_sample_percent !== undefined) {
+                const sampleSelect = document.getElementById('wizardDataSample');
+                if (sampleSelect) sampleSelect.value = suggestedParams.data_sample_percent;
+            }
+        }, 300);
+    }, 100);
 }
 </script>
 

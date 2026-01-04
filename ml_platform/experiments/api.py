@@ -2196,7 +2196,14 @@ def metrics_trend(request):
 @require_http_methods(["GET"])
 def hyperparameter_analysis(request):
     """
-    Get hyperparameter analysis showing which values correlate with best results.
+    Get TPE-inspired hyperparameter analysis showing which values correlate with best results.
+
+    Uses TPE (Tree-structured Parzen Estimator) inspired probability ratio scoring
+    instead of simple averaging. This approach:
+    - Handles small sample sizes via Laplace smoothing
+    - Ranks by P(good|value) / P(bad|value) ratio
+    - Provides confidence indicators based on sample count
+    - Groups parameters into 4 categories: training, model, features, dataset
 
     GET /api/experiments/hyperparameter-analysis/
 
@@ -2204,14 +2211,31 @@ def hyperparameter_analysis(request):
     {
         "success": true,
         "analysis": {
-            "learning_rate": [
-                {"value": "0.01", "avg_recall": 0.465, "best_recall": 0.473, "count": 12},
+            "training": [
+                {
+                    "param": "Learning Rate",
+                    "field": "learning_rate",
+                    "values": [
+                        {
+                            "value": "0.005",
+                            "tpe_score": 2.3,
+                            "avg_recall": 0.085,
+                            "best_recall": 0.092,
+                            "count": 5,
+                            "good_count": 4,
+                            "confidence": "high"
+                        },
+                        ...
+                    ]
+                },
                 ...
             ],
-            "batch_size": [...],
-            "epochs": [...],
-            "data_sample_percent": [...],
-            "split_strategy": [...]
+            "model": [...],
+            "features": [...],
+            "dataset": [...],
+            "good_threshold": 0.072,
+            "total_experiments": 15,
+            "good_experiments": 5
         }
     }
     """
@@ -2223,61 +2247,17 @@ def hyperparameter_analysis(request):
                 'error': 'No model endpoint selected'
             }, status=400)
 
-        from collections import defaultdict
+        from ml_platform.experiments.hyperparameter_analyzer import HyperparameterAnalyzer
 
         # Get all completed experiments
         queryset = QuickTest.objects.filter(
             feature_config__dataset__model_endpoint=model_endpoint,
             status=QuickTest.STATUS_COMPLETED
-        )
+        ).select_related('feature_config', 'model_config')
 
-        # Collect experiments with their metrics
-        experiments_data = []
-        for qt in queryset:
-            exp_metrics = _get_experiment_metrics(qt)
-            recall = exp_metrics.get('recall_at_100')
-            if recall is not None:
-                experiments_data.append({
-                    'learning_rate': qt.learning_rate,
-                    'batch_size': qt.batch_size,
-                    'epochs': qt.epochs,
-                    'data_sample_percent': qt.data_sample_percent,
-                    'split_strategy': qt.split_strategy,
-                    'recall_at_100': recall,
-                })
-
-        def analyze_param(experiments, param_name, format_value=None):
-            """Group experiments by param and compute stats."""
-            groups = defaultdict(list)
-            for exp in experiments:
-                value = exp.get(param_name)
-                if value is not None:
-                    groups[value].append(exp['recall_at_100'])
-
-            results = []
-            for value, recalls in groups.items():
-                display_value = format_value(value) if format_value else str(value)
-                results.append({
-                    'value': display_value,
-                    'avg_recall': round(sum(recalls) / len(recalls), 4),
-                    'best_recall': round(max(recalls), 4),
-                    'count': len(recalls)
-                })
-
-            # Sort by avg_recall descending
-            results.sort(key=lambda x: x['avg_recall'], reverse=True)
-            return results
-
-        analysis = {
-            'learning_rate': analyze_param(experiments_data, 'learning_rate'),
-            'batch_size': analyze_param(experiments_data, 'batch_size'),
-            'epochs': analyze_param(experiments_data, 'epochs'),
-            'data_sample_percent': analyze_param(
-                experiments_data, 'data_sample_percent',
-                format_value=lambda v: f"{v}%"
-            ),
-            'split_strategy': analyze_param(experiments_data, 'split_strategy'),
-        }
+        # Use HyperparameterAnalyzer for TPE-based analysis
+        analyzer = HyperparameterAnalyzer()
+        analysis = analyzer.analyze(list(queryset))
 
         return JsonResponse({
             'success': True,

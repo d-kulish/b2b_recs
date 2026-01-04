@@ -129,6 +129,10 @@ class ExperimentService:
             QuickTest instance
         """
         from ml_platform.models import QuickTest
+        from ml_platform.experiments.hyperparameter_analyzer import (
+            get_l2_category, get_tower_structure, get_primary_activation,
+            get_max_l2_reg, estimate_tower_params
+        )
 
         # Create QuickTest record
         quick_test = QuickTest(
@@ -150,6 +154,10 @@ class ExperimentService:
             experiment_description=experiment_description,
             status=QuickTest.STATUS_SUBMITTING,
         )
+
+        # Populate denormalized fields for hyperparameter analysis
+        self._populate_denormalized_fields(quick_test, feature_config, model_config)
+
         # Assign sequential experiment number before saving
         quick_test.assign_experiment_number()
         quick_test.save()
@@ -180,6 +188,85 @@ class ExperimentService:
             quick_test.save(update_fields=['status', 'error_message'])
 
         return quick_test
+
+    def _populate_denormalized_fields(self, quick_test, feature_config, model_config):
+        """
+        Populate denormalized fields for hyperparameter analysis.
+
+        These fields are copied/derived from ModelConfig, FeatureConfig, and Dataset
+        at experiment creation time to enable fast querying without joins.
+
+        Args:
+            quick_test: QuickTest instance to populate
+            feature_config: FeatureConfig instance
+            model_config: ModelConfig instance
+        """
+        from ml_platform.experiments.hyperparameter_analyzer import (
+            get_l2_category, get_tower_structure, get_primary_activation,
+            get_max_l2_reg, estimate_tower_params
+        )
+
+        try:
+            # From ModelConfig - Training params
+            quick_test.optimizer = model_config.optimizer
+            quick_test.output_embedding_dim = model_config.output_embedding_dim
+            quick_test.retrieval_algorithm = model_config.retrieval_algorithm
+            quick_test.top_k = model_config.top_k
+
+            # From ModelConfig - Architecture (derived)
+            buyer_layers = model_config.buyer_tower_layers or []
+            product_layers = model_config.product_tower_layers or []
+
+            quick_test.buyer_tower_structure = get_tower_structure(buyer_layers)
+            quick_test.product_tower_structure = get_tower_structure(product_layers)
+            quick_test.buyer_activation = get_primary_activation(buyer_layers)
+            quick_test.product_activation = get_primary_activation(product_layers)
+
+            # L2 regularization as category
+            buyer_l2 = get_max_l2_reg(buyer_layers)
+            product_l2 = get_max_l2_reg(product_layers)
+            quick_test.buyer_l2_category = get_l2_category(buyer_l2)
+            quick_test.product_l2_category = get_l2_category(product_l2)
+
+            # From FeatureConfig
+            quick_test.buyer_tensor_dim = feature_config.buyer_tensor_dim
+            quick_test.product_tensor_dim = feature_config.product_tensor_dim
+
+            buyer_features = feature_config.buyer_model_features or []
+            product_features = feature_config.product_model_features or []
+            buyer_crosses = feature_config.buyer_model_crosses or []
+            product_crosses = feature_config.product_model_crosses or []
+
+            quick_test.buyer_feature_count = len(buyer_features)
+            quick_test.product_feature_count = len(product_features)
+            quick_test.buyer_cross_count = len(buyer_crosses)
+            quick_test.product_cross_count = len(product_crosses)
+
+            # Estimate tower params
+            if feature_config.buyer_tensor_dim:
+                quick_test.buyer_total_params = estimate_tower_params(
+                    buyer_layers, feature_config.buyer_tensor_dim
+                )
+            if feature_config.product_tensor_dim:
+                quick_test.product_total_params = estimate_tower_params(
+                    product_layers, feature_config.product_tensor_dim
+                )
+
+            # From Dataset (via FeatureConfig)
+            dataset = feature_config.dataset
+            if dataset:
+                quick_test.dataset_row_count = dataset.row_count_estimate
+                quick_test.dataset_unique_users = dataset.unique_users_estimate
+                quick_test.dataset_unique_products = dataset.unique_products_estimate
+
+                # Calculate date range days
+                if dataset.date_range_start and dataset.date_range_end:
+                    delta = dataset.date_range_end - dataset.date_range_start
+                    quick_test.dataset_date_range_days = delta.days
+
+        except Exception as e:
+            # Log but don't fail - these fields are for analysis only
+            logger.warning(f"Error populating denormalized fields: {e}")
 
     def _submit_pipeline(self, quick_test, feature_config, model_config):
         """

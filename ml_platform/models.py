@@ -1653,6 +1653,156 @@ class QuickTest(models.Model):
         help_text="Column name containing ratings/scores (required for ranking models)"
     )
 
+    # =========================================================================
+    # Denormalized Fields for Hyperparameter Analysis
+    # These fields are copied from ModelConfig/FeatureConfig/Dataset at creation
+    # to enable fast querying without joins for TPE-based analysis
+    # =========================================================================
+
+    # From ModelConfig - Training params
+    optimizer = models.CharField(
+        max_length=20,
+        blank=True,
+        null=True,
+        help_text="Optimizer algorithm (denormalized from ModelConfig)"
+    )
+    output_embedding_dim = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="Dimension of final tower embeddings (denormalized from ModelConfig)"
+    )
+    retrieval_algorithm = models.CharField(
+        max_length=20,
+        blank=True,
+        null=True,
+        help_text="Algorithm for top-K retrieval (denormalized from ModelConfig)"
+    )
+    top_k = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="Number of top candidates to retrieve (denormalized from ModelConfig)"
+    )
+
+    # From ModelConfig - Architecture (derived)
+    buyer_tower_structure = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        help_text="Buyer tower structure e.g. '128→64→32' (derived from ModelConfig)"
+    )
+    product_tower_structure = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        help_text="Product tower structure e.g. '128→64→32' (derived from ModelConfig)"
+    )
+    buyer_activation = models.CharField(
+        max_length=20,
+        blank=True,
+        null=True,
+        help_text="Primary activation function in buyer tower"
+    )
+    product_activation = models.CharField(
+        max_length=20,
+        blank=True,
+        null=True,
+        help_text="Primary activation function in product tower"
+    )
+
+    # L2 regularization as category: 'none', 'light', 'medium', 'heavy'
+    L2_REG_NONE = 'none'
+    L2_REG_LIGHT = 'light'
+    L2_REG_MEDIUM = 'medium'
+    L2_REG_HEAVY = 'heavy'
+
+    L2_REG_CHOICES = [
+        (L2_REG_NONE, 'None (0)'),
+        (L2_REG_LIGHT, 'Light (0.0001-0.001)'),
+        (L2_REG_MEDIUM, 'Medium (0.001-0.01)'),
+        (L2_REG_HEAVY, 'Heavy (>0.01)'),
+    ]
+
+    buyer_l2_category = models.CharField(
+        max_length=20,
+        blank=True,
+        null=True,
+        choices=L2_REG_CHOICES,
+        help_text="L2 regularization category for buyer tower"
+    )
+    product_l2_category = models.CharField(
+        max_length=20,
+        blank=True,
+        null=True,
+        choices=L2_REG_CHOICES,
+        help_text="L2 regularization category for product tower"
+    )
+
+    # Tower parameter counts (computed)
+    buyer_total_params = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="Estimated trainable params in buyer tower"
+    )
+    product_total_params = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="Estimated trainable params in product tower"
+    )
+
+    # From FeatureConfig
+    buyer_tensor_dim = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="Total tensor dimensions for BuyerModel (denormalized from FeatureConfig)"
+    )
+    product_tensor_dim = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="Total tensor dimensions for ProductModel (denormalized from FeatureConfig)"
+    )
+    buyer_feature_count = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="Number of columns in buyer tower"
+    )
+    product_feature_count = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="Number of columns in product tower"
+    )
+    buyer_cross_count = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="Number of cross features in buyer tower"
+    )
+    product_cross_count = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="Number of cross features in product tower"
+    )
+
+    # From Dataset (via FeatureConfig)
+    dataset_row_count = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="Estimated row count of dataset"
+    )
+    dataset_date_range_days = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="Number of days in dataset date range"
+    )
+    dataset_unique_users = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="Estimated unique users in dataset"
+    )
+    dataset_unique_products = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="Estimated unique products in dataset"
+    )
+
     # Experiment number (auto-incrementing per Model Endpoint)
     experiment_number = models.PositiveIntegerField(
         null=True,

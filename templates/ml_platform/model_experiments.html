@@ -2983,33 +2983,81 @@
         font-size: 13px;
     }
 
-    /* Hyperparameter Grid */
+    /* Hyperparameter Grid - Enhanced with TPE Analysis */
+    .hyperparam-container {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+    }
+    .hyperparam-meta {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        font-size: 12px;
+        color: #6b7280;
+        padding: 8px 12px;
+        background: #f3f4f6;
+        border-radius: 6px;
+    }
+    .hyperparam-meta-item {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+    .hyperparam-meta-value {
+        font-weight: 600;
+        color: #374151;
+    }
+    .hyperparam-category {
+        margin-bottom: 8px;
+    }
+    .hyperparam-category-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: #374151;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        padding: 8px 0;
+        border-bottom: 2px solid #e5e7eb;
+        margin-bottom: 12px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .hyperparam-category-title i {
+        color: #6b7280;
+        font-size: 12px;
+    }
+    .hyperparam-category-title.training { border-color: #3b82f6; }
+    .hyperparam-category-title.model { border-color: #8b5cf6; }
+    .hyperparam-category-title.features { border-color: #10b981; }
+    .hyperparam-category-title.dataset { border-color: #f59e0b; }
     .hyperparam-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-        gap: 16px;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 12px;
     }
     .hyperparam-card {
         background: #f9fafb;
         border: 1px solid #e5e7eb;
         border-radius: 8px;
-        padding: 12px;
+        padding: 10px;
     }
     .hyperparam-card-title {
-        font-size: 12px;
+        font-size: 11px;
         font-weight: 600;
         color: #6b7280;
         text-transform: uppercase;
         letter-spacing: 0.5px;
-        margin-bottom: 8px;
+        margin-bottom: 6px;
     }
     .hyperparam-item {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding: 6px 0;
+        padding: 4px 0;
         border-bottom: 1px solid #e5e7eb;
-        font-size: 13px;
+        font-size: 12px;
     }
     .hyperparam-item:last-child {
         border-bottom: none;
@@ -3017,19 +3065,75 @@
     .hyperparam-value {
         font-weight: 600;
         color: #374151;
+        max-width: 80px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .hyperparam-metrics {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+    .hyperparam-tpe {
+        font-weight: 600;
+        font-size: 11px;
+        padding: 2px 5px;
+        border-radius: 4px;
+        background: #dbeafe;
+        color: #1d4ed8;
+    }
+    .hyperparam-tpe.best {
+        background: #dcfce7;
+        color: #166534;
     }
     .hyperparam-recall {
         color: #10b981;
         font-weight: 500;
+        font-size: 11px;
     }
     .hyperparam-count {
-        font-size: 11px;
+        font-size: 10px;
         color: #9ca3af;
-        margin-left: 4px;
     }
-    .hyperparam-best {
+    .hyperparam-item.best {
         background: #ecfdf5;
-        border-color: #10b981;
+        margin: 0 -8px;
+        padding: 4px 8px;
+        border-radius: 4px;
+        border-bottom: none;
+    }
+    .hyperparam-item.low-confidence {
+        opacity: 0.6;
+    }
+    .hyperparam-item.low-confidence .hyperparam-value::before {
+        content: '•';
+        margin-right: 4px;
+        color: #9ca3af;
+    }
+    .confidence-indicator {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        display: inline-block;
+        margin-right: 4px;
+    }
+    .confidence-high { background: #10b981; }
+    .confidence-medium { background: #f59e0b; }
+    .confidence-low { background: #d1d5db; }
+    .hyperparam-legend {
+        display: flex;
+        gap: 16px;
+        font-size: 11px;
+        color: #6b7280;
+        margin-top: 12px;
+        padding-top: 12px;
+        border-top: 1px solid #e5e7eb;
+    }
+    .hyperparam-legend-item {
+        display: flex;
+        align-items: center;
+        gap: 4px;
     }
 
     /* Suggestions Grid */
@@ -3307,13 +3411,13 @@
                 </div>
             </div>
 
-            <!-- Hyperparameter Analysis Section -->
+            <!-- Hyperparameter Analysis Section - TPE-based -->
             <div class="dashboard-section">
                 <div class="dashboard-section-header">
                     <span class="dashboard-section-title">Hyperparameter Insights</span>
-                    <span class="text-xs text-gray-400">Which parameter values work best</span>
+                    <span class="text-xs text-gray-400">TPE-based analysis • Higher score = better association with top 30% results</span>
                 </div>
-                <div id="hyperparamContainer" class="hyperparam-grid">
+                <div id="hyperparamContainer" class="hyperparam-container">
                     <!-- Populated by JavaScript -->
                 </div>
             </div>
@@ -9380,38 +9484,114 @@ async function loadHyperparameterAnalysis() {
             return;
         }
 
-        const paramLabels = {
-            'learning_rate': 'Learning Rate',
-            'batch_size': 'Batch Size',
-            'epochs': 'Epochs',
-            'data_sample_percent': 'Data Sample',
-            'split_strategy': 'Split Strategy'
-        };
+        const analysis = data.analysis;
 
-        let html = '';
-        for (const [param, values] of Object.entries(data.analysis)) {
-            if (!values || values.length === 0) continue;
+        // Check if we have any data
+        const hasData = ['training', 'model', 'features', 'dataset'].some(
+            cat => analysis[cat] && analysis[cat].length > 0
+        );
 
-            const label = paramLabels[param] || param;
-            const topValues = values.slice(0, 4); // Show top 4 values
+        if (!hasData) {
+            container.innerHTML = '<div class="dashboard-empty-section"><i class="fas fa-cogs"></i><p>No hyperparameter data available</p></div>';
+            return;
+        }
+
+        // Category configuration
+        const categories = [
+            { key: 'training', label: 'Training', icon: 'fa-graduation-cap' },
+            { key: 'model', label: 'Model Architecture', icon: 'fa-network-wired' },
+            { key: 'features', label: 'Features', icon: 'fa-layer-group' },
+            { key: 'dataset', label: 'Dataset', icon: 'fa-database' }
+        ];
+
+        // Build meta info section
+        let html = `
+            <div class="hyperparam-meta">
+                <div class="hyperparam-meta-item">
+                    <span>Experiments:</span>
+                    <span class="hyperparam-meta-value">${analysis.total_experiments || 0}</span>
+                </div>
+                <div class="hyperparam-meta-item">
+                    <span>Good threshold (top 30%):</span>
+                    <span class="hyperparam-meta-value">${analysis.good_threshold ? (analysis.good_threshold * 100).toFixed(1) + '%' : '-'}</span>
+                </div>
+                <div class="hyperparam-meta-item">
+                    <span>Good experiments:</span>
+                    <span class="hyperparam-meta-value">${analysis.good_experiments || 0}</span>
+                </div>
+            </div>
+        `;
+
+        // Build each category section
+        for (const category of categories) {
+            const params = analysis[category.key];
+            if (!params || params.length === 0) continue;
 
             html += `
-                <div class="hyperparam-card ${topValues.length > 0 ? '' : 'hidden'}">
-                    <div class="hyperparam-card-title">${label}</div>
-                    ${topValues.map((item, idx) => `
-                        <div class="hyperparam-item ${idx === 0 ? 'hyperparam-best' : ''}">
-                            <span class="hyperparam-value">${item.value}</span>
-                            <span>
-                                <span class="hyperparam-recall">${item.avg_recall !== null ? item.avg_recall.toFixed(3) : '-'}</span>
-                                <span class="hyperparam-count">(${item.count})</span>
-                            </span>
-                        </div>
-                    `).join('')}
+                <div class="hyperparam-category">
+                    <div class="hyperparam-category-title ${category.key}">
+                        <i class="fas ${category.icon}"></i>
+                        ${category.label}
+                    </div>
+                    <div class="hyperparam-grid">
+            `;
+
+            for (const param of params) {
+                if (!param.values || param.values.length === 0) continue;
+
+                const topValues = param.values.slice(0, 4); // Show top 4 values
+
+                html += `
+                    <div class="hyperparam-card">
+                        <div class="hyperparam-card-title">${param.param}</div>
+                        ${topValues.map((item, idx) => {
+                            const isBest = idx === 0;
+                            const isLowConf = item.confidence === 'low';
+                            const classes = [
+                                'hyperparam-item',
+                                isBest ? 'best' : '',
+                                isLowConf ? 'low-confidence' : ''
+                            ].filter(Boolean).join(' ');
+
+                            return `
+                                <div class="${classes}" title="TPE Score: ${item.tpe_score}, Avg Recall: ${(item.avg_recall * 100).toFixed(1)}%, Count: ${item.count}">
+                                    <span class="hyperparam-value">${item.value}</span>
+                                    <span class="hyperparam-metrics">
+                                        <span class="hyperparam-tpe ${isBest ? 'best' : ''}">${item.tpe_score.toFixed(1)}</span>
+                                        <span class="hyperparam-count">(${item.count})</span>
+                                    </span>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                `;
+            }
+
+            html += `
+                    </div>
                 </div>
             `;
         }
 
-        container.innerHTML = html || '<div class="dashboard-empty-section"><i class="fas fa-cogs"></i><p>No hyperparameter data available</p></div>';
+        // Add legend
+        html += `
+            <div class="hyperparam-legend">
+                <div class="hyperparam-legend-item">
+                    <span class="hyperparam-tpe best">2.3</span>
+                    <span>= TPE Score (higher = better)</span>
+                </div>
+                <div class="hyperparam-legend-item">
+                    <span class="hyperparam-count">(5)</span>
+                    <span>= experiment count</span>
+                </div>
+                <div class="hyperparam-legend-item">
+                    <span style="opacity: 0.6;">• faded</span>
+                    <span>= low confidence (&lt;3 experiments)</span>
+                </div>
+            </div>
+        `;
+
+        container.innerHTML = html;
 
     } catch (error) {
         console.error('Failed to load hyperparameter analysis:', error);

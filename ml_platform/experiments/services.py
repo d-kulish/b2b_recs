@@ -1447,3 +1447,86 @@ if __name__ == "__main__":
             logger.warning(f"No active jobs found to cancel for {quick_test.display_name}")
 
         return quick_test
+
+    def delete_quick_test(self, quick_test) -> None:
+        """
+        Delete a Quick Test and its associated GCS artifacts.
+
+        Only experiments in terminal states (completed, failed, cancelled) can be deleted.
+        Running or submitting experiments must be cancelled first.
+
+        Args:
+            quick_test: QuickTest instance to delete
+
+        Raises:
+            ExperimentServiceError: If experiment is still running or deletion fails
+        """
+        from ml_platform.models import QuickTest
+
+        # Verify experiment is in terminal state
+        if quick_test.status in (QuickTest.STATUS_RUNNING, QuickTest.STATUS_SUBMITTING):
+            raise ExperimentServiceError(
+                f"Cannot delete experiment in '{quick_test.status}' state. "
+                "Please cancel the experiment first."
+            )
+
+        experiment_display = f"{quick_test.display_name} (id={quick_test.id})"
+        logger.info(f"Deleting experiment {experiment_display}")
+
+        # Delete GCS artifacts if path exists
+        if quick_test.gcs_artifacts_path:
+            self._delete_gcs_artifacts(quick_test.gcs_artifacts_path, experiment_display)
+
+        # Delete the Django database record
+        try:
+            quick_test.delete()
+            logger.info(f"Successfully deleted experiment {experiment_display} from database")
+        except Exception as e:
+            logger.error(f"Failed to delete experiment {experiment_display} from database: {e}")
+            raise ExperimentServiceError(f"Failed to delete experiment: {e}")
+
+    def _delete_gcs_artifacts(self, gcs_path: str, experiment_display: str) -> None:
+        """
+        Delete all objects under a GCS path.
+
+        Args:
+            gcs_path: GCS path (e.g., 'gs://bucket/path/to/artifacts' or 'path/to/artifacts')
+            experiment_display: Display name for logging
+        """
+        try:
+            # Parse GCS path - handle both 'gs://bucket/path' and 'path' formats
+            if gcs_path.startswith('gs://'):
+                # Extract bucket and prefix from full GCS URI
+                path_parts = gcs_path[5:].split('/', 1)
+                bucket_name = path_parts[0]
+                prefix = path_parts[1] if len(path_parts) > 1 else ''
+            else:
+                # Assume it's a path within the artifacts bucket
+                bucket_name = self.ARTIFACTS_BUCKET
+                prefix = gcs_path
+
+            bucket = self.storage_client.bucket(bucket_name)
+            blobs = list(bucket.list_blobs(prefix=prefix))
+
+            if not blobs:
+                logger.info(f"No GCS artifacts found at {gcs_path} for {experiment_display}")
+                return
+
+            # Delete all blobs under the prefix
+            for blob in blobs:
+                try:
+                    blob.delete()
+                except Exception as e:
+                    logger.warning(f"Failed to delete GCS blob {blob.name}: {e}")
+
+            logger.info(
+                f"Deleted {len(blobs)} GCS artifacts from {bucket_name}/{prefix} "
+                f"for {experiment_display}"
+            )
+
+        except Exception as e:
+            # Log warning but don't fail the deletion - DB cleanup is more important
+            logger.warning(
+                f"Failed to delete GCS artifacts at {gcs_path} for {experiment_display}: {e}. "
+                "Continuing with database deletion."
+            )

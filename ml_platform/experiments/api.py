@@ -464,6 +464,66 @@ def quick_test_cancel(request, quick_test_id):
 
 
 @csrf_exempt
+@require_http_methods(["DELETE", "POST"])
+def quick_test_delete(request, quick_test_id):
+    """
+    Delete a Quick Test and its associated GCS artifacts.
+
+    DELETE /api/quick-tests/<id>/delete/
+
+    Only experiments in terminal states (completed, failed, cancelled) can be deleted.
+    Running or submitting experiments must be cancelled first.
+
+    Returns:
+    {
+        "success": true,
+        "message": "Experiment deleted successfully"
+    }
+    """
+    try:
+        model_endpoint = _get_model_endpoint(request)
+        if not model_endpoint:
+            return JsonResponse({
+                'success': False,
+                'error': 'No model endpoint selected'
+            }, status=400)
+
+        try:
+            quick_test = QuickTest.objects.get(
+                id=quick_test_id,
+                feature_config__dataset__model_endpoint=model_endpoint
+            )
+        except QuickTest.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': f'QuickTest {quick_test_id} not found'
+            }, status=404)
+
+        # Check if deletable (not running or submitting)
+        if quick_test.status in (QuickTest.STATUS_SUBMITTING, QuickTest.STATUS_RUNNING):
+            return JsonResponse({
+                'success': False,
+                'error': f'Cannot delete experiment in \'{quick_test.status}\' state. Please cancel the experiment first.'
+            }, status=400)
+
+        # Delete the experiment
+        service = ExperimentService(model_endpoint)
+        service.delete_quick_test(quick_test)
+
+        return JsonResponse({
+            'success': True,
+            'message': 'Experiment deleted successfully'
+        })
+
+    except Exception as e:
+        logger.exception(f"Error deleting quick test: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@csrf_exempt
 @require_http_methods(["GET"])
 def get_date_columns(request, dataset_id):
     """

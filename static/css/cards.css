@@ -259,9 +259,15 @@
     color: #dc2626;
 }
 
-.card-action-btn.delete:hover {
+.card-action-btn.delete:hover:not(:disabled) {
     background-color: #fee2e2;
     border-color: #fecaca;
+}
+
+.card-action-btn.delete:disabled {
+    background-color: #f9fafb;
+    color: #d1d5db;
+    cursor: not-allowed;
 }
 
 /* Primary Action Button (e.g., Run) */

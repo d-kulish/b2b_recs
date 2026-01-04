@@ -428,6 +428,12 @@
         align-items: flex-end;
         gap: 6px;
     }
+    .exp-card-actions-row {
+        display: flex;
+        flex-direction: row;
+        gap: 6px;
+        justify-content: flex-end;
+    }
     /* Legacy support */
     .exp-card-header {
         display: flex;
@@ -4039,6 +4045,8 @@ const DATA_TYPES = {
  * @param {string} options.confirmText - Text for confirm button (default: "Confirm")
  * @param {string} options.cancelText - Text for cancel button (default: "Cancel")
  * @param {string} options.type - Modal type: 'danger', 'warning', 'info', 'success' (default: 'warning')
+ * @param {string} options.confirmButtonClass - Custom class for confirm button (overrides type-based class)
+ * @param {string} options.cancelButtonClass - Custom class for cancel button (e.g., 'btn-neu-cancel' for red)
  * @param {Function} options.onConfirm - Callback when confirmed
  * @param {Function} options.onCancel - Callback when cancelled (optional)
  */
@@ -4068,19 +4076,38 @@ function showConfirmModal(options) {
     const iconElement = icon.querySelector('i');
     const baseClasses = 'btn-neu btn-neu-action';
 
-    if (type === 'danger') {
-        iconElement.className = 'fas fa-exclamation-triangle text-xl';
-        confirmBtn.className = `${baseClasses} btn-neu-cancel`;
-    } else if (type === 'warning') {
-        iconElement.className = 'fas fa-exclamation-circle text-xl';
-        confirmBtn.className = `${baseClasses} btn-neu-warning`;
-    } else if (type === 'info') {
-        iconElement.className = 'fas fa-info-circle text-xl';
-        confirmBtn.className = `${baseClasses} btn-neu-nav-wide`;
-    } else if (type === 'success') {
-        iconElement.className = 'fas fa-check-circle text-xl';
-        confirmBtn.className = `${baseClasses} btn-neu-save`;
+    // Determine confirm button class (custom class takes precedence)
+    let confirmButtonClass = options.confirmButtonClass;
+    if (!confirmButtonClass) {
+        if (type === 'danger') {
+            iconElement.className = 'fas fa-exclamation-triangle text-xl';
+            confirmButtonClass = 'btn-neu-cancel';
+        } else if (type === 'warning') {
+            iconElement.className = 'fas fa-exclamation-circle text-xl';
+            confirmButtonClass = 'btn-neu-warning';
+        } else if (type === 'info') {
+            iconElement.className = 'fas fa-info-circle text-xl';
+            confirmButtonClass = 'btn-neu-nav-wide';
+        } else if (type === 'success') {
+            iconElement.className = 'fas fa-check-circle text-xl';
+            confirmButtonClass = 'btn-neu-save';
+        }
+    } else {
+        // Set icon based on type even when custom button class is provided
+        if (type === 'danger') {
+            iconElement.className = 'fas fa-exclamation-triangle text-xl';
+        } else if (type === 'warning') {
+            iconElement.className = 'fas fa-exclamation-circle text-xl';
+        } else if (type === 'info') {
+            iconElement.className = 'fas fa-info-circle text-xl';
+        } else if (type === 'success') {
+            iconElement.className = 'fas fa-check-circle text-xl';
+        }
     }
+    confirmBtn.className = `${baseClasses} ${confirmButtonClass}`;
+
+    // Set cancel button class (default: btn-neu-secondary for grey)
+    cancelBtn.className = `${baseClasses} ${options.cancelButtonClass || 'btn-neu-secondary'}`;
 
     // Remove old event listeners by cloning
     const newConfirmBtn = confirmBtn.cloneNode(true);
@@ -4567,6 +4594,9 @@ function renderExpCard(exp) {
     const isRunning = exp.status === 'running' || exp.status === 'submitting';
     const viewBtn = `<button class="card-action-btn view" onclick="viewExpFromCard(event, ${exp.id})">View</button>`;
     const cancelBtn = `<button class="card-action-btn cancel" onclick="cancelExpFromCard(event, ${exp.id})" ${isRunning ? '' : 'disabled'}>Cancel</button>`;
+    // Delete button - disabled for running/submitting experiments (must cancel first)
+    const canDelete = !isRunning;
+    const deleteBtn = `<button class="card-action-btn delete" onclick="deleteExpFromCard(event, ${exp.id})" title="Delete experiment" ${canDelete ? '' : 'disabled'}><i class="fas fa-trash"></i></button>`;
 
     return `
         <div class="exp-card-new" onclick="openExpDetails(${exp.id})" data-exp-id="${exp.id}">
@@ -4599,8 +4629,13 @@ function renderExpCard(exp) {
                 </div>
                 <!-- Column 4: Actions (20%) -->
                 <div class="exp-card-col-actions">
-                    ${viewBtn}
-                    ${cancelBtn}
+                    <div class="exp-card-actions-row">
+                        ${viewBtn}
+                        ${cancelBtn}
+                    </div>
+                    <div class="exp-card-actions-row">
+                        ${deleteBtn}
+                    </div>
                 </div>
             </div>
             ${stagesHtml}
@@ -7794,6 +7829,50 @@ function cancelExpFromCard(event, expId) {
                 }
             } catch (error) {
                 showError('Failed to cancel: ' + error.message);
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
+            }
+        }
+    });
+}
+
+function deleteExpFromCard(event, expId) {
+    event.stopPropagation(); // Prevent card click
+
+    const btn = event.target.closest('button');
+    const originalHtml = btn.innerHTML;
+
+    showConfirmModal({
+        title: 'Delete Experiment',
+        message: 'Are you sure you want to delete this experiment?<br><span class="text-sm text-gray-500 mt-2 block">This will permanently delete the experiment and its artifacts. This action cannot be undone.</span>',
+        confirmText: 'Ok',
+        cancelText: 'Cancel',
+        type: 'danger',
+        confirmButtonClass: 'btn-neu-save',
+        cancelButtonClass: 'btn-neu-cancel',
+        onConfirm: async () => {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+            try {
+                const response = await fetch(`/api/quick-tests/${expId}/delete/`, {
+                    method: 'DELETE',
+                    headers: {
+                        'X-CSRFToken': getCookie('csrftoken')
+                    }
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    await loadExperiments(pagination.page);
+                } else {
+                    showError(data.error || 'Failed to delete experiment');
+                    btn.disabled = false;
+                    btn.innerHTML = originalHtml;
+                }
+            } catch (error) {
+                showError('Failed to delete: ' + error.message);
                 btn.disabled = false;
                 btn.innerHTML = originalHtml;
             }

@@ -5,7 +5,7 @@ This document provides **high-level specifications** for the Experiments domain.
 
 👉 **[phase_experiments_implementation.md](phase_experiments_implementation.md)** - Complete implementation guide with code examples
 
-**Last Updated**: 2026-01-02
+**Last Updated**: 2026-01-04
 
 ---
 
@@ -260,6 +260,78 @@ Updated `cancel_quick_test()` in `ml_platform/experiments/services.py` to handle
 - Added Cloud Build cancellation using `google.cloud.devtools.cloudbuild_v1`
 - Handle race condition where Cloud Build completes between cancel request and API call
 - Comprehensive logging for debugging which phase was cancelled
+
+---
+
+### Delete Experiment Functionality (2026-01-04)
+
+**New Feature:** Added ability to permanently delete experiments and their associated GCS artifacts.
+
+#### The Problem
+
+Experiments could only be cancelled but never deleted. Failed or useless experiments accumulated in the database and UI, making it harder to manage and find relevant experiments.
+
+#### The Solution
+
+Added a delete button to experiment cards that permanently removes:
+1. **Database record** - QuickTest record deleted from Django DB
+2. **GCS artifacts** - All files under `gcs_artifacts_path` deleted from Cloud Storage
+
+#### UI Implementation
+
+**Button Layout:**
+```
+┌─────────────────────────────────┐
+│  [View]  [Cancel]               │  ← Row 1: View and Cancel side by side
+│                 [🗑️]            │  ← Row 2: Delete button aligned right
+└─────────────────────────────────┘
+```
+
+**Button States:**
+| Status | View | Cancel | Delete |
+|--------|------|--------|--------|
+| Running/Submitting | Enabled | Enabled | Disabled |
+| Completed/Failed/Cancelled | Enabled | Disabled | Enabled |
+
+**Confirmation Modal:**
+- Title: "Delete Experiment"
+- Message: Warning about permanent deletion
+- Buttons: "Ok" (green) to confirm, "Cancel" (red) to abort
+
+#### API Endpoint
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| DELETE | `/api/quick-tests/<id>/delete/` | Delete experiment and GCS artifacts |
+
+**Response:**
+```json
+{"success": true, "message": "Experiment deleted successfully"}
+```
+
+**Error (if running):**
+```json
+{"success": false, "error": "Cannot delete experiment in 'running' state. Please cancel the experiment first."}
+```
+
+#### Implementation Files
+
+| File | Changes |
+|------|---------|
+| `ml_platform/experiments/services.py` | Added `delete_quick_test()` and `_delete_gcs_artifacts()` methods |
+| `ml_platform/experiments/api.py` | Added `quick_test_delete()` endpoint |
+| `ml_platform/experiments/urls.py` | Added URL route for delete endpoint |
+| `templates/ml_platform/model_experiments.html` | Added delete button, JS handler, CSS for button layout |
+| `static/css/cards.css` | Added disabled state for delete button |
+
+#### Key Design Decisions
+
+| Decision | Choice | Rationale |
+|----------|--------|-----------|
+| GCS artifacts | Delete with record | Save storage costs, data is recoverable from re-running |
+| Vertex AI job | Keep | Preserve audit trail in GCP |
+| Running experiments | Block delete | Must cancel first to prevent orphaned resources |
+| Confirmation | Single modal | Balance safety with UX friction |
 
 ---
 

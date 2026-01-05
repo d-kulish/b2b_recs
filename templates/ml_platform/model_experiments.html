@@ -2810,8 +2810,13 @@
         gap: 24px;
     }
     .training-heatmap-panel {
-        flex: 1;
         min-width: 0;
+    }
+    .training-heatmap-panel:first-child {
+        flex: 6;  /* 60% for Loss heatmap */
+    }
+    .training-heatmap-panel:last-child {
+        flex: 4;  /* 40% for Recall heatmap */
     }
     .training-heatmap-title {
         font-size: 13px;
@@ -3435,7 +3440,7 @@
                     <span class="text-xs text-gray-400">Top 10 experiments by Recall@100</span>
                 </div>
                 <div class="training-heatmaps-container">
-                    <!-- Loss Heatmap (50%) -->
+                    <!-- Loss Heatmap (60%) -->
                     <div class="training-heatmap-panel">
                         <div class="training-heatmap-title">Validation Loss by Epoch</div>
                         <div id="lossHeatmap" class="training-heatmap-grid"></div>
@@ -3445,7 +3450,7 @@
                             <span class="legend-label">High</span>
                         </div>
                     </div>
-                    <!-- Recall Heatmap (50%) -->
+                    <!-- Recall Heatmap (40%) -->
                     <div class="training-heatmap-panel">
                         <div class="training-heatmap-title">Final Recall Metrics</div>
                         <div id="recallHeatmap" class="training-heatmap-grid"></div>
@@ -9092,11 +9097,11 @@ function renderLossHeatmapD3(container, data) {
     const allEpochs = [...new Set(experiments.flatMap(exp => exp.epochs))].sort((a, b) => a - b);
     const lossRange = data.loss_range;
 
-    // Dimensions
+    // Dimensions - responsive to container width
     const margin = { top: 5, right: 10, bottom: 30, left: 70 };
     const cellHeight = 24;
-    const cellWidth = 45;
-    const width = margin.left + allEpochs.length * cellWidth + margin.right;
+    const containerWidth = container.getBoundingClientRect().width || 500;
+    const width = Math.max(containerWidth, margin.left + allEpochs.length * 40 + margin.right);
     const height = margin.top + experiments.length * cellHeight + margin.bottom;
 
     // Create SVG
@@ -9198,14 +9203,14 @@ function renderRecallHeatmapD3(container, data) {
     const experiments = data.experiments;
     if (!experiments.length) return;
 
-    const metrics = ['R@10', 'R@50', 'R@100'];
+    const metrics = ['R@5', 'R@10', 'R@50', 'R@100'];
     const recallRange = data.recall_range;
 
-    // Dimensions
+    // Dimensions - responsive to container width
     const margin = { top: 5, right: 10, bottom: 30, left: 70 };
     const cellHeight = 24;
-    const cellWidth = 55;
-    const width = margin.left + metrics.length * cellWidth + margin.right;
+    const containerWidth = container.getBoundingClientRect().width || 300;
+    const width = Math.max(containerWidth, margin.left + metrics.length * 45 + margin.right);
     const height = margin.top + experiments.length * cellHeight + margin.bottom;
 
     // Create SVG

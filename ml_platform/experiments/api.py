@@ -1713,6 +1713,7 @@ def training_heatmaps(request):
             final_metrics = history.get('final_metrics', {})
 
             # Get recall values: prefer direct fields, fallback to training_history_json
+            recall_5 = qt.recall_at_5 if qt.recall_at_5 is not None else final_metrics.get('test_recall_at_5')
             recall_10 = qt.recall_at_10 if qt.recall_at_10 is not None else final_metrics.get('test_recall_at_10')
             recall_50 = qt.recall_at_50 if qt.recall_at_50 is not None else final_metrics.get('test_recall_at_50')
             recall_100 = qt.recall_at_100 if qt.recall_at_100 is not None else final_metrics.get('test_recall_at_100')
@@ -1722,6 +1723,7 @@ def training_heatmaps(request):
                 experiment_data.append({
                     'qt': qt,
                     'history': history,
+                    'recall_5': recall_5,
                     'recall_10': recall_10,
                     'recall_50': recall_50,
                     'recall_100': recall_100
@@ -1756,8 +1758,9 @@ def training_heatmaps(request):
                     if loss_val is not None:
                         all_losses.append(loss_val)
 
-            # Get final recall metrics as percentages
+            # Get final recall metrics as percentages (ascending order: R@5 → R@10 → R@50 → R@100)
             final_recalls = {
+                'R@5': round((exp_data['recall_5'] or 0) * 100),
                 'R@10': round((exp_data['recall_10'] or 0) * 100),
                 'R@50': round((exp_data['recall_50'] or 0) * 100),
                 'R@100': round((exp_data['recall_100'] or 0) * 100)

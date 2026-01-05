@@ -1350,8 +1350,8 @@ if __name__ == "__main__":
             return
 
         try:
-            # Try to read metrics.json from output path
-            metrics_path = f"{quick_test.gcs_artifacts_path}/metrics.json"
+            # Read training_metrics.json from output path
+            metrics_path = f"{quick_test.gcs_artifacts_path}/training_metrics.json"
             blob_path = metrics_path.replace(f"gs://{self.ARTIFACTS_BUCKET}/", "")
 
             bucket = self.storage_client.bucket(self.ARTIFACTS_BUCKET)
@@ -1359,31 +1359,43 @@ if __name__ == "__main__":
 
             if blob.exists():
                 metrics_content = blob.download_as_string().decode('utf-8')
-                metrics = json.loads(metrics_content)
+                training_metrics = json.loads(metrics_content)
+
+                # Extract final_metrics from the training metrics JSON
+                final_metrics = training_metrics.get('final_metrics', {})
 
                 # Map metrics to QuickTest model fields
                 update_fields = []
 
-                if 'loss' in metrics:
-                    quick_test.loss = metrics['loss']
+                # Extract loss
+                if 'test_loss' in final_metrics:
+                    quick_test.loss = final_metrics['test_loss']
+                    update_fields.append('loss')
+                elif 'final_loss' in final_metrics:
+                    quick_test.loss = final_metrics['final_loss']
                     update_fields.append('loss')
 
-                if 'factorized_top_k/top_10_categorical_accuracy' in metrics:
-                    quick_test.recall_at_10 = metrics['factorized_top_k/top_10_categorical_accuracy']
+                # Extract recall metrics
+                if 'test_recall_at_5' in final_metrics:
+                    quick_test.recall_at_5 = final_metrics['test_recall_at_5']
+                    update_fields.append('recall_at_5')
+
+                if 'test_recall_at_10' in final_metrics:
+                    quick_test.recall_at_10 = final_metrics['test_recall_at_10']
                     update_fields.append('recall_at_10')
 
-                if 'factorized_top_k/top_50_categorical_accuracy' in metrics:
-                    quick_test.recall_at_50 = metrics['factorized_top_k/top_50_categorical_accuracy']
+                if 'test_recall_at_50' in final_metrics:
+                    quick_test.recall_at_50 = final_metrics['test_recall_at_50']
                     update_fields.append('recall_at_50')
 
-                if 'factorized_top_k/top_100_categorical_accuracy' in metrics:
-                    quick_test.recall_at_100 = metrics['factorized_top_k/top_100_categorical_accuracy']
+                if 'test_recall_at_100' in final_metrics:
+                    quick_test.recall_at_100 = final_metrics['test_recall_at_100']
                     update_fields.append('recall_at_100')
 
                 if update_fields:
                     quick_test.save(update_fields=update_fields)
 
-                logger.info(f"Extracted results for {quick_test.display_name} (id={quick_test.id}): {metrics}")
+                logger.info(f"Extracted results for {quick_test.display_name} (id={quick_test.id}): {list(final_metrics.keys())}")
 
         except Exception as e:
             logger.warning(f"Error extracting results for {quick_test.display_name} (id={quick_test.id}): {e}")

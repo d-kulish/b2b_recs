@@ -37,6 +37,69 @@ This document provides **high-level specifications** for the Experiments domain.
 
 ## Recent Updates (December 2025 - January 2026)
 
+### Training Analysis Heatmaps - Layout & R@5 Metric (2026-01-05)
+
+**Enhancement:** Fixed Training Analysis heatmaps layout and added missing Recall@5 metric.
+
+#### Problems Fixed
+
+| Issue | Solution |
+|-------|----------|
+| **Layout dislocation** | Heatmaps now use 60%/40% split (Loss 60%, Recall 40%) |
+| **Missing R@5 metric** | Added `recall_at_5` field and displays all 4 recall metrics |
+| **Broken metric extraction** | Fixed `_extract_results()` to use correct file and keys |
+| **NULL direct fields** | Backfilled all recall metrics from `training_history_json` |
+
+#### Root Cause Analysis
+
+The `_extract_results()` function was broken:
+- **Wrong file**: Looked for `metrics.json` but trainer saves `training_metrics.json`
+- **Wrong keys**: Expected `factorized_top_k/top_*` but trainer uses `test_recall_at_*`
+- **Missing field**: QuickTest model lacked `recall_at_5` field
+
+Data was available in `training_history_json['final_metrics']` but not extracted to direct DB fields.
+
+#### Changes
+
+| Component | Before | After |
+|-----------|--------|-------|
+| **Heatmap layout** | Both panels `flex: 1` (50%/50%) | Loss `flex: 6` (60%), Recall `flex: 4` (40%) |
+| **Recall metrics** | `['R@10', 'R@50', 'R@100']` | `['R@5', 'R@10', 'R@50', 'R@100']` |
+| **Cell sizing** | Fixed `cellWidth = 55px` | Responsive to container width |
+| **Metric extraction** | `metrics.json` with wrong keys | `training_metrics.json` with `test_recall_at_*` |
+
+#### Database Migration
+
+```python
+# ml_platform/models.py - QuickTest model
+recall_at_5 = models.FloatField(null=True, blank=True, help_text="Recall@5 metric")
+```
+
+Migration: `0047_add_recall_at_5_to_quicktest.py`
+
+#### Files Modified
+
+| File | Changes |
+|------|---------|
+| `ml_platform/models.py` | Added `recall_at_5` field |
+| `ml_platform/experiments/services.py` | Fixed `_extract_results()` - correct file/keys, extract R@5 |
+| `ml_platform/experiments/api.py` | Added R@5 to `training_heatmaps()` response |
+| `templates/ml_platform/model_experiments.html` | CSS 60%/40% layout, JS 4 metrics + responsive sizing |
+
+#### New Management Command
+
+```bash
+# Backfill recall metrics from training_history_json to direct DB fields
+python manage.py backfill_recall_metrics
+
+# Options
+python manage.py backfill_recall_metrics --dry-run   # Preview changes
+python manage.py backfill_recall_metrics --limit 10  # Process only 10 records
+python manage.py backfill_recall_metrics --force     # Re-populate even if fields have values
+```
+
+---
+
 ### Hyperparameter Insights - Enhanced Layout & Feature Details (2026-01-05)
 
 **Major Enhancement:** Improved Model Architecture and Features sections with 2-row Buyer/Product layouts and new Feature Details analysis.

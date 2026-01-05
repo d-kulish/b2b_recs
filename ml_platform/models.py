@@ -1922,6 +1922,11 @@ class QuickTest(models.Model):
         blank=True,
         help_text="Final training loss"
     )
+    recall_at_5 = models.FloatField(
+        null=True,
+        blank=True,
+        help_text="Recall@5 metric"
+    )
     recall_at_10 = models.FloatField(
         null=True,
         blank=True,

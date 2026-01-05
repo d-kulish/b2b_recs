@@ -261,7 +261,11 @@ class ExperimentService:
             # From Dataset (via FeatureConfig)
             dataset = feature_config.dataset
             if dataset:
+                # Row count - prefer row_count_estimate, fallback to summary_snapshot
                 quick_test.dataset_row_count = dataset.row_count_estimate
+                if not quick_test.dataset_row_count and dataset.summary_snapshot:
+                    quick_test.dataset_row_count = dataset.summary_snapshot.get('total_rows')
+
                 quick_test.dataset_unique_users = dataset.unique_users_estimate
                 quick_test.dataset_unique_products = dataset.unique_products_estimate
 
@@ -269,6 +273,9 @@ class ExperimentService:
                 if dataset.date_range_start and dataset.date_range_end:
                     delta = dataset.date_range_end - dataset.date_range_start
                     quick_test.dataset_date_range_days = delta.days
+
+                # Extract filter parameters from Dataset.filters
+                self._populate_dataset_filter_fields(quick_test, dataset)
 
         except Exception as e:
             # Log but don't fail - these fields are for analysis only
@@ -347,6 +354,155 @@ class ExperimentService:
             details.append({'name': name, 'dim': dim})
 
         return details
+
+    def _populate_dataset_filter_fields(self, quick_test, dataset):
+        """
+        Extract filter descriptions from Dataset.filters and populate QuickTest fields.
+
+        This enables TPE-based hyperparameter analysis for dataset filtering strategies.
+        Each filter is converted to a human-readable description string.
+
+        Args:
+            quick_test: QuickTest instance to populate
+            dataset: Dataset instance with filters JSONField
+        """
+        filters = dataset.filters or {}
+
+        # Extract date filter descriptions
+        quick_test.dataset_date_filters = self._extract_date_filter_descriptions(filters)
+
+        # Extract customer filter descriptions
+        quick_test.dataset_customer_filters = self._extract_customer_filter_descriptions(filters)
+
+        # Extract product filter descriptions
+        quick_test.dataset_product_filters = self._extract_product_filter_descriptions(filters)
+
+    def _extract_date_filter_descriptions(self, filters):
+        """Extract human-readable date filter descriptions."""
+        descriptions = []
+        date_filter = filters.get('date_filter') or filters.get('history', {})
+
+        if date_filter:
+            rolling_days = date_filter.get('rolling_days') or date_filter.get('days')
+            if rolling_days:
+                descriptions.append(f"Rolling {rolling_days} days")
+
+            start_date = date_filter.get('start_date')
+            if start_date:
+                descriptions.append(f"From {start_date}")
+
+        return descriptions if descriptions else None
+
+    def _extract_customer_filter_descriptions(self, filters):
+        """Extract human-readable customer filter descriptions."""
+        descriptions = []
+        customer_filter = filters.get('customer_filter', {})
+
+        if not customer_filter:
+            return None
+
+        # Top revenue filter
+        top_revenue = customer_filter.get('top_revenue', {})
+        if top_revenue and top_revenue.get('enabled'):
+            percent = (
+                top_revenue.get('percent') or
+                top_revenue.get('threshold_percent') or
+                top_revenue.get('threshold')
+            )
+            if percent:
+                descriptions.append(f"Top {int(percent)}% customers")
+
+        # Aggregation filters (transaction count, spending)
+        for agg_filter in customer_filter.get('aggregation_filters', []):
+            filter_type = agg_filter.get('type')
+            filter_op = agg_filter.get('filterType') or agg_filter.get('filter_type', '')
+            value = agg_filter.get('value')
+
+            if filter_type == 'transaction_count' and value is not None:
+                op_symbol = '>' if filter_op == 'greater_than' else '<' if filter_op == 'less_than' else '='
+                descriptions.append(f"Transaction count {op_symbol} {value}")
+            elif filter_type == 'spending' and value is not None:
+                op_symbol = '>' if filter_op == 'greater_than' else '<' if filter_op == 'less_than' else '='
+                descriptions.append(f"Spending {op_symbol} {value}")
+
+        # Category filters (city, etc.)
+        for cat_filter in customer_filter.get('category_filters', []):
+            column = cat_filter.get('column', '').split('.')[-1]  # Get column name without table prefix
+            mode = cat_filter.get('mode', 'include')
+            values = cat_filter.get('values', [])
+
+            if column and values:
+                values_str = ', '.join(str(v) for v in values[:3])  # Limit to 3 values
+                if len(values) > 3:
+                    values_str += f" (+{len(values) - 3})"
+                op = '=' if mode == 'include' else '≠'
+                descriptions.append(f"{column} {op} {values_str}")
+
+        # Numeric filters
+        for num_filter in customer_filter.get('numeric_filters', []):
+            column = num_filter.get('column', '').split('.')[-1]
+            filter_type = num_filter.get('filter_type', '')
+            value = num_filter.get('value')
+            min_val = num_filter.get('min')
+            max_val = num_filter.get('max')
+
+            if column:
+                if filter_type == 'range' and min_val is not None and max_val is not None:
+                    descriptions.append(f"{column}: {min_val} - {max_val}")
+                elif filter_type in ('greater_than', 'less_than', 'equals') and value is not None:
+                    op_symbol = '>' if filter_type == 'greater_than' else '<' if filter_type == 'less_than' else '='
+                    descriptions.append(f"{column} {op_symbol} {value}")
+
+        return descriptions if descriptions else None
+
+    def _extract_product_filter_descriptions(self, filters):
+        """Extract human-readable product filter descriptions."""
+        descriptions = []
+        product_filter = filters.get('product_filter', {})
+
+        if not product_filter:
+            return None
+
+        # Top revenue filter
+        top_revenue = product_filter.get('top_revenue', {})
+        if top_revenue and top_revenue.get('enabled'):
+            threshold = (
+                top_revenue.get('threshold_percent') or
+                top_revenue.get('threshold') or
+                top_revenue.get('percent')
+            )
+            if threshold:
+                descriptions.append(f"Top {int(threshold)}% products")
+
+        # Category filters
+        for cat_filter in product_filter.get('category_filters', []):
+            column = cat_filter.get('column', '').split('.')[-1]
+            mode = cat_filter.get('mode', 'include')
+            values = cat_filter.get('values', [])
+
+            if column and values:
+                values_str = ', '.join(str(v) for v in values[:3])
+                if len(values) > 3:
+                    values_str += f" (+{len(values) - 3})"
+                op = '=' if mode == 'include' else '≠'
+                descriptions.append(f"{column} {op} {values_str}")
+
+        # Numeric filters
+        for num_filter in product_filter.get('numeric_filters', []):
+            column = num_filter.get('column', '').split('.')[-1]
+            filter_type = num_filter.get('filter_type', '')
+            value = num_filter.get('value')
+            min_val = num_filter.get('min')
+            max_val = num_filter.get('max')
+
+            if column:
+                if filter_type == 'range' and min_val is not None and max_val is not None:
+                    descriptions.append(f"{column}: {min_val} - {max_val}")
+                elif filter_type in ('greater_than', 'less_than', 'equals') and value is not None:
+                    op_symbol = '>' if filter_type == 'greater_than' else '<' if filter_type == 'less_than' else '='
+                    descriptions.append(f"{column} {op_symbol} {value}")
+
+        return descriptions if descriptions else None
 
     def _submit_pipeline(self, quick_test, feature_config, model_config):
         """

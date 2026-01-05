@@ -86,6 +86,73 @@ Fixed `_calc_feature_dim()` in `FeatureConfig.calculate_tensor_dims()`:
 
 ---
 
+### Hyperparameter Insights - Dataset Filters Analysis (2026-01-05)
+
+**New Feature:** Added Dataset section to Hyperparameter Insights showing TPE analysis for dataset configurations.
+
+#### Overview
+
+The Dataset section analyzes which dataset configurations (size, date filters, customer filters, product filters) correlate with better model performance. This helps users understand:
+- Optimal dataset sizes for training
+- Which date ranges work best
+- Impact of customer/product filtering strategies
+
+#### Layout
+
+Single row with 4 tablets:
+
+| Tablet | Content | Example Values |
+|--------|---------|----------------|
+| **Dataset Size** | Row counts | 782K, 108K |
+| **Dates** | Date filter settings | "Rolling 90 days", "Rolling 60 days" |
+| **Customer Filters** | Customer filtering | "city = CHERNIGIV", "Transaction count > 2" |
+| **Product Filters** | Product filtering | "Top 80% products", "Top 70% products" |
+
+Each tablet shows top 5 values sorted by TPE score with experiment counts.
+
+#### New Fields Added
+
+```python
+# ml_platform/models.py - QuickTest model
+dataset_date_filters = JSONField()      # ["Rolling 90 days"]
+dataset_customer_filters = JSONField()  # ["city = CHERNIGIV", "Transaction count > 2"]
+dataset_product_filters = JSONField()   # ["Top 80% products"]
+```
+
+#### Filter Description Extraction
+
+Filters are extracted from `Dataset.filters` JSONField and converted to human-readable descriptions:
+
+| Filter Type | Source Field | Example Output |
+|-------------|--------------|----------------|
+| Date rolling | `history.rolling_days` | "Rolling 60 days" |
+| Date fixed | `history.start_date` | "From 2024-01-01" |
+| Customer top revenue | `customer_filter.top_revenue.percent` | "Top 80% customers" |
+| Customer aggregation | `customer_filter.aggregation_filters` | "Transaction count > 2" |
+| Customer category | `customer_filter.category_filters` | "city = CHERNIGIV" |
+| Product top revenue | `product_filter.top_revenue.threshold_percent` | "Top 70% products" |
+| Product category | `product_filter.category_filters` | "category = Books, Home Decor" |
+
+#### Row Count Source
+
+Dataset row count is extracted from:
+1. `Dataset.row_count_estimate` (preferred)
+2. `Dataset.summary_snapshot['total_rows']` (fallback)
+
+#### Files Modified
+
+| File | Changes |
+|------|---------|
+| `ml_platform/models.py` | 3 new JSONFields for filter descriptions |
+| `ml_platform/migrations/0045_*.py` | Initial filter fields (superseded) |
+| `ml_platform/migrations/0046_*.py` | Final JSON filter fields |
+| `ml_platform/experiments/services.py` | Filter description extraction methods |
+| `ml_platform/experiments/hyperparameter_analyzer.py` | New `_analyze_filter_details()`, `FILTER_FIELDS` |
+| `ml_platform/management/commands/backfill_hyperparameter_fields.py` | Filter description extraction |
+| `templates/ml_platform/model_experiments.html` | Dataset section UI, `renderFilterDetailCard()` |
+
+---
+
 ### MLflow Removed - Direct GCS Storage (2026-01-02)
 
 **Major Change:** MLflow has been completely removed from the training pipeline and replaced with direct GCS storage.

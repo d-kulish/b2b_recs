@@ -1830,6 +1830,28 @@ class QuickTest(models.Model):
         help_text="Estimated unique products in dataset"
     )
 
+    # Dataset Filter Descriptions (for hyperparameter analysis)
+    # Each field stores a list of human-readable filter descriptions
+    # Example: ["Rolling 60 days"] or ["city = CHERNIGIV", "Transaction count > 2"]
+    dataset_date_filters = models.JSONField(
+        null=True,
+        blank=True,
+        default=list,
+        help_text="List of date filter descriptions (e.g., ['Rolling 60 days'])"
+    )
+    dataset_customer_filters = models.JSONField(
+        null=True,
+        blank=True,
+        default=list,
+        help_text="List of customer filter descriptions (e.g., ['city = CHERNIGIV', 'Transaction count > 2'])"
+    )
+    dataset_product_filters = models.JSONField(
+        null=True,
+        blank=True,
+        default=list,
+        help_text="List of product filter descriptions (e.g., ['Top 80%', 'category = Books'])"
+    )
+
     # Experiment number (auto-incrementing per Model Endpoint)
     experiment_number = models.PositiveIntegerField(
         null=True,

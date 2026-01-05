@@ -76,11 +76,15 @@ class HyperparameterAnalyzer:
             {'field': 'product_cross_count', 'label': 'Product Crosses'},
         ],
         'dataset': [
-            {'field': 'dataset_row_count', 'label': 'Row Count'},
-            {'field': 'dataset_date_range_days', 'label': 'Date Range (days)'},
-            {'field': 'dataset_unique_users', 'label': 'Unique Users'},
-            {'field': 'dataset_unique_products', 'label': 'Unique Products'},
+            {'field': 'dataset_row_count', 'label': 'Dataset Size', 'format': lambda v: f"{v:,}" if v else 'N/A'},
         ],
+    }
+
+    # Filter array fields that need special handling (similar to feature_details)
+    FILTER_FIELDS = {
+        'date_filters': 'dataset_date_filters',
+        'customer_filters': 'dataset_customer_filters',
+        'product_filters': 'dataset_product_filters',
     }
 
     def analyze(self, experiments: List[Any]) -> Dict:
@@ -158,6 +162,12 @@ class HyperparameterAnalyzer:
 
         # Analyze feature details (name + dimension combinations)
         result['feature_details'] = self._analyze_feature_details(
+            experiments_with_recall,
+            good_threshold
+        )
+
+        # Analyze dataset filter details (date/customer/product filters)
+        result['filter_details'] = self._analyze_filter_details(
             experiments_with_recall,
             good_threshold
         )
@@ -319,6 +329,78 @@ class HyperparameterAnalyzer:
             # Sort by TPE score descending, limit to top 5
             values.sort(key=lambda x: x['tpe_score'], reverse=True)
             result[result_key] = values[:5]
+
+        return result
+
+    def _analyze_filter_details(
+        self,
+        experiments: List[Any],
+        good_threshold: float
+    ) -> Dict:
+        """
+        Analyze dataset filter descriptions to find which filters
+        are most associated with good experiment outcomes.
+
+        Args:
+            experiments: List of QuickTest instances
+            good_threshold: Recall value that defines "good" experiments
+
+        Returns:
+            Dictionary with filter details analysis:
+            {
+                'date_filters': [{'value': 'Rolling 60 days', 'tpe_score': 2.1, 'count': 12}, ...],
+                'customer_filters': [{'value': 'city = CHERNIGIV', 'tpe_score': 1.8, 'count': 8}, ...],
+                'product_filters': [{'value': 'Top 80% products', 'tpe_score': 2.0, 'count': 10}, ...]
+            }
+        """
+        result = {
+            'date_filters': [],
+            'customer_filters': [],
+            'product_filters': [],
+        }
+
+        # Analyze each filter type
+        for result_key, field_name in self.FILTER_FIELDS.items():
+            # Group recalls by filter description
+            groups = defaultdict(list)
+
+            for exp in experiments:
+                filters = getattr(exp, field_name, None)
+                if not filters:
+                    # Include "None" as a value for experiments without this filter type
+                    filters = ['None']
+
+                recall = self._get_recall(exp)
+                if recall is None:
+                    continue
+
+                # Each filter in the list contributes to its group
+                for filter_desc in filters:
+                    groups[filter_desc].append(recall)
+
+            # Calculate TPE scores for each filter
+            values = []
+            for filter_desc, recalls in groups.items():
+                n_good = sum(1 for r in recalls if r >= good_threshold)
+                n_bad = len(recalls) - n_good
+                n_total = len(recalls)
+
+                p_good = (n_good + self.LAPLACE_ALPHA) / (n_total + self.LAPLACE_ALPHA + self.LAPLACE_BETA)
+                p_bad = (n_bad + self.LAPLACE_BETA) / (n_total + self.LAPLACE_ALPHA + self.LAPLACE_BETA)
+                tpe_score = p_good / max(p_bad, 0.001)
+
+                values.append({
+                    'value': filter_desc,
+                    'tpe_score': round(tpe_score, 2),
+                    'avg_recall': round(sum(recalls) / len(recalls), 4),
+                    'count': n_total,
+                    'good_count': n_good,
+                    'confidence': self._get_confidence(n_total),
+                })
+
+            # Sort by TPE score descending
+            values.sort(key=lambda x: x['tpe_score'], reverse=True)
+            result[result_key] = values
 
         return result
 

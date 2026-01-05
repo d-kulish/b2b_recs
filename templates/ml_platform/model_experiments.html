@@ -3038,8 +3038,8 @@
         gap: 12px;
     }
     .hyperparam-card {
-        background: #f9fafb;
-        border: 1px solid #e5e7eb;
+        background: #ffffff;
+        border: 1px solid #1f2937;
         border-radius: 8px;
         padding: 10px;
     }
@@ -3157,6 +3157,15 @@
         grid-template-columns: 2fr 1fr;
         gap: 12px;
     }
+    /* DATASET section - single row with 4 tablets */
+    .hyperparam-dataset-row {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 12px;
+    }
+    .hyperparam-dataset-row .hyperparam-value {
+        max-width: 180px;
+    }
     .hyperparam-model-row-label {
         font-size: 10px;
         font-weight: 600;
@@ -3166,8 +3175,8 @@
         margin-bottom: 4px;
     }
     .hyperparam-card-wide {
-        background: #f9fafb;
-        border: 1px solid #e5e7eb;
+        background: #ffffff;
+        border: 1px solid #1f2937;
         border-radius: 8px;
         padding: 10px;
     }
@@ -9638,10 +9647,71 @@ async function loadHyperparameterAnalysis() {
             `;
         }
 
+        // Helper function to render filter detail card (for Dataset section)
+        function renderFilterDetailCard(title, filters, isSize = false) {
+            if (!filters || filters.length === 0) {
+                return `
+                    <div class="hyperparam-card">
+                        <div class="hyperparam-card-title">${title}</div>
+                        <div class="hyperparam-item" style="color: #9ca3af; font-style: italic;">
+                            No data
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Format value - for size, format as "107K" or "782K"
+            const formatValue = (val) => {
+                if (isSize && typeof val === 'number') {
+                    if (val >= 1000000) return `${(val / 1000000).toFixed(1)}M`;
+                    if (val >= 1000) return `${(val / 1000).toFixed(0)}K`;
+                    return val.toString();
+                }
+                return val;
+            };
+
+            return `
+                <div class="hyperparam-card">
+                    <div class="hyperparam-card-title">${title}</div>
+                    ${filters.map((item, idx) => {
+                        const isBest = idx === 0;
+                        const isLowConf = item.confidence === 'low';
+                        const classes = [
+                            'hyperparam-item',
+                            isBest ? 'best' : '',
+                            isLowConf ? 'low-confidence' : ''
+                        ].filter(Boolean).join(' ');
+
+                        const displayValue = isSize ? formatValue(item.raw_value || item.value) : item.value;
+
+                        return `
+                            <div class="${classes}" title="TPE Score: ${item.tpe_score}, Avg Recall: ${(item.avg_recall * 100).toFixed(1)}%, Count: ${item.count}">
+                                <span class="hyperparam-value">${displayValue}</span>
+                                <span class="hyperparam-metrics">
+                                    <span class="hyperparam-tpe ${isBest ? 'best' : ''}">${item.tpe_score.toFixed(1)}</span>
+                                    <span class="hyperparam-count">(${item.count})</span>
+                                </span>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            `;
+        }
+
         // Build each category section
         for (const category of categories) {
             const params = analysis[category.key];
-            if (!params || params.length === 0) continue;
+
+            // For dataset, also check filter_details
+            if (category.key === 'dataset') {
+                const filterDetails = analysis.filter_details || {};
+                const hasFilters = (filterDetails.date_filters?.length > 0) ||
+                                   (filterDetails.customer_filters?.length > 0) ||
+                                   (filterDetails.product_filters?.length > 0);
+                if ((!params || params.length === 0) && !hasFilters) continue;
+            } else {
+                if (!params || params.length === 0) continue;
+            }
 
             html += `
                 <div class="hyperparam-category">
@@ -9713,6 +9783,18 @@ async function loadHyperparameterAnalysis() {
                             ${renderFeatureDetailCard('Product Feature Details', featureDetails.product || [])}
                             ${renderFeatureDetailCard('Product Cross Details', featureDetails.product_crosses || [])}
                         </div>
+                    </div>
+                `;
+            } else if (category.key === 'dataset') {
+                // Special handling for DATASET - single row with 4 tablets
+                const filterDetails = analysis.filter_details || {};
+
+                html += `
+                    <div class="hyperparam-dataset-row">
+                        ${renderFilterDetailCard('Dataset Size', params && params.length > 0 ? params[0].values.slice(0, 5) : [], true)}
+                        ${renderFilterDetailCard('Dates', (filterDetails.date_filters || []).slice(0, 5))}
+                        ${renderFilterDetailCard('Customer Filters', (filterDetails.customer_filters || []).slice(0, 5))}
+                        ${renderFilterDetailCard('Product Filters', (filterDetails.product_filters || []).slice(0, 5))}
                     </div>
                 `;
             } else {

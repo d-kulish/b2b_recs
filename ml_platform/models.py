@@ -1786,6 +1786,28 @@ class QuickTest(models.Model):
         help_text="Number of cross features in product tower"
     )
 
+    # Feature details for TPE analysis (name + dimension combinations)
+    buyer_feature_details = models.JSONField(
+        null=True,
+        blank=True,
+        help_text="List of buyer features with dimensions, e.g. [{'name': 'customer_id', 'dim': 32}]"
+    )
+    product_feature_details = models.JSONField(
+        null=True,
+        blank=True,
+        help_text="List of product features with dimensions"
+    )
+    buyer_cross_details = models.JSONField(
+        null=True,
+        blank=True,
+        help_text="List of buyer cross features, e.g. [{'name': 'customer_id × date', 'dim': 16}]"
+    )
+    product_cross_details = models.JSONField(
+        null=True,
+        blank=True,
+        help_text="List of product cross features"
+    )
+
     # From Dataset (via FeatureConfig)
     dataset_row_count = models.IntegerField(
         null=True,

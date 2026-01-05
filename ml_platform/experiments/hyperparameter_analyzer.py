@@ -68,8 +68,8 @@ class HyperparameterAnalyzer:
             {'field': 'product_total_params', 'label': 'Product Params'},
         ],
         'features': [
-            {'field': 'buyer_tensor_dim', 'label': 'Buyer Tensor Dim'},
-            {'field': 'product_tensor_dim', 'label': 'Product Tensor Dim'},
+            {'field': 'buyer_tensor_dim', 'label': 'Buyer Vector Size'},
+            {'field': 'product_tensor_dim', 'label': 'Product Vector Size'},
             {'field': 'buyer_feature_count', 'label': 'Buyer Features'},
             {'field': 'product_feature_count', 'label': 'Product Features'},
             {'field': 'buyer_cross_count', 'label': 'Buyer Crosses'},
@@ -156,6 +156,12 @@ class HyperparameterAnalyzer:
                 if analysis['values']:
                     result[category].append(analysis)
 
+        # Analyze feature details (name + dimension combinations)
+        result['feature_details'] = self._analyze_feature_details(
+            experiments_with_recall,
+            good_threshold
+        )
+
         return result
 
     def _analyze_parameter(
@@ -232,6 +238,89 @@ class HyperparameterAnalyzer:
             'field': field,
             'values': values,
         }
+
+    def _analyze_feature_details(
+        self,
+        experiments: List[Any],
+        good_threshold: float
+    ) -> Dict:
+        """
+        Analyze feature details (name + dimension) to find which features
+        are most associated with good experiment outcomes.
+
+        Args:
+            experiments: List of QuickTest instances
+            good_threshold: Recall value that defines "good" experiments
+
+        Returns:
+            Dictionary with feature details analysis:
+            {
+                'buyer': [{'value': 'customer_id 32D', 'tpe_score': 2.1, 'count': 12}, ...],
+                'product': [...],
+                'buyer_crosses': [...],
+                'product_crosses': [...]
+            }
+        """
+        result = {
+            'buyer': [],
+            'product': [],
+            'buyer_crosses': [],
+            'product_crosses': []
+        }
+
+        # Analyze each feature type
+        feature_fields = [
+            ('buyer', 'buyer_feature_details'),
+            ('product', 'product_feature_details'),
+            ('buyer_crosses', 'buyer_cross_details'),
+            ('product_crosses', 'product_cross_details'),
+        ]
+
+        for result_key, field_name in feature_fields:
+            # Group recalls by feature "name dim" key
+            groups = defaultdict(list)
+
+            for exp in experiments:
+                details = getattr(exp, field_name, None)
+                if not details:
+                    continue
+
+                recall = self._get_recall(exp)
+                if recall is None:
+                    continue
+
+                # Each feature in the list contributes to its group
+                for feature in details:
+                    name = feature.get('name', 'unknown')
+                    dim = feature.get('dim', 0)
+                    key = f"{name} {dim}D"
+                    groups[key].append(recall)
+
+            # Calculate TPE scores for each feature
+            values = []
+            for feature_key, recalls in groups.items():
+                n_good = sum(1 for r in recalls if r >= good_threshold)
+                n_bad = len(recalls) - n_good
+                n_total = len(recalls)
+
+                p_good = (n_good + self.LAPLACE_ALPHA) / (n_total + self.LAPLACE_ALPHA + self.LAPLACE_BETA)
+                p_bad = (n_bad + self.LAPLACE_BETA) / (n_total + self.LAPLACE_ALPHA + self.LAPLACE_BETA)
+                tpe_score = p_good / max(p_bad, 0.001)
+
+                values.append({
+                    'value': feature_key,
+                    'tpe_score': round(tpe_score, 2),
+                    'avg_recall': round(sum(recalls) / len(recalls), 4),
+                    'count': n_total,
+                    'good_count': n_good,
+                    'confidence': self._get_confidence(n_total),
+                })
+
+            # Sort by TPE score descending, limit to top 5
+            values.sort(key=lambda x: x['tpe_score'], reverse=True)
+            result[result_key] = values[:5]
+
+        return result
 
     def _get_recall(self, experiment) -> Optional[float]:
         """

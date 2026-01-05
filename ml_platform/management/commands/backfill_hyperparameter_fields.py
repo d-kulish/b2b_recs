@@ -158,6 +158,12 @@ class Command(BaseCommand):
         qt.buyer_cross_count = len(buyer_crosses)
         qt.product_cross_count = len(product_crosses)
 
+        # Extract feature details (name + dimension) for TPE analysis
+        qt.buyer_feature_details = extract_feature_details(buyer_features)
+        qt.product_feature_details = extract_feature_details(product_features)
+        qt.buyer_cross_details = extract_cross_details(buyer_crosses)
+        qt.product_cross_details = extract_cross_details(product_crosses)
+
         # Estimate tower params
         if feature_config.buyer_tensor_dim:
             qt.buyer_total_params = estimate_tower_params(
@@ -179,3 +185,79 @@ class Command(BaseCommand):
             if dataset.date_range_start and dataset.date_range_end:
                 delta = dataset.date_range_end - dataset.date_range_start
                 qt.dataset_date_range_days = delta.days
+
+
+def extract_feature_details(features):
+    """
+    Extract feature name and dimension from feature config list.
+
+    Args:
+        features: List of feature config dicts from FeatureConfig
+
+    Returns:
+        List of {"name": "column_name", "dim": embedding_dim}
+    """
+    details = []
+    for f in features:
+        name = f.get('column') or f.get('display_name', 'unknown')
+        dim = 0
+
+        transforms = f.get('transforms', {})
+
+        # Text embedding dimension
+        embedding = transforms.get('embedding', {})
+        if embedding.get('enabled'):
+            dim = embedding.get('embedding_dim', 32)
+
+        # Numeric bucketization dimension
+        bucketize = transforms.get('bucketize', {})
+        if bucketize.get('enabled'):
+            dim = bucketize.get('embedding_dim', 32)
+
+        # Numeric normalization (1D)
+        normalize = transforms.get('normalize', {})
+        if normalize.get('enabled'):
+            dim = 1
+
+        # Cyclical encoding (count 2D per cycle)
+        cyclical = transforms.get('cyclical', {})
+        cycle_dim = 0
+        for cycle in ['annual', 'quarterly', 'monthly', 'weekly', 'daily']:
+            if cyclical.get(cycle):
+                cycle_dim += 2
+        if cycle_dim > 0:
+            dim = cycle_dim
+
+        if dim > 0:
+            details.append({'name': name, 'dim': dim})
+
+    return details
+
+
+def extract_cross_details(crosses):
+    """
+    Extract cross feature names and dimensions.
+
+    Args:
+        crosses: List of cross feature config dicts
+
+    Returns:
+        List of {"name": "col1 × col2", "dim": hash_bucket_size or embedding_dim}
+    """
+    details = []
+    for c in crosses:
+        # Cross features typically have 'columns' list or 'feature1'/'feature2' keys
+        columns = c.get('columns', [])
+        if not columns:
+            # Try alternate format
+            f1 = c.get('feature1', c.get('column1', ''))
+            f2 = c.get('feature2', c.get('column2', ''))
+            if f1 and f2:
+                columns = [f1, f2]
+
+        name = ' × '.join(columns) if columns else 'cross'
+        dim = c.get('embedding_dim') or c.get('hash_bucket_size', 16)
+
+        details.append({'name': name, 'dim': dim})
+
+    return details

@@ -5,7 +5,7 @@ This document provides **high-level specifications** for the Experiments domain.
 
 👉 **[phase_experiments_implementation.md](phase_experiments_implementation.md)** - Complete implementation guide with code examples
 
-**Last Updated**: 2026-01-04
+**Last Updated**: 2026-01-05
 
 ---
 
@@ -36,6 +36,55 @@ This document provides **high-level specifications** for the Experiments domain.
 ---
 
 ## Recent Updates (December 2025 - January 2026)
+
+### Hyperparameter Insights - Enhanced Layout & Feature Details (2026-01-05)
+
+**Major Enhancement:** Improved Model Architecture and Features sections with 2-row Buyer/Product layouts and new Feature Details analysis.
+
+#### Changes
+
+| Component | Change |
+|-----------|--------|
+| **Model Architecture** | 2-row layout (Buyer row / Product row) for easy comparison |
+| **Tower Cards** | Double-width for full structure display (e.g., "256→128→64→32") |
+| **Activation Cards** | Removed (activation varies per layer, not useful) |
+| **Features Section** | 2-row layout with summary + detail cards |
+| **Tensor Dim** | Renamed to "Vector Size" |
+| **Feature Details** | NEW: Shows which features (by name + dim) correlate with best results |
+| **Cross Details** | NEW: Same analysis for cross features |
+
+#### New Fields Added
+
+```python
+# ml_platform/models.py - QuickTest model
+buyer_feature_details = JSONField()    # [{"name": "customer_id", "dim": 32}, ...]
+product_feature_details = JSONField()
+buyer_cross_details = JSONField()
+product_cross_details = JSONField()
+```
+
+#### Bug Fix
+
+Fixed `_calc_feature_dim()` in `FeatureConfig.calculate_tensor_dims()`:
+- **Issue**: Text features with `transforms.embedding.enabled` returned dim=0
+- **Cause**: Only checked legacy `feature.type == 'string_embedding'`
+- **Fix**: Added check for `transforms.embedding.embedding_dim`
+- **Impact**: `product_tensor_dim` was 0 for all configs with text-only features
+
+#### Files Modified
+
+| File | Changes |
+|------|---------|
+| `ml_platform/models.py` | 4 new JSONFields, fixed `_calc_feature_dim()` |
+| `ml_platform/migrations/0044_add_feature_details_fields.py` | New migration |
+| `ml_platform/experiments/services.py` | Extract feature details at creation |
+| `ml_platform/experiments/hyperparameter_analyzer.py` | New `_analyze_feature_details()`, renamed labels |
+| `ml_platform/management/commands/backfill_hyperparameter_fields.py` | Added feature details extraction |
+| `templates/ml_platform/model_experiments.html` | New UI layout, CSS, JS |
+
+**See:** [`hyperparameter_best_selection.md`](hyperparameter_best_selection.md) for full details.
+
+---
 
 ### MLflow Removed - Direct GCS Storage (2026-01-02)
 

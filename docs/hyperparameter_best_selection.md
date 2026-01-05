@@ -1,6 +1,6 @@
 # Hyperparameter Best Selection Analysis
 
-**Last Updated**: 2026-01-04
+**Last Updated**: 2026-01-05
 **Status**: Implemented
 
 ---
@@ -151,12 +151,20 @@ product_total_params = IntegerField()
 
 **From FeatureConfig:**
 ```python
-buyer_tensor_dim = IntegerField()      # Total tensor dimensions
+buyer_tensor_dim = IntegerField()      # Total tensor dimensions (renamed to "Vector Size" in UI)
 product_tensor_dim = IntegerField()
 buyer_feature_count = IntegerField()   # Number of columns
 product_feature_count = IntegerField()
 buyer_cross_count = IntegerField()     # Number of cross features
 product_cross_count = IntegerField()
+```
+
+**Feature Details (Added 2026-01-05):**
+```python
+buyer_feature_details = JSONField()    # [{"name": "customer_id", "dim": 32}, ...]
+product_feature_details = JSONField()
+buyer_cross_details = JSONField()      # [{"name": "customer_id × date", "dim": 16}, ...]
+product_cross_details = JSONField()
 ```
 
 **From Dataset:**
@@ -204,6 +212,12 @@ dataset_unique_products = IntegerField()
     "model": [...],
     "features": [...],
     "dataset": [...],
+    "feature_details": {
+      "buyer": [{"value": "customer_id 64D", "tpe_score": 2.1, "count": 12, ...}],
+      "product": [{"value": "product_id 32D", "tpe_score": 2.0, "count": 15, ...}],
+      "buyer_crosses": [],
+      "product_crosses": []
+    },
     "good_threshold": 0.072,
     "total_experiments": 15,
     "good_experiments": 5
@@ -211,7 +225,9 @@ dataset_unique_products = IntegerField()
 }
 ```
 
-### UI Layout
+### UI Layout (Updated 2026-01-05)
+
+**Model Architecture** and **Features** sections now use a 2-row layout to enable easy Buyer/Product comparison. Activation cards were removed (activation varies per layer).
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -227,17 +243,40 @@ dataset_unique_products = IntegerField()
 │ │0.01   1.5(4)│ │2048   1.2(6)│ │adagrad  1.4 │ │25     1.2(5)│             │
 │ └─────────────┘ └─────────────┘ └─────────────┘ └─────────────┘             │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│ ▀ MODEL ARCHITECTURE (purple border) ───────────────────────────────────────│
-│ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐             │
-│ │ Buyer Tower │ │Product Tower│ │Buyer Activ. │ │ Buyer L2    │             │
-│ │128→64→32 2.1│ │128→64→32 1.9│ │relu    1.8  │ │light   1.6  │             │
-│ └─────────────┘ └─────────────┘ └─────────────┘ └─────────────┘             │
+│ ▀ MODEL ARCHITECTURE (purple border) - 2-row Buyer/Product layout ──────────│
+│ ┌───────────────────────┐ ┌─────────────┐ ┌─────────────┐  ← Buyer row      │
+│ │ BUYER TOWER (2x wide) │ │ BUYER L2 REG│ │ BUYER PARAMS│                   │
+│ │ 128→64→32       2.0(4)│ │ light  2.0  │ │ 19,424  3.0 │                   │
+│ │ 256→128→64→32   0.3(3)│ │ medium 0.7  │ │ 55,200  2.0 │                   │
+│ └───────────────────────┘ └─────────────┘ └─────────────┘                   │
+│ ┌───────────────────────┐ ┌─────────────┐ ┌─────────────┐  ← Product row    │
+│ │ PRODUCT TOWER (2x)    │ │PRODUCT L2   │ │PRODUCT PARAMS│                  │
+│ │ 128→64→32       0.6(11)│ │ light  2.0  │ │ 63,488  0.3 │                   │
+│ │ 256→128→64→32   0.5(1)│ │ medium 0.7  │ │             │                   │
+│ └───────────────────────┘ └─────────────┘ └─────────────┘                   │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│ ▀ FEATURES (green border) ──────────────────────────────────────────────────│
-│ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐             │
-│ │Buyer Tensor │ │Product Tens.│ │Buyer Feats. │ │Buyer Crosses│             │
-│ │256     2.2  │ │128     1.7  │ │5 cols   2.0 │ │2       1.8  │             │
-│ └─────────────┘ └─────────────┘ └─────────────┘ └─────────────┘             │
+│ ▀ FEATURES (green border) - 2-row Buyer/Product layout ─────────────────────│
+│ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐  ← Buyer summary row        │
+│ │BUYER VECTOR │ │BUYER FEATURES│ │BUYER CROSSES│                            │
+│ │ SIZE        │ │ (count)     │ │ (count)     │                             │
+│ │ 175    1.0  │ │ 5      1.0  │ │ 0      0.4  │                             │
+│ └─────────────┘ └─────────────┘ └─────────────┘                             │
+│ ┌───────────────────────────────┐ ┌─────────────────────┐ ← Buyer details   │
+│ │ BUYER FEATURE DETAILS         │ │ BUYER CROSS DETAILS │                   │
+│ │ customer_id 64D       2.1(12) │ │ No data available   │                   │
+│ │ segment 8D            1.8(10) │ │                     │                   │
+│ │ date 4D               1.5(8)  │ │                     │                   │
+│ └───────────────────────────────┘ └─────────────────────┘                   │
+│ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐  ← Product summary row      │
+│ │PRODUCT VECT.│ │PRODUCT FEATS│ │PRODUCT CROSS│                             │
+│ │ SIZE        │ │ (count)     │ │ (count)     │                             │
+│ │ 72     1.0  │ │ 3      0.4  │ │ 0      0.4  │                             │
+│ └─────────────┘ └─────────────┘ └─────────────┘                             │
+│ ┌───────────────────────────────┐ ┌─────────────────────┐ ← Product details │
+│ │ PRODUCT FEATURE DETAILS       │ │ PRODUCT CROSS DET.  │                   │
+│ │ product_id 32D        2.0(15) │ │ No data available   │                   │
+│ │ category 8D           1.7(12) │ │                     │                   │
+│ └───────────────────────────────┘ └─────────────────────┘                   │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │ ▀ DATASET (orange border) ──────────────────────────────────────────────────│
 │ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐             │

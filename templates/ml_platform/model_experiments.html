@@ -3136,7 +3136,7 @@
         gap: 4px;
     }
 
-    /* MODEL ARCHITECTURE - Special 2-row layout for Buyer/Product comparison */
+    /* MODEL ARCHITECTURE & FEATURES - Special 2-row layout for Buyer/Product comparison */
     .hyperparam-model-section {
         display: flex;
         flex-direction: column;
@@ -3145,6 +3145,16 @@
     .hyperparam-model-row {
         display: grid;
         grid-template-columns: 2fr 1fr 1fr;
+        gap: 12px;
+    }
+    .hyperparam-features-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 12px;
+    }
+    .hyperparam-features-detail-row {
+        display: grid;
+        grid-template-columns: 2fr 1fr;
         gap: 12px;
     }
     .hyperparam-model-row-label {
@@ -9589,6 +9599,45 @@ async function loadHyperparameterAnalysis() {
             return params.find(p => p.field === field);
         }
 
+        // Helper function to render feature detail card
+        function renderFeatureDetailCard(title, features) {
+            if (!features || features.length === 0) {
+                return `
+                    <div class="hyperparam-card">
+                        <div class="hyperparam-card-title">${title}</div>
+                        <div class="hyperparam-item" style="color: #9ca3af; font-style: italic;">
+                            No data available
+                        </div>
+                    </div>
+                `;
+            }
+
+            return `
+                <div class="hyperparam-card">
+                    <div class="hyperparam-card-title">${title}</div>
+                    ${features.map((item, idx) => {
+                        const isBest = idx === 0;
+                        const isLowConf = item.confidence === 'low';
+                        const classes = [
+                            'hyperparam-item',
+                            isBest ? 'best' : '',
+                            isLowConf ? 'low-confidence' : ''
+                        ].filter(Boolean).join(' ');
+
+                        return `
+                            <div class="${classes}" title="TPE Score: ${item.tpe_score}, Avg Recall: ${(item.avg_recall * 100).toFixed(1)}%, Count: ${item.count}">
+                                <span class="hyperparam-value" style="max-width: 140px;">${item.value}</span>
+                                <span class="hyperparam-metrics">
+                                    <span class="hyperparam-tpe ${isBest ? 'best' : ''}">${item.tpe_score.toFixed(1)}</span>
+                                    <span class="hyperparam-count">(${item.count})</span>
+                                </span>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            `;
+        }
+
         // Build each category section
         for (const category of categories) {
             const params = analysis[category.key];
@@ -9625,6 +9674,44 @@ async function loadHyperparameterAnalysis() {
                             ${renderHyperparamCard(productTower, true)}
                             ${renderHyperparamCard(productL2, false)}
                             ${renderHyperparamCard(productParams, false)}
+                        </div>
+                    </div>
+                `;
+            } else if (category.key === 'features') {
+                // Special handling for FEATURES - 2 row layout (Buyer/Product)
+                const buyerTensorDim = findParam(params, 'buyer_tensor_dim');
+                const buyerFeatures = findParam(params, 'buyer_feature_count');
+                const buyerCrosses = findParam(params, 'buyer_cross_count');
+                const productTensorDim = findParam(params, 'product_tensor_dim');
+                const productFeatures = findParam(params, 'product_feature_count');
+                const productCrosses = findParam(params, 'product_cross_count');
+
+                // Get feature details from analysis
+                const featureDetails = analysis.feature_details || {};
+
+                html += `
+                    <div class="hyperparam-model-section">
+                        <!-- Buyer Features Row 1: Summary cards -->
+                        <div class="hyperparam-features-row">
+                            ${renderHyperparamCard(buyerTensorDim, false)}
+                            ${renderHyperparamCard(buyerFeatures, false)}
+                            ${renderHyperparamCard(buyerCrosses, false)}
+                        </div>
+                        <!-- Buyer Features Row 2: Detail cards -->
+                        <div class="hyperparam-features-detail-row">
+                            ${renderFeatureDetailCard('Buyer Feature Details', featureDetails.buyer || [])}
+                            ${renderFeatureDetailCard('Buyer Cross Details', featureDetails.buyer_crosses || [])}
+                        </div>
+                        <!-- Product Features Row 1: Summary cards -->
+                        <div class="hyperparam-features-row">
+                            ${renderHyperparamCard(productTensorDim, false)}
+                            ${renderHyperparamCard(productFeatures, false)}
+                            ${renderHyperparamCard(productCrosses, false)}
+                        </div>
+                        <!-- Product Features Row 2: Detail cards -->
+                        <div class="hyperparam-features-detail-row">
+                            ${renderFeatureDetailCard('Product Feature Details', featureDetails.product || [])}
+                            ${renderFeatureDetailCard('Product Cross Details', featureDetails.product_crosses || [])}
                         </div>
                     </div>
                 `;

@@ -629,13 +629,19 @@ class ExperimentService:
             return  # Can't validate without dataset
 
         # Get column names from FeatureConfig features
+        # IMPORTANT: Use display_name if present, falling back to column
+        # This matches how PreprocessingFnGenerator uses column names:
+        #   col = feature.get('display_name') or feature.get('column')
+        # The display_name contains the aliased name that matches BigQuery output
         feature_columns = set()
         for feature in (feature_config.buyer_model_features or []):
-            if 'column' in feature:
-                feature_columns.add(feature['column'])
+            col = feature.get('display_name') or feature.get('column')
+            if col:
+                feature_columns.add(col)
         for feature in (feature_config.product_model_features or []):
-            if 'column' in feature:
-                feature_columns.add(feature['column'])
+            col = feature.get('display_name') or feature.get('column')
+            if col:
+                feature_columns.add(col)
 
         if not feature_columns:
             return  # No features to validate

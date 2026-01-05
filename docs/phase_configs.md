@@ -4,11 +4,119 @@
 ## Document Purpose
 This document provides detailed specifications for implementing the **Configs** domain in the ML Platform. This domain defines HOW data is transformed for training (Feature Configs) and the neural network architecture (Model Configs).
 
-**Last Updated**: 2025-12-29
+**Last Updated**: 2026-01-05
 
 ---
 
-## Recent Updates (December 2025)
+## Recent Updates (December 2025 - January 2026)
+
+### Column Alias Validation Fix (2026-01-05)
+
+**Bug Fix:** Fixed `_validate_column_names()` in experiments/services.py to use `display_name` when validating column names.
+
+#### The Problem
+
+Experiments that previously worked (14 successful runs from Dec 30 - Jan 2) started failing with:
+```
+FeatureConfig column names don't match BigQuery output.
+Missing columns: ['division_desc', 'mge_cat_desc']
+Available columns: ['category', 'city', 'cust_value', 'customer_id', 'date', 'product_id', 'sales', 'sub_category']
+
+Suggestions:
+  - 'division_desc' -> try 'category' (column was renamed in Dataset)
+  - 'mge_cat_desc' -> try 'sub_category' (column was renamed in Dataset)
+```
+
+#### Timeline of Events
+
+| Date | Event |
+|------|-------|
+| Dec 28, 2025 | Column renaming feature added (`fdcd6cf`) |
+| Dec 29, 2025 | Display name preservation fixes (v15, v16) |
+| Dec 30 - Jan 2 | 14 experiments completed successfully with `cherng_v1` FeatureConfig |
+| Jan 3, 2026 | `_validate_column_names()` added to catch column mismatches (`da745c8`) |
+| Jan 5, 2026 | Experiment failed - validation rejected previously-working config |
+
+#### Root Cause Analysis
+
+The Jan 3 validation addition (`da745c8`) introduced a regression. It checked `feature['column']` but the transform code generator uses `feature.get('display_name') or feature.get('column')`.
+
+**FeatureConfig Data Model:**
+```json
+{
+  "column": "division_desc",      // Original BigQuery column name
+  "display_name": "category",     // Aliased name (matches BQ output)
+  "type": "text",
+  "transforms": { "embedding": { "enabled": true, "embedding_dim": 8 } }
+}
+```
+
+**Data Flow:**
+```
+Dataset.column_aliases: {"products_division_desc": "category"}
+                                    ↓
+BigQuery SQL: SELECT division_desc AS category  →  Output column: "category"
+                                    ↓
+Transform code: inputs['category']  ←  Uses display_name ✅
+                                    ↓
+Validation: feature['column'] = "division_desc"  ←  Wrong field! ❌
+```
+
+#### Wrong Approach (Attempted & Reverted)
+
+Initially attempted to fix by modifying `SmartDefaultsService._get_all_columns_with_info()` to apply aliases to the `name` field. This was **wrong** because:
+
+1. The data model is correct - storing both `column` (original) and `display_name` (alias) is intentional
+2. The transform code generator already handles this correctly
+3. The fix would have broken existing FeatureConfigs that store original names in `column`
+
+**Reverted changes:**
+- `SmartDefaultsService._get_all_columns_with_info()` alias application
+- New `_validate_column_names_against_dataset()` function
+- Incorrect documentation
+
+#### The Correct Fix
+
+The validation should use the same pattern as the transform code generator:
+
+**File:** `ml_platform/experiments/services.py`
+
+```python
+# Before (wrong - only checked 'column'):
+for feature in (feature_config.buyer_model_features or []):
+    if 'column' in feature:
+        feature_columns.add(feature['column'])
+
+# After (correct - uses display_name if present):
+for feature in (feature_config.buyer_model_features or []):
+    col = feature.get('display_name') or feature.get('column')
+    if col:
+        feature_columns.add(col)
+```
+
+#### Key Insight: Consistent Column Name Resolution
+
+Throughout the codebase, column names should be resolved using:
+```python
+col = feature.get('display_name') or feature.get('column')
+```
+
+This pattern appears 30+ times in `configs/services.py` (transform/trainer code generators). The validation was the only place that didn't follow this pattern.
+
+#### Files Modified
+
+| File | Changes |
+|------|---------|
+| `ml_platform/experiments/services.py` | Fixed `_validate_column_names()` to use `display_name or column` pattern |
+
+#### Lessons Learned
+
+1. **Check existing patterns** before implementing fixes - the codebase already had the correct approach
+2. **Trace actual data** through the system before assuming what's broken
+3. **Test with real data** - the FeatureConfig had both `column` and `display_name` fields
+4. **Validation should match runtime behavior** - if transform uses `display_name`, validation must too
+
+---
 
 ### Embedding Recommendations & OOV Info for All Features (2025-12-29)
 

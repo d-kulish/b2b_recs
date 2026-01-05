@@ -88,7 +88,7 @@ urlpatterns = [
         name='get_date_columns'
     ),
 
-    # MLflow Comparison and Leaderboard
+    # Experiment Comparison and Dashboard
     path(
         'api/experiments/selectable/',
         api.selectable_experiments,
@@ -100,14 +100,9 @@ urlpatterns = [
         name='compare_experiments'
     ),
     path(
-        'api/experiments/leaderboard/',
-        api.experiment_leaderboard,
-        name='experiment_leaderboard'
-    ),
-    path(
-        'api/experiments/heatmap/',
-        api.experiment_heatmap,
-        name='experiment_heatmap'
+        'api/experiments/training-heatmaps/',
+        api.training_heatmaps,
+        name='training_heatmaps'
     ),
     path(
         'api/experiments/dashboard-stats/',

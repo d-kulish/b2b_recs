@@ -2804,75 +2804,52 @@
         border-color: #3b82f6;
     }
 
-    /* Leaderboard Table */
-    .leaderboard-table {
-        width: 100%;
-        border-collapse: collapse;
+    /* Training Heatmaps */
+    .training-heatmaps-container {
+        display: flex;
+        gap: 24px;
+    }
+    .training-heatmap-panel {
+        flex: 1;
+        min-width: 0;
+    }
+    .training-heatmap-title {
         font-size: 13px;
-    }
-    .leaderboard-table th,
-    .leaderboard-table td {
-        padding: 10px 12px;
-        text-align: left;
-        border-bottom: 1px solid #e5e7eb;
-    }
-    .leaderboard-table th {
-        background: #f9fafb;
         font-weight: 600;
         color: #374151;
-        font-size: 11px;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-    .leaderboard-table tbody tr {
-        cursor: pointer;
-        transition: background 0.15s ease;
-    }
-    .leaderboard-table tbody tr:hover {
-        background: #f3f4f6;
-    }
-    .leaderboard-rank {
-        width: 40px;
+        margin-bottom: 12px;
         text-align: center;
-        font-weight: 600;
+    }
+    .training-heatmap-grid {
+        min-height: 280px;
+    }
+    .training-heatmap-grid svg {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+    .training-heatmap-legend {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        margin-top: 8px;
+        font-size: 10px;
         color: #6b7280;
     }
-    .leaderboard-rank-1 {
-        color: #f59e0b;
-    }
-    .leaderboard-rank-2 {
-        color: #9ca3af;
-    }
-    .leaderboard-rank-3 {
-        color: #b45309;
-    }
-    .leaderboard-exp-name {
+    .legend-label {
         font-weight: 500;
-        color: #111827;
     }
-    .leaderboard-config {
-        color: #6b7280;
-        font-size: 12px;
+    .legend-gradient {
+        width: 100px;
+        height: 10px;
+        border-radius: 2px;
     }
-    .leaderboard-metric {
-        font-weight: 600;
-        color: #111827;
+    .loss-gradient {
+        background: linear-gradient(to right, #10b981, #fbbf24, #ef4444);
     }
-    .leaderboard-metric.best {
-        color: #10b981;
+    .recall-gradient {
+        background: linear-gradient(to right, #ef4444, #fbbf24, #10b981);
     }
-    .leaderboard-empty {
-        text-align: center;
-        padding: 32px;
-        color: #9ca3af;
-    }
-
-    /* Heatmap Container */
-    .heatmap-container {
-        position: relative;
-        min-height: 300px;
-    }
-    .heatmap-empty {
+    .training-heatmaps-empty {
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -2881,29 +2858,10 @@
         color: #9ca3af;
         text-align: center;
     }
-    .heatmap-empty i {
+    .training-heatmaps-empty i {
         font-size: 48px;
         margin-bottom: 12px;
         opacity: 0.5;
-    }
-    .heatmap-legend {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 16px;
-        margin-top: 12px;
-        font-size: 11px;
-        color: #6b7280;
-    }
-    .heatmap-legend-item {
-        display: flex;
-        align-items: center;
-        gap: 4px;
-    }
-    .heatmap-legend-color {
-        width: 16px;
-        height: 12px;
-        border-radius: 2px;
     }
 
     /* Dashboard Loading State */
@@ -3470,73 +3428,37 @@
                 </div>
             </div>
 
-            <!-- Leaderboard Section -->
+            <!-- Training Heatmaps Section -->
             <div class="dashboard-section">
                 <div class="dashboard-section-header">
-                    <span class="dashboard-section-title">Leaderboard</span>
-                    <div class="dashboard-section-controls">
-                        <label class="text-xs text-gray-500 mr-1">Sort by:</label>
-                        <select id="leaderboardMetricSelect" class="dashboard-select" onchange="loadLeaderboard()">
-                            <option value="recall_at_100">Recall@100</option>
-                            <option value="recall_at_50">Recall@50</option>
-                            <option value="recall_at_10">Recall@10</option>
-                            <option value="loss">Loss (lowest)</option>
-                        </select>
+                    <span class="dashboard-section-title">Training Analysis</span>
+                    <span class="text-xs text-gray-400">Top 10 experiments by Recall@100</span>
+                </div>
+                <div class="training-heatmaps-container">
+                    <!-- Loss Heatmap (50%) -->
+                    <div class="training-heatmap-panel">
+                        <div class="training-heatmap-title">Validation Loss by Epoch</div>
+                        <div id="lossHeatmap" class="training-heatmap-grid"></div>
+                        <div class="training-heatmap-legend">
+                            <span class="legend-label">Low</span>
+                            <div class="legend-gradient loss-gradient"></div>
+                            <span class="legend-label">High</span>
+                        </div>
+                    </div>
+                    <!-- Recall Heatmap (50%) -->
+                    <div class="training-heatmap-panel">
+                        <div class="training-heatmap-title">Final Recall Metrics</div>
+                        <div id="recallHeatmap" class="training-heatmap-grid"></div>
+                        <div class="training-heatmap-legend">
+                            <span class="legend-label">Low</span>
+                            <div class="legend-gradient recall-gradient"></div>
+                            <span class="legend-label">High</span>
+                        </div>
                     </div>
                 </div>
-                <div id="leaderboardContainer">
-                    <table class="leaderboard-table">
-                        <thead>
-                            <tr>
-                                <th style="width: 50px;">#</th>
-                                <th>Experiment</th>
-                                <th>Feature Config</th>
-                                <th>Model Config</th>
-                                <th style="text-align: right;">Recall@100</th>
-                                <th style="text-align: right;">Recall@50</th>
-                                <th style="text-align: right;">Loss</th>
-                            </tr>
-                        </thead>
-                        <tbody id="leaderboardBody">
-                            <!-- Populated by JavaScript -->
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <!-- Heatmap Section -->
-            <div class="dashboard-section">
-                <div class="dashboard-section-header">
-                    <span class="dashboard-section-title">Configuration Heatmap</span>
-                    <div class="dashboard-section-controls">
-                        <label class="text-xs text-gray-500 mr-1">Metric:</label>
-                        <select id="heatmapMetricSelect" class="dashboard-select" onchange="loadHeatmap()">
-                            <option value="recall_at_100">Recall@100</option>
-                            <option value="recall_at_50">Recall@50</option>
-                            <option value="recall_at_10">Recall@10</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="heatmap-container" id="heatmapContainer">
-                    <canvas id="heatmapCanvas"></canvas>
-                </div>
-                <div class="heatmap-legend" id="heatmapLegend">
-                    <div class="heatmap-legend-item">
-                        <div class="heatmap-legend-color" style="background: #10b981;"></div>
-                        <span>High</span>
-                    </div>
-                    <div class="heatmap-legend-item">
-                        <div class="heatmap-legend-color" style="background: #fbbf24;"></div>
-                        <span>Medium</span>
-                    </div>
-                    <div class="heatmap-legend-item">
-                        <div class="heatmap-legend-color" style="background: #ef4444;"></div>
-                        <span>Low</span>
-                    </div>
-                    <div class="heatmap-legend-item">
-                        <div class="heatmap-legend-color" style="background: #e5e7eb;"></div>
-                        <span>No data</span>
-                    </div>
+                <div id="trainingHeatmapsEmpty" class="training-heatmaps-empty hidden">
+                    <i class="fas fa-th"></i>
+                    <p>No completed experiments with training data</p>
                 </div>
             </div>
 
@@ -9009,7 +8931,6 @@ function showSuccess(message) {
 // =============================================================================
 // EXPERIMENTS DASHBOARD
 // =============================================================================
-let heatmapChart = null;
 let trendChart = null;
 let datasetChart = null;
 
@@ -9091,8 +9012,7 @@ async function loadExperimentsDashboard() {
             loadMetricsTrend(),
             loadTopConfigurations(),
             loadHyperparameterAnalysis(),
-            loadLeaderboard(),
-            loadHeatmap(),
+            loadTrainingHeatmaps(),
             loadDatasetComparison(),
             loadSuggestions()
         ]);
@@ -9104,249 +9024,269 @@ async function loadExperimentsDashboard() {
     }
 }
 
-async function loadLeaderboard() {
-    const metric = document.getElementById('leaderboardMetricSelect').value;
-    const tbody = document.getElementById('leaderboardBody');
+// =============================================================================
+// TRAINING HEATMAPS (D3.js)
+// =============================================================================
+
+async function loadTrainingHeatmaps() {
+    const lossContainer = document.getElementById('lossHeatmap');
+    const recallContainer = document.getElementById('recallHeatmap');
+    const emptyEl = document.getElementById('trainingHeatmapsEmpty');
+    const heatmapsContainer = document.querySelector('.training-heatmaps-container');
 
     try {
-        const response = await fetch(`/api/experiments/leaderboard/?metric=${metric}&limit=10`);
+        const response = await fetch('/api/experiments/training-heatmaps/');
         const data = await response.json();
 
-        if (!data.success || !data.leaderboard || data.leaderboard.length === 0) {
-            tbody.innerHTML = `
-                <tr>
-                    <td colspan="7" class="leaderboard-empty">
-                        <i class="fas fa-trophy text-gray-300 text-2xl mb-2"></i>
-                        <p>No completed experiments yet</p>
-                    </td>
-                </tr>
-            `;
+        if (!data.success || !data.experiments || data.experiments.length === 0) {
+            heatmapsContainer.style.display = 'none';
+            emptyEl.classList.remove('hidden');
             return;
         }
 
-        // Render leaderboard rows
-        tbody.innerHTML = data.leaderboard.map((item, index) => {
-            const rankClass = index < 3 ? `leaderboard-rank-${index + 1}` : '';
-            const bestClass = index === 0 ? 'best' : '';
+        // Check if we have data for each heatmap
+        const hasLossData = data.experiments.some(exp => exp.val_loss && exp.val_loss.length > 0);
+        const hasRecallData = data.experiments.some(exp =>
+            exp.final_recalls && Object.values(exp.final_recalls).some(v => v > 0)
+        );
 
-            return `
-                <tr onclick="openExpViewModal(${item.quick_test_id})" title="Click to view details">
-                    <td class="leaderboard-rank ${rankClass}">${item.rank}</td>
-                    <td>
-                        <div class="leaderboard-exp-name">${item.display_name || item.experiment_number}</div>
-                    </td>
-                    <td class="leaderboard-config">${item.feature_config || '-'}</td>
-                    <td class="leaderboard-config">${item.model_config || '-'}</td>
-                    <td style="text-align: right;" class="leaderboard-metric ${bestClass}">
-                        ${item.metrics.recall_at_100 !== null ? item.metrics.recall_at_100.toFixed(3) : '-'}
-                    </td>
-                    <td style="text-align: right;" class="leaderboard-metric">
-                        ${item.metrics.recall_at_50 !== null ? item.metrics.recall_at_50.toFixed(3) : '-'}
-                    </td>
-                    <td style="text-align: right;" class="leaderboard-metric">
-                        ${item.metrics.loss !== null ? item.metrics.loss.toFixed(4) : '-'}
-                    </td>
-                </tr>
-            `;
-        }).join('');
-
-    } catch (error) {
-        console.error('Failed to load leaderboard:', error);
-        tbody.innerHTML = `
-            <tr>
-                <td colspan="7" class="leaderboard-empty text-red-500">
-                    Failed to load leaderboard
-                </td>
-            </tr>
-        `;
-    }
-}
-
-async function loadHeatmap() {
-    const metric = document.getElementById('heatmapMetricSelect').value;
-    const container = document.getElementById('heatmapContainer');
-    const canvas = document.getElementById('heatmapCanvas');
-    const legend = document.getElementById('heatmapLegend');
-
-    try {
-        const response = await fetch(`/api/experiments/heatmap/?metric=${metric}`);
-        const data = await response.json();
-
-        if (!data.success || !data.heatmap) {
-            showHeatmapEmpty(container, canvas, legend, 'Failed to load heatmap data');
+        // If neither heatmap has data, show empty state
+        if (!hasLossData && !hasRecallData) {
+            heatmapsContainer.style.display = 'none';
+            emptyEl.classList.remove('hidden');
             return;
         }
 
-        const heatmap = data.heatmap;
+        heatmapsContainer.style.display = 'flex';
+        emptyEl.classList.add('hidden');
 
-        // Check if we have enough data for a heatmap
-        if (heatmap.feature_configs.length === 0 || heatmap.model_configs.length === 0) {
-            showHeatmapEmpty(container, canvas, legend, 'Need experiments with different configs to show heatmap');
-            return;
-        }
-
-        // Show canvas and legend
-        canvas.style.display = 'block';
-        legend.style.display = 'flex';
-
-        // Destroy existing chart
-        if (heatmapChart) {
-            heatmapChart.destroy();
-            heatmapChart = null;
-        }
-
-        // Render heatmap with Chart.js matrix
-        renderHeatmapChart(canvas, heatmap);
-
-    } catch (error) {
-        console.error('Failed to load heatmap:', error);
-        showHeatmapEmpty(container, canvas, legend, 'Error loading heatmap');
-    }
-}
-
-function showHeatmapEmpty(container, canvas, legend, message) {
-    canvas.style.display = 'none';
-    legend.style.display = 'none';
-
-    // Remove existing empty message if any
-    const existingEmpty = container.querySelector('.heatmap-empty');
-    if (existingEmpty) existingEmpty.remove();
-
-    const emptyDiv = document.createElement('div');
-    emptyDiv.className = 'heatmap-empty';
-    emptyDiv.innerHTML = `
-        <i class="fas fa-th"></i>
-        <p>${message}</p>
-    `;
-    container.appendChild(emptyDiv);
-}
-
-function renderHeatmapChart(canvas, heatmap) {
-    const ctx = canvas.getContext('2d');
-
-    // Remove empty message if present
-    const container = canvas.parentElement;
-    const existingEmpty = container.querySelector('.heatmap-empty');
-    if (existingEmpty) existingEmpty.remove();
-
-    // Build data for matrix chart
-    const matrixData = [];
-    const featureConfigs = heatmap.feature_configs;
-    const modelConfigs = heatmap.model_configs;
-
-    // Create matrix data points
-    for (let y = 0; y < featureConfigs.length; y++) {
-        for (let x = 0; x < modelConfigs.length; x++) {
-            // Find matching data point
-            const point = heatmap.data.find(d => d.x === x && d.y === y);
-            matrixData.push({
-                x: modelConfigs[x],
-                y: featureConfigs[y],
-                v: point ? point.v : null,
-                exp_id: point ? point.exp_id : null
-            });
-        }
-    }
-
-    // Color scale function
-    const minVal = heatmap.min_value || 0;
-    const maxVal = heatmap.max_value || 1;
-
-    function getColor(value) {
-        if (value === null) return 'rgba(229, 231, 235, 0.8)'; // Gray for no data
-
-        // Normalize value between 0 and 1
-        const normalized = (value - minVal) / (maxVal - minVal || 1);
-
-        // Color gradient: red (0) -> yellow (0.5) -> green (1)
-        if (normalized < 0.5) {
-            // Red to yellow
-            const r = 239;
-            const g = Math.round(68 + (normalized * 2) * (187 - 68));
-            const b = 68;
-            return `rgba(${r}, ${g}, ${b}, 0.8)`;
+        // Render Loss heatmap or show placeholder
+        if (hasLossData) {
+            renderLossHeatmapD3(lossContainer, data);
         } else {
-            // Yellow to green
-            const t = (normalized - 0.5) * 2;
-            const r = Math.round(251 - t * (251 - 16));
-            const g = Math.round(191 + t * (185 - 191));
-            const b = Math.round(36 + t * (129 - 36));
-            return `rgba(${r}, ${g}, ${b}, 0.8)`;
+            lossContainer.innerHTML = '<div class="text-center text-gray-400 py-8"><i class="fas fa-clock mr-2"></i>No training history cached yet</div>';
         }
-    }
 
-    // Create the chart using native Chart.js bar chart as a workaround
-    // (Matrix plugin requires separate import - using simple visualization)
-    heatmapChart = new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: modelConfigs,
-            datasets: featureConfigs.map((fc, fcIndex) => ({
-                label: fc,
-                data: modelConfigs.map((mc, mcIndex) => {
-                    const point = matrixData.find(d => d.x === mc && d.y === fc);
-                    return point ? point.v : null;
-                }),
-                backgroundColor: modelConfigs.map((mc, mcIndex) => {
-                    const point = matrixData.find(d => d.x === mc && d.y === fc);
-                    return getColor(point ? point.v : null);
-                }),
-                borderColor: 'white',
-                borderWidth: 2,
-                barPercentage: 0.9,
-                categoryPercentage: 0.9
-            }))
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            indexAxis: 'x',
-            plugins: {
-                legend: {
-                    display: true,
-                    position: 'right',
-                    labels: {
-                        boxWidth: 12,
-                        font: { size: 11 }
-                    }
-                },
-                tooltip: {
-                    callbacks: {
-                        title: (items) => {
-                            if (items.length === 0) return '';
-                            const item = items[0];
-                            return `${item.dataset.label} × ${item.label}`;
-                        },
-                        label: (item) => {
-                            const value = item.raw;
-                            if (value === null) return 'No data';
-                            return `${heatmap.metric}: ${value.toFixed(4)}`;
-                        }
-                    }
-                }
-            },
-            scales: {
-                x: {
-                    title: {
-                        display: true,
-                        text: 'Model Config',
-                        font: { size: 12, weight: 'bold' }
-                    },
-                    grid: { display: false }
-                },
-                y: {
-                    title: {
-                        display: true,
-                        text: heatmap.metric.replace(/_/g, '@').replace('recall@', 'Recall@'),
-                        font: { size: 12, weight: 'bold' }
-                    },
-                    beginAtZero: false,
-                    min: minVal > 0 ? minVal * 0.95 : 0,
-                    max: maxVal * 1.02
-                }
-            }
+        // Always render Recall heatmap if we have data
+        if (hasRecallData) {
+            renderRecallHeatmapD3(recallContainer, data);
+        } else {
+            recallContainer.innerHTML = '<div class="text-center text-gray-400 py-8"><i class="fas fa-chart-bar mr-2"></i>No recall metrics available</div>';
         }
+
+    } catch (error) {
+        console.error('Failed to load training heatmaps:', error);
+        heatmapsContainer.style.display = 'none';
+        emptyEl.classList.remove('hidden');
+    }
+}
+
+function renderLossHeatmapD3(container, data) {
+    // Clear previous content
+    d3.select(container).selectAll('*').remove();
+
+    const experiments = data.experiments;
+    if (!experiments.length) return;
+
+    // Get all unique epochs across experiments
+    const allEpochs = [...new Set(experiments.flatMap(exp => exp.epochs))].sort((a, b) => a - b);
+    const lossRange = data.loss_range;
+
+    // Dimensions
+    const margin = { top: 5, right: 10, bottom: 30, left: 70 };
+    const cellHeight = 24;
+    const cellWidth = 45;
+    const width = margin.left + allEpochs.length * cellWidth + margin.right;
+    const height = margin.top + experiments.length * cellHeight + margin.bottom;
+
+    // Create SVG
+    const svg = d3.select(container)
+        .append('svg')
+        .attr('width', width)
+        .attr('height', height);
+
+    // Color scale: Green (low loss) -> Yellow -> Red (high loss)
+    const colorScale = d3.scaleSequential()
+        .domain([lossRange.min, lossRange.max])
+        .interpolator(t => d3.interpolateRgb('#10b981', '#ef4444')(t));
+
+    // X axis (epochs)
+    const xScale = d3.scaleBand()
+        .domain(allEpochs)
+        .range([margin.left, width - margin.right])
+        .padding(0.05);
+
+    // Y axis (experiments)
+    const yScale = d3.scaleBand()
+        .domain(experiments.map(e => e.label))
+        .range([margin.top, height - margin.bottom])
+        .padding(0.05);
+
+    // Draw cells
+    experiments.forEach(exp => {
+        allEpochs.forEach((epoch, epochIdx) => {
+            const lossIdx = exp.epochs.indexOf(epoch);
+            const lossVal = lossIdx >= 0 ? exp.val_loss[lossIdx] : null;
+
+            const cell = svg.append('g');
+
+            cell.append('rect')
+                .attr('x', xScale(epoch))
+                .attr('y', yScale(exp.label))
+                .attr('width', xScale.bandwidth())
+                .attr('height', yScale.bandwidth())
+                .attr('fill', lossVal !== null ? colorScale(lossVal) : '#e5e7eb')
+                .attr('rx', 2);
+
+            if (lossVal !== null) {
+                cell.append('text')
+                    .attr('x', xScale(epoch) + xScale.bandwidth() / 2)
+                    .attr('y', yScale(exp.label) + yScale.bandwidth() / 2)
+                    .attr('text-anchor', 'middle')
+                    .attr('dominant-baseline', 'middle')
+                    .attr('font-size', '10px')
+                    .attr('font-weight', '500')
+                    .attr('fill', lossVal > (lossRange.max + lossRange.min) / 2 ? '#fff' : '#1f2937')
+                    .text(lossVal);
+            }
+        });
     });
+
+    // X axis labels
+    svg.append('g')
+        .attr('transform', `translate(0, ${height - margin.bottom + 5})`)
+        .selectAll('text')
+        .data(allEpochs)
+        .enter()
+        .append('text')
+        .attr('x', d => xScale(d) + xScale.bandwidth() / 2)
+        .attr('y', 12)
+        .attr('text-anchor', 'middle')
+        .attr('font-size', '10px')
+        .attr('fill', '#6b7280')
+        .text(d => d);
+
+    // X axis title
+    svg.append('text')
+        .attr('x', (width + margin.left - margin.right) / 2)
+        .attr('y', height - 2)
+        .attr('text-anchor', 'middle')
+        .attr('font-size', '11px')
+        .attr('fill', '#374151')
+        .attr('font-weight', '500')
+        .text('Epoch');
+
+    // Y axis labels
+    svg.append('g')
+        .selectAll('text')
+        .data(experiments)
+        .enter()
+        .append('text')
+        .attr('x', margin.left - 5)
+        .attr('y', d => yScale(d.label) + yScale.bandwidth() / 2)
+        .attr('text-anchor', 'end')
+        .attr('dominant-baseline', 'middle')
+        .attr('font-size', '11px')
+        .attr('fill', '#374151')
+        .text(d => d.label);
+}
+
+function renderRecallHeatmapD3(container, data) {
+    // Clear previous content
+    d3.select(container).selectAll('*').remove();
+
+    const experiments = data.experiments;
+    if (!experiments.length) return;
+
+    const metrics = ['R@10', 'R@50', 'R@100'];
+    const recallRange = data.recall_range;
+
+    // Dimensions
+    const margin = { top: 5, right: 10, bottom: 30, left: 70 };
+    const cellHeight = 24;
+    const cellWidth = 55;
+    const width = margin.left + metrics.length * cellWidth + margin.right;
+    const height = margin.top + experiments.length * cellHeight + margin.bottom;
+
+    // Create SVG
+    const svg = d3.select(container)
+        .append('svg')
+        .attr('width', width)
+        .attr('height', height);
+
+    // Color scale: Red (low recall) -> Yellow -> Green (high recall)
+    const colorScale = d3.scaleSequential()
+        .domain([recallRange.min, recallRange.max])
+        .interpolator(t => d3.interpolateRgb('#ef4444', '#10b981')(t));
+
+    // X axis (metrics)
+    const xScale = d3.scaleBand()
+        .domain(metrics)
+        .range([margin.left, width - margin.right])
+        .padding(0.05);
+
+    // Y axis (experiments)
+    const yScale = d3.scaleBand()
+        .domain(experiments.map(e => e.label))
+        .range([margin.top, height - margin.bottom])
+        .padding(0.05);
+
+    // Draw cells
+    experiments.forEach(exp => {
+        metrics.forEach(metric => {
+            const val = exp.final_recalls[metric];
+
+            const cell = svg.append('g');
+
+            cell.append('rect')
+                .attr('x', xScale(metric))
+                .attr('y', yScale(exp.label))
+                .attr('width', xScale.bandwidth())
+                .attr('height', yScale.bandwidth())
+                .attr('fill', val !== null && val > 0 ? colorScale(val) : '#e5e7eb')
+                .attr('rx', 2);
+
+            if (val !== null) {
+                cell.append('text')
+                    .attr('x', xScale(metric) + xScale.bandwidth() / 2)
+                    .attr('y', yScale(exp.label) + yScale.bandwidth() / 2)
+                    .attr('text-anchor', 'middle')
+                    .attr('dominant-baseline', 'middle')
+                    .attr('font-size', '10px')
+                    .attr('font-weight', '500')
+                    .attr('fill', val > (recallRange.max + recallRange.min) / 2 ? '#fff' : '#1f2937')
+                    .text(val + '%');
+            }
+        });
+    });
+
+    // X axis labels
+    svg.append('g')
+        .attr('transform', `translate(0, ${height - margin.bottom + 5})`)
+        .selectAll('text')
+        .data(metrics)
+        .enter()
+        .append('text')
+        .attr('x', d => xScale(d) + xScale.bandwidth() / 2)
+        .attr('y', 12)
+        .attr('text-anchor', 'middle')
+        .attr('font-size', '10px')
+        .attr('fill', '#6b7280')
+        .text(d => d);
+
+    // Y axis labels
+    svg.append('g')
+        .selectAll('text')
+        .data(experiments)
+        .enter()
+        .append('text')
+        .attr('x', margin.left - 5)
+        .attr('y', d => yScale(d.label) + yScale.bandwidth() / 2)
+        .attr('text-anchor', 'end')
+        .attr('dominant-baseline', 'middle')
+        .attr('font-size', '11px')
+        .attr('fill', '#374151')
+        .text(d => d.label);
 }
 
 // =============================================================================

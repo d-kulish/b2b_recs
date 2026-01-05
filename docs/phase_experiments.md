@@ -1003,9 +1003,7 @@ Returns experiments available for comparison (excludes running/submitting/pendin
 │ ═══════════════════════════════════════════════════════════════════════════ │
 │ HYPERPARAMETER INSIGHTS - Grid showing best values per hyperparameter       │
 │ ═══════════════════════════════════════════════════════════════════════════ │
-│ LEADERBOARD - Sortable ranked list by metric (existing)                     │
-│ ═══════════════════════════════════════════════════════════════════════════ │
-│ CONFIGURATION HEATMAP - FeatureConfig × ModelConfig matrix (existing)       │
+│ TRAINING ANALYSIS - D3.js heatmaps: Val Loss by Epoch + Recall Metrics      │
 │ ═══════════════════════════════════════════════════════════════════════════ │
 │ DATASET PERFORMANCE - Compare results across different datasets             │
 │ ═══════════════════════════════════════════════════════════════════════════ │
@@ -1054,8 +1052,7 @@ Returns experiments available for comparison (excludes running/submitting/pendin
 | Endpoint | Enhancement |
 |----------|-------------|
 | `/api/experiments/dashboard-stats/` | Added: running, failed, success_rate, avg_duration_minutes |
-| `/api/experiments/leaderboard/` | Now reads metrics from training_history_json |
-| `/api/experiments/heatmap/` | Now reads metrics from training_history_json |
+| `/api/experiments/training-heatmaps/` | NEW: Training Analysis with D3.js heatmaps |
 
 **Technical Implementation:**
 
@@ -1077,8 +1074,7 @@ Returns experiments available for comparison (excludes running/submitting/pendin
 **New UI Components:**
 1. **Experiments Dashboard Chapter** (blue icon, after Quick Test chapter)
    - Summary Dashboard: 4 stat cards (Total, Completed, Best R@100, Avg R@100)
-   - Leaderboard Table: Sortable by metric, clickable rows open View modal
-   - Configuration Heatmap: Chart.js grouped bar chart showing metrics by config combinations
+   - Training Analysis: D3.js heatmaps showing Val Loss by Epoch + Final Recall Metrics
 
 2. **Compare Feature** (in Quick Test chapter) - **Redesigned 2025-12-24**
    - **Always-visible Compare button** (no longer hidden until selection)
@@ -1101,8 +1097,7 @@ Returns experiments available for comparison (excludes running/submitting/pendin
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/api/experiments/dashboard-stats/` | GET | Summary statistics |
-| `/api/experiments/heatmap/?metric=recall_at_100` | GET | Config combination matrix |
-| `/api/experiments/leaderboard/?metric=recall_at_100` | GET | Ranked experiments |
+| `/api/experiments/training-heatmaps/` | GET | Training analysis heatmaps data |
 | `/api/experiments/selectable/` | GET | List experiments for comparison selection (2025-12-24) |
 | `/api/experiments/compare/` | POST | Multi-experiment comparison (enhanced 2025-12-24) |
 | `/api/quick-tests/<id>/training-history/` | GET | Per-epoch MLflow metrics |

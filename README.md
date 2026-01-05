@@ -304,7 +304,7 @@ gcloud run jobs execute django-migrate-and-createsuperuser --region europe-centr
 - **Modeling (Feature Engineering)** - Feature config wizard with drag-drop UI, tensor dimension preview (11 endpoints)
 - **Quick Test Pipeline** - ✅ **Fully working!** TFX pipeline on Vertex AI with TFRS model training and SavedModel export
 - **Model Structure** - Tower architecture builder with presets, layer configuration, training params (9 endpoints)
-- **MLflow Integration** - ✅ **Complete!** Experiment tracking, per-epoch charts, leaderboard, configuration heatmaps
+- **MLflow Integration** - ✅ **Complete!** Experiment tracking, per-epoch charts, training analysis heatmaps
 - **Experiments Dashboard** - ✅ **Enhanced!** 8 analytical components, AI-powered suggestions, hyperparameter insights
 
 ### **🔮 Next Up**

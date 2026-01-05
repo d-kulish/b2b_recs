@@ -1444,7 +1444,7 @@ def quick_test_histogram_data(request, quick_test_id):
 
 
 # =============================================================================
-# Experiment Comparison and Leaderboard Endpoints
+# Experiment Comparison and Dashboard Endpoints
 # =============================================================================
 
 @csrf_exempt
@@ -1663,29 +1663,33 @@ def _format_tower_layers(layers):
 
 @csrf_exempt
 @require_http_methods(["GET"])
-def experiment_leaderboard(request):
+def training_heatmaps(request):
     """
-    Get experiment leaderboard sorted by metric.
+    Get data for training analysis heatmaps.
 
-    GET /api/experiments/leaderboard/?metric=recall_at_100&limit=20
+    GET /api/experiments/training-heatmaps/
 
-    Query params:
-        metric: Metric to sort by (default: recall_at_100)
-        limit: Max results (default: 20)
+    Returns top 10 experiments by recall@100 with:
+    - Per-epoch validation loss (sampled every 10th epoch)
+    - Final recall metrics (R@5, R@10, R@50, R@100)
 
     Returns:
     {
         "success": true,
-        "leaderboard": [
+        "experiments": [
             {
+                "id": 45,
+                "label": "Exp #45",
                 "rank": 1,
-                "quick_test_id": 123,
-                "experiment_number": "Exp #45",
-                "feature_config": "...",
-                "metrics": {...}
+                "recall_at_100": 47,
+                "epochs": [0, 10, 20, 30, 40, 50],
+                "val_loss": [54, 23, 12, 8, 5, 3],
+                "final_recalls": {"R@5": 8, "R@10": 15, "R@50": 35, "R@100": 47}
             },
             ...
-        ]
+        ],
+        "loss_range": {"min": 1, "max": 60},
+        "recall_range": {"min": 5, "max": 50}
     }
     """
     try:
@@ -1696,192 +1700,98 @@ def experiment_leaderboard(request):
                 'error': 'No model endpoint selected'
             }, status=400)
 
-        # Parse query params
-        metric = request.GET.get('metric', 'recall_at_100')
-        try:
-            limit = int(request.GET.get('limit', 20))
-            limit = min(max(1, limit), 100)  # Clamp between 1 and 100
-        except ValueError:
-            limit = 20
-
-        # Query all completed experiments
-        queryset = QuickTest.objects.filter(
+        # Get all completed experiments (recall values may be in training_history_json)
+        completed_qs = QuickTest.objects.filter(
             feature_config__dataset__model_endpoint=model_endpoint,
             status=QuickTest.STATUS_COMPLETED
-        ).select_related(
-            'feature_config', 'model_config', 'feature_config__dataset'
         )
 
-        # Build list with extracted metrics
-        experiments_with_metrics = []
-        for qt in queryset:
-            exp_metrics = _get_experiment_metrics(qt)
-            metric_value = exp_metrics.get(metric)
-            if metric_value is not None:
-                experiments_with_metrics.append({
+        # Build experiment data with recall values from either direct fields or training_history_json
+        experiment_data = []
+        for qt in completed_qs:
+            history = qt.training_history_json if isinstance(qt.training_history_json, dict) else {}
+            final_metrics = history.get('final_metrics', {})
+
+            # Get recall values: prefer direct fields, fallback to training_history_json
+            recall_10 = qt.recall_at_10 if qt.recall_at_10 is not None else final_metrics.get('test_recall_at_10')
+            recall_50 = qt.recall_at_50 if qt.recall_at_50 is not None else final_metrics.get('test_recall_at_50')
+            recall_100 = qt.recall_at_100 if qt.recall_at_100 is not None else final_metrics.get('test_recall_at_100')
+
+            # Only include experiments that have at least recall_at_100
+            if recall_100 is not None:
+                experiment_data.append({
                     'qt': qt,
-                    'metrics': exp_metrics,
-                    'sort_value': metric_value,
+                    'history': history,
+                    'recall_10': recall_10,
+                    'recall_50': recall_50,
+                    'recall_100': recall_100
                 })
 
-        # Sort by metric (loss: ascending, recall: descending)
-        reverse = metric != 'loss'
-        experiments_with_metrics.sort(key=lambda x: x['sort_value'], reverse=reverse)
+        # Sort by recall_at_100 (descending) and take top 10
+        experiment_data.sort(key=lambda x: x['recall_100'] or 0, reverse=True)
+        experiment_data = experiment_data[:10]
 
-        # Build leaderboard
-        leaderboard = []
-        for i, item in enumerate(experiments_with_metrics[:limit]):
-            qt = item['qt']
-            exp_metrics = item['metrics']
-            leaderboard.append({
-                'rank': i + 1,
-                'quick_test_id': qt.id,
-                'experiment_number': qt.experiment_number,
-                'display_name': qt.display_name,
-                'feature_config': qt.feature_config.name,
-                'model_config': qt.model_config.name if qt.model_config else None,
-                'dataset': qt.feature_config.dataset.name if qt.feature_config.dataset else None,
-                'mlflow_run_id': qt.mlflow_run_id,
-                'metrics': exp_metrics,
-                'created_at': qt.created_at.isoformat() if qt.created_at else None,
+        experiments = []
+        all_losses = []
+        all_recalls = []
+
+        for rank, exp_data in enumerate(experiment_data, 1):
+            qt = exp_data['qt']
+            history = exp_data['history']
+
+            # Extract epochs and val_loss, sample every 10th epoch
+            raw_epochs = history.get('epochs', [])
+            raw_val_loss = history.get('loss', {}).get('val', [])
+
+            # Sample every 10th epoch (0, 10, 20, 30, 40, 50, ...)
+            sampled_epochs = []
+            sampled_loss = []
+
+            for i, epoch in enumerate(raw_epochs):
+                if epoch % 10 == 0 and i < len(raw_val_loss):
+                    sampled_epochs.append(epoch)
+                    # Round loss to integer for display
+                    loss_val = round(raw_val_loss[i]) if raw_val_loss[i] is not None else None
+                    sampled_loss.append(loss_val)
+                    if loss_val is not None:
+                        all_losses.append(loss_val)
+
+            # Get final recall metrics as percentages
+            final_recalls = {
+                'R@10': round((exp_data['recall_10'] or 0) * 100),
+                'R@50': round((exp_data['recall_50'] or 0) * 100),
+                'R@100': round((exp_data['recall_100'] or 0) * 100)
+            }
+
+            for val in final_recalls.values():
+                if val > 0:
+                    all_recalls.append(val)
+
+            experiments.append({
+                'id': qt.id,
+                'label': f'Exp #{qt.experiment_number}',
+                'rank': rank,
+                'recall_at_100': round((exp_data['recall_100'] or 0) * 100),
+                'epochs': sampled_epochs,
+                'val_loss': sampled_loss,
+                'final_recalls': final_recalls
             })
 
         return JsonResponse({
             'success': True,
-            'leaderboard': leaderboard,
-            'metric': metric,
-            'count': len(leaderboard)
-        })
-
-    except Exception as e:
-        logger.exception(f"Error getting leaderboard: {e}")
-        return JsonResponse({
-            'success': False,
-            'error': str(e)
-        }, status=500)
-
-
-@csrf_exempt
-@require_http_methods(["GET"])
-def experiment_heatmap(request):
-    """
-    Get heatmap data showing best metric for each Feature Config × Model Config combination.
-
-    GET /api/experiments/heatmap/?metric=recall_at_100
-
-    Query params:
-        metric: Metric to show (default: recall_at_100)
-
-    Returns:
-    {
-        "success": true,
-        "heatmap": {
-            "feature_configs": ["FC1", "FC2", ...],
-            "model_configs": ["MC1", "MC2", ...],
-            "data": [
-                {"x": 0, "y": 0, "v": 0.45, "exp_id": 123},
-                {"x": 0, "y": 1, "v": 0.42, "exp_id": 124},
-                ...
-            ],
-            "min_value": 0.35,
-            "max_value": 0.48
-        }
-    }
-    """
-    try:
-        model_endpoint = _get_model_endpoint(request)
-        if not model_endpoint:
-            return JsonResponse({
-                'success': False,
-                'error': 'No model endpoint selected'
-            }, status=400)
-
-        # Parse query params
-        metric = request.GET.get('metric', 'recall_at_100')
-
-        # Get all completed experiments
-        queryset = QuickTest.objects.filter(
-            feature_config__dataset__model_endpoint=model_endpoint,
-            status=QuickTest.STATUS_COMPLETED
-        ).select_related('feature_config', 'model_config')
-
-        # Build a mapping of (feature_config_id, model_config_id) -> best experiment
-        config_best = {}  # (fc_id, mc_id) -> (metric_value, exp_id)
-
-        for qt in queryset:
-            fc_id = qt.feature_config_id
-            mc_id = qt.model_config_id if qt.model_config else None
-            if mc_id is None:
-                continue
-
-            # Get metrics using helper
-            exp_metrics = _get_experiment_metrics(qt)
-            metric_value = exp_metrics.get(metric)
-            if metric_value is None:
-                continue
-
-            key = (fc_id, mc_id)
-            if key not in config_best or metric_value > config_best[key][0]:
-                config_best[key] = (metric_value, qt.id)
-
-        # Get unique feature configs and model configs
-        fc_ids = set()
-        mc_ids = set()
-        for (fc_id, mc_id) in config_best.keys():
-            fc_ids.add(fc_id)
-            mc_ids.add(mc_id)
-
-        # Get names for display
-        fc_names = {}
-        mc_names = {}
-
-        if fc_ids:
-            for fc in FeatureConfig.objects.filter(id__in=fc_ids):
-                fc_names[fc.id] = fc.name
-
-        if mc_ids:
-            for mc in ModelConfig.objects.filter(id__in=mc_ids):
-                mc_names[mc.id] = mc.name
-
-        # Sort by name for consistent display
-        fc_list = sorted(fc_names.items(), key=lambda x: x[1])
-        mc_list = sorted(mc_names.items(), key=lambda x: x[1])
-
-        # Build index maps
-        fc_index = {fc_id: i for i, (fc_id, _) in enumerate(fc_list)}
-        mc_index = {mc_id: i for i, (mc_id, _) in enumerate(mc_list)}
-
-        # Build heatmap data points
-        data = []
-        values = []
-
-        for (fc_id, mc_id), (metric_value, exp_id) in config_best.items():
-            x = mc_index.get(mc_id)
-            y = fc_index.get(fc_id)
-            if x is not None and y is not None:
-                data.append({
-                    'x': x,
-                    'y': y,
-                    'v': round(metric_value, 4) if metric_value else None,
-                    'exp_id': exp_id
-                })
-                if metric_value:
-                    values.append(metric_value)
-
-        return JsonResponse({
-            'success': True,
-            'heatmap': {
-                'feature_configs': [name for _, name in fc_list],
-                'model_configs': [name for _, name in mc_list],
-                'data': data,
-                'min_value': round(min(values), 4) if values else None,
-                'max_value': round(max(values), 4) if values else None,
-                'metric': metric
+            'experiments': experiments,
+            'loss_range': {
+                'min': min(all_losses) if all_losses else 0,
+                'max': max(all_losses) if all_losses else 100
+            },
+            'recall_range': {
+                'min': min(all_recalls) if all_recalls else 0,
+                'max': max(all_recalls) if all_recalls else 100
             }
         })
 
     except Exception as e:
-        logger.exception(f"Error getting heatmap data: {e}")
+        logger.exception(f"Error getting training heatmaps data: {e}")
         return JsonResponse({
             'success': False,
             'error': str(e)

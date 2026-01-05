@@ -3136,6 +3136,35 @@
         gap: 4px;
     }
 
+    /* MODEL ARCHITECTURE - Special 2-row layout for Buyer/Product comparison */
+    .hyperparam-model-section {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+    .hyperparam-model-row {
+        display: grid;
+        grid-template-columns: 2fr 1fr 1fr;
+        gap: 12px;
+    }
+    .hyperparam-model-row-label {
+        font-size: 10px;
+        font-weight: 600;
+        color: #8b5cf6;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 4px;
+    }
+    .hyperparam-card-wide {
+        background: #f9fafb;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        padding: 10px;
+    }
+    .hyperparam-card-wide .hyperparam-value {
+        max-width: 160px;
+    }
+
     /* Suggestions Grid */
     .suggestions-grid {
         display: grid;
@@ -9522,6 +9551,44 @@ async function loadHyperparameterAnalysis() {
             </div>
         `;
 
+        // Helper function to render a standard hyperparam card
+        function renderHyperparamCard(param, isWide = false) {
+            if (!param || !param.values || param.values.length === 0) return '';
+
+            const topValues = param.values.slice(0, 4);
+            const cardClass = isWide ? 'hyperparam-card-wide' : 'hyperparam-card';
+
+            return `
+                <div class="${cardClass}">
+                    <div class="hyperparam-card-title">${param.param}</div>
+                    ${topValues.map((item, idx) => {
+                        const isBest = idx === 0;
+                        const isLowConf = item.confidence === 'low';
+                        const classes = [
+                            'hyperparam-item',
+                            isBest ? 'best' : '',
+                            isLowConf ? 'low-confidence' : ''
+                        ].filter(Boolean).join(' ');
+
+                        return `
+                            <div class="${classes}" title="TPE Score: ${item.tpe_score}, Avg Recall: ${(item.avg_recall * 100).toFixed(1)}%, Count: ${item.count}">
+                                <span class="hyperparam-value">${item.value}</span>
+                                <span class="hyperparam-metrics">
+                                    <span class="hyperparam-tpe ${isBest ? 'best' : ''}">${item.tpe_score.toFixed(1)}</span>
+                                    <span class="hyperparam-count">(${item.count})</span>
+                                </span>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            `;
+        }
+
+        // Helper function to find a param by field name
+        function findParam(params, field) {
+            return params.find(p => p.field === field);
+        }
+
         // Build each category section
         for (const category of categories) {
             const params = analysis[category.key];
@@ -9533,44 +9600,46 @@ async function loadHyperparameterAnalysis() {
                         <i class="fas ${category.icon}"></i>
                         ${category.label}
                     </div>
-                    <div class="hyperparam-grid">
             `;
 
-            for (const param of params) {
-                if (!param.values || param.values.length === 0) continue;
-
-                const topValues = param.values.slice(0, 4); // Show top 4 values
+            // Special handling for MODEL ARCHITECTURE - 2 row layout
+            if (category.key === 'model') {
+                // Get params by field name (exclude activation fields)
+                const buyerTower = findParam(params, 'buyer_tower_structure');
+                const buyerL2 = findParam(params, 'buyer_l2_category');
+                const buyerParams = findParam(params, 'buyer_total_params');
+                const productTower = findParam(params, 'product_tower_structure');
+                const productL2 = findParam(params, 'product_l2_category');
+                const productParams = findParam(params, 'product_total_params');
 
                 html += `
-                    <div class="hyperparam-card">
-                        <div class="hyperparam-card-title">${param.param}</div>
-                        ${topValues.map((item, idx) => {
-                            const isBest = idx === 0;
-                            const isLowConf = item.confidence === 'low';
-                            const classes = [
-                                'hyperparam-item',
-                                isBest ? 'best' : '',
-                                isLowConf ? 'low-confidence' : ''
-                            ].filter(Boolean).join(' ');
-
-                            return `
-                                <div class="${classes}" title="TPE Score: ${item.tpe_score}, Avg Recall: ${(item.avg_recall * 100).toFixed(1)}%, Count: ${item.count}">
-                                    <span class="hyperparam-value">${item.value}</span>
-                                    <span class="hyperparam-metrics">
-                                        <span class="hyperparam-tpe ${isBest ? 'best' : ''}">${item.tpe_score.toFixed(1)}</span>
-                                        <span class="hyperparam-count">(${item.count})</span>
-                                    </span>
-                                </div>
-                            `;
-                        }).join('')}
+                    <div class="hyperparam-model-section">
+                        <!-- Buyer Tower Row -->
+                        <div class="hyperparam-model-row">
+                            ${renderHyperparamCard(buyerTower, true)}
+                            ${renderHyperparamCard(buyerL2, false)}
+                            ${renderHyperparamCard(buyerParams, false)}
+                        </div>
+                        <!-- Product Tower Row -->
+                        <div class="hyperparam-model-row">
+                            ${renderHyperparamCard(productTower, true)}
+                            ${renderHyperparamCard(productL2, false)}
+                            ${renderHyperparamCard(productParams, false)}
+                        </div>
                     </div>
                 `;
+            } else {
+                // Standard grid layout for other categories
+                html += `<div class="hyperparam-grid">`;
+
+                for (const param of params) {
+                    html += renderHyperparamCard(param, false);
+                }
+
+                html += `</div>`;
             }
 
-            html += `
-                    </div>
-                </div>
-            `;
+            html += `</div>`;
         }
 
         // Add legend

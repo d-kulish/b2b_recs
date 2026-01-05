@@ -1356,7 +1356,12 @@ class FeatureConfig(models.Model):
         dim = 0
         transforms = feature.get('transforms', {})
 
-        # String embedding
+        # Text embedding (transforms.embedding.enabled)
+        embedding = transforms.get('embedding', {})
+        if embedding.get('enabled'):
+            dim += embedding.get('embedding_dim', 32)
+
+        # Legacy: String embedding (feature.type == 'string_embedding')
         if feature.get('type') == 'string_embedding':
             dim += feature.get('embedding_dim', 32)
 

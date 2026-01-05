@@ -61,7 +61,7 @@ def create_tfx_pipeline(
         from tfx import v1 as tfx_v1
         from tfx.extensions.google_cloud_big_query.example_gen.component import BigQueryExampleGen
         from tfx.components import StatisticsGen, SchemaGen, Transform, Trainer
-        from tfx.proto import example_gen_pb2, trainer_pb2
+        from tfx.proto import example_gen_pb2, trainer_pb2, transform_pb2
         from tfx.dsl.components.common import resolver
         from tfx.dsl.experimental import latest_blessed_model_resolver
         from tfx.orchestration import pipeline as tfx_pipeline
@@ -106,11 +106,18 @@ def create_tfx_pipeline(
         # =================================================================
         # COMPONENT 4: Transform
         # Applies preprocessing_fn from the generated transform module
+        # IMPORTANT: Analyze BOTH train and eval splits to build complete vocabulary.
+        # This ensures all customer_ids and product_ids are in the vocabulary, not just
+        # those that randomly landed in the train split due to hash-based splitting.
         # =================================================================
         transform = Transform(
             examples=example_gen.outputs['examples'],
             schema=schema_gen.outputs['schema'],
             module_file=transform_module_path,
+            splits_config=transform_pb2.SplitsConfig(
+                analyze=['train', 'eval'],  # Build vocab from ALL data
+                transform=['train', 'eval']  # Apply transforms to both splits
+            ),
         )
 
         # =================================================================

@@ -37,6 +37,57 @@ This document provides **high-level specifications** for the Experiments domain.
 
 ## Recent Updates (December 2025 - January 2026)
 
+### Transform Vocabulary Coverage Fix (2026-01-05)
+
+**Critical Fix:** Ensured vocabulary is computed from ALL data (train + eval), not just train split.
+
+#### The Problem
+
+With hash-based 80/20 train/eval split in `BigQueryExampleGen`, the `Transform` component by default computes vocabularies (`tft.compute_and_apply_vocabulary()`) from **only the train split**. This caused:
+
+| Issue | Impact |
+|-------|--------|
+| IDs appearing only in eval | Mapped to OOV (out-of-vocabulary) embedding |
+| ~20% of unique IDs potentially affected | Lost embedding coverage in evaluation |
+| Cold start customers/products | Couldn't be properly evaluated |
+
+For TFRS two-tower models, this means customers/products that randomly landed entirely in the eval split (due to hash-based splitting) would share a single OOV embedding, degrading evaluation metrics.
+
+#### The Solution
+
+Added `splits_config` to the Transform component to analyze **both** train and eval splits when building vocabularies:
+
+```python
+from tfx.proto import transform_pb2
+
+transform = Transform(
+    examples=example_gen.outputs['examples'],
+    schema=schema_gen.outputs['schema'],
+    module_file=transform_module_path,
+    splits_config=transform_pb2.SplitsConfig(
+        analyze=['train', 'eval'],  # Build vocab from ALL data
+        transform=['train', 'eval']  # Apply transforms to both splits
+    ),
+)
+```
+
+#### Files Modified
+
+| File | Changes |
+|------|---------|
+| `cloudbuild/compile_and_submit.py` | Added `transform_pb2` import, added `splits_config` to Transform |
+| `ml_platform/experiments/tfx_pipeline.py` | Same changes for consistency |
+
+#### Result
+
+| Before | After |
+|--------|-------|
+| Vocab from train only (~80% of IDs) | Vocab from all data (100% of IDs) |
+| Eval-only IDs → OOV | All IDs have vocab entries |
+| Incomplete embedding coverage | Complete embedding coverage |
+
+---
+
 ### Training Analysis Heatmaps - Layout & R@5 Metric (2026-01-05)
 
 **Enhancement:** Fixed Training Analysis heatmaps layout and added missing Recall@5 metric.

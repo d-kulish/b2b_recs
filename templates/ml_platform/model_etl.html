@@ -3447,10 +3447,11 @@ async function togglePauseSource(sourceId, isCurrentlyEnabled) {
         : 'The job will resume running on its configured schedule.';
     const confirmTitle = isCurrentlyEnabled ? 'Pause ETL Schedule?' : 'Resume ETL Schedule?';
     const confirmBtnText = isCurrentlyEnabled ? 'Pause' : 'Resume';
+    const confirmType = 'success';
 
     const confirmed = await showConfirmation(
         confirmMessage,
-        'warning',
+        confirmType,
         confirmTitle,
         confirmBtnText
     );

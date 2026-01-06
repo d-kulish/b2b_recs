@@ -795,6 +795,10 @@
         justify-content: center;
         font-size: 18px;
     }
+    .chapter-icon.features {
+        background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%);
+        color: white;
+    }
     .chapter-icon.model-structure {
         background: linear-gradient(135deg, #8b5cf6 0%, #a78bfa 100%);
         color: white;
@@ -808,7 +812,7 @@
         color: white;
     }
     .chapter-title {
-        font-size: 20px;
+        font-size: 24px;
         font-weight: 700;
         color: #111827;
     }
@@ -1815,17 +1819,17 @@
         gap: 8px;
     }
     .mc-filter-label {
-        font-size: 13px;
+        font-size: 14px;
         font-weight: 500;
-        color: #6b7280;
+        color: #4b5563;
     }
     .mc-filter-select {
-        padding: 6px 12px;
+        padding: 8px 12px;
         border: 1px solid #e5e7eb;
         border-radius: 6px;
-        font-size: 13px;
+        font-size: 14px;
+        min-width: 200px;
         background: white;
-        min-width: 140px;
     }
     .mc-filter-select:focus {
         outline: none;
@@ -1834,10 +1838,10 @@
     }
     .mc-search-input {
         flex: 1;
-        padding: 6px 12px;
+        padding: 8px 12px;
         border: 1px solid #e5e7eb;
         border-radius: 6px;
-        font-size: 13px;
+        font-size: 14px;
         background: white;
     }
     .mc-search-input:focus {
@@ -3225,7 +3229,12 @@
     <!-- Modeling Container -->
     <div class="bg-white rounded-xl border border-black shadow-lg p-6">
         <div class="flex items-center justify-between mb-6">
-            <h2 class="text-2xl font-bold text-gray-900">Features</h2>
+            <div class="flex items-center gap-3">
+                <div class="chapter-icon features">
+                    <i class="fas fa-microchip"></i>
+                </div>
+                <h2 class="text-2xl font-bold text-gray-900">Features</h2>
+            </div>
             <div class="btn-group">
                 <button onclick="openCompareModal()" class="btn btn-secondary btn-sm" style="width: 150px;">
                     <i class="fas fa-columns"></i>Compare
@@ -3267,7 +3276,7 @@
     </div>
 
     <!-- Model Structure Chapter -->
-    <div class="chapter-section">
+    <div class="chapter-section" style="border-color: black;">
         <div class="chapter-header">
             <div class="chapter-icon model-structure">
                 <i class="fas fa-layer-group"></i>
@@ -4728,17 +4737,14 @@
 
 <!-- Cross Feature Modal -->
 <div id="crossFeatureModal" class="modal-overlay hidden">
-    <div class="modal-container" style="max-width: 500px;">
+    <div class="modal-container" style="max-width: 550px; max-height: 85vh; display: flex; flex-direction: column;">
         <div class="modal-header">
             <div class="modal-header-icon info">
                 <i class="fas fa-times"></i>
             </div>
             <h3 class="modal-header-title">Add Cross Feature</h3>
-            <button type="button" class="modal-close-btn" onclick="closeCrossModal()">
-                <i class="fas fa-times"></i>
-            </button>
         </div>
-        <div class="modal-body">
+        <div class="modal-body" style="overflow-y: auto; flex: 1;">
             <div class="modal-form-group">
                 <label class="modal-form-label">Select 2-3 features to cross</label>
                 <div id="crossFeatureOptions" class="space-y-2">
@@ -4781,7 +4787,7 @@
             <div class="footer-left"></div>
             <div class="footer-right">
                 <button type="button" class="btn-neu btn-neu-action btn-neu-save" onclick="addCrossFeature()">
-                    <span class="btn-neu-inner">Add Cross</span>
+                    <span class="btn-neu-inner">Ok</span>
                 </button>
                 <button type="button" class="btn-neu btn-neu-action btn-neu-cancel" onclick="closeCrossModal()">
                     <span class="btn-neu-inner">Cancel</span>
@@ -5920,20 +5926,36 @@ function renderAvailableColumns() {
     container.innerHTML = '';
 
     // Get assigned column names by model (including primary IDs)
-    const buyerCols = new Set(configState.buyerFeatures.map(f => f.column));
-    const productCols = new Set(configState.productFeatures.map(f => f.column));
+    // Include both column (raw name) and display_name (alias) to handle renamed columns
+    const buyerCols = new Set();
+    configState.buyerFeatures.forEach(f => {
+        buyerCols.add(f.column);
+        if (f.display_name) buyerCols.add(f.display_name);
+    });
+    const productCols = new Set();
+    configState.productFeatures.forEach(f => {
+        productCols.add(f.column);
+        if (f.display_name) productCols.add(f.display_name);
+    });
 
-    // Add primary ID columns to the sets
+    // Add primary ID columns to the sets (both column and display_name)
     if (configState.customerIdFeature) {
         buyerCols.add(configState.customerIdFeature.column);
+        if (configState.customerIdFeature.display_name) {
+            buyerCols.add(configState.customerIdFeature.display_name);
+        }
     }
     if (configState.productIdFeature) {
         productCols.add(configState.productIdFeature.column);
+        if (configState.productIdFeature.display_name) {
+            productCols.add(configState.productIdFeature.display_name);
+        }
     }
 
     configState.availableColumns.forEach(col => {
-        const inBuyer = buyerCols.has(col.name);
-        const inProduct = productCols.has(col.name);
+        // Check both name and display_name to handle renamed columns
+        const inBuyer = buyerCols.has(col.name) || buyerCols.has(col.display_name);
+        const inProduct = productCols.has(col.name) || productCols.has(col.display_name);
 
         const card = document.createElement('div');
         card.className = 'column-card';
@@ -6123,15 +6145,30 @@ function renderSampleTable() {
     }
 
     // Get assignment status for each column (including primary IDs)
-    const buyerCols = new Set(configState.buyerFeatures.map(f => f.column));
-    const productCols = new Set(configState.productFeatures.map(f => f.column));
+    // Include both column (raw name) and display_name (alias) to handle renamed columns
+    const buyerCols = new Set();
+    configState.buyerFeatures.forEach(f => {
+        buyerCols.add(f.column);
+        if (f.display_name) buyerCols.add(f.display_name);
+    });
+    const productCols = new Set();
+    configState.productFeatures.forEach(f => {
+        productCols.add(f.column);
+        if (f.display_name) productCols.add(f.display_name);
+    });
 
-    // Add primary ID columns
+    // Add primary ID columns (both column and display_name)
     if (configState.customerIdFeature) {
         buyerCols.add(configState.customerIdFeature.column);
+        if (configState.customerIdFeature.display_name) {
+            buyerCols.add(configState.customerIdFeature.display_name);
+        }
     }
     if (configState.productIdFeature) {
         productCols.add(configState.productIdFeature.column);
+        if (configState.productIdFeature.display_name) {
+            productCols.add(configState.productIdFeature.display_name);
+        }
     }
 
     let html = `

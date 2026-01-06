@@ -646,3 +646,399 @@ OK
    - `ml_platform/experiments/tfx_pipeline.py` - Not used
 
 2. Update `docs/phase_experiments.md` to note single source of truth is `services.py:_get_compile_script()`
+
+---
+
+# Bug Fix: Temporal Split Strategies Failing with partition_feature_name
+
+**Date:** 2026-01-06
+**Files Modified:**
+- `ml_platform/experiments/services.py`
+- `ml_platform/datasets/services.py`
+- `tests/test_split_strategies.py`
+
+## Problem Description
+
+Experiments using `time_holdout` or `strict_time` split strategies failed at the BigQueryExampleGen stage with the error:
+
+```
+RuntimeError: Str-typed output split name and int-typed hash buckets are required.
+```
+
+### Error Location
+
+```
+File "tfx/components/example_gen/utils.py", line 87, in generate_output_split_names
+    raise RuntimeError(
+RuntimeError: Str-typed output split name and int-typed hash buckets are required.
+```
+
+### Affected Configurations
+
+- Split strategy: `time_holdout` or `strict_time`
+- Random split: **NOT affected** (uses hash_buckets)
+
+## Root Cause Analysis
+
+### Investigation Steps
+
+1. **Examined TFX source code** to understand the error:
+   ```python
+   # tfx/components/example_gen/utils.py:generate_output_split_names()
+   def generate_output_split_names(input_config, output_config):
+       if output_config.split_config.splits:
+           if output_config.split_config.partition_feature_name:  # ← PROBLEM
+               return [split.name for split in output_config.split_config.splits]
+           for split in output_config.split_config.splits:
+               if not isinstance(split.hash_buckets, int) or split.hash_buckets <= 0:
+                   raise RuntimeError(...)  # ← ERROR THROWN HERE
+   ```
+
+2. **Root cause identified**: The `partition_feature_name` field is set in Python but evaluates to `False` (empty string) after JSON serialization/deserialization in Vertex AI.
+
+3. **The bug pathway**:
+   - Pipeline compiled locally with `partition_feature_name='split'` ✅
+   - Pipeline JSON submitted to Vertex AI
+   - TFX deserializes JSON back to protobuf
+   - `partition_feature_name` is empty string (falsy) ❌
+   - Code falls through to check `hash_buckets` (not set for temporal strategies)
+   - RuntimeError raised
+
+### Why Random Split Works
+
+Random split uses `hash_buckets=[16, 3, 1]` in `output_config`:
+```python
+output_config = example_gen_pb2.Output(
+    split_config=example_gen_pb2.SplitConfig(
+        splits=[
+            example_gen_pb2.SplitConfig.Split(name='train', hash_buckets=16),
+            example_gen_pb2.SplitConfig.Split(name='eval', hash_buckets=3),
+            example_gen_pb2.SplitConfig.Split(name='test', hash_buckets=1),
+        ]
+    )
+)
+```
+This bypasses the `partition_feature_name` check entirely.
+
+## Solution
+
+### Proposed Fix: Use input_config.splits Instead
+
+Instead of using `partition_feature_name` (buggy code path), use multiple `input_config.splits` with separate queries for each split:
+
+```python
+# BEFORE (BUGGY - partition_feature_name not parsed correctly)
+output_config = example_gen_pb2.Output(
+    split_config=example_gen_pb2.SplitConfig(
+        splits=[...],
+        partition_feature_name='split'  # ← NOT RECOGNIZED IN VERTEX AI
+    )
+)
+example_gen = BigQueryExampleGen(query=single_query, output_config=output_config)
+
+# AFTER (FIXED - multiple input splits)
+input_config = example_gen_pb2.Input(splits=[
+    example_gen_pb2.Input.Split(name='train', pattern=train_query),
+    example_gen_pb2.Input.Split(name='eval', pattern=eval_query),
+    example_gen_pb2.Input.Split(name='test', pattern=test_query),
+])
+example_gen = BigQueryExampleGen(input_config=input_config, custom_config={'project': project_id})
+```
+
+This takes a different code path in `generate_output_split_names()`:
+```python
+elif input_config.splits:  # ← TRUE (we define splits here)
+    return [split.name for split in input_config.splits]  # ← SUCCESS
+```
+
+## Pre-Implementation Testing
+
+Before implementing the fix, comprehensive tests were run to validate the approach.
+
+### Test Environment
+
+```bash
+# TFX 1.15.0 in conda environment
+source ~/miniconda3/etc/profile.d/conda.sh
+conda activate tf_2.12_py39
+python -c "import tfx; print(f'TFX version: {tfx.__version__}')"
+# Output: TFX version: 1.15.0
+```
+
+### Test 1: Validate input_config Approach Works
+
+**File:** `tests/test_proposed_split_fix.py`
+
+```python
+def test_tfx_input_config_creation(self):
+    """Test actual TFX Input config creation."""
+    from tfx.proto import example_gen_pb2
+    from tfx.components.example_gen import utils
+
+    input_config = example_gen_pb2.Input(splits=[
+        example_gen_pb2.Input.Split(name='train', pattern='Q1'),
+        example_gen_pb2.Input.Split(name='eval', pattern='Q2'),
+        example_gen_pb2.Input.Split(name='test', pattern='Q3'),
+    ])
+    output_config = example_gen_pb2.Output()  # Empty!
+
+    split_names = utils.generate_output_split_names(input_config, output_config)
+    assert split_names == ['train', 'eval', 'test']
+```
+
+**Result:** ✅ PASSED
+
+### Test 2: Verify Random Split Not Affected
+
+```python
+def test_random_split_uses_hash_buckets(self):
+    """Verify random split uses hash_buckets configuration."""
+    # Random split continues to use:
+    # - Single BigQuery query (no 'split' column)
+    # - hash_buckets=[16, 3, 1] for 80/15/5 split
+    # This is NOT affected by the fix
+```
+
+**Result:** ✅ PASSED
+
+### Test 3: Parameter Pass-Through Verification
+
+```python
+def test_parameters_not_hardcoded(self):
+    """Test that temporal parameters are passed through, not hardcoded."""
+    # Verified that holdout_days, train_days, val_days, test_days
+    # flow from wizard → SQL generation → pipeline configuration
+```
+
+**Result:** ✅ PASSED
+
+### Full Test Results
+
+```
+======================================================================
+TESTING PROPOSED FIX FOR TEMPORAL SPLIT STRATEGIES
+======================================================================
+test_parameters_not_hardcoded ... ok
+test_wrap_query_with_split_filter ... ok
+test_input_config_multiple_splits_structure ... ok
+test_no_output_config_needed_for_multiple_input_splits ... ok
+test_tfx_input_config_creation ... ok
+test_random_split_uses_hash_buckets ... ok
+test_random_split_uses_single_query ... ok
+test_proposed_fix_for_temporal_strategies ... ok
+test_verify_fix_avoids_buggy_code_path ... ok
+test_query_syntax_basic ... ok
+----------------------------------------------------------------------
+Ran 10 tests in 0.023s
+OK
+
+*** ALL TESTS PASSED - PROPOSED FIX IS VALIDATED ***
+```
+
+## Implementation
+
+### Phase 1: Add generate_split_queries() Method
+
+**File:** `ml_platform/datasets/services.py`
+**Location:** After `generate_training_query()` method
+
+```python
+def generate_split_queries(
+    self,
+    dataset,
+    split_strategy: str,
+    holdout_days: int = 1,
+    date_column: str = None,
+    sample_percent: int = 100,
+    train_days: int = 60,
+    val_days: int = 7,
+    test_days: int = 7,
+) -> dict:
+    """
+    Generate separate BigQuery queries for each split (temporal strategies only).
+
+    For temporal strategies (time_holdout, strict_time), generates three separate
+    queries that each filter by the split column. This is required because TFX's
+    partition_feature_name doesn't work correctly in Vertex AI.
+
+    Returns:
+        dict with 'train', 'eval', 'test' keys containing SQL queries,
+        or None for random split (which uses hash_buckets).
+    """
+    if split_strategy == 'random':
+        return None
+
+    # Generate base query (includes 'split' column)
+    base_query = self.generate_training_query(
+        dataset=dataset,
+        split_strategy=split_strategy,
+        holdout_days=holdout_days,
+        date_column=date_column,
+        sample_percent=sample_percent,
+        train_days=train_days,
+        val_days=val_days,
+        test_days=test_days,
+    )
+
+    # Wrap base query to filter by split and remove split column
+    def make_split_query(split_name: str) -> str:
+        return f"WITH base AS (\n{base_query}\n)\nSELECT * EXCEPT(split) FROM base WHERE split = '{split_name}'"
+
+    return {
+        'train': make_split_query('train'),
+        'eval': make_split_query('eval'),
+        'test': make_split_query('test'),
+    }
+```
+
+### Phase 2: Update _submit_pipeline() to Generate Split Queries
+
+**File:** `ml_platform/experiments/services.py`
+**Method:** `_submit_pipeline()`
+
+```python
+# Generate split queries for temporal strategies
+split_queries = None
+if quick_test.split_strategy in ('time_holdout', 'strict_time'):
+    split_queries = bq_service.generate_split_queries(
+        dataset=dataset,
+        split_strategy=quick_test.split_strategy,
+        holdout_days=getattr(quick_test, 'holdout_days', 1),
+        date_column=getattr(quick_test, 'date_column', None),
+        sample_percent=quick_test.sample_percent,
+        train_days=getattr(quick_test, 'train_days', 60),
+        val_days=getattr(quick_test, 'val_days', 7),
+        test_days=getattr(quick_test, 'test_days', 7),
+    )
+    logger.info(f"Generated split queries for {quick_test.split_strategy}: "
+               f"train={len(split_queries['train'])} chars, "
+               f"eval={len(split_queries['eval'])} chars, "
+               f"test={len(split_queries['test'])} chars")
+```
+
+### Phase 3: Upload Split Queries to GCS (Cloud Build Arg Limit Fix)
+
+**Problem:** Cloud Build has a 10KB limit for command-line arguments. The three split queries (each wrapping the full base query) exceeded this limit.
+
+**Error:**
+```
+400 invalid build: invalid .steps field: build step 0 arg 1 too long (max: 10000)
+```
+
+**Solution:** Upload split queries as a JSON file to GCS instead of passing as CLI args.
+
+**File:** `ml_platform/experiments/services.py`
+**Method:** `_trigger_cloud_build()`
+
+```python
+# For temporal strategies, upload split queries to GCS as JSON (too large for CLI args)
+split_queries_blob_path = ""
+if split_queries:
+    split_queries_blob_path = f"build_scripts/{run_id}/split_queries.json"
+    split_blob = bucket.blob(split_queries_blob_path)
+    split_blob.upload_from_string(json.dumps(split_queries), content_type='application/json')
+    logger.info(f"Uploaded split queries to gs://{self.STAGING_BUCKET}/{split_queries_blob_path}")
+
+# Build command with optional split queries GCS path
+split_args = ""
+if split_queries_blob_path:
+    split_args = f'    --split-queries-gcs-path="{split_queries_blob_path}" \\\n'
+```
+
+### Phase 4: Update Inline Script to Use input_config
+
+**File:** `ml_platform/experiments/services.py`
+**Method:** `_get_compile_script()` → `create_tfx_pipeline()`
+
+```python
+def create_tfx_pipeline(..., split_queries: Optional[dict], ...):
+    if split_strategy == 'random':
+        # Unchanged - uses hash_buckets
+        output_config = example_gen_pb2.Output(
+            split_config=example_gen_pb2.SplitConfig(
+                splits=[
+                    example_gen_pb2.SplitConfig.Split(name='train', hash_buckets=16),
+                    example_gen_pb2.SplitConfig.Split(name='eval', hash_buckets=3),
+                    example_gen_pb2.SplitConfig.Split(name='test', hash_buckets=1),
+                ]
+            )
+        )
+        example_gen = BigQueryExampleGen(query=bigquery_query, output_config=output_config, ...)
+    else:
+        # NEW - uses input_config with multiple splits (avoids partition_feature_name bug)
+        input_config = example_gen_pb2.Input(splits=[
+            example_gen_pb2.Input.Split(name='train', pattern=split_queries['train']),
+            example_gen_pb2.Input.Split(name='eval', pattern=split_queries['eval']),
+            example_gen_pb2.Input.Split(name='test', pattern=split_queries['test']),
+        ])
+        example_gen = BigQueryExampleGen(input_config=input_config, custom_config={'project': project_id})
+```
+
+### Phase 5: Update Inline Script main() to Download Split Queries
+
+```python
+def main():
+    parser.add_argument("--split-queries-gcs-path", default="",
+                       help="GCS blob path to split_queries.json (temporal strategies)")
+    ...
+
+    # Download split queries from GCS for temporal strategies
+    split_queries = None
+    if args.split_queries_gcs_path:
+        from google.cloud import storage
+        client = storage.Client()
+        bucket = client.bucket(args.staging_bucket)
+        blob = bucket.blob(args.split_queries_gcs_path)
+        split_queries = json.loads(blob.download_as_text())
+        logger.info(f"Downloaded split queries from gs://{args.staging_bucket}/{args.split_queries_gcs_path}")
+```
+
+## Files Modified
+
+| File | Changes |
+|------|---------|
+| `ml_platform/datasets/services.py` | Added `generate_split_queries()` method |
+| `ml_platform/experiments/services.py` | Updated `_submit_pipeline()`, `_submit_vertex_pipeline()`, `_trigger_cloud_build()`, inline script |
+| `tests/test_split_strategies.py` | Updated tests for new `input_config` approach |
+| `tests/test_proposed_split_fix.py` | New - validation tests for the fix |
+| `tests/test_proposed_fix_integration.py` | New - integration tests |
+| `docs/tfx_test.md` | New - documentation for running TFX tests |
+
+## Test Results After Implementation
+
+```
+$ python tests/test_split_strategies.py --no-django
+test_old_broken_ratios ... ok
+test_random_split_ratios ... ok
+test_random_strategy_creates_test_split ... ok
+test_random_strategy_hash_buckets ... ok
+test_temporal_strategy_defines_three_splits ... ok
+test_temporal_strategy_uses_input_config ... ok
+test_transform_analyze_excludes_test ... ok
+test_transform_pb2_import_exists ... ok
+test_transform_splits_config_exists ... ok
+test_transform_transform_includes_test ... ok
+----------------------------------------------------------------------
+Ran 10 tests in 0.002s
+OK
+```
+
+## Summary
+
+| Aspect | Before | After |
+|--------|--------|-------|
+| Temporal split approach | `partition_feature_name='split'` | `input_config.splits` with 3 queries |
+| Random split | `hash_buckets=[16,3,1]` | Unchanged |
+| Query passing | 3 base64-encoded CLI args | JSON file in GCS |
+| Data flow | Single query with 'split' column | 3 separate queries (split column removed) |
+
+## Verification Checklist
+
+- [x] Random split strategy still works (hash_buckets approach unchanged)
+- [x] Temporal parameters (holdout_days, train_days, etc.) passed from wizard, not hardcoded
+- [x] Split queries uploaded to GCS (avoids Cloud Build 10KB arg limit)
+- [x] Inline script downloads split queries from GCS
+- [x] `input_config.splits` used instead of `partition_feature_name`
+- [x] All unit tests pass (10/10)
+- [ ] E2E test: time_holdout strategy pipeline succeeds
+- [ ] E2E test: strict_time strategy pipeline succeeds

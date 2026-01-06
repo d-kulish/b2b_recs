@@ -154,29 +154,47 @@ class TestInlineScript(unittest.TestCase):
         self.assertIn('name="test"', random_section,
                      "Random strategy must define a test split")
 
-    def test_temporal_strategy_uses_partition_feature(self):
-        """Verify temporal strategies use partition_feature_name='split'."""
+    def test_temporal_strategy_uses_input_config(self):
+        """Verify temporal strategies use input_config with multiple splits (not partition_feature_name)."""
+        # The new implementation uses input_config instead of partition_feature_name
+        # to avoid the buggy code path in TFX
         self.assertIn(
+            "input_config",
+            self.inline_script,
+            "Temporal strategies must use input_config with multiple splits"
+        )
+        # Should NOT use partition_feature_name='split' as a configuration
+        # (it may appear in comments explaining what we're avoiding)
+        self.assertNotIn(
             "partition_feature_name='split'",
             self.inline_script,
-            "Temporal strategies must use partition_feature_name='split'"
+            "Temporal strategies should NOT use partition_feature_name='split' (buggy in TFX)"
         )
 
     def test_temporal_strategy_defines_three_splits(self):
-        """Verify temporal strategies define train/eval/test splits."""
-        # Find the temporal strategy section (else branch) - capture until closing parentheses
-        temporal_section_match = re.search(
-            r"else:\s*#.*?time_holdout.*?partition_feature_name='split'\s*\)",
-            self.inline_script,
-            re.DOTALL
+        """Verify temporal strategies define train/eval/test splits via input_config."""
+        # Verify all three Input.Split declarations exist for temporal strategies
+        # Each split should reference split_queries dict
+        train_split = re.search(
+            r"Input\.Split\(name='train',\s*pattern=split_queries\['train'\]\)",
+            self.inline_script
         )
-        self.assertIsNotNone(temporal_section_match,
-                            "Could not find temporal strategy section")
-        temporal_section = temporal_section_match.group(0)
+        self.assertIsNotNone(train_split,
+                            "Could not find Input.Split for 'train' split")
 
-        self.assertIn('name="train"', temporal_section)
-        self.assertIn('name="eval"', temporal_section)
-        self.assertIn('name="test"', temporal_section)
+        eval_split = re.search(
+            r"Input\.Split\(name='eval',\s*pattern=split_queries\['eval'\]\)",
+            self.inline_script
+        )
+        self.assertIsNotNone(eval_split,
+                            "Could not find Input.Split for 'eval' split")
+
+        test_split = re.search(
+            r"Input\.Split\(name='test',\s*pattern=split_queries\['test'\]\)",
+            self.inline_script
+        )
+        self.assertIsNotNone(test_split,
+                            "Could not find Input.Split for 'test' split")
 
 
 class TestSQLGeneration(unittest.TestCase):

@@ -1631,6 +1631,69 @@ class BigQueryService:
 
         return ctes
 
+    def generate_split_queries(
+        self,
+        dataset,
+        split_strategy: str,
+        holdout_days: int = 1,
+        date_column: str = None,
+        sample_percent: int = 100,
+        train_days: int = 60,
+        val_days: int = 7,
+        test_days: int = 7,
+    ) -> dict:
+        """
+        Generate separate BigQuery queries for each split (train, eval, test).
+
+        This method wraps generate_training_query() and produces three separate
+        queries, each filtering for a specific split value. This approach is used
+        for temporal split strategies (time_holdout, strict_time) to avoid the
+        buggy partition_feature_name code path in TFX BigQueryExampleGen.
+
+        Args:
+            dataset: Dataset model instance
+            split_strategy: 'random', 'time_holdout', or 'strict_time'
+            holdout_days: Days for test split (time_holdout only)
+            date_column: Column name for temporal split
+            sample_percent: Percentage of data to use
+            train_days: Days for training data (strict_time only)
+            val_days: Days for validation data (strict_time only)
+            test_days: Days for test data (strict_time only)
+
+        Returns:
+            dict: {'train': query, 'eval': query, 'test': query}
+            Returns None for 'random' strategy (uses hash_buckets instead)
+
+        Note:
+            The 'split' column is excluded from output (EXCEPT(split)) since
+            TFX doesn't need it when using input_config with multiple splits.
+        """
+        if split_strategy == 'random':
+            # Random strategy uses hash_buckets, not split queries
+            return None
+
+        # Generate the base query with split column
+        base_query = self.generate_training_query(
+            dataset=dataset,
+            split_strategy=split_strategy,
+            holdout_days=holdout_days,
+            date_column=date_column,
+            sample_percent=sample_percent,
+            train_days=train_days,
+            val_days=val_days,
+            test_days=test_days,
+        )
+
+        # Wrap and filter for each split, excluding the 'split' column from output
+        def make_split_query(split_name: str) -> str:
+            return f"WITH base AS (\n{base_query}\n)\nSELECT * EXCEPT(split) FROM base WHERE split = '{split_name}'"
+
+        return {
+            'train': make_split_query('train'),
+            'eval': make_split_query('eval'),
+            'test': make_split_query('test'),
+        }
+
     def _generate_top_products_cte(self, primary_alias, product_col, revenue_col, percent):
         """
         Generate CTE for top N% products by revenue.

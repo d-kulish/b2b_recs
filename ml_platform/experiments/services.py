@@ -540,16 +540,37 @@ class ExperimentService:
         dataset = feature_config.dataset
         bq_service = BigQueryService(self.model_endpoint, dataset)
 
-        bigquery_query = bq_service.generate_training_query(
-            dataset=dataset,
-            split_strategy=quick_test.split_strategy,
-            holdout_days=quick_test.holdout_days,
-            date_column=quick_test.date_column,
-            sample_percent=quick_test.data_sample_percent,
-            train_days=quick_test.train_days,
-            val_days=quick_test.val_days,
-            test_days=quick_test.test_days,
-        )
+        # For temporal strategies, generate separate queries for each split
+        # This avoids the buggy partition_feature_name code path in TFX
+        split_queries = None
+        if quick_test.split_strategy in ('time_holdout', 'strict_time'):
+            logger.info(f"Generating split-specific queries for {quick_test.split_strategy}")
+            split_queries = bq_service.generate_split_queries(
+                dataset=dataset,
+                split_strategy=quick_test.split_strategy,
+                holdout_days=quick_test.holdout_days,
+                date_column=quick_test.date_column,
+                sample_percent=quick_test.data_sample_percent,
+                train_days=quick_test.train_days,
+                val_days=quick_test.val_days,
+                test_days=quick_test.test_days,
+            )
+            # Use train query as the main query (for logging/debugging)
+            bigquery_query = split_queries['train']
+            logger.info(f"Generated 3 split queries: train={len(split_queries['train'])} chars, "
+                       f"eval={len(split_queries['eval'])} chars, test={len(split_queries['test'])} chars")
+        else:
+            # Random strategy: single query, TFX does hash-based splitting
+            bigquery_query = bq_service.generate_training_query(
+                dataset=dataset,
+                split_strategy=quick_test.split_strategy,
+                holdout_days=quick_test.holdout_days,
+                date_column=quick_test.date_column,
+                sample_percent=quick_test.data_sample_percent,
+                train_days=quick_test.train_days,
+                val_days=quick_test.val_days,
+                test_days=quick_test.test_days,
+            )
 
         # 4. Create unique paths for this run
         # Use hyphens (not underscores) - Vertex AI pipeline names require [a-z0-9-]
@@ -576,6 +597,7 @@ class ExperimentService:
         build_id = self._submit_vertex_pipeline(
             quick_test=quick_test,
             bigquery_query=bigquery_query,
+            split_queries=split_queries,  # None for random, dict for temporal
             transform_module_path=transform_module_path,
             trainer_module_path=trainer_module_path,
             gcs_output_path=gcs_base_path,
@@ -726,6 +748,7 @@ class ExperimentService:
         self,
         quick_test,
         bigquery_query: str,
+        split_queries: dict,
         transform_module_path: str,
         trainer_module_path: str,
         gcs_output_path: str,
@@ -741,7 +764,8 @@ class ExperimentService:
 
         Args:
             quick_test: QuickTest instance
-            bigquery_query: SQL query for data extraction
+            bigquery_query: SQL query for data extraction (for random split)
+            split_queries: Dict with train/eval/test queries (for temporal splits), or None
             transform_module_path: GCS path to transform_module.py
             trainer_module_path: GCS path to trainer_module.py
             gcs_output_path: GCS path for output artifacts
@@ -757,6 +781,7 @@ class ExperimentService:
         build_id = self._trigger_cloud_build(
             run_id=run_id,
             bigquery_query=bigquery_query,
+            split_queries=split_queries,
             transform_module_path=transform_module_path,
             trainer_module_path=trainer_module_path,
             output_path=gcs_output_path,
@@ -777,6 +802,7 @@ class ExperimentService:
         self,
         run_id: str,
         bigquery_query: str,
+        split_queries: dict,
         transform_module_path: str,
         trainer_module_path: str,
         output_path: str,
@@ -791,7 +817,8 @@ class ExperimentService:
 
         Args:
             run_id: Unique run identifier
-            bigquery_query: BigQuery SQL query
+            bigquery_query: BigQuery SQL query (for random split)
+            split_queries: Dict with train/eval/test queries (for temporal splits), or None
             transform_module_path: GCS path to transform module
             trainer_module_path: GCS path to trainer module
             output_path: GCS path for outputs
@@ -809,16 +836,27 @@ class ExperimentService:
 
         client = cloudbuild_v1.CloudBuildClient()
 
-        # Base64 encode the query to avoid shell escaping issues
+        import json
+
+        # Base64 encode queries to avoid shell escaping issues
         query_b64 = base64.b64encode(bigquery_query.encode()).decode()
+
+        bucket = self.storage_client.bucket(self.STAGING_BUCKET)
 
         # Upload the compile script to GCS (avoid Cloud Build arg length limit)
         script_path = f"build_scripts/{run_id}/compile_and_submit.py"
-        bucket = self.storage_client.bucket(self.STAGING_BUCKET)
         blob = bucket.blob(script_path)
         blob.upload_from_string(self._get_compile_script(), content_type='text/plain')
         script_gcs_path = f"gs://{self.STAGING_BUCKET}/{script_path}"
         logger.info(f"Uploaded compile script to {script_gcs_path}")
+
+        # For temporal strategies, upload split queries to GCS as JSON (too large for CLI args)
+        split_queries_blob_path = ""
+        if split_queries:
+            split_queries_blob_path = f"build_scripts/{run_id}/split_queries.json"
+            split_blob = bucket.blob(split_queries_blob_path)
+            split_blob.upload_from_string(json.dumps(split_queries), content_type='application/json')
+            logger.info(f"Uploaded split queries to gs://{self.STAGING_BUCKET}/{split_queries_blob_path}")
 
         # Build configuration - downloads script from GCS using Python (gsutil not available in python:3.10)
         # Parse bucket and blob path from script_gcs_path
@@ -833,6 +871,11 @@ class ExperimentService:
         )
         logger.info(f"Using TFX compiler image: {tfx_compiler_image}")
 
+        # Build command with optional split queries GCS path
+        split_args = ""
+        if split_queries_blob_path:
+            split_args = f'    --split-queries-gcs-path="{split_queries_blob_path}" \\\n'
+
         build = cloudbuild_v1.Build(
             steps=[
                 cloudbuild_v1.BuildStep(
@@ -845,19 +888,19 @@ set -e
 echo "TFX Compiler Image - dependencies pre-installed"
 python -c "import tfx; print(f'TFX version: {{tfx.__version__}}')"
 python -c "from google.cloud import storage; storage.Client().bucket('{script_bucket}').blob('{script_blob}').download_to_filename('/tmp/compile_and_submit.py')"
-python /tmp/compile_and_submit.py \
-    --run-id="{run_id}" \
-    --staging-bucket="{self.STAGING_BUCKET}" \
-    --bigquery-query-b64="{query_b64}" \
-    --transform-module-path="{transform_module_path}" \
-    --trainer-module-path="{trainer_module_path}" \
-    --output-path="{output_path}" \
-    --epochs="{epochs}" \
-    --batch-size="{batch_size}" \
-    --learning-rate="{learning_rate}" \
-    --split-strategy="{split_strategy}" \
-    --machine-type="{machine_type}" \
-    --project-id="{self.project_id}" \
+python /tmp/compile_and_submit.py \\
+    --run-id="{run_id}" \\
+    --staging-bucket="{self.STAGING_BUCKET}" \\
+    --bigquery-query-b64="{query_b64}" \\
+{split_args}    --transform-module-path="{transform_module_path}" \\
+    --trainer-module-path="{trainer_module_path}" \\
+    --output-path="{output_path}" \\
+    --epochs="{epochs}" \\
+    --batch-size="{batch_size}" \\
+    --learning-rate="{learning_rate}" \\
+    --split-strategy="{split_strategy}" \\
+    --machine-type="{machine_type}" \\
+    --project-id="{self.project_id}" \\
     --region="{self.REGION}"
 '''
                     ],
@@ -897,6 +940,7 @@ def create_tfx_pipeline(
     pipeline_name: str,
     pipeline_root: str,
     bigquery_query: str,
+    split_queries: Optional[dict],
     transform_module_path: str,
     trainer_module_path: str,
     output_path: str,
@@ -918,11 +962,10 @@ def create_tfx_pipeline(
     logger.info(f"Creating TFX pipeline: {pipeline_name}, split_strategy={split_strategy}")
 
     # Configure split based on strategy
-    # - 'random': Hash-based 80/15/5 split (train/eval/test)
-    # - 'time_holdout': SQL adds 'split' column (test=last N days, train/eval=80/20 random on rest)
-    # - 'strict_time': SQL adds 'split' column (explicit day-based train/eval/test)
+    # - 'random': Hash-based 80/15/5 split (train/eval/test) - single query
+    # - 'time_holdout'/'strict_time': Multiple queries via input_config (avoids buggy partition_feature_name)
     if split_strategy == 'random':
-        # Random: hash-based 80/15/5 split
+        # Random: hash-based 80/15/5 split with single query
         logger.info("Using hash-based 80/15/5 split (train/eval/test)")
         output_config = example_gen_pb2.Output(
             split_config=example_gen_pb2.SplitConfig(
@@ -933,28 +976,31 @@ def create_tfx_pipeline(
                 ]
             )
         )
-    else:
-        # time_holdout and strict_time: SQL provides 'split' column
-        # TFX uses partition_feature_name to split based on this column
-        logger.info(f"Using partition-based split from SQL 'split' column (strategy={split_strategy})")
-        output_config = example_gen_pb2.Output(
-            split_config=example_gen_pb2.SplitConfig(
-                splits=[
-                    example_gen_pb2.SplitConfig.Split(name="train"),
-                    example_gen_pb2.SplitConfig.Split(name="eval"),
-                    example_gen_pb2.SplitConfig.Split(name="test"),
-                ],
-                partition_feature_name='split'
-            )
+        # Configure BigQueryExampleGen with single query
+        logger.info(f"BigQueryExampleGen configured with single query, project={project_id}")
+        example_gen = BigQueryExampleGen(
+            query=bigquery_query,
+            output_config=output_config,
+            custom_config={'project': project_id}
         )
+    else:
+        # time_holdout and strict_time: Use multiple input splits (one query per split)
+        # This avoids the buggy partition_feature_name code path in TFX
+        if not split_queries:
+            raise ValueError(f"split_queries required for split_strategy={split_strategy}")
 
-    # Configure BigQueryExampleGen with explicit project to avoid using Vertex AI's internal ADC project
-    logger.info(f"BigQueryExampleGen configured with project={project_id}")
-    example_gen = BigQueryExampleGen(
-        query=bigquery_query,
-        output_config=output_config,
-        custom_config={'project': project_id}
-    )
+        logger.info(f"Using multiple input splits for {split_strategy} (avoids partition_feature_name bug)")
+        input_config = example_gen_pb2.Input(splits=[
+            example_gen_pb2.Input.Split(name='train', pattern=split_queries['train']),
+            example_gen_pb2.Input.Split(name='eval', pattern=split_queries['eval']),
+            example_gen_pb2.Input.Split(name='test', pattern=split_queries['test']),
+        ])
+        # Configure BigQueryExampleGen with multiple input splits
+        logger.info(f"BigQueryExampleGen configured with 3 input splits, project={project_id}")
+        example_gen = BigQueryExampleGen(
+            input_config=input_config,
+            custom_config={'project': project_id}
+        )
     statistics_gen = StatisticsGen(examples=example_gen.outputs["examples"])
     schema_gen = SchemaGen(statistics=statistics_gen.outputs["statistics"])
     # IMPORTANT: Configure splits_config correctly to avoid data leakage:
@@ -1075,6 +1121,7 @@ def main():
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--staging-bucket", required=True)
     parser.add_argument("--bigquery-query-b64", required=True, help="Base64 encoded BigQuery SQL")
+    parser.add_argument("--split-queries-gcs-path", default="", help="GCS blob path to split_queries.json (temporal strategies)")
     parser.add_argument("--transform-module-path", required=True)
     parser.add_argument("--trainer-module-path", required=True)
     parser.add_argument("--output-path", required=True)
@@ -1091,6 +1138,18 @@ def main():
     bigquery_query = base64.b64decode(args.bigquery_query_b64).decode("utf-8")
     logger.info(f"Decoded BigQuery query: {bigquery_query[:100]}...")
 
+    # Download split queries from GCS for temporal strategies
+    split_queries = None
+    if args.split_queries_gcs_path:
+        from google.cloud import storage
+        client = storage.Client()
+        bucket = client.bucket(args.staging_bucket)
+        blob = bucket.blob(args.split_queries_gcs_path)
+        split_queries = json.loads(blob.download_as_text())
+        logger.info(f"Downloaded split queries from gs://{args.staging_bucket}/{args.split_queries_gcs_path}: "
+                   f"train={len(split_queries['train'])} chars, "
+                   f"eval={len(split_queries['eval'])} chars, test={len(split_queries['test'])} chars")
+
     try:
         with tempfile.TemporaryDirectory() as temp_dir:
             pipeline_file = os.path.join(temp_dir, f"pipeline_{args.run_id}.json")
@@ -1098,6 +1157,7 @@ def main():
                 pipeline_name=f"quicktest-{args.run_id}",
                 pipeline_root=f"gs://{args.staging_bucket}/pipeline_root/{args.run_id}",
                 bigquery_query=bigquery_query,
+                split_queries=split_queries,
                 transform_module_path=args.transform_module_path,
                 trainer_module_path=args.trainer_module_path,
                 output_path=args.output_path,

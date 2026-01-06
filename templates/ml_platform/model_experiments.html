@@ -8190,9 +8190,11 @@ function cancelExpFromCard(event, expId) {
     showConfirmModal({
         title: 'Cancel Experiment',
         message: 'Are you sure you want to cancel this experiment?<br><span class="text-sm text-gray-500 mt-2 block">This will stop the Vertex AI pipeline.</span>',
-        confirmText: 'Yes, Cancel',
-        cancelText: 'Keep Running',
+        confirmText: 'Confirm',
+        cancelText: 'Cancel',
         type: 'warning',
+        confirmButtonClass: 'btn-neu-save',
+        cancelButtonClass: 'btn-neu-cancel',
         onConfirm: async () => {
             btn.disabled = true;
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';

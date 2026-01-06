@@ -996,9 +996,12 @@ def create_tfx_pipeline(
             example_gen_pb2.Input.Split(name='test', pattern=split_queries['test']),
         ])
         # Configure BigQueryExampleGen with multiple input splits
+        # Pass empty output_config to avoid TFX calling make_default_output_config()
+        # which has protobuf 5.x compatibility issues (deprecated 'including_default_value_fields')
         logger.info(f"BigQueryExampleGen configured with 3 input splits, project={project_id}")
         example_gen = BigQueryExampleGen(
             input_config=input_config,
+            output_config=example_gen_pb2.Output(),
             custom_config={'project': project_id}
         )
     statistics_gen = StatisticsGen(examples=example_gen.outputs["examples"])

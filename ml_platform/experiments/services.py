@@ -912,7 +912,7 @@ def create_tfx_pipeline(
 ):
     from tfx.extensions.google_cloud_big_query.example_gen.component import BigQueryExampleGen
     from tfx.components import StatisticsGen, SchemaGen, Transform, Trainer
-    from tfx.proto import example_gen_pb2, trainer_pb2
+    from tfx.proto import example_gen_pb2, trainer_pb2, transform_pb2
     from tfx.orchestration import pipeline as tfx_pipeline
 
     logger.info(f"Creating TFX pipeline: {pipeline_name}, split_strategy={split_strategy}")
@@ -957,10 +957,18 @@ def create_tfx_pipeline(
     )
     statistics_gen = StatisticsGen(examples=example_gen.outputs["examples"])
     schema_gen = SchemaGen(statistics=statistics_gen.outputs["statistics"])
+    # IMPORTANT: Configure splits_config correctly to avoid data leakage:
+    # - analyze=['train', 'eval']: Build vocabularies ONLY from data model sees during training
+    # - transform=['train', 'eval', 'test']: Create TFRecords for all splits including test
+    # Test-only IDs will correctly map to OOV embedding (honest evaluation)
     transform = Transform(
         examples=example_gen.outputs["examples"],
         schema=schema_gen.outputs["schema"],
         module_file=transform_module_path,
+        splits_config=transform_pb2.SplitsConfig(
+            analyze=['train', 'eval'],  # NO test - avoid data leakage
+            transform=['train', 'eval', 'test']  # But transform all for evaluation
+        ),
     )
 
     train_args = trainer_pb2.TrainArgs(num_steps=train_steps)

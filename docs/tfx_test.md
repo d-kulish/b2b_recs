@@ -276,6 +276,151 @@ echo "  python tests/test_proposed_split_fix.py"
 echo "  python tests/test_split_strategies.py --no-django"
 ```
 
+## Alternative: Temporary Virtual Environment
+
+If conda is not available on your machine, you can create a temporary Python virtual environment with TensorFlow:
+
+### Create Temporary TensorFlow Environment
+
+```bash
+# Create a temporary venv
+python3 -m venv /tmp/tf_analysis_venv
+
+# Activate and install TensorFlow
+source /tmp/tf_analysis_venv/bin/activate
+pip install --quiet tensorflow
+
+# Verify installation
+python -c "import tensorflow as tf; print(f'TensorFlow version: {tf.__version__}')"
+```
+
+### Use for TFRecord Analysis
+
+```bash
+source /tmp/tf_analysis_venv/bin/activate
+python your_analysis_script.py
+```
+
+---
+
+## Analyzing Pipeline TFRecords
+
+After running experiments, you can analyze the TFRecords to verify split strategies were applied correctly.
+
+### 1. Locate Pipeline Artifacts
+
+TFX pipeline artifacts are stored in GCS:
+
+```bash
+# Pattern: gs://b2b-recs-pipeline-staging/pipeline_root/{run_id}/...
+PIPELINE_ROOT="gs://b2b-recs-pipeline-staging/pipeline_root/qt-{EXP_ID}-{TIMESTAMP}/555035914949/{JOB_ID}"
+
+# List components
+gsutil ls "${PIPELINE_ROOT}/"
+
+# Find BigQueryExampleGen output
+gsutil ls -r "${PIPELINE_ROOT}/BigQueryExampleGen_*/examples/"
+```
+
+### 2. Download TFRecords
+
+```bash
+# Create local directory
+mkdir -p /tmp/exp_analysis/{train,eval,test}
+
+# Download splits
+gsutil cp "${PIPELINE_ROOT}/BigQueryExampleGen_*/examples/Split-train/*" /tmp/exp_analysis/train/
+gsutil cp "${PIPELINE_ROOT}/BigQueryExampleGen_*/examples/Split-eval/*" /tmp/exp_analysis/eval/
+gsutil cp "${PIPELINE_ROOT}/BigQueryExampleGen_*/examples/Split-test/*" /tmp/exp_analysis/test/
+```
+
+### 3. Parse and Analyze TFRecords
+
+```python
+#!/usr/bin/env python3
+"""Analyze TFRecords date distribution for split strategy verification."""
+
+import tensorflow as tf
+from datetime import datetime
+import glob
+
+def analyze_split(split_dir: str, date_feature: str = 'date') -> dict:
+    """Parse TFRecords and extract date statistics."""
+    files = glob.glob(f"{split_dir}/*.gz")
+    dates = []
+
+    for f in files:
+        dataset = tf.data.TFRecordDataset(f, compression_type='GZIP')
+        for raw_record in dataset:
+            example = tf.train.Example()
+            example.ParseFromString(raw_record.numpy())
+            if date_feature in example.features.feature:
+                date_val = example.features.feature[date_feature].int64_list.value[0]
+                dates.append(datetime.fromtimestamp(date_val).date())
+
+    unique_dates = sorted(set(dates))
+    return {
+        'records': len(dates),
+        'min_date': min(dates) if dates else None,
+        'max_date': max(dates) if dates else None,
+        'unique_days': len(unique_dates),
+        'dates_set': set(dates)
+    }
+
+# Analyze each split
+base_dir = '/tmp/exp_analysis'
+results = {}
+for split in ['train', 'eval', 'test']:
+    results[split] = analyze_split(f'{base_dir}/{split}')
+    r = results[split]
+    print(f"{split.upper():6}: {r['records']:>6} records | {r['min_date']} to {r['max_date']} | {r['unique_days']} days")
+
+# Check for overlaps
+train_dates = results['train']['dates_set']
+eval_dates = results['eval']['dates_set']
+test_dates = results['test']['dates_set']
+
+print(f"\nTrain-Eval overlap: {len(train_dates & eval_dates)} days")
+print(f"Eval-Test overlap:  {len(eval_dates & test_dates)} days")
+```
+
+### 4. Expected Results by Strategy
+
+| Strategy | Train/Eval Dates | Test Dates | Overlap |
+|----------|-----------------|------------|---------|
+| **random** | Same range (shuffled) | Same range (shuffled) | Full overlap |
+| **time_holdout** | Mixed dates | Latest N days only | Test isolated |
+| **strict_time** | Oldest window | Latest window | No overlap |
+
+### 5. Quick Verification Commands
+
+```bash
+# Activate environment
+source /tmp/tf_analysis_venv/bin/activate
+
+# Run inline analysis
+python3 << 'EOF'
+import tensorflow as tf
+from datetime import datetime
+import glob
+
+for split in ['train', 'eval', 'test']:
+    files = glob.glob(f'/tmp/exp_analysis/{split}/*.gz')
+    dates = set()
+    count = 0
+    for f in files:
+        for raw in tf.data.TFRecordDataset(f, compression_type='GZIP'):
+            ex = tf.train.Example()
+            ex.ParseFromString(raw.numpy())
+            if 'date' in ex.features.feature:
+                dates.add(datetime.fromtimestamp(ex.features.feature['date'].int64_list.value[0]).date())
+            count += 1
+    print(f"{split}: {count} records, {len(dates)} unique days, {min(dates)} to {max(dates)}")
+EOF
+```
+
+---
+
 ## Related Documentation
 
 - [TFX Documentation](https://www.tensorflow.org/tfx/guide)

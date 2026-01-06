@@ -1040,5 +1040,170 @@ OK
 - [x] Inline script downloads split queries from GCS
 - [x] `input_config.splits` used instead of `partition_feature_name`
 - [x] All unit tests pass (10/10)
-- [ ] E2E test: time_holdout strategy pipeline succeeds
+- [x] E2E test: time_holdout strategy pipeline succeeds (Experiment 86)
 - [ ] E2E test: strict_time strategy pipeline succeeds
+
+---
+
+# E2E Verification: Time Holdout Strategy (Experiment 86)
+
+**Date:** 2026-01-06
+**Experiment ID:** 86
+**Run ID:** qt-86-20260106-160433
+**Split Strategy:** time_holdout
+**Holdout Days:** 1
+
+## Pipeline Execution
+
+The pipeline completed successfully after fixing two issues:
+
+1. **partition_feature_name bug** - Fixed by using `input_config.splits` instead
+2. **Protobuf 5.x compatibility** - Fixed by passing empty `output_config` to avoid `make_default_output_config()`
+
+### Build Result
+
+```json
+{
+    "success": true,
+    "run_id": "qt-86-20260106-160433",
+    "vertex_pipeline_job_name": "projects/555035914949/locations/europe-central2/pipelineJobs/quicktest-qt-86-20260106-160433-20260106160658"
+}
+```
+
+## Artifact Analysis
+
+### BigQueryExampleGen Output
+
+All 3 splits were created correctly:
+
+| Split | Size | Description |
+|-------|------|-------------|
+| train | 2.92 MiB | Training data |
+| eval | 522.68 KiB | Evaluation data |
+| test | 98.14 KiB | Temporal holdout (last 1 day) |
+
+### Transform Output
+
+All 3 splits were transformed:
+
+| Split | Size | Status |
+|-------|------|--------|
+| train | 3.54 MiB | ✅ Transformed |
+| eval | 580.77 KiB | ✅ Transformed |
+| test | 103.23 KiB | ✅ Transformed |
+
+### StatisticsGen Output
+
+Statistics generated for all 3 splits:
+- `Split-train/FeatureStats.pb` ✅
+- `Split-eval/FeatureStats.pb` ✅
+- `Split-test/FeatureStats.pb` ✅
+
+## TFRecord Date Analysis
+
+To verify the time_holdout strategy was applied correctly, the TFRecords were parsed using TensorFlow to extract and analyze the date distributions.
+
+### Analysis Method
+
+```python
+# Environment: conda activate tf_2.12_py39 (TFX 1.15.0, TensorFlow 2.15.1)
+
+import tensorflow as tf
+from google.cloud import storage
+
+# Download TFRecords from GCS
+# Parse each record to extract 'date' feature (UNIX timestamp)
+# Convert to datetime and analyze distribution
+
+dataset = tf.data.TFRecordDataset(file_path, compression_type='GZIP')
+for raw_record in dataset:
+    example = tf.train.Example()
+    example.ParseFromString(raw_record.numpy())
+    date_val = example.features.feature['date'].int64_list.value[0]
+    # Collect and analyze dates
+```
+
+### Results
+
+| Split | Records | Min Date | Max Date | Date Range |
+|-------|---------|----------|----------|------------|
+| **Train** | 73,110 | 2024-03-01 | 2024-04-28 | 58 days |
+| **Eval** | 13,178 | 2024-03-06 | 2024-04-23 | 48 days |
+| **Test** | 2,596 | 2024-04-29 | 2024-04-30 | 1 day |
+
+### Overlap Analysis
+
+```
+Train max date: 2024-04-28
+Eval max date:  2024-04-23
+Test min date:  2024-04-29
+
+✅ TEST SPLIT HAS LATEST DATES (no overlap with train/eval)
+```
+
+**Key Findings:**
+
+1. **Test split is strictly temporal**: Test min date (2024-04-29) > Train max date (2024-04-28)
+2. **Holdout days correct**: Test contains exactly 1 day of data (2024-04-29 to 2024-04-30), matching `holdout_days=1`
+3. **No data leakage**: Test data was never seen during training or validation
+4. **Train/Eval split**: Remaining data (before holdout) split ~85/15 via deterministic hash function
+
+### Visual Timeline
+
+```
+Dataset dates:    [2024-03-01 -------------------- 2024-04-30]
+                                                          |
+                                                   holdout_days=1
+                                                          ↓
+Train (73,110):   [2024-03-01 -------- 2024-04-28]        |
+Eval (13,178):        [2024-03-06 -- 2024-04-23]          |
+Test (2,596):                                    [2024-04-29 -- 2024-04-30]
+                  ←── 80% random ──→←── 20% ──→  ←── temporal ──→
+```
+
+## Validation Metrics
+
+From TensorBoard events (`model_run/validation/`):
+
+| Metric | Value |
+|--------|-------|
+| epoch_loss | 9814.76 |
+| epoch_regularization_loss | 3.73 |
+| epoch_total_loss | 9818.49 |
+
+## Additional Fix: Protobuf 5.x Compatibility
+
+During testing, an additional error was encountered:
+
+```
+TypeError: MessageToDict() got an unexpected keyword argument 'including_default_value_fields'
+```
+
+**Cause:** TFX 1.15.0 uses the deprecated `including_default_value_fields` parameter, but the Docker image has protobuf 5.x which renamed it to `always_print_fields_with_no_presence`.
+
+**Fix:** Pass an explicit empty `output_config` to skip the buggy `make_default_output_config()` call:
+
+```python
+example_gen = BigQueryExampleGen(
+    input_config=input_config,
+    output_config=example_gen_pb2.Output(),  # Avoids make_default_output_config()
+    custom_config={'project': project_id}
+)
+```
+
+## Conclusion
+
+The `time_holdout` split strategy is now working correctly:
+
+- ✅ Pipeline completes successfully
+- ✅ All 3 splits (train/eval/test) are created
+- ✅ Test split contains only the latest data (temporal holdout)
+- ✅ No overlap between test and train/eval splits
+- ✅ Transform processes all 3 splits
+- ✅ Model trains and produces validation metrics
+
+## Next Steps
+
+1. **E2E test strict_time strategy** - Run an experiment with `split_strategy='strict_time'` to verify pure temporal ordering works
+2. **Verify test evaluation** - Confirm Trainer runs final evaluation on test split and produces test metrics
+3. **Consider Docker image update** - Pin protobuf version in tfx-compiler image to avoid compatibility issues

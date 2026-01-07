@@ -76,10 +76,27 @@ target_column = {
     "transforms": {
         "normalize": {"enabled": False, "range": [0, 1]},
         "log_transform": {"enabled": False},
-        "clip_outliers": {"enabled": False, "percentile": 99}
+        "clip_outliers": {
+            "enabled": False,
+            "lower": {                    # Lower bound clipping (optional)
+                "enabled": False,
+                "percentile": 1           # Options: 1, 5, 10
+            },
+            "upper": {                    # Upper bound clipping
+                "enabled": True,
+                "percentile": 99          # Options: 75, 80, 90, 95, 99, 99.9
+            }
+        }
     }
 }
 ```
+
+**Transform Order:** Clip → Log → Normalize (applied in this order during Transform)
+
+**Inverse Transform:** At serving time, predictions are converted back to original scale:
+- Inverse Normalize: `x * (max - min) + min`
+- Inverse Log: `exp(x) - 1`
+- Note: Clipping creates a prediction ceiling (model cannot predict above the clip threshold)
 
 ### 3. Config Compatibility Matrix
 
@@ -354,26 +371,51 @@ For a ranking config with target column `sales`:
     outputs['sales_target'] = tf.cast(inputs['sales'], tf.float32)
 ```
 
-With transforms enabled:
+With transforms enabled (clip upper=99th, log, normalize):
 
 ```python
 # =========================================================================
 # TARGET COLUMN (for Ranking models)
 # =========================================================================
 
-    # Target: sales (with transforms)
+    # Target: sales (transforms: clip(upper=99th) -> log -> normalize)
     sales_float = tf.cast(inputs['sales'], tf.float32)
 
-    # Clip outliers at 99th percentile
-    sales_max = tft.max(sales_float)
-    sales_clipped = tf.minimum(sales_float, sales_max * 0.99)
+    # Compute percentiles for clipping using tft.quantiles
+    # num_buckets=1000 gives us 0.1% precision for percentile values
+    sales_quantiles = tft.quantiles(sales_float, num_buckets=1000, epsilon=0.001)
+    # Upper bound: 99th percentile (index 989)
+    sales_p_upper = sales_quantiles[989]
+    sales_float = tf.minimum(sales_float, sales_p_upper)
+    # Store for inverse transform
+    outputs['sales_clip_upper'] = sales_p_upper
+    sales_clipped = sales_float
 
-    # Log transform (log1p for numerical stability)
+    # Log transform (log1p for numerical stability with values near 0)
     sales_log = tf.math.log1p(tf.maximum(sales_clipped, 0.0))
 
     # Normalize to [0, 1]
+    sales_min = tft.min(sales_log)
+    sales_max = tft.max(sales_log)
+    # Store normalization params for inverse transform
+    outputs['sales_norm_min'] = sales_min
+    outputs['sales_norm_max'] = sales_max
     outputs['sales_target'] = tft.scale_to_0_1(sales_log)
 ```
+
+**Note:** The transform outputs (`sales_clip_upper`, `sales_norm_min`, `sales_norm_max`) are used by the serving model to apply inverse transforms and return predictions in the original scale.
+
+### Technical Notes: tft.quantiles()
+
+| Parameter | Value | Reason |
+|-----------|-------|--------|
+| `num_buckets` | 1000 | Provides 0.1% precision for percentile selection (p99.9 supported) |
+| `epsilon` | 0.001 | Controls approximation accuracy; lower = more accurate but more memory |
+
+**Percentile Index Calculation:**
+- For `num_buckets=1000`, we get 999 boundary values
+- Index for percentile `p`: `int((p / 100) * 1000) - 1`
+- Examples: p1 → idx 9, p50 → idx 499, p99 → idx 989, p99.9 → idx 998
 
 ---
 
@@ -1077,6 +1119,75 @@ def update_quicktest_results(quick_test: QuickTest, results: dict, model_type: s
 
 ---
 
+## Inverse Transform at Serving Time
+
+### Overview
+
+When target column transforms (clip, log, normalize) are applied during training, the model learns to predict values in the transformed space. At serving time, predictions are automatically converted back to the original scale.
+
+### How It Works
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        INFERENCE FLOW                                        │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  Input Features           Model Prediction        Inverse Transform          │
+│  ──────────────           ────────────────        ─────────────────          │
+│                                                                              │
+│  customer_id: "C123"                                                        │
+│  product_id: "P456"   →   Raw output: 0.15   →   Original scale: 1.83      │
+│  category: "Electronics"                                                     │
+│                                                                              │
+│  Inverse transform order (reverse of forward):                              │
+│  1. Inverse Normalize: x * (max - min) + min                                │
+│  2. Inverse Log: exp(x) - 1 (expm1)                                         │
+│  3. Clip ceiling: implicit (model cannot predict above clip threshold)      │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Serving Model Output
+
+The `RankingServingModel` returns two values:
+
+```python
+return {
+    'predictions': predictions_original,       # Original scale (e.g., $1.83)
+    'predictions_normalized': predictions_normalized  # Raw model output (0-1)
+}
+```
+
+### Transform Parameters File
+
+After training, a `transform_params.json` file is saved alongside the model:
+
+```json
+{
+    "normalize_applied": true,
+    "log_applied": true,
+    "clip_lower_applied": false,
+    "clip_upper_applied": true,
+    "norm_min": 0.0,
+    "norm_max": 6.908,
+    "target_column": "sales"
+}
+```
+
+### Important Limitation: Clipping Creates a Prediction Ceiling
+
+When clipping is applied, the model cannot predict values above the clip threshold:
+
+| If trained with... | Max prediction possible |
+|--------------------|------------------------|
+| No clipping | Unlimited |
+| Clip at 99th percentile (e.g., p99 = 1000) | ~1000 |
+| Clip at 95th percentile (e.g., p95 = 500) | ~500 |
+
+This is intentional behavior for ranking models where relative ordering matters more than absolute values.
+
+---
+
 ## Testing & Validation
 
 ### Test Scenarios
@@ -1090,8 +1201,12 @@ def update_quicktest_results(quick_test: QuickTest, results: dict, model_type: s
 | **Validation - Incompatible** | Ranking feature + retrieval model | Error message displayed |
 | **Transform Code - Retrieval** | Generate transform for retrieval config | No target column section |
 | **Transform Code - Ranking** | Generate transform for ranking config | Target column section with `{col}_target` |
+| **Transform Code - Clip** | Enable clip with upper=99th | Code uses `tft.quantiles()` with index 989 |
+| **Transform Code - Dual Clip** | Enable lower=1st and upper=99th | Both `tf.maximum` and `tf.minimum` generated |
 | **Trainer Code - Retrieval** | Generate trainer for retrieval | `RetrievalModel`, `tfrs.tasks.Retrieval` |
 | **Trainer Code - Ranking** | Generate trainer for ranking | `RankingModel`, `tfrs.tasks.Ranking`, `LABEL_KEY` |
+| **Inverse Transform** | Serving model with transforms | Returns both `predictions` and `predictions_normalized` |
+| **Backward Compat** | Old clip format `{"enabled": true, "percentile": 99}` | Converts to new format automatically |
 | **E2E Ranking Pipeline** | Run complete ranking experiment | RMSE/MAE metrics returned |
 
 ### Manual Testing Checklist
@@ -1104,6 +1219,16 @@ def update_quicktest_results(quick_test: QuickTest, results: dict, model_type: s
 - [ ] Verify RMSE/MAE metrics are displayed
 - [ ] Verify generated transform code includes target column
 - [ ] Verify generated trainer code uses RankingModel
+
+**Target Column Transforms Testing:**
+- [ ] Create Feature Config with normalize only
+- [ ] Create Feature Config with log + normalize
+- [ ] Create Feature Config with clip (upper only, 99th) + normalize
+- [ ] Create Feature Config with clip (lower 1st + upper 99th) + log + normalize
+- [ ] Verify clip UI shows lower/upper percentile selectors
+- [ ] Verify transform code uses `tft.quantiles()` (not `tft.max() * 0.99`)
+- [ ] Verify `transform_params.json` saved with model after training
+- [ ] Verify serving model returns predictions in original scale
 
 ---
 

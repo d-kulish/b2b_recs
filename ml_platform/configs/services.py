@@ -1021,12 +1021,46 @@ def preprocessing_fn(inputs):
     return outputs
 '''
 
+    def _normalize_clip_config(self, clip_config: dict) -> dict:
+        """
+        Convert old single-percentile clip format to new dual-bound format.
+
+        Old format: {"enabled": True, "percentile": 99}
+        New format: {"enabled": True, "lower": {...}, "upper": {...}}
+        """
+        if not clip_config:
+            return {
+                'enabled': False,
+                'lower': {'enabled': False, 'percentile': 1},
+                'upper': {'enabled': False, 'percentile': 99}
+            }
+
+        # Check if already in new format
+        if 'lower' in clip_config or 'upper' in clip_config:
+            return clip_config
+
+        # Convert old format to new format
+        return {
+            'enabled': clip_config.get('enabled', False),
+            'lower': {'enabled': False, 'percentile': 1},
+            'upper': {
+                'enabled': clip_config.get('enabled', False),
+                'percentile': clip_config.get('percentile', 99)
+            }
+        }
+
     def _generate_target_column_code(self) -> str:
         """
         Generate code to pass target column through transform for ranking models.
 
         The target column is used as the label in ranking model training.
-        It can optionally have transforms applied (normalize, log, clip).
+        Transform order: Clip -> Log -> Normalize
+
+        Also outputs transform parameters for inverse transform at serving time:
+        - {col}_clip_lower: Lower clipping threshold (or 0 if not clipped)
+        - {col}_clip_upper: Upper clipping threshold (or inf if not clipped)
+        - {col}_norm_min: Min value after clip+log (for inverse normalize)
+        - {col}_norm_max: Max value after clip+log (for inverse normalize)
 
         Returns:
             Python code string for target column handling, or empty string if no target
@@ -1035,8 +1069,21 @@ def preprocessing_fn(inputs):
             return ''
 
         col = self.target_column.get('display_name') or self.target_column.get('column')
-        bq_type = self.target_column.get('bq_type', 'FLOAT64')
         transforms = self.target_column.get('transforms', {})
+
+        # Normalize clip config for backward compatibility
+        clip_config = self._normalize_clip_config(transforms.get('clip_outliers', {}))
+        normalize = transforms.get('normalize', {})
+        log_transform = transforms.get('log_transform', {})
+
+        # Determine what's enabled
+        has_clip_lower = clip_config.get('lower', {}).get('enabled', False)
+        has_clip_upper = clip_config.get('upper', {}).get('enabled', False)
+        has_clip = has_clip_lower or has_clip_upper
+        has_log = log_transform.get('enabled', False)
+        has_normalize = normalize.get('enabled', False)
+
+        has_any_transform = has_clip or has_log or has_normalize
 
         lines = [
             '    # =========================================================================',
@@ -1045,56 +1092,98 @@ def preprocessing_fn(inputs):
             ''
         ]
 
-        # Check if any transforms are enabled
-        normalize = transforms.get('normalize', {})
-        log_transform = transforms.get('log_transform', {})
-        clip_outliers = transforms.get('clip_outliers', {})
-
-        has_transforms = (
-            normalize.get('enabled') or
-            log_transform.get('enabled') or
-            clip_outliers.get('enabled')
-        )
-
-        if has_transforms:
-            lines.append(f"    # Target: {col} (with transforms)")
-
-            # Start with the input column, cast to float
-            current_var = f"inputs['{col}']"
-            lines.append(f"    {col}_float = tf.cast({current_var}, tf.float32)")
-            current_var = f"{col}_float"
-
-            # Apply clip outliers first (if enabled)
-            if clip_outliers.get('enabled'):
-                percentile = clip_outliers.get('percentile', 99)
-                lines.append(f"")
-                lines.append(f"    # Clip outliers at {percentile}th percentile")
-                lines.append(f"    {col}_max = tft.max({current_var})")
-                lines.append(f"    {col}_clipped = tf.minimum({current_var}, {col}_max * 0.99)")
-                current_var = f"{col}_clipped"
-
-            # Apply log transform (if enabled)
-            if log_transform.get('enabled'):
-                lines.append(f"")
-                lines.append(f"    # Log transform (log1p for numerical stability)")
-                lines.append(f"    {col}_log = tf.math.log1p(tf.maximum({current_var}, 0.0))")
-                current_var = f"{col}_log"
-
-            # Apply normalization (if enabled)
-            if normalize.get('enabled'):
-                range_vals = normalize.get('range', [0, 1])
-                lines.append(f"")
-                lines.append(f"    # Normalize to {range_vals}")
-                if range_vals == [0, 1]:
-                    lines.append(f"    outputs['{col}_target'] = tft.scale_to_0_1({current_var})")
-                else:
-                    lines.append(f"    outputs['{col}_target'] = tft.scale_to_z_score({current_var})")
-            else:
-                lines.append(f"    outputs['{col}_target'] = {current_var}")
-        else:
+        if not has_any_transform:
             # No transforms - just pass through as float
             lines.append(f"    # Target: {col} (raw, no transforms)")
             lines.append(f"    outputs['{col}_target'] = tf.cast(inputs['{col}'], tf.float32)")
+            lines.append('')
+            return '\n'.join(lines)
+
+        # Build transform description
+        transform_desc = []
+        if has_clip:
+            clip_parts = []
+            if has_clip_lower:
+                clip_parts.append(f"lower={clip_config['lower']['percentile']}th")
+            if has_clip_upper:
+                clip_parts.append(f"upper={clip_config['upper']['percentile']}th")
+            transform_desc.append(f"clip({', '.join(clip_parts)})")
+        if has_log:
+            transform_desc.append("log")
+        if has_normalize:
+            transform_desc.append("normalize")
+
+        lines.append(f"    # Target: {col} (transforms: {' -> '.join(transform_desc)})")
+        lines.append(f"    {col}_float = tf.cast(inputs['{col}'], tf.float32)")
+        current_var = f"{col}_float"
+
+        # =====================================================================
+        # CLIPPING (using true percentiles via tft.quantiles)
+        # =====================================================================
+        if has_clip:
+            lines.append('')
+            lines.append('    # Compute percentiles for clipping using tft.quantiles')
+            lines.append('    # num_buckets=1000 gives us 0.1% precision for percentile values')
+            lines.append(f"    {col}_quantiles = tft.quantiles({current_var}, num_buckets=1000, epsilon=0.001)")
+
+            if has_clip_lower:
+                p_lower = clip_config['lower'].get('percentile', 1)
+                # Index calculation: for percentile p, index = (p/100)*1000 - 1
+                # p1 -> idx 9, p5 -> idx 49, p10 -> idx 99
+                idx_lower = max(0, int((p_lower / 100) * 1000) - 1)
+                lines.append(f"    # Lower bound: {p_lower}th percentile (index {idx_lower})")
+                lines.append(f"    {col}_p_lower = {col}_quantiles[{idx_lower}]")
+                lines.append(f"    {current_var} = tf.maximum({current_var}, {col}_p_lower)")
+                lines.append(f"    # Store for inverse transform")
+                lines.append(f"    outputs['{col}_clip_lower'] = {col}_p_lower")
+
+            if has_clip_upper:
+                p_upper = clip_config['upper'].get('percentile', 99)
+                # Handle decimal percentiles like 99.9
+                if p_upper >= 99.9:
+                    idx_upper = 998  # 99.9th percentile
+                else:
+                    idx_upper = min(998, int((p_upper / 100) * 1000) - 1)
+                p_upper_str = str(p_upper).replace('.', '_')
+                lines.append(f"    # Upper bound: {p_upper}th percentile (index {idx_upper})")
+                lines.append(f"    {col}_p_upper = {col}_quantiles[{idx_upper}]")
+                lines.append(f"    {current_var} = tf.minimum({current_var}, {col}_p_upper)")
+                lines.append(f"    # Store for inverse transform")
+                lines.append(f"    outputs['{col}_clip_upper'] = {col}_p_upper")
+
+            lines.append(f"    {col}_clipped = {current_var}")
+            current_var = f"{col}_clipped"
+
+        # =====================================================================
+        # LOG TRANSFORM
+        # =====================================================================
+        if has_log:
+            lines.append('')
+            lines.append('    # Log transform (log1p for numerical stability with values near 0)')
+            lines.append(f"    {col}_log = tf.math.log1p(tf.maximum({current_var}, 0.0))")
+            current_var = f"{col}_log"
+
+        # =====================================================================
+        # NORMALIZATION
+        # =====================================================================
+        if has_normalize:
+            range_vals = normalize.get('range', [0, 1])
+            lines.append('')
+            lines.append(f"    # Normalize to {range_vals}")
+
+            # Compute and store min/max for inverse transform
+            lines.append(f"    {col}_min = tft.min({current_var})")
+            lines.append(f"    {col}_max = tft.max({current_var})")
+            lines.append(f"    # Store normalization params for inverse transform")
+            lines.append(f"    outputs['{col}_norm_min'] = {col}_min")
+            lines.append(f"    outputs['{col}_norm_max'] = {col}_max")
+
+            if range_vals == [0, 1]:
+                lines.append(f"    outputs['{col}_target'] = tft.scale_to_0_1({current_var})")
+            else:
+                lines.append(f"    outputs['{col}_target'] = tft.scale_to_z_score({current_var})")
+        else:
+            lines.append(f"    outputs['{col}_target'] = {current_var}")
 
         lines.append('')
         return '\n'.join(lines)
@@ -3308,8 +3397,24 @@ def run_fn(fn_args: tfx.components.FnArgs):
 '''
 
     def _generate_constants_ranking(self) -> str:
-        """Generate constants for ranking model."""
+        """Generate constants for ranking model including transform flags for inverse transform."""
         target_col = self.target_column.get('display_name') or self.target_column.get('column') if self.target_column else 'target'
+
+        # Extract transform flags
+        transforms = self.target_column.get('transforms', {}) if self.target_column else {}
+        normalize_applied = transforms.get('normalize', {}).get('enabled', False)
+        log_applied = transforms.get('log_transform', {}).get('enabled', False)
+
+        # Handle clip config (backward compatible)
+        clip_config = transforms.get('clip_outliers', {})
+        if 'lower' in clip_config or 'upper' in clip_config:
+            # New format
+            clip_lower_applied = clip_config.get('lower', {}).get('enabled', False)
+            clip_upper_applied = clip_config.get('upper', {}).get('enabled', False)
+        else:
+            # Old format
+            clip_lower_applied = False
+            clip_upper_applied = clip_config.get('enabled', False)
 
         return f'''
 # =============================================================================
@@ -3323,6 +3428,13 @@ LEARNING_RATE = {self.learning_rate}
 
 # Target column for ranking (label key from Transform)
 LABEL_KEY = '{target_col}_target'
+TARGET_COL = '{target_col}'
+
+# Transform flags for inverse transform at serving time
+NORMALIZE_APPLIED = {normalize_applied}
+LOG_APPLIED = {log_applied}
+CLIP_LOWER_APPLIED = {clip_lower_applied}
+CLIP_UPPER_APPLIED = {clip_upper_applied}
 '''
 
     def _generate_input_fn_ranking(self) -> str:
@@ -3477,39 +3589,85 @@ class RankingModel(tfrs.Model):
         return '\n'.join(lines)
 
     def _generate_serve_fn_ranking(self) -> str:
-        """Generate serving function for ranking model."""
+        """Generate serving function for ranking model with inverse transform."""
         return '''
 # =============================================================================
-# SERVING FUNCTION (Ranking)
+# SERVING FUNCTION (Ranking) with Inverse Transform
 # =============================================================================
 
 class RankingServingModel(tf.keras.Model):
     """
-    Wrapper for serving ranking model.
+    Wrapper for serving ranking model with inverse transform.
 
     Input: Serialized tf.Examples containing buyer and product features
-    Output: Predicted scores
+    Output: Predicted scores in ORIGINAL scale (not normalized)
+
+    The inverse transform reverses: Normalize -> Log -> (Clip is implicit ceiling)
     """
 
-    def __init__(self, ranking_model, tf_transform_output):
+    def __init__(self, ranking_model, tf_transform_output, transform_params=None):
         super().__init__()
         self.ranking_model = ranking_model
         self.tft_layer = tf_transform_output.transform_features_layer()
         self._raw_feature_spec = tf_transform_output.raw_feature_spec()
 
-        # Remove label from feature spec for serving (label not needed at inference)
+        # Transform parameters for inverse transform
+        self.transform_params = transform_params or {}
+
+        # Extract transform flags from constants
+        self.normalize_applied = NORMALIZE_APPLIED
+        self.log_applied = LOG_APPLIED
+
+        # Get normalization params (set during training from first batch)
+        self.norm_min = tf.constant(
+            self.transform_params.get('norm_min', 0.0), dtype=tf.float32
+        )
+        self.norm_max = tf.constant(
+            self.transform_params.get('norm_max', 1.0), dtype=tf.float32
+        )
+
+        # Remove label and transform param columns from feature spec for serving
         label_source_col = LABEL_KEY.replace('_target', '')
-        if label_source_col in self._raw_feature_spec:
-            del self._raw_feature_spec[label_source_col]
+        cols_to_remove = [
+            label_source_col,
+            f'{TARGET_COL}_clip_lower',
+            f'{TARGET_COL}_clip_upper',
+            f'{TARGET_COL}_norm_min',
+            f'{TARGET_COL}_norm_max',
+        ]
+        for col in cols_to_remove:
+            if col in self._raw_feature_spec:
+                del self._raw_feature_spec[col]
+
+    def inverse_transform(self, predictions):
+        """
+        Apply inverse transforms to convert predictions back to original scale.
+
+        Order: Inverse Normalize -> Inverse Log
+        Note: Clip is NOT inverted - predictions are naturally bounded by training ceiling
+        """
+        x = predictions
+
+        # Inverse normalize: x * (max - min) + min
+        if self.normalize_applied:
+            x = x * (self.norm_max - self.norm_min) + self.norm_min
+
+        # Inverse log: exp(x) - 1 (inverse of log1p)
+        if self.log_applied:
+            x = tf.math.expm1(x)  # exp(x) - 1
+
+        return x
 
     @tf.function(input_signature=[
         tf.TensorSpec(shape=[None], dtype=tf.string, name='examples')
     ])
     def serve(self, serialized_examples):
         """
-        Serving function: tf.Examples -> predicted scores.
+        Serving function: tf.Examples -> predicted scores in original scale.
 
-        Accepts batch of serialized examples, returns predicted ratings/scores.
+        Returns:
+            predictions: Predictions in original scale (e.g., actual sales value)
+            predictions_normalized: Raw model output (0-1 if normalized)
         """
         # Parse raw features
         parsed_features = tf.io.parse_example(serialized_examples, self._raw_feature_spec)
@@ -3517,11 +3675,15 @@ class RankingServingModel(tf.keras.Model):
         # Apply transform preprocessing
         transformed_features = self.tft_layer(parsed_features)
 
-        # Get predictions
-        predictions = self.ranking_model(transformed_features)
+        # Get predictions (in transformed/normalized space)
+        predictions_normalized = self.ranking_model(transformed_features)
+
+        # Apply inverse transform to get original scale
+        predictions_original = self.inverse_transform(predictions_normalized)
 
         return {
-            'predictions': predictions
+            'predictions': predictions_original,
+            'predictions_normalized': predictions_normalized
         }
 '''
 
@@ -3595,6 +3757,35 @@ def run_fn(fn_args: tfx.components.FnArgs):
         tf_transform_output,
         batch_size
     )
+
+    # Extract transform parameters from first batch for inverse transform
+    transform_params = {{'norm_min': 0.0, 'norm_max': 1.0}}
+    if NORMALIZE_APPLIED:
+        try:
+            # Get one batch to extract transform params
+            sample_batch = next(iter(train_dataset))
+            features, _ = sample_batch
+
+            # Extract normalization params (these are scalars stored as same-value tensors)
+            norm_min_key = f'{{TARGET_COL}}_norm_min'
+            norm_max_key = f'{{TARGET_COL}}_norm_max'
+
+            if norm_min_key in features:
+                transform_params['norm_min'] = float(features[norm_min_key][0].numpy())
+            if norm_max_key in features:
+                transform_params['norm_max'] = float(features[norm_max_key][0].numpy())
+
+            logging.info(f"Extracted transform params for inverse transform: {{transform_params}}")
+
+            # Reload dataset since we consumed one batch
+            train_dataset = _input_fn(
+                fn_args.train_files,
+                fn_args.data_accessor,
+                tf_transform_output,
+                batch_size
+            )
+        except Exception as e:
+            logging.warning(f"Could not extract transform params: {{e}}")
 
     # Initialize MetricsCollector
     global _metrics_collector
@@ -3692,9 +3883,10 @@ def run_fn(fn_args: tfx.components.FnArgs):
         except Exception as test_error:
             logging.warning(f"Test evaluation skipped: {{test_error}}")
 
-        # Save serving model
+        # Save serving model with transform params for inverse transform
         logging.info("Saving serving model...")
-        serving_model = RankingServingModel(model, tf_transform_output)
+        logging.info(f"Transform params: {{transform_params}}")
+        serving_model = RankingServingModel(model, tf_transform_output, transform_params)
 
         signatures = {{
             'serving_default': serving_model.serve.get_concrete_function()
@@ -3706,6 +3898,22 @@ def run_fn(fn_args: tfx.components.FnArgs):
             signatures=signatures
         )
         logging.info(f"Model saved to {{fn_args.serving_model_dir}}")
+
+        # Save transform params as JSON for reference/debugging
+        import json
+        params_path = os.path.join(fn_args.serving_model_dir, 'transform_params.json')
+        transform_params_full = {{
+            'normalize_applied': NORMALIZE_APPLIED,
+            'log_applied': LOG_APPLIED,
+            'clip_lower_applied': CLIP_LOWER_APPLIED,
+            'clip_upper_applied': CLIP_UPPER_APPLIED,
+            'norm_min': transform_params.get('norm_min', 0.0),
+            'norm_max': transform_params.get('norm_max', 1.0),
+            'target_column': TARGET_COL,
+        }}
+        with tf.io.gfile.GFile(params_path, 'w') as f:
+            f.write(json.dumps(transform_params_full, indent=2))
+        logging.info(f"Transform params saved to {{params_path}}")
 
         # Save metrics
         if _metrics_collector:

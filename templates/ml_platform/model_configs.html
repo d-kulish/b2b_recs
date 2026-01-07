@@ -286,6 +286,55 @@
         color: #a16207;
     }
 
+    /* Clip Options Container */
+    .clip-options-container {
+        margin-left: 24px;
+        margin-top: 8px;
+        padding: 12px;
+        background: #fefce8;
+        border: 1px solid #fef08a;
+        border-radius: 8px;
+    }
+    .clip-bound-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 8px;
+    }
+    .clip-bound-check {
+        min-width: 110px;
+        margin-right: 0;
+    }
+    .clip-bound-check .form-check-label {
+        font-size: 0.8rem;
+        color: #78350f;
+    }
+    .clip-percentile-select {
+        width: 80px;
+        padding: 4px 8px;
+        font-size: 0.8rem;
+        border: 1px solid #fde68a;
+        border-radius: 4px;
+        background: #fff;
+        color: #78350f;
+    }
+    .clip-percentile-label {
+        font-size: 0.75rem;
+        color: #a16207;
+    }
+    .clip-info-text {
+        margin-top: 10px;
+        padding-top: 10px;
+        border-top: 1px dashed #fde68a;
+        font-size: 0.75rem;
+        color: #92400e;
+        line-height: 1.4;
+    }
+    .clip-info-text i {
+        color: #f59e0b;
+        margin-right: 4px;
+    }
+
     /* Config type badge in list */
     .config-type-badge {
         padding: 2px 8px;
@@ -4778,8 +4827,28 @@
                     </div>
                 </div>
 
+                <!-- Tensor Preview -->
+                <div class="grid grid-cols-2 gap-4 mt-4">
+                    <div class="tensor-preview-panel">
+                        <div class="tensor-preview-header">
+                            <span class="tensor-preview-title">Buyer Tensor</span>
+                            <span id="buyerTensorTotal" class="tensor-preview-total buyer">0D</span>
+                        </div>
+                        <div id="buyerTensorBar" class="tensor-breakdown-bar"></div>
+                        <div id="buyerTensorBreakdown" class="tensor-breakdown"></div>
+                    </div>
+                    <div class="tensor-preview-panel">
+                        <div class="tensor-preview-header">
+                            <span class="tensor-preview-title">Product Tensor</span>
+                            <span id="productTensorTotal" class="tensor-preview-total product">0D</span>
+                        </div>
+                        <div id="productTensorBar" class="tensor-breakdown-bar"></div>
+                        <div id="productTensorBreakdown" class="tensor-breakdown"></div>
+                    </div>
+                </div>
+
                 <!-- Target Column Zone (for Ranking models) -->
-                <div class="target-column-section">
+                <div class="target-column-section mt-4">
                     <div class="target-column-header">
                         <i class="fas fa-bullseye" style="color: #f59e0b;"></i>
                         <h5>Target Column</h5>
@@ -4803,44 +4872,70 @@
                     <!-- Target Column Configuration (appears when column is set) -->
                     <div id="targetColumnConfig" class="target-column-config" style="display: none;">
                         <h6><i class="fas fa-sliders-h mr-1"></i>Target Transforms (Optional)</h6>
+
+                        <!-- Normalize -->
                         <div class="form-check">
                             <input type="checkbox" class="form-check-input" id="targetNormalize" onchange="updateTargetTransforms()">
                             <label class="form-check-label" for="targetNormalize">
                                 Normalize to 0-1 range <small>(recommended for ratings)</small>
                             </label>
                         </div>
+
+                        <!-- Log Transform -->
                         <div class="form-check">
                             <input type="checkbox" class="form-check-input" id="targetLogTransform" onchange="updateTargetTransforms()">
                             <label class="form-check-label" for="targetLogTransform">
                                 Log transform <small>(for skewed distributions like revenue)</small>
                             </label>
                         </div>
+
+                        <!-- Clip Outliers -->
                         <div class="form-check">
-                            <input type="checkbox" class="form-check-input" id="targetClipOutliers" onchange="updateTargetTransforms()">
+                            <input type="checkbox" class="form-check-input" id="targetClipOutliers" onchange="toggleClipOptions()">
                             <label class="form-check-label" for="targetClipOutliers">
-                                Clip outliers at 99th percentile
+                                Clip outliers
                             </label>
                         </div>
-                    </div>
-                </div>
 
-                <!-- Tensor Preview -->
-                <div class="grid grid-cols-2 gap-4 mt-4">
-                    <div class="tensor-preview-panel">
-                        <div class="tensor-preview-header">
-                            <span class="tensor-preview-title">Buyer Tensor</span>
-                            <span id="buyerTensorTotal" class="tensor-preview-total buyer">0D</span>
+                        <!-- Clip Options (shown when clip is enabled) -->
+                        <div id="clipOutliersOptions" class="clip-options-container" style="display: none;">
+                            <!-- Lower Bound -->
+                            <div class="clip-bound-row">
+                                <div class="form-check form-check-inline clip-bound-check">
+                                    <input type="checkbox" class="form-check-input" id="clipLowerEnabled" onchange="updateTargetTransforms()">
+                                    <label class="form-check-label" for="clipLowerEnabled">Lower bound</label>
+                                </div>
+                                <select id="clipLowerPercentile" class="form-select form-select-sm clip-percentile-select" onchange="updateTargetTransforms()">
+                                    <option value="1">1st</option>
+                                    <option value="5">5th</option>
+                                    <option value="10">10th</option>
+                                </select>
+                                <span class="clip-percentile-label">percentile</span>
+                            </div>
+
+                            <!-- Upper Bound -->
+                            <div class="clip-bound-row">
+                                <div class="form-check form-check-inline clip-bound-check">
+                                    <input type="checkbox" class="form-check-input" id="clipUpperEnabled" onchange="updateTargetTransforms()" checked>
+                                    <label class="form-check-label" for="clipUpperEnabled">Upper bound</label>
+                                </div>
+                                <select id="clipUpperPercentile" class="form-select form-select-sm clip-percentile-select" onchange="updateTargetTransforms()">
+                                    <option value="75">75th</option>
+                                    <option value="80">80th</option>
+                                    <option value="90">90th</option>
+                                    <option value="95">95th</option>
+                                    <option value="99" selected>99th</option>
+                                    <option value="99.9">99.9th</option>
+                                </select>
+                                <span class="clip-percentile-label">percentile</span>
+                            </div>
+
+                            <!-- Info text -->
+                            <div class="clip-info-text">
+                                <i class="fas fa-info-circle"></i>
+                                Clipping caps extreme values at the selected percentiles. Values outside the range are set to the boundary value (not removed from training).
+                            </div>
                         </div>
-                        <div id="buyerTensorBar" class="tensor-breakdown-bar"></div>
-                        <div id="buyerTensorBreakdown" class="tensor-breakdown"></div>
-                    </div>
-                    <div class="tensor-preview-panel">
-                        <div class="tensor-preview-header">
-                            <span class="tensor-preview-title">Product Tensor</span>
-                            <span id="productTensorTotal" class="tensor-preview-total product">0D</span>
-                        </div>
-                        <div id="productTensorBar" class="tensor-breakdown-bar"></div>
-                        <div id="productTensorBreakdown" class="tensor-breakdown"></div>
                     </div>
                 </div>
             </div>
@@ -6705,7 +6800,7 @@ function dropTargetColumn(e) {
         return;
     }
 
-    // Set target column
+    // Set target column with new clip schema
     configState.targetColumn = {
         column: colData.name,
         display_name: colData.display_name || colData.name,
@@ -6713,7 +6808,11 @@ function dropTargetColumn(e) {
         transforms: {
             normalize: { enabled: false, range: [0, 1] },
             log_transform: { enabled: false },
-            clip_outliers: { enabled: false, percentile: 99 }
+            clip_outliers: {
+                enabled: false,
+                lower: { enabled: false, percentile: 1 },
+                upper: { enabled: true, percentile: 99 }
+            }
         }
     };
 
@@ -6787,7 +6886,29 @@ function renderTargetColumn() {
         const transforms = col.transforms || {};
         document.getElementById('targetNormalize').checked = transforms.normalize?.enabled || false;
         document.getElementById('targetLogTransform').checked = transforms.log_transform?.enabled || false;
-        document.getElementById('targetClipOutliers').checked = transforms.clip_outliers?.enabled || false;
+
+        // Handle clip outliers - support both old and new schema
+        const clip = transforms.clip_outliers || {};
+        const clipEnabled = clip.enabled || false;
+        document.getElementById('targetClipOutliers').checked = clipEnabled;
+
+        // Set clip lower/upper options (with backward compatibility)
+        if (clip.lower !== undefined) {
+            // New schema
+            document.getElementById('clipLowerEnabled').checked = clip.lower?.enabled || false;
+            document.getElementById('clipLowerPercentile').value = clip.lower?.percentile || 1;
+            document.getElementById('clipUpperEnabled').checked = clip.upper?.enabled !== false;
+            document.getElementById('clipUpperPercentile').value = clip.upper?.percentile || 99;
+        } else {
+            // Old schema - convert to new format
+            document.getElementById('clipLowerEnabled').checked = false;
+            document.getElementById('clipLowerPercentile').value = 1;
+            document.getElementById('clipUpperEnabled').checked = clipEnabled;
+            document.getElementById('clipUpperPercentile').value = clip.percentile || 99;
+        }
+
+        // Show/hide clip options
+        document.getElementById('clipOutliersOptions').style.display = clipEnabled ? 'block' : 'none';
     } else {
         placeholder.style.display = 'block';
         content.style.display = 'none';
@@ -6795,8 +6916,16 @@ function renderTargetColumn() {
     }
 }
 
+function toggleClipOptions() {
+    const clipEnabled = document.getElementById('targetClipOutliers').checked;
+    document.getElementById('clipOutliersOptions').style.display = clipEnabled ? 'block' : 'none';
+    updateTargetTransforms();
+}
+
 function updateTargetTransforms() {
     if (!configState.targetColumn) return;
+
+    const clipEnabled = document.getElementById('targetClipOutliers').checked;
 
     configState.targetColumn.transforms = {
         normalize: {
@@ -6807,8 +6936,15 @@ function updateTargetTransforms() {
             enabled: document.getElementById('targetLogTransform').checked
         },
         clip_outliers: {
-            enabled: document.getElementById('targetClipOutliers').checked,
-            percentile: 99
+            enabled: clipEnabled,
+            lower: {
+                enabled: clipEnabled && document.getElementById('clipLowerEnabled').checked,
+                percentile: parseInt(document.getElementById('clipLowerPercentile').value)
+            },
+            upper: {
+                enabled: clipEnabled && document.getElementById('clipUpperEnabled').checked,
+                percentile: parseFloat(document.getElementById('clipUpperPercentile').value)
+            }
         }
     };
 }

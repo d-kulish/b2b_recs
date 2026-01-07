@@ -31,11 +31,64 @@ This document provides **high-level specifications** for the Experiments domain.
 | Pipeline Compilation | On-demand at submission time |
 | Sampling | TFX-level (ExampleGen/Transform) |
 | Train/Val Split | 3 options: random (hash-based), time_holdout (date-filtered + hash), strict_time (true temporal) |
-| Model Type (Phase 1) | Retrieval only |
+| Model Type | Retrieval and Ranking (see [ranking_implementation.md](ranking_implementation.md)) |
 
 ---
 
 ## Recent Updates (December 2025 - January 2026)
+
+### Ranking Model Support with Target Column Transforms (2026-01-07)
+
+**Major Feature:** Added full support for Ranking models alongside existing Retrieval models.
+
+#### Overview
+
+| Aspect | Retrieval | Ranking |
+|--------|-----------|---------|
+| **Purpose** | Find candidate items | Score/rank candidates |
+| **Architecture** | Two-tower → dot product | Two-tower → concat → rating head → scalar |
+| **TFRS Task** | `tfrs.tasks.Retrieval()` | `tfrs.tasks.Ranking()` |
+| **Label** | None (implicit) | Target column (explicit) |
+| **Metrics** | Recall@K | RMSE, MAE |
+
+#### Target Column Transforms
+
+When a target column is set in Feature Config, three optional transforms can be applied:
+
+| Transform | Purpose | Implementation |
+|-----------|---------|----------------|
+| **Clip Outliers** | Cap extreme values | `tft.quantiles()` for true percentile computation |
+| **Log Transform** | Compress skewed distributions | `tf.math.log1p()` |
+| **Normalize** | Scale to 0-1 range | `tft.scale_to_0_1()` |
+
+**Transform Order:** Clip → Log → Normalize
+
+**Bug Fix:** Previously, "Clip at 99th percentile" incorrectly computed `max * 0.99`. Now uses `tft.quantiles(num_buckets=1000)` for true percentile values.
+
+#### Inverse Transform at Serving
+
+Ranking models now return predictions in **original scale** (not normalized):
+
+```python
+return {
+    'predictions': predictions_original,       # e.g., $1.83
+    'predictions_normalized': predictions_normalized  # e.g., 0.15
+}
+```
+
+A `transform_params.json` file is saved with each model containing normalization parameters.
+
+#### Files Modified
+
+| File | Changes |
+|------|---------|
+| `ml_platform/configs/services.py` | `_generate_target_column_code()`, `_generate_serve_fn_ranking()`, `_generate_run_fn_ranking()` |
+| `templates/ml_platform/model_configs.html` | New clip UI with lower/upper percentile selectors |
+| `docs/ranking_implementation.md` | Updated schema, transform examples, inverse transform section |
+
+**See:** [ranking_implementation.md](ranking_implementation.md) for full implementation details.
+
+---
 
 ### Transform Vocabulary Coverage Fix (2026-01-05)
 

@@ -4,11 +4,59 @@
 ## Document Purpose
 This document provides detailed specifications for implementing the **Configs** domain in the ML Platform. This domain defines HOW data is transformed for training (Feature Configs) and the neural network architecture (Model Configs).
 
-**Last Updated**: 2026-01-05
+**Last Updated**: 2026-01-07
 
 ---
 
 ## Recent Updates (December 2025 - January 2026)
+
+### Ranking Feature Config Support & UI Enhancements (2026-01-07)
+
+#### 1. Model Type Compatibility Badge on Feature Config Cards
+
+**Feature Added:** Feature Config cards now display a badge indicating which model types they're compatible with.
+
+**Logic:**
+- **No target column** → `[🔍 Retrieval]` badge (blue) - Can only be used with Retrieval models
+- **Has target column** → `[📚 Retrieval / Ranking / Hybrid]` badge (gradient) - Can be used with all model types
+
+**Why this matters:** A Feature Config with a target column can be used for:
+- **Retrieval**: Ignores the target column, trains embeddings for similarity matching
+- **Ranking**: Uses the target column as the label for rating prediction
+- **Hybrid (Multitask)**: Uses both retrieval and ranking objectives
+
+**Files Modified:**
+| File | Changes |
+|------|---------|
+| `templates/ml_platform/model_configs.html` | Added `modelTypeBadge` in `createConfigCard()` function |
+| `templates/ml_platform/model_configs.html` | Added CSS styles `.model-type-badge`, `.model-type-retrieval`, `.model-type-all` |
+
+#### 2. Target Column Change Now Triggers Code Regeneration
+
+**Bug Fix:** Updating a Feature Config to add or modify the `target_column` now correctly regenerates the transform code.
+
+**The Problem:** When adding a target column to an existing Feature Config, the `features_changed` check did not include `target_column`, so the transform code was not regenerated.
+
+**The Fix:**
+```python
+# ml_platform/configs/api.py:251-259
+features_changed = (
+    data.get('buyer_model_features') != fc.buyer_model_features or
+    data.get('product_model_features') != fc.product_model_features or
+    data.get('buyer_model_crosses') != fc.buyer_model_crosses or
+    data.get('product_model_crosses') != fc.product_model_crosses or
+    data.get('target_column') != fc.target_column  # NEW: Added for ranking support
+)
+```
+
+**Files Modified:**
+| File | Changes |
+|------|---------|
+| `ml_platform/configs/api.py` | Added `target_column` to `features_changed` condition (line 258) |
+
+**See Also:** [Ranking Implementation](ranking_implementation.md) for full ranking model documentation.
+
+---
 
 ### Column Alias Validation Fix (2026-01-05)
 

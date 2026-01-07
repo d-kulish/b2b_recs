@@ -77,6 +77,31 @@
         color: #92400e;
     }
 
+    /* Model type compatibility badge */
+    .model-type-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 10px;
+        font-weight: 500;
+        white-space: nowrap;
+    }
+    .model-type-badge i {
+        font-size: 9px;
+    }
+    .model-type-retrieval {
+        background: #dbeafe;
+        color: #1e40af;
+        border: 1px solid #bfdbfe;
+    }
+    .model-type-all {
+        background: linear-gradient(135deg, #dbeafe 0%, #fae8ff 50%, #ffedd5 100%);
+        color: #6b21a8;
+        border: 1px solid #e9d5ff;
+    }
+
     /* Drag and drop styles - Compact column cards */
     .column-card {
         background: white;
@@ -5511,12 +5536,25 @@ function createConfigCard(config) {
         ? `<span class="leakage-warning"><i class="fas fa-exclamation-triangle"></i>${config.columns_in_both_models.length} shared</span>`
         : '';
 
+    // Model type compatibility badge
+    // - No target column (retrieval config) → can only be used for Retrieval models
+    // - Has target column (ranking config) → can be used for ALL model types
+    const hasTargetColumn = config.target_column !== null && config.target_column !== undefined;
+    const modelTypeBadge = hasTargetColumn
+        ? `<span class="model-type-badge model-type-all" title="Can be used with Retrieval, Ranking, or Hybrid models">
+               <i class="fas fa-layer-group"></i> Retrieval / Ranking / Hybrid
+           </span>`
+        : `<span class="model-type-badge model-type-retrieval" title="Can only be used with Retrieval models (no target column)">
+               <i class="fas fa-search"></i> Retrieval
+           </span>`;
+
     const cardId = `config-${config.id}`;
 
     card.innerHTML = `
         <div class="flex items-start justify-between mb-2">
             <div class="flex items-center gap-2">
                 <h3 class="font-semibold text-gray-900">${escapeHtml(config.name)}</h3>
+                ${modelTypeBadge}
                 ${leakageWarning}
             </div>
             <div class="flex items-center gap-2">

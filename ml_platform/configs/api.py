@@ -248,12 +248,14 @@ def update_feature_config(request, config_id):
                 'errors': errors,
             }, status=400)
 
-        # Check if features changed (for versioning)
+        # Check if features changed (for versioning and code regeneration)
+        # Include target_column for ranking models - changing target affects transform code
         features_changed = (
             data.get('buyer_model_features') != fc.buyer_model_features or
             data.get('product_model_features') != fc.product_model_features or
             data.get('buyer_model_crosses') != fc.buyer_model_crosses or
-            data.get('product_model_crosses') != fc.product_model_crosses
+            data.get('product_model_crosses') != fc.product_model_crosses or
+            data.get('target_column') != fc.target_column
         )
 
         # Create version snapshot if features changed

@@ -1624,6 +1624,204 @@ Instead of Recall@K metrics used for retrieval models.
 
 ---
 
+## Config Compatibility Validation: FC + MC for Pipeline Training (2026-01-07)
+
+### Validation Context
+
+**Goal:** Validate that Feature Config `cherng_v3_rank_#1` (ID: 9) and Model Config `chernigiv_rank_1` (ID: 15) are fully compatible and can be used together to train a ranking model in the Vertex AI pipeline's **Trainer node**.
+
+**Methodology:** 9-phase systematic analysis covering config types, target column, transform code, trainer code generation, dimensions, tower models, serving model, end-to-end data flow, and edge cases.
+
+### Config Alignment Summary
+
+| Attribute | Feature Config | Model Config | Compatible |
+|-----------|----------------|--------------|------------|
+| **Name** | `cherng_v3_rank_#1` | `chernigiv_rank_1` | ✅ |
+| **ID** | 9 | 15 | ✅ |
+| **Type** | `ranking` | `ranking` | ✅ |
+| **Target Column** | `sales` (FLOAT) | N/A (uses FC's target) | ✅ |
+| **Loss Function** | N/A | `mse` | ✅ |
+| **Output Embedding** | N/A | 32D | ✅ |
+
+### Phase-by-Phase Results
+
+#### Phase 1: Config Type Compatibility ✅ (2/2)
+
+| Check | Result |
+|-------|--------|
+| Config type alignment (ranking + ranking) | ✅ PASS |
+| `validate_experiment_config()` official validation | ✅ PASS |
+
+#### Phase 2: Target Column Analysis ✅ (7/7)
+
+| Check | Result |
+|-------|--------|
+| Target column present | ✅ PASS (`sales`) |
+| BigQuery type is numeric | ✅ PASS (`FLOAT`) |
+| NOT in buyer_model_features | ✅ PASS |
+| NOT in product_model_features | ✅ PASS |
+| NOT in buyer_model_crosses | ✅ PASS |
+| NOT in product_model_crosses | ✅ PASS |
+| Transform chain valid | ✅ PASS (`Clip(1st,90th) → Log`) |
+
+#### Phase 3: Transform Code Validation ✅ (7/7)
+
+| Check | Result |
+|-------|--------|
+| `generated_transform_code` exists | ✅ PASS (6,341 chars) |
+| `# TARGET COLUMN` section header | ✅ PASS |
+| `outputs['sales_target']` | ✅ PASS |
+| `tft.quantiles()` for clipping | ✅ PASS |
+| `tf.math.log1p()` for log | ✅ PASS |
+| `outputs['sales_clip_lower']` | ✅ PASS |
+| `outputs['sales_clip_upper']` | ✅ PASS |
+
+#### Phase 4: Trainer Code Generation ✅ (22/22)
+
+| Category | Checks Passed |
+|----------|---------------|
+| Code Generation | 1/1 (30,406 chars) |
+| CONSTANTS Section | 9/9 (`LABEL_KEY`, `TARGET_COL`, `OUTPUT_EMBEDDING_DIM`, etc.) |
+| RankingModel Class | 8/8 (`tfrs.tasks.Ranking`, `MeanSquaredError`, metrics) |
+| Input Function | 3/3 (`label_key=LABEL_KEY`) |
+| Rating Head Architecture | 1/1 (4 layers, final=1 unit, linear activation) |
+
+#### Phase 5: Feature-Model Dimension Compatibility ✅ (2/2)
+
+| Check | Result |
+|-------|--------|
+| Buyer tower output (32D) matches embedding dim (32D) | ✅ PASS |
+| Product tower output (32D) matches embedding dim (32D) | ✅ PASS |
+
+**Dimension Flow:**
+```
+FC buyer_tensor_dim (150D) → Buyer Tower (256→128→64→32) → 32D embedding
+FC product_tensor_dim (72D) → Product Tower (128→64→32) → 32D embedding
+Concatenated: 64D → Rating Head (128→64→32→1) → scalar prediction
+```
+
+#### Phase 6: BuyerModel and ProductModel ✅ (10/10)
+
+| Check | Result |
+|-------|--------|
+| Buyer features: `customer_id`, `date`, `cust_value` | ✅ All found |
+| Product features: `product_id`, `category`, `sub_category` | ✅ All found |
+| Buyer crosses: `customer_id × cust_value` | ✅ Found |
+| Product crosses: `category × sub_category` | ✅ Found |
+| `class BuyerModel` with `tf.keras.layers.Embedding` | ✅ PASS |
+| `class ProductModel` with `vocabulary_size_by_name` | ✅ PASS |
+
+#### Phase 7: Serving Model Validation ✅ (7/7)
+
+| Check | Result |
+|-------|--------|
+| `class RankingServingModel` | ✅ PASS |
+| `inverse_transform` method | ✅ PASS |
+| `tf.math.expm1` (inverse log) | ✅ PASS |
+| `self.normalize_applied` / `self.log_applied` flags | ✅ PASS |
+| `transform_params` loading | ✅ PASS |
+| `transform_features_layer` for inference | ✅ PASS |
+
+#### Phase 8: End-to-End Data Flow ✅ (7/7)
+
+| Check | Result |
+|-------|--------|
+| Transform outputs `sales_target` | ✅ PASS |
+| Trainer uses `label_key=LABEL_KEY` | ✅ PASS |
+| `compute_loss` unpacks `(feature_dict, labels)` | ✅ PASS |
+| Task called with `labels=labels` | ✅ PASS |
+| RMSE metric configured | ✅ PASS |
+| MAE metric configured | ✅ PASS |
+| Loss from `tfrs.tasks.Ranking` | ✅ PASS |
+
+#### Phase 9: Edge Cases ✅ (7/7)
+
+| Check | Result |
+|-------|--------|
+| Transform code recently regenerated | ✅ PASS |
+| Uses `tft.quantiles()` (not buggy max*0.99) | ✅ PASS |
+| Column aliases (`category`, `sub_category`) found | ✅ PASS |
+| `rating_head_layers` has 4 layers | ✅ PASS |
+| Loss function `mse` is valid | ✅ PASS |
+| Target NOT in cross features | ✅ PASS |
+| Generated code compiles without syntax errors | ✅ PASS |
+
+### Pipeline Data Flow Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         PIPELINE DATA FLOW                                   │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  BigQuery Data                                                               │
+│  ┌─────────────────────────────────────────────────────────────────────┐    │
+│  │ customer_id | product_id | sales | date | category | cust_value ... │    │
+│  └─────────────────────────────────────────────────────────────────────┘    │
+│                                    │                                         │
+│                                    ▼                                         │
+│  TRANSFORM (preprocessing_fn)                                                │
+│  ┌─────────────────────────────────────────────────────────────────────┐    │
+│  │ • Text → Vocabulary indices                                          │    │
+│  │ • Numeric → Normalized/Bucketized                                    │    │
+│  │ • sales → clip(1st,90th) → log → outputs['sales_target']            │    │
+│  └─────────────────────────────────────────────────────────────────────┘    │
+│                                    │                                         │
+│                                    ▼                                         │
+│  TRAINER (_input_fn with label_key='sales_target')                          │
+│  ┌─────────────────────────────────────────────────────────────────────┐    │
+│  │ Returns: (features_dict, labels) tuple for supervised learning       │    │
+│  └─────────────────────────────────────────────────────────────────────┘    │
+│                                    │                                         │
+│                                    ▼                                         │
+│  RANKING MODEL                                                               │
+│  ┌─────────────────────────────────────────────────────────────────────┐    │
+│  │  BuyerModel(150D) ────┐                                              │    │
+│  │       ↓               │                                              │    │
+│  │   256→128→64→32      │                                              │    │
+│  │       ↓               ├── concat (64D) ── RatingHead ── scalar       │    │
+│  │  ProductModel(72D)    │                    128→64→32→1               │    │
+│  │       ↓               │                                              │    │
+│  │   128→64→32 ─────────┘                                              │    │
+│  │                                                                      │    │
+│  │  Loss: tfrs.tasks.Ranking(loss=MSE)                                  │    │
+│  │  Metrics: RMSE, MAE                                                  │    │
+│  └─────────────────────────────────────────────────────────────────────┘    │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Validation Summary
+
+| Phase | Description | Status | Checks |
+|-------|-------------|--------|--------|
+| 1 | Config Type Compatibility | ✅ | 2/2 |
+| 2 | Target Column Analysis | ✅ | 7/7 |
+| 3 | Transform Code Validation | ✅ | 7/7 |
+| 4 | Trainer Code Generation | ✅ | 22/22 |
+| 5 | Dimension Compatibility | ✅ | 2/2 |
+| 6 | Tower Models | ✅ | 10/10 |
+| 7 | Serving Model | ✅ | 7/7 |
+| 8 | End-to-End Flow | ✅ | 7/7 |
+| 9 | Edge Cases | ✅ | 7/7 |
+| **TOTAL** | | **✅ PASSED** | **71/71** |
+
+### Conclusions
+
+1. **Full Compatibility:** ✅ Feature Config `cherng_v3_rank_#1` and Model Config `chernigiv_rank_1` are fully compatible for ranking model training.
+
+2. **Data Flow Verified:** The complete pipeline data flow from BigQuery → Transform → Trainer → Model is validated:
+   - Transform correctly outputs `sales_target` with clip+log transforms
+   - Trainer extracts label via `label_key=LABEL_KEY`
+   - Model receives `(features_dict, labels)` tuple for supervised learning
+
+3. **Code Generation Working:** Both transform code (6,341 chars) and trainer code (30,406 chars) generate successfully without syntax errors.
+
+4. **Ready for Experiments:** These configs can be used immediately to create and run ranking experiments in Vertex AI pipelines.
+
+5. **Expected Output:** Experiments will report RMSE, MAE, and Loss (MSE) metrics. Predictions will be automatically inverse-transformed to original `sales` scale.
+
+---
+
 ## References
 
 - [TensorFlow Recommenders - Ranking](https://www.tensorflow.org/recommenders/examples/basic_ranking)

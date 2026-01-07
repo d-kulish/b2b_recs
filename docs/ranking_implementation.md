@@ -1432,6 +1432,198 @@ class RankingModel(tfrs.Model):
 
 ---
 
+## Model Config Validation: `chernigiv_rank_1` (2026-01-07)
+
+### Validation Context
+
+**Goal:** Validate that the Model Config `chernigiv_rank_1` is correctly saved in Django DB and can be used for training ranking models in the Vertex AI pipeline experiments.
+
+**Methodology:** Systematic analysis using Django shell queries, code generation tests, and compatibility validation against the experiment submission flow.
+
+### Model Config Details
+
+| Field | Value | Status |
+|-------|-------|--------|
+| **ID** | 15 | ✅ |
+| **Name** | `chernigiv_rank_1` | ✅ |
+| **Model Type** | `ranking` | ✅ |
+| **Description** | first ranking model with 'sales' as target column | ✅ |
+| **Output Embedding Dim** | 32D | ✅ |
+| **Optimizer** | adam | ✅ |
+| **Learning Rate** | 0.001 | ✅ |
+| **Batch Size** | 1024 | ✅ |
+| **Loss Function** | mse (Mean Squared Error) | ✅ |
+| **Created** | 2026-01-07 16:22:04 UTC | ✅ |
+
+### Architecture Configuration
+
+**Buyer Tower (4 layers):**
+```
+Input → Dense(256, relu, L2=0.005) → Dense(128, relu) → Dense(64, relu) → Dense(32, relu) → Output (32D)
+```
+
+**Product Tower (3 layers):**
+```
+Input → Dense(128, relu, L2=0.005) → Dense(64, relu) → Dense(32, relu) → Output (32D)
+```
+
+**Rating Head (4 layers):**
+```
+Concat(64D) → Dense(128, relu) → Dense(64, relu) → Dense(32, relu) → Dense(1, linear) → Scalar Output
+```
+
+### Validation Steps and Results
+
+#### Step 1: Database Query (Django Shell)
+
+**Tool:** `./venv/bin/python manage.py shell`
+
+**Command:**
+```python
+from ml_platform.models import ModelConfig
+mc = ModelConfig.objects.get(name='chernigiv_rank_1')
+```
+
+**Finding:** Model Config found with ID=15, correctly stored with all required fields.
+
+#### Step 2: Structure Validation (8 checks)
+
+| Check | Expected | Actual | Result |
+|-------|----------|--------|--------|
+| Model type is `ranking` | `ranking` | `ranking` | ✅ PASS |
+| Loss function is valid | `mse/binary_crossentropy/huber` | `mse` | ✅ PASS |
+| Rating head has layers | > 0 layers | 4 layers | ✅ PASS |
+| Final layer outputs scalar | `units=1` | `units=1` | ✅ PASS |
+| Final layer has linear activation | `None/linear` | `None` | ✅ PASS |
+| Buyer tower has layers | > 0 layers | 4 layers | ✅ PASS |
+| Product tower has layers | > 0 layers | 3 layers | ✅ PASS |
+| Output embedding dim set | > 0 | 32D | ✅ PASS |
+
+#### Step 3: Trainer Code Generation Test
+
+**Tool:** `TrainerModuleGenerator(feature_config, model_config).generate()`
+
+**Commands:**
+```python
+from ml_platform.configs.services import TrainerModuleGenerator
+from ml_platform.models import FeatureConfig, ModelConfig
+
+fc = FeatureConfig.objects.get(id=9)  # cherng_v3_rank_#1
+mc = ModelConfig.objects.get(name='chernigiv_rank_1')
+
+generator = TrainerModuleGenerator(fc, mc)
+code = generator.generate()
+print(f'Generated: {len(code)} characters')
+```
+
+**Result:** ✅ Successfully generated 30,406 characters of valid Python code.
+
+**Key Code Elements Verified:**
+
+| Element | Status | Generated Code |
+|---------|--------|----------------|
+| `LABEL_KEY` | ✅ Found | `LABEL_KEY = 'sales_target'` |
+| `TARGET_COL` | ✅ Found | `TARGET_COL = 'sales'` |
+| `class RankingModel` | ✅ Found | `class RankingModel(tfrs.Model):` |
+| `tfrs.tasks.Ranking` | ✅ Found | `self.task = tfrs.tasks.Ranking(...)` |
+| `self.rating_head` | ✅ Found | `self.rating_head = tf.keras.Sequential([...])` |
+| `MeanSquaredError` | ✅ Found | `loss=tf.keras.losses.MeanSquaredError()` |
+| Transform flags | ✅ Found | `NORMALIZE_APPLIED = False`, `LOG_APPLIED = True` |
+
+**Generated Rating Head Code:**
+```python
+self.rating_head = tf.keras.Sequential([
+    tf.keras.layers.Dense(128, activation='relu'),
+    tf.keras.layers.Dense(64, activation='relu'),
+    tf.keras.layers.Dense(32, activation='relu'),
+    tf.keras.layers.Dense(1),
+], name='rating_head')
+```
+
+#### Step 4: Experiment Compatibility Validation
+
+**Tool:** `validate_experiment_config()` from `ml_platform/experiments/services.py`
+
+**Command:**
+```python
+from ml_platform.experiments.services import validate_experiment_config
+
+is_valid, errors = validate_experiment_config(fc, mc)
+print(f'Valid: {is_valid}, Errors: {errors}')
+```
+
+**Result:** ✅ VALIDATION PASSED (no errors)
+
+**Compatible Feature Configs:**
+| FC ID | Name | Target Column | Status |
+|-------|------|---------------|--------|
+| 9 | `cherng_v3_rank_#1` | `sales` | ✅ Compatible |
+
+#### Step 5: Edge Case Validation (7 checks)
+
+| Check | Expected | Actual | Result |
+|-------|----------|--------|--------|
+| Output layer has no regularization | `l2_reg=0` or absent | `l2_reg=0` | ✅ PASS |
+| Learning rate is reasonable | 0.0001 - 0.1 | 0.001 | ✅ PASS |
+| Batch size is reasonable | 32 - 8192 | 1024 | ✅ PASS |
+| Tower outputs match embedding dim | 32D | buyer=32D, product=32D | ✅ PASS |
+| Transform code has TARGET COLUMN section | present | ✅ present | ✅ PASS |
+| Transform code outputs `'sales_target'` | present | ✅ present | ✅ PASS |
+| Transform code uses `tft.quantiles()` | not `max*0.99` | ✅ uses quantiles | ✅ PASS |
+
+### Generated Constants Section (from Trainer Code)
+
+```python
+# =============================================================================
+# CONSTANTS
+# =============================================================================
+
+OUTPUT_EMBEDDING_DIM = 32
+BATCH_SIZE = 1024
+EPOCHS = 5
+LEARNING_RATE = 0.001
+
+# Target column for ranking (label key from Transform)
+LABEL_KEY = 'sales_target'
+TARGET_COL = 'sales'
+
+# Transform flags for inverse transform at serving time
+NORMALIZE_APPLIED = False
+LOG_APPLIED = True
+CLIP_LOWER_APPLIED = True
+CLIP_UPPER_APPLIED = True
+```
+
+### Conclusions
+
+1. **Database Storage:** ✅ Model Config `chernigiv_rank_1` is correctly stored in Django DB with all required fields properly populated.
+
+2. **Architecture Validity:** ✅ The rating head architecture follows best practices:
+   - Progressive dimension reduction (128 → 64 → 32 → 1)
+   - Linear activation on output layer for regression
+   - No regularization on output layer
+
+3. **Trainer Code Generation:** ✅ The `TrainerModuleGenerator` successfully produces valid Python code that:
+   - Uses `RankingModel` with `tfrs.tasks.Ranking`
+   - Correctly references `LABEL_KEY = 'sales_target'`
+   - Generates proper rating head layers from config
+   - Includes inverse transform flags for serving
+
+4. **Experiment Compatibility:** ✅ Passes `validate_experiment_config()` with compatible ranking Feature Configs.
+
+5. **Ready for Training:** ✅ The Model Config can be used immediately with Feature Config `cherng_v3_rank_#1` (ID: 9) to run ranking experiments in Vertex AI pipelines.
+
+### Expected Metrics
+
+When experiments run with this config, the following metrics will be reported:
+- **RMSE** (Root Mean Squared Error) - primary metric
+- **MAE** (Mean Absolute Error)
+- **Loss** (MSE)
+
+Instead of Recall@K metrics used for retrieval models.
+
+---
+
 ## References
 
 - [TensorFlow Recommenders - Ranking](https://www.tensorflow.org/recommenders/examples/basic_ranking)

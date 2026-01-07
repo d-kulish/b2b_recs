@@ -5,7 +5,7 @@ This document provides **high-level specifications** for the Experiments domain.
 
 👉 **[phase_experiments_implementation.md](phase_experiments_implementation.md)** - Complete implementation guide with code examples
 
-**Last Updated**: 2026-01-05
+**Last Updated**: 2026-01-07
 
 ---
 
@@ -87,6 +87,81 @@ A `transform_params.json` file is saved with each model containing normalization
 | `docs/ranking_implementation.md` | Updated schema, transform examples, inverse transform section |
 
 **See:** [ranking_implementation.md](ranking_implementation.md) for full implementation details.
+
+---
+
+### Experiment Wizard - Model Type Selection & Rating Head Display (2026-01-07)
+
+**Enhancement:** Improved the New Experiment wizard with model type selection and full ranking model support.
+
+#### Model Type Selection
+
+Added model type selector as the first element in the wizard (Step 1: Select Configs):
+
+| Model Type | Icon | Description | Compatible Feature Configs |
+|------------|------|-------------|---------------------------|
+| **Retrieval** | 🔍 Purple | Two-tower for candidate retrieval | `config_type='retrieval'` (no target column) |
+| **Ranking** | 📊 Amber | Score and rank candidates | `config_type='ranking'` (has target column) |
+| **Multitask** | 🔀 Pink | Combined retrieval + ranking | `config_type='ranking'` (has target column) |
+
+**Behavior:**
+- Default selection: Retrieval
+- Feature Config dropdown filters based on selected model type
+- Model Config dropdown filters to show only configs of selected type
+- Changing model type resets both config selections
+
+#### Target Column Display
+
+For ranking/multitask model types, the Feature Config preview now shows the target column:
+
+```
+┌─────────────────────────────────────────────────┐
+│ ◎ Target Column                    For Ranking  │
+│ ┌─────────────────────────────────────────────┐ │
+│ │ sales   FLOAT                               │ │
+│ └─────────────────────────────────────────────┘ │
+│ [Normalize 0-1] [Log transform] [Clip 1%-99%]   │
+└─────────────────────────────────────────────────┘
+```
+
+Shows:
+- Column name and BigQuery type
+- Applied transforms as tags (Normalize, Log transform, Clip percentiles)
+
+#### Rating Head Display
+
+For ranking/multitask model configs, the Model Config preview now shows the Rating Head network:
+
+```
+┌─────────────────────────────────────────────────┐
+│ ⭐ Rating Head                      128→64→32→1 │
+│ ┌─────────────────────────────────────────────┐ │
+│ │ DENSE  128 units, relu                      │ │
+│ │ DENSE  64 units, relu                       │ │
+│ │ DENSE  32 units, relu                       │ │
+│ │ DENSE  1 units (output)                     │ │
+│ └─────────────────────────────────────────────┘ │
+│ Total params: 12,609                            │
+└─────────────────────────────────────────────────┘
+```
+
+**Color Theme:** Purple/magenta (#d946ef) to match Model Config wizard styling.
+
+#### Files Modified
+
+| File | Changes |
+|------|---------|
+| `templates/ml_platform/model_experiments.html` | Model type selector, target column display, rating head display |
+| `templates/ml_platform/model_configs.html` | Compact horizontal model type buttons |
+
+#### CSS Classes Added
+
+| Class | Purpose |
+|-------|---------|
+| `.wizard-model-type-selector` | Grid layout for model type buttons |
+| `.wizard-model-type-option` | Individual button with icon + text |
+| `.target-column-card` | Amber-themed target column display |
+| `.wizard-rating-head-section` | Purple-themed rating head display |
 
 ---
 

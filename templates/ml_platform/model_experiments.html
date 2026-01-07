@@ -525,6 +525,150 @@
         font-size: 13px;
     }
 
+    /* Model Type Selector (Wizard Step 1) - Modern Compact Design */
+    .wizard-model-type-selector {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+    }
+    .wizard-model-type-option {
+        padding: 8px 10px;
+        border: 1.5px solid #e5e7eb;
+        border-radius: 10px;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        background: #fafafa;
+    }
+    .wizard-model-type-option:hover:not(.disabled) {
+        border-color: #f59e0b;
+        background: #fffbeb;
+    }
+    .wizard-model-type-option.selected {
+        border-color: #f59e0b;
+        background: #fef3c7;
+        box-shadow: 0 0 0 1px #f59e0b inset;
+    }
+    .wizard-model-type-option.disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+    .wizard-model-type-icon {
+        width: 32px;
+        height: 32px;
+        min-width: 32px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 14px;
+        flex-shrink: 0;
+    }
+    .wizard-model-type-icon.retrieval {
+        background: linear-gradient(135deg, #8b5cf6 0%, #a78bfa 100%);
+        color: white;
+    }
+    .wizard-model-type-icon.ranking {
+        background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%);
+        color: white;
+    }
+    .wizard-model-type-icon.multitask {
+        background: linear-gradient(135deg, #ec4899 0%, #f472b6 100%);
+        color: white;
+    }
+    .wizard-model-type-content {
+        flex: 1;
+        text-align: left;
+        min-width: 0;
+    }
+    .wizard-model-type-name {
+        font-weight: 600;
+        color: #111827;
+        font-size: 13px;
+        line-height: 1.2;
+    }
+    .wizard-model-type-desc {
+        font-size: 10px;
+        color: #6b7280;
+        line-height: 1.2;
+        margin-top: 1px;
+    }
+
+    /* Target Column Card (for Ranking configs in wizard) */
+    .target-column-card {
+        background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+        border: 1.5px solid #fbbf24;
+        border-radius: 10px;
+        padding: 12px 14px;
+    }
+    .target-column-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 10px;
+        font-size: 13px;
+        font-weight: 600;
+        color: #b45309;
+    }
+    .target-column-header i {
+        color: #f59e0b;
+    }
+    .target-column-badge {
+        background: #fbbf24;
+        color: white;
+        font-size: 10px;
+        font-weight: 600;
+        padding: 2px 8px;
+        border-radius: 10px;
+        margin-left: auto;
+    }
+    .target-column-content {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        background: white;
+        border: 1px solid #fcd34d;
+        border-radius: 8px;
+        padding: 8px 12px;
+    }
+    .target-column-name {
+        font-weight: 600;
+        color: #92400e;
+        font-size: 14px;
+    }
+    .target-column-type {
+        background: #fef3c7;
+        color: #b45309;
+        font-size: 11px;
+        font-weight: 500;
+        padding: 2px 8px;
+        border-radius: 4px;
+        text-transform: uppercase;
+    }
+    .target-column-transforms {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 10px;
+    }
+    .target-transform-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        background: white;
+        border: 1px solid #fcd34d;
+        color: #92400e;
+        font-size: 11px;
+        padding: 3px 8px;
+        border-radius: 6px;
+    }
+    .target-transform-tag i {
+        font-size: 10px;
+        color: #f59e0b;
+    }
+
     /* Tensor Preview in Wizard */
     .tensor-preview-grid {
         display: grid;
@@ -661,6 +805,64 @@
     .tower-stack.ranking .card-layer-item {
         border-color: rgba(139, 92, 246, 0.2);
     }
+
+    /* Rating Head Section (for Ranking models in wizard) */
+    .wizard-rating-head-section {
+        margin-top: 16px;
+        padding: 14px;
+        background: linear-gradient(135deg, #fdf4ff 0%, #fae8ff 100%);
+        border: 2px dashed #d946ef;
+        border-radius: 12px;
+    }
+    .wizard-rating-head-header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 12px;
+    }
+    .wizard-rating-head-icon {
+        width: 28px;
+        height: 28px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, #d946ef 0%, #a855f7 100%);
+        color: white;
+        font-size: 12px;
+    }
+    .wizard-rating-head-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: #86198f;
+    }
+    .wizard-rating-head-summary {
+        margin-left: auto;
+        font-size: 12px;
+        font-weight: 600;
+        color: #a855f7;
+    }
+    .wizard-rating-head-layers {
+        background: rgba(255, 255, 255, 0.9);
+        border: 1px solid #f0abfc;
+        border-radius: 8px;
+        padding: 8px;
+    }
+    .wizard-rating-head-layers .card-layer-item {
+        border-color: rgba(217, 70, 239, 0.2);
+    }
+    .wizard-rating-head-params {
+        display: flex;
+        gap: 16px;
+        margin-top: 10px;
+        font-size: 11px;
+        color: #86198f;
+    }
+    .wizard-rating-head-params span {
+        color: #a855f7;
+        font-weight: 600;
+    }
+
     .card-layer-item.output-layer {
         border: 2px solid #f87171 !important;
     }
@@ -3547,15 +3749,49 @@
         <div id="wizardModalBody" class="modal-body-wizard" style="max-height: calc(90vh - 200px); overflow-y: auto;">
             <!-- Step 1: Select Configurations -->
             <div id="wizardStep1" class="wizard-step active">
+                <!-- Model Type Selection (first, right after progress bar) -->
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Model Type</label>
+                    <div class="wizard-model-type-selector">
+                        <div class="wizard-model-type-option selected" data-type="retrieval" onclick="selectExpModelType('retrieval')">
+                            <div class="wizard-model-type-icon retrieval">
+                                <i class="fas fa-search"></i>
+                            </div>
+                            <div class="wizard-model-type-content">
+                                <div class="wizard-model-type-name">Retrieval</div>
+                                <div class="wizard-model-type-desc">Two-tower for candidate retrieval</div>
+                            </div>
+                        </div>
+                        <div class="wizard-model-type-option" data-type="ranking" onclick="selectExpModelType('ranking')">
+                            <div class="wizard-model-type-icon ranking">
+                                <i class="fas fa-sort-amount-down"></i>
+                            </div>
+                            <div class="wizard-model-type-content">
+                                <div class="wizard-model-type-name">Ranking</div>
+                                <div class="wizard-model-type-desc">Score and rank candidates</div>
+                            </div>
+                        </div>
+                        <div class="wizard-model-type-option" data-type="multitask" onclick="selectExpModelType('multitask')">
+                            <div class="wizard-model-type-icon multitask">
+                                <i class="fas fa-project-diagram"></i>
+                            </div>
+                            <div class="wizard-model-type-content">
+                                <div class="wizard-model-type-name">Multitask</div>
+                                <div class="wizard-model-type-desc">Combined retrieval + ranking</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Experiment Metadata -->
-                <div class="mb-6 pb-6 border-b border-gray-200">
-                    <div class="mb-4">
-                        <label class="block text-sm font-medium text-gray-700 mb-2">Experiment Name <span class="text-gray-400 font-normal">(optional)</span></label>
+                <div class="mb-4">
+                    <div class="mb-3">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Experiment Name <span class="text-gray-400 font-normal">(optional)</span></label>
                         <input type="text" id="wizardExpName" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500" placeholder="e.g., Baseline with new features">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">Description <span class="text-gray-400 font-normal">(optional)</span></label>
-                        <textarea id="wizardExpDescription" rows="3" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 resize-y" placeholder="Describe the purpose of this experiment..."></textarea>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Description <span class="text-gray-400 font-normal">(optional)</span></label>
+                        <textarea id="wizardExpDescription" rows="2" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 resize-none" placeholder="Describe the purpose of this experiment..."></textarea>
                     </div>
                 </div>
 
@@ -3581,6 +3817,21 @@
                         </div>
                         <!-- Dataset Source Info -->
                         <div id="wizardDatasetInfo"></div>
+                        <!-- Target Column (for Ranking configs) -->
+                        <div id="wizardTargetColumnSection" class="hidden mb-4">
+                            <div class="target-column-card">
+                                <div class="target-column-header">
+                                    <i class="fas fa-bullseye"></i>
+                                    <span>Target Column</span>
+                                    <span class="target-column-badge">For Ranking</span>
+                                </div>
+                                <div class="target-column-content">
+                                    <span class="target-column-name" id="wizardTargetColumnName">-</span>
+                                    <span class="target-column-type" id="wizardTargetColumnType">-</span>
+                                </div>
+                                <div class="target-column-transforms" id="wizardTargetTransforms"></div>
+                            </div>
+                        </div>
                         <!-- Tensor Breakdown Grid -->
                         <div class="grid grid-cols-2 gap-4">
                             <div class="p-4 bg-blue-50 rounded-lg">
@@ -3659,6 +3910,23 @@
                                         <div class="params-row"><span>Non-trainable params:</span><span>0</span></div>
                                     </div>
                                 </div>
+                            </div>
+                        </div>
+
+                        <!-- Rating Head (for Ranking/Multitask models) -->
+                        <div id="wizardRatingHeadSection" class="wizard-rating-head-section hidden">
+                            <div class="wizard-rating-head-header">
+                                <div class="wizard-rating-head-icon">
+                                    <i class="fas fa-star"></i>
+                                </div>
+                                <div class="wizard-rating-head-title">Rating Head</div>
+                                <div class="wizard-rating-head-summary" id="wizardRatingHeadSummary">-</div>
+                            </div>
+                            <div class="wizard-rating-head-layers" id="wizardRatingHeadLayers">
+                                <!-- Layers will be inserted here -->
+                            </div>
+                            <div class="wizard-rating-head-params">
+                                <div>Total params: <span id="wizardRatingHeadParams">0</span></div>
                             </div>
                         </div>
 
@@ -3868,6 +4136,10 @@
                         Experiment Summary
                     </div>
                     <div class="exp-summary-grid">
+                        <div class="exp-summary-item">
+                            <span class="exp-summary-label">Model Type</span>
+                            <span class="exp-summary-value accent" id="wizardSummaryModelType">Retrieval</span>
+                        </div>
                         <div class="exp-summary-item">
                             <span class="exp-summary-label">Feature Config</span>
                             <span class="exp-summary-value accent" id="wizardSummaryFeature">-</span>
@@ -4406,6 +4678,7 @@ let pagination = { page: 1, page_size: 10, total_count: 0, total_pages: 1 };
 
 // Wizard state
 let wizardStep = 1;
+let selectedModelType = 'retrieval';  // Default to retrieval
 let selectedFeatureConfig = null;
 let selectedModelConfig = null;
 let datasetEstimatedRows = null;  // Estimated rows from selected feature config's dataset
@@ -5165,10 +5438,16 @@ function debounceExpSearch() {
 function openNewExpWizard() {
     // Reset wizard state
     wizardStep = 1;
+    selectedModelType = 'retrieval';  // Default to retrieval
     selectedFeatureConfig = null;
     selectedModelConfig = null;
 
-    // Populate dropdowns
+    // Reset model type selector UI
+    document.querySelectorAll('.wizard-model-type-option').forEach(btn => {
+        btn.classList.toggle('selected', btn.dataset.type === 'retrieval');
+    });
+
+    // Populate dropdowns (filtered by model type)
     populateWizardDropdowns();
 
     // Reset UI
@@ -5214,14 +5493,58 @@ function closeNewExpWizard() {
     document.getElementById('newExpWizardModal').classList.add('hidden');
 }
 
+function selectExpModelType(type) {
+    /**
+     * Handle model type selection in the experiment wizard.
+     * Updates state, UI, and filters both dropdowns.
+     */
+    if (selectedModelType === type) return;  // No change
+
+    selectedModelType = type;
+
+    // Update button UI
+    document.querySelectorAll('.wizard-model-type-option').forEach(btn => {
+        btn.classList.toggle('selected', btn.dataset.type === type);
+    });
+
+    // Clear current selections
+    selectedFeatureConfig = null;
+    selectedModelConfig = null;
+
+    // Reset preview panels
+    document.getElementById('wizardFeaturePreview').classList.add('hidden');
+    document.getElementById('wizardFeatureEmpty').classList.remove('hidden');
+    document.getElementById('wizardModelPreview').classList.add('hidden');
+    document.getElementById('wizardModelEmpty').classList.remove('hidden');
+
+    // Hide config type info badge
+    hideConfigTypeInfo();
+
+    // Re-populate dropdowns with filtered configs
+    populateWizardDropdowns();
+
+    // Update summary
+    updateWizardSummary();
+}
+
 function populateWizardDropdowns() {
-    // Feature Config dropdown
+    /**
+     * Populate Feature Config and Model Config dropdowns.
+     * Filters based on selectedModelType:
+     * - Retrieval: Feature configs with config_type='retrieval' (no target column)
+     * - Ranking/Multitask: Feature configs with config_type='ranking' (has target column)
+     */
+
+    // Feature Config dropdown - filtered by model type
     const fcSelect = document.getElementById('wizardFeatureSelect');
     fcSelect.innerHTML = '<option value="">-- Select Feature Config --</option>';
 
-    // Group by dataset
+    // Filter feature configs based on selected model type
+    const compatibleFCs = filterFeatureConfigsByModelType(allFeatureConfigs, selectedModelType);
+
+    // Group filtered configs by dataset
     const byDataset = {};
-    allFeatureConfigs.forEach(fc => {
+    compatibleFCs.forEach(fc => {
         const dsName = fc.dataset_name || 'Unknown Dataset';
         if (!byDataset[dsName]) byDataset[dsName] = [];
         byDataset[dsName].push(fc);
@@ -5239,24 +5562,75 @@ function populateWizardDropdowns() {
         fcSelect.appendChild(optgroup);
     });
 
-    // Model Config dropdown
+    // Show message if no compatible feature configs
+    if (compatibleFCs.length === 0) {
+        const option = document.createElement('option');
+        option.value = '';
+        option.disabled = true;
+        const configType = selectedModelType === 'retrieval' ? 'retrieval' : 'ranking';
+        option.textContent = `No ${configType} feature configs available`;
+        fcSelect.appendChild(option);
+    }
+
+    // Model Config dropdown - filtered by model type
     const mcSelect = document.getElementById('wizardModelSelect');
     mcSelect.innerHTML = '<option value="">-- Select Model Config --</option>';
 
-    allModelConfigs.forEach(mc => {
+    const compatibleMCs = allModelConfigs.filter(mc => mc.model_type === selectedModelType);
+
+    compatibleMCs.forEach(mc => {
         const option = document.createElement('option');
         option.value = mc.id;
         option.textContent = mc.name;
         mcSelect.appendChild(option);
     });
+
+    // Show message if no compatible model configs
+    if (compatibleMCs.length === 0) {
+        const option = document.createElement('option');
+        option.value = '';
+        option.disabled = true;
+        option.textContent = `No ${selectedModelType} model configs available`;
+        mcSelect.appendChild(option);
+    }
+}
+
+function filterFeatureConfigsByModelType(configs, modelType) {
+    /**
+     * Filter feature configs based on selected model type.
+     * - Retrieval: needs config_type='retrieval' (no target column)
+     * - Ranking/Multitask: needs config_type='ranking' (has target column)
+     */
+    if (modelType === 'retrieval') {
+        return configs.filter(fc => {
+            const fcType = fc.config_type || 'retrieval';
+            return fcType === 'retrieval';
+        });
+    } else {
+        // Ranking and Multitask both need feature configs with target column
+        return configs.filter(fc => {
+            const fcType = fc.config_type || 'retrieval';
+            return fcType === 'ranking';
+        });
+    }
 }
 
 function onWizardFeatureChange() {
     const fcId = parseInt(document.getElementById('wizardFeatureSelect').value);
     selectedFeatureConfig = allFeatureConfigs.find(fc => fc.id === fcId) || null;
 
-    // Filter model configs based on feature config type
-    filterModelConfigsForFeatureConfig(selectedFeatureConfig);
+    // Note: Model configs are already filtered by model type in populateWizardDropdowns()
+    // No need to re-filter here since model type is selected first
+
+    // Show target column info for ranking/multitask configs
+    if (selectedFeatureConfig && (selectedModelType === 'ranking' || selectedModelType === 'multitask')) {
+        const targetName = selectedFeatureConfig.target_column_name || selectedFeatureConfig.target_column?.display_name;
+        if (targetName) {
+            showConfigTypeInfo('ranking', targetName);
+        }
+    } else {
+        hideConfigTypeInfo();
+    }
 
     if (selectedFeatureConfig) {
         // Show preview panel with loading state
@@ -5289,69 +5663,6 @@ function onWizardFeatureChange() {
     }
 
     updateWizardSummary();
-}
-
-function filterModelConfigsForFeatureConfig(featureConfig) {
-    /**
-     * Filter Model Configs dropdown based on selected Feature Config's type.
-     *
-     * - If feature config has target_column (ranking type): show only ranking/multitask model configs
-     * - If feature config has no target_column (retrieval type): show only retrieval model configs
-     * - If no feature config selected: show all model configs
-     */
-    const mcSelect = document.getElementById('wizardModelSelect');
-    mcSelect.innerHTML = '<option value="">-- Select Model Config --</option>';
-
-    // Reset selected model config when feature config changes
-    selectedModelConfig = null;
-    document.getElementById('wizardModelPreview').classList.add('hidden');
-    document.getElementById('wizardModelEmpty').classList.remove('hidden');
-
-    let compatibleConfigs = allModelConfigs;
-
-    if (featureConfig) {
-        const fcType = featureConfig.config_type || 'retrieval';
-
-        if (fcType === 'ranking') {
-            // Show only ranking and multitask model configs
-            compatibleConfigs = allModelConfigs.filter(mc =>
-                mc.model_type === 'ranking' || mc.model_type === 'multitask'
-            );
-
-            // Show info message about ranking config
-            const targetName = featureConfig.target_column_name || featureConfig.target_column?.display_name;
-            if (targetName) {
-                showConfigTypeInfo('ranking', targetName);
-            }
-        } else {
-            // Show only retrieval model configs
-            compatibleConfigs = allModelConfigs.filter(mc =>
-                mc.model_type === 'retrieval'
-            );
-            hideConfigTypeInfo();
-        }
-    } else {
-        hideConfigTypeInfo();
-    }
-
-    // Populate dropdown with compatible configs
-    compatibleConfigs.forEach(mc => {
-        const option = document.createElement('option');
-        option.value = mc.id;
-        const typeLabel = mc.model_type === 'ranking' ? ' [Ranking]' :
-                         mc.model_type === 'multitask' ? ' [Multitask]' : '';
-        option.textContent = mc.name + typeLabel;
-        mcSelect.appendChild(option);
-    });
-
-    // Show warning if no compatible configs
-    if (featureConfig && compatibleConfigs.length === 0) {
-        const option = document.createElement('option');
-        option.value = '';
-        option.disabled = true;
-        option.textContent = `No compatible ${featureConfig.config_type} model configs found`;
-        mcSelect.appendChild(option);
-    }
 }
 
 function showConfigTypeInfo(configType, targetColumnName) {
@@ -5393,6 +5704,33 @@ function renderWizardFeaturePreview(config) {
     // Build and insert dataset info HTML
     const datasetInfoHtml = buildDatasetInfoHtml(config.dataset_info, config.dataset_name);
     document.getElementById('wizardDatasetInfo').innerHTML = datasetInfoHtml;
+
+    // Render Target Column section (for ranking configs)
+    const targetSection = document.getElementById('wizardTargetColumnSection');
+    if (config.target_column && (selectedModelType === 'ranking' || selectedModelType === 'multitask')) {
+        const tc = config.target_column;
+        document.getElementById('wizardTargetColumnName').textContent = tc.display_name || tc.column || '-';
+        document.getElementById('wizardTargetColumnType').textContent = tc.bq_type || 'FLOAT';
+
+        // Build transforms tags
+        const transforms = tc.transforms || {};
+        let transformsHtml = '';
+        if (transforms.normalize) {
+            transformsHtml += '<span class="target-transform-tag"><i class="fas fa-compress-arrows-alt"></i> Normalize 0-1</span>';
+        }
+        if (transforms.log_transform) {
+            transformsHtml += '<span class="target-transform-tag"><i class="fas fa-chart-line"></i> Log transform</span>';
+        }
+        if (transforms.clip_outliers) {
+            const lower = transforms.clip_lower_percentile || 1;
+            const upper = transforms.clip_upper_percentile || 99;
+            transformsHtml += `<span class="target-transform-tag"><i class="fas fa-cut"></i> Clip ${lower}%-${upper}%</span>`;
+        }
+        document.getElementById('wizardTargetTransforms').innerHTML = transformsHtml;
+        targetSection.classList.remove('hidden');
+    } else {
+        targetSection.classList.add('hidden');
+    }
 
     // Calculate tensor breakdowns
     const buyerResult = calculateTensorBreakdown(
@@ -5661,6 +5999,30 @@ function renderWizardModelPreview(mc) {
     document.getElementById('wizardProductTotalParams').textContent = productParams.toLocaleString();
     document.getElementById('wizardProductTrainableParams').textContent = productParams.toLocaleString();
 
+    // Rating Head section (for ranking and multitask models)
+    const ratingHeadSection = document.getElementById('wizardRatingHeadSection');
+    if (['ranking', 'multitask'].includes(mc.model_type) && mc.rating_head_layers && mc.rating_head_layers.length > 0) {
+        ratingHeadSection.classList.remove('hidden');
+
+        // Render rating head layers
+        const ratingHeadLayersHtml = renderWizardRatingHeadLayers(mc.rating_head_layers);
+        document.getElementById('wizardRatingHeadLayers').innerHTML = ratingHeadLayersHtml;
+
+        // Calculate and display summary (e.g., "128→64→32→1")
+        const summary = mc.rating_head_layers
+            .filter(l => l.type === 'dense')
+            .map(l => l.units)
+            .join('→');
+        document.getElementById('wizardRatingHeadSummary').textContent = summary || '-';
+
+        // Calculate rating head params (input is output_embedding_dim * 2)
+        const outputDim = mc.output_embedding_dim || 32;
+        const ratingHeadParams = calculateRatingHeadParams(mc.rating_head_layers, outputDim * 2);
+        document.getElementById('wizardRatingHeadParams').textContent = ratingHeadParams.toLocaleString();
+    } else {
+        ratingHeadSection.classList.add('hidden');
+    }
+
     // Training parameters
     document.getElementById('wizardModelParams').innerHTML = `
         <div class="param-chip">
@@ -5708,6 +6070,65 @@ function renderWizardModelPreview(mc) {
     } else {
         retrievalSection.classList.add('hidden');
     }
+}
+
+function renderWizardRatingHeadLayers(layers) {
+    /**
+     * Render rating head layers for the wizard preview.
+     * Uses same card-layer-item styling as tower layers.
+     */
+    if (!layers || layers.length === 0) {
+        return '<div class="text-xs text-gray-400 italic p-2">No layers defined</div>';
+    }
+
+    return layers.map((layer, idx) => {
+        const isOutput = idx === layers.length - 1 && layer.type === 'dense' && layer.units === 1;
+        let badge = '';
+        let params = '';
+
+        if (layer.type === 'dense') {
+            badge = '<span class="card-layer-badge dense">Dense</span>';
+            params = `${layer.units} units`;
+            if (layer.activation) params += `, ${layer.activation}`;
+            if (layer.l2_reg) params += `, L2=${layer.l2_reg}`;
+            else if (layer.l2_regularization) params += `, L2=${layer.l2_regularization}`;
+        } else if (layer.type === 'dropout') {
+            badge = '<span class="card-layer-badge dropout">Dropout</span>';
+            params = `rate: ${layer.rate}`;
+        } else if (layer.type === 'batch_norm') {
+            badge = '<span class="card-layer-badge batch_norm">BatchNorm</span>';
+            params = '';
+        } else if (layer.type === 'layer_norm') {
+            badge = '<span class="card-layer-badge layer_norm">LayerNorm</span>';
+            params = layer.epsilon ? `ε: ${layer.epsilon}` : '';
+        }
+
+        return `
+            <div class="card-layer-item${isOutput ? ' output-layer' : ''}">
+                <span class="card-drag-handle"><i class="fas fa-grip-vertical"></i></span>
+                ${badge}
+                <span class="card-layer-params">${params}</span>
+            </div>
+        `;
+    }).join('');
+}
+
+function calculateRatingHeadParams(layers, inputDim) {
+    /**
+     * Calculate total parameters for rating head layers.
+     * Input dimension is output_embedding_dim * 2 (concatenated embeddings).
+     */
+    let prevDim = inputDim;
+    let totalParams = 0;
+
+    layers.forEach(layer => {
+        if (layer.type === 'dense') {
+            totalParams += prevDim * layer.units + layer.units; // weights + bias
+            prevDim = layer.units;
+        }
+    });
+
+    return totalParams;
 }
 
 function onWizardSplitChange() {
@@ -5841,6 +6262,15 @@ function updateWizardUI() {
 }
 
 function updateWizardSummary() {
+    // Model type
+    const modelTypeLabels = {
+        'retrieval': 'Retrieval',
+        'ranking': 'Ranking',
+        'multitask': 'Multitask'
+    };
+    document.getElementById('wizardSummaryModelType').textContent =
+        modelTypeLabels[selectedModelType] || 'Retrieval';
+
     // Config names
     document.getElementById('wizardSummaryFeature').textContent =
         selectedFeatureConfig ? selectedFeatureConfig.name : '-';

@@ -2051,12 +2051,14 @@
         margin-bottom: 24px;
     }
     .wizard-model-type-option {
-        padding: 16px;
+        padding: 10px 12px;
         border: 2px solid #e5e7eb;
         border-radius: 12px;
         cursor: pointer;
         transition: all 0.2s ease;
-        text-align: center;
+        display: flex;
+        align-items: center;
+        gap: 12px;
     }
     .wizard-model-type-option:hover:not(.disabled) {
         border-color: #8b5cf6;
@@ -2071,14 +2073,15 @@
         cursor: not-allowed;
     }
     .wizard-model-type-icon {
-        width: 48px;
-        height: 48px;
-        border-radius: 12px;
+        width: 40px;
+        height: 40px;
+        min-width: 40px;
+        border-radius: 10px;
         display: flex;
         align-items: center;
         justify-content: center;
-        margin: 0 auto 8px;
-        font-size: 20px;
+        font-size: 18px;
+        flex-shrink: 0;
     }
     .wizard-model-type-icon.retrieval {
         background: linear-gradient(135deg, #8b5cf6 0%, #a78bfa 100%);
@@ -2092,14 +2095,21 @@
         background: linear-gradient(135deg, #ec4899 0%, #f472b6 100%);
         color: white;
     }
+    .wizard-model-type-content {
+        flex: 1;
+        text-align: left;
+        min-width: 0;
+    }
     .wizard-model-type-name {
         font-weight: 600;
         color: #111827;
-        margin-bottom: 4px;
+        font-size: 14px;
+        margin-bottom: 2px;
     }
     .wizard-model-type-desc {
-        font-size: 12px;
+        font-size: 11px;
         color: #6b7280;
+        line-height: 1.3;
     }
     .wizard-model-type-phase {
         font-size: 10px;
@@ -3558,22 +3568,28 @@
                             <div class="wizard-model-type-icon retrieval">
                                 <i class="fas fa-search"></i>
                             </div>
-                            <div class="wizard-model-type-name">Retrieval</div>
-                            <div class="wizard-model-type-desc">Two-tower model for candidate retrieval</div>
+                            <div class="wizard-model-type-content">
+                                <div class="wizard-model-type-name">Retrieval</div>
+                                <div class="wizard-model-type-desc">Two-tower model for candidate retrieval</div>
+                            </div>
                         </div>
                         <div class="wizard-model-type-option" data-type="ranking" onclick="selectModelType('ranking')">
                             <div class="wizard-model-type-icon ranking">
                                 <i class="fas fa-sort-amount-down"></i>
                             </div>
-                            <div class="wizard-model-type-name">Ranking</div>
-                            <div class="wizard-model-type-desc">Score and rank retrieved candidates</div>
+                            <div class="wizard-model-type-content">
+                                <div class="wizard-model-type-name">Ranking</div>
+                                <div class="wizard-model-type-desc">Score and rank retrieved candidates</div>
+                            </div>
                         </div>
                         <div class="wizard-model-type-option" data-type="multitask" onclick="selectModelType('multitask')">
                             <div class="wizard-model-type-icon multitask">
                                 <i class="fas fa-project-diagram"></i>
                             </div>
-                            <div class="wizard-model-type-name">Multitask</div>
-                            <div class="wizard-model-type-desc">Combined retrieval + ranking</div>
+                            <div class="wizard-model-type-content">
+                                <div class="wizard-model-type-name">Multitask</div>
+                                <div class="wizard-model-type-desc">Combined retrieval + ranking</div>
+                            </div>
                         </div>
                     </div>
                 </div>

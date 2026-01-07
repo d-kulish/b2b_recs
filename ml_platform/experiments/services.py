@@ -23,6 +23,53 @@ class ExperimentServiceError(Exception):
     pass
 
 
+def validate_experiment_config(feature_config, model_config):
+    """
+    Validate that feature config and model config are compatible.
+
+    For ranking models:
+    - Feature config must have a target column
+    - Feature config must be of type 'ranking'
+
+    For retrieval models:
+    - Feature config must be of type 'retrieval' (no target column)
+
+    Args:
+        feature_config: FeatureConfig model instance
+        model_config: ModelConfig model instance
+
+    Returns:
+        Tuple of (is_valid, error_messages_list)
+    """
+    errors = []
+
+    # Check config type compatibility
+    fc_type = getattr(feature_config, 'config_type', 'retrieval')
+    mc_type = getattr(model_config, 'model_type', 'retrieval')
+
+    if fc_type == 'retrieval' and mc_type != 'retrieval':
+        errors.append(
+            f"Feature config '{feature_config.name}' is for Retrieval models, "
+            f"but Model config '{model_config.name}' is {model_config.get_model_type_display()}"
+        )
+
+    if fc_type == 'ranking' and mc_type == 'retrieval':
+        errors.append(
+            f"Feature config '{feature_config.name}' is for Ranking models (has target column), "
+            f"but Model config '{model_config.name}' is Retrieval"
+        )
+
+    # Check target column for ranking models
+    if mc_type in ['ranking', 'multitask']:
+        if not feature_config.target_column:
+            errors.append(
+                f"Model config '{model_config.name}' requires a target column, "
+                f"but Feature config '{feature_config.name}' has no target column defined"
+            )
+
+    return (len(errors) == 0, errors)
+
+
 class ExperimentService:
     """
     Service for orchestrating ML experiments (Quick Tests).

@@ -11,7 +11,7 @@ from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
 
 from ml_platform.models import FeatureConfig, ModelConfig, QuickTest, Dataset
-from .services import ExperimentService
+from .services import ExperimentService, validate_experiment_config
 from .artifact_service import ArtifactService
 
 logger = logging.getLogger(__name__)
@@ -34,28 +34,68 @@ def _get_experiment_metrics(qt):
     Extract metrics from a QuickTest object.
     Tries direct fields first, falls back to training_history_json.
 
-    Returns dict with: recall_at_100, recall_at_50, recall_at_10, loss
+    Returns dict with:
+    - For retrieval: recall_at_100, recall_at_50, recall_at_10, loss
+    - For ranking: rmse, mae, test_rmse, test_mae, loss
+    Also includes config_type to indicate model type.
     """
+    # Determine model type from feature config
+    config_type = 'retrieval'
+    if qt.feature_config:
+        config_type = getattr(qt.feature_config, 'config_type', 'retrieval')
+
     metrics = {
-        'recall_at_100': qt.recall_at_100,
-        'recall_at_50': qt.recall_at_50,
-        'recall_at_10': qt.recall_at_10,
+        'config_type': config_type,
         'loss': qt.loss,
     }
 
-    # If direct fields are empty, try training_history_json
-    if qt.training_history_json:
+    if config_type == 'ranking':
+        # Ranking model metrics
+        metrics.update({
+            'rmse': qt.rmse,
+            'mae': qt.mae,
+            'test_rmse': qt.test_rmse,
+            'test_mae': qt.test_mae,
+        })
+
+        # Fallback to training_history_json
+        if qt.training_history_json:
+            hist = qt.training_history_json if isinstance(qt.training_history_json, dict) else {}
+            final_metrics = hist.get('final_metrics', {})
+
+            if metrics['rmse'] is None:
+                metrics['rmse'] = final_metrics.get('rmse') or final_metrics.get('root_mean_squared_error')
+            if metrics['mae'] is None:
+                metrics['mae'] = final_metrics.get('mae') or final_metrics.get('mean_absolute_error')
+            if metrics['test_rmse'] is None:
+                metrics['test_rmse'] = final_metrics.get('test_rmse') or final_metrics.get('test_root_mean_squared_error')
+            if metrics['test_mae'] is None:
+                metrics['test_mae'] = final_metrics.get('test_mae') or final_metrics.get('test_mean_absolute_error')
+    else:
+        # Retrieval model metrics
+        metrics.update({
+            'recall_at_100': qt.recall_at_100,
+            'recall_at_50': qt.recall_at_50,
+            'recall_at_10': qt.recall_at_10,
+        })
+
+        # If direct fields are empty, try training_history_json
+        if qt.training_history_json:
+            hist = qt.training_history_json if isinstance(qt.training_history_json, dict) else {}
+            final_metrics = hist.get('final_metrics', {})
+
+            if metrics['recall_at_100'] is None:
+                metrics['recall_at_100'] = final_metrics.get('test_recall_at_100')
+            if metrics['recall_at_50'] is None:
+                metrics['recall_at_50'] = final_metrics.get('test_recall_at_50')
+            if metrics['recall_at_10'] is None:
+                metrics['recall_at_10'] = final_metrics.get('test_recall_at_10')
+
+    # Fallback for loss
+    if metrics['loss'] is None and qt.training_history_json:
         hist = qt.training_history_json if isinstance(qt.training_history_json, dict) else {}
         final_metrics = hist.get('final_metrics', {})
-
-        if metrics['recall_at_100'] is None:
-            metrics['recall_at_100'] = final_metrics.get('test_recall_at_100')
-        if metrics['recall_at_50'] is None:
-            metrics['recall_at_50'] = final_metrics.get('test_recall_at_50')
-        if metrics['recall_at_10'] is None:
-            metrics['recall_at_10'] = final_metrics.get('test_recall_at_10')
-        if metrics['loss'] is None:
-            metrics['loss'] = final_metrics.get('test_loss') or final_metrics.get('final_loss')
+        metrics['loss'] = final_metrics.get('test_loss') or final_metrics.get('final_loss')
 
     return metrics
 
@@ -181,7 +221,13 @@ def start_quick_test(request, feature_config_id):
             }, status=404)
 
         # Validate model type compatibility
-        # (Future: check that ModelConfig type matches what FeatureConfig supports)
+        is_valid, validation_errors = validate_experiment_config(feature_config, model_config)
+        if not is_valid:
+            return JsonResponse({
+                'success': False,
+                'error': 'Configuration incompatibility',
+                'validation_errors': validation_errors
+            }, status=400)
 
         # Extract parameters
         params = {
@@ -670,28 +716,61 @@ def get_date_columns(request, dataset_id):
         }, status=500)
 
 
-def _get_recall_metrics(quick_test):
+def _get_model_metrics(quick_test):
     """
-    Extract recall metrics from QuickTest.
+    Extract metrics from QuickTest based on model type.
 
     First tries model fields, then falls back to training_history_json.final_metrics.
-    Returns dict with recall_at_5, recall_at_10, recall_at_50, recall_at_100.
+    Returns dict with:
+    - config_type: 'retrieval' or 'ranking'
+    - For retrieval: recall_at_5, recall_at_10, recall_at_50, recall_at_100
+    - For ranking: rmse, mae, test_rmse, test_mae
     """
-    # Try model fields first
-    metrics = {
-        'recall_at_5': None,
-        'recall_at_10': quick_test.recall_at_10,
-        'recall_at_50': quick_test.recall_at_50,
-        'recall_at_100': quick_test.recall_at_100,
-    }
+    # Determine model type from feature config
+    config_type = 'retrieval'
+    if quick_test.feature_config:
+        config_type = getattr(quick_test.feature_config, 'config_type', 'retrieval')
 
-    # If any are missing, try training_history_json.final_metrics
-    if any(v is None for v in metrics.values()):
+    metrics = {'config_type': config_type}
+
+    if config_type == 'ranking':
+        # Ranking model metrics
+        metrics.update({
+            'rmse': quick_test.rmse,
+            'mae': quick_test.mae,
+            'test_rmse': quick_test.test_rmse,
+            'test_mae': quick_test.test_mae,
+        })
+
+        # Fallback to training_history_json
         try:
             history = quick_test.training_history_json or {}
             final_metrics = history.get('final_metrics', {})
             if final_metrics:
-                # Keys in final_metrics are prefixed with 'test_'
+                if metrics['rmse'] is None:
+                    metrics['rmse'] = final_metrics.get('rmse') or final_metrics.get('root_mean_squared_error')
+                if metrics['mae'] is None:
+                    metrics['mae'] = final_metrics.get('mae') or final_metrics.get('mean_absolute_error')
+                if metrics['test_rmse'] is None:
+                    metrics['test_rmse'] = final_metrics.get('test_rmse') or final_metrics.get('test_root_mean_squared_error')
+                if metrics['test_mae'] is None:
+                    metrics['test_mae'] = final_metrics.get('test_mae') or final_metrics.get('test_mean_absolute_error')
+        except Exception:
+            pass
+    else:
+        # Retrieval model metrics
+        metrics.update({
+            'recall_at_5': None,
+            'recall_at_10': quick_test.recall_at_10,
+            'recall_at_50': quick_test.recall_at_50,
+            'recall_at_100': quick_test.recall_at_100,
+        })
+
+        # Fallback to training_history_json
+        try:
+            history = quick_test.training_history_json or {}
+            final_metrics = history.get('final_metrics', {})
+            if final_metrics:
                 if metrics['recall_at_5'] is None:
                     metrics['recall_at_5'] = final_metrics.get('test_recall_at_5')
                 if metrics['recall_at_10'] is None:
@@ -701,9 +780,25 @@ def _get_recall_metrics(quick_test):
                 if metrics['recall_at_100'] is None:
                     metrics['recall_at_100'] = final_metrics.get('test_recall_at_100')
         except Exception:
-            pass  # Keep None values if extraction fails
+            pass
 
     return metrics
+
+
+# Keep for backward compatibility - alias to new function
+def _get_recall_metrics(quick_test):
+    """
+    Extract recall metrics from QuickTest.
+    Deprecated: Use _get_model_metrics instead.
+    """
+    metrics = _get_model_metrics(quick_test)
+    # Return only recall-related keys for backward compatibility
+    return {
+        'recall_at_5': metrics.get('recall_at_5'),
+        'recall_at_10': metrics.get('recall_at_10'),
+        'recall_at_50': metrics.get('recall_at_50'),
+        'recall_at_100': metrics.get('recall_at_100'),
+    }
 
 
 def _serialize_quick_test(quick_test, include_details=False):
@@ -712,8 +807,9 @@ def _serialize_quick_test(quick_test, include_details=False):
     # Handle different statuses appropriately
     stage_details = _get_stage_details_for_status(quick_test)
 
-    # Get recall metrics (from model fields or training_history_json)
-    recall_metrics = _get_recall_metrics(quick_test)
+    # Get model metrics (supports both retrieval and ranking)
+    model_metrics = _get_model_metrics(quick_test)
+    config_type = model_metrics.get('config_type', 'retrieval')
 
     data = {
         'id': quick_test.id,
@@ -723,6 +819,7 @@ def _serialize_quick_test(quick_test, include_details=False):
         'experiment_description': quick_test.experiment_description,
         'feature_config_id': quick_test.feature_config_id,
         'feature_config_name': quick_test.feature_config.name,
+        'feature_config_type': config_type,  # 'retrieval' or 'ranking'
         'dataset_id': quick_test.feature_config.dataset.id if quick_test.feature_config.dataset else None,
         'dataset_name': quick_test.feature_config.dataset.name if quick_test.feature_config.dataset else None,
         'model_config_id': quick_test.model_config_id,
@@ -747,12 +844,6 @@ def _serialize_quick_test(quick_test, include_details=False):
         'learning_rate': quick_test.learning_rate,
         'machine_type': quick_test.machine_type,
 
-        # Key metrics for card display (from model fields or training_history_json)
-        'recall_at_5': recall_metrics['recall_at_5'],
-        'recall_at_10': recall_metrics['recall_at_10'],
-        'recall_at_50': recall_metrics['recall_at_50'],
-        'recall_at_100': recall_metrics['recall_at_100'],
-
         # Vertex AI info
         'vertex_pipeline_job_id': quick_test.vertex_pipeline_job_id,
 
@@ -765,15 +856,52 @@ def _serialize_quick_test(quick_test, include_details=False):
         'created_by': quick_test.created_by.username if quick_test.created_by else None,
     }
 
+    # Add metrics based on model type
+    if config_type == 'ranking':
+        # Ranking model metrics
+        data.update({
+            'rmse': model_metrics.get('rmse'),
+            'mae': model_metrics.get('mae'),
+            'test_rmse': model_metrics.get('test_rmse'),
+            'test_mae': model_metrics.get('test_mae'),
+            # Keep recall fields as None for consistency
+            'recall_at_5': None,
+            'recall_at_10': None,
+            'recall_at_50': None,
+            'recall_at_100': None,
+        })
+    else:
+        # Retrieval model metrics
+        data.update({
+            'recall_at_5': model_metrics.get('recall_at_5'),
+            'recall_at_10': model_metrics.get('recall_at_10'),
+            'recall_at_50': model_metrics.get('recall_at_50'),
+            'recall_at_100': model_metrics.get('recall_at_100'),
+            # Keep ranking fields as None for consistency
+            'rmse': None,
+            'mae': None,
+            'test_rmse': None,
+            'test_mae': None,
+        })
+
     if include_details:
         # Include full results and metrics
-        data['metrics'] = {
-            'loss': quick_test.loss,
-            'recall_at_5': getattr(quick_test, 'recall_at_5', None),
-            'recall_at_10': quick_test.recall_at_10,
-            'recall_at_50': quick_test.recall_at_50,
-            'recall_at_100': quick_test.recall_at_100,
-        }
+        if config_type == 'ranking':
+            data['metrics'] = {
+                'loss': quick_test.loss,
+                'rmse': quick_test.rmse,
+                'mae': quick_test.mae,
+                'test_rmse': quick_test.test_rmse,
+                'test_mae': quick_test.test_mae,
+            }
+        else:
+            data['metrics'] = {
+                'loss': quick_test.loss,
+                'recall_at_5': getattr(quick_test, 'recall_at_5', None),
+                'recall_at_10': quick_test.recall_at_10,
+                'recall_at_50': quick_test.recall_at_50,
+                'recall_at_100': quick_test.recall_at_100,
+            }
         data['vocabulary_stats'] = quick_test.vocabulary_stats
         data['error_message'] = quick_test.error_message
         data['vertex_pipeline_job_name'] = quick_test.vertex_pipeline_job_name

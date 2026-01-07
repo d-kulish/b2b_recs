@@ -1,0 +1,1198 @@
+# Ranking Model Implementation Plan
+
+## Overview
+
+This document describes the implementation of **Ranking models** alongside the existing **Retrieval models** in the B2B Recommendations SaaS system. The implementation follows a phased approach, with backend changes completed first, followed by UI and pipeline integration.
+
+## Table of Contents
+
+1. [Background & Context](#background--context)
+2. [Architecture Decisions](#architecture-decisions)
+3. [Implementation Phases](#implementation-phases)
+4. [Phase 1: Database & Model Changes](#phase-1-database--model-changes-completed)
+5. [Phase 2: Transform Code Generation](#phase-2-transform-code-generation-completed)
+6. [Phase 3: Trainer Code Generation](#phase-3-trainer-code-generation-completed)
+7. [Phase 4: Features Config UI](#phase-4-features-config-ui-completed)
+8. [Phase 5: Experiments UI & Validation](#phase-5-experiments-ui--validation-completed)
+9. [Phase 6: Pipeline Services](#phase-6-pipeline-services-completed)
+10. [Testing & Validation](#testing--validation)
+
+---
+
+## Background & Context
+
+### Retrieval vs Ranking Models
+
+| Aspect | Retrieval (Existing) | Ranking (New) |
+|--------|---------------------|---------------|
+| **Purpose** | Find candidate items from large catalog | Score and rank candidate items |
+| **Architecture** | Two-tower → dot product similarity | Two-tower → concatenate → rating head → scalar |
+| **TFRS Task** | `tfrs.tasks.Retrieval()` | `tfrs.tasks.Ranking(loss=...)` |
+| **Loss** | Contrastive (in-batch negatives) | MSE/BCE/Huber (regression/classification) |
+| **Label** | None (implicit feedback) | Rating column (explicit feedback) |
+| **Metrics** | Recall@K | RMSE, MAE |
+| **Output** | Embeddings (32D vectors) | Scalar score |
+| **Use Cases** | "Which products might this user like?" | "How much will user like this product?" |
+
+### Key Design Decision: Target Column in Feature Config
+
+The **target column** (label for ranking) is defined in the **Feature Config**, not in the Model Config or at experiment time. This is intentional:
+
+1. **Prevents data leakage**: If a column is used as a feature AND as a target, it creates leakage
+2. **Architectural clarity**: Feature Config defines WHAT data is used and HOW
+3. **Auto-exclusion**: Target column is automatically removed from Buyer/Product models
+4. **Config type derivation**: `config_type` is automatically set based on target_column presence
+
+```
+Feature Config with target_column → config_type = 'ranking'
+Feature Config without target_column → config_type = 'retrieval'
+```
+
+---
+
+## Architecture Decisions
+
+### 1. Config Type Derivation
+
+The `config_type` field on FeatureConfig is **derived**, not manually set:
+
+```python
+def save(self, *args, **kwargs):
+    # Auto-derive config_type from target_column presence
+    if self.target_column:
+        self.config_type = self.CONFIG_TYPE_RANKING
+    else:
+        self.config_type = self.CONFIG_TYPE_RETRIEVAL
+    super().save(*args, **kwargs)
+```
+
+### 2. Target Column Schema
+
+```python
+target_column = {
+    "column": "sales",           # Original column name
+    "display_name": "sales",     # Alias (if using column aliases)
+    "bq_type": "FLOAT64",        # BigQuery data type
+    "transforms": {
+        "normalize": {"enabled": False, "range": [0, 1]},
+        "log_transform": {"enabled": False},
+        "clip_outliers": {"enabled": False, "percentile": 99}
+    }
+}
+```
+
+### 3. Config Compatibility Matrix
+
+| Feature Config Type | Compatible Model Config Types |
+|---------------------|------------------------------|
+| `retrieval` | `retrieval` only |
+| `ranking` | `ranking`, `multitask` |
+
+### 4. Code Generation Flow
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                        FEATURE CONFIG                                │
+│  - buyer_model_features, product_model_features                     │
+│  - target_column (for ranking)                                      │
+│                                                                      │
+│  Generates: preprocessing_fn (Transform code)                       │
+│  - Vocabularies, normalization, bucketization                       │
+│  - Target column pass-through (as '{column}_target')                │
+└─────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                  FEATURE CONFIG + MODEL CONFIG                       │
+│                                                                      │
+│  Generates: trainer_module.py (Trainer code)                        │
+│  - BuyerModel, ProductModel classes                                 │
+│  - RetrievalModel OR RankingModel (based on model_type)             │
+│  - run_fn() with appropriate training loop                          │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Implementation Phases
+
+| Phase | Description | Status |
+|-------|-------------|--------|
+| 1 | Database & Model Changes | ✅ Completed |
+| 2 | Transform Code Generation | ✅ Completed |
+| 3 | Trainer Code Generation | ✅ Completed |
+| 4 | Features Config UI | ⏳ Pending |
+| 5 | Experiments UI & Validation | ⏳ Pending |
+| 6 | Pipeline Services | ⏳ Pending |
+
+---
+
+## Phase 1: Database & Model Changes (COMPLETED)
+
+### Files Modified
+
+| File | Changes |
+|------|---------|
+| `ml_platform/models.py` | Added fields and methods to FeatureConfig |
+| `ml_platform/migrations/0048_*.py` | New migration |
+| `ml_platform/configs/api.py` | Updated API serializers and endpoints |
+| `ml_platform/configs/services.py` | Updated `serialize_feature_config()` |
+
+### FeatureConfig Model Changes
+
+```python
+# ml_platform/models.py (lines 1290-1328)
+
+class FeatureConfig(models.Model):
+    # ... existing fields ...
+
+    # Config Type (derived from target_column presence)
+    CONFIG_TYPE_RETRIEVAL = 'retrieval'
+    CONFIG_TYPE_RANKING = 'ranking'
+
+    CONFIG_TYPE_CHOICES = [
+        (CONFIG_TYPE_RETRIEVAL, 'Retrieval'),
+        (CONFIG_TYPE_RANKING, 'Ranking'),
+    ]
+
+    config_type = models.CharField(
+        max_length=20,
+        choices=CONFIG_TYPE_CHOICES,
+        default=CONFIG_TYPE_RETRIEVAL,
+        help_text="Derived from target_column presence"
+    )
+
+    # Target Column (for Ranking models)
+    target_column = models.JSONField(
+        null=True,
+        blank=True,
+        help_text="Target column for ranking models"
+    )
+```
+
+### Save Method Override
+
+```python
+# ml_platform/models.py (lines 1376-1415)
+
+def save(self, *args, **kwargs):
+    """Override save to auto-derive config_type and remove target from models."""
+    # Auto-derive config_type from target_column presence
+    if self.target_column:
+        self.config_type = self.CONFIG_TYPE_RANKING
+    else:
+        self.config_type = self.CONFIG_TYPE_RETRIEVAL
+
+    # Auto-remove target column from buyer/product models to prevent data leakage
+    self._remove_target_from_models()
+
+    super().save(*args, **kwargs)
+
+def _remove_target_from_models(self):
+    """Remove target column from feature models to prevent data leakage."""
+    if not self.target_column:
+        return
+
+    target_col = self.target_column.get('column')
+    target_display = self.target_column.get('display_name', target_col)
+
+    # Remove from buyer_model_features
+    if self.buyer_model_features:
+        self.buyer_model_features = [
+            f for f in self.buyer_model_features
+            if f.get('column') != target_col and f.get('display_name') != target_display
+        ]
+
+    # Remove from product_model_features
+    if self.product_model_features:
+        self.product_model_features = [
+            f for f in self.product_model_features
+            if f.get('column') != target_col and f.get('display_name') != target_display
+        ]
+```
+
+### Migration
+
+```python
+# ml_platform/migrations/0048_add_ranking_support_to_featureconfig.py
+
+class Migration(migrations.Migration):
+    dependencies = [
+        ('ml_platform', '0047_add_recall_at_5_to_quicktest'),
+    ]
+
+    operations = [
+        migrations.AddField(
+            model_name='featureconfig',
+            name='config_type',
+            field=models.CharField(
+                choices=[('retrieval', 'Retrieval'), ('ranking', 'Ranking')],
+                default='retrieval',
+                max_length=20,
+            ),
+        ),
+        migrations.AddField(
+            model_name='featureconfig',
+            name='target_column',
+            field=models.JSONField(blank=True, null=True),
+        ),
+    ]
+```
+
+### API Serializer Update
+
+```python
+# ml_platform/configs/services.py (serialize_feature_config)
+
+data = {
+    'id': fc.id,
+    'name': fc.name,
+    # ... existing fields ...
+
+    # NEW: Config type (retrieval or ranking)
+    'config_type': fc.config_type,
+    'config_type_display': fc.get_config_type_display(),
+
+    # NEW: Target column for ranking models
+    'target_column': fc.target_column,
+    'target_column_name': fc.get_target_column_name(),
+
+    # ... rest of fields ...
+}
+```
+
+---
+
+## Phase 2: Transform Code Generation (COMPLETED)
+
+### Files Modified
+
+| File | Changes |
+|------|---------|
+| `ml_platform/configs/services.py` | Updated `PreprocessingFnGenerator` |
+
+### PreprocessingFnGenerator Changes
+
+```python
+# ml_platform/configs/services.py (lines 865-877)
+
+class PreprocessingFnGenerator:
+    def __init__(self, feature_config: 'FeatureConfig'):
+        self.config = feature_config
+        self.buyer_features = feature_config.buyer_model_features or []
+        self.product_features = feature_config.product_model_features or []
+        self.buyer_crosses = feature_config.buyer_model_crosses or []
+        self.product_crosses = feature_config.product_model_crosses or []
+        self.target_column = feature_config.target_column  # NEW: For ranking models
+```
+
+### Generate Method Update
+
+```python
+# ml_platform/configs/services.py (lines 894-921)
+
+def generate(self) -> str:
+    # ... existing code ...
+
+    text_code = self._generate_text_transforms(all_features['text'])
+    numeric_code = self._generate_numeric_transforms(all_features['numeric'])
+    temporal_code = self._generate_temporal_transforms(all_features['temporal'])
+    cross_code = self._generate_cross_transforms()
+    target_code = self._generate_target_column_code()  # NEW: For ranking models
+
+    # Combine all sections
+    sections = [...]
+    if target_code:
+        sections.append(target_code)  # NEW
+    sections.append(fn_end)
+```
+
+### Target Column Code Generation
+
+```python
+# ml_platform/configs/services.py (lines 1024-1100)
+
+def _generate_target_column_code(self) -> str:
+    """
+    Generate code to pass target column through transform for ranking models.
+    """
+    if not self.target_column:
+        return ''
+
+    col = self.target_column.get('display_name') or self.target_column.get('column')
+    transforms = self.target_column.get('transforms', {})
+
+    # Check if any transforms are enabled
+    normalize = transforms.get('normalize', {})
+    log_transform = transforms.get('log_transform', {})
+    clip_outliers = transforms.get('clip_outliers', {})
+
+    has_transforms = (
+        normalize.get('enabled') or
+        log_transform.get('enabled') or
+        clip_outliers.get('enabled')
+    )
+
+    if has_transforms:
+        # Apply transforms: clip → log → normalize
+        # ... transform chain ...
+    else:
+        # No transforms - just pass through as float
+        lines.append(f"    outputs['{col}_target'] = tf.cast(inputs['{col}'], tf.float32)")
+```
+
+### Generated Transform Code Example
+
+For a ranking config with target column `sales`:
+
+```python
+# =========================================================================
+# TARGET COLUMN (for Ranking models)
+# =========================================================================
+
+    # Target: sales (raw, no transforms)
+    outputs['sales_target'] = tf.cast(inputs['sales'], tf.float32)
+```
+
+With transforms enabled:
+
+```python
+# =========================================================================
+# TARGET COLUMN (for Ranking models)
+# =========================================================================
+
+    # Target: sales (with transforms)
+    sales_float = tf.cast(inputs['sales'], tf.float32)
+
+    # Clip outliers at 99th percentile
+    sales_max = tft.max(sales_float)
+    sales_clipped = tf.minimum(sales_float, sales_max * 0.99)
+
+    # Log transform (log1p for numerical stability)
+    sales_log = tf.math.log1p(tf.maximum(sales_clipped, 0.0))
+
+    # Normalize to [0, 1]
+    outputs['sales_target'] = tft.scale_to_0_1(sales_log)
+```
+
+---
+
+## Phase 3: Trainer Code Generation (COMPLETED)
+
+### Files Modified
+
+| File | Changes |
+|------|---------|
+| `ml_platform/configs/services.py` | Updated `TrainerModuleGenerator` |
+
+### TrainerModuleGenerator Changes
+
+```python
+# ml_platform/configs/services.py (lines 1484-1518)
+
+class TrainerModuleGenerator:
+    def __init__(self, feature_config: 'FeatureConfig', model_config: 'ModelConfig'):
+        # Feature config data
+        self.buyer_features = feature_config.buyer_model_features or []
+        self.product_features = feature_config.product_model_features or []
+        self.buyer_crosses = feature_config.buyer_model_crosses or []
+        self.product_crosses = feature_config.product_model_crosses or []
+        self.target_column = feature_config.target_column  # NEW
+
+        # Model config data
+        self.model_type = model_config.model_type  # NEW: retrieval, ranking, or multitask
+        # ... existing fields ...
+
+        # Ranking model specific (NEW)
+        self.rating_head_layers = model_config.rating_head_layers or []
+        self.loss_function = model_config.loss_function
+```
+
+### Conditional Code Generation
+
+```python
+# ml_platform/configs/services.py (lines 1520-1582)
+
+def generate(self) -> str:
+    """
+    Generate complete trainer_module.py as Python code string.
+
+    Generates different code based on model_type:
+    - 'retrieval': Two-tower retrieval model with tfrs.tasks.Retrieval
+    - 'ranking': Ranking model with rating head and tfrs.tasks.Ranking
+    - 'multitask': Combined retrieval + ranking (future)
+    """
+    if self.model_type == 'ranking':
+        return self._generate_ranking_trainer()
+    elif self.model_type == 'multitask':
+        return self._generate_retrieval_trainer()  # Fallback for now
+    else:
+        return self._generate_retrieval_trainer()
+
+def _generate_retrieval_trainer(self) -> str:
+    """Generate trainer module for Retrieval models (existing implementation)."""
+    # ... existing code ...
+
+def _generate_ranking_trainer(self) -> str:
+    """Generate trainer module for Ranking models."""
+    sections = [
+        self._generate_header_ranking(),
+        self._generate_imports(),
+        self._generate_constants_ranking(),
+        self._generate_input_fn_ranking(),
+        self._generate_buyer_model(buyer_by_type),
+        self._generate_product_model(product_by_type),
+        self._generate_ranking_model(),
+        self._generate_serve_fn_ranking(),
+        self._generate_metrics_callback_ranking(),
+        self._generate_run_fn_ranking(),
+    ]
+    return '\n'.join(sections)
+```
+
+### New Ranking-Specific Methods
+
+#### 1. Constants with LABEL_KEY
+
+```python
+# ml_platform/configs/services.py (_generate_constants_ranking)
+
+def _generate_constants_ranking(self) -> str:
+    target_col = self.target_column.get('display_name') or self.target_column.get('column')
+
+    return f'''
+# =============================================================================
+# CONSTANTS
+# =============================================================================
+
+OUTPUT_EMBEDDING_DIM = {self.output_embedding_dim}
+BATCH_SIZE = {self.batch_size}
+EPOCHS = {self.epochs}
+LEARNING_RATE = {self.learning_rate}
+
+# Target column for ranking (label key from Transform)
+LABEL_KEY = '{target_col}_target'
+'''
+```
+
+#### 2. Input Function with Label Key
+
+```python
+# ml_platform/configs/services.py (_generate_input_fn_ranking)
+
+def _input_fn_ranking() -> str:
+    return '''
+def _input_fn(
+    file_pattern: List[str],
+    data_accessor: tfx.components.DataAccessor,
+    tf_transform_output: tft.TFTransformOutput,
+    batch_size: int = BATCH_SIZE
+) -> tf.data.Dataset:
+    """
+    Generate dataset for ranking model training.
+    Returns tuples of (features_dict, label) for supervised learning.
+    """
+    return data_accessor.tf_dataset_factory(
+        file_pattern,
+        tfxio.TensorFlowDatasetOptions(
+            batch_size=batch_size,
+            label_key=LABEL_KEY  # Extract label from features
+        ),
+        tf_transform_output.transformed_metadata.schema
+    )
+'''
+```
+
+#### 3. RankingModel Class
+
+```python
+# ml_platform/configs/services.py (_generate_ranking_model)
+
+class RankingModel(tfrs.Model):
+    """
+    Ranking model using TensorFlow Recommenders.
+
+    Concatenates buyer and product embeddings, passes through rating head
+    to predict a scalar value (rating, score, quantity, etc.).
+    """
+
+    def __init__(self, tf_transform_output: tft.TFTransformOutput):
+        super().__init__()
+
+        # Feature extraction models (same as retrieval)
+        self.buyer_model = BuyerModel(tf_transform_output)
+        self.product_model = ProductModel(tf_transform_output)
+
+        # Rating head: concatenated embeddings -> scalar prediction
+        self.rating_head = tf.keras.Sequential([
+            # Layers from ModelConfig.rating_head_layers
+        ], name='rating_head')
+
+        # TFRS Ranking task
+        self.task = tfrs.tasks.Ranking(
+            loss=tf.keras.losses.MeanSquaredError(),  # From loss_function
+            metrics=[
+                tf.keras.metrics.RootMeanSquaredError(name='rmse'),
+                tf.keras.metrics.MeanAbsoluteError(name='mae'),
+            ]
+        )
+
+    def call(self, features: Dict[str, tf.Tensor]) -> tf.Tensor:
+        """Forward pass: features -> predicted rating."""
+        buyer_embedding = self.buyer_model(features)
+        product_embedding = self.product_model(features)
+        concatenated = tf.concat([buyer_embedding, product_embedding], axis=1)
+        return self.rating_head(concatenated)
+
+    def compute_loss(self, features, training=False) -> tf.Tensor:
+        """Compute ranking loss."""
+        feature_dict, labels = features  # From label_key
+        predictions = self(feature_dict)
+        return self.task(labels=labels, predictions=predictions)
+```
+
+#### 4. Rating Head Code Generation
+
+```python
+# ml_platform/configs/services.py (_generate_rating_head_code)
+
+def _generate_rating_head_code(self) -> str:
+    """Generate rating head layers from ModelConfig.rating_head_layers."""
+    if not self.rating_head_layers:
+        # Default fallback
+        return '''        self.rating_head = tf.keras.Sequential([
+            tf.keras.layers.Dense(256, activation='relu'),
+            tf.keras.layers.Dense(64, activation='relu'),
+            tf.keras.layers.Dense(1)  # Scalar output
+        ], name='rating_head')'''
+
+    # Generate from ModelConfig
+    lines = ['        self.rating_head = tf.keras.Sequential([']
+    for layer in self.rating_head_layers:
+        if layer['type'] == 'dense':
+            # Handle activation, regularization
+            lines.append(f"            tf.keras.layers.Dense({layer['units']}, ...),")
+        elif layer['type'] == 'dropout':
+            lines.append(f"            tf.keras.layers.Dropout({layer['rate']}),")
+        # ... etc
+    lines.append("        ], name='rating_head')")
+    return '\n'.join(lines)
+```
+
+#### 5. Ranking run_fn
+
+The `_generate_run_fn_ranking()` method generates a complete training loop that:
+
+- Loads datasets with `label_key=LABEL_KEY`
+- Logs `model_type: 'ranking'` in parameters
+- Uses RMSE/MAE metrics instead of Recall@K
+- Saves `RankingServingModel` for inference
+
+---
+
+## Phase 4: Features Config UI (COMPLETED)
+
+### Objective
+
+Add a **Target Column drop zone** to the Features Config wizard (Step 2) that allows users to designate a column as the prediction target for ranking models.
+
+### Files to Modify
+
+| File | Changes |
+|------|---------|
+| `templates/ml_platform/model_configs.html` | Add Target Column zone UI |
+| Static JS (inline or external) | Add drag-drop handlers |
+
+### UI Design
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│ Step 2 of 3: Assign Features                                        │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│ Available Columns                                                    │
+│ [customer_id] [product_id] [sales] [quantity] [price] [category]    │
+│                                                                      │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  ┌─────────────────────┐    ┌─────────────────────┐                 │
+│  │ BUYER MODEL         │    │ PRODUCT MODEL       │                 │
+│  │ (Query Tower)       │    │ (Candidate Tower)   │                 │
+│  │ ┌─────────────────┐ │    │ ┌─────────────────┐ │                 │
+│  │ │ customer_id     │ │    │ │ product_id      │ │                 │
+│  │ │ city            │ │    │ │ category        │ │                 │
+│  │ └─────────────────┘ │    │ └─────────────────┘ │                 │
+│  └─────────────────────┘    └─────────────────────┘                 │
+│                                                                      │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  🎯 TARGET COLUMN (for Ranking models)                              │
+│  ┌─────────────────────────────────────────────────────────────────┐│
+│  │                                                                  ││
+│  │  Drop a numeric column here to use as prediction target         ││
+│  │  (e.g., rating, sales, quantity, price)                         ││
+│  │                                                                  ││
+│  │  ⚠️ This column will be excluded from Buyer/Product models      ││
+│  │                                                                  ││
+│  └─────────────────────────────────────────────────────────────────┘│
+│                                                                      │
+│  [ ] Normalize target (scale to 0-1)                                │
+│  [ ] Log transform (for skewed distributions)                       │
+│  [ ] Clip outliers at 99th percentile                               │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### HTML Structure
+
+```html
+<!-- Target Column Zone (for Ranking models) -->
+<div class="target-column-section" style="margin-top: 24px;">
+    <div class="section-header">
+        <span style="font-size: 1.2em;">🎯</span>
+        <h4>Target Column</h4>
+        <span class="badge badge-info">For Ranking Models</span>
+    </div>
+
+    <div id="targetColumnZone"
+         class="drop-zone target-zone"
+         ondrop="dropTargetColumn(event)"
+         ondragover="allowDrop(event)"
+         style="
+             min-height: 80px;
+             border: 2px dashed #e9967a;
+             border-radius: 8px;
+             padding: 16px;
+             background: linear-gradient(135deg, #fff5f0 0%, #ffe4d9 100%);
+         ">
+        <div id="targetColumnPlaceholder" class="placeholder-text">
+            <p>Drop a column here to use as prediction target</p>
+            <small>⚠️ This column will be excluded from Buyer/Product models</small>
+        </div>
+        <div id="targetColumnContent" style="display: none;">
+            <!-- Filled when column is dropped -->
+        </div>
+    </div>
+
+    <!-- Target Column Configuration (appears when column is set) -->
+    <div id="targetColumnConfig" style="display: none; margin-top: 12px;">
+        <h5>Target Transforms (Optional)</h5>
+        <div class="form-check">
+            <input type="checkbox" id="targetNormalize">
+            <label for="targetNormalize">Normalize to 0-1 range</label>
+        </div>
+        <div class="form-check">
+            <input type="checkbox" id="targetLogTransform">
+            <label for="targetLogTransform">Log transform</label>
+        </div>
+        <div class="form-check">
+            <input type="checkbox" id="targetClipOutliers">
+            <label for="targetClipOutliers">Clip outliers at 99th percentile</label>
+        </div>
+    </div>
+</div>
+```
+
+### JavaScript Handlers
+
+```javascript
+// Target Column Drop Handler
+function dropTargetColumn(event) {
+    event.preventDefault();
+
+    const columnData = JSON.parse(event.dataTransfer.getData('text/plain'));
+
+    // Validate: must be numeric type
+    const numericTypes = ['INTEGER', 'INT64', 'FLOAT', 'FLOAT64', 'NUMERIC'];
+    if (!numericTypes.includes(columnData.type)) {
+        showToast('Target column must be numeric', 'warning');
+        return;
+    }
+
+    // Set target column
+    fcState.targetColumn = {
+        column: columnData.name,
+        display_name: columnData.display_name || columnData.name,
+        bq_type: columnData.type,
+        transforms: {
+            normalize: { enabled: false, range: [0, 1] },
+            log_transform: { enabled: false },
+            clip_outliers: { enabled: false, percentile: 99 }
+        }
+    };
+
+    // Remove from buyer/product models if present
+    removeColumnFromModels(columnData.name);
+
+    // Update UI
+    renderTargetColumn();
+
+    showToast(`Target column set: ${columnData.name}`, 'success');
+}
+
+function removeColumnFromModels(columnName) {
+    // Remove from buyer features
+    fcState.buyerFeatures = fcState.buyerFeatures.filter(
+        f => f.column !== columnName && f.display_name !== columnName
+    );
+
+    // Remove from product features
+    fcState.productFeatures = fcState.productFeatures.filter(
+        f => f.column !== columnName && f.display_name !== columnName
+    );
+
+    // Re-render
+    renderBuyerFeatures();
+    renderProductFeatures();
+}
+
+function clearTargetColumn() {
+    fcState.targetColumn = null;
+    renderTargetColumn();
+}
+```
+
+### State Management
+
+```javascript
+// Add to fcState object
+const fcState = {
+    // ... existing state ...
+    targetColumn: null,  // NEW
+};
+
+// When saving config, include target_column
+function buildSavePayload() {
+    return {
+        name: fcState.name,
+        description: fcState.description,
+        dataset_id: fcState.datasetId,
+        buyer_model_features: fcState.buyerFeatures,
+        product_model_features: fcState.productFeatures,
+        buyer_model_crosses: fcState.buyerCrosses,
+        product_model_crosses: fcState.productCrosses,
+        target_column: fcState.targetColumn,  // NEW
+    };
+}
+```
+
+### Visual Indicators
+
+When target column is set, show a badge indicating config type:
+
+```html
+<!-- In config list/header -->
+<span class="config-type-badge config-type-ranking">
+    🎯 Ranking
+</span>
+```
+
+```css
+.config-type-badge {
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.75em;
+    font-weight: 600;
+}
+
+.config-type-retrieval {
+    background-color: #e3f2fd;
+    color: #1565c0;
+}
+
+.config-type-ranking {
+    background-color: #fff3e0;
+    color: #e65100;
+}
+```
+
+---
+
+## Phase 5: Experiments UI & Validation (COMPLETED)
+
+### Objective
+
+Filter Model Configs based on the selected Feature Config's type, and validate compatibility before running experiments.
+
+### Files to Modify
+
+| File | Changes |
+|------|---------|
+| `templates/ml_platform/model_experiments.html` | Add filtering and validation |
+| `ml_platform/experiments/services.py` | Add validation function |
+| `ml_platform/experiments/api.py` | Add validation endpoint |
+
+### Config Filtering Logic
+
+```javascript
+// When Feature Config is selected, filter Model Configs
+function onFeatureConfigSelect(featureConfigId) {
+    const featureConfig = featureConfigs.find(fc => fc.id === featureConfigId);
+
+    if (!featureConfig) return;
+
+    const configType = featureConfig.config_type;  // 'retrieval' or 'ranking'
+
+    // Filter model configs based on feature config type
+    const compatibleModelConfigs = modelConfigs.filter(mc => {
+        if (configType === 'retrieval') {
+            return mc.model_type === 'retrieval';
+        } else if (configType === 'ranking') {
+            return mc.model_type === 'ranking' || mc.model_type === 'multitask';
+        }
+        return true;
+    });
+
+    // Populate model config dropdown with only compatible configs
+    populateModelConfigDropdown(compatibleModelConfigs);
+
+    // Show info message
+    if (configType === 'ranking') {
+        showConfigTypeInfo(`
+            <strong>Ranking Config Selected</strong><br>
+            Target column: ${featureConfig.target_column_name}<br>
+            Only Ranking model configs are shown.
+        `);
+    } else {
+        showConfigTypeInfo(`
+            <strong>Retrieval Config Selected</strong><br>
+            Only Retrieval model configs are shown.
+        `);
+    }
+}
+```
+
+### Backend Validation
+
+```python
+# ml_platform/experiments/services.py
+
+def validate_experiment_config(
+    feature_config: FeatureConfig,
+    model_config: ModelConfig
+) -> List[str]:
+    """
+    Validate that feature config and model config are compatible.
+
+    Returns:
+        List of error messages (empty if valid)
+    """
+    errors = []
+
+    # Check config type compatibility
+    if feature_config.config_type == 'retrieval' and model_config.model_type != 'retrieval':
+        errors.append(
+            f"Feature config '{feature_config.name}' is for Retrieval models, "
+            f"but Model config '{model_config.name}' is {model_config.get_model_type_display()}"
+        )
+
+    if feature_config.config_type == 'ranking' and model_config.model_type == 'retrieval':
+        errors.append(
+            f"Feature config '{feature_config.name}' is for Ranking models (has target column), "
+            f"but Model config '{model_config.name}' is Retrieval"
+        )
+
+    # Check target column for ranking
+    if model_config.model_type in ['ranking', 'multitask']:
+        if not feature_config.target_column:
+            errors.append(
+                f"Model config '{model_config.name}' requires a target column, "
+                f"but Feature config '{feature_config.name}' has no target column"
+            )
+
+    return errors
+```
+
+### UI Info Panel
+
+```html
+<!-- Config compatibility info panel -->
+<div id="configCompatibilityInfo" class="alert" style="display: none;">
+    <div id="configCompatibilityContent"></div>
+</div>
+
+<!-- Validation errors -->
+<div id="configValidationErrors" class="alert alert-danger" style="display: none;">
+    <strong>Configuration Error</strong>
+    <ul id="validationErrorList"></ul>
+</div>
+```
+
+### Experiment Creation Flow
+
+```javascript
+async function createQuickTest() {
+    // Validate before submission
+    const featureConfigId = document.getElementById('featureConfigSelect').value;
+    const modelConfigId = document.getElementById('modelConfigSelect').value;
+
+    // Call validation API
+    const validationResponse = await fetch('/api/experiments/validate/', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            feature_config_id: featureConfigId,
+            model_config_id: modelConfigId,
+        })
+    });
+
+    const validation = await validationResponse.json();
+
+    if (validation.errors && validation.errors.length > 0) {
+        showValidationErrors(validation.errors);
+        return;
+    }
+
+    // Proceed with experiment creation
+    // ...
+}
+```
+
+---
+
+## Phase 6: Pipeline Services (COMPLETED)
+
+### Objective
+
+Update pipeline result parsing to handle ranking-specific metrics (RMSE, MAE instead of Recall@K).
+
+### Files Modified
+
+| File | Changes |
+|------|---------|
+| `ml_platform/models.py` | Added `rmse`, `mae`, `test_rmse`, `test_mae` fields to QuickTest |
+| `ml_platform/migrations/0049_add_ranking_metrics_to_quicktest.py` | Migration for new fields |
+| `ml_platform/pipelines/services.py` | Updated `extract_results` and `update_quick_test_status` for ranking metrics |
+| `ml_platform/experiments/api.py` | Updated `_get_experiment_metrics`, `_get_model_metrics`, `_serialize_quick_test` |
+| `templates/ml_platform/model_experiments.html` | Updated `renderMetricsRow`, `renderMetricsSummary`, `renderMetricsChart` |
+
+### QuickTest Model Updates
+
+```python
+# ml_platform/models.py (QuickTest model)
+
+class QuickTest(models.Model):
+    # ... existing fields ...
+
+    # Retrieval metrics (existing)
+    recall_at_5 = models.FloatField(null=True, blank=True)
+    recall_at_10 = models.FloatField(null=True, blank=True)
+    recall_at_50 = models.FloatField(null=True, blank=True)
+    recall_at_100 = models.FloatField(null=True, blank=True)
+
+    # Ranking metrics (NEW)
+    rmse = models.FloatField(null=True, blank=True, help_text="Root Mean Square Error")
+    mae = models.FloatField(null=True, blank=True, help_text="Mean Absolute Error")
+    test_rmse = models.FloatField(null=True, blank=True, help_text="Test set RMSE")
+    test_mae = models.FloatField(null=True, blank=True, help_text="Test set MAE")
+```
+
+### Pipeline Result Parsing
+
+```python
+# ml_platform/pipelines/services.py
+
+def parse_training_results(metrics_json: dict, model_type: str) -> dict:
+    """
+    Parse training results based on model type.
+
+    Args:
+        metrics_json: Raw metrics from training_metrics.json
+        model_type: 'retrieval' or 'ranking'
+
+    Returns:
+        Parsed metrics dict for QuickTest model
+    """
+    if model_type == 'ranking':
+        return {
+            'rmse': metrics_json.get('final_rmse'),
+            'mae': metrics_json.get('final_mae'),
+            'val_rmse': metrics_json.get('final_val_rmse'),
+            'val_mae': metrics_json.get('final_val_mae'),
+            'test_rmse': metrics_json.get('test_rmse'),
+            'test_mae': metrics_json.get('test_mae'),
+            'loss': metrics_json.get('final_loss'),
+        }
+    else:  # retrieval
+        return {
+            'recall_at_5': metrics_json.get('recall_at_5'),
+            'recall_at_10': metrics_json.get('recall_at_10'),
+            'recall_at_50': metrics_json.get('recall_at_50'),
+            'recall_at_100': metrics_json.get('recall_at_100'),
+            'loss': metrics_json.get('final_loss'),
+        }
+
+def update_quicktest_results(quick_test: QuickTest, results: dict, model_type: str):
+    """Update QuickTest with parsed results."""
+    if model_type == 'ranking':
+        quick_test.rmse = results.get('rmse')
+        quick_test.mae = results.get('mae')
+        quick_test.test_rmse = results.get('test_rmse')
+        quick_test.test_mae = results.get('test_mae')
+    else:
+        quick_test.recall_at_5 = results.get('recall_at_5')
+        quick_test.recall_at_10 = results.get('recall_at_10')
+        quick_test.recall_at_50 = results.get('recall_at_50')
+        quick_test.recall_at_100 = results.get('recall_at_100')
+
+    quick_test.loss = results.get('loss')
+    quick_test.save()
+```
+
+### Result Display Updates
+
+```html
+<!-- Quick Test result display -->
+<div id="quickTestResults">
+    {% if quick_test.model_config.model_type == 'ranking' %}
+        <!-- Ranking metrics -->
+        <div class="metric-card">
+            <span class="metric-label">RMSE</span>
+            <span class="metric-value">{{ quick_test.rmse|floatformat:4 }}</span>
+        </div>
+        <div class="metric-card">
+            <span class="metric-label">MAE</span>
+            <span class="metric-value">{{ quick_test.mae|floatformat:4 }}</span>
+        </div>
+        {% if quick_test.test_rmse %}
+        <div class="metric-card">
+            <span class="metric-label">Test RMSE</span>
+            <span class="metric-value">{{ quick_test.test_rmse|floatformat:4 }}</span>
+        </div>
+        {% endif %}
+    {% else %}
+        <!-- Retrieval metrics -->
+        <div class="metric-card">
+            <span class="metric-label">Recall@10</span>
+            <span class="metric-value">{{ quick_test.recall_at_10|floatformat:4 }}</span>
+        </div>
+        <div class="metric-card">
+            <span class="metric-label">Recall@50</span>
+            <span class="metric-value">{{ quick_test.recall_at_50|floatformat:4 }}</span>
+        </div>
+        <!-- ... more recall metrics ... -->
+    {% endif %}
+</div>
+```
+
+---
+
+## Testing & Validation
+
+### Test Scenarios
+
+| Test | Description | Expected Result |
+|------|-------------|-----------------|
+| **Create Retrieval Feature Config** | Create config without target column | `config_type = 'retrieval'` |
+| **Create Ranking Feature Config** | Create config with target column | `config_type = 'ranking'`, target auto-removed from models |
+| **Target Auto-Removal** | Add target column that was in Buyer model | Column removed from Buyer model |
+| **Config Filtering** | Select ranking feature config | Only ranking model configs shown |
+| **Validation - Incompatible** | Ranking feature + retrieval model | Error message displayed |
+| **Transform Code - Retrieval** | Generate transform for retrieval config | No target column section |
+| **Transform Code - Ranking** | Generate transform for ranking config | Target column section with `{col}_target` |
+| **Trainer Code - Retrieval** | Generate trainer for retrieval | `RetrievalModel`, `tfrs.tasks.Retrieval` |
+| **Trainer Code - Ranking** | Generate trainer for ranking | `RankingModel`, `tfrs.tasks.Ranking`, `LABEL_KEY` |
+| **E2E Ranking Pipeline** | Run complete ranking experiment | RMSE/MAE metrics returned |
+
+### Manual Testing Checklist
+
+- [ ] Create a new Feature Config with target column
+- [ ] Verify target column is excluded from Buyer/Product models
+- [ ] Verify `config_type` is set to 'ranking'
+- [ ] Create ranking Model Config with custom rating_head_layers
+- [ ] Run Quick Test with ranking configs
+- [ ] Verify RMSE/MAE metrics are displayed
+- [ ] Verify generated transform code includes target column
+- [ ] Verify generated trainer code uses RankingModel
+
+---
+
+## Appendix: Generated Code Examples
+
+### Transform Code (Ranking)
+
+```python
+# Auto-generated TFX Transform preprocessing_fn
+# FeatureConfig: "Sales Prediction v1" (ID: 15)
+
+import tensorflow as tf
+import tensorflow_transform as tft
+
+def preprocessing_fn(inputs):
+    outputs = {}
+
+    # =========================================================================
+    # TEXT FEATURES → Vocabulary lookup
+    # =========================================================================
+    outputs['customer_id'] = tft.compute_and_apply_vocabulary(
+        tf.strings.as_string(inputs['customer_id']),
+        num_oov_buckets=1
+    )
+    # ... more features ...
+
+    # =========================================================================
+    # TARGET COLUMN (for Ranking models)
+    # =========================================================================
+    # Target: sales (raw, no transforms)
+    outputs['sales_target'] = tf.cast(inputs['sales'], tf.float32)
+
+    return outputs
+```
+
+### Trainer Code (Ranking)
+
+```python
+# Auto-generated TFX Trainer Module (RANKING)
+# FeatureConfig: "Sales Prediction v1" (ID: 15)
+# ModelConfig: "Ranking Standard" (ID: 8)
+
+# === Constants ===
+LABEL_KEY = 'sales_target'
+
+# === Input Function ===
+def _input_fn(...):
+    return data_accessor.tf_dataset_factory(
+        file_pattern,
+        tfxio.TensorFlowDatasetOptions(
+            batch_size=batch_size,
+            label_key=LABEL_KEY
+        ),
+        ...
+    )
+
+# === Ranking Model ===
+class RankingModel(tfrs.Model):
+    def __init__(self, tf_transform_output):
+        super().__init__()
+        self.buyer_model = BuyerModel(tf_transform_output)
+        self.product_model = ProductModel(tf_transform_output)
+
+        self.rating_head = tf.keras.Sequential([
+            tf.keras.layers.Dense(256, activation='relu'),
+            tf.keras.layers.Dense(64, activation='relu'),
+            tf.keras.layers.Dense(1)
+        ], name='rating_head')
+
+        self.task = tfrs.tasks.Ranking(
+            loss=tf.keras.losses.MeanSquaredError(),
+            metrics=[
+                tf.keras.metrics.RootMeanSquaredError(name='rmse'),
+                tf.keras.metrics.MeanAbsoluteError(name='mae'),
+            ]
+        )
+
+    def compute_loss(self, features, training=False):
+        feature_dict, labels = features
+        predictions = self(feature_dict)
+        return self.task(labels=labels, predictions=predictions)
+```
+
+---
+
+## References
+
+- [TensorFlow Recommenders - Ranking](https://www.tensorflow.org/recommenders/examples/basic_ranking)
+- [TFX Transform Component](https://www.tensorflow.org/tfx/guide/transform)
+- [TFX Trainer Component](https://www.tensorflow.org/tfx/guide/trainer)
+- Internal: `past/ranking_tfx.ipynb` - Reference implementation
+- Internal: `docs/phase_configs.md` - Config domain documentation

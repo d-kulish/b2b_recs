@@ -187,6 +187,122 @@
         margin-bottom: 8px;
     }
 
+    /* Target Column Zone (for Ranking models) */
+    .target-column-section {
+        margin-top: 20px;
+        padding-top: 20px;
+        border-top: 1px solid #e5e7eb;
+    }
+    .target-column-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 12px;
+    }
+    .target-column-header h5 {
+        margin: 0;
+        font-weight: 600;
+        color: #374151;
+    }
+    .target-column-badge {
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 0.7em;
+        font-weight: 600;
+        background-color: #fef3c7;
+        color: #92400e;
+    }
+    .target-column-zone {
+        min-height: 70px;
+        border: 2px dashed #f59e0b;
+        border-radius: 8px;
+        padding: 16px;
+        background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+        transition: all 0.2s ease;
+    }
+    .target-column-zone.drag-over {
+        border-color: #d97706;
+        background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+        box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.2);
+    }
+    .target-column-zone .placeholder-text {
+        text-align: center;
+        color: #92400e;
+    }
+    .target-column-zone .placeholder-text p {
+        margin: 0 0 4px 0;
+        font-size: 0.875rem;
+    }
+    .target-column-zone .placeholder-text small {
+        color: #b45309;
+        font-size: 0.75rem;
+    }
+    .target-column-card {
+        background: white;
+        border: 2px solid #f59e0b;
+        border-radius: 8px;
+        padding: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+    .target-column-card .column-info {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .target-column-card .column-name {
+        font-weight: 600;
+        color: #92400e;
+    }
+    .target-column-card .column-type {
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 0.7em;
+        background-color: #fef3c7;
+        color: #92400e;
+    }
+    .target-column-config {
+        margin-top: 12px;
+        padding: 12px;
+        background: #fffbeb;
+        border: 1px solid #fde68a;
+        border-radius: 8px;
+    }
+    .target-column-config h6 {
+        margin: 0 0 8px 0;
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: #92400e;
+    }
+    .target-column-config .form-check {
+        margin-bottom: 6px;
+    }
+    .target-column-config .form-check-label {
+        font-size: 0.8rem;
+        color: #78350f;
+    }
+    .target-column-config .form-check-label small {
+        color: #a16207;
+    }
+
+    /* Config type badge in list */
+    .config-type-badge {
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 0.65em;
+        font-weight: 600;
+        margin-left: 8px;
+    }
+    .config-type-badge.retrieval {
+        background-color: #dbeafe;
+        color: #1e40af;
+    }
+    .config-type-badge.ranking {
+        background-color: #fef3c7;
+        color: #92400e;
+    }
+
     /* Tensor preview */
     .tensor-preview-panel {
         background: #f9fafb;
@@ -4662,6 +4778,52 @@
                     </div>
                 </div>
 
+                <!-- Target Column Zone (for Ranking models) -->
+                <div class="target-column-section">
+                    <div class="target-column-header">
+                        <i class="fas fa-bullseye" style="color: #f59e0b;"></i>
+                        <h5>Target Column</h5>
+                        <span class="target-column-badge">For Ranking Models</span>
+                    </div>
+
+                    <div id="targetColumnZone" class="target-column-zone"
+                         ondrop="dropTargetColumn(event)"
+                         ondragover="allowDrop(event)"
+                         ondragenter="dragEnterTarget(event)"
+                         ondragleave="dragLeaveTarget(event)">
+                        <div id="targetColumnPlaceholder" class="placeholder-text">
+                            <p><i class="fas fa-arrow-down mr-1"></i>Drop a numeric column here to use as prediction target</p>
+                            <small>e.g., rating, sales, quantity, price — will be excluded from Buyer/Product models</small>
+                        </div>
+                        <div id="targetColumnContent" style="display: none;">
+                            <!-- Filled when column is dropped -->
+                        </div>
+                    </div>
+
+                    <!-- Target Column Configuration (appears when column is set) -->
+                    <div id="targetColumnConfig" class="target-column-config" style="display: none;">
+                        <h6><i class="fas fa-sliders-h mr-1"></i>Target Transforms (Optional)</h6>
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input" id="targetNormalize" onchange="updateTargetTransforms()">
+                            <label class="form-check-label" for="targetNormalize">
+                                Normalize to 0-1 range <small>(recommended for ratings)</small>
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input" id="targetLogTransform" onchange="updateTargetTransforms()">
+                            <label class="form-check-label" for="targetLogTransform">
+                                Log transform <small>(for skewed distributions like revenue)</small>
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input" id="targetClipOutliers" onchange="updateTargetTransforms()">
+                            <label class="form-check-label" for="targetClipOutliers">
+                                Clip outliers at 99th percentile
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Tensor Preview -->
                 <div class="grid grid-cols-2 gap-4 mt-4">
                     <div class="tensor-preview-panel">
@@ -5098,7 +5260,9 @@ let configState = {
     productCrosses: [],
     availableColumns: [],
     sampleRows: [],
-    columnOrder: []
+    columnOrder: [],
+    // Target column for ranking models
+    targetColumn: null
 };
 
 // Currently editing feature
@@ -5350,7 +5514,8 @@ function openWizard(configId = null) {
         productCrosses: [],
         availableColumns: [],
         sampleRows: [],
-        columnOrder: []
+        columnOrder: [],
+        targetColumn: null  // For ranking models
     };
 
     // Reset form
@@ -5423,6 +5588,9 @@ function loadConfigForEdit(configId) {
 
                 configState.buyerCrosses = config.buyer_model_crosses || [];
                 configState.productCrosses = config.product_model_crosses || [];
+
+                // Load target column for ranking configs
+                configState.targetColumn = config.target_column || null;
 
                 // Mark name as valid since we're editing an existing config
                 configNameIsValid = true;
@@ -5790,6 +5958,7 @@ function renderStep2() {
     renderPrimaryIdZone('product');
     renderAssignedFeatures('buyer');
     renderAssignedFeatures('product');
+    renderTargetColumn();  // For ranking models
     updateAdditionalFeaturesLockState();
     updateTensorPreview();
     updateSubchapterStatuses();
@@ -6507,6 +6676,141 @@ function removePrimaryId(model) {
         configState.productCrosses = [];
     }
     renderStep2();
+}
+
+// =============================================================================
+// TARGET COLUMN HANDLING (for Ranking models)
+// =============================================================================
+
+function dragEnterTarget(e) {
+    e.preventDefault();
+    e.currentTarget.classList.add('drag-over');
+}
+
+function dragLeaveTarget(e) {
+    e.currentTarget.classList.remove('drag-over');
+}
+
+function dropTargetColumn(e) {
+    e.preventDefault();
+    e.currentTarget.classList.remove('drag-over');
+
+    const colData = JSON.parse(e.dataTransfer.getData('text/plain'));
+    const colType = (colData.bq_type || colData.type || '').toUpperCase();
+
+    // Validate: must be numeric type
+    const numericTypes = ['INTEGER', 'INT64', 'FLOAT', 'FLOAT64', 'NUMERIC', 'BIGNUMERIC', 'DECIMAL'];
+    if (!numericTypes.includes(colType)) {
+        showError('Target column must be numeric (INTEGER, FLOAT, etc.)');
+        return;
+    }
+
+    // Set target column
+    configState.targetColumn = {
+        column: colData.name,
+        display_name: colData.display_name || colData.name,
+        bq_type: colType,
+        transforms: {
+            normalize: { enabled: false, range: [0, 1] },
+            log_transform: { enabled: false },
+            clip_outliers: { enabled: false, percentile: 99 }
+        }
+    };
+
+    // Remove target column from buyer/product models if present
+    removeTargetColumnFromModels(colData.name, colData.display_name);
+
+    // Update UI
+    renderTargetColumn();
+    renderStep2();
+
+    showSuccess(`Target column set: ${colData.display_name || colData.name}`);
+}
+
+function removeTargetColumnFromModels(column, displayName) {
+    // Remove from buyer features
+    configState.buyerFeatures = configState.buyerFeatures.filter(
+        f => f.column !== column && f.display_name !== displayName
+    );
+
+    // Remove from product features
+    configState.productFeatures = configState.productFeatures.filter(
+        f => f.column !== column && f.display_name !== displayName
+    );
+
+    // Check if it was a primary ID
+    if (configState.customerIdFeature &&
+        (configState.customerIdFeature.column === column || configState.customerIdFeature.display_name === displayName)) {
+        configState.customerIdFeature = null;
+        configState.buyerFeatures = [];
+        configState.buyerCrosses = [];
+    }
+
+    if (configState.productIdFeature &&
+        (configState.productIdFeature.column === column || configState.productIdFeature.display_name === displayName)) {
+        configState.productIdFeature = null;
+        configState.productFeatures = [];
+        configState.productCrosses = [];
+    }
+}
+
+function clearTargetColumn() {
+    configState.targetColumn = null;
+    renderTargetColumn();
+}
+
+function renderTargetColumn() {
+    const placeholder = document.getElementById('targetColumnPlaceholder');
+    const content = document.getElementById('targetColumnContent');
+    const config = document.getElementById('targetColumnConfig');
+
+    if (configState.targetColumn) {
+        placeholder.style.display = 'none';
+        content.style.display = 'block';
+        config.style.display = 'block';
+
+        const col = configState.targetColumn;
+        content.innerHTML = `
+            <div class="target-column-card">
+                <div class="column-info">
+                    <i class="fas fa-bullseye" style="color: #f59e0b;"></i>
+                    <span class="column-name">${col.display_name || col.column}</span>
+                    <span class="column-type">${col.bq_type}</span>
+                </div>
+                <button type="button" class="feature-config-btn remove" onclick="clearTargetColumn()" title="Remove target column">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        `;
+
+        // Set checkbox states
+        const transforms = col.transforms || {};
+        document.getElementById('targetNormalize').checked = transforms.normalize?.enabled || false;
+        document.getElementById('targetLogTransform').checked = transforms.log_transform?.enabled || false;
+        document.getElementById('targetClipOutliers').checked = transforms.clip_outliers?.enabled || false;
+    } else {
+        placeholder.style.display = 'block';
+        content.style.display = 'none';
+        config.style.display = 'none';
+    }
+}
+
+function updateTargetTransforms() {
+    if (!configState.targetColumn) return;
+
+    configState.targetColumn.transforms = {
+        normalize: {
+            enabled: document.getElementById('targetNormalize').checked,
+            range: [0, 1]
+        },
+        log_transform: {
+            enabled: document.getElementById('targetLogTransform').checked
+        },
+        clip_outliers: {
+            enabled: document.getElementById('targetClipOutliers').checked,
+            percentile: 99
+        }
+    };
 }
 
 function openPrimaryIdConfig(model) {
@@ -7475,7 +7779,8 @@ function saveConfig() {
         buyer_model_features: buyerFeatures,
         product_model_features: productFeatures,
         buyer_model_crosses: configState.buyerCrosses,
-        product_model_crosses: configState.productCrosses
+        product_model_crosses: configState.productCrosses,
+        target_column: configState.targetColumn  // For ranking models
     };
 
     const url = editingConfigId

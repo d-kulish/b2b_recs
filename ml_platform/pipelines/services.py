@@ -472,6 +472,7 @@ class PipelineService:
         Extract results from completed pipeline.
 
         Reads metrics from GCS output location.
+        Handles both retrieval metrics (recall@K) and ranking metrics (RMSE/MAE).
         """
         if not quick_test.gcs_artifacts_path:
             return {}
@@ -492,13 +493,33 @@ class PipelineService:
                 metrics_content = metrics_blob.download_as_string()
                 metrics = json.loads(metrics_content)
 
-                return {
+                # Determine model type from feature config
+                feature_config = quick_test.feature_config
+                config_type = getattr(feature_config, 'config_type', 'retrieval')
+
+                result = {
                     "loss": metrics.get("loss"),
-                    "recall_at_10": metrics.get("recall_at_10"),
-                    "recall_at_50": metrics.get("recall_at_50"),
-                    "recall_at_100": metrics.get("recall_at_100"),
                     "vocabulary_stats": metrics.get("vocabulary_stats", {}),
                 }
+
+                if config_type == 'ranking':
+                    # Ranking model metrics
+                    result.update({
+                        "rmse": metrics.get("rmse") or metrics.get("root_mean_squared_error"),
+                        "mae": metrics.get("mae") or metrics.get("mean_absolute_error"),
+                        "test_rmse": metrics.get("test_rmse") or metrics.get("test_root_mean_squared_error"),
+                        "test_mae": metrics.get("test_mae") or metrics.get("test_mean_absolute_error"),
+                    })
+                else:
+                    # Retrieval model metrics
+                    result.update({
+                        "recall_at_5": metrics.get("recall_at_5"),
+                        "recall_at_10": metrics.get("recall_at_10"),
+                        "recall_at_50": metrics.get("recall_at_50"),
+                        "recall_at_100": metrics.get("recall_at_100"),
+                    })
+
+                return result
 
             logger.warning(f"metrics.json not found at {quick_test.gcs_artifacts_path}")
             return {}
@@ -563,10 +584,24 @@ class PipelineService:
 
             results = self.extract_results(quick_test)
             quick_test.loss = results.get("loss")
-            quick_test.recall_at_10 = results.get("recall_at_10")
-            quick_test.recall_at_50 = results.get("recall_at_50")
-            quick_test.recall_at_100 = results.get("recall_at_100")
             quick_test.vocabulary_stats = results.get("vocabulary_stats", {})
+
+            # Determine model type from feature config
+            feature_config = quick_test.feature_config
+            config_type = getattr(feature_config, 'config_type', 'retrieval')
+
+            if config_type == 'ranking':
+                # Ranking model metrics
+                quick_test.rmse = results.get("rmse")
+                quick_test.mae = results.get("mae")
+                quick_test.test_rmse = results.get("test_rmse")
+                quick_test.test_mae = results.get("test_mae")
+            else:
+                # Retrieval model metrics
+                quick_test.recall_at_5 = results.get("recall_at_5")
+                quick_test.recall_at_10 = results.get("recall_at_10")
+                quick_test.recall_at_50 = results.get("recall_at_50")
+                quick_test.recall_at_100 = results.get("recall_at_100")
 
             # Update FeatureConfig best metrics
             quick_test.feature_config.update_best_metrics(quick_test)

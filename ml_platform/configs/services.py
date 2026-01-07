@@ -468,6 +468,13 @@ def serialize_feature_config(fc, include_details: bool = False) -> Dict[str, Any
         'dataset_id': fc.dataset_id,
         'dataset_name': fc.dataset.name,
         'version': fc.version,
+        # Config type (retrieval or ranking - derived from target_column presence)
+        'config_type': fc.config_type,
+        'config_type_display': fc.get_config_type_display(),
+        # Target column for ranking models
+        'target_column': fc.target_column,
+        'target_column_name': fc.get_target_column_name(),
+        # Tensor dimensions
         'buyer_tensor_dim': fc.buyer_tensor_dim,
         'product_tensor_dim': fc.product_tensor_dim,
         'buyer_features_count': len(fc.buyer_model_features or []),
@@ -867,6 +874,7 @@ class PreprocessingFnGenerator:
         self.product_features = feature_config.product_model_features or []
         self.buyer_crosses = feature_config.buyer_model_crosses or []
         self.product_crosses = feature_config.product_model_crosses or []
+        self.target_column = feature_config.target_column  # For ranking models
 
     def generate(self) -> str:
         """
@@ -888,6 +896,7 @@ class PreprocessingFnGenerator:
         numeric_code = self._generate_numeric_transforms(all_features['numeric'])
         temporal_code = self._generate_temporal_transforms(all_features['temporal'])
         cross_code = self._generate_cross_transforms()
+        target_code = self._generate_target_column_code()  # For ranking models
         fn_end = self._generate_function_end()
 
         # Combine all sections
@@ -906,6 +915,8 @@ class PreprocessingFnGenerator:
             sections.append(temporal_code)
         if cross_code:
             sections.append(cross_code)
+        if target_code:
+            sections.append(target_code)
 
         sections.append(fn_end)
 
@@ -1009,6 +1020,84 @@ def preprocessing_fn(inputs):
         return '''
     return outputs
 '''
+
+    def _generate_target_column_code(self) -> str:
+        """
+        Generate code to pass target column through transform for ranking models.
+
+        The target column is used as the label in ranking model training.
+        It can optionally have transforms applied (normalize, log, clip).
+
+        Returns:
+            Python code string for target column handling, or empty string if no target
+        """
+        if not self.target_column:
+            return ''
+
+        col = self.target_column.get('display_name') or self.target_column.get('column')
+        bq_type = self.target_column.get('bq_type', 'FLOAT64')
+        transforms = self.target_column.get('transforms', {})
+
+        lines = [
+            '    # =========================================================================',
+            '    # TARGET COLUMN (for Ranking models)',
+            '    # =========================================================================',
+            ''
+        ]
+
+        # Check if any transforms are enabled
+        normalize = transforms.get('normalize', {})
+        log_transform = transforms.get('log_transform', {})
+        clip_outliers = transforms.get('clip_outliers', {})
+
+        has_transforms = (
+            normalize.get('enabled') or
+            log_transform.get('enabled') or
+            clip_outliers.get('enabled')
+        )
+
+        if has_transforms:
+            lines.append(f"    # Target: {col} (with transforms)")
+
+            # Start with the input column, cast to float
+            current_var = f"inputs['{col}']"
+            lines.append(f"    {col}_float = tf.cast({current_var}, tf.float32)")
+            current_var = f"{col}_float"
+
+            # Apply clip outliers first (if enabled)
+            if clip_outliers.get('enabled'):
+                percentile = clip_outliers.get('percentile', 99)
+                lines.append(f"")
+                lines.append(f"    # Clip outliers at {percentile}th percentile")
+                lines.append(f"    {col}_max = tft.max({current_var})")
+                lines.append(f"    {col}_clipped = tf.minimum({current_var}, {col}_max * 0.99)")
+                current_var = f"{col}_clipped"
+
+            # Apply log transform (if enabled)
+            if log_transform.get('enabled'):
+                lines.append(f"")
+                lines.append(f"    # Log transform (log1p for numerical stability)")
+                lines.append(f"    {col}_log = tf.math.log1p(tf.maximum({current_var}, 0.0))")
+                current_var = f"{col}_log"
+
+            # Apply normalization (if enabled)
+            if normalize.get('enabled'):
+                range_vals = normalize.get('range', [0, 1])
+                lines.append(f"")
+                lines.append(f"    # Normalize to {range_vals}")
+                if range_vals == [0, 1]:
+                    lines.append(f"    outputs['{col}_target'] = tft.scale_to_0_1({current_var})")
+                else:
+                    lines.append(f"    outputs['{col}_target'] = tft.scale_to_z_score({current_var})")
+            else:
+                lines.append(f"    outputs['{col}_target'] = {current_var}")
+        else:
+            # No transforms - just pass through as float
+            lines.append(f"    # Target: {col} (raw, no transforms)")
+            lines.append(f"    outputs['{col}_target'] = tf.cast(inputs['{col}'], tf.float32)")
+
+        lines.append('')
+        return '\n'.join(lines)
 
     def _generate_text_transforms(self, features: List[Dict]) -> str:
         """
@@ -1408,8 +1497,10 @@ class TrainerModuleGenerator:
         self.product_features = feature_config.product_model_features or []
         self.buyer_crosses = feature_config.buyer_model_crosses or []
         self.product_crosses = feature_config.product_model_crosses or []
+        self.target_column = feature_config.target_column  # For ranking models
 
         # Model config data
+        self.model_type = model_config.model_type  # retrieval, ranking, or multitask
         self.buyer_tower_layers = model_config.buyer_tower_layers or []
         self.product_tower_layers = model_config.product_tower_layers or []
         self.output_embedding_dim = model_config.output_embedding_dim
@@ -1422,13 +1513,32 @@ class TrainerModuleGenerator:
         self.scann_num_leaves = model_config.scann_num_leaves
         self.scann_leaves_to_search = model_config.scann_leaves_to_search
 
+        # Ranking model specific
+        self.rating_head_layers = model_config.rating_head_layers or []
+        self.loss_function = model_config.loss_function
+
     def generate(self) -> str:
         """
         Generate complete trainer_module.py as Python code string.
 
+        Generates different code based on model_type:
+        - 'retrieval': Two-tower retrieval model with tfrs.tasks.Retrieval
+        - 'ranking': Ranking model with rating head and tfrs.tasks.Ranking
+        - 'multitask': Combined retrieval + ranking (future)
+
         Returns:
             Python code string containing the full trainer module
         """
+        if self.model_type == 'ranking':
+            return self._generate_ranking_trainer()
+        elif self.model_type == 'multitask':
+            # Future: implement multitask trainer
+            return self._generate_retrieval_trainer()  # Fallback for now
+        else:
+            return self._generate_retrieval_trainer()
+
+    def _generate_retrieval_trainer(self) -> str:
+        """Generate trainer module for Retrieval models (existing implementation)."""
         # Collect all features organized by type
         buyer_by_type = self._collect_features_by_type(self.buyer_features)
         product_by_type = self._collect_features_by_type(self.product_features)
@@ -1445,6 +1555,28 @@ class TrainerModuleGenerator:
             self._generate_serve_fn(),
             self._generate_metrics_callback(),
             self._generate_run_fn(),
+        ]
+
+        return '\n'.join(sections)
+
+    def _generate_ranking_trainer(self) -> str:
+        """Generate trainer module for Ranking models."""
+        # Collect all features organized by type
+        buyer_by_type = self._collect_features_by_type(self.buyer_features)
+        product_by_type = self._collect_features_by_type(self.product_features)
+
+        # Build code sections
+        sections = [
+            self._generate_header_ranking(),
+            self._generate_imports(),
+            self._generate_constants_ranking(),
+            self._generate_input_fn_ranking(),
+            self._generate_buyer_model(buyer_by_type),
+            self._generate_product_model(product_by_type),
+            self._generate_ranking_model(),
+            self._generate_serve_fn_ranking(),
+            self._generate_metrics_callback_ranking(),
+            self._generate_run_fn_ranking(),
         ]
 
         return '\n'.join(sections)
@@ -3134,6 +3266,456 @@ def run_fn(fn_args: tfx.components.FnArgs):
                 logging.info("Training metrics saved to GCS successfully")
             except Exception as e:
                 logging.warning(f"Error saving metrics to GCS: {{e}}")
+'''
+
+    # =========================================================================
+    # RANKING MODEL GENERATION METHODS
+    # =========================================================================
+
+    def _generate_header_ranking(self) -> str:
+        """Generate file header for ranking model."""
+        buyer_cols = [f.get('display_name') or f.get('column', '?') for f in self.buyer_features]
+        product_cols = [f.get('display_name') or f.get('column', '?') for f in self.product_features]
+        target_col = self.target_column.get('display_name') or self.target_column.get('column') if self.target_column else 'N/A'
+
+        buyer_layer_summary = self._summarize_layers(self.buyer_tower_layers)
+        product_layer_summary = self._summarize_layers(self.product_tower_layers)
+        rating_head_summary = self._summarize_layers(self.rating_head_layers)
+
+        return f'''# Auto-generated TFX Trainer Module (RANKING)
+# FeatureConfig: "{self.feature_config.name}" (ID: {self.feature_config.id})
+# ModelConfig: "{self.model_config.name}" (ID: {self.model_config.id})
+# Generated at: {datetime.utcnow().isoformat()}Z
+#
+# === Feature Configuration ===
+# BuyerModel features: {', '.join(buyer_cols) if buyer_cols else 'none'}
+# ProductModel features: {', '.join(product_cols) if product_cols else 'none'}
+# Target column: {target_col}
+#
+# === Model Architecture (RANKING) ===
+# Buyer tower: {buyer_layer_summary}
+# Product tower: {product_layer_summary}
+# Rating head: {rating_head_summary}
+# Output embedding dim: {self.output_embedding_dim}
+#
+# === Training Configuration ===
+# Optimizer: {self.optimizer} (lr={self.learning_rate})
+# Loss function: {self.loss_function}
+# Batch size: {self.batch_size}
+# Epochs: {self.epochs}
+#
+# This module is designed for TFX Trainer component.
+'''
+
+    def _generate_constants_ranking(self) -> str:
+        """Generate constants for ranking model."""
+        target_col = self.target_column.get('display_name') or self.target_column.get('column') if self.target_column else 'target'
+
+        return f'''
+# =============================================================================
+# CONSTANTS
+# =============================================================================
+
+OUTPUT_EMBEDDING_DIM = {self.output_embedding_dim}
+BATCH_SIZE = {self.batch_size}
+EPOCHS = {self.epochs}
+LEARNING_RATE = {self.learning_rate}
+
+# Target column for ranking (label key from Transform)
+LABEL_KEY = '{target_col}_target'
+'''
+
+    def _generate_input_fn_ranking(self) -> str:
+        """Generate input function with label_key for ranking models."""
+        return '''
+# =============================================================================
+# INPUT FUNCTION (Ranking - with label)
+# =============================================================================
+
+def _input_fn(
+    file_pattern: List[str],
+    data_accessor: tfx.components.DataAccessor,
+    tf_transform_output: tft.TFTransformOutput,
+    batch_size: int = BATCH_SIZE
+) -> tf.data.Dataset:
+    """
+    Generate dataset for ranking model training.
+
+    Returns tuples of (features_dict, label) for supervised learning.
+    The label is extracted from features using label_key.
+    """
+    return data_accessor.tf_dataset_factory(
+        file_pattern,
+        tfxio.TensorFlowDatasetOptions(
+            batch_size=batch_size,
+            label_key=LABEL_KEY  # Extract label from features
+        ),
+        tf_transform_output.transformed_metadata.schema
+    )
+'''
+
+    def _generate_ranking_model(self) -> str:
+        """Generate RankingModel class using rating_head_layers from ModelConfig."""
+        # Generate rating head layers code
+        rating_head_code = self._generate_rating_head_code()
+
+        # Get loss function
+        loss_mapping = {
+            'mse': 'tf.keras.losses.MeanSquaredError()',
+            'binary_crossentropy': 'tf.keras.losses.BinaryCrossentropy()',
+            'huber': 'tf.keras.losses.Huber()',
+        }
+        loss_class = loss_mapping.get(self.loss_function, 'tf.keras.losses.MeanSquaredError()')
+
+        return f'''
+# =============================================================================
+# RANKING MODEL (TFRS)
+# =============================================================================
+
+class RankingModel(tfrs.Model):
+    """
+    Ranking model using TensorFlow Recommenders.
+
+    Concatenates buyer and product embeddings, passes through rating head
+    to predict a scalar value (rating, score, quantity, etc.).
+
+    Rating head architecture from ModelConfig: {self.model_config.get_rating_head_summary()}
+    Loss function: {self.loss_function}
+    """
+
+    def __init__(self, tf_transform_output: tft.TFTransformOutput):
+        super().__init__()
+
+        # Feature extraction models (same as retrieval)
+        self.buyer_model = BuyerModel(tf_transform_output)
+        self.product_model = ProductModel(tf_transform_output)
+
+        # Rating head: concatenated embeddings -> scalar prediction
+{rating_head_code}
+
+        # TFRS Ranking task
+        self.task = tfrs.tasks.Ranking(
+            loss={loss_class},
+            metrics=[
+                tf.keras.metrics.RootMeanSquaredError(name='rmse'),
+                tf.keras.metrics.MeanAbsoluteError(name='mae'),
+            ]
+        )
+
+    def call(self, features: Dict[str, tf.Tensor]) -> tf.Tensor:
+        """Forward pass: features -> predicted rating."""
+        # Get embeddings from both towers
+        buyer_embedding = self.buyer_model(features)
+        product_embedding = self.product_model(features)
+
+        # Concatenate embeddings
+        concatenated = tf.concat([buyer_embedding, product_embedding], axis=1)
+
+        # Pass through rating head to get scalar prediction
+        return self.rating_head(concatenated)
+
+    def compute_loss(
+        self,
+        features: Tuple[Dict[str, tf.Tensor], tf.Tensor],
+        training: bool = False
+    ) -> tf.Tensor:
+        """Compute ranking loss."""
+        # features is (feature_dict, labels) tuple from _input_fn with label_key
+        feature_dict, labels = features
+
+        # Get predictions
+        predictions = self(feature_dict)
+
+        # Compute loss using TFRS Ranking task
+        return self.task(labels=labels, predictions=predictions)
+'''
+
+    def _generate_rating_head_code(self) -> str:
+        """Generate rating head layers from ModelConfig.rating_head_layers."""
+        if not self.rating_head_layers:
+            # Default fallback
+            return '''        # Rating head (default - no custom layers configured)
+        self.rating_head = tf.keras.Sequential([
+            tf.keras.layers.Dense(256, activation='relu'),
+            tf.keras.layers.Dense(64, activation='relu'),
+            tf.keras.layers.Dense(1)  # Scalar output
+        ], name='rating_head')'''
+
+        lines = ['        # Rating head from ModelConfig']
+        lines.append('        self.rating_head = tf.keras.Sequential([')
+
+        for layer in self.rating_head_layers:
+            layer_type = layer.get('type', 'dense')
+
+            if layer_type == 'dense':
+                units = layer.get('units', 64)
+                activation = layer.get('activation', 'relu')
+                l2_reg = layer.get('l2_reg', 0.0)
+
+                # Handle activation
+                if activation and activation.lower() not in ['none', 'null', '']:
+                    activation_str = f", activation='{activation}'"
+                else:
+                    activation_str = ""
+
+                # Handle regularization
+                if l2_reg and l2_reg > 0:
+                    reg_str = f", kernel_regularizer=tf.keras.regularizers.l2({l2_reg})"
+                else:
+                    reg_str = ""
+
+                lines.append(f"            tf.keras.layers.Dense({units}{activation_str}{reg_str}),")
+
+            elif layer_type == 'dropout':
+                rate = layer.get('rate', 0.2)
+                lines.append(f"            tf.keras.layers.Dropout({rate}),")
+
+            elif layer_type == 'batch_norm':
+                lines.append(f"            tf.keras.layers.BatchNormalization(),")
+
+        lines.append("        ], name='rating_head')")
+        return '\n'.join(lines)
+
+    def _generate_serve_fn_ranking(self) -> str:
+        """Generate serving function for ranking model."""
+        return '''
+# =============================================================================
+# SERVING FUNCTION (Ranking)
+# =============================================================================
+
+class RankingServingModel(tf.keras.Model):
+    """
+    Wrapper for serving ranking model.
+
+    Input: Serialized tf.Examples containing buyer and product features
+    Output: Predicted scores
+    """
+
+    def __init__(self, ranking_model, tf_transform_output):
+        super().__init__()
+        self.ranking_model = ranking_model
+        self.tft_layer = tf_transform_output.transform_features_layer()
+        self._raw_feature_spec = tf_transform_output.raw_feature_spec()
+
+        # Remove label from feature spec for serving (label not needed at inference)
+        label_source_col = LABEL_KEY.replace('_target', '')
+        if label_source_col in self._raw_feature_spec:
+            del self._raw_feature_spec[label_source_col]
+
+    @tf.function(input_signature=[
+        tf.TensorSpec(shape=[None], dtype=tf.string, name='examples')
+    ])
+    def serve(self, serialized_examples):
+        """
+        Serving function: tf.Examples -> predicted scores.
+
+        Accepts batch of serialized examples, returns predicted ratings/scores.
+        """
+        # Parse raw features
+        parsed_features = tf.io.parse_example(serialized_examples, self._raw_feature_spec)
+
+        # Apply transform preprocessing
+        transformed_features = self.tft_layer(parsed_features)
+
+        # Get predictions
+        predictions = self.ranking_model(transformed_features)
+
+        return {
+            'predictions': predictions
+        }
+'''
+
+    def _generate_metrics_callback_ranking(self) -> str:
+        """Generate metrics callback for ranking model."""
+        return '''
+# =============================================================================
+# TRAINING CALLBACKS (Ranking)
+# =============================================================================
+
+class MetricsCallback(tf.keras.callbacks.Callback):
+    """Log Keras metrics to MetricsCollector after each epoch."""
+
+    def on_epoch_end(self, epoch, logs=None):
+        if _metrics_collector and logs:
+            for metric_name, value in logs.items():
+                _metrics_collector.log_metric(metric_name, float(value), step=epoch)
+'''
+
+    def _generate_run_fn_ranking(self) -> str:
+        """Generate run_fn for ranking model training."""
+        optimizer_class = self.OPTIMIZER_CODE.get(self.optimizer, 'tf.keras.optimizers.Adam')
+
+        # Get IDs for parameter logging
+        feature_config_id = self.feature_config.id
+        model_config_id = self.model_config.id
+        dataset_id = self.feature_config.dataset.id
+        feature_config_name = self.feature_config.name
+        model_config_name = self.model_config.name
+        dataset_name = self.feature_config.dataset.name
+
+        return f'''
+# =============================================================================
+# TFX TRAINER ENTRY POINT (Ranking)
+# =============================================================================
+
+def run_fn(fn_args: tfx.components.FnArgs):
+    """
+    TFX Trainer entry point for Ranking model.
+
+    Metrics are collected in-memory during training and saved to GCS as
+    training_metrics.json at the end.
+    """
+    logging.info("Starting TFX Trainer (Ranking Model)...")
+
+    # Load Transform output
+    tf_transform_output = tft.TFTransformOutput(fn_args.transform_output)
+    logging.info(f"Loaded Transform output from: {{fn_args.transform_output}}")
+
+    # Get configuration
+    custom_config = fn_args.custom_config or {{}}
+    epochs = custom_config.get('epochs', EPOCHS)
+    learning_rate = custom_config.get('learning_rate', LEARNING_RATE)
+    batch_size = custom_config.get('batch_size', BATCH_SIZE)
+    gcs_output_path = custom_config.get('gcs_output_path', '')
+
+    logging.info(f"Training config: epochs={{epochs}}, lr={{learning_rate}}, batch={{batch_size}}")
+    logging.info(f"Label key: {{LABEL_KEY}}")
+
+    # Load datasets (with labels)
+    train_dataset = _input_fn(
+        fn_args.train_files,
+        fn_args.data_accessor,
+        tf_transform_output,
+        batch_size
+    )
+
+    eval_dataset = _input_fn(
+        fn_args.eval_files,
+        fn_args.data_accessor,
+        tf_transform_output,
+        batch_size
+    )
+
+    # Initialize MetricsCollector
+    global _metrics_collector
+    _metrics_collector = MetricsCollector(gcs_output_path=gcs_output_path)
+
+    logging.info("=" * 60)
+    logging.info("MetricsCollector initialized (Ranking)")
+    logging.info(f"  Output path: {{gcs_output_path}}")
+    logging.info("=" * 60)
+
+    # Log training parameters
+    _metrics_collector.log_params({{
+        'model_type': 'ranking',
+        'loss_function': '{self.loss_function}',
+        'epochs': epochs,
+        'batch_size': batch_size,
+        'learning_rate': learning_rate,
+        'optimizer': '{self.optimizer}',
+        'embedding_dim': OUTPUT_EMBEDDING_DIM,
+        'label_key': LABEL_KEY,
+        'feature_config_id': {feature_config_id},
+        'model_config_id': {model_config_id},
+        'dataset_id': {dataset_id},
+        'feature_config_name': '{feature_config_name}',
+        'model_config_name': '{model_config_name}',
+        'dataset_name': '{dataset_name}',
+    }})
+
+    try:
+        # Build model
+        logging.info("Building RankingModel...")
+        model = RankingModel(tf_transform_output=tf_transform_output)
+
+        # Compile with configured optimizer
+        optimizer = {optimizer_class}(learning_rate=learning_rate, clipnorm=1.0)
+        model.compile(optimizer=optimizer)
+        logging.info(f"Using optimizer: {self.optimizer} with lr={{learning_rate}}, clipnorm=1.0")
+
+        # Calculate steps
+        train_steps = custom_config.get('train_steps', fn_args.train_steps)
+        eval_steps = custom_config.get('eval_steps', fn_args.eval_steps)
+
+        # Callbacks
+        callbacks = [
+            MetricsCallback(),
+        ]
+
+        # TensorBoard logging
+        if fn_args.model_run_dir:
+            tensorboard_callback = tf.keras.callbacks.TensorBoard(
+                log_dir=fn_args.model_run_dir,
+                update_freq='epoch'
+            )
+            callbacks.append(tensorboard_callback)
+
+        # Train
+        logging.info(f"Starting training for {{epochs}} epochs...")
+        history = model.fit(
+            train_dataset,
+            validation_data=eval_dataset,
+            epochs=epochs,
+            steps_per_epoch=train_steps,
+            validation_steps=eval_steps,
+            callbacks=callbacks
+        )
+        logging.info("Training completed.")
+
+        # Log final metrics
+        if _metrics_collector:
+            for metric_name, values in history.history.items():
+                _metrics_collector.log_metric(f'final_{{metric_name}}', float(values[-1]))
+
+        # Evaluate on test set if available
+        try:
+            transformed_examples_dir = os.path.dirname(fn_args.train_files[0])
+            test_split_dir = os.path.join(os.path.dirname(transformed_examples_dir), 'Split-test')
+
+            if tf.io.gfile.exists(test_split_dir):
+                test_files = tf.io.gfile.glob(os.path.join(test_split_dir, '*'))
+                if test_files:
+                    logging.info(f"Test split found - running final evaluation...")
+                    test_dataset = _input_fn(
+                        test_files,
+                        fn_args.data_accessor,
+                        tf_transform_output,
+                        batch_size
+                    )
+
+                    test_results = model.evaluate(test_dataset, return_dict=True)
+                    logging.info("=== TEST SET RESULTS ===")
+                    for metric_name, metric_value in test_results.items():
+                        logging.info(f"  test_{{metric_name}}: {{metric_value:.6f}}")
+                        if _metrics_collector:
+                            _metrics_collector.log_metric(f'test_{{metric_name}}', float(metric_value))
+        except Exception as test_error:
+            logging.warning(f"Test evaluation skipped: {{test_error}}")
+
+        # Save serving model
+        logging.info("Saving serving model...")
+        serving_model = RankingServingModel(model, tf_transform_output)
+
+        signatures = {{
+            'serving_default': serving_model.serve.get_concrete_function()
+        }}
+
+        tf.saved_model.save(
+            serving_model,
+            fn_args.serving_model_dir,
+            signatures=signatures
+        )
+        logging.info(f"Model saved to {{fn_args.serving_model_dir}}")
+
+        # Save metrics
+        if _metrics_collector:
+            _metrics_collector.save()
+
+    except Exception as e:
+        logging.error(f"Training failed: {{e}}")
+        import traceback
+        traceback.print_exc()
+        raise
 '''
 
     def generate_and_validate(self) -> Tuple[str, bool, Optional[str], Optional[int]]:

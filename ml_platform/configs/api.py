@@ -147,6 +147,7 @@ def create_feature_config(request, model_id):
             product_model_features=data.get('product_model_features', []),
             buyer_model_crosses=data.get('buyer_model_crosses', []),
             product_model_crosses=data.get('product_model_crosses', []),
+            target_column=data.get('target_column'),  # For ranking models
             created_by=request.user,
         )
 
@@ -283,6 +284,8 @@ def update_feature_config(request, config_id):
             fc.buyer_model_crosses = data['buyer_model_crosses']
         if 'product_model_crosses' in data:
             fc.product_model_crosses = data['product_model_crosses']
+        if 'target_column' in data:
+            fc.target_column = data['target_column']  # For ranking models
 
         # Recalculate tensor dimensions
         fc.calculate_tensor_dims()
@@ -391,6 +394,7 @@ def clone_feature_config(request, config_id):
             product_model_features=source.product_model_features,
             buyer_model_crosses=source.buyer_model_crosses,
             product_model_crosses=source.product_model_crosses,
+            target_column=source.target_column,  # Copy target column for ranking configs
             created_by=request.user,
         )
 

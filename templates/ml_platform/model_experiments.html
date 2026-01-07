@@ -4927,19 +4927,36 @@ function renderExperiments() {
 
 function renderMetricsRow(exp) {
     const formatRecall = v => v != null ? (v * 100).toFixed(1) + '%' : '--';
-    const metrics = [
-        { label: 'R@5', value: exp.recall_at_5 },
-        { label: 'R@10', value: exp.recall_at_10 },
-        { label: 'R@50', value: exp.recall_at_50 },
-        { label: 'R@100', value: exp.recall_at_100 }
-    ];
+    const formatRMSE = v => v != null ? v.toFixed(4) : '--';
+
+    // Check if this is a ranking model
+    const isRanking = exp.feature_config_type === 'ranking';
+
+    let metrics;
+    if (isRanking) {
+        // Ranking model metrics - RMSE/MAE (lower is better)
+        metrics = [
+            { label: 'RMSE', value: exp.rmse, format: formatRMSE },
+            { label: 'MAE', value: exp.mae, format: formatRMSE },
+            { label: 'Test RMSE', value: exp.test_rmse, format: formatRMSE },
+            { label: 'Test MAE', value: exp.test_mae, format: formatRMSE }
+        ];
+    } else {
+        // Retrieval model metrics - Recall@K (higher is better)
+        metrics = [
+            { label: 'R@5', value: exp.recall_at_5, format: formatRecall },
+            { label: 'R@10', value: exp.recall_at_10, format: formatRecall },
+            { label: 'R@50', value: exp.recall_at_50, format: formatRecall },
+            { label: 'R@100', value: exp.recall_at_100, format: formatRecall }
+        ];
+    }
 
     return `
         <div class="exp-card-metrics-row">
             ${metrics.map(m => `
                 <div class="exp-card-metric">
                     <div class="exp-card-metric-label">${m.label}</div>
-                    <div class="exp-card-metric-value ${m.value == null ? 'empty' : ''}">${formatRecall(m.value)}</div>
+                    <div class="exp-card-metric-value ${m.value == null ? 'empty' : ''}">${m.format(m.value)}</div>
                 </div>
             `).join('')}
         </div>
@@ -5238,6 +5255,9 @@ function onWizardFeatureChange() {
     const fcId = parseInt(document.getElementById('wizardFeatureSelect').value);
     selectedFeatureConfig = allFeatureConfigs.find(fc => fc.id === fcId) || null;
 
+    // Filter model configs based on feature config type
+    filterModelConfigsForFeatureConfig(selectedFeatureConfig);
+
     if (selectedFeatureConfig) {
         // Show preview panel with loading state
         document.getElementById('wizardFeatureEmpty').classList.add('hidden');
@@ -5269,6 +5289,101 @@ function onWizardFeatureChange() {
     }
 
     updateWizardSummary();
+}
+
+function filterModelConfigsForFeatureConfig(featureConfig) {
+    /**
+     * Filter Model Configs dropdown based on selected Feature Config's type.
+     *
+     * - If feature config has target_column (ranking type): show only ranking/multitask model configs
+     * - If feature config has no target_column (retrieval type): show only retrieval model configs
+     * - If no feature config selected: show all model configs
+     */
+    const mcSelect = document.getElementById('wizardModelSelect');
+    mcSelect.innerHTML = '<option value="">-- Select Model Config --</option>';
+
+    // Reset selected model config when feature config changes
+    selectedModelConfig = null;
+    document.getElementById('wizardModelPreview').classList.add('hidden');
+    document.getElementById('wizardModelEmpty').classList.remove('hidden');
+
+    let compatibleConfigs = allModelConfigs;
+
+    if (featureConfig) {
+        const fcType = featureConfig.config_type || 'retrieval';
+
+        if (fcType === 'ranking') {
+            // Show only ranking and multitask model configs
+            compatibleConfigs = allModelConfigs.filter(mc =>
+                mc.model_type === 'ranking' || mc.model_type === 'multitask'
+            );
+
+            // Show info message about ranking config
+            const targetName = featureConfig.target_column_name || featureConfig.target_column?.display_name;
+            if (targetName) {
+                showConfigTypeInfo('ranking', targetName);
+            }
+        } else {
+            // Show only retrieval model configs
+            compatibleConfigs = allModelConfigs.filter(mc =>
+                mc.model_type === 'retrieval'
+            );
+            hideConfigTypeInfo();
+        }
+    } else {
+        hideConfigTypeInfo();
+    }
+
+    // Populate dropdown with compatible configs
+    compatibleConfigs.forEach(mc => {
+        const option = document.createElement('option');
+        option.value = mc.id;
+        const typeLabel = mc.model_type === 'ranking' ? ' [Ranking]' :
+                         mc.model_type === 'multitask' ? ' [Multitask]' : '';
+        option.textContent = mc.name + typeLabel;
+        mcSelect.appendChild(option);
+    });
+
+    // Show warning if no compatible configs
+    if (featureConfig && compatibleConfigs.length === 0) {
+        const option = document.createElement('option');
+        option.value = '';
+        option.disabled = true;
+        option.textContent = `No compatible ${featureConfig.config_type} model configs found`;
+        mcSelect.appendChild(option);
+    }
+}
+
+function showConfigTypeInfo(configType, targetColumnName) {
+    /**
+     * Show info message about config type compatibility.
+     */
+    let infoEl = document.getElementById('configTypeInfo');
+    if (!infoEl) {
+        // Create info element if it doesn't exist
+        infoEl = document.createElement('div');
+        infoEl.id = 'configTypeInfo';
+        infoEl.className = 'mt-2 p-2 rounded-lg text-sm';
+        const mcSelect = document.getElementById('wizardModelSelect');
+        mcSelect.parentNode.insertBefore(infoEl, mcSelect.nextSibling);
+    }
+
+    if (configType === 'ranking') {
+        infoEl.className = 'mt-2 p-2 rounded-lg text-sm bg-amber-50 border border-amber-200 text-amber-800';
+        infoEl.innerHTML = `
+            <i class="fas fa-bullseye mr-1"></i>
+            <strong>Ranking Config Selected</strong><br>
+            <span class="text-xs">Target: ${targetColumnName} • Only Ranking model configs shown</span>
+        `;
+    }
+    infoEl.classList.remove('hidden');
+}
+
+function hideConfigTypeInfo() {
+    const infoEl = document.getElementById('configTypeInfo');
+    if (infoEl) {
+        infoEl.classList.add('hidden');
+    }
 }
 
 function renderWizardFeaturePreview(config) {
@@ -6629,7 +6744,7 @@ function populateExpViewModal(exp) {
     const resultsSummary = document.getElementById('expViewResultsSummary');
     if (exp.status === 'completed' && exp.metrics) {
         resultsSummary.classList.remove('hidden');
-        renderMetricsSummary(exp.metrics);
+        renderMetricsSummary(exp.metrics, false, exp.feature_config_type);
     } else {
         resultsSummary.classList.add('hidden');
     }
@@ -6673,18 +6788,31 @@ function populateExpViewModal(exp) {
     }
 }
 
-function renderMetricsSummary(metrics, useTestPrefix = false) {
+function renderMetricsSummary(metrics, useTestPrefix = false, configType = 'retrieval') {
     const container = document.getElementById('expViewMetricsSummary');
     const formatRecall = v => v != null ? (v * 100).toFixed(2) + '%' : 'N/A';
+    const formatRMSE = v => v != null ? v.toFixed(4) : 'N/A';
 
-    // Support both 'recall_at_*' (from exp.metrics) and 'test_recall_at_*' (from final_metrics)
-    const prefix = useTestPrefix ? 'test_' : '';
-    const items = [
-        { label: 'Recall@5', value: metrics[prefix + 'recall_at_5'], format: formatRecall },
-        { label: 'Recall@10', value: metrics[prefix + 'recall_at_10'], format: formatRecall },
-        { label: 'Recall@50', value: metrics[prefix + 'recall_at_50'], format: formatRecall },
-        { label: 'Recall@100', value: metrics[prefix + 'recall_at_100'], format: formatRecall }
-    ];
+    let items;
+    if (configType === 'ranking') {
+        // Ranking model metrics - RMSE/MAE
+        const prefix = useTestPrefix ? 'test_' : '';
+        items = [
+            { label: 'RMSE', value: metrics[prefix + 'rmse'] || metrics['rmse'], format: formatRMSE },
+            { label: 'MAE', value: metrics[prefix + 'mae'] || metrics['mae'], format: formatRMSE },
+            { label: 'Test RMSE', value: metrics['test_rmse'], format: formatRMSE },
+            { label: 'Test MAE', value: metrics['test_mae'], format: formatRMSE }
+        ];
+    } else {
+        // Retrieval model metrics - Recall@K
+        const prefix = useTestPrefix ? 'test_' : '';
+        items = [
+            { label: 'Recall@5', value: metrics[prefix + 'recall_at_5'], format: formatRecall },
+            { label: 'Recall@10', value: metrics[prefix + 'recall_at_10'], format: formatRecall },
+            { label: 'Recall@50', value: metrics[prefix + 'recall_at_50'], format: formatRecall },
+            { label: 'Recall@100', value: metrics[prefix + 'recall_at_100'], format: formatRecall }
+        ];
+    }
     container.innerHTML = items.map(item => `
         <div class="exp-view-metric-card">
             <div class="exp-view-metric-card-label">${item.label}</div>
@@ -6789,7 +6917,8 @@ async function preloadTrainingHistory() {
 
             // Update Overview metrics with accurate test_recall values
             if (data.training_history.final_metrics) {
-                renderMetricsSummary(data.training_history.final_metrics, true);
+                const configType = window.currentViewExp?.feature_config_type || 'retrieval';
+                renderMetricsSummary(data.training_history.final_metrics, true, configType);
             }
         }
     } catch (error) {
@@ -7316,7 +7445,8 @@ async function loadTrainingHistory() {
 
         // Update Overview tab metrics with accurate test_recall values from final_metrics
         if (history.final_metrics) {
-            renderMetricsSummary(history.final_metrics, true);
+            const configType = window.currentViewExp?.feature_config_type || 'retrieval';
+            renderMetricsSummary(history.final_metrics, true, configType);
         }
 
     } catch (error) {
@@ -7502,38 +7632,66 @@ function renderMetricsChart(history) {
     if (!ctx) return;
 
     const finalMetrics = history.final_metrics || {};
+    const configType = window.currentViewExp?.feature_config_type || 'retrieval';
 
-    // Extract recall metrics from final_metrics (test_recall_at_5, test_recall_at_10, test_recall_at_50, test_recall_at_100)
-    const recallLabels = [];
-    const recallValues = [];
+    let metricLabels = [];
+    let metricValues = [];
     const colors = ['#06b6d4', '#10b981', '#8b5cf6', '#ec4899'];
+    let isRanking = configType === 'ranking';
+    let chartTitle, yAxisTitle, formatValue, formatLabel;
 
-    // Define the recall metrics we want to show (in order)
-    const recallKeys = [
-        { key: 'test_recall_at_5', label: 'Recall@5' },
-        { key: 'test_recall_at_10', label: 'Recall@10' },
-        { key: 'test_recall_at_50', label: 'Recall@50' },
-        { key: 'test_recall_at_100', label: 'Recall@100' }
-    ];
+    if (isRanking) {
+        // Ranking model - show RMSE/MAE metrics
+        const rankingKeys = [
+            { key: 'rmse', label: 'RMSE' },
+            { key: 'mae', label: 'MAE' },
+            { key: 'test_rmse', label: 'Test RMSE' },
+            { key: 'test_mae', label: 'Test MAE' }
+        ];
 
-    recallKeys.forEach(({ key, label }) => {
-        if (finalMetrics[key] !== undefined) {
-            recallLabels.push(label);
-            recallValues.push(finalMetrics[key]);
-        }
-    });
+        rankingKeys.forEach(({ key, label }) => {
+            const value = finalMetrics[key] || finalMetrics[key.replace('test_', '')];
+            if (value !== undefined) {
+                metricLabels.push(label);
+                metricValues.push(value);
+            }
+        });
 
-    // If no recall metrics found, show a placeholder message
-    if (recallValues.length === 0) {
-        // Check if there was an evaluation error
+        chartTitle = 'Error Metrics';
+        yAxisTitle = 'Error Value';
+        formatValue = v => v.toFixed(4);
+        formatLabel = v => v.toFixed(4);
+    } else {
+        // Retrieval model - show Recall metrics
+        const recallKeys = [
+            { key: 'test_recall_at_5', label: 'Recall@5' },
+            { key: 'test_recall_at_10', label: 'Recall@10' },
+            { key: 'test_recall_at_50', label: 'Recall@50' },
+            { key: 'test_recall_at_100', label: 'Recall@100' }
+        ];
+
+        recallKeys.forEach(({ key, label }) => {
+            if (finalMetrics[key] !== undefined) {
+                metricLabels.push(label);
+                metricValues.push(finalMetrics[key]);
+            }
+        });
+
+        chartTitle = 'Recall Metrics';
+        yAxisTitle = 'Recall Rate';
+        formatValue = v => (v * 100).toFixed(2) + '%';
+        formatLabel = v => (v * 100).toFixed(2) + '%';
+    }
+
+    // If no metrics found, show a placeholder message
+    if (metricValues.length === 0) {
         const hasAnyFinalMetrics = Object.keys(finalMetrics).length > 0;
         if (hasAnyFinalMetrics) {
-            // Training completed but recall evaluation failed
             ctx.parentElement.innerHTML = `
-                <h5 class="training-chart-title">Recall Metrics</h5>
+                <h5 class="training-chart-title">${chartTitle}</h5>
                 <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 180px; color: #9ca3af; text-align: center;">
                     <i class="fas fa-exclamation-triangle" style="font-size: 24px; margin-bottom: 8px; color: #f59e0b;"></i>
-                    <span style="font-size: 13px;">Recall evaluation failed</span>
+                    <span style="font-size: 13px;">${isRanking ? 'Error' : 'Recall'} evaluation failed</span>
                     <span style="font-size: 11px; margin-top: 4px;">Check logs for details</span>
                 </div>
             `;
@@ -7545,12 +7703,12 @@ function renderMetricsChart(history) {
         type: 'bar',
         plugins: [ChartDataLabels],
         data: {
-            labels: recallLabels,
+            labels: metricLabels,
             datasets: [{
-                label: 'Test Recall',
-                data: recallValues,
-                backgroundColor: colors.slice(0, recallValues.length),
-                borderColor: colors.slice(0, recallValues.length).map(c => c),
+                label: isRanking ? 'Error Metrics' : 'Test Recall',
+                data: metricValues,
+                backgroundColor: colors.slice(0, metricValues.length),
+                borderColor: colors.slice(0, metricValues.length).map(c => c),
                 borderWidth: 1,
                 borderRadius: 4,
                 barThickness: 40
@@ -7565,7 +7723,7 @@ function renderMetricsChart(history) {
                 tooltip: {
                     callbacks: {
                         label: function(context) {
-                            return `${(context.parsed.y * 100).toFixed(2)}%`;
+                            return formatValue(context.parsed.y);
                         }
                     }
                 },
@@ -7579,19 +7737,19 @@ function renderMetricsChart(history) {
                         weight: '600'
                     },
                     formatter: function(value) {
-                        return (value * 100).toFixed(2) + '%';
+                        return formatLabel(value);
                     }
                 }
             },
             scales: {
                 y: {
                     beginAtZero: true,
-                    max: 1,
-                    title: { display: true, text: 'Recall Rate', ...trainingChartDefaults.scales.y.title },
+                    max: isRanking ? undefined : 1,
+                    title: { display: true, text: yAxisTitle, ...trainingChartDefaults.scales.y.title },
                     ticks: {
                         ...trainingChartDefaults.scales.y.ticks,
                         callback: function(value) {
-                            return (value * 100).toFixed(0) + '%';
+                            return isRanking ? value.toFixed(2) : (value * 100).toFixed(0) + '%';
                         }
                     }
                 },

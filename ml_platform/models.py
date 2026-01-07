@@ -1287,6 +1287,46 @@ class FeatureConfig(models.Model):
         help_text="Cross features for ProductModel"
     )
 
+    # =========================================================================
+    # Config Type (derived from target_column presence)
+    # =========================================================================
+
+    CONFIG_TYPE_RETRIEVAL = 'retrieval'
+    CONFIG_TYPE_RANKING = 'ranking'
+
+    CONFIG_TYPE_CHOICES = [
+        (CONFIG_TYPE_RETRIEVAL, 'Retrieval'),
+        (CONFIG_TYPE_RANKING, 'Ranking'),
+    ]
+
+    config_type = models.CharField(
+        max_length=20,
+        choices=CONFIG_TYPE_CHOICES,
+        default=CONFIG_TYPE_RETRIEVAL,
+        help_text="Derived from target_column presence. Retrieval=no target, Ranking=has target"
+    )
+
+    # =========================================================================
+    # Target Column (for Ranking models)
+    # =========================================================================
+
+    # Schema:
+    # {
+    #   "column": "sales",
+    #   "display_name": "sales",  # Optional alias
+    #   "bq_type": "FLOAT64",
+    #   "transforms": {
+    #     "normalize": {"enabled": false, "range": [0, 1]},
+    #     "log_transform": {"enabled": false},
+    #     "clip_outliers": {"enabled": false, "percentile": 99}
+    #   }
+    # }
+    target_column = models.JSONField(
+        null=True,
+        blank=True,
+        help_text="Target column for ranking models (e.g., rating, sales, quantity)"
+    )
+
     # Cached tensor dimensions (for quick display)
     buyer_tensor_dim = models.PositiveIntegerField(
         null=True,
@@ -1332,6 +1372,47 @@ class FeatureConfig(models.Model):
 
     def __str__(self):
         return f"{self.name} v{self.version}"
+
+    def save(self, *args, **kwargs):
+        """Override save to auto-derive config_type and remove target from models."""
+        # Auto-derive config_type from target_column presence
+        if self.target_column:
+            self.config_type = self.CONFIG_TYPE_RANKING
+        else:
+            self.config_type = self.CONFIG_TYPE_RETRIEVAL
+
+        # Auto-remove target column from buyer/product models to prevent data leakage
+        self._remove_target_from_models()
+
+        super().save(*args, **kwargs)
+
+    def _remove_target_from_models(self):
+        """Remove target column from feature models to prevent data leakage."""
+        if not self.target_column:
+            return
+
+        target_col = self.target_column.get('column')
+        target_display = self.target_column.get('display_name', target_col)
+
+        # Remove from buyer_model_features
+        if self.buyer_model_features:
+            self.buyer_model_features = [
+                f for f in self.buyer_model_features
+                if f.get('column') != target_col and f.get('display_name') != target_display
+            ]
+
+        # Remove from product_model_features
+        if self.product_model_features:
+            self.product_model_features = [
+                f for f in self.product_model_features
+                if f.get('column') != target_col and f.get('display_name') != target_display
+            ]
+
+    def get_target_column_name(self):
+        """Return the target column name for display."""
+        if not self.target_column:
+            return None
+        return self.target_column.get('display_name') or self.target_column.get('column')
 
     def calculate_tensor_dims(self):
         """Calculate and cache tensor dimensions for both models."""
@@ -1941,6 +2022,28 @@ class QuickTest(models.Model):
         null=True,
         blank=True,
         help_text="Recall@100 metric"
+    )
+
+    # Ranking model metrics
+    rmse = models.FloatField(
+        null=True,
+        blank=True,
+        help_text="Root Mean Square Error (validation) - for ranking models"
+    )
+    mae = models.FloatField(
+        null=True,
+        blank=True,
+        help_text="Mean Absolute Error (validation) - for ranking models"
+    )
+    test_rmse = models.FloatField(
+        null=True,
+        blank=True,
+        help_text="Root Mean Square Error (test set) - for ranking models"
+    )
+    test_mae = models.FloatField(
+        null=True,
+        blank=True,
+        help_text="Mean Absolute Error (test set) - for ranking models"
     )
 
     # Vocabulary statistics

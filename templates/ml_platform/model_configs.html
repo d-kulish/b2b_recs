@@ -311,6 +311,80 @@
         color: #a16207;
     }
 
+    /* Target Column Card (View Modal - matching experiments page style) */
+    .target-column-view-card {
+        background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+        border: 1.5px solid #fbbf24;
+        border-radius: 10px;
+        padding: 12px 14px;
+        margin-bottom: 16px;
+    }
+    .target-column-view-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 10px;
+        font-size: 13px;
+        font-weight: 600;
+        color: #b45309;
+    }
+    .target-column-view-header i {
+        color: #f59e0b;
+    }
+    .target-column-view-badge {
+        background: #fbbf24;
+        color: white;
+        font-size: 10px;
+        font-weight: 600;
+        padding: 2px 8px;
+        border-radius: 10px;
+        margin-left: auto;
+    }
+    .target-column-view-content {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        background: white;
+        border: 1px solid #fcd34d;
+        border-radius: 8px;
+        padding: 8px 12px;
+    }
+    .target-column-view-name {
+        font-weight: 600;
+        color: #92400e;
+        font-size: 14px;
+    }
+    .target-column-view-type {
+        background: #fef3c7;
+        color: #b45309;
+        font-size: 11px;
+        font-weight: 500;
+        padding: 2px 8px;
+        border-radius: 4px;
+        text-transform: uppercase;
+    }
+    .target-column-view-transforms {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 10px;
+    }
+    .target-transform-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        background: white;
+        border: 1px solid #fcd34d;
+        color: #92400e;
+        font-size: 11px;
+        padding: 3px 8px;
+        border-radius: 6px;
+    }
+    .target-transform-tag i {
+        font-size: 10px;
+        color: #f59e0b;
+    }
+
     /* Clip Options Container */
     .clip-options-container {
         margin-left: 24px;
@@ -8033,6 +8107,52 @@ function renderViewModal(config) {
     // Build dataset info section
     const datasetInfoHtml = buildDatasetInfoHtml(config.dataset_info, config.dataset_name);
 
+    // Build target column section (for ranking configs)
+    let targetColumnHtml = '';
+    if (config.target_column && config.config_type === 'ranking') {
+        const tc = config.target_column;
+        const tcName = tc.display_name || tc.column || '-';
+        const tcType = tc.bq_type || 'FLOAT';
+        const transforms = tc.transforms || {};
+
+        // Build transforms tags
+        let transformsHtml = '';
+        if (transforms.normalize && transforms.normalize.enabled) {
+            transformsHtml += '<span class="target-transform-tag"><i class="fas fa-compress-arrows-alt"></i> Normalize 0-1</span>';
+        }
+        if (transforms.log_transform && transforms.log_transform.enabled) {
+            transformsHtml += '<span class="target-transform-tag"><i class="fas fa-chart-line"></i> Log transform</span>';
+        }
+        if (transforms.clip_outliers && transforms.clip_outliers.enabled) {
+            const lower = transforms.clip_outliers.lower?.enabled ? transforms.clip_outliers.lower.percentile : null;
+            const upper = transforms.clip_outliers.upper?.enabled ? transforms.clip_outliers.upper.percentile : null;
+            let clipText = 'Clip';
+            if (lower && upper) {
+                clipText = `Clip ${lower}%-${upper}%`;
+            } else if (lower) {
+                clipText = `Clip lower ${lower}%`;
+            } else if (upper) {
+                clipText = `Clip upper ${upper}%`;
+            }
+            transformsHtml += `<span class="target-transform-tag"><i class="fas fa-cut"></i> ${clipText}</span>`;
+        }
+
+        targetColumnHtml = `
+            <div class="target-column-view-card">
+                <div class="target-column-view-header">
+                    <i class="fas fa-bullseye"></i>
+                    <span>Target Column</span>
+                    <span class="target-column-view-badge">For Ranking</span>
+                </div>
+                <div class="target-column-view-content">
+                    <span class="target-column-view-name">${tcName}</span>
+                    <span class="target-column-view-type">${tcType}</span>
+                </div>
+                ${transformsHtml ? `<div class="target-column-view-transforms">${transformsHtml}</div>` : ''}
+            </div>
+        `;
+    }
+
     const body = document.getElementById('viewConfigBody');
     body.innerHTML = `
         <div class="mb-3">
@@ -8040,6 +8160,8 @@ function renderViewModal(config) {
         </div>
 
         ${datasetInfoHtml}
+
+        ${targetColumnHtml}
 
         <div class="grid grid-cols-2 gap-4">
             <div class="p-4 bg-blue-50 rounded-lg">

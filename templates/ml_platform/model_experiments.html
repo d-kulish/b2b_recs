@@ -6037,10 +6037,17 @@ function renderWizardModelPreview(mc) {
             <span class="param-chip-label">Batch Size:</span>
             <span class="param-chip-value">${mc.batch_size}</span>
         </div>
+        ${mc.model_type === 'ranking' ? `
+        <div class="param-chip">
+            <span class="param-chip-label">Output:</span>
+            <span class="param-chip-value">1D (scalar)</span>
+        </div>
+        ` : `
         <div class="param-chip">
             <span class="param-chip-label">Output Dim:</span>
             <span class="param-chip-value">${mc.output_embedding_dim || 32}D</span>
         </div>
+        `}
     `;
 
     // Retrieval algorithm section (for retrieval and multitask models)
@@ -9317,7 +9324,9 @@ function renderUnifiedCompareTable(experiments) {
         { label: 'Name', getter: exp => exp.model_config?.name },
         { label: 'Type', getter: exp => exp.model_config?.model_type },
         { label: 'Optimizer', getter: exp => exp.model_config?.optimizer },
-        { label: 'Output Embedding', getter: exp => exp.model_config?.output_embedding_dim },
+        { label: 'Output', getter: exp => exp.model_config?.model_type === 'ranking'
+            ? '1D (scalar)'
+            : `${exp.model_config?.output_embedding_dim || 32}D` },
         { label: 'Tower Layers', getter: exp => exp.model_config?.tower_layers || '—' },
     ];
 

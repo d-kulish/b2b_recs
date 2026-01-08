@@ -1096,7 +1096,7 @@ def create_tfx_pipeline(
         '--runner=DataflowRunner',
         f'--project={project_id}',
         f'--region={region}',
-        f'--zone={region}-b',  # Explicitly set zone to avoid exhausted zones (a and c are exhausted)
+        # Zone auto-selected by Dataflow based on availability (don't hardcode - zones get exhausted)
         f'--temp_location=gs://{staging_bucket}/dataflow_temp',
         f'--staging_location=gs://{staging_bucket}/dataflow_staging',
         f'--machine_type={machine_type}',

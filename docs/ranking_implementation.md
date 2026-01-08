@@ -71,6 +71,99 @@ features_changed = (
 
 ---
 
+### tft.quantiles() 2D Tensor Indexing Bug (2026-01-08)
+
+**Bug:** The Transform phase failed with `ValueError: slice index 9 of dimension 0 out of bounds` when using `tft.quantiles()` for percentile-based clipping.
+
+**Error Message:**
+```
+ValueError: slice index 9 of dimension 0 out of bounds. for '{{node strided_slice}}'
+with input shapes: [1,999], [1], [1], [1]
+and with computed input tensors: input[1] = <9>, input[2] = <10>, input[3] = <1>.
+```
+
+**Root Cause:** `tft.quantiles()` returns a 2D tensor with shape `[1, num_buckets-1]` at runtime, not a 1D tensor as the documentation might suggest:
+- Dimension 0: Size 1 (per-dataset statistic, not per-example)
+- Dimension 1: Size 999 (bucket boundaries for `num_buckets=1000`)
+
+The original code indexed as 1D:
+```python
+# BUGGY - 1D indexing on 2D tensor
+sales_quantiles = tft.quantiles(sales_float, num_buckets=1000, epsilon=0.001)
+sales_p_lower = sales_quantiles[9]   # Tries to access row 9, but only row 0 exists!
+```
+
+**Fix:** Use 2D indexing `[0, idx]`:
+```python
+# FIXED - proper 2D indexing
+sales_p_lower = sales_quantiles[0, 9]   # Access column 9 of row 0
+sales_p_upper = sales_quantiles[0, 899]
+```
+
+**Files Modified:**
+| File | Changes |
+|------|---------|
+| `ml_platform/configs/services.py:1135` | Changed `{col}_quantiles[{idx_lower}]` to `{col}_quantiles[0, {idx_lower}]` |
+| `ml_platform/configs/services.py:1147` | Changed `{col}_quantiles[{idx_upper}]` to `{col}_quantiles[0, {idx_upper}]` |
+
+---
+
+### Per-Dataset Statistics Cannot Be Transform Outputs (2026-01-08)
+
+**Bug:** After fixing the indexing, Transform failed with `ValueError: Arrays were not all the same length: 1 vs 2` during `ConvertToRecordBatch`.
+
+**Root Cause:** The code attempted to output per-dataset statistics (clip bounds, normalization min/max) as per-example features:
+```python
+# BUGGY - per-dataset scalar stored as per-example feature
+outputs['sales_clip_lower'] = tf.reshape(sales_p_lower, [1])  # Shape [1]
+outputs['sales_clip_upper'] = tf.reshape(sales_p_upper, [1])  # Shape [1]
+# But other outputs have batch shape, e.g., [2] for 2 examples
+```
+
+TFT's `ConvertToRecordBatch` expects all output arrays to have the same length (batch size). Per-dataset statistics like quantile boundaries and min/max values are scalars, not per-example values.
+
+**Fix:** Remove per-dataset statistics from transform outputs entirely. These values (if needed for inverse transform at serving) should be:
+1. Stored in the model config as constants, or
+2. Computed from the saved transform graph at serving time
+
+```python
+# FIXED - only output the transformed value, not the statistics
+outputs['sales_target'] = sales_log  # Per-example transformed value
+# Removed: outputs['sales_clip_lower'], outputs['sales_clip_upper']
+# Removed: outputs['sales_norm_min'], outputs['sales_norm_max']
+```
+
+**Files Modified:**
+| File | Changes |
+|------|---------|
+| `ml_platform/configs/services.py:1137-1138` | Removed `outputs['{col}_clip_lower']` |
+| `ml_platform/configs/services.py:1151-1152` | Removed `outputs['{col}_clip_upper']` |
+| `ml_platform/configs/services.py:1170-1175` | Removed `outputs['{col}_norm_min']` and `outputs['{col}_norm_max']` |
+
+---
+
+### Custom Job Testing Limitations for TFT Transform (2026-01-08)
+
+**Discovery:** Attempted to create a Custom Job test script for Transform (similar to `scripts/test_services_trainer.py`) but discovered fundamental limitations.
+
+**Problem:** TFT analyzers (`tft.quantiles()`, `tft.compute_and_apply_vocabulary()`, `tft.min()`, `tft.max()`) cannot be tested outside of a Beam pipeline context. They create placeholder tensors that are filled by Beam's distributed analysis phase.
+
+**Attempted Approaches:**
+1. **Direct tf.function tracing** - Failed with placeholder errors
+2. **tft.get_analyze_input_columns()** - Failed due to TypeSpec/FeatureSpec version mismatch
+3. **tft_beam with DirectRunner** - Failed with module namespace issues
+
+**Conclusion:** Transform component testing requires running the full TFX pipeline. Custom Job testing is only viable for the Trainer component (which uses pre-computed transform artifacts).
+
+**Scripts Created (for reference, not production use):**
+| Script | Purpose | Status |
+|--------|---------|--------|
+| `scripts/test_services_transform.py` | Full Transform test with tft_beam | Not working - namespace issues |
+| `scripts/test_transform_simple.py` | Trace preprocessing_fn | Not working - TypeSpec mismatch |
+| `scripts/test_transform_direct.py` | Direct tensor test | Not working - placeholder errors |
+
+---
+
 ## Background & Context
 
 ### Retrieval vs Ranking Models

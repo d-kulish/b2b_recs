@@ -1132,10 +1132,8 @@ def preprocessing_fn(inputs):
                 # p1 -> idx 9, p5 -> idx 49, p10 -> idx 99
                 idx_lower = max(0, int((p_lower / 100) * 1000) - 1)
                 lines.append(f"    # Lower bound: {p_lower}th percentile (index {idx_lower})")
-                lines.append(f"    {col}_p_lower = {col}_quantiles[{idx_lower}]")
+                lines.append(f"    {col}_p_lower = {col}_quantiles[0, {idx_lower}]")
                 lines.append(f"    {current_var} = tf.maximum({current_var}, {col}_p_lower)")
-                lines.append(f"    # Store for inverse transform")
-                lines.append(f"    outputs['{col}_clip_lower'] = {col}_p_lower")
 
             if has_clip_upper:
                 p_upper = clip_config['upper'].get('percentile', 99)
@@ -1146,10 +1144,8 @@ def preprocessing_fn(inputs):
                     idx_upper = min(998, int((p_upper / 100) * 1000) - 1)
                 p_upper_str = str(p_upper).replace('.', '_')
                 lines.append(f"    # Upper bound: {p_upper}th percentile (index {idx_upper})")
-                lines.append(f"    {col}_p_upper = {col}_quantiles[{idx_upper}]")
+                lines.append(f"    {col}_p_upper = {col}_quantiles[0, {idx_upper}]")
                 lines.append(f"    {current_var} = tf.minimum({current_var}, {col}_p_upper)")
-                lines.append(f"    # Store for inverse transform")
-                lines.append(f"    outputs['{col}_clip_upper'] = {col}_p_upper")
 
             lines.append(f"    {col}_clipped = {current_var}")
             current_var = f"{col}_clipped"
@@ -1170,13 +1166,6 @@ def preprocessing_fn(inputs):
             range_vals = normalize.get('range', [0, 1])
             lines.append('')
             lines.append(f"    # Normalize to {range_vals}")
-
-            # Compute and store min/max for inverse transform
-            lines.append(f"    {col}_min = tft.min({current_var})")
-            lines.append(f"    {col}_max = tft.max({current_var})")
-            lines.append(f"    # Store normalization params for inverse transform")
-            lines.append(f"    outputs['{col}_norm_min'] = {col}_min")
-            lines.append(f"    outputs['{col}_norm_max'] = {col}_max")
 
             if range_vals == [0, 1]:
                 lines.append(f"    outputs['{col}_target'] = tft.scale_to_0_1({current_var})")

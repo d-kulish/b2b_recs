@@ -4080,14 +4080,16 @@
                     </div>
                 </div>
 
-                <!-- Rating Column (for Ranking models) -->
+                <!-- Rating Column (for Ranking models) - displays target from Feature Config -->
                 <div id="wizardRatingSection" class="training-params-section hidden" style="background: #faf5ff; border-color: #d8b4fe;">
                     <h4 style="color: #7c3aed;"><i class="fas fa-star"></i> Rating Column</h4>
-                    <p class="text-sm text-purple-600 mb-3">Ranking models require a numeric column containing ratings/scores.</p>
-                    <div class="training-param-group">
-                        <select id="wizardRatingColumn" style="border-color: #d8b4fe;">
-                            <option value="">Select rating column...</option>
-                        </select>
+                    <p class="text-sm text-purple-600 mb-3">Target column defined in the selected Feature Config.</p>
+                    <div class="target-column-card" style="background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%); border-color: #d8b4fe;">
+                        <div class="target-column-content" style="border-color: #e9d5ff;">
+                            <span class="target-column-name" id="step2TargetColumnName" style="color: #7c3aed;">-</span>
+                            <span class="target-column-type" id="step2TargetColumnType" style="background: #f3e8ff; color: #7c3aed;">-</span>
+                        </div>
+                        <div class="target-column-transforms" id="step2TargetTransforms"></div>
                     </div>
                 </div>
 
@@ -5785,6 +5787,45 @@ function renderWizardFeaturePreview(config) {
     updateHardwareRecommendation();
 }
 
+/**
+ * Render target column info in Step 2 (Training Parameters) for ranking models.
+ * This displays the target column defined in the Feature Config (read-only).
+ */
+function renderStep2TargetColumn(targetColumn) {
+    if (!targetColumn) return;
+
+    // Update column name and type
+    document.getElementById('step2TargetColumnName').textContent = targetColumn.display_name || targetColumn.column || '-';
+    document.getElementById('step2TargetColumnType').textContent = targetColumn.bq_type || 'FLOAT';
+
+    // Build transforms tags (matching Step 1 styling but with purple theme)
+    const transforms = targetColumn.transforms || {};
+    let transformsHtml = '';
+
+    if (transforms.clip_outliers) {
+        const clipConfig = transforms.clip_outliers;
+        const lower = clipConfig.lower?.enabled ? clipConfig.lower.percentile : null;
+        const upper = clipConfig.upper?.enabled ? clipConfig.upper.percentile : null;
+        if (lower && upper) {
+            transformsHtml += `<span class="target-transform-tag" style="background: #f3e8ff; color: #7c3aed;"><i class="fas fa-cut"></i> Clip ${lower}%-${upper}%</span>`;
+        } else if (upper) {
+            transformsHtml += `<span class="target-transform-tag" style="background: #f3e8ff; color: #7c3aed;"><i class="fas fa-cut"></i> Clip upper ${upper}%</span>`;
+        } else if (lower) {
+            transformsHtml += `<span class="target-transform-tag" style="background: #f3e8ff; color: #7c3aed;"><i class="fas fa-cut"></i> Clip lower ${lower}%</span>`;
+        }
+    }
+
+    if (transforms.log_transform?.enabled) {
+        transformsHtml += '<span class="target-transform-tag" style="background: #f3e8ff; color: #7c3aed;"><i class="fas fa-chart-line"></i> Log transform</span>';
+    }
+
+    if (transforms.normalize?.enabled) {
+        transformsHtml += '<span class="target-transform-tag" style="background: #f3e8ff; color: #7c3aed;"><i class="fas fa-compress-arrows-alt"></i> Normalize 0-1</span>';
+    }
+
+    document.getElementById('step2TargetTransforms').innerHTML = transformsHtml;
+}
+
 function updateExampleCount() {
     const samplePercent = parseInt(document.getElementById('wizardSamplePercentInput').value) || 100;
     const countEl = document.getElementById('wizardExampleCountValue');
@@ -5964,11 +6005,11 @@ function onWizardModelChange() {
         setParam('batchSize', selectedModelConfig.batch_size);
         // Epochs not in model config, keep default
 
-        // Show rating column section for ranking models
+        // Show rating column section for ranking models - display target from Feature Config
         if (selectedModelConfig.model_type === 'ranking' || selectedModelConfig.model_type === 'multitask') {
             document.getElementById('wizardRatingSection').classList.remove('hidden');
-            if (selectedFeatureConfig) {
-                loadWizardRatingColumns(selectedFeatureConfig.dataset_id);
+            if (selectedFeatureConfig && selectedFeatureConfig.target_column) {
+                renderStep2TargetColumn(selectedFeatureConfig.target_column);
             }
         } else {
             document.getElementById('wizardRatingSection').classList.add('hidden');
@@ -6212,34 +6253,6 @@ async function loadWizardDateColumns(datasetId) {
     }
 }
 
-async function loadWizardRatingColumns(datasetId) {
-    if (!datasetId) return;
-
-    try {
-        const response = await fetch(`/api/datasets/${datasetId}/columns/`);
-        const data = await response.json();
-
-        const select = document.getElementById('wizardRatingColumn');
-        select.innerHTML = '<option value="">Select rating column...</option>';
-
-        if (data.success && data.data && data.data.columns) {
-            const numericCols = data.data.columns.filter(col =>
-                col.dtype.includes('int') || col.dtype.includes('float')
-            );
-            numericCols.forEach(col => {
-                const option = document.createElement('option');
-                option.value = col.name;
-                // Use display_name (alias) if available, fallback to name
-                const displayName = col.display_name || col.name;
-                option.textContent = `${displayName} (${col.dtype})`;
-                select.appendChild(option);
-            });
-        }
-    } catch (error) {
-        console.error('Error loading rating columns:', error);
-    }
-}
-
 function updateWizardUI() {
     // Update step indicators
     document.getElementById('wizardCurrentStep').textContent = wizardStep;
@@ -6371,9 +6384,10 @@ async function submitExperiment() {
         experiment_description: document.getElementById('wizardExpDescription').value.trim()
     };
 
-    // Add rating column for ranking models
+    // Add rating column for ranking models (auto-populate from Feature Config's target column)
     if (selectedModelConfig.model_type === 'ranking' || selectedModelConfig.model_type === 'multitask') {
-        payload.rating_column = document.getElementById('wizardRatingColumn').value;
+        const tc = selectedFeatureConfig?.target_column;
+        payload.rating_column = tc?.display_name || tc?.column || '';
     }
 
     // Disable run button and show spinner

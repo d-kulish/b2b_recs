@@ -3458,14 +3458,19 @@ def _input_fn(
         file_pattern,
         tfxio.TensorFlowDatasetOptions(
             batch_size=batch_size,
-            label_key=LABEL_KEY  # Extract label from features
+            label_key=LABEL_KEY,  # Extract label from features
+            num_epochs=1  # CRITICAL: Must be 1 for finite dataset, otherwise TFX creates infinite dataset
         ),
         tf_transform_output.transformed_metadata.schema
     )
 '''
 
     def _generate_ranking_model(self) -> str:
-        """Generate RankingModel class using rating_head_layers from ModelConfig."""
+        """Generate RankingModel class using tower layers and rating_head_layers from ModelConfig."""
+        # Generate tower layer code for buyer and product (same as retrieval)
+        buyer_layers_code = self._generate_tower_layers_code(self.buyer_tower_layers, 'query')
+        product_layers_code = self._generate_tower_layers_code(self.product_tower_layers, 'candidate')
+
         # Generate rating head layers code
         rating_head_code = self._generate_rating_head_code()
 
@@ -3486,8 +3491,13 @@ class RankingModel(tfrs.Model):
     """
     Ranking model using TensorFlow Recommenders.
 
-    Concatenates buyer and product embeddings, passes through rating head
-    to predict a scalar value (rating, score, quantity, etc.).
+    Architecture:
+    - Query tower: BuyerModel (embeddings) → Dense layers → compressed embedding
+    - Candidate tower: ProductModel (embeddings) → Dense layers → compressed embedding
+    - Concatenate compressed embeddings → Rating head → scalar prediction
+
+    Tower layers compress high-dimensional feature embeddings to output_embedding_dim
+    and apply L2 regularization for better generalization.
 
     Rating head architecture from ModelConfig: {self.model_config.get_rating_head_summary()}
     Loss function: {self.loss_function}
@@ -3510,11 +3520,23 @@ class RankingModel(tfrs.Model):
                 'hist_counts': tf.Variable(tf.zeros(25, dtype=tf.int32), trainable=False, name=f'{{tower}}_grad_hist'),
             }}
 
-        # Feature extraction models (same as retrieval)
+        # Feature extraction models
         self.buyer_model = BuyerModel(tf_transform_output)
         self.product_model = ProductModel(tf_transform_output)
 
-        # Rating head: concatenated embeddings -> scalar prediction
+        # Query tower: BuyerModel → Dense layers (with L2 regularization)
+        # Compresses high-dimensional feature embeddings to output_embedding_dim
+        query_layers = [self.buyer_model]
+{buyer_layers_code}
+        self.query_tower = tf.keras.Sequential(query_layers, name='query_tower')
+
+        # Candidate tower: ProductModel → Dense layers (with L2 regularization)
+        # Compresses high-dimensional feature embeddings to output_embedding_dim
+        candidate_layers = [self.product_model]
+{product_layers_code}
+        self.candidate_tower = tf.keras.Sequential(candidate_layers, name='candidate_tower')
+
+        # Rating head: concatenated tower embeddings -> scalar prediction
 {rating_head_code}
 
         # TFRS Ranking task
@@ -3528,11 +3550,11 @@ class RankingModel(tfrs.Model):
 
     def call(self, features: Dict[str, tf.Tensor]) -> tf.Tensor:
         """Forward pass: features -> predicted rating."""
-        # Get embeddings from both towers
-        buyer_embedding = self.buyer_model(features)
-        product_embedding = self.product_model(features)
+        # Get compressed embeddings from both towers (includes L2 regularization)
+        buyer_embedding = self.query_tower(features)      # Compressed to output_embedding_dim
+        product_embedding = self.candidate_tower(features) # Compressed to output_embedding_dim
 
-        # Concatenate embeddings
+        # Concatenate compressed embeddings
         concatenated = tf.concat([buyer_embedding, product_embedding], axis=1)
 
         # Pass through rating head to get scalar prediction

@@ -341,6 +341,170 @@ for tower in ['query', 'candidate', 'rating_head']:
 
 ---
 
+### Infinite Dataset Error in Ranking Trainer (2026-01-09)
+
+**Bug:** Ranking model experiments hung indefinitely during training with no progress, eventually timing out. The issue appeared as if the training loop was running infinitely.
+
+**Root Cause:** The ranking trainer's `_input_fn_ranking()` was missing `num_epochs=1` in the `TensorFlowDatasetOptions`. When `num_epochs` is not specified, TFX's `DataAccessor.tf_dataset_factory()` creates an **infinite repeating dataset**, causing the training loop to never terminate.
+
+**Comparison:**
+```python
+# Retrieval trainer (correct) - services.py line ~3098
+return data_accessor.tf_dataset_factory(
+    file_pattern,
+    tfxio.TensorFlowDatasetOptions(
+        batch_size=batch_size,
+        num_epochs=1  # CRITICAL: finite dataset
+    ),
+    ...
+)
+
+# Ranking trainer (buggy) - services.py line ~3462
+return data_accessor.tf_dataset_factory(
+    file_pattern,
+    tfxio.TensorFlowDatasetOptions(
+        batch_size=batch_size,
+        label_key=LABEL_KEY,
+        # MISSING: num_epochs=1 → infinite dataset!
+    ),
+    ...
+)
+```
+
+**Fix:** Added `num_epochs=1` to the ranking trainer's `_input_fn_ranking()`:
+
+```python
+return data_accessor.tf_dataset_factory(
+    file_pattern,
+    tfxio.TensorFlowDatasetOptions(
+        batch_size=batch_size,
+        label_key=LABEL_KEY,
+        num_epochs=1  # CRITICAL: Must be 1 for finite dataset
+    ),
+    tf_transform_output.transformed_metadata.schema
+)
+```
+
+**File Modified:** `ml_platform/configs/services.py` - `_generate_input_fn_ranking()`
+
+**Impact:** After this fix, ranking model training completes within expected time (5-10 minutes for 5 epochs on test data).
+
+---
+
+### Missing Tower Layers in Ranking Model - Zero Regularization Loss (2026-01-09)
+
+**Bug:** After successful ranking model training, the Training Analysis UI showed regularization loss was always 0 across all epochs:
+- `reg_loss`: `[0.0, 0.0, 0.0, 0.0, 0.0]`
+- `val_reg_loss`: `[0.0, 0.0, 0.0, 0.0, 0.0]`
+
+This indicated that L2 regularization was not being applied during training.
+
+**Root Cause Analysis:**
+
+The ranking model was missing the **tower layers** that compress high-dimensional embeddings and apply L2 regularization. Unlike the simple TensorFlow Recommenders tutorial examples (which use 32D pre-computed embeddings), our production system uses:
+
+- **Buyer tensor dimension:** 150D (from multiple features + crosses)
+- **Product tensor dimension:** 72D (from multiple features + crosses)
+
+These high-dimensional embeddings need to be compressed to a common 32D size before concatenation in the rating head.
+
+**Retrieval Model Architecture (correct):**
+```
+BuyerModel (150D) → Tower Layers (256→128→64→32, L2 reg) → 32D
+ProductModel (72D) → Tower Layers (128→64→32, L2 reg) → 32D
+                                    ↓
+                            Dot product similarity
+```
+
+**Ranking Model Architecture (buggy - before fix):**
+```
+BuyerModel (150D) → [MISSING TOWER] → 150D  ←── Wrong!
+ProductModel (72D) → [MISSING TOWER] → 72D  ←── Wrong!
+                          ↓
+                    Concat (222D)
+                          ↓
+                    Rating Head
+```
+
+The `_generate_ranking_model()` method was not calling `_generate_tower_layers_code()` for the buyer and product towers, even though `ModelConfig` had `buyer_tower_layers` and `product_tower_layers` defined with L2 regularization.
+
+**Fix:** Updated `_generate_ranking_model()` to include tower layers:
+
+1. **Generate tower layer code** (same method used by retrieval):
+```python
+buyer_layers_code = self._generate_tower_layers_code(self.buyer_tower_layers, 'query')
+product_layers_code = self._generate_tower_layers_code(self.product_tower_layers, 'candidate')
+```
+
+2. **Add tower Sequentials to `__init__`:**
+```python
+# Query tower: BuyerModel → Dense layers (with L2 regularization)
+query_layers = [self.buyer_model]
+{buyer_layers_code}  # Dense(256, L2=0.005), Dense(128), Dense(64), Dense(32)
+self.query_tower = tf.keras.Sequential(query_layers, name='query_tower')
+
+# Candidate tower: ProductModel → Dense layers (with L2 regularization)
+candidate_layers = [self.product_model]
+{product_layers_code}  # Dense(128, L2=0.005), Dense(64), Dense(32)
+self.candidate_tower = tf.keras.Sequential(candidate_layers, name='candidate_tower')
+```
+
+3. **Update `call()` to use towers:**
+```python
+def call(self, features: Dict[str, tf.Tensor]) -> tf.Tensor:
+    buyer_embedding = self.query_tower(features)      # Compressed to 32D
+    product_embedding = self.candidate_tower(features) # Compressed to 32D
+    concatenated = tf.concat([buyer_embedding, product_embedding], axis=1)  # 64D
+    return self.rating_head(concatenated)
+```
+
+**Ranking Model Architecture (fixed):**
+```
+BuyerModel (150D) → Tower (256→128→64→32, L2 reg) → 32D
+ProductModel (72D) → Tower (128→64→32, L2 reg) → 32D
+                              ↓
+                        Concat (64D)
+                              ↓
+                    Rating Head (128→64→32→1)
+                              ↓
+                        Scalar prediction
+```
+
+**File Modified:** `ml_platform/configs/services.py` - `_generate_ranking_model()` method (lines ~3468-3556)
+
+**Test Configuration:**
+| Parameter | Value |
+|-----------|-------|
+| Feature Config | `cherng_v3_rank_#1` (ID: 9) |
+| Model Config | `chernigiv_rank_1` (ID: 15) |
+| Source Experiment | `qt-96-20260109-154434` |
+| Epochs | 5 |
+| Learning Rate | 0.001 |
+
+**Test Results:** ✅ JOB_STATE_SUCCEEDED
+
+**Regularization Loss (after fix):**
+| Epoch | reg_loss | val_reg_loss |
+|-------|----------|--------------|
+| 1 | 1.0823 | 1.0823 |
+| 2 | 0.8713 | 0.8713 |
+| 3 | 0.6393 | 0.6393 |
+| 4 | 0.4451 | 0.4451 |
+| 5 | 0.3094 | 0.3094 |
+
+**Key Findings:**
+- Regularization loss now > 0 and decreasing as expected
+- L2 regularization from buyer and product tower layers is being applied
+- All 3 towers (query, candidate, rating_head) are properly tracked in metrics
+- Weight and gradient statistics are collected for all towers
+
+**Architectural Note:** For ranking models with high-dimensional input features (>32D), tower layers are essential for:
+1. **Dimension compression** - Reducing 150D/72D embeddings to 32D
+2. **L2 regularization** - Preventing overfitting via weight decay
+3. **Feature learning** - Adding non-linear transformations before the rating head
+
+---
+
 ### Custom Job Testing Limitations for TFT Transform (2026-01-08)
 
 **Discovery:** Attempted to create a Custom Job test script for Transform (similar to `scripts/test_services_trainer.py`) but discovered fundamental limitations.

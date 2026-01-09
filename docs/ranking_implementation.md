@@ -2278,6 +2278,35 @@ Concatenated: 64D → Rating Head (128→64→32→1) → scalar prediction
 
 ---
 
+## Known Issues / Future Improvements
+
+### Training RMSE/MAE Not Captured
+
+**Problem:** The trainer currently saves validation RMSE/MAE (`final_val_rmse`, `final_val_mae`) and test RMSE/MAE (`test_rmse`, `test_mae`), but does not save training set RMSE/MAE.
+
+**Impact:** In the ML Platform Overview tab, the "RMSE" KPI shows validation RMSE compared to "Test RMSE". Since both are computed on unseen data, they appear very close even when the model is overfitting. The loss chart shows clear overfitting (train loss << val loss), but this is not visible in the RMSE/MAE KPIs.
+
+**Solution:** Update the trainer to compute and save training RMSE/MAE at the end of training:
+- `final_train_rmse` - RMSE on training set
+- `final_train_mae` - MAE on training set
+
+This would allow the Overview tab to display:
+| Metric | Description |
+|--------|-------------|
+| Train RMSE | Training set RMSE (low if overfitting) |
+| Val RMSE | Validation set RMSE |
+| Test RMSE | Test set RMSE |
+
+The gap between Train RMSE and Val/Test RMSE would clearly indicate overfitting in the KPIs.
+
+**Files to modify:**
+- `pipelines/ranking_trainer_template.py` - Add training set evaluation
+- `ml_platform/experiments/training_cache_service.py` - Cache new metrics
+- `ml_platform/pipelines/services.py` - Extract new metrics
+- `templates/ml_platform/model_experiments.html` - Display new metrics
+
+---
+
 ## References
 
 - [TensorFlow Recommenders - Ranking](https://www.tensorflow.org/recommenders/examples/basic_ranking)

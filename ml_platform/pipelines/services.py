@@ -473,6 +473,9 @@ class PipelineService:
 
         Reads metrics from GCS output location.
         Handles both retrieval metrics (recall@K) and ranking metrics (RMSE/MAE).
+
+        Tries metrics.json first, then falls back to training_metrics.json for
+        detailed metrics (which stores training metrics as final_rmse, final_mae, etc.)
         """
         if not quick_test.gcs_artifacts_path:
             return {}
@@ -487,42 +490,59 @@ class PipelineService:
             prefix = "/".join(gcs_path.split("/")[1:])
 
             bucket = self.storage_client.bucket(bucket_name)
-            metrics_blob = bucket.blob(f"{prefix}/metrics.json")
 
+            # Try metrics.json first
+            metrics = {}
+            metrics_blob = bucket.blob(f"{prefix}/metrics.json")
             if metrics_blob.exists():
                 metrics_content = metrics_blob.download_as_string()
                 metrics = json.loads(metrics_content)
 
-                # Determine model type from feature config
-                feature_config = quick_test.feature_config
-                config_type = getattr(feature_config, 'config_type', 'retrieval')
+            # Also try training_metrics.json for detailed metrics (final_rmse, test_rmse, etc.)
+            training_metrics_blob = bucket.blob(f"{prefix}/training_metrics.json")
+            final_metrics = {}
+            if training_metrics_blob.exists():
+                training_content = training_metrics_blob.download_as_string()
+                training_data = json.loads(training_content)
+                final_metrics = training_data.get('final_metrics', {})
 
-                result = {
-                    "loss": metrics.get("loss"),
-                    "vocabulary_stats": metrics.get("vocabulary_stats", {}),
-                }
+            if not metrics and not final_metrics:
+                logger.warning(f"No metrics files found at {quick_test.gcs_artifacts_path}")
+                return {}
 
-                if config_type == 'ranking':
-                    # Ranking model metrics
-                    result.update({
-                        "rmse": metrics.get("rmse") or metrics.get("root_mean_squared_error"),
-                        "mae": metrics.get("mae") or metrics.get("mean_absolute_error"),
-                        "test_rmse": metrics.get("test_rmse") or metrics.get("test_root_mean_squared_error"),
-                        "test_mae": metrics.get("test_mae") or metrics.get("test_mean_absolute_error"),
-                    })
-                else:
-                    # Retrieval model metrics
-                    result.update({
-                        "recall_at_5": metrics.get("recall_at_5"),
-                        "recall_at_10": metrics.get("recall_at_10"),
-                        "recall_at_50": metrics.get("recall_at_50"),
-                        "recall_at_100": metrics.get("recall_at_100"),
-                    })
+            # Determine model type from feature config
+            feature_config = quick_test.feature_config
+            config_type = getattr(feature_config, 'config_type', 'retrieval')
 
-                return result
+            result = {
+                "loss": metrics.get("loss") or final_metrics.get("final_loss"),
+                "vocabulary_stats": metrics.get("vocabulary_stats", {}),
+            }
 
-            logger.warning(f"metrics.json not found at {quick_test.gcs_artifacts_path}")
-            return {}
+            if config_type == 'ranking':
+                # Ranking model metrics
+                # Training RMSE/MAE: check metrics.json first, then training_metrics.json (final_rmse/final_mae)
+                # Note: final_val_rmse/final_val_mae are validation metrics from training
+                result.update({
+                    "rmse": (metrics.get("rmse") or metrics.get("root_mean_squared_error") or
+                             final_metrics.get("final_val_rmse") or final_metrics.get("final_rmse")),
+                    "mae": (metrics.get("mae") or metrics.get("mean_absolute_error") or
+                            final_metrics.get("final_val_mae") or final_metrics.get("final_mae")),
+                    "test_rmse": (metrics.get("test_rmse") or metrics.get("test_root_mean_squared_error") or
+                                  final_metrics.get("test_rmse")),
+                    "test_mae": (metrics.get("test_mae") or metrics.get("test_mean_absolute_error") or
+                                 final_metrics.get("test_mae")),
+                })
+            else:
+                # Retrieval model metrics
+                result.update({
+                    "recall_at_5": metrics.get("recall_at_5") or final_metrics.get("test_recall_at_5"),
+                    "recall_at_10": metrics.get("recall_at_10") or final_metrics.get("test_recall_at_10"),
+                    "recall_at_50": metrics.get("recall_at_50") or final_metrics.get("test_recall_at_50"),
+                    "recall_at_100": metrics.get("recall_at_100") or final_metrics.get("test_recall_at_100"),
+                })
+
+            return result
 
         except Exception as e:
             logger.exception(f"Failed to extract results for QuickTest {quick_test.pk}")

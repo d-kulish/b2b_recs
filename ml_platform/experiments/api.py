@@ -59,18 +59,28 @@ def _get_experiment_metrics(qt):
         })
 
         # Fallback to training_history_json
+        # Training saves metrics as: final_val_rmse, final_val_mae (validation), test_rmse, test_mae (test)
         if qt.training_history_json:
             hist = qt.training_history_json if isinstance(qt.training_history_json, dict) else {}
             final_metrics = hist.get('final_metrics', {})
 
             if metrics['rmse'] is None:
-                metrics['rmse'] = final_metrics.get('rmse') or final_metrics.get('root_mean_squared_error')
+                # Prefer validation metrics, fallback to training metrics
+                metrics['rmse'] = (final_metrics.get('final_val_rmse') or
+                                   final_metrics.get('final_rmse') or
+                                   final_metrics.get('rmse') or
+                                   final_metrics.get('root_mean_squared_error'))
             if metrics['mae'] is None:
-                metrics['mae'] = final_metrics.get('mae') or final_metrics.get('mean_absolute_error')
+                metrics['mae'] = (final_metrics.get('final_val_mae') or
+                                  final_metrics.get('final_mae') or
+                                  final_metrics.get('mae') or
+                                  final_metrics.get('mean_absolute_error'))
             if metrics['test_rmse'] is None:
-                metrics['test_rmse'] = final_metrics.get('test_rmse') or final_metrics.get('test_root_mean_squared_error')
+                metrics['test_rmse'] = (final_metrics.get('test_rmse') or
+                                        final_metrics.get('test_root_mean_squared_error'))
             if metrics['test_mae'] is None:
-                metrics['test_mae'] = final_metrics.get('test_mae') or final_metrics.get('test_mean_absolute_error')
+                metrics['test_mae'] = (final_metrics.get('test_mae') or
+                                       final_metrics.get('test_mean_absolute_error'))
     else:
         # Retrieval model metrics
         metrics.update({
@@ -743,18 +753,28 @@ def _get_model_metrics(quick_test):
         })
 
         # Fallback to training_history_json
+        # Training saves metrics as: final_val_rmse, final_val_mae (validation), test_rmse, test_mae (test)
         try:
             history = quick_test.training_history_json or {}
             final_metrics = history.get('final_metrics', {})
             if final_metrics:
                 if metrics['rmse'] is None:
-                    metrics['rmse'] = final_metrics.get('rmse') or final_metrics.get('root_mean_squared_error')
+                    # Prefer validation metrics, fallback to training metrics
+                    metrics['rmse'] = (final_metrics.get('final_val_rmse') or
+                                       final_metrics.get('final_rmse') or
+                                       final_metrics.get('rmse') or
+                                       final_metrics.get('root_mean_squared_error'))
                 if metrics['mae'] is None:
-                    metrics['mae'] = final_metrics.get('mae') or final_metrics.get('mean_absolute_error')
+                    metrics['mae'] = (final_metrics.get('final_val_mae') or
+                                      final_metrics.get('final_mae') or
+                                      final_metrics.get('mae') or
+                                      final_metrics.get('mean_absolute_error'))
                 if metrics['test_rmse'] is None:
-                    metrics['test_rmse'] = final_metrics.get('test_rmse') or final_metrics.get('test_root_mean_squared_error')
+                    metrics['test_rmse'] = (final_metrics.get('test_rmse') or
+                                            final_metrics.get('test_root_mean_squared_error'))
                 if metrics['test_mae'] is None:
-                    metrics['test_mae'] = final_metrics.get('test_mae') or final_metrics.get('test_mean_absolute_error')
+                    metrics['test_mae'] = (final_metrics.get('test_mae') or
+                                           final_metrics.get('test_mean_absolute_error'))
         except Exception:
             pass
     else:

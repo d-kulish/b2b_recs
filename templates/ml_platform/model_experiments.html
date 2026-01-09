@@ -669,6 +669,65 @@
         color: #f59e0b;
     }
 
+    /* Target Column Card (for Overview tab - ranking models) */
+    .target-column-view-card {
+        background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+        border: 1.5px solid #fbbf24;
+        border-radius: 10px;
+        padding: 12px 14px;
+        margin-bottom: 16px;
+    }
+    .target-column-view-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 10px;
+        font-size: 13px;
+        font-weight: 600;
+        color: #b45309;
+    }
+    .target-column-view-header i {
+        color: #f59e0b;
+    }
+    .target-column-view-badge {
+        background: #fbbf24;
+        color: white;
+        font-size: 10px;
+        font-weight: 600;
+        padding: 2px 8px;
+        border-radius: 10px;
+        margin-left: auto;
+    }
+    .target-column-view-content {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        background: white;
+        border: 1px solid #fcd34d;
+        border-radius: 8px;
+        padding: 8px 12px;
+    }
+    .target-column-view-name {
+        font-weight: 600;
+        color: #92400e;
+        font-size: 14px;
+    }
+    .target-column-view-type {
+        background: #fef3c7;
+        color: #b45309;
+        font-size: 11px;
+        font-weight: 500;
+        padding: 2px 8px;
+        border-radius: 4px;
+        text-transform: uppercase;
+    }
+    .target-column-view-transforms {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 10px;
+    }
+
     /* Tensor Preview in Wizard */
     .tensor-preview-grid {
         display: grid;
@@ -4589,7 +4648,7 @@
                             <canvas id="trainingLossChart" height="170"></canvas>
                         </div>
                         <div class="training-chart-wrapper">
-                            <h5 class="training-chart-title">Recall Metrics</h5>
+                            <h5 id="metricsChartTitle" class="training-chart-title">Recall Metrics</h5>
                             <canvas id="trainingMetricsChart" height="170"></canvas>
                         </div>
                     </div>
@@ -5210,10 +5269,11 @@ function renderMetricsRow(exp) {
     let metrics;
     if (isRanking) {
         // Ranking model metrics - RMSE/MAE (lower is better)
+        // Group by metric type: RMSEs together, MAEs together
         metrics = [
             { label: 'RMSE', value: exp.rmse, format: formatRMSE },
-            { label: 'MAE', value: exp.mae, format: formatRMSE },
             { label: 'Test RMSE', value: exp.test_rmse, format: formatRMSE },
+            { label: 'MAE', value: exp.mae, format: formatRMSE },
             { label: 'Test MAE', value: exp.test_mae, format: formatRMSE }
         ];
     } else {
@@ -6678,8 +6738,51 @@ function renderFeaturesConfigForExp(config) {
 
     const maxTotal = Math.max(buyerResult.total || 0, productResult.total || 0);
 
+    // Build target column section (for ranking models)
+    let targetColumnHtml = '';
+    if (config.target_column && config.config_type === 'ranking') {
+        const tc = config.target_column;
+        const tcName = tc.display_name || tc.column || '-';
+        const tcType = tc.bq_type || 'FLOAT';
+        const transforms = tc.transforms || {};
+
+        // Build transforms tags
+        let transformsHtml = '';
+        if (transforms.log_transform && transforms.log_transform.enabled) {
+            transformsHtml += '<span class="target-transform-tag"><i class="fas fa-chart-line"></i> Log transform</span>';
+        }
+        if (transforms.clip_outliers && transforms.clip_outliers.enabled) {
+            const lower = transforms.clip_outliers.lower?.enabled ? transforms.clip_outliers.lower.percentile : null;
+            const upper = transforms.clip_outliers.upper?.enabled ? transforms.clip_outliers.upper.percentile : null;
+            let clipText = 'Clip';
+            if (lower && upper) {
+                clipText = `Clip ${lower}%-${upper}%`;
+            } else if (lower) {
+                clipText = `Clip lower ${lower}%`;
+            } else if (upper) {
+                clipText = `Clip upper ${upper}%`;
+            }
+            transformsHtml += `<span class="target-transform-tag"><i class="fas fa-cut"></i> ${clipText}</span>`;
+        }
+
+        targetColumnHtml = `
+            <div class="target-column-view-card">
+                <div class="target-column-view-header">
+                    <i class="fas fa-bullseye"></i>
+                    <span>Target Column</span>
+                    <span class="target-column-view-badge">For Ranking</span>
+                </div>
+                <div class="target-column-view-content">
+                    <span class="target-column-view-name">${tcName}</span>
+                    <span class="target-column-view-type">${tcType}</span>
+                </div>
+                ${transformsHtml ? `<div class="target-column-view-transforms">${transformsHtml}</div>` : ''}
+            </div>
+        `;
+    }
+
     // Build HTML
-    let html = '<div class="exp-view-features-grid">';
+    let html = targetColumnHtml + '<div class="exp-view-features-grid">';
 
     // Buyer Tensor Panel
     html += `
@@ -6773,6 +6876,7 @@ function getExpFeatureDimension(feature) {
             if (c.weekly) totalDim += 2;
             if (c.daily) totalDim += 2;
         }
+        if (transforms.bucketize?.enabled) totalDim += (transforms.bucketize.embedding_dim || 32);
     }
 
     return totalDim;
@@ -7246,13 +7350,20 @@ function renderMetricsSummary(metrics, useTestPrefix = false, configType = 'retr
 
     let items;
     if (configType === 'ranking') {
-        // Ranking model metrics - RMSE/MAE
-        const prefix = useTestPrefix ? 'test_' : '';
+        // Ranking model metrics - show all 4 metrics: training RMSE/MAE and test RMSE/MAE
+        // For ranking, we always show both training and test metrics regardless of useTestPrefix
+        // Training metrics come from rmse/mae (or final_val_rmse/final_val_mae in training history)
+        // Test metrics come from test_rmse/test_mae
+        const rmse = metrics['rmse'] ?? metrics['final_val_rmse'] ?? metrics['final_rmse'];
+        const mae = metrics['mae'] ?? metrics['final_val_mae'] ?? metrics['final_mae'];
+        const testRmse = metrics['test_rmse'];
+        const testMae = metrics['test_mae'];
+
         items = [
-            { label: 'RMSE', value: metrics[prefix + 'rmse'] || metrics['rmse'], format: formatRMSE },
-            { label: 'MAE', value: metrics[prefix + 'mae'] || metrics['mae'], format: formatRMSE },
-            { label: 'Test RMSE', value: metrics['test_rmse'], format: formatRMSE },
-            { label: 'Test MAE', value: metrics['test_mae'], format: formatRMSE }
+            { label: 'RMSE', value: rmse, format: formatRMSE },
+            { label: 'Test RMSE', value: testRmse, format: formatRMSE },
+            { label: 'MAE', value: mae, format: formatRMSE },
+            { label: 'Test MAE', value: testMae, format: formatRMSE }
         ];
     } else {
         // Retrieval model metrics - Recall@K
@@ -8093,16 +8204,29 @@ function renderMetricsChart(history) {
 
     if (isRanking) {
         // Ranking model - show RMSE/MAE metrics
-        const rankingKeys = [
-            { key: 'rmse', label: 'RMSE' },
-            { key: 'mae', label: 'MAE' },
-            { key: 'test_rmse', label: 'Test RMSE' },
-            { key: 'test_mae', label: 'Test MAE' }
+        // Training metrics stored as final_val_rmse/final_val_mae or final_rmse/final_mae
+        // Test metrics stored as test_rmse/test_mae
+        const rankingMetrics = [
+            {
+                label: 'RMSE',
+                value: finalMetrics['rmse'] ?? finalMetrics['final_val_rmse'] ?? finalMetrics['final_rmse']
+            },
+            {
+                label: 'Test RMSE',
+                value: finalMetrics['test_rmse']
+            },
+            {
+                label: 'MAE',
+                value: finalMetrics['mae'] ?? finalMetrics['final_val_mae'] ?? finalMetrics['final_mae']
+            },
+            {
+                label: 'Test MAE',
+                value: finalMetrics['test_mae']
+            }
         ];
 
-        rankingKeys.forEach(({ key, label }) => {
-            const value = finalMetrics[key] || finalMetrics[key.replace('test_', '')];
-            if (value !== undefined) {
+        rankingMetrics.forEach(({ label, value }) => {
+            if (value !== undefined && value !== null) {
                 metricLabels.push(label);
                 metricValues.push(value);
             }
@@ -8132,6 +8256,12 @@ function renderMetricsChart(history) {
         yAxisTitle = 'Recall Rate';
         formatValue = v => (v * 100).toFixed(2) + '%';
         formatLabel = v => (v * 100).toFixed(2) + '%';
+    }
+
+    // Update the chart title in the DOM
+    const titleElement = document.getElementById('metricsChartTitle');
+    if (titleElement) {
+        titleElement.textContent = chartTitle;
     }
 
     // If no metrics found, show a placeholder message

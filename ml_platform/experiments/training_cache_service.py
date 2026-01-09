@@ -302,38 +302,44 @@ class TrainingCacheService:
     def _extract_weight_stats(self, weight_stats: Dict, indices: List[int]) -> Dict:
         """Extract weight stats without histogram data (sampled)."""
         result = {}
-        for tower in ['query', 'candidate']:
+        # Include rating_head for ranking models
+        for tower in ['query', 'candidate', 'rating_head']:
             tower_data = weight_stats.get(tower, {})
-            result[tower] = {}
-            for stat in ['mean', 'std', 'min', 'max']:
-                values = tower_data.get(stat, [])
-                if values:
-                    result[tower][stat] = self._sample_list(values, indices)
-            # Skip histogram - fetched on demand
+            if tower_data:  # Only include if data exists
+                result[tower] = {}
+                for stat in ['mean', 'std', 'min', 'max']:
+                    values = tower_data.get(stat, [])
+                    if values:
+                        result[tower][stat] = self._sample_list(values, indices)
+                # Skip histogram - fetched on demand
         return result
 
     def _extract_gradient_stats(self, gradient_stats: Dict, indices: List[int]) -> Dict:
         """Extract gradient stats without histogram data (sampled)."""
         result = {}
-        for tower in ['query', 'candidate']:
+        # Include rating_head for ranking models
+        for tower in ['query', 'candidate', 'rating_head']:
             tower_data = gradient_stats.get(tower, {})
-            result[tower] = {}
-            for stat in ['mean', 'std', 'min', 'max', 'norm']:
-                values = tower_data.get(stat, [])
-                if values:
-                    result[tower][stat] = self._sample_list(values, indices)
-            # Skip histogram - fetched on demand
+            if tower_data:  # Only include if data exists
+                result[tower] = {}
+                for stat in ['mean', 'std', 'min', 'max', 'norm']:
+                    values = tower_data.get(stat, [])
+                    if values:
+                        result[tower][stat] = self._sample_list(values, indices)
+                # Skip histogram - fetched on demand
         return result
 
     def _has_histogram_data(self, full_history: Dict) -> bool:
         """Check if histogram data is available in the full history."""
         weight_stats = full_history.get('weight_stats', {})
-        for tower in ['query', 'candidate']:
+        # Include rating_head for ranking models
+        for tower in ['query', 'candidate', 'rating_head']:
             if weight_stats.get(tower, {}).get('histogram'):
                 return True
 
         gradient_stats = full_history.get('gradient_stats', {})
-        for tower in ['query', 'candidate']:
+        # Include rating_head for ranking models
+        for tower in ['query', 'candidate', 'rating_head']:
             if gradient_stats.get(tower, {}).get('histogram'):
                 return True
 

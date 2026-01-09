@@ -166,6 +166,16 @@ def main():
 
             dataset = dataset.map(parse_fn, num_parallel_calls=tf.data.AUTOTUNE)
             dataset = dataset.batch(options.batch_size)
+
+            # Handle label_key for ranking models - extract label from features
+            label_key = getattr(options, 'label_key', None)
+            if label_key:
+                logger.info(f"Ranking model: extracting label_key='{{label_key}}' from features")
+                def extract_label(features):
+                    label = features.pop(label_key)
+                    return features, label
+                dataset = dataset.map(extract_label, num_parallel_calls=tf.data.AUTOTUNE)
+
             dataset = dataset.prefetch(tf.data.AUTOTUNE)
             return dataset
 
@@ -199,13 +209,20 @@ def main():
     parser.add_argument('--source-exp', default='qt-62-20251231-154907', help='Source experiment for artifacts')
     parser.add_argument('--epochs', type=int, default=2, help='Training epochs')
     parser.add_argument('--learning-rate', type=float, default=0.1, help='Learning rate')
+    parser.add_argument('--output-gcs-path', type=str, default=None, help='Custom GCS output path (e.g., gs://bucket/qt-94-xxx)')
     parser.add_argument('--dry-run', action='store_true', help='Generate code but do not submit job')
 
     args = parser.parse_args()
 
     from google.cloud import storage, aiplatform
 
-    run_id = f'services-test-{datetime.now().strftime("%Y%m%d-%H%M%S")}'
+    # Use custom output path if provided, otherwise generate new run_id
+    if args.output_gcs_path:
+        run_id = args.output_gcs_path.split('/')[-1]  # Extract last part as run_id
+        gcs_output_path = args.output_gcs_path
+    else:
+        run_id = f'services-test-{datetime.now().strftime("%Y%m%d-%H%M%S")}'
+        gcs_output_path = None  # Will be set later
     logger.info(f"Run ID: {run_id}")
 
     # Get configs from database
@@ -256,8 +273,10 @@ def main():
     logger.info(f"Uploaded trainer to {trainer_gcs_path}")
 
     # Create runner script
-    gcs_output_path = f'gs://{ARTIFACTS_BUCKET}/{run_id}'  # Base path for MetricsCollector
+    if not gcs_output_path:
+        gcs_output_path = f'gs://{ARTIFACTS_BUCKET}/{run_id}'  # Base path for MetricsCollector
     output_path = f'{gcs_output_path}/model'  # Model output subdirectory
+    logger.info(f"GCS output path: {gcs_output_path}")
     runner_script = create_runner_script(artifacts, trainer_gcs_path, output_path, gcs_output_path, args.epochs, args.learning_rate)
 
     # Upload runner script

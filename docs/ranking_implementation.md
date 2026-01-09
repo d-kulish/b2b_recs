@@ -142,6 +142,205 @@ outputs['sales_target'] = sales_log  # Per-example transformed value
 
 ---
 
+### Ranking Trainer Bug Fixes (2026-01-09)
+
+A series of bugs were discovered and fixed during ranking trainer testing. These bugs prevented the ranking model from training successfully and from collecting complete metrics.
+
+---
+
+#### Bug 1: `NUM_OOV_BUCKETS` Not Defined
+
+**Error:**
+```
+NameError: name 'NUM_OOV_BUCKETS' is not defined
+File "trainer_module.py", line 309, in __init__
+    self.customer_id_embedding = tf.keras.layers.Embedding(customer_id_vocab_size + NUM_OOV_BUCKETS, 64)
+```
+
+**Root Cause:** The `_generate_constants_ranking()` method was missing the `NUM_OOV_BUCKETS = 1` constant that exists in the retrieval trainer's `_generate_constants()`. Both BuyerModel and ProductModel use this constant for embedding layer initialization.
+
+**Fix:** Added `NUM_OOV_BUCKETS = 1` to `_generate_constants_ranking()`.
+
+**File Modified:** `ml_platform/configs/services.py:3422`
+
+```python
+# Before (buggy)
+return f'''
+# Target column for ranking
+LABEL_KEY = '{target_col}_target'
+TARGET_COL = '{target_col}'
+
+# Transform flags...
+'''
+
+# After (fixed)
+return f'''
+# Target column for ranking
+LABEL_KEY = '{target_col}_target'
+TARGET_COL = '{target_col}'
+
+# OOV buckets (must match Transform preprocessing)
+NUM_OOV_BUCKETS = 1
+
+# Transform flags...
+'''
+```
+
+---
+
+#### Bug 2: Test Runner Missing `label_key` Handling
+
+**Error:**
+```
+ValueError: too many values to unpack (expected 2)
+File "trainer_module.py", line 484, in compute_loss
+    feature_dict, labels = features
+```
+
+**Root Cause:** The custom job test runner script (`scripts/test_services_trainer.py`) has a `DataAccessor` class that didn't handle the `label_key` option. For ranking models, `_input_fn_ranking()` uses `label_key=LABEL_KEY` to extract labels, returning a `(features_dict, label)` tuple. The test runner was returning only the features dict.
+
+**Fix:** Updated `DataAccessor.tf_dataset_factory()` to extract labels when `label_key` is specified.
+
+**File Modified:** `scripts/test_services_trainer.py:170-177`
+
+```python
+# Handle label_key for ranking models - extract label from features
+label_key = getattr(options, 'label_key', None)
+if label_key:
+    logger.info(f"Ranking model: extracting label_key='{label_key}' from features")
+    def extract_label(features):
+        label = features.pop(label_key)
+        return features, label
+    dataset = dataset.map(extract_label, num_parallel_calls=tf.data.AUTOTUNE)
+```
+
+---
+
+#### Bug 3: Rating Head Layer Names Missing 'rating' Pattern
+
+**Symptom:** `rating_head` gradient norms were `[0.0, 0.0, ...]`, weight_stats and gradient_stats missing for rating_head tower.
+
+**Root Cause:** The `_generate_rating_head_code()` method created Dense layers without explicit names:
+
+```python
+# BUGGY - layers have no names
+self.rating_head = tf.keras.Sequential([
+    tf.keras.layers.Dense(128, activation='relu'),
+    tf.keras.layers.Dense(64, activation='relu'),
+    ...
+], name='rating_head')
+```
+
+Keras auto-names these as `dense/kernel:0`, `dense_1/kernel:0`, etc. The `train_step` method and callbacks check `if 'rating' in var_name` to categorize variables. Without 'rating' in the variable names, rating_head variables were skipped.
+
+**Fix:** Added explicit names containing 'rating' to all layers in the rating head.
+
+**File Modified:** `ml_platform/configs/services.py:3606-3661`
+
+```python
+# FIXED - layers have names containing 'rating'
+self.rating_head = tf.keras.Sequential([
+    tf.keras.layers.Dense(128, activation='relu', name='rating_dense_1'),
+    tf.keras.layers.Dense(64, activation='relu', name='rating_dense_2'),
+    tf.keras.layers.Dense(32, activation='relu', name='rating_dense_3'),
+    tf.keras.layers.Dense(1, name='rating_dense_4'),
+], name='rating_head')
+```
+
+---
+
+#### Bug 4: `log_weight_stats` / `log_gradient_stats` KeyError
+
+**Error:**
+```
+KeyError: 'histogram'
+File "trainer_module.py", line 166, in log_weight_stats
+    tower_stats['histogram']['bin_edges'] = histogram['bin_edges']
+```
+
+**Root Cause:** When a new tower (like `rating_head`) is first logged, `tower_stats` is an empty dict. The code tried to access `tower_stats['histogram']` before initializing it:
+
+```python
+# BUGGY - tower_stats['histogram'] doesn't exist yet
+if 'bin_edges' in histogram:
+    tower_stats['histogram']['bin_edges'] = histogram['bin_edges']  # KeyError!
+```
+
+**Fix:** Initialize histogram dict before accessing.
+
+**Files Modified:** `ml_platform/configs/services.py:1887-1895` and `1915-1923`
+
+```python
+# FIXED - initialize histogram dict first
+if histogram:
+    if 'histogram' not in tower_stats:
+        tower_stats['histogram'] = {'bin_edges': None, 'counts': []}
+    if 'bin_edges' in histogram and histogram['bin_edges']:
+        tower_stats['histogram']['bin_edges'] = histogram['bin_edges']
+    if 'counts' in histogram:
+        tower_stats['histogram']['counts'].append(histogram['counts'])
+```
+
+---
+
+#### Bug 5: TrainingCacheService Missing `rating_head` Tower
+
+**Symptom:** GCS had complete rating_head data, but Django DB was missing weight_stats and gradient_stats for rating_head.
+
+**Root Cause:** `TrainingCacheService` had hardcoded tower lists `['query', 'candidate']` without `'rating_head'`.
+
+**File Modified:** `ml_platform/experiments/training_cache_service.py:302-346`
+
+```python
+# BUGGY - missing rating_head
+for tower in ['query', 'candidate']:  # No rating_head!
+
+# FIXED - includes rating_head
+for tower in ['query', 'candidate', 'rating_head']:
+```
+
+**Methods Fixed:**
+- `_extract_weight_stats()` - line 306
+- `_extract_gradient_stats()` - line 321
+- `_has_histogram_data()` - lines 331, 336
+
+---
+
+### Test Results (2026-01-09)
+
+**Test Configuration:**
+| Parameter | Value |
+|-----------|-------|
+| Feature Config | `cherng_v3_rank_#1` (ID: 9) |
+| Model Config | `chernigiv_rank_1` (ID: 15) |
+| Source Experiment | `qt-94-20260108-204730` |
+| Epochs | 5 |
+| Learning Rate | 0.01 |
+| GCS Output | `gs://b2b-recs-quicktest-artifacts/qt-94-20260108-204730` |
+
+**Custom Job:** `projects/555035914949/locations/europe-central2/customJobs/2484319035169177600`
+
+**Result:** ✅ JOB_STATE_SUCCEEDED
+
+**Verified Metrics from Django DB (QuickTest 94):**
+
+| Metric Category | Status | Values |
+|-----------------|--------|--------|
+| **Gradient Norms (rating_head)** | ✅ Non-zero | `[19.19, 19.52, 19.71, 19.87, 20.09]` |
+| **Weight Stats (rating_head)** | ✅ Present | mean, std, min, max, histogram |
+| **Gradient Stats (rating_head)** | ✅ Present | mean, std, min, max, norm, histogram |
+| **Final Test RMSE** | ✅ | 0.5444 |
+| **Final Test MAE** | ✅ | 0.4062 |
+
+**All 5 Verification Checks Passed:**
+- [x] rating_head gradient norms present
+- [x] rating_head gradient norms non-zero
+- [x] rating_head weight_stats present
+- [x] rating_head gradient_stats present
+- [x] rating_head gradient_stats norm non-zero
+
+---
+
 ### Custom Job Testing Limitations for TFT Transform (2026-01-08)
 
 **Discovery:** Attempted to create a Custom Job test script for Transform (similar to `scripts/test_services_trainer.py`) but discovered fundamental limitations.

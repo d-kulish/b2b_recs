@@ -1885,7 +1885,10 @@ class MetricsCollector:
                 tower_stats[stat_name].append(float(stats[stat_name]))
 
         if histogram:
-            if 'bin_edges' in histogram and not tower_stats.get('histogram', {}).get('bin_edges'):
+            # Initialize histogram dict if not present
+            if 'histogram' not in tower_stats:
+                tower_stats['histogram'] = {'bin_edges': None, 'counts': []}
+            if 'bin_edges' in histogram and histogram['bin_edges'] and not tower_stats['histogram'].get('bin_edges'):
                 tower_stats['histogram']['bin_edges'] = histogram['bin_edges']
             if 'counts' in histogram:
                 tower_stats['histogram']['counts'].append(histogram['counts'])
@@ -1910,7 +1913,10 @@ class MetricsCollector:
                 tower_stats[stat_name].append(float(stats[stat_name]))
 
         if histogram:
-            if 'bin_edges' in histogram and not tower_stats.get('histogram', {}).get('bin_edges'):
+            # Initialize histogram dict if not present
+            if 'histogram' not in tower_stats:
+                tower_stats['histogram'] = {'bin_edges': None, 'counts': []}
+            if 'bin_edges' in histogram and histogram['bin_edges'] and not tower_stats['histogram'].get('bin_edges'):
                 tower_stats['histogram']['bin_edges'] = histogram['bin_edges']
             if 'counts' in histogram:
                 tower_stats['histogram']['counts'].append(histogram['counts'])
@@ -3419,6 +3425,9 @@ LEARNING_RATE = {self.learning_rate}
 LABEL_KEY = '{target_col}_target'
 TARGET_COL = '{target_col}'
 
+# OOV buckets (must match Transform preprocessing)
+NUM_OOV_BUCKETS = 1
+
 # Transform flags for inverse transform at serving time
 NORMALIZE_APPLIED = {normalize_applied}
 LOG_APPLIED = {log_applied}
@@ -3601,21 +3610,29 @@ class RankingModel(tfrs.Model):
 '''
 
     def _generate_rating_head_code(self) -> str:
-        """Generate rating head layers from ModelConfig.rating_head_layers."""
+        """Generate rating head layers from ModelConfig.rating_head_layers.
+
+        IMPORTANT: All layers must have explicit names containing 'rating' so that
+        train_step, WeightStatsCallback, and GradientStatsCallback can identify
+        them as belonging to the rating_head tower for metrics tracking.
+        """
         if not self.rating_head_layers:
-            # Default fallback
+            # Default fallback - layers must have names containing 'rating'
             return '''        # Rating head (default - no custom layers configured)
         self.rating_head = tf.keras.Sequential([
-            tf.keras.layers.Dense(256, activation='relu'),
-            tf.keras.layers.Dense(64, activation='relu'),
-            tf.keras.layers.Dense(1)  # Scalar output
+            tf.keras.layers.Dense(256, activation='relu', name='rating_dense_1'),
+            tf.keras.layers.Dense(64, activation='relu', name='rating_dense_2'),
+            tf.keras.layers.Dense(1, name='rating_output')  # Scalar output
         ], name='rating_head')'''
 
         lines = ['        # Rating head from ModelConfig']
         lines.append('        self.rating_head = tf.keras.Sequential([')
 
+        # Counter for unique layer names - all must contain 'rating' for metrics tracking
+        layer_idx = 0
         for layer in self.rating_head_layers:
             layer_type = layer.get('type', 'dense')
+            layer_idx += 1
 
             if layer_type == 'dense':
                 units = layer.get('units', 64)
@@ -3634,14 +3651,17 @@ class RankingModel(tfrs.Model):
                 else:
                     reg_str = ""
 
-                lines.append(f"            tf.keras.layers.Dense({units}{activation_str}{reg_str}),")
+                # Name must contain 'rating' for train_step gradient tracking
+                lines.append(f"            tf.keras.layers.Dense({units}{activation_str}{reg_str}, name='rating_dense_{layer_idx}'),")
 
             elif layer_type == 'dropout':
                 rate = layer.get('rate', 0.2)
-                lines.append(f"            tf.keras.layers.Dropout({rate}),")
+                # Name must contain 'rating' for weight stats tracking
+                lines.append(f"            tf.keras.layers.Dropout({rate}, name='rating_dropout_{layer_idx}'),")
 
             elif layer_type == 'batch_norm':
-                lines.append(f"            tf.keras.layers.BatchNormalization(),")
+                # Name must contain 'rating' for weight stats tracking
+                lines.append(f"            tf.keras.layers.BatchNormalization(name='rating_batchnorm_{layer_idx}'),")
 
         lines.append("        ], name='rating_head')")
         return '\n'.join(lines)

@@ -1748,7 +1748,7 @@ class TrainerModuleGenerator:
         return '''import os
 import json
 import glob
-from typing import Dict, List, Text
+from typing import Dict, List, Text, Tuple
 
 import numpy as np
 import tensorflow as tf
@@ -3487,6 +3487,20 @@ class RankingModel(tfrs.Model):
     def __init__(self, tf_transform_output: tft.TFTransformOutput):
         super().__init__()
 
+        # Gradient statistics accumulators (tf.Variables for graph-mode updates)
+        # These are updated in train_step and read/reset by GradientStatsCallback
+        self._grad_accum = {{}}
+        for tower in ['query', 'candidate', 'rating_head']:
+            self._grad_accum[tower] = {{
+                'sum': tf.Variable(0.0, trainable=False, name=f'{{tower}}_grad_sum'),
+                'sum_sq': tf.Variable(0.0, trainable=False, name=f'{{tower}}_grad_sum_sq'),
+                'count': tf.Variable(0.0, trainable=False, name=f'{{tower}}_grad_count'),
+                'min': tf.Variable(float('inf'), trainable=False, name=f'{{tower}}_grad_min'),
+                'max': tf.Variable(float('-inf'), trainable=False, name=f'{{tower}}_grad_max'),
+                # Histogram bins (25 bins, range will be determined dynamically)
+                'hist_counts': tf.Variable(tf.zeros(25, dtype=tf.int32), trainable=False, name=f'{{tower}}_grad_hist'),
+            }}
+
         # Feature extraction models (same as retrieval)
         self.buyer_model = BuyerModel(tf_transform_output)
         self.product_model = ProductModel(tf_transform_output)
@@ -3529,6 +3543,61 @@ class RankingModel(tfrs.Model):
 
         # Compute loss using TFRS Ranking task
         return self.task(labels=labels, predictions=predictions)
+
+    def train_step(self, data):
+        """
+        Custom train_step that captures gradient statistics for visualization.
+
+        Updates tf.Variable accumulators for gradient stats (graph-compatible).
+        GradientStatsCallback reads these at epoch end.
+        """
+        with tf.GradientTape() as tape:
+            loss = self.compute_loss(data, training=True)
+            # Extract regularization losses separately for monitoring
+            regularization_loss = sum(self.losses) if self.losses else tf.constant(0.0)
+            total_loss = loss + regularization_loss
+
+        gradients = tape.gradient(total_loss, self.trainable_variables)
+        self.optimizer.apply_gradients(zip(gradients, self.trainable_variables))
+
+        # Accumulate gradient statistics using tf ops (no numpy - graph compatible)
+        for grad, var in zip(gradients, self.trainable_variables):
+            if grad is not None:
+                var_name = var.name.lower()
+                grad_flat = tf.reshape(tf.cast(grad, tf.float32), [-1])
+
+                # Determine tower
+                if 'query' in var_name or 'buyer' in var_name:
+                    tower = 'query'
+                elif 'candidate' in var_name or 'product' in var_name:
+                    tower = 'candidate'
+                elif 'rating' in var_name:
+                    tower = 'rating_head'
+                else:
+                    continue
+
+                accum = self._grad_accum[tower]
+
+                # Update running statistics
+                batch_sum = tf.reduce_sum(grad_flat)
+                batch_sum_sq = tf.reduce_sum(tf.square(grad_flat))
+                batch_count = tf.cast(tf.size(grad_flat), tf.float32)
+                batch_min = tf.reduce_min(grad_flat)
+                batch_max = tf.reduce_max(grad_flat)
+
+                accum['sum'].assign_add(batch_sum)
+                accum['sum_sq'].assign_add(batch_sum_sq)
+                accum['count'].assign_add(batch_count)
+                accum['min'].assign(tf.minimum(accum['min'], batch_min))
+                accum['max'].assign(tf.maximum(accum['max'], batch_max))
+
+                # Update histogram (fixed range for stability: -1 to 1, clipped)
+                grad_clipped = tf.clip_by_value(grad_flat, -1.0, 1.0)
+                hist = tf.histogram_fixed_width(grad_clipped, [-1.0, 1.0], nbins=25)
+                accum['hist_counts'].assign_add(hist)
+
+        # Update metrics (regularization_loss logged separately for monitoring)
+        return dict(loss=loss, regularization_loss=regularization_loss, total_loss=total_loss)
 '''
 
     def _generate_rating_head_code(self) -> str:
@@ -3677,10 +3746,10 @@ class RankingServingModel(tf.keras.Model):
 '''
 
     def _generate_metrics_callback_ranking(self) -> str:
-        """Generate metrics callback for ranking model."""
+        """Generate metrics callback classes for ranking model (includes all callbacks like retrieval)."""
         return '''
 # =============================================================================
-# TRAINING CALLBACKS (Ranking)
+# TRAINING CALLBACKS (Ranking - using MetricsCollector)
 # =============================================================================
 
 class MetricsCallback(tf.keras.callbacks.Callback):
@@ -3690,6 +3759,240 @@ class MetricsCallback(tf.keras.callbacks.Callback):
         if _metrics_collector and logs:
             for metric_name, value in logs.items():
                 _metrics_collector.log_metric(metric_name, float(value), step=epoch)
+
+
+class WeightNormCallback(tf.keras.callbacks.Callback):
+    """
+    Log weight L2 norms for monitoring training dynamics.
+
+    Tracks the total L2 norm of all trainable weights per epoch.
+    Useful for detecting:
+    - Weight explosion (norms growing unboundedly)
+    - Weight collapse (norms shrinking to zero)
+    - Training stability
+    """
+
+    def on_epoch_end(self, epoch, logs=None):
+        if not _metrics_collector:
+            return
+
+        # Compute total weight norm (L2 norm of all trainable weights)
+        total_norm_sq = 0.0
+        query_norm_sq = 0.0
+        candidate_norm_sq = 0.0
+        rating_head_norm_sq = 0.0
+
+        for var in self.model.trainable_variables:
+            var_norm_sq = tf.reduce_sum(tf.square(var)).numpy()
+            total_norm_sq += var_norm_sq
+
+            # Categorize by tower
+            var_name = var.name.lower()
+            if 'query' in var_name or 'buyer' in var_name:
+                query_norm_sq += var_norm_sq
+            elif 'candidate' in var_name or 'product' in var_name:
+                candidate_norm_sq += var_norm_sq
+            elif 'rating' in var_name:
+                rating_head_norm_sq += var_norm_sq
+
+        # Log norms
+        _metrics_collector.log_metric('weight_norm', float(np.sqrt(total_norm_sq)), step=epoch)
+        _metrics_collector.log_metric('query_weight_norm', float(np.sqrt(query_norm_sq)), step=epoch)
+        _metrics_collector.log_metric('candidate_weight_norm', float(np.sqrt(candidate_norm_sq)), step=epoch)
+        _metrics_collector.log_metric('rating_head_weight_norm', float(np.sqrt(rating_head_norm_sq)), step=epoch)
+
+
+class WeightStatsCallback(tf.keras.callbacks.Callback):
+    """
+    Log weight statistics per epoch for each tower.
+
+    Tracks min, max, mean, std of weights for the query, candidate, and rating_head towers.
+    Also logs histogram bins for weight distribution visualization.
+    """
+
+    NUM_HISTOGRAM_BINS = 25
+
+    def on_epoch_end(self, epoch, logs=None):
+        if not _metrics_collector:
+            return
+
+        # Collect weight stats per tower
+        tower_weights = dict(query=[], candidate=[], rating_head=[])
+
+        for var in self.model.trainable_variables:
+            var_name = var.name.lower()
+            weights = var.numpy().flatten()
+
+            if 'query' in var_name or 'buyer' in var_name:
+                tower_weights['query'].extend(weights)
+            elif 'candidate' in var_name or 'product' in var_name:
+                tower_weights['candidate'].extend(weights)
+            elif 'rating' in var_name:
+                tower_weights['rating_head'].extend(weights)
+
+        # Log stats for each tower
+        for tower, weights in tower_weights.items():
+            if weights:
+                weights_arr = np.array(weights)
+
+                # Summary statistics
+                stats = {
+                    'mean': float(np.mean(weights_arr)),
+                    'std': float(np.std(weights_arr)),
+                    'min': float(np.min(weights_arr)),
+                    'max': float(np.max(weights_arr)),
+                }
+
+                # Histogram
+                counts, bin_edges = np.histogram(weights_arr, bins=self.NUM_HISTOGRAM_BINS)
+                histogram = {
+                    'bin_edges': [float(e) for e in bin_edges] if epoch == 0 else None,
+                    'counts': [int(c) for c in counts],
+                }
+
+                _metrics_collector.log_weight_stats(tower, stats, histogram)
+
+
+class GradientStatsCallback(tf.keras.callbacks.Callback):
+    """
+    Log gradient statistics and histogram for training dynamics visualization.
+
+    Reads tf.Variable accumulators from model._grad_accum (updated by train_step)
+    and logs computed statistics.
+    """
+
+    NUM_HISTOGRAM_BINS = 25
+
+    def on_epoch_end(self, epoch, logs=None):
+        if not _metrics_collector:
+            return
+
+        # Check if model has gradient accumulators
+        if not hasattr(self.model, '_grad_accum'):
+            return
+
+        for tower in ['query', 'candidate', 'rating_head']:
+            accum = self.model._grad_accum.get(tower)
+            if accum is None:
+                continue
+
+            # Read accumulated values
+            count = float(accum['count'].numpy())
+            if count == 0:
+                continue
+
+            total_sum = float(accum['sum'].numpy())
+            total_sum_sq = float(accum['sum_sq'].numpy())
+            grad_min = float(accum['min'].numpy())
+            grad_max = float(accum['max'].numpy())
+            hist_counts = accum['hist_counts'].numpy()
+
+            # Compute statistics
+            mean = total_sum / count
+            variance = (total_sum_sq / count) - (mean ** 2)
+            std = float(np.sqrt(max(0, variance)))
+            norm = float(np.sqrt(total_sum_sq))
+
+            # Summary statistics
+            stats = {
+                'mean': mean,
+                'std': std,
+                'min': grad_min,
+                'max': grad_max,
+                'norm': norm,
+            }
+
+            # Histogram (fixed range: -1 to 1)
+            bin_edges = np.linspace(-1.0, 1.0, self.NUM_HISTOGRAM_BINS + 1)
+            histogram = {
+                'bin_edges': [float(e) for e in bin_edges] if epoch == 0 else None,
+                'counts': [int(c) for c in hist_counts],
+            }
+
+            _metrics_collector.log_gradient_stats(tower, stats, histogram)
+
+            # Reset accumulators for next epoch
+            accum['sum'].assign(0.0)
+            accum['sum_sq'].assign(0.0)
+            accum['count'].assign(0.0)
+            accum['min'].assign(float('inf'))
+            accum['max'].assign(float('-inf'))
+            accum['hist_counts'].assign(tf.zeros(self.NUM_HISTOGRAM_BINS, dtype=tf.int32))
+
+
+class GradientCollapseCallback(tf.keras.callbacks.Callback):
+    """
+    Detects gradient collapse and stops training early with clear error message.
+
+    Gradient collapse occurs when gradients become effectively zero, typically due to:
+    - Learning rate too high for the architecture
+    - Numerical overflow causing NaN/Inf gradients
+    - Dead neurons (all activations zero)
+    """
+
+    def __init__(self, min_grad_norm=1e-7, patience=3):
+        super().__init__()
+        self.min_grad_norm = min_grad_norm
+        self.patience = patience
+        self.collapse_count = 0
+        self.collapsed_towers = set()
+
+    def on_epoch_end(self, epoch, logs=None):
+        if not hasattr(self.model, '_grad_accum'):
+            return
+
+        epoch_collapsed = False
+
+        for tower in ['query', 'candidate', 'rating_head']:
+            accum = self.model._grad_accum.get(tower)
+            if accum is None:
+                continue
+
+            # Check if any gradients were accumulated this epoch
+            count = float(accum['count'].numpy())
+            if count == 0:
+                continue
+
+            # Get gradient norm from accumulator
+            total_sum_sq = float(accum['sum_sq'].numpy())
+            grad_norm = np.sqrt(total_sum_sq)
+
+            if grad_norm < self.min_grad_norm:
+                epoch_collapsed = True
+                self.collapsed_towers.add(tower)
+                logging.warning(
+                    f"Epoch {epoch}: {tower} tower gradient norm = {grad_norm:.2e} "
+                    f"(below threshold {self.min_grad_norm:.2e})"
+                )
+
+        if epoch_collapsed:
+            self.collapse_count += 1
+            logging.warning(f"Gradient collapse detected for {self.collapse_count}/{self.patience} epochs")
+
+            if self.collapse_count >= self.patience:
+                logging.error("=" * 70)
+                logging.error("GRADIENT COLLAPSE DETECTED - TRAINING STOPPED")
+                logging.error("=" * 70)
+                logging.error(f"Affected towers: {', '.join(self.collapsed_towers)}")
+                logging.error(f"Gradients collapsed to near-zero for {self.patience} consecutive epochs.")
+                logging.error("")
+                logging.error("LIKELY CAUSE: Learning rate too high for this architecture.")
+                logging.error("RECOMMENDATION: Try a lower learning rate (0.01 - 0.05)")
+                logging.error("=" * 70)
+
+                # Log to metrics for UI visibility
+                if _metrics_collector:
+                    _metrics_collector.log_metric('gradient_collapse_epoch', float(epoch))
+                    _metrics_collector.log_param('gradient_collapse_detected', True)
+                    _metrics_collector.log_param('collapsed_towers', ','.join(self.collapsed_towers))
+
+                self.model.stop_training = True
+        else:
+            # Gradients recovered - reset counter
+            self.collapse_count = 0
+            self.collapsed_towers.clear()
+
+
 '''
 
     def _generate_run_fn_ranking(self) -> str:
@@ -3817,10 +4120,22 @@ def run_fn(fn_args: tfx.components.FnArgs):
         train_steps = custom_config.get('train_steps', fn_args.train_steps)
         eval_steps = custom_config.get('eval_steps', fn_args.eval_steps)
 
-        # Callbacks
-        callbacks = [
-            MetricsCallback(),
-        ]
+        # Training callbacks
+        callbacks = []
+
+        # Metrics callback for per-epoch logging to MetricsCollector
+        callbacks.append(MetricsCallback())
+
+        # Weight monitoring callbacks for debugging training issues
+        callbacks.append(WeightNormCallback())
+        callbacks.append(WeightStatsCallback())
+
+        # Gradient collapse early stopping (detects LR too high)
+        # IMPORTANT: Must run BEFORE GradientStatsCallback which resets accumulators
+        callbacks.append(GradientCollapseCallback(min_grad_norm=1e-7, patience=3))
+
+        # Gradient stats logging (resets accumulators after reading)
+        callbacks.append(GradientStatsCallback())
 
         # TensorBoard logging
         if fn_args.model_run_dir:
@@ -3904,15 +4219,20 @@ def run_fn(fn_args: tfx.components.FnArgs):
             f.write(json.dumps(transform_params_full, indent=2))
         logging.info(f"Transform params saved to {{params_path}}")
 
-        # Save metrics
-        if _metrics_collector:
-            _metrics_collector.save()
-
     except Exception as e:
         logging.error(f"Training failed: {{e}}")
         import traceback
         traceback.print_exc()
         raise
+
+    finally:
+        # Save all collected metrics to GCS
+        if _metrics_collector:
+            try:
+                _metrics_collector.save_to_gcs()
+                logging.info("Training metrics saved to GCS successfully")
+            except Exception as e:
+                logging.warning(f"Error saving metrics to GCS: {{e}}")
 '''
 
     def generate_and_validate(self) -> Tuple[str, bool, Optional[str], Optional[int]]:

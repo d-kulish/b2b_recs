@@ -5,7 +5,7 @@ This document provides **high-level specifications** for the Experiments domain.
 
 👉 **[phase_experiments_implementation.md](phase_experiments_implementation.md)** - Complete implementation guide with code examples
 
-**Last Updated**: 2026-01-07
+**Last Updated**: 2026-01-10
 
 ---
 
@@ -36,6 +36,111 @@ This document provides **high-level specifications** for the Experiments domain.
 ---
 
 ## Recent Updates (December 2025 - January 2026)
+
+### Conditional Experiments Dashboard - Model Type Selection (2026-01-10)
+
+**Major Enhancement:** Made the Experiments Dashboard conditional based on selected model type (Retrieval, Ranking, or Hybrid).
+
+#### Overview
+
+The Experiments Dashboard now allows users to click on model type KPI containers to filter all dashboard content by that model type. This provides focused analysis for each model type's specific metrics.
+
+| Model Type | Primary Metrics | Metric Direction | Status |
+|------------|-----------------|------------------|--------|
+| **Retrieval** | R@5, R@10, R@50, R@100 | Higher is better | Fully implemented |
+| **Ranking** | RMSE, Test RMSE, MAE, Test MAE | Lower is better | Fully implemented |
+| **Hybrid** | TBD | TBD | Placeholder (coming soon) |
+
+#### Selectable KPI Containers
+
+The three model type KPI containers are now clickable with glowing selection effects:
+
+| Model Type | Color Theme | Glow Effect |
+|------------|-------------|-------------|
+| **Retrieval** | Purple (#8b5cf6) | `box-shadow: 0 0 0 2px #8b5cf6, 0 0 20px rgba(139, 92, 246, 0.35)` |
+| **Ranking** | Amber (#f59e0b) | `box-shadow: 0 0 0 2px #f59e0b, 0 0 20px rgba(245, 158, 11, 0.35)` |
+| **Hybrid** | Pink (#ec4899) | `box-shadow: 0 0 0 2px #ec4899, 0 0 20px rgba(236, 72, 153, 0.35)` |
+
+**Default Selection:** Retrieval
+
+#### Conditional Components
+
+When a model type is selected, the following dashboard components update:
+
+| Component | Retrieval | Ranking | Hybrid |
+|-----------|-----------|---------|--------|
+| **Metrics Trend Chart** | R@5/10/50/100 over time | RMSE, Test RMSE, MAE, Test MAE over time | Empty ("coming soon") |
+| **Top Configurations Table** | Sorted by R@100 (desc), shows R@100 + Loss | Sorted by Test RMSE (asc), shows Test RMSE + Test MAE | Empty ("no hybrid experiments") |
+| **Hyperparameter Insights** | TPE by R@100 (top 30% = highest) | TPE by Test RMSE (top 30% = lowest) | Empty ("coming soon") |
+| **Model Architecture** | Buyer Tower + Product Tower (2 rows) | Buyer Tower + Product Tower + Ranking Tower (3 rows) | 2 rows |
+
+#### Backend API Changes
+
+All dashboard APIs now accept `model_type` query parameter:
+
+| Endpoint | New Parameter | Behavior |
+|----------|---------------|----------|
+| `/api/experiments/metrics-trend/` | `?model_type=ranking` | Returns RMSE/MAE trends instead of Recall |
+| `/api/experiments/top-configurations/` | `?model_type=ranking` | Filters by config_type, returns ranking metrics |
+| `/api/experiments/hyperparameter-analysis/` | `?model_type=ranking` | Filters experiments, uses Test RMSE for TPE scoring |
+
+#### HyperparameterAnalyzer Changes
+
+The `HyperparameterAnalyzer` class now supports model type:
+
+| Change | Description |
+|--------|-------------|
+| `analyze(experiments, model_type='retrieval')` | New parameter for model type |
+| `_get_metric(experiment)` | Returns Recall@100 or Test RMSE based on model_type |
+| `_get_ranking_tower_structure(experiment)` | New getter for ranking tower from model_config |
+| `_get_ranking_total_params(experiment)` | New getter for ranking tower params |
+| `ranking_only` parameter fields | Fields marked `ranking_only: True` only show for ranking models |
+
+**TPE Threshold Logic:**
+- Retrieval: Top 30% = highest Recall@100 values (higher is better)
+- Ranking: Top 30% = lowest Test RMSE values (lower is better)
+
+#### Ranking Tower in Model Architecture
+
+For ranking models, a 3rd row is added to the Model Architecture section:
+
+```
+┌────────────────────────────────────────────────────────────────┐
+│ MODEL ARCHITECTURE                                              │
+├─────────────────────────────┬──────────────┬───────────────────┤
+│ BUYER TOWER                 │ BUYER L2 REG │ BUYER PARAMS      │
+│ 256→128→64→32               │ medium       │ 81,888            │
+├─────────────────────────────┼──────────────┼───────────────────┤
+│ PRODUCT TOWER               │ PRODUCT L2   │ PRODUCT PARAMS    │
+│ 128→64→32                   │ medium       │ 19,680            │
+├─────────────────────────────┼──────────────┼───────────────────┤
+│ RANKING TOWER (ranking only)│              │ RANKING PARAMS    │
+│ 128→64→32→1                 │              │ 18,689            │
+└─────────────────────────────┴──────────────┴───────────────────┘
+```
+
+#### Files Modified
+
+| File | Changes |
+|------|---------|
+| `templates/ml_platform/model_experiments.html` | CSS for selection states, JS for model type selection, conditional rendering |
+| `ml_platform/experiments/api.py` | `metrics_trend()`, `top_configurations()`, `hyperparameter_analysis()` - added model_type filtering |
+| `ml_platform/experiments/hyperparameter_analyzer.py` | Model type support, ranking tower getters, conditional TPE logic |
+
+#### JavaScript State Management
+
+```javascript
+// State variable
+let selectedDashboardModelType = 'retrieval';
+
+// Selection function
+function selectDashboardModelType(modelType) {
+    // Update visual selection
+    // Reload: loadMetricsTrend(), loadTopConfigurations(), loadHyperparameterAnalysis()
+}
+```
+
+---
 
 ### Ranking Model Support with Target Column Transforms (2026-01-07)
 

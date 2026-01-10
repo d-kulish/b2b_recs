@@ -45,6 +45,7 @@ class HyperparameterAnalyzer:
 
     # Parameter definitions organized by category
     # Each parameter has: field (model attribute), label (display name)
+    # Optional 'getter' function for computed fields
     PARAMETERS = {
         'training': [
             {'field': 'optimizer', 'label': 'Optimizer'},
@@ -66,6 +67,9 @@ class HyperparameterAnalyzer:
             {'field': 'product_l2_category', 'label': 'Product L2 Reg'},
             {'field': 'buyer_total_params', 'label': 'Buyer Params'},
             {'field': 'product_total_params', 'label': 'Product Params'},
+            # Ranking tower fields (computed from model_config)
+            {'field': 'ranking_tower_structure', 'label': 'Ranking Tower', 'getter': '_get_ranking_tower_structure', 'ranking_only': True},
+            {'field': 'ranking_total_params', 'label': 'Ranking Params', 'getter': '_get_ranking_total_params', 'ranking_only': True},
         ],
         'features': [
             {'field': 'buyer_tensor_dim', 'label': 'Buyer Vector Size'},
@@ -87,12 +91,13 @@ class HyperparameterAnalyzer:
         'product_filters': 'dataset_product_filters',
     }
 
-    def analyze(self, experiments: List[Any]) -> Dict:
+    def analyze(self, experiments: List[Any], model_type: str = 'retrieval') -> Dict:
         """
         Analyze all parameters using TPE-inspired scoring.
 
         Args:
             experiments: List of QuickTest instances (completed experiments)
+            model_type: 'retrieval' (higher recall = better) or 'ranking' (lower RMSE = better)
 
         Returns:
             Dictionary with analysis results organized by category:
@@ -124,26 +129,36 @@ class HyperparameterAnalyzer:
                 'good_experiments': 5
             }
         """
-        # Filter experiments with valid recall@100
-        experiments_with_recall = [
+        self._model_type = model_type
+
+        # Filter experiments with valid metric (recall@100 for retrieval, test_rmse for ranking)
+        experiments_with_metric = [
             exp for exp in experiments
-            if self._get_recall(exp) is not None
+            if self._get_metric(exp) is not None
         ]
 
-        if not experiments_with_recall:
+        if not experiments_with_metric:
             return self._empty_result()
 
-        # Calculate good threshold (70th percentile = top 30%)
-        recalls = [self._get_recall(exp) for exp in experiments_with_recall]
-        recalls.sort(reverse=True)
+        # Calculate good threshold
+        # For retrieval: higher recall = better, so top 30% = highest values
+        # For ranking: lower RMSE = better, so top 30% = lowest values
+        metrics = [self._get_metric(exp) for exp in experiments_with_metric]
+
+        if model_type == 'ranking':
+            # Lower is better - sort ascending, top 30% are the lowest values
+            metrics.sort()
+        else:
+            # Higher is better - sort descending, top 30% are the highest values
+            metrics.sort(reverse=True)
 
         # Calculate the index for 30% of experiments
-        good_count = max(1, int(len(recalls) * self.GOOD_PERCENTILE / 100))
-        good_threshold = recalls[good_count - 1] if recalls else 0
+        good_count = max(1, int(len(metrics) * self.GOOD_PERCENTILE / 100))
+        good_threshold = metrics[good_count - 1] if metrics else 0
 
         result = {
             'good_threshold': round(good_threshold, 4),
-            'total_experiments': len(experiments_with_recall),
+            'total_experiments': len(experiments_with_metric),
             'good_experiments': good_count,
         }
 
@@ -151,8 +166,12 @@ class HyperparameterAnalyzer:
         for category, params in self.PARAMETERS.items():
             result[category] = []
             for param_def in params:
+                # Skip ranking_only fields when not analyzing ranking models
+                if param_def.get('ranking_only') and model_type != 'ranking':
+                    continue
+
                 analysis = self._analyze_parameter(
-                    experiments_with_recall,
+                    experiments_with_metric,
                     param_def,
                     good_threshold
                 )
@@ -162,13 +181,13 @@ class HyperparameterAnalyzer:
 
         # Analyze feature details (name + dimension combinations)
         result['feature_details'] = self._analyze_feature_details(
-            experiments_with_recall,
+            experiments_with_metric,
             good_threshold
         )
 
         # Analyze dataset filter details (date/customer/product filters)
         result['filter_details'] = self._analyze_filter_details(
-            experiments_with_recall,
+            experiments_with_metric,
             good_threshold
         )
 
@@ -186,7 +205,7 @@ class HyperparameterAnalyzer:
         Args:
             experiments: List of QuickTest instances
             param_def: Parameter definition dict with 'field', 'label', optional 'format'
-            good_threshold: Recall value that defines "good" experiments
+            good_threshold: Metric value that defines "good" experiments
 
         Returns:
             Dictionary with parameter analysis:
@@ -198,24 +217,37 @@ class HyperparameterAnalyzer:
         """
         field = param_def['field']
         format_fn = param_def.get('format')
+        getter_name = param_def.get('getter')
 
         # Group experiments by parameter value
         groups = defaultdict(list)
         for exp in experiments:
-            value = getattr(exp, field, None)
+            # Use custom getter if provided, otherwise use getattr
+            if getter_name:
+                getter_fn = getattr(self, getter_name, None)
+                value = getter_fn(exp) if getter_fn else None
+            else:
+                value = getattr(exp, field, None)
+
             if value is None:
                 continue
 
-            recall = self._get_recall(exp)
-            if recall is not None:
-                groups[value].append(recall)
+            metric = self._get_metric(exp)
+            if metric is not None:
+                groups[value].append(metric)
 
         # Calculate TPE score for each value
         values = []
-        for value, recalls in groups.items():
-            n_good = sum(1 for r in recalls if r >= good_threshold)
-            n_bad = len(recalls) - n_good
-            n_total = len(recalls)
+        for value, metrics in groups.items():
+            # For ranking: lower is better (metric <= threshold is "good")
+            # For retrieval: higher is better (metric >= threshold is "good")
+            if self._model_type == 'ranking':
+                n_good = sum(1 for m in metrics if m <= good_threshold)
+            else:
+                n_good = sum(1 for m in metrics if m >= good_threshold)
+
+            n_bad = len(metrics) - n_good
+            n_total = len(metrics)
 
             # TPE score with Laplace smoothing
             # P(good | value) / P(bad | value)
@@ -229,12 +261,18 @@ class HyperparameterAnalyzer:
             # Format display value
             display_value = format_fn(value) if format_fn else self._format_value(value)
 
+            # For ranking: best metric is lowest, for retrieval: best is highest
+            if self._model_type == 'ranking':
+                best_metric = round(min(metrics), 4)
+            else:
+                best_metric = round(max(metrics), 4)
+
             values.append({
                 'value': display_value,
                 'raw_value': value,  # Keep raw value for sorting numerics
                 'tpe_score': round(tpe_score, 2),
-                'avg_recall': round(sum(recalls) / len(recalls), 4),
-                'best_recall': round(max(recalls), 4),
+                'avg_recall': round(sum(metrics) / len(metrics), 4),  # Keep 'avg_recall' key for compatibility
+                'best_recall': best_metric,  # Keep 'best_recall' key for compatibility
                 'count': n_total,
                 'good_count': n_good,
                 'confidence': self._get_confidence(n_total),
@@ -287,7 +325,7 @@ class HyperparameterAnalyzer:
         ]
 
         for result_key, field_name in feature_fields:
-            # Group recalls by feature "name dim" key
+            # Group metrics by feature "name dim" key
             groups = defaultdict(list)
 
             for exp in experiments:
@@ -295,8 +333,8 @@ class HyperparameterAnalyzer:
                 if not details:
                     continue
 
-                recall = self._get_recall(exp)
-                if recall is None:
+                metric = self._get_metric(exp)
+                if metric is None:
                     continue
 
                 # Each feature in the list contributes to its group
@@ -304,14 +342,19 @@ class HyperparameterAnalyzer:
                     name = feature.get('name', 'unknown')
                     dim = feature.get('dim', 0)
                     key = f"{name} {dim}D"
-                    groups[key].append(recall)
+                    groups[key].append(metric)
 
             # Calculate TPE scores for each feature
             values = []
-            for feature_key, recalls in groups.items():
-                n_good = sum(1 for r in recalls if r >= good_threshold)
-                n_bad = len(recalls) - n_good
-                n_total = len(recalls)
+            for feature_key, metrics in groups.items():
+                # For ranking: lower is better, for retrieval: higher is better
+                if self._model_type == 'ranking':
+                    n_good = sum(1 for m in metrics if m <= good_threshold)
+                else:
+                    n_good = sum(1 for m in metrics if m >= good_threshold)
+
+                n_bad = len(metrics) - n_good
+                n_total = len(metrics)
 
                 p_good = (n_good + self.LAPLACE_ALPHA) / (n_total + self.LAPLACE_ALPHA + self.LAPLACE_BETA)
                 p_bad = (n_bad + self.LAPLACE_BETA) / (n_total + self.LAPLACE_ALPHA + self.LAPLACE_BETA)
@@ -320,7 +363,7 @@ class HyperparameterAnalyzer:
                 values.append({
                     'value': feature_key,
                     'tpe_score': round(tpe_score, 2),
-                    'avg_recall': round(sum(recalls) / len(recalls), 4),
+                    'avg_recall': round(sum(metrics) / len(metrics), 4),  # Keep key name for compatibility
                     'count': n_total,
                     'good_count': n_good,
                     'confidence': self._get_confidence(n_total),
@@ -361,7 +404,7 @@ class HyperparameterAnalyzer:
 
         # Analyze each filter type
         for result_key, field_name in self.FILTER_FIELDS.items():
-            # Group recalls by filter description
+            # Group metrics by filter description
             groups = defaultdict(list)
 
             for exp in experiments:
@@ -370,20 +413,25 @@ class HyperparameterAnalyzer:
                     # Include "None" as a value for experiments without this filter type
                     filters = ['None']
 
-                recall = self._get_recall(exp)
-                if recall is None:
+                metric = self._get_metric(exp)
+                if metric is None:
                     continue
 
                 # Each filter in the list contributes to its group
                 for filter_desc in filters:
-                    groups[filter_desc].append(recall)
+                    groups[filter_desc].append(metric)
 
             # Calculate TPE scores for each filter
             values = []
-            for filter_desc, recalls in groups.items():
-                n_good = sum(1 for r in recalls if r >= good_threshold)
-                n_bad = len(recalls) - n_good
-                n_total = len(recalls)
+            for filter_desc, metrics in groups.items():
+                # For ranking: lower is better, for retrieval: higher is better
+                if self._model_type == 'ranking':
+                    n_good = sum(1 for m in metrics if m <= good_threshold)
+                else:
+                    n_good = sum(1 for m in metrics if m >= good_threshold)
+
+                n_bad = len(metrics) - n_good
+                n_total = len(metrics)
 
                 p_good = (n_good + self.LAPLACE_ALPHA) / (n_total + self.LAPLACE_ALPHA + self.LAPLACE_BETA)
                 p_bad = (n_bad + self.LAPLACE_BETA) / (n_total + self.LAPLACE_ALPHA + self.LAPLACE_BETA)
@@ -392,7 +440,7 @@ class HyperparameterAnalyzer:
                 values.append({
                     'value': filter_desc,
                     'tpe_score': round(tpe_score, 2),
-                    'avg_recall': round(sum(recalls) / len(recalls), 4),
+                    'avg_recall': round(sum(metrics) / len(metrics), 4),  # Keep key name for compatibility
                     'count': n_total,
                     'good_count': n_good,
                     'confidence': self._get_confidence(n_total),
@@ -433,6 +481,104 @@ class HyperparameterAnalyzer:
                     return float(final_metrics[key])
 
         return None
+
+    def _get_test_rmse(self, experiment) -> Optional[float]:
+        """
+        Extract test_rmse from experiment.
+
+        Tries multiple sources:
+        1. Direct field (test_rmse)
+        2. Cached training history JSON
+
+        Args:
+            experiment: QuickTest instance
+
+        Returns:
+            Test RMSE value or None if not available
+        """
+        # Try direct field first
+        if experiment.test_rmse is not None:
+            return float(experiment.test_rmse)
+
+        # Try cached training history
+        if experiment.training_history_json:
+            history = experiment.training_history_json
+            final_metrics = history.get('final_metrics', {})
+
+            # Try different key formats
+            for key in ['test_rmse']:
+                if key in final_metrics and final_metrics[key] is not None:
+                    return float(final_metrics[key])
+
+        return None
+
+    def _get_metric(self, experiment) -> Optional[float]:
+        """
+        Get the appropriate metric based on model type.
+
+        For retrieval: returns recall@100 (higher is better)
+        For ranking: returns test_rmse (lower is better)
+
+        Args:
+            experiment: QuickTest instance
+
+        Returns:
+            Metric value or None if not available
+        """
+        if getattr(self, '_model_type', 'retrieval') == 'ranking':
+            return self._get_test_rmse(experiment)
+        return self._get_recall(experiment)
+
+    def _get_ranking_tower_structure(self, experiment) -> Optional[str]:
+        """
+        Get ranking tower structure from model_config.
+
+        Returns structure like '128→64→32→1' or None if not available.
+        """
+        try:
+            model_config = experiment.model_config
+            if not model_config:
+                return None
+
+            rating_head_layers = model_config.rating_head_layers
+            if not rating_head_layers:
+                return None
+
+            # Extract units from dense layers
+            units = [layer['units'] for layer in rating_head_layers if layer.get('type') == 'dense']
+            return '→'.join(map(str, units)) if units else None
+        except Exception:
+            return None
+
+    def _get_ranking_total_params(self, experiment) -> Optional[int]:
+        """
+        Estimate total params in ranking tower from model_config.
+
+        Returns estimated parameter count or None if not available.
+        """
+        try:
+            model_config = experiment.model_config
+            if not model_config:
+                return None
+
+            rating_head_layers = model_config.rating_head_layers
+            if not rating_head_layers:
+                return None
+
+            # Input to rating head is concatenated embeddings (2 * output_embedding_dim)
+            output_dim = model_config.output_embedding_dim or 32
+            prev_dim = output_dim * 2
+
+            total_params = 0
+            for layer in rating_head_layers:
+                if layer.get('type') == 'dense':
+                    units = layer['units']
+                    total_params += prev_dim * units + units  # weights + bias
+                    prev_dim = units
+
+            return total_params if total_params > 0 else None
+        except Exception:
+            return None
 
     def _get_confidence(self, count: int) -> str:
         """

@@ -3216,6 +3216,27 @@
     .dashboard-model-section.hybrid .dashboard-kpi-value.highlight {
         color: #ec4899;
     }
+    /* Model section selection states */
+    .dashboard-model-section {
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+    .dashboard-model-section:hover:not(.selected) {
+        border-color: #9ca3af;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    }
+    .dashboard-model-section.retrieval.selected {
+        border-color: #8b5cf6;
+        box-shadow: 0 0 0 2px #8b5cf6, 0 0 20px rgba(139, 92, 246, 0.35);
+    }
+    .dashboard-model-section.ranking.selected {
+        border-color: #f59e0b;
+        box-shadow: 0 0 0 2px #f59e0b, 0 0 20px rgba(245, 158, 11, 0.35);
+    }
+    .dashboard-model-section.hybrid.selected {
+        border-color: #ec4899;
+        box-shadow: 0 0 0 2px #ec4899, 0 0 20px rgba(236, 72, 153, 0.35);
+    }
     /* Trend Panel styling */
     .dashboard-trend-panel {
         background: white;
@@ -3588,6 +3609,14 @@
         grid-template-columns: 2fr 1fr 1fr;
         gap: 12px;
     }
+    .hyperparam-model-row.ranking-tower-row {
+        border-top: 1px dashed #e5e7eb;
+        padding-top: 12px;
+        margin-top: 4px;
+    }
+    .hyperparam-card-placeholder {
+        /* Empty placeholder to maintain 3-column grid */
+    }
     .hyperparam-features-row {
         display: grid;
         grid-template-columns: 1fr 1fr 1fr;
@@ -3848,7 +3877,7 @@
                 <!-- Model Type KPI Sections -->
                 <div class="dashboard-model-sections">
                     <!-- Retrieval Section -->
-                    <div id="dashboardRetrievalSection" class="dashboard-model-section retrieval">
+                    <div id="dashboardRetrievalSection" class="dashboard-model-section retrieval selected" onclick="selectDashboardModelType('retrieval')">
                         <div class="dashboard-model-header">
                             <div class="dashboard-model-icon retrieval">
                                 <i class="fas fa-search"></i>
@@ -3880,7 +3909,7 @@
                     </div>
 
                     <!-- Ranking Section -->
-                    <div id="dashboardRankingSection" class="dashboard-model-section ranking">
+                    <div id="dashboardRankingSection" class="dashboard-model-section ranking" onclick="selectDashboardModelType('ranking')">
                         <div class="dashboard-model-header">
                             <div class="dashboard-model-icon ranking">
                                 <i class="fas fa-sort-amount-down"></i>
@@ -3912,7 +3941,7 @@
                     </div>
 
                     <!-- Hybrid Section -->
-                    <div id="dashboardHybridSection" class="dashboard-model-section hybrid">
+                    <div id="dashboardHybridSection" class="dashboard-model-section hybrid" onclick="selectDashboardModelType('hybrid')">
                         <div class="dashboard-model-header">
                             <div class="dashboard-model-icon hybrid">
                                 <i class="fas fa-layer-group"></i>
@@ -3963,12 +3992,12 @@
             <!-- Top Configurations Section -->
             <div class="dashboard-section">
                 <div class="dashboard-section-header">
-                    <span class="dashboard-section-title">Top Configurations</span>
-                    <span class="text-xs text-gray-400">Best performing experiment configurations</span>
+                    <span class="dashboard-section-title" id="topConfigsTitle">Top Configurations</span>
+                    <span class="text-xs text-gray-400" id="topConfigsSubtitle">Best performing experiment configurations</span>
                 </div>
                 <div id="topConfigsContainer">
                     <table class="dashboard-table">
-                        <thead>
+                        <thead id="topConfigsHead">
                             <tr>
                                 <th style="width: 40px;">#</th>
                                 <th style="text-align: center;">Experiment</th>
@@ -10062,6 +10091,43 @@ function formatDuration(minutes) {
     }
 }
 
+// =============================================================================
+// DASHBOARD MODEL TYPE SELECTION
+// =============================================================================
+
+// State variable for selected model type (default: retrieval)
+let selectedDashboardModelType = 'retrieval';
+
+function selectDashboardModelType(modelType) {
+    /**
+     * Handle model type selection in the dashboard.
+     * Updates visual selection and reloads chart/table/insights for the selected type.
+     */
+    if (selectedDashboardModelType === modelType) return;
+
+    selectedDashboardModelType = modelType;
+
+    // Update visual selection
+    const sections = document.querySelectorAll('.dashboard-model-section');
+    sections.forEach(section => section.classList.remove('selected'));
+
+    const sectionId = {
+        'retrieval': 'dashboardRetrievalSection',
+        'ranking': 'dashboardRankingSection',
+        'hybrid': 'dashboardHybridSection'
+    }[modelType];
+
+    const selectedSection = document.getElementById(sectionId);
+    if (selectedSection) {
+        selectedSection.classList.add('selected');
+    }
+
+    // Reload chart, table, and hyperparameter insights for the selected model type
+    loadMetricsTrend(modelType);
+    loadTopConfigurations(modelType);
+    loadHyperparameterAnalysis(modelType);
+}
+
 function renderModelTypeKPIs(stats) {
     /**
      * Render KPI sections for each model type (Retrieval, Ranking, Hybrid).
@@ -10432,16 +10498,46 @@ function renderRecallHeatmapD3(container, data) {
 // NEW DASHBOARD SECTIONS
 // =============================================================================
 
-async function loadMetricsTrend() {
+async function loadMetricsTrend(modelType = null) {
     const canvas = document.getElementById('trendChartCanvas');
     const emptyEl = document.getElementById('trendChartEmpty');
+    const headerTitle = document.querySelector('.dashboard-trend-panel .dashboard-section-title');
+    const headerSubtitle = document.querySelector('.dashboard-trend-panel .text-xs');
+
+    // Use provided modelType or fall back to selected state
+    const activeModelType = modelType || selectedDashboardModelType;
+
+    // Update header based on model type
+    const headerConfig = {
+        'retrieval': { title: 'Metrics Trend', subtitle: 'Best Recall metrics over time' },
+        'ranking': { title: 'Metrics Trend', subtitle: 'Best RMSE/MAE metrics over time (lower is better)' },
+        'hybrid': { title: 'Metrics Trend', subtitle: 'Hybrid model metrics over time' }
+    };
+    const config = headerConfig[activeModelType] || headerConfig['retrieval'];
+    if (headerTitle) headerTitle.textContent = config.title;
+    if (headerSubtitle) headerSubtitle.textContent = config.subtitle;
+
+    // Destroy existing chart
+    if (trendChart) {
+        trendChart.destroy();
+        trendChart = null;
+    }
+
+    // For Hybrid, show empty state (not implemented yet)
+    if (activeModelType === 'hybrid') {
+        canvas.style.display = 'none';
+        emptyEl.innerHTML = '<i class="fas fa-layer-group"></i><p>Hybrid metrics trend coming soon</p>';
+        emptyEl.classList.remove('hidden');
+        return;
+    }
 
     try {
-        const response = await fetch('/api/experiments/metrics-trend/');
+        const response = await fetch(`/api/experiments/metrics-trend/?model_type=${activeModelType}`);
         const data = await response.json();
 
         if (!data.success || !data.trend || data.trend.length < 2) {
             canvas.style.display = 'none';
+            emptyEl.innerHTML = '<i class="fas fa-chart-line"></i><p>Not enough data for trend analysis</p>';
             emptyEl.classList.remove('hidden');
             return;
         }
@@ -10449,60 +10545,107 @@ async function loadMetricsTrend() {
         canvas.style.display = 'block';
         emptyEl.classList.add('hidden');
 
-        // Destroy existing chart
-        if (trendChart) {
-            trendChart.destroy();
-            trendChart = null;
+        const ctx = canvas.getContext('2d');
+
+        // Build datasets based on model type
+        let datasets;
+        if (activeModelType === 'ranking') {
+            // Ranking: RMSE, Test RMSE, MAE, Test MAE (lower is better)
+            datasets = [
+                {
+                    label: 'Best RMSE',
+                    data: data.trend.map(d => d.best_rmse),
+                    borderColor: '#f59e0b',
+                    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                    fill: false,
+                    tension: 0.3,
+                    pointRadius: 3,
+                    pointHoverRadius: 5,
+                    borderWidth: 2
+                },
+                {
+                    label: 'Best Test RMSE',
+                    data: data.trend.map(d => d.best_test_rmse),
+                    borderColor: '#d97706',
+                    fill: false,
+                    tension: 0.3,
+                    pointRadius: 3,
+                    pointHoverRadius: 5,
+                    borderWidth: 2
+                },
+                {
+                    label: 'Best MAE',
+                    data: data.trend.map(d => d.best_mae),
+                    borderColor: '#10b981',
+                    fill: false,
+                    tension: 0.3,
+                    pointRadius: 3,
+                    pointHoverRadius: 5,
+                    borderWidth: 2
+                },
+                {
+                    label: 'Best Test MAE',
+                    data: data.trend.map(d => d.best_test_mae),
+                    borderColor: '#059669',
+                    fill: false,
+                    tension: 0.3,
+                    pointRadius: 3,
+                    pointHoverRadius: 5,
+                    borderWidth: 2
+                }
+            ];
+        } else {
+            // Retrieval: R@5, R@10, R@50, R@100 (higher is better)
+            datasets = [
+                {
+                    label: 'Best R@100',
+                    data: data.trend.map(d => d.best_r100),
+                    borderColor: '#10b981',
+                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                    fill: false,
+                    tension: 0.3,
+                    pointRadius: 3,
+                    pointHoverRadius: 5,
+                    borderWidth: 2
+                },
+                {
+                    label: 'Best R@50',
+                    data: data.trend.map(d => d.best_r50),
+                    borderColor: '#3b82f6',
+                    fill: false,
+                    tension: 0.3,
+                    pointRadius: 3,
+                    pointHoverRadius: 5,
+                    borderWidth: 2
+                },
+                {
+                    label: 'Best R@10',
+                    data: data.trend.map(d => d.best_r10),
+                    borderColor: '#f59e0b',
+                    fill: false,
+                    tension: 0.3,
+                    pointRadius: 3,
+                    pointHoverRadius: 5,
+                    borderWidth: 2
+                },
+                {
+                    label: 'Best R@5',
+                    data: data.trend.map(d => d.best_r5),
+                    borderColor: '#ef4444',
+                    fill: false,
+                    tension: 0.3,
+                    pointRadius: 3,
+                    pointHoverRadius: 5,
+                    borderWidth: 2
+                }
+            ];
         }
 
-        const ctx = canvas.getContext('2d');
         trendChart = new Chart(ctx, {
             type: 'line',
             data: {
                 labels: data.trend.map(d => d.date),
-                datasets: [
-                    {
-                        label: 'Best R@100',
-                        data: data.trend.map(d => d.best_r100),
-                        borderColor: '#10b981',
-                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                        fill: false,
-                        tension: 0.3,
-                        pointRadius: 3,
-                        pointHoverRadius: 5,
-                        borderWidth: 2
-                    },
-                    {
-                        label: 'Best R@50',
-                        data: data.trend.map(d => d.best_r50),
-                        borderColor: '#3b82f6',
-                        fill: false,
-                        tension: 0.3,
-                        pointRadius: 3,
-                        pointHoverRadius: 5,
-                        borderWidth: 2
-                    },
-                    {
-                        label: 'Best R@10',
-                        data: data.trend.map(d => d.best_r10),
-                        borderColor: '#f59e0b',
-                        fill: false,
-                        tension: 0.3,
-                        pointRadius: 3,
-                        pointHoverRadius: 5,
-                        borderWidth: 2
-                    },
-                    {
-                        label: 'Best R@5',
-                        data: data.trend.map(d => d.best_r5),
-                        borderColor: '#ef4444',
-                        fill: false,
-                        tension: 0.3,
-                        pointRadius: 3,
-                        pointHoverRadius: 5,
-                        borderWidth: 2
-                    }
-                ]
+                datasets: datasets
             },
             options: {
                 responsive: true,
@@ -10542,53 +10685,155 @@ async function loadMetricsTrend() {
     } catch (error) {
         console.error('Failed to load metrics trend:', error);
         canvas.style.display = 'none';
+        emptyEl.innerHTML = '<i class="fas fa-chart-line"></i><p>Not enough data for trend analysis</p>';
         emptyEl.classList.remove('hidden');
     }
 }
 
-async function loadTopConfigurations() {
+async function loadTopConfigurations(modelType = null) {
+    const thead = document.getElementById('topConfigsHead');
     const tbody = document.getElementById('topConfigsBody');
+    const titleEl = document.getElementById('topConfigsTitle');
+    const subtitleEl = document.getElementById('topConfigsSubtitle');
+
+    // Use provided modelType or fall back to selected state
+    const activeModelType = modelType || selectedDashboardModelType;
+
+    // Update header based on model type
+    const headerConfig = {
+        'retrieval': {
+            title: 'Top Configurations',
+            subtitle: 'Best performing retrieval experiments (by R@100)'
+        },
+        'ranking': {
+            title: 'Top Configurations',
+            subtitle: 'Best performing ranking experiments (by Test RMSE, lower is better)'
+        },
+        'hybrid': {
+            title: 'Top Configurations',
+            subtitle: 'Best performing hybrid experiments'
+        }
+    };
+    const config = headerConfig[activeModelType] || headerConfig['retrieval'];
+    if (titleEl) titleEl.textContent = config.title;
+    if (subtitleEl) subtitleEl.textContent = config.subtitle;
+
+    // Update table header based on model type
+    if (activeModelType === 'ranking') {
+        thead.innerHTML = `
+            <tr>
+                <th style="width: 40px;">#</th>
+                <th style="text-align: center;">Experiment</th>
+                <th>Dataset</th>
+                <th>Feature</th>
+                <th>Model</th>
+                <th style="text-align: center;">LR</th>
+                <th style="text-align: center;">Batch</th>
+                <th style="text-align: center;">Epochs</th>
+                <th style="text-align: center;">Test RMSE</th>
+                <th style="text-align: center;">Test MAE</th>
+            </tr>
+        `;
+    } else {
+        thead.innerHTML = `
+            <tr>
+                <th style="width: 40px;">#</th>
+                <th style="text-align: center;">Experiment</th>
+                <th>Dataset</th>
+                <th>Feature</th>
+                <th>Model</th>
+                <th style="text-align: center;">LR</th>
+                <th style="text-align: center;">Batch</th>
+                <th style="text-align: center;">Epochs</th>
+                <th style="text-align: center;">R@100</th>
+                <th style="text-align: center;">Loss</th>
+            </tr>
+        `;
+    }
+
+    // For Hybrid, show empty state (not implemented yet)
+    if (activeModelType === 'hybrid') {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="10" class="text-center text-gray-400 py-4">
+                    <i class="fas fa-layer-group mr-2"></i>No hybrid experiments yet
+                </td>
+            </tr>
+        `;
+        return;
+    }
 
     try {
-        const response = await fetch('/api/experiments/top-configurations/?limit=5');
+        const response = await fetch(`/api/experiments/top-configurations/?limit=5&model_type=${activeModelType}`);
         const data = await response.json();
 
         if (!data.success || !data.configurations || data.configurations.length === 0) {
+            const modelLabel = activeModelType === 'ranking' ? 'ranking' : 'retrieval';
             tbody.innerHTML = `
                 <tr>
                     <td colspan="10" class="text-center text-gray-400 py-4">
-                        No completed experiments yet
+                        No completed ${modelLabel} experiments yet
                     </td>
                 </tr>
             `;
             return;
         }
 
-        const bestRecall = data.configurations[0]?.recall_at_100;
+        if (activeModelType === 'ranking') {
+            // Ranking: sort by test_rmse (lower is better)
+            const bestMetric = data.configurations[0]?.test_rmse;
 
-        tbody.innerHTML = data.configurations.map((cfg, index) => {
-            const rankClass = index < 3 ? `rank-${index + 1}` : '';
-            const isBest = cfg.recall_at_100 === bestRecall;
+            tbody.innerHTML = data.configurations.map((cfg, index) => {
+                const rankClass = index < 3 ? `rank-${index + 1}` : '';
+                const isBest = cfg.test_rmse === bestMetric;
 
-            return `
-                <tr onclick="openExpViewModal(${cfg.experiment_id})" style="cursor: pointer;" title="Click to view details">
-                    <td class="rank-cell ${rankClass}">${cfg.rank}</td>
-                    <td style="text-align: center;">${cfg.display_name || 'Exp #' + cfg.experiment_number}</td>
-                    <td>${cfg.dataset || '-'}</td>
-                    <td>${cfg.feature_config || '-'}</td>
-                    <td>${cfg.model_config || '-'}</td>
-                    <td style="text-align: center;">${cfg.learning_rate}</td>
-                    <td style="text-align: center;">${cfg.batch_size}</td>
-                    <td style="text-align: center;">${cfg.epochs}</td>
-                    <td style="text-align: center;" class="${isBest ? 'metric-best' : ''}">
-                        ${cfg.recall_at_100 !== null ? cfg.recall_at_100.toFixed(3) : '-'}
-                    </td>
-                    <td style="text-align: center;">
-                        ${cfg.loss !== null ? cfg.loss.toFixed(1) : '-'}
-                    </td>
-                </tr>
-            `;
-        }).join('');
+                return `
+                    <tr onclick="openExpViewModal(${cfg.experiment_id})" style="cursor: pointer;" title="Click to view details">
+                        <td class="rank-cell ${rankClass}">${cfg.rank}</td>
+                        <td style="text-align: center;">${cfg.display_name || 'Exp #' + cfg.experiment_number}</td>
+                        <td>${cfg.dataset || '-'}</td>
+                        <td>${cfg.feature_config || '-'}</td>
+                        <td>${cfg.model_config || '-'}</td>
+                        <td style="text-align: center;">${cfg.learning_rate}</td>
+                        <td style="text-align: center;">${cfg.batch_size}</td>
+                        <td style="text-align: center;">${cfg.epochs}</td>
+                        <td style="text-align: center;" class="${isBest ? 'metric-best' : ''}">
+                            ${cfg.test_rmse !== null ? cfg.test_rmse.toFixed(4) : '-'}
+                        </td>
+                        <td style="text-align: center;">
+                            ${cfg.test_mae !== null ? cfg.test_mae.toFixed(4) : '-'}
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        } else {
+            // Retrieval: sort by recall_at_100 (higher is better)
+            const bestRecall = data.configurations[0]?.recall_at_100;
+
+            tbody.innerHTML = data.configurations.map((cfg, index) => {
+                const rankClass = index < 3 ? `rank-${index + 1}` : '';
+                const isBest = cfg.recall_at_100 === bestRecall;
+
+                return `
+                    <tr onclick="openExpViewModal(${cfg.experiment_id})" style="cursor: pointer;" title="Click to view details">
+                        <td class="rank-cell ${rankClass}">${cfg.rank}</td>
+                        <td style="text-align: center;">${cfg.display_name || 'Exp #' + cfg.experiment_number}</td>
+                        <td>${cfg.dataset || '-'}</td>
+                        <td>${cfg.feature_config || '-'}</td>
+                        <td>${cfg.model_config || '-'}</td>
+                        <td style="text-align: center;">${cfg.learning_rate}</td>
+                        <td style="text-align: center;">${cfg.batch_size}</td>
+                        <td style="text-align: center;">${cfg.epochs}</td>
+                        <td style="text-align: center;" class="${isBest ? 'metric-best' : ''}">
+                            ${cfg.recall_at_100 !== null ? cfg.recall_at_100.toFixed(3) : '-'}
+                        </td>
+                        <td style="text-align: center;">
+                            ${cfg.loss !== null ? cfg.loss.toFixed(1) : '-'}
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
 
     } catch (error) {
         console.error('Failed to load top configurations:', error);
@@ -10602,15 +10847,36 @@ async function loadTopConfigurations() {
     }
 }
 
-async function loadHyperparameterAnalysis() {
+async function loadHyperparameterAnalysis(modelType = null) {
     const container = document.getElementById('hyperparamContainer');
+    const sectionSubtitle = document.querySelector('#hyperparamContainer').closest('.dashboard-section').querySelector('.text-xs');
+
+    // Use provided modelType or fall back to selected state
+    const activeModelType = modelType || selectedDashboardModelType;
+
+    // Update subtitle based on model type
+    const subtitleConfig = {
+        'retrieval': 'TPE-based analysis • Higher score = better association with top 30% results (by R@100)',
+        'ranking': 'TPE-based analysis • Higher score = better association with top 30% results (by Test RMSE)',
+        'hybrid': 'TPE-based analysis • Hybrid model experiments'
+    };
+    if (sectionSubtitle) {
+        sectionSubtitle.textContent = subtitleConfig[activeModelType] || subtitleConfig['retrieval'];
+    }
+
+    // For Hybrid, show empty state (not implemented yet)
+    if (activeModelType === 'hybrid') {
+        container.innerHTML = '<div class="dashboard-empty-section"><i class="fas fa-layer-group"></i><p>Hybrid hyperparameter insights coming soon</p></div>';
+        return;
+    }
 
     try {
-        const response = await fetch('/api/experiments/hyperparameter-analysis/');
+        const response = await fetch(`/api/experiments/hyperparameter-analysis/?model_type=${activeModelType}`);
         const data = await response.json();
 
         if (!data.success || !data.analysis) {
-            container.innerHTML = '<div class="dashboard-empty-section"><i class="fas fa-cogs"></i><p>No hyperparameter data available</p></div>';
+            const modelLabel = activeModelType === 'ranking' ? 'ranking' : 'retrieval';
+            container.innerHTML = `<div class="dashboard-empty-section"><i class="fas fa-cogs"></i><p>No ${modelLabel} hyperparameter data available</p></div>`;
             return;
         }
 
@@ -10622,7 +10888,8 @@ async function loadHyperparameterAnalysis() {
         );
 
         if (!hasData) {
-            container.innerHTML = '<div class="dashboard-empty-section"><i class="fas fa-cogs"></i><p>No hyperparameter data available</p></div>';
+            const modelLabel = activeModelType === 'ranking' ? 'ranking' : 'retrieval';
+            container.innerHTML = `<div class="dashboard-empty-section"><i class="fas fa-cogs"></i><p>No ${modelLabel} hyperparameter data available</p></div>`;
             return;
         }
 
@@ -10634,6 +10901,12 @@ async function loadHyperparameterAnalysis() {
             { key: 'dataset', label: 'Dataset', icon: 'fa-database' }
         ];
 
+        // Determine metric label based on model type
+        const metricLabel = activeModelType === 'ranking' ? 'Test RMSE' : 'R@100';
+        const thresholdLabel = activeModelType === 'ranking'
+            ? (analysis.good_threshold ? analysis.good_threshold.toFixed(4) : '-')
+            : (analysis.good_threshold ? (analysis.good_threshold * 100).toFixed(1) + '%' : '-');
+
         // Build meta info section
         let html = `
             <div class="hyperparam-meta">
@@ -10643,7 +10916,7 @@ async function loadHyperparameterAnalysis() {
                 </div>
                 <div class="hyperparam-meta-item">
                     <span>Good threshold (top 30%):</span>
-                    <span class="hyperparam-meta-value">${analysis.good_threshold ? (analysis.good_threshold * 100).toFixed(1) + '%' : '-'}</span>
+                    <span class="hyperparam-meta-value">${thresholdLabel}</span>
                 </div>
                 <div class="hyperparam-meta-item">
                     <span>Good experiments:</span>
@@ -10803,7 +11076,7 @@ async function loadHyperparameterAnalysis() {
                     </div>
             `;
 
-            // Special handling for MODEL ARCHITECTURE - 2 row layout
+            // Special handling for MODEL ARCHITECTURE - 2 or 3 row layout
             if (category.key === 'model') {
                 // Get params by field name (exclude activation fields)
                 const buyerTower = findParam(params, 'buyer_tower_structure');
@@ -10812,6 +11085,9 @@ async function loadHyperparameterAnalysis() {
                 const productTower = findParam(params, 'product_tower_structure');
                 const productL2 = findParam(params, 'product_l2_category');
                 const productParams = findParam(params, 'product_total_params');
+                // Ranking tower fields (only available for ranking models)
+                const rankingTower = findParam(params, 'ranking_tower_structure');
+                const rankingParams = findParam(params, 'ranking_total_params');
 
                 html += `
                     <div class="hyperparam-model-section">
@@ -10827,8 +11103,21 @@ async function loadHyperparameterAnalysis() {
                             ${renderHyperparamCard(productL2, false)}
                             ${renderHyperparamCard(productParams, false)}
                         </div>
-                    </div>
                 `;
+
+                // Add Ranking Tower row for ranking models
+                if (activeModelType === 'ranking' && (rankingTower || rankingParams)) {
+                    html += `
+                        <!-- Ranking Tower Row -->
+                        <div class="hyperparam-model-row ranking-tower-row">
+                            ${renderHyperparamCard(rankingTower, true)}
+                            <div class="hyperparam-card-placeholder"></div>
+                            ${renderHyperparamCard(rankingParams, false)}
+                        </div>
+                    `;
+                }
+
+                html += `</div>`;
             } else if (category.key === 'features') {
                 // Special handling for FEATURES - 2 row layout (Buyer/Product)
                 const buyerTensorDim = findParam(params, 'buyer_tensor_dim');

@@ -2230,11 +2230,12 @@ def selectable_experiments(request):
 @require_http_methods(["GET"])
 def metrics_trend(request):
     """
-    Get metrics trend data showing best recall metrics over time.
+    Get metrics trend data showing best metrics over time, filtered by model type.
 
-    GET /api/experiments/metrics-trend/
+    GET /api/experiments/metrics-trend/?model_type=retrieval
+    GET /api/experiments/metrics-trend/?model_type=ranking
 
-    Returns:
+    Returns for retrieval:
     {
         "success": true,
         "trend": [
@@ -2242,6 +2243,19 @@ def metrics_trend(request):
                 "date": "2025-12-01",
                 "best_r100": 0.42, "best_r50": 0.35, "best_r10": 0.20, "best_r5": 0.15,
                 "experiment_count": 5
+            },
+            ...
+        ]
+    }
+
+    Returns for ranking:
+    {
+        "success": true,
+        "trend": [
+            {
+                "date": "2025-12-01",
+                "best_rmse": 0.52, "best_test_rmse": 0.55, "best_mae": 0.35, "best_test_mae": 0.38,
+                "experiment_count": 3
             },
             ...
         ]
@@ -2255,71 +2269,147 @@ def metrics_trend(request):
                 'error': 'No model endpoint selected'
             }, status=400)
 
+        # Get model_type from query params (default: retrieval)
+        model_type = request.GET.get('model_type', 'retrieval')
+
         # Get all completed experiments ordered by date
         queryset = QuickTest.objects.filter(
             feature_config__dataset__model_endpoint=model_endpoint,
             status=QuickTest.STATUS_COMPLETED,
             completed_at__isnull=False
-        ).order_by('completed_at')
+        ).select_related('feature_config').order_by('completed_at')
 
-        # Extract metrics for all recall values
-        experiments = []
-        for qt in queryset:
-            if not qt.completed_at:
-                continue
+        # Filter by model type based on feature_config.config_type
+        if model_type == 'ranking':
+            queryset = queryset.filter(feature_config__config_type='ranking')
+        elif model_type == 'hybrid':
+            queryset = queryset.filter(feature_config__config_type='multitask')
+        else:
+            # Default: retrieval - include both retrieval and configs without config_type
+            from django.db.models import Q
+            queryset = queryset.filter(
+                Q(feature_config__config_type='retrieval') |
+                Q(feature_config__config_type__isnull=True) |
+                Q(feature_config__config_type='')
+            )
 
-            # Get recall values from direct fields or training_history_json
-            hist = qt.training_history_json if isinstance(qt.training_history_json, dict) else {}
-            final_metrics = hist.get('final_metrics', {})
+        if model_type == 'ranking':
+            # Extract ranking metrics (RMSE, MAE - lower is better)
+            experiments = []
+            for qt in queryset:
+                if not qt.completed_at:
+                    continue
 
-            recall_5 = final_metrics.get('test_recall_at_5')
-            recall_10 = final_metrics.get('test_recall_at_10')
-            recall_50 = qt.recall_at_50 if qt.recall_at_50 is not None else final_metrics.get('test_recall_at_50')
-            recall_100 = qt.recall_at_100 if qt.recall_at_100 is not None else final_metrics.get('test_recall_at_100')
+                hist = qt.training_history_json if isinstance(qt.training_history_json, dict) else {}
+                final_metrics = hist.get('final_metrics', {})
 
-            # Only include if at least one recall metric exists
-            if any(r is not None for r in [recall_5, recall_10, recall_50, recall_100]):
-                experiments.append({
-                    'completed_at': qt.completed_at,
-                    'recall_5': recall_5,
-                    'recall_10': recall_10,
-                    'recall_50': recall_50,
-                    'recall_100': recall_100
+                rmse = qt.rmse if qt.rmse is not None else final_metrics.get('final_val_rmse') or final_metrics.get('rmse')
+                test_rmse = qt.test_rmse if qt.test_rmse is not None else final_metrics.get('test_rmse')
+                mae = qt.mae if qt.mae is not None else final_metrics.get('final_val_mae') or final_metrics.get('mae')
+                test_mae = qt.test_mae if qt.test_mae is not None else final_metrics.get('test_mae')
+
+                # Only include if at least one metric exists
+                if any(m is not None for m in [rmse, test_rmse, mae, test_mae]):
+                    experiments.append({
+                        'completed_at': qt.completed_at,
+                        'rmse': rmse,
+                        'test_rmse': test_rmse,
+                        'mae': mae,
+                        'test_mae': test_mae
+                    })
+
+            if not experiments:
+                return JsonResponse({
+                    'success': True,
+                    'trend': []
                 })
 
-        if not experiments:
-            return JsonResponse({
-                'success': True,
-                'trend': []
-            })
+            # Build cumulative best tracking (lower is better for ranking)
+            trend_data = []
+            cumulative_best = {'rmse': None, 'test_rmse': None, 'mae': None, 'test_mae': None}
+            count = 0
 
-        # Build cumulative best tracking for all metrics
-        trend_data = []
-        cumulative_best = {'r5': 0, 'r10': 0, 'r50': 0, 'r100': 0}
-        count = 0
+            for exp in experiments:
+                count += 1
 
-        for exp in experiments:
-            count += 1
+                # Update cumulative best (lower is better)
+                if exp['rmse'] is not None and (cumulative_best['rmse'] is None or exp['rmse'] < cumulative_best['rmse']):
+                    cumulative_best['rmse'] = exp['rmse']
+                if exp['test_rmse'] is not None and (cumulative_best['test_rmse'] is None or exp['test_rmse'] < cumulative_best['test_rmse']):
+                    cumulative_best['test_rmse'] = exp['test_rmse']
+                if exp['mae'] is not None and (cumulative_best['mae'] is None or exp['mae'] < cumulative_best['mae']):
+                    cumulative_best['mae'] = exp['mae']
+                if exp['test_mae'] is not None and (cumulative_best['test_mae'] is None or exp['test_mae'] < cumulative_best['test_mae']):
+                    cumulative_best['test_mae'] = exp['test_mae']
 
-            # Update cumulative best for each metric
-            if exp['recall_5'] is not None and exp['recall_5'] > cumulative_best['r5']:
-                cumulative_best['r5'] = exp['recall_5']
-            if exp['recall_10'] is not None and exp['recall_10'] > cumulative_best['r10']:
-                cumulative_best['r10'] = exp['recall_10']
-            if exp['recall_50'] is not None and exp['recall_50'] > cumulative_best['r50']:
-                cumulative_best['r50'] = exp['recall_50']
-            if exp['recall_100'] is not None and exp['recall_100'] > cumulative_best['r100']:
-                cumulative_best['r100'] = exp['recall_100']
+                trend_data.append({
+                    'date': exp['completed_at'].strftime('%Y-%m-%d'),
+                    'datetime': exp['completed_at'].isoformat(),
+                    'best_rmse': round(cumulative_best['rmse'], 4) if cumulative_best['rmse'] else None,
+                    'best_test_rmse': round(cumulative_best['test_rmse'], 4) if cumulative_best['test_rmse'] else None,
+                    'best_mae': round(cumulative_best['mae'], 4) if cumulative_best['mae'] else None,
+                    'best_test_mae': round(cumulative_best['test_mae'], 4) if cumulative_best['test_mae'] else None,
+                    'experiment_count': count
+                })
 
-            trend_data.append({
-                'date': exp['completed_at'].strftime('%Y-%m-%d'),
-                'datetime': exp['completed_at'].isoformat(),
-                'best_r100': round(cumulative_best['r100'], 4) if cumulative_best['r100'] else None,
-                'best_r50': round(cumulative_best['r50'], 4) if cumulative_best['r50'] else None,
-                'best_r10': round(cumulative_best['r10'], 4) if cumulative_best['r10'] else None,
-                'best_r5': round(cumulative_best['r5'], 4) if cumulative_best['r5'] else None,
-                'experiment_count': count
-            })
+        else:
+            # Retrieval: Extract recall metrics (higher is better)
+            experiments = []
+            for qt in queryset:
+                if not qt.completed_at:
+                    continue
+
+                hist = qt.training_history_json if isinstance(qt.training_history_json, dict) else {}
+                final_metrics = hist.get('final_metrics', {})
+
+                recall_5 = final_metrics.get('test_recall_at_5')
+                recall_10 = final_metrics.get('test_recall_at_10')
+                recall_50 = qt.recall_at_50 if qt.recall_at_50 is not None else final_metrics.get('test_recall_at_50')
+                recall_100 = qt.recall_at_100 if qt.recall_at_100 is not None else final_metrics.get('test_recall_at_100')
+
+                # Only include if at least one recall metric exists
+                if any(r is not None for r in [recall_5, recall_10, recall_50, recall_100]):
+                    experiments.append({
+                        'completed_at': qt.completed_at,
+                        'recall_5': recall_5,
+                        'recall_10': recall_10,
+                        'recall_50': recall_50,
+                        'recall_100': recall_100
+                    })
+
+            if not experiments:
+                return JsonResponse({
+                    'success': True,
+                    'trend': []
+                })
+
+            # Build cumulative best tracking (higher is better for retrieval)
+            trend_data = []
+            cumulative_best = {'r5': 0, 'r10': 0, 'r50': 0, 'r100': 0}
+            count = 0
+
+            for exp in experiments:
+                count += 1
+
+                # Update cumulative best for each metric
+                if exp['recall_5'] is not None and exp['recall_5'] > cumulative_best['r5']:
+                    cumulative_best['r5'] = exp['recall_5']
+                if exp['recall_10'] is not None and exp['recall_10'] > cumulative_best['r10']:
+                    cumulative_best['r10'] = exp['recall_10']
+                if exp['recall_50'] is not None and exp['recall_50'] > cumulative_best['r50']:
+                    cumulative_best['r50'] = exp['recall_50']
+                if exp['recall_100'] is not None and exp['recall_100'] > cumulative_best['r100']:
+                    cumulative_best['r100'] = exp['recall_100']
+
+                trend_data.append({
+                    'date': exp['completed_at'].strftime('%Y-%m-%d'),
+                    'datetime': exp['completed_at'].isoformat(),
+                    'best_r100': round(cumulative_best['r100'], 4) if cumulative_best['r100'] else None,
+                    'best_r50': round(cumulative_best['r50'], 4) if cumulative_best['r50'] else None,
+                    'best_r10': round(cumulative_best['r10'], 4) if cumulative_best['r10'] else None,
+                    'best_r5': round(cumulative_best['r5'], 4) if cumulative_best['r5'] else None,
+                    'experiment_count': count
+                })
 
         return JsonResponse({
             'success': True,
@@ -2347,7 +2437,8 @@ def hyperparameter_analysis(request):
     - Provides confidence indicators based on sample count
     - Groups parameters into 4 categories: training, model, features, dataset
 
-    GET /api/experiments/hyperparameter-analysis/
+    GET /api/experiments/hyperparameter-analysis/?model_type=retrieval
+    GET /api/experiments/hyperparameter-analysis/?model_type=ranking
 
     Returns:
     {
@@ -2389,6 +2480,9 @@ def hyperparameter_analysis(request):
                 'error': 'No model endpoint selected'
             }, status=400)
 
+        # Get model_type from query params (default: retrieval)
+        model_type = request.GET.get('model_type', 'retrieval')
+
         from ml_platform.experiments.hyperparameter_analyzer import HyperparameterAnalyzer
 
         # Get all completed experiments
@@ -2397,9 +2491,23 @@ def hyperparameter_analysis(request):
             status=QuickTest.STATUS_COMPLETED
         ).select_related('feature_config', 'model_config')
 
+        # Filter by model type based on feature_config.config_type
+        if model_type == 'ranking':
+            queryset = queryset.filter(feature_config__config_type='ranking')
+        elif model_type == 'hybrid':
+            queryset = queryset.filter(feature_config__config_type='multitask')
+        else:
+            # Default: retrieval - include both retrieval and configs without config_type
+            from django.db.models import Q
+            queryset = queryset.filter(
+                Q(feature_config__config_type='retrieval') |
+                Q(feature_config__config_type__isnull=True) |
+                Q(feature_config__config_type='')
+            )
+
         # Use HyperparameterAnalyzer for TPE-based analysis
         analyzer = HyperparameterAnalyzer()
-        analysis = analyzer.analyze(list(queryset))
+        analysis = analyzer.analyze(list(queryset), model_type=model_type)
 
         return JsonResponse({
             'success': True,
@@ -2418,9 +2526,13 @@ def hyperparameter_analysis(request):
 @require_http_methods(["GET"])
 def top_configurations(request):
     """
-    Get top experiment configurations ranked by recall@100.
+    Get top experiment configurations ranked by model-specific metrics.
 
-    GET /api/experiments/top-configurations/?limit=10
+    GET /api/experiments/top-configurations/?limit=10&model_type=retrieval
+    GET /api/experiments/top-configurations/?limit=10&model_type=ranking
+
+    For retrieval: ranked by recall@100 (higher is better)
+    For ranking: ranked by test_rmse (lower is better)
 
     Returns:
     {
@@ -2437,9 +2549,15 @@ def top_configurations(request):
                 "epochs": 15,
                 "data_sample_percent": 100,
                 "split_strategy": "time_holdout",
+                // For retrieval:
                 "recall_at_100": 0.473,
                 "recall_at_50": 0.412,
                 "loss": 0.034
+                // For ranking:
+                "test_rmse": 0.523,
+                "test_mae": 0.412,
+                "rmse": 0.498,
+                "mae": 0.389
             },
             ...
         ]
@@ -2454,6 +2572,7 @@ def top_configurations(request):
             }, status=400)
 
         limit = int(request.GET.get('limit', 10))
+        model_type = request.GET.get('model_type', 'retrieval')
 
         # Get all completed experiments
         queryset = QuickTest.objects.filter(
@@ -2461,46 +2580,109 @@ def top_configurations(request):
             status=QuickTest.STATUS_COMPLETED
         ).select_related('feature_config', 'feature_config__dataset', 'model_config')
 
-        # Build list with extracted metrics
-        experiments_with_metrics = []
-        for qt in queryset:
-            exp_metrics = _get_experiment_metrics(qt)
-            recall = exp_metrics.get('recall_at_100')
-            if recall is not None:
-                experiments_with_metrics.append({
-                    'qt': qt,
-                    'metrics': exp_metrics,
-                    'recall': recall,
+        # Filter by model type based on feature_config.config_type
+        if model_type == 'ranking':
+            queryset = queryset.filter(feature_config__config_type='ranking')
+        elif model_type == 'hybrid':
+            queryset = queryset.filter(feature_config__config_type='multitask')
+        else:
+            # Default: retrieval - include both retrieval and configs without config_type
+            from django.db.models import Q
+            queryset = queryset.filter(
+                Q(feature_config__config_type='retrieval') |
+                Q(feature_config__config_type__isnull=True) |
+                Q(feature_config__config_type='')
+            )
+
+        if model_type == 'ranking':
+            # Ranking: sort by test_rmse (lower is better)
+            experiments_with_metrics = []
+            for qt in queryset:
+                hist = qt.training_history_json if isinstance(qt.training_history_json, dict) else {}
+                final_metrics = hist.get('final_metrics', {})
+
+                test_rmse = qt.test_rmse if qt.test_rmse is not None else final_metrics.get('test_rmse')
+                test_mae = qt.test_mae if qt.test_mae is not None else final_metrics.get('test_mae')
+                rmse = qt.rmse if qt.rmse is not None else final_metrics.get('final_val_rmse') or final_metrics.get('rmse')
+                mae = qt.mae if qt.mae is not None else final_metrics.get('final_val_mae') or final_metrics.get('mae')
+
+                if test_rmse is not None:
+                    experiments_with_metrics.append({
+                        'qt': qt,
+                        'test_rmse': test_rmse,
+                        'test_mae': test_mae,
+                        'rmse': rmse,
+                        'mae': mae
+                    })
+
+            # Sort by test_rmse ascending (lower is better)
+            experiments_with_metrics.sort(key=lambda x: x['test_rmse'])
+
+            # Build configurations list
+            configurations = []
+            for i, item in enumerate(experiments_with_metrics[:limit]):
+                qt = item['qt']
+                configurations.append({
+                    'rank': i + 1,
+                    'experiment_id': qt.id,
+                    'experiment_number': qt.experiment_number,
+                    'display_name': qt.display_name,
+                    'dataset': qt.feature_config.dataset.name if qt.feature_config and qt.feature_config.dataset else None,
+                    'feature_config': qt.feature_config.name if qt.feature_config else None,
+                    'feature_config_id': qt.feature_config.id if qt.feature_config else None,
+                    'model_config': qt.model_config.name if qt.model_config else None,
+                    'model_config_id': qt.model_config.id if qt.model_config else None,
+                    'learning_rate': qt.learning_rate,
+                    'batch_size': qt.batch_size,
+                    'epochs': qt.epochs,
+                    'data_sample_percent': qt.data_sample_percent,
+                    'split_strategy': qt.split_strategy,
+                    'test_rmse': round(item['test_rmse'], 4) if item['test_rmse'] else None,
+                    'test_mae': round(item['test_mae'], 4) if item['test_mae'] else None,
+                    'rmse': round(item['rmse'], 4) if item['rmse'] else None,
+                    'mae': round(item['mae'], 4) if item['mae'] else None,
                 })
+        else:
+            # Retrieval: sort by recall@100 (higher is better)
+            experiments_with_metrics = []
+            for qt in queryset:
+                exp_metrics = _get_experiment_metrics(qt)
+                recall = exp_metrics.get('recall_at_100')
+                if recall is not None:
+                    experiments_with_metrics.append({
+                        'qt': qt,
+                        'metrics': exp_metrics,
+                        'recall': recall,
+                    })
 
-        # Sort by recall descending
-        experiments_with_metrics.sort(key=lambda x: x['recall'], reverse=True)
+            # Sort by recall descending (higher is better)
+            experiments_with_metrics.sort(key=lambda x: x['recall'], reverse=True)
 
-        # Build configurations list
-        configurations = []
-        for i, item in enumerate(experiments_with_metrics[:limit]):
-            qt = item['qt']
-            exp_metrics = item['metrics']
-            configurations.append({
-                'rank': i + 1,
-                'experiment_id': qt.id,
-                'experiment_number': qt.experiment_number,
-                'display_name': qt.display_name,
-                'dataset': qt.feature_config.dataset.name if qt.feature_config and qt.feature_config.dataset else None,
-                'feature_config': qt.feature_config.name if qt.feature_config else None,
-                'feature_config_id': qt.feature_config.id if qt.feature_config else None,
-                'model_config': qt.model_config.name if qt.model_config else None,
-                'model_config_id': qt.model_config.id if qt.model_config else None,
-                'learning_rate': qt.learning_rate,
-                'batch_size': qt.batch_size,
-                'epochs': qt.epochs,
-                'data_sample_percent': qt.data_sample_percent,
-                'split_strategy': qt.split_strategy,
-                'recall_at_100': round(exp_metrics['recall_at_100'], 4) if exp_metrics['recall_at_100'] else None,
-                'recall_at_50': round(exp_metrics['recall_at_50'], 4) if exp_metrics['recall_at_50'] else None,
-                'recall_at_10': round(exp_metrics['recall_at_10'], 4) if exp_metrics['recall_at_10'] else None,
-                'loss': round(exp_metrics['loss'], 4) if exp_metrics['loss'] else None,
-            })
+            # Build configurations list
+            configurations = []
+            for i, item in enumerate(experiments_with_metrics[:limit]):
+                qt = item['qt']
+                exp_metrics = item['metrics']
+                configurations.append({
+                    'rank': i + 1,
+                    'experiment_id': qt.id,
+                    'experiment_number': qt.experiment_number,
+                    'display_name': qt.display_name,
+                    'dataset': qt.feature_config.dataset.name if qt.feature_config and qt.feature_config.dataset else None,
+                    'feature_config': qt.feature_config.name if qt.feature_config else None,
+                    'feature_config_id': qt.feature_config.id if qt.feature_config else None,
+                    'model_config': qt.model_config.name if qt.model_config else None,
+                    'model_config_id': qt.model_config.id if qt.model_config else None,
+                    'learning_rate': qt.learning_rate,
+                    'batch_size': qt.batch_size,
+                    'epochs': qt.epochs,
+                    'data_sample_percent': qt.data_sample_percent,
+                    'split_strategy': qt.split_strategy,
+                    'recall_at_100': round(exp_metrics['recall_at_100'], 4) if exp_metrics['recall_at_100'] else None,
+                    'recall_at_50': round(exp_metrics['recall_at_50'], 4) if exp_metrics['recall_at_50'] else None,
+                    'recall_at_10': round(exp_metrics['recall_at_10'], 4) if exp_metrics['recall_at_10'] else None,
+                    'loss': round(exp_metrics['loss'], 4) if exp_metrics['loss'] else None,
+                })
 
         return JsonResponse({
             'success': True,

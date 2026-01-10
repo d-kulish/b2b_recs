@@ -310,6 +310,8 @@ def quick_test_list(request):
     GET /api/quick-tests/?feature_config_id=123
     GET /api/quick-tests/?model_config_id=456
     GET /api/quick-tests/?status=running
+    GET /api/quick-tests/?model_type=retrieval  (retrieval|ranking|multitask)
+    GET /api/quick-tests/?dataset_id=789
     GET /api/quick-tests/?search=exp
 
     Returns:
@@ -351,6 +353,16 @@ def quick_test_list(request):
         status = request.GET.get('status')
         if status:
             queryset = queryset.filter(status=status)
+
+        # Model type filter (retrieval/ranking/multitask)
+        model_type = request.GET.get('model_type')
+        if model_type:
+            queryset = queryset.filter(feature_config__config_type=model_type)
+
+        # Dataset filter
+        dataset_id = request.GET.get('dataset_id')
+        if dataset_id:
+            queryset = queryset.filter(feature_config__dataset_id=dataset_id)
 
         # Search filter (searches experiment number, feature config name, model config name)
         search = request.GET.get('search', '').strip()
@@ -1953,7 +1965,7 @@ def training_heatmaps(request):
 @require_http_methods(["GET"])
 def experiment_dashboard_stats(request):
     """
-    Get summary statistics for the experiments dashboard.
+    Get summary statistics for the experiments dashboard, grouped by model type.
 
     GET /api/experiments/dashboard-stats/
 
@@ -1965,10 +1977,21 @@ def experiment_dashboard_stats(request):
             "completed": 18,
             "running": 2,
             "failed": 5,
-            "best_recall_100": 0.473,
-            "avg_recall_100": 0.412,
-            "success_rate": 72.0,
-            "avg_duration_minutes": 45.5
+            "retrieval": {
+                "count": 15,
+                "best_r5": 0.054, "best_r10": 0.088,
+                "best_r50": 0.213, "best_r100": 0.317
+            },
+            "ranking": {
+                "count": 8,
+                "best_rmse": 0.142, "best_test_rmse": 0.156,
+                "best_mae": 0.089, "best_test_mae": 0.095
+            },
+            "hybrid": {
+                "count": 2,
+                "best_r50": 0.195, "best_r100": 0.289,
+                "best_rmse": 0.151, "best_test_rmse": 0.163
+            }
         }
     }
     """
@@ -1980,12 +2003,12 @@ def experiment_dashboard_stats(request):
                 'error': 'No model endpoint selected'
             }, status=400)
 
-        from django.db.models import Count, Max, Avg, F, ExpressionWrapper, DurationField
+        from django.db.models import Count
 
         # Base queryset
         base_qs = QuickTest.objects.filter(
             feature_config__dataset__model_endpoint=model_endpoint
-        )
+        ).select_related('feature_config')
 
         # Get counts by status
         status_counts = base_qs.values('status').annotate(count=Count('id'))
@@ -1997,42 +2020,101 @@ def experiment_dashboard_stats(request):
                   counts_by_status.get(QuickTest.STATUS_SUBMITTING, 0)
         failed = counts_by_status.get(QuickTest.STATUS_FAILED, 0)
 
-        # Calculate success rate (completed / (completed + failed))
-        finished = completed + failed
-        success_rate = round((completed / finished) * 100, 1) if finished > 0 else None
-
-        # Get metrics for completed experiments
-        # Note: recall fields may be NULL, metrics are in training_history_json
+        # Get completed experiments grouped by model type
         completed_qs = base_qs.filter(status=QuickTest.STATUS_COMPLETED)
 
-        # Track best values for all recall metrics
-        best_metrics = {
-            'recall_5': None,
-            'recall_10': None,
-            'recall_50': None,
-            'recall_100': None,
+        # Initialize stats per model type
+        model_type_stats = {
+            'retrieval': {
+                'count': 0,
+                'best_r5': None, 'best_r10': None, 'best_r50': None, 'best_r100': None
+            },
+            'ranking': {
+                'count': 0,
+                'best_rmse': None, 'best_test_rmse': None,
+                'best_mae': None, 'best_test_mae': None
+            },
+            'hybrid': {
+                'count': 0,
+                'best_r50': None, 'best_r100': None,
+                'best_rmse': None, 'best_test_rmse': None
+            }
         }
 
         for qt in completed_qs:
-            # Get recall values from direct fields or training_history_json
-            # Note: QuickTest model only has recall_at_50 and recall_at_100 fields
+            # Determine model type from feature config
+            config_type = getattr(qt.feature_config, 'config_type', 'retrieval') or 'retrieval'
+
+            # Map multitask to hybrid for frontend consistency
+            if config_type == 'multitask':
+                config_type = 'hybrid'
+
+            if config_type not in model_type_stats:
+                continue
+
+            model_type_stats[config_type]['count'] += 1
+
+            # Get metrics from training_history_json
             hist = qt.training_history_json if isinstance(qt.training_history_json, dict) else {}
             final_metrics = hist.get('final_metrics', {})
 
-            recall_5 = final_metrics.get('test_recall_at_5')
-            recall_10 = final_metrics.get('test_recall_at_10')
-            recall_50 = qt.recall_at_50 if qt.recall_at_50 is not None else final_metrics.get('test_recall_at_50')
-            recall_100 = qt.recall_at_100 if qt.recall_at_100 is not None else final_metrics.get('test_recall_at_100')
+            if config_type == 'retrieval':
+                # Retrieval: recall metrics (higher is better)
+                recall_5 = final_metrics.get('test_recall_at_5')
+                recall_10 = final_metrics.get('test_recall_at_10')
+                recall_50 = qt.recall_at_50 or final_metrics.get('test_recall_at_50')
+                recall_100 = qt.recall_at_100 or final_metrics.get('test_recall_at_100')
 
-            # Update best values
-            if recall_5 is not None and (best_metrics['recall_5'] is None or recall_5 > best_metrics['recall_5']):
-                best_metrics['recall_5'] = recall_5
-            if recall_10 is not None and (best_metrics['recall_10'] is None or recall_10 > best_metrics['recall_10']):
-                best_metrics['recall_10'] = recall_10
-            if recall_50 is not None and (best_metrics['recall_50'] is None or recall_50 > best_metrics['recall_50']):
-                best_metrics['recall_50'] = recall_50
-            if recall_100 is not None and (best_metrics['recall_100'] is None or recall_100 > best_metrics['recall_100']):
-                best_metrics['recall_100'] = recall_100
+                stats = model_type_stats['retrieval']
+                if recall_5 and (stats['best_r5'] is None or recall_5 > stats['best_r5']):
+                    stats['best_r5'] = recall_5
+                if recall_10 and (stats['best_r10'] is None or recall_10 > stats['best_r10']):
+                    stats['best_r10'] = recall_10
+                if recall_50 and (stats['best_r50'] is None or recall_50 > stats['best_r50']):
+                    stats['best_r50'] = recall_50
+                if recall_100 and (stats['best_r100'] is None or recall_100 > stats['best_r100']):
+                    stats['best_r100'] = recall_100
+
+            elif config_type == 'ranking':
+                # Ranking: error metrics (lower is better)
+                rmse = qt.rmse or final_metrics.get('final_val_rmse') or final_metrics.get('rmse')
+                test_rmse = qt.test_rmse or final_metrics.get('test_rmse')
+                mae = qt.mae or final_metrics.get('final_val_mae') or final_metrics.get('mae')
+                test_mae = qt.test_mae or final_metrics.get('test_mae')
+
+                stats = model_type_stats['ranking']
+                if rmse and (stats['best_rmse'] is None or rmse < stats['best_rmse']):
+                    stats['best_rmse'] = rmse
+                if test_rmse and (stats['best_test_rmse'] is None or test_rmse < stats['best_test_rmse']):
+                    stats['best_test_rmse'] = test_rmse
+                if mae and (stats['best_mae'] is None or mae < stats['best_mae']):
+                    stats['best_mae'] = mae
+                if test_mae and (stats['best_test_mae'] is None or test_mae < stats['best_test_mae']):
+                    stats['best_test_mae'] = test_mae
+
+            elif config_type == 'hybrid':
+                # Hybrid: both recall (higher) and error (lower) metrics
+                recall_50 = qt.recall_at_50 or final_metrics.get('test_recall_at_50')
+                recall_100 = qt.recall_at_100 or final_metrics.get('test_recall_at_100')
+                rmse = qt.rmse or final_metrics.get('final_val_rmse') or final_metrics.get('rmse')
+                test_rmse = qt.test_rmse or final_metrics.get('test_rmse')
+
+                stats = model_type_stats['hybrid']
+                if recall_50 and (stats['best_r50'] is None or recall_50 > stats['best_r50']):
+                    stats['best_r50'] = recall_50
+                if recall_100 and (stats['best_r100'] is None or recall_100 > stats['best_r100']):
+                    stats['best_r100'] = recall_100
+                if rmse and (stats['best_rmse'] is None or rmse < stats['best_rmse']):
+                    stats['best_rmse'] = rmse
+                if test_rmse and (stats['best_test_rmse'] is None or test_rmse < stats['best_test_rmse']):
+                    stats['best_test_rmse'] = test_rmse
+
+        # Round all metric values
+        def round_metrics(stats_dict):
+            return {
+                k: round(v, 4) if isinstance(v, float) else v
+                for k, v in stats_dict.items()
+            }
 
         return JsonResponse({
             'success': True,
@@ -2041,10 +2123,9 @@ def experiment_dashboard_stats(request):
                 'completed': completed,
                 'running': running,
                 'failed': failed,
-                'best_recall_5': round(best_metrics['recall_5'], 4) if best_metrics['recall_5'] else None,
-                'best_recall_10': round(best_metrics['recall_10'], 4) if best_metrics['recall_10'] else None,
-                'best_recall_50': round(best_metrics['recall_50'], 4) if best_metrics['recall_50'] else None,
-                'best_recall_100': round(best_metrics['recall_100'], 4) if best_metrics['recall_100'] else None,
+                'retrieval': round_metrics(model_type_stats['retrieval']),
+                'ranking': round_metrics(model_type_stats['ranking']),
+                'hybrid': round_metrics(model_type_stats['hybrid']),
             }
         })
 

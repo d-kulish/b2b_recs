@@ -300,22 +300,27 @@
     background-color: #059669;
 }
 
-/* Cancel Action Button (red, same size as View) */
+/* Cancel Action Button - solid red when active, outline when disabled */
 .card-action-btn.cancel {
     width: 64px;
     height: 32px;
     background-color: #ef4444;
     color: #ffffff;
+    border: 2px solid #ef4444;
     font-weight: 600;
     font-size: 12px;
 }
 
 .card-action-btn.cancel:hover:not(:disabled) {
     background-color: #dc2626;
+    border-color: #dc2626;
 }
 
 .card-action-btn.cancel:disabled {
-    background-color: #fca5a5;
+    background-color: #ffffff;
+    color: #dc2626;
+    border-color: #dc2626;
+    opacity: 0.5;
     cursor: not-allowed;
 }
 

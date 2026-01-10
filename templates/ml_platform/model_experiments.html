@@ -382,6 +382,35 @@
         font-weight: 600;
         color: #6b7280;
     }
+    /* Model type badge (unified style matching model_configs.html) */
+    .exp-card-type-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 10px;
+        font-weight: 500;
+        white-space: nowrap;
+    }
+    .exp-card-type-badge i {
+        font-size: 9px;
+    }
+    .exp-card-type-badge.retrieval {
+        background: #dbeafe;
+        color: #1e40af;
+        border: 1px solid #bfdbfe;
+    }
+    .exp-card-type-badge.ranking {
+        background: #fef3c7;
+        color: #92400e;
+        border: 1px solid #fde68a;
+    }
+    .exp-card-type-badge.multitask {
+        background: linear-gradient(135deg, #dbeafe 0%, #f3e8ff 100%);
+        color: #6b21a8;
+        border: 1px solid #e9d5ff;
+    }
     /* Column 3: Training Params / Metrics (30%) */
     .exp-card-col-params {
         width: 30%;
@@ -1389,6 +1418,50 @@
         background: white;
         overflow: hidden;
         min-height: 110px; /* Unified header height */
+        position: relative;
+    }
+    /* Status gradient backgrounds for header */
+    .exp-view-header.running {
+        background: linear-gradient(to right,
+            rgba(255,255,255,1) 0%,
+            rgba(219,234,254,0.3) 30%,
+            rgba(219,234,254,0.7) 60%,
+            rgba(191,219,254,1) 100%);
+    }
+    .exp-view-header.submitting {
+        background: linear-gradient(to right,
+            rgba(255,255,255,1) 0%,
+            rgba(219,234,254,0.3) 30%,
+            rgba(219,234,254,0.7) 60%,
+            rgba(191,219,254,1) 100%);
+    }
+    .exp-view-header.completed {
+        background: linear-gradient(to right,
+            rgba(255,255,255,1) 0%,
+            rgba(220,237,222,0.4) 30%,
+            rgba(200,225,204,0.7) 60%,
+            rgba(178,212,183,1) 100%);
+    }
+    .exp-view-header.failed {
+        background: linear-gradient(to right,
+            rgba(255,255,255,1) 0%,
+            rgba(254,226,226,0.3) 30%,
+            rgba(254,226,226,0.7) 60%,
+            rgba(254,202,202,1) 100%);
+    }
+    .exp-view-header.cancelled {
+        background: linear-gradient(to right,
+            rgba(255,255,255,1) 0%,
+            rgba(229,231,235,0.3) 30%,
+            rgba(229,231,235,0.7) 60%,
+            rgba(209,213,219,1) 100%);
+    }
+    .exp-view-header.pending {
+        background: linear-gradient(to right,
+            rgba(255,255,255,1) 0%,
+            rgba(229,231,235,0.3) 30%,
+            rgba(229,231,235,0.7) 60%,
+            rgba(209,213,219,1) 100%);
     }
     /* Column 1: Experiment Number (20%, centered) */
     .exp-view-header-number {
@@ -1418,6 +1491,38 @@
         color: #374151;
         margin: 0 0 4px;
     }
+    .exp-view-header-type-row {
+        margin-top: 8px;
+    }
+    .exp-view-header-type-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 3px 10px;
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        white-space: nowrap;
+    }
+    .exp-view-header-type-badge i {
+        font-size: 10px;
+    }
+    .exp-view-header-type-badge.retrieval {
+        background: #dbeafe;
+        color: #1e40af;
+        border: 1px solid #bfdbfe;
+    }
+    .exp-view-header-type-badge.ranking {
+        background: #fef3c7;
+        color: #92400e;
+        border: 1px solid #fde68a;
+    }
+    .exp-view-header-type-badge.multitask {
+        background: linear-gradient(135deg, #dbeafe 0%, #f3e8ff 100%);
+        color: #6b21a8;
+        border: 1px solid #e9d5ff;
+    }
     .exp-view-description {
         font-size: 13px;
         color: #9ca3af;
@@ -1439,40 +1544,23 @@
         color: #374151;
         font-weight: 500;
     }
-    /* Column 3: Status Panel (20%, centered) */
+    /* Column 3: Status Panel (20%, centered) - transparent, icon floats on gradient */
     .exp-view-status-panel {
         width: 20%;
         display: flex;
         align-items: center;
         justify-content: center;
-    }
-    .exp-view-status-panel.running {
-        background: #dbeafe;
-    }
-    .exp-view-status-panel.submitting {
-        background: #dbeafe;
-    }
-    .exp-view-status-panel.completed {
-        background: #d1fae5;
-    }
-    .exp-view-status-panel.failed {
-        background: #fee2e2;
-    }
-    .exp-view-status-panel.cancelled {
-        background: #e5e7eb;
-    }
-    .exp-view-status-panel.pending {
-        background: #e5e7eb;
+        background: transparent;
     }
     /* Status Icon - Solid filled circle with white icon */
     .exp-view-status-icon {
-        width: 40px;
-        height: 40px;
+        width: 50px;
+        height: 50px;
         border-radius: 50%;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 18px;
+        font-size: 22px;
         flex-shrink: 0;
         color: white;
         font-weight: 600;
@@ -1829,7 +1917,8 @@
     .exp-view-model-type-badge {
         display: inline-flex;
         align-items: center;
-        padding: 4px 10px;
+        gap: 6px;
+        padding: 4px 12px;
         border-radius: 6px;
         font-size: 11px;
         font-weight: 600;
@@ -1837,17 +1926,23 @@
         letter-spacing: 0.5px;
         margin-bottom: 16px;
     }
+    .exp-view-model-type-badge i {
+        font-size: 10px;
+    }
     .exp-view-model-type-badge.retrieval {
         background: #dbeafe;
-        color: #1d4ed8;
+        color: #1e40af;
+        border: 1px solid #bfdbfe;
     }
     .exp-view-model-type-badge.ranking {
         background: #fef3c7;
         color: #92400e;
+        border: 1px solid #fde68a;
     }
     .exp-view-model-type-badge.multitask {
-        background: #f3e8ff;
-        color: #7c3aed;
+        background: linear-gradient(135deg, #dbeafe 0%, #f3e8ff 100%);
+        color: #6b21a8;
+        border: 1px solid #e9d5ff;
     }
     .exp-view-tower-section-title {
         font-size: 13px;
@@ -4430,6 +4525,9 @@
                     <div>Start: <span id="expViewStartTime">-</span></div>
                     <div>End: <span id="expViewEndTime">-</span></div>
                 </div>
+                <div class="exp-view-header-type-row">
+                    <span class="exp-view-header-type-badge" id="expViewTypeBadge"></span>
+                </div>
             </div>
             <!-- Column 3: Status Panel (20%, centered) -->
             <div class="exp-view-status-panel" id="expViewStatusPanel">
@@ -5298,6 +5396,32 @@ function renderMetricsRow(exp) {
     `;
 }
 
+/**
+ * Generate unified model type badge HTML for experiment cards
+ * Uses same style as model_configs.html badges
+ */
+function generateExpTypeBadge(modelType) {
+    const type = (modelType || '').toLowerCase();
+    switch (type) {
+        case 'retrieval':
+            return `<span class="exp-card-type-badge retrieval" title="Retrieval model">
+                       <i class="fas fa-search"></i> Retrieval
+                   </span>`;
+        case 'ranking':
+            return `<span class="exp-card-type-badge ranking" title="Ranking model">
+                       <i class="fas fa-sort-amount-down"></i> Ranking
+                   </span>`;
+        case 'multitask':
+            return `<span class="exp-card-type-badge multitask" title="Hybrid model (Retrieval + Ranking)">
+                       <i class="fas fa-layer-group"></i> Retrieval / Ranking
+                   </span>`;
+        default:
+            return `<span class="exp-card-type-badge retrieval" title="Retrieval model">
+                       <i class="fas fa-search"></i> Retrieval
+                   </span>`;
+    }
+}
+
 function renderExpCard(exp) {
     const statusIcons = {
         'submitting': 'fa-spinner fa-spin',
@@ -5361,7 +5485,7 @@ function renderExpCard(exp) {
                     <div class="exp-card-config-item"><span class="exp-card-config-label">Dataset:</span> ${exp.dataset_name || '-'}</div>
                     <div class="exp-card-config-item"><span class="exp-card-config-label">Features:</span> ${exp.feature_config_name || '-'}</div>
                     <div class="exp-card-config-item"><span class="exp-card-config-label">Model:</span> ${exp.model_config_name || '-'}</div>
-                    <div class="exp-card-config-item"><span class="exp-card-config-label">Type:</span> ${exp.model_type || '-'}</div>
+                    <div class="exp-card-config-item">${generateExpTypeBadge(exp.model_type)}</div>
                 </div>
                 <!-- Column 3: Accuracy Metrics (30%) -->
                 <div class="exp-card-col-params">
@@ -6960,13 +7084,13 @@ function loadModelConfigForExp(modelConfigId) {
 function renderModelConfigForExp(mc) {
     const container = document.getElementById('expViewModelConfigContent');
 
-    // Model type badge
-    const modelTypeLabels = {
-        'retrieval': 'Retrieval',
-        'ranking': 'Ranking',
-        'multitask': 'Multitask'
+    // Model type badge with icon (unified style)
+    const modelTypeBadges = {
+        'retrieval': '<i class="fas fa-search"></i> Retrieval',
+        'ranking': '<i class="fas fa-sort-amount-down"></i> Ranking',
+        'multitask': '<i class="fas fa-layer-group"></i> Retrieval / Ranking'
     };
-    const modelTypeLabel = modelTypeLabels[mc.model_type] || mc.model_type;
+    const modelTypeBadgeContent = modelTypeBadges[mc.model_type] || modelTypeBadges['retrieval'];
 
     // Build tower layers HTML
     const buyerLayers = mc.buyer_tower_layers || [];
@@ -6975,7 +7099,7 @@ function renderModelConfigForExp(mc) {
     const productParams = calculateExpTowerParams(productLayers);
 
     let html = `
-        <span class="exp-view-model-type-badge ${mc.model_type}">${modelTypeLabel}</span>
+        <span class="exp-view-model-type-badge ${mc.model_type}">${modelTypeBadgeContent}</span>
 
         <div class="exp-view-tower-section-title">Tower Architecture</div>
         <div class="exp-view-towers-grid">
@@ -7223,6 +7347,10 @@ function populateExpViewModal(exp) {
     // Store current exp for tab data loading
     window.currentViewExp = exp;
 
+    // Status gradient on header
+    const header = document.getElementById('expViewHeader');
+    header.className = `modal-header exp-view-header ${exp.status}`;
+
     // Status panel (right side colored stripe) - Vertex Pipelines style
     const statusPanel = document.getElementById('expViewStatusPanel');
     statusPanel.className = `exp-view-status-panel ${exp.status}`;
@@ -7247,6 +7375,17 @@ function populateExpViewModal(exp) {
     const expNameEl = document.getElementById('expViewExpName');
     expNameEl.textContent = exp.experiment_name || '';
     expNameEl.style.display = exp.experiment_name ? '' : 'none';
+
+    // Model type badge in header
+    const typeBadgeEl = document.getElementById('expViewTypeBadge');
+    const modelType = (exp.model_type || 'retrieval').toLowerCase();
+    const badgeContents = {
+        'retrieval': '<i class="fas fa-search"></i> Retrieval',
+        'ranking': '<i class="fas fa-sort-amount-down"></i> Ranking',
+        'multitask': '<i class="fas fa-layer-group"></i> Retrieval / Ranking'
+    };
+    typeBadgeEl.className = `exp-view-header-type-badge ${modelType}`;
+    typeBadgeEl.innerHTML = badgeContents[modelType] || badgeContents['retrieval'];
 
     // Description
     const descEl = document.getElementById('expViewDescription');

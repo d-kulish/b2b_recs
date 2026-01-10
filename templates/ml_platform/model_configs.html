@@ -101,6 +101,16 @@
         color: #6b21a8;
         border: 1px solid #e9d5ff;
     }
+    .model-type-ranking {
+        background: #fef3c7;
+        color: #92400e;
+        border: 1px solid #fde68a;
+    }
+    .model-type-hybrid {
+        background: linear-gradient(135deg, #dbeafe 0%, #f3e8ff 100%);
+        color: #6b21a8;
+        border: 1px solid #e9d5ff;
+    }
 
     /* Drag and drop styles - Compact column cards */
     .column-card {
@@ -1423,30 +1433,6 @@
         color: #9ca3af;
         margin-top: 4px;
     }
-    .model-type-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        padding: 4px 10px;
-        border-radius: 6px;
-        font-size: 11px;
-        font-weight: 600;
-        text-transform: uppercase;
-        flex-shrink: 0;
-    }
-    .model-type-badge.retrieval {
-        background: linear-gradient(135deg, #8b5cf6 0%, #a78bfa 100%);
-        color: white;
-    }
-    .model-type-badge.ranking {
-        background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%);
-        color: white;
-    }
-    .model-type-badge.multitask {
-        background: linear-gradient(135deg, #ec4899 0%, #f472b6 100%);
-        color: white;
-    }
-
     /* Tower Architecture Visualization - Card Layout */
     .mc-card-body {
         display: flex;
@@ -1724,36 +1710,6 @@
     }
     .param-chip.retrieval-algo .param-chip-value {
         color: #7c3aed;
-    }
-    .param-chip.model-type-chip {
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        padding: 5px 12px;
-    }
-    .param-chip.model-type-chip.retrieval {
-        background: #dcfce7;
-        color: #166534;
-        border: 1px solid #bbf7d0;
-    }
-    .param-chip.model-type-chip.retrieval .param-chip-value {
-        color: #166534;
-    }
-    .param-chip.model-type-chip.ranking {
-        background: #fef3c7;
-        color: #92400e;
-        border: 1px solid #fde68a;
-    }
-    .param-chip.model-type-chip.ranking .param-chip-value {
-        color: #92400e;
-    }
-    .param-chip.model-type-chip.multitask {
-        background: #fce7f3;
-        color: #be185d;
-        border: 1px solid #fbcfe8;
-    }
-    .param-chip.model-type-chip.multitask .param-chip-value {
-        color: #be185d;
     }
     .param-chip.multitask-weights {
         background: #fdf2f8;
@@ -9024,6 +8980,31 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
+/**
+ * Generate unified model type badge HTML for model configs
+ * Uses same style as Features section badges
+ */
+function generateMcTypeBadge(modelType) {
+    switch (modelType) {
+        case 'retrieval':
+            return `<span class="model-type-badge model-type-retrieval" title="Retrieval model">
+                       <i class="fas fa-search"></i> Retrieval
+                   </span>`;
+        case 'ranking':
+            return `<span class="model-type-badge model-type-ranking" title="Ranking model">
+                       <i class="fas fa-sort-amount-down"></i> Ranking
+                   </span>`;
+        case 'multitask':
+            return `<span class="model-type-badge model-type-hybrid" title="Hybrid model (Retrieval + Ranking)">
+                       <i class="fas fa-layer-group"></i> Retrieval / Ranking
+                   </span>`;
+        default:
+            return `<span class="model-type-badge model-type-retrieval" title="Retrieval model">
+                       <i class="fas fa-search"></i> Retrieval
+                   </span>`;
+    }
+}
+
 function formatTimeAgo(isoString) {
     if (!isoString) return 'Unknown';
     const date = new Date(isoString);
@@ -9639,7 +9620,10 @@ function renderModelConfigs() {
             <!-- Header: Name & Actions -->
             <div class="model-config-card-header">
                 <div style="flex: 1; min-width: 0;">
-                    <div class="model-config-name">${escapeHtml(mc.name)}</div>
+                    <div class="flex items-center gap-2">
+                        <div class="model-config-name">${escapeHtml(mc.name)}</div>
+                        ${generateMcTypeBadge(mc.model_type)}
+                    </div>
                     ${descTruncated ? `<div class="model-config-desc">${escapeHtml(descTruncated)}</div>` : ''}
                     <div class="model-config-meta">Updated ${formatMcTimeAgo(mc.updated_at)}${mc.created_by ? ` by ${mc.created_by}` : ''}</div>
                 </div>
@@ -9667,11 +9651,8 @@ function renderModelConfigs() {
             <!-- Row 2: For Ranking/Multitask models - Hyperparams | Ranking bar -->
             ${rankingViz ? `
             <div class="ranking-row-grid">
-                <!-- Left: Model Type & Training Params -->
+                <!-- Left: Training Params -->
                 <div class="training-params-preview ranking-layout">
-                    <div class="param-chip model-type-chip ${mc.model_type}">
-                        <span class="param-chip-value">${mc.model_type_display}</span>
-                    </div>
                     <div class="param-chip">
                         <span class="param-chip-label">Opt:</span>
                         <span class="param-chip-value">${mc.optimizer_display}</span>
@@ -9707,9 +9688,6 @@ function renderModelConfigs() {
             ` : `
             <!-- For Retrieval models - just hyperparams row -->
             <div class="training-params-preview">
-                <div class="param-chip model-type-chip ${mc.model_type}">
-                    <span class="param-chip-value">${mc.model_type_display}</span>
-                </div>
                 <div class="param-chip">
                     <span class="param-chip-label">Opt:</span>
                     <span class="param-chip-value">${mc.optimizer_display}</span>
@@ -11356,9 +11334,9 @@ function viewModelConfig(id) {
     document.getElementById('viewMcName').textContent = mcBasic.name;
     document.getElementById('viewMcDesc').textContent = mcBasic.description || 'No description';
 
-    const badge = document.getElementById('viewMcTypeBadge');
-    badge.className = `model-type-badge ${mcBasic.model_type}`;
-    badge.textContent = mcBasic.model_type_display;
+    // Update badge with unified style (icon + text)
+    const badgeContainer = document.getElementById('viewMcTypeBadge');
+    badgeContainer.outerHTML = generateMcTypeBadge(mcBasic.model_type).replace('class="model-type-badge', 'id="viewMcTypeBadge" class="model-type-badge');
 
     document.getElementById('viewMcUpdatedAt').textContent = formatMcTimeAgo(mcBasic.updated_at);
     if (mcBasic.created_by) {
@@ -11900,14 +11878,13 @@ function renderMcCompareHeader(elementId, config) {
         return;
     }
 
-    const modelTypeBadgeClass = config.model_type || 'retrieval';
     element.innerHTML = `
         <div class="flex items-start justify-between">
             <div>
                 <div class="font-semibold text-gray-900 text-lg">${escapeHtml(config.name)}</div>
                 ${config.description ? `<div class="text-sm text-gray-400 mt-1 max-w-xs truncate">${escapeHtml(config.description)}</div>` : ''}
             </div>
-            <span class="model-type-badge ${modelTypeBadgeClass}">${config.model_type_display || config.model_type}</span>
+            ${generateMcTypeBadge(config.model_type)}
         </div>
     `;
 }

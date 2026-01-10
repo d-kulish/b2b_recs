@@ -1828,28 +1828,30 @@ def training_heatmaps(request):
     Get data for training analysis heatmaps.
 
     GET /api/experiments/training-heatmaps/
+    GET /api/experiments/training-heatmaps/?model_type=ranking
 
-    Returns top 10 experiments by recall@100 with:
-    - Per-epoch validation loss (sampled every 10th epoch)
-    - Final recall metrics (R@5, R@10, R@50, R@100)
+    Returns top 10 experiments with:
+    - For retrieval: validation loss by epoch, final recall metrics (R@5, R@10, R@50, R@100)
+    - For ranking: validation RMSE by epoch, final metrics (RMSE, Test RMSE, MAE, Test MAE)
 
     Returns:
     {
         "success": true,
+        "model_type": "retrieval" | "ranking",
         "experiments": [
             {
                 "id": 45,
                 "label": "Exp #45",
                 "rank": 1,
-                "recall_at_100": 47,
+                "primary_metric": 47,  // recall@100 or test_rmse
                 "epochs": [0, 10, 20, 30, 40, 50],
-                "val_loss": [54, 23, 12, 8, 5, 3],
-                "final_recalls": {"R@5": 8, "R@10": 15, "R@50": 35, "R@100": 47}
+                "epoch_values": [54, 23, 12, 8, 5, 3],  // val_loss or val_rmse
+                "final_metrics": {"R@5": 8, ...} or {"RMSE": 0.12, ...}
             },
             ...
         ],
-        "loss_range": {"min": 1, "max": 60},
-        "recall_range": {"min": 5, "max": 50}
+        "epoch_range": {"min": 1, "max": 60},
+        "metric_range": {"min": 5, "max": 50}
     }
     """
     try:
@@ -1860,96 +1862,195 @@ def training_heatmaps(request):
                 'error': 'No model endpoint selected'
             }, status=400)
 
-        # Get all completed experiments (recall values may be in training_history_json)
+        model_type = request.GET.get('model_type', 'retrieval')
+
+        # Get all completed experiments
         completed_qs = QuickTest.objects.filter(
             feature_config__dataset__model_endpoint=model_endpoint,
             status=QuickTest.STATUS_COMPLETED
         )
 
-        # Build experiment data with recall values from either direct fields or training_history_json
+        # Filter by model type
+        if model_type == 'ranking':
+            completed_qs = completed_qs.filter(feature_config__config_type='ranking')
+        elif model_type == 'hybrid':
+            completed_qs = completed_qs.filter(feature_config__config_type='multitask')
+        else:
+            # Default to retrieval - include null/empty config_type for backwards compatibility
+            from django.db.models import Q
+            completed_qs = completed_qs.filter(
+                Q(feature_config__config_type='retrieval') |
+                Q(feature_config__config_type__isnull=True) |
+                Q(feature_config__config_type='')
+            )
+
+        # Build experiment data based on model type
         experiment_data = []
         for qt in completed_qs:
             history = qt.training_history_json if isinstance(qt.training_history_json, dict) else {}
             final_metrics = history.get('final_metrics', {})
 
-            # Get recall values: prefer direct fields, fallback to training_history_json
-            recall_5 = qt.recall_at_5 if qt.recall_at_5 is not None else final_metrics.get('test_recall_at_5')
-            recall_10 = qt.recall_at_10 if qt.recall_at_10 is not None else final_metrics.get('test_recall_at_10')
-            recall_50 = qt.recall_at_50 if qt.recall_at_50 is not None else final_metrics.get('test_recall_at_50')
-            recall_100 = qt.recall_at_100 if qt.recall_at_100 is not None else final_metrics.get('test_recall_at_100')
+            if model_type == 'ranking':
+                # For ranking models: get RMSE/MAE metrics (lower is better)
+                # Use same fallback chain as experiment list for consistency
+                rmse = qt.rmse
+                if rmse is None:
+                    rmse = (final_metrics.get('final_val_rmse') or
+                            final_metrics.get('final_rmse') or
+                            final_metrics.get('rmse') or
+                            final_metrics.get('root_mean_squared_error'))
 
-            # Only include experiments that have at least recall_at_100
-            if recall_100 is not None:
-                experiment_data.append({
-                    'qt': qt,
-                    'history': history,
-                    'recall_5': recall_5,
-                    'recall_10': recall_10,
-                    'recall_50': recall_50,
-                    'recall_100': recall_100
-                })
+                test_rmse = qt.test_rmse
+                if test_rmse is None:
+                    test_rmse = (final_metrics.get('test_rmse') or
+                                 final_metrics.get('test_root_mean_squared_error'))
 
-        # Sort by recall_at_100 (descending) and take top 10
-        experiment_data.sort(key=lambda x: x['recall_100'] or 0, reverse=True)
+                mae = qt.mae
+                if mae is None:
+                    mae = (final_metrics.get('final_val_mae') or
+                           final_metrics.get('final_mae') or
+                           final_metrics.get('mae') or
+                           final_metrics.get('mean_absolute_error'))
+
+                test_mae = qt.test_mae
+                if test_mae is None:
+                    test_mae = (final_metrics.get('test_mae') or
+                                final_metrics.get('test_mean_absolute_error'))
+
+                # Only include experiments that have at least test_rmse
+                if test_rmse is not None:
+                    experiment_data.append({
+                        'qt': qt,
+                        'history': history,
+                        'rmse': rmse,
+                        'test_rmse': test_rmse,
+                        'mae': mae,
+                        'test_mae': test_mae,
+                        'sort_key': test_rmse  # Lower is better
+                    })
+            else:
+                # For retrieval models: get recall metrics (higher is better)
+                recall_5 = qt.recall_at_5 if qt.recall_at_5 is not None else final_metrics.get('test_recall_at_5')
+                recall_10 = qt.recall_at_10 if qt.recall_at_10 is not None else final_metrics.get('test_recall_at_10')
+                recall_50 = qt.recall_at_50 if qt.recall_at_50 is not None else final_metrics.get('test_recall_at_50')
+                recall_100 = qt.recall_at_100 if qt.recall_at_100 is not None else final_metrics.get('test_recall_at_100')
+
+                # Only include experiments that have at least recall_at_100
+                if recall_100 is not None:
+                    experiment_data.append({
+                        'qt': qt,
+                        'history': history,
+                        'recall_5': recall_5,
+                        'recall_10': recall_10,
+                        'recall_50': recall_50,
+                        'recall_100': recall_100,
+                        'sort_key': recall_100  # Higher is better
+                    })
+
+        # Sort and take top 10
+        if model_type == 'ranking':
+            # Lower RMSE is better - ascending sort
+            experiment_data.sort(key=lambda x: x['sort_key'] or float('inf'))
+        else:
+            # Higher recall is better - descending sort
+            experiment_data.sort(key=lambda x: x['sort_key'] or 0, reverse=True)
         experiment_data = experiment_data[:10]
 
         experiments = []
-        all_losses = []
-        all_recalls = []
+        all_epoch_values = []
+        all_final_metrics = []
 
         for rank, exp_data in enumerate(experiment_data, 1):
             qt = exp_data['qt']
             history = exp_data['history']
-
-            # Extract epochs and val_loss, sample every 10th epoch
             raw_epochs = history.get('epochs', [])
-            raw_val_loss = history.get('loss', {}).get('val', [])
 
             # Sample every 10th epoch (0, 10, 20, 30, 40, 50, ...)
             sampled_epochs = []
-            sampled_loss = []
+            sampled_values = []
 
+            # Use validation loss for both model types - this is what the model optimizes
+            # For retrieval: this is the contrastive loss (large values, round to int)
+            # For ranking: this is the MSE loss (small values, keep 2 decimals)
+            raw_val_loss = history.get('loss', {}).get('val', [])
             for i, epoch in enumerate(raw_epochs):
                 if epoch % 10 == 0 and i < len(raw_val_loss):
                     sampled_epochs.append(epoch)
-                    # Round loss to integer for display
-                    loss_val = round(raw_val_loss[i]) if raw_val_loss[i] is not None else None
-                    sampled_loss.append(loss_val)
-                    if loss_val is not None:
-                        all_losses.append(loss_val)
+                    if raw_val_loss[i] is not None:
+                        if model_type == 'ranking':
+                            # Keep 2 decimals for small MSE values
+                            val = round(raw_val_loss[i], 2)
+                        else:
+                            # Round to integer for large contrastive loss values
+                            val = round(raw_val_loss[i])
+                    else:
+                        val = None
+                    sampled_values.append(val)
+                    if val is not None:
+                        all_epoch_values.append(val)
 
-            # Get final recall metrics as percentages (ascending order: R@5 → R@10 → R@50 → R@100)
-            final_recalls = {
-                'R@5': round((exp_data['recall_5'] or 0) * 100),
-                'R@10': round((exp_data['recall_10'] or 0) * 100),
-                'R@50': round((exp_data['recall_50'] or 0) * 100),
-                'R@100': round((exp_data['recall_100'] or 0) * 100)
-            }
+            if model_type == 'ranking':
+                # Final metrics for ranking
+                final_metrics_dict = {
+                    'RMSE': round(exp_data['rmse'], 4) if exp_data['rmse'] else None,
+                    'Test RMSE': round(exp_data['test_rmse'], 4) if exp_data['test_rmse'] else None,
+                    'MAE': round(exp_data['mae'], 4) if exp_data['mae'] else None,
+                    'Test MAE': round(exp_data['test_mae'], 4) if exp_data['test_mae'] else None
+                }
+                primary_metric = round(exp_data['test_rmse'], 4) if exp_data['test_rmse'] else None
 
-            for val in final_recalls.values():
-                if val > 0:
-                    all_recalls.append(val)
+                for val in final_metrics_dict.values():
+                    if val is not None and val > 0:
+                        all_final_metrics.append(val)
+
+            else:
+                # Final metrics for retrieval (as percentages)
+                final_metrics_dict = {
+                    'R@5': round((exp_data['recall_5'] or 0) * 100),
+                    'R@10': round((exp_data['recall_10'] or 0) * 100),
+                    'R@50': round((exp_data['recall_50'] or 0) * 100),
+                    'R@100': round((exp_data['recall_100'] or 0) * 100)
+                }
+                primary_metric = round((exp_data['recall_100'] or 0) * 100)
+
+                for val in final_metrics_dict.values():
+                    if val > 0:
+                        all_final_metrics.append(val)
 
             experiments.append({
                 'id': qt.id,
                 'label': f'Exp #{qt.experiment_number}',
                 'rank': rank,
-                'recall_at_100': round((exp_data['recall_100'] or 0) * 100),
+                'primary_metric': primary_metric,
                 'epochs': sampled_epochs,
-                'val_loss': sampled_loss,
-                'final_recalls': final_recalls
+                'epoch_values': sampled_values,
+                'final_metrics': final_metrics_dict,
+                # Legacy fields for backwards compatibility
+                'val_loss': sampled_values if model_type != 'ranking' else [],
+                'final_recalls': final_metrics_dict if model_type != 'ranking' else {},
+                'recall_at_100': primary_metric if model_type != 'ranking' else None
             })
 
         return JsonResponse({
             'success': True,
+            'model_type': model_type,
             'experiments': experiments,
+            'epoch_range': {
+                'min': min(all_epoch_values) if all_epoch_values else 0,
+                'max': max(all_epoch_values) if all_epoch_values else 100
+            },
+            'metric_range': {
+                'min': min(all_final_metrics) if all_final_metrics else 0,
+                'max': max(all_final_metrics) if all_final_metrics else 100
+            },
+            # Legacy fields for backwards compatibility
             'loss_range': {
-                'min': min(all_losses) if all_losses else 0,
-                'max': max(all_losses) if all_losses else 100
+                'min': min(all_epoch_values) if all_epoch_values else 0,
+                'max': max(all_epoch_values) if all_epoch_values else 100
             },
             'recall_range': {
-                'min': min(all_recalls) if all_recalls else 0,
-                'max': max(all_recalls) if all_recalls else 100
+                'min': min(all_final_metrics) if all_final_metrics else 0,
+                'max': max(all_final_metrics) if all_final_metrics else 100
             }
         })
 
@@ -2863,10 +2964,12 @@ def dataset_comparison(request):
     Get dataset performance comparison.
 
     GET /api/experiments/dataset-comparison/
+    GET /api/experiments/dataset-comparison/?model_type=ranking
 
-    Returns:
+    Returns for retrieval:
     {
         "success": true,
+        "model_type": "retrieval",
         "datasets": [
             {
                 "id": 1,
@@ -2879,6 +2982,24 @@ def dataset_comparison(request):
             ...
         ]
     }
+
+    Returns for ranking:
+    {
+        "success": true,
+        "model_type": "ranking",
+        "datasets": [
+            {
+                "id": 1,
+                "name": "Q4 Data",
+                "experiment_count": 25,
+                "best_rmse": 0.45,
+                "avg_rmse": 0.52,
+                "best_mae": 0.32,
+                "avg_mae": 0.38
+            },
+            ...
+        ]
+    }
     """
     try:
         model_endpoint = _get_model_endpoint(request)
@@ -2887,6 +3008,8 @@ def dataset_comparison(request):
                 'success': False,
                 'error': 'No model endpoint selected'
             }, status=400)
+
+        model_type = request.GET.get('model_type', 'retrieval')
 
         from collections import defaultdict
         from ml_platform.models import Dataset
@@ -2902,6 +3025,20 @@ def dataset_comparison(request):
             status=QuickTest.STATUS_COMPLETED
         ).select_related('feature_config__dataset')
 
+        # Filter by model type
+        if model_type == 'ranking':
+            queryset = queryset.filter(feature_config__config_type='ranking')
+        elif model_type == 'hybrid':
+            queryset = queryset.filter(feature_config__config_type='multitask')
+        else:
+            # Default to retrieval - include null/empty config_type for backwards compatibility
+            from django.db.models import Q
+            queryset = queryset.filter(
+                Q(feature_config__config_type='retrieval') |
+                Q(feature_config__config_type__isnull=True) |
+                Q(feature_config__config_type='')
+            )
+
         dataset_experiments = defaultdict(list)
         for qt in queryset:
             ds_id = qt.feature_config.dataset_id if qt.feature_config else None
@@ -2909,38 +3046,83 @@ def dataset_comparison(request):
                 continue
 
             exp_metrics = _get_experiment_metrics(qt)
-            recall = exp_metrics.get('recall_at_100')
-            loss = exp_metrics.get('loss')
 
-            if recall is not None:
-                dataset_experiments[ds_id].append({
-                    'recall': recall,
-                    'loss': loss,
-                })
+            if model_type == 'ranking':
+                # Get RMSE/MAE metrics for ranking
+                rmse = exp_metrics.get('rmse')
+                test_rmse = exp_metrics.get('test_rmse')
+                mae = exp_metrics.get('mae')
+                test_mae = exp_metrics.get('test_mae')
+                loss = exp_metrics.get('loss')
+
+                if test_rmse is not None:
+                    dataset_experiments[ds_id].append({
+                        'rmse': rmse,
+                        'test_rmse': test_rmse,
+                        'mae': mae,
+                        'test_mae': test_mae,
+                        'loss': loss,
+                    })
+            else:
+                # Get recall metrics for retrieval
+                recall = exp_metrics.get('recall_at_100')
+                loss = exp_metrics.get('loss')
+
+                if recall is not None:
+                    dataset_experiments[ds_id].append({
+                        'recall': recall,
+                        'loss': loss,
+                    })
 
         # Build stats for each dataset
         dataset_stats = []
         for ds_id, experiments in dataset_experiments.items():
             ds_name = datasets.get(ds_id, f'Dataset {ds_id}')
-            recalls = [e['recall'] for e in experiments if e['recall'] is not None]
-            losses = [e['loss'] for e in experiments if e['loss'] is not None]
 
-            if recalls:
-                dataset_stats.append({
-                    'id': ds_id,
-                    'name': ds_name,
-                    'experiment_count': len(experiments),
-                    'avg_recall': round(sum(recalls) / len(recalls), 4),
-                    'best_recall': round(max(recalls), 4),
-                    'avg_loss': round(sum(losses) / len(losses), 4) if losses else None,
-                    'min_loss': round(min(losses), 4) if losses else None,
-                })
+            if model_type == 'ranking':
+                # Ranking metrics - lower is better
+                test_rmses = [e['test_rmse'] for e in experiments if e['test_rmse'] is not None]
+                test_maes = [e['test_mae'] for e in experiments if e['test_mae'] is not None]
+                losses = [e['loss'] for e in experiments if e['loss'] is not None]
 
-        # Sort by best_recall descending
-        dataset_stats.sort(key=lambda x: x['best_recall'] or 0, reverse=True)
+                if test_rmses:
+                    dataset_stats.append({
+                        'id': ds_id,
+                        'name': ds_name,
+                        'experiment_count': len(experiments),
+                        'best_rmse': round(min(test_rmses), 4),
+                        'avg_rmse': round(sum(test_rmses) / len(test_rmses), 4),
+                        'best_mae': round(min(test_maes), 4) if test_maes else None,
+                        'avg_mae': round(sum(test_maes) / len(test_maes), 4) if test_maes else None,
+                        'avg_loss': round(sum(losses) / len(losses), 4) if losses else None,
+                    })
+            else:
+                # Retrieval metrics - higher is better
+                recalls = [e['recall'] for e in experiments if e['recall'] is not None]
+                losses = [e['loss'] for e in experiments if e['loss'] is not None]
+
+                if recalls:
+                    dataset_stats.append({
+                        'id': ds_id,
+                        'name': ds_name,
+                        'experiment_count': len(experiments),
+                        'avg_recall': round(sum(recalls) / len(recalls), 4),
+                        'best_recall': round(max(recalls), 4),
+                        'avg_loss': round(sum(losses) / len(losses), 4) if losses else None,
+                        'min_loss': round(min(losses), 4) if losses else None,
+                    })
+
+        # Sort by best metric
+        if model_type == 'ranking':
+            # Lower RMSE is better - ascending
+            dataset_stats.sort(key=lambda x: x.get('best_rmse') or float('inf'))
+        else:
+            # Higher recall is better - descending
+            dataset_stats.sort(key=lambda x: x.get('best_recall') or 0, reverse=True)
 
         return JsonResponse({
             'success': True,
+            'model_type': model_type,
             'datasets': dataset_stats
         })
 

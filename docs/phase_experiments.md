@@ -142,6 +142,107 @@ function selectDashboardModelType(modelType) {
 
 ---
 
+### Training Analysis Heatmaps for Ranking Models (2026-01-10)
+
+**Enhancement:** Extended Training Analysis heatmaps to support ranking models with per-column normalization.
+
+#### Heatmap Configuration by Model Type
+
+| Panel | Retrieval | Ranking |
+|-------|-----------|---------|
+| **Left Panel (Epoch)** | Validation Loss by Epoch | Validation Loss by Epoch (MSE) |
+| **Right Panel (Metrics)** | R@5, R@10, R@50, R@100 | RMSE, Test RMSE, MAE, Test MAE |
+| **Sort Order** | By R@100 (descending) | By Test RMSE (ascending) |
+| **Color Scale** | Green=good, Red=bad | Green=good (low), Red=bad (high) |
+
+#### Per-Column Normalization
+
+The Final Metrics heatmap now uses per-column normalization instead of global normalization:
+
+- **Problem:** RMSE (~0.5) and MAE (~0.35) have different scales, making global normalization misleading
+- **Solution:** Each column calculates its own min/max range for color scaling
+- **Result:** Best value in each column → darkest green, worst → darkest red
+
+```javascript
+// Per-column range calculation
+const columnRanges = {};
+metrics.forEach(metric => {
+    const values = experiments.map(exp => exp.final_metrics[metric]).filter(v => v > 0);
+    columnRanges[metric] = { min: Math.min(...values), max: Math.max(...values) };
+});
+```
+
+#### Backend API Changes
+
+`/api/experiments/training-heatmaps/?model_type=ranking`:
+
+| Field | Retrieval | Ranking |
+|-------|-----------|---------|
+| `epoch_values` | Validation loss (int) | Validation loss (2 decimals) |
+| `final_metrics` | `{R@5, R@10, R@50, R@100}` | `{RMSE, Test RMSE, MAE, Test MAE}` |
+| `primary_metric` | R@100 (%) | Test RMSE |
+
+#### Metric Fallback Chain
+
+For ranking experiments, metrics are retrieved using the same fallback chain as experiment list:
+
+```python
+rmse = qt.rmse or final_metrics.get('final_val_rmse') or final_metrics.get('final_rmse') or final_metrics.get('rmse')
+mae = qt.mae or final_metrics.get('final_val_mae') or final_metrics.get('final_mae') or final_metrics.get('mae')
+```
+
+---
+
+### Dataset Performance Conditional by Model Type (2026-01-10)
+
+**Enhancement:** Made Dataset Performance table conditional based on selected model type.
+
+#### Table Columns by Model Type
+
+| Column | Retrieval | Ranking |
+|--------|-----------|---------|
+| **Dataset** | Dataset name | Dataset name |
+| **Experiments** | Count | Count |
+| **Best Metric** | Best R@100 | Best RMSE |
+| **Avg Metric** | Avg R@100 | Avg RMSE |
+| **Avg Loss** | Avg Loss | Avg Loss |
+
+#### Backend API
+
+`/api/experiments/dataset-comparison/?model_type=ranking`:
+
+```json
+// Retrieval response
+{
+    "model_type": "retrieval",
+    "datasets": [
+        {"name": "Q4 Data", "experiment_count": 25, "best_recall": 0.473, "avg_recall": 0.45, "avg_loss": 0.035}
+    ]
+}
+
+// Ranking response
+{
+    "model_type": "ranking",
+    "datasets": [
+        {"name": "Q4 Data", "experiment_count": 25, "best_rmse": 0.45, "avg_rmse": 0.52, "avg_loss": 0.035}
+    ]
+}
+```
+
+#### Sort Order
+
+- **Retrieval:** By `best_recall` descending (higher is better)
+- **Ranking:** By `best_rmse` ascending (lower is better)
+
+#### Files Modified
+
+| File | Changes |
+|------|---------|
+| `ml_platform/experiments/api.py` | `training_heatmaps()` - model type filtering, RMSE/MAE metrics; `dataset_comparison()` - model type support |
+| `templates/ml_platform/model_experiments.html` | `loadTrainingHeatmaps()` - model type param, per-column normalization; `loadDatasetComparison()` - model type support, dynamic headers |
+
+---
+
 ### Ranking Model Support with Target Column Transforms (2026-01-07)
 
 **Major Feature:** Added full support for Ranking models alongside existing Retrieval models.

@@ -4036,23 +4036,23 @@
                     <span class="text-xs text-gray-400">Top 10 experiments by Recall@100</span>
                 </div>
                 <div class="training-heatmaps-container">
-                    <!-- Loss Heatmap (60%) -->
+                    <!-- Epoch Heatmap (60%) - Loss for retrieval, RMSE for ranking -->
                     <div class="training-heatmap-panel">
-                        <div class="training-heatmap-title">Validation Loss by Epoch</div>
+                        <div id="epochHeatmapTitle" class="training-heatmap-title">Validation Loss by Epoch</div>
                         <div id="lossHeatmap" class="training-heatmap-grid"></div>
                         <div class="training-heatmap-legend">
                             <span class="legend-label">Low</span>
-                            <div class="legend-gradient loss-gradient"></div>
+                            <div id="epochGradient" class="legend-gradient loss-gradient"></div>
                             <span class="legend-label">High</span>
                         </div>
                     </div>
-                    <!-- Recall Heatmap (40%) -->
+                    <!-- Final Metrics Heatmap (40%) - Recall for retrieval, RMSE/MAE for ranking -->
                     <div class="training-heatmap-panel">
-                        <div class="training-heatmap-title">Final Recall Metrics</div>
+                        <div id="metricsHeatmapTitle" class="training-heatmap-title">Final Recall Metrics</div>
                         <div id="recallHeatmap" class="training-heatmap-grid"></div>
                         <div class="training-heatmap-legend">
                             <span class="legend-label">Low</span>
-                            <div class="legend-gradient recall-gradient"></div>
+                            <div id="metricsGradient" class="legend-gradient recall-gradient"></div>
                             <span class="legend-label">High</span>
                         </div>
                     </div>
@@ -4067,17 +4067,17 @@
             <div class="dashboard-section">
                 <div class="dashboard-section-header">
                     <span class="dashboard-section-title">Dataset Performance</span>
-                    <span class="text-xs text-gray-400">Compare results across different datasets</span>
+                    <span id="datasetComparisonSubtitle" class="text-xs text-gray-400">Compare results across different datasets</span>
                 </div>
                 <div id="datasetComparisonContainer">
                     <table class="dashboard-table">
-                        <thead>
+                        <thead id="datasetComparisonHead">
                             <tr>
                                 <th>Dataset</th>
                                 <th style="text-align: center;">Experiments</th>
-                                <th style="text-align: right;">Best R@100</th>
-                                <th style="text-align: right;">Avg R@100</th>
-                                <th style="text-align: right;">Avg Loss</th>
+                                <th id="datasetMetric1" style="text-align: right;">Best R@100</th>
+                                <th id="datasetMetric2" style="text-align: right;">Avg R@100</th>
+                                <th id="datasetMetric3" style="text-align: right;">Avg Loss</th>
                             </tr>
                         </thead>
                         <tbody id="datasetComparisonBody">
@@ -10122,10 +10122,12 @@ function selectDashboardModelType(modelType) {
         selectedSection.classList.add('selected');
     }
 
-    // Reload chart, table, and hyperparameter insights for the selected model type
+    // Reload chart, table, hyperparameter insights, training heatmaps, and dataset comparison for the selected model type
     loadMetricsTrend(modelType);
     loadTopConfigurations(modelType);
     loadHyperparameterAnalysis(modelType);
+    loadTrainingHeatmaps(modelType);
+    loadDatasetComparison(modelType);
 }
 
 function renderModelTypeKPIs(stats) {
@@ -10233,14 +10235,54 @@ async function loadExperimentsDashboard() {
 // TRAINING HEATMAPS (D3.js)
 // =============================================================================
 
-async function loadTrainingHeatmaps() {
-    const lossContainer = document.getElementById('lossHeatmap');
-    const recallContainer = document.getElementById('recallHeatmap');
+async function loadTrainingHeatmaps(modelType = null) {
+    const epochContainer = document.getElementById('lossHeatmap');
+    const metricsContainer = document.getElementById('recallHeatmap');
     const emptyEl = document.getElementById('trainingHeatmapsEmpty');
     const heatmapsContainer = document.querySelector('.training-heatmaps-container');
 
+    // Update section header, titles, and gradients based on model type
+    const activeModelType = modelType || selectedDashboardModelType;
+    const sectionHeader = document.querySelector('.dashboard-section:has(.training-heatmaps-container) .dashboard-section-header');
+    const epochTitle = document.getElementById('epochHeatmapTitle');
+    const metricsTitle = document.getElementById('metricsHeatmapTitle');
+    const metricsGradient = document.getElementById('metricsGradient');
+
+    if (activeModelType === 'ranking') {
+        if (sectionHeader) {
+            sectionHeader.querySelector('.text-xs').textContent = 'Top 10 experiments by Test RMSE (lowest)';
+        }
+        // Use "Validation Loss" for both - this is MSE for ranking models
+        if (epochTitle) epochTitle.textContent = 'Validation Loss by Epoch';
+        if (metricsTitle) metricsTitle.textContent = 'Final Ranking Metrics';
+        // For ranking, both heatmaps use loss-gradient (green to red, lower is better)
+        if (metricsGradient) {
+            metricsGradient.classList.remove('recall-gradient');
+            metricsGradient.classList.add('loss-gradient');
+        }
+    } else {
+        if (sectionHeader) {
+            sectionHeader.querySelector('.text-xs').textContent = 'Top 10 experiments by Recall@100';
+        }
+        if (epochTitle) epochTitle.textContent = 'Validation Loss by Epoch';
+        if (metricsTitle) metricsTitle.textContent = 'Final Recall Metrics';
+        // For retrieval, metrics heatmap uses recall-gradient (red to green, higher is better)
+        if (metricsGradient) {
+            metricsGradient.classList.remove('loss-gradient');
+            metricsGradient.classList.add('recall-gradient');
+        }
+    }
+
+    // For Hybrid, show empty state (not implemented yet)
+    if (activeModelType === 'hybrid') {
+        heatmapsContainer.style.display = 'none';
+        emptyEl.innerHTML = '<i class="fas fa-layer-group"></i><p>Hybrid training analysis coming soon</p>';
+        emptyEl.classList.remove('hidden');
+        return;
+    }
+
     try {
-        const response = await fetch('/api/experiments/training-heatmaps/');
+        const response = await fetch(`/api/experiments/training-heatmaps/?model_type=${activeModelType}`);
         const data = await response.json();
 
         if (!data.success || !data.experiments || data.experiments.length === 0) {
@@ -10250,13 +10292,13 @@ async function loadTrainingHeatmaps() {
         }
 
         // Check if we have data for each heatmap
-        const hasLossData = data.experiments.some(exp => exp.val_loss && exp.val_loss.length > 0);
-        const hasRecallData = data.experiments.some(exp =>
-            exp.final_recalls && Object.values(exp.final_recalls).some(v => v > 0)
+        const hasEpochData = data.experiments.some(exp => exp.epoch_values && exp.epoch_values.length > 0);
+        const hasMetricsData = data.experiments.some(exp =>
+            exp.final_metrics && Object.values(exp.final_metrics).some(v => v !== null && v > 0)
         );
 
         // If neither heatmap has data, show empty state
-        if (!hasLossData && !hasRecallData) {
+        if (!hasEpochData && !hasMetricsData) {
             heatmapsContainer.style.display = 'none';
             emptyEl.classList.remove('hidden');
             return;
@@ -10265,18 +10307,19 @@ async function loadTrainingHeatmaps() {
         heatmapsContainer.style.display = 'flex';
         emptyEl.classList.add('hidden');
 
-        // Render Loss heatmap or show placeholder
-        if (hasLossData) {
-            renderLossHeatmapD3(lossContainer, data);
+        // Render epoch heatmap (Validation Loss for both model types)
+        if (hasEpochData) {
+            renderEpochHeatmapD3(epochContainer, data, activeModelType);
         } else {
-            lossContainer.innerHTML = '<div class="text-center text-gray-400 py-8"><i class="fas fa-clock mr-2"></i>No training history cached yet</div>';
+            epochContainer.innerHTML = `<div class="text-center text-gray-400 py-8"><i class="fas fa-clock mr-2"></i>No loss history cached yet</div>`;
         }
 
-        // Always render Recall heatmap if we have data
-        if (hasRecallData) {
-            renderRecallHeatmapD3(recallContainer, data);
+        // Render final metrics heatmap
+        if (hasMetricsData) {
+            renderFinalMetricsHeatmapD3(metricsContainer, data, activeModelType);
         } else {
-            recallContainer.innerHTML = '<div class="text-center text-gray-400 py-8"><i class="fas fa-chart-bar mr-2"></i>No recall metrics available</div>';
+            const metricLabel = activeModelType === 'ranking' ? 'ranking' : 'recall';
+            metricsContainer.innerHTML = `<div class="text-center text-gray-400 py-8"><i class="fas fa-chart-bar mr-2"></i>No ${metricLabel} metrics available</div>`;
         }
 
     } catch (error) {
@@ -10286,7 +10329,7 @@ async function loadTrainingHeatmaps() {
     }
 }
 
-function renderLossHeatmapD3(container, data) {
+function renderEpochHeatmapD3(container, data, modelType) {
     // Clear previous content
     d3.select(container).selectAll('*').remove();
 
@@ -10295,7 +10338,7 @@ function renderLossHeatmapD3(container, data) {
 
     // Get all unique epochs across experiments
     const allEpochs = [...new Set(experiments.flatMap(exp => exp.epochs))].sort((a, b) => a - b);
-    const lossRange = data.loss_range;
+    const valueRange = data.epoch_range || data.loss_range;
 
     // Dimensions - responsive to container width
     const margin = { top: 5, right: 10, bottom: 30, left: 70 };
@@ -10310,9 +10353,10 @@ function renderLossHeatmapD3(container, data) {
         .attr('width', width)
         .attr('height', height);
 
-    // Color scale: Green (low loss) -> Yellow -> Red (high loss)
+    // Color scale: Green (low/good) -> Yellow -> Red (high/bad)
+    // For both loss and RMSE, lower is better
     const colorScale = d3.scaleSequential()
-        .domain([lossRange.min, lossRange.max])
+        .domain([valueRange.min, valueRange.max])
         .interpolator(t => d3.interpolateRgb('#10b981', '#ef4444')(t));
 
     // X axis (epochs)
@@ -10329,9 +10373,10 @@ function renderLossHeatmapD3(container, data) {
 
     // Draw cells
     experiments.forEach(exp => {
+        const values = exp.epoch_values || exp.val_loss || [];
         allEpochs.forEach((epoch, epochIdx) => {
-            const lossIdx = exp.epochs.indexOf(epoch);
-            const lossVal = lossIdx >= 0 ? exp.val_loss[lossIdx] : null;
+            const valIdx = exp.epochs.indexOf(epoch);
+            const val = valIdx >= 0 ? values[valIdx] : null;
 
             const cell = svg.append('g');
 
@@ -10340,19 +10385,21 @@ function renderLossHeatmapD3(container, data) {
                 .attr('y', yScale(exp.label))
                 .attr('width', xScale.bandwidth())
                 .attr('height', yScale.bandwidth())
-                .attr('fill', lossVal !== null ? colorScale(lossVal) : '#e5e7eb')
+                .attr('fill', val !== null ? colorScale(val) : '#e5e7eb')
                 .attr('rx', 2);
 
-            if (lossVal !== null) {
+            if (val !== null) {
+                // Format: show decimals for ranking (small MSE values), integers for retrieval
+                const displayVal = modelType === 'ranking' ? val.toFixed(2) : val;
                 cell.append('text')
                     .attr('x', xScale(epoch) + xScale.bandwidth() / 2)
                     .attr('y', yScale(exp.label) + yScale.bandwidth() / 2)
                     .attr('text-anchor', 'middle')
                     .attr('dominant-baseline', 'middle')
-                    .attr('font-size', '10px')
+                    .attr('font-size', modelType === 'ranking' ? '9px' : '10px')
                     .attr('font-weight', '500')
-                    .attr('fill', lossVal > (lossRange.max + lossRange.min) / 2 ? '#fff' : '#1f2937')
-                    .text(lossVal);
+                    .attr('fill', val > (valueRange.max + valueRange.min) / 2 ? '#fff' : '#1f2937')
+                    .text(displayVal);
             }
         });
     });
@@ -10396,21 +10443,47 @@ function renderLossHeatmapD3(container, data) {
         .text(d => d.label);
 }
 
-function renderRecallHeatmapD3(container, data) {
+function renderLossHeatmapD3(container, data) {
+    // Legacy function - delegate to new unified function
+    renderEpochHeatmapD3(container, data, 'retrieval');
+}
+
+function renderFinalMetricsHeatmapD3(container, data, modelType) {
     // Clear previous content
     d3.select(container).selectAll('*').remove();
 
     const experiments = data.experiments;
     if (!experiments.length) return;
 
-    const metrics = ['R@5', 'R@10', 'R@50', 'R@100'];
-    const recallRange = data.recall_range;
+    // Metrics differ by model type
+    const metrics = modelType === 'ranking'
+        ? ['RMSE', 'Test RMSE', 'MAE', 'Test MAE']
+        : ['R@5', 'R@10', 'R@50', 'R@100'];
+
+    // Calculate min/max per column for per-column normalization
+    // This ensures RMSE and MAE are colored relative to their own ranges
+    const columnRanges = {};
+    metrics.forEach(metric => {
+        const values = experiments
+            .map(exp => (exp.final_metrics || exp.final_recalls || {})[metric])
+            .filter(v => v !== null && v !== undefined && v > 0);
+        if (values.length > 0) {
+            columnRanges[metric] = {
+                min: Math.min(...values),
+                max: Math.max(...values)
+            };
+        } else {
+            columnRanges[metric] = { min: 0, max: 1 };
+        }
+    });
 
     // Dimensions - responsive to container width
     const margin = { top: 5, right: 10, bottom: 30, left: 70 };
     const cellHeight = 24;
     const containerWidth = container.getBoundingClientRect().width || 300;
-    const width = Math.max(containerWidth, margin.left + metrics.length * 45 + margin.right);
+    // Wider cells for ranking metrics (longer labels)
+    const cellWidth = modelType === 'ranking' ? 60 : 45;
+    const width = Math.max(containerWidth, margin.left + metrics.length * cellWidth + margin.right);
     const height = margin.top + experiments.length * cellHeight + margin.bottom;
 
     // Create SVG
@@ -10419,10 +10492,18 @@ function renderRecallHeatmapD3(container, data) {
         .attr('width', width)
         .attr('height', height);
 
-    // Color scale: Red (low recall) -> Yellow -> Green (high recall)
-    const colorScale = d3.scaleSequential()
-        .domain([recallRange.min, recallRange.max])
-        .interpolator(t => d3.interpolateRgb('#ef4444', '#10b981')(t));
+    // Create color scale function per column
+    // - Retrieval (recall): Red (low) -> Green (high) - higher is better
+    // - Ranking (RMSE/MAE): Green (low) -> Red (high) - lower is better
+    const getColorScale = (metric) => {
+        const range = columnRanges[metric];
+        return d3.scaleSequential()
+            .domain([range.min, range.max])
+            .interpolator(modelType === 'ranking'
+                ? (t => d3.interpolateRgb('#10b981', '#ef4444')(t))  // Green to Red (lower is better)
+                : (t => d3.interpolateRgb('#ef4444', '#10b981')(t))  // Red to Green (higher is better)
+            );
+    };
 
     // X axis (metrics)
     const xScale = d3.scaleBand()
@@ -10438,8 +10519,11 @@ function renderRecallHeatmapD3(container, data) {
 
     // Draw cells
     experiments.forEach(exp => {
+        const metricsData = exp.final_metrics || exp.final_recalls || {};
         metrics.forEach(metric => {
-            const val = exp.final_recalls[metric];
+            const val = metricsData[metric];
+            const colorScale = getColorScale(metric);
+            const range = columnRanges[metric];
 
             const cell = svg.append('g');
 
@@ -10452,15 +10536,34 @@ function renderRecallHeatmapD3(container, data) {
                 .attr('rx', 2);
 
             if (val !== null) {
+                // Format value based on model type
+                let displayVal;
+                if (modelType === 'ranking') {
+                    displayVal = val.toFixed(4);
+                } else {
+                    displayVal = val + '%';
+                }
+
+                // Determine text color based on model type and value (per-column midpoint)
+                const midpoint = (range.max + range.min) / 2;
+                let textColor;
+                if (modelType === 'ranking') {
+                    // For ranking, lower values are green (good), higher are red
+                    textColor = val < midpoint ? '#1f2937' : '#fff';
+                } else {
+                    // For retrieval, higher values are green (good)
+                    textColor = val > midpoint ? '#fff' : '#1f2937';
+                }
+
                 cell.append('text')
                     .attr('x', xScale(metric) + xScale.bandwidth() / 2)
                     .attr('y', yScale(exp.label) + yScale.bandwidth() / 2)
                     .attr('text-anchor', 'middle')
                     .attr('dominant-baseline', 'middle')
-                    .attr('font-size', '10px')
+                    .attr('font-size', modelType === 'ranking' ? '8px' : '10px')
                     .attr('font-weight', '500')
-                    .attr('fill', val > (recallRange.max + recallRange.min) / 2 ? '#fff' : '#1f2937')
-                    .text(val + '%');
+                    .attr('fill', textColor)
+                    .text(displayVal);
             }
         });
     });
@@ -10475,7 +10578,7 @@ function renderRecallHeatmapD3(container, data) {
         .attr('x', d => xScale(d) + xScale.bandwidth() / 2)
         .attr('y', 12)
         .attr('text-anchor', 'middle')
-        .attr('font-size', '10px')
+        .attr('font-size', modelType === 'ranking' ? '8px' : '10px')
         .attr('fill', '#6b7280')
         .text(d => d);
 
@@ -10492,6 +10595,11 @@ function renderRecallHeatmapD3(container, data) {
         .attr('font-size', '11px')
         .attr('fill', '#374151')
         .text(d => d.label);
+}
+
+function renderRecallHeatmapD3(container, data) {
+    // Legacy function - delegate to new unified function
+    renderFinalMetricsHeatmapD3(container, data, 'retrieval');
 }
 
 // =============================================================================
@@ -11264,16 +11372,44 @@ async function loadSuggestions() {
     }
 }
 
-async function loadDatasetComparison() {
+async function loadDatasetComparison(modelType = null) {
     const tbody = document.getElementById('datasetComparisonBody');
     const emptyEl = document.getElementById('datasetComparisonEmpty');
+    const subtitle = document.getElementById('datasetComparisonSubtitle');
+    const metric1Header = document.getElementById('datasetMetric1');
+    const metric2Header = document.getElementById('datasetMetric2');
+    const metric3Header = document.getElementById('datasetMetric3');
+
+    const activeModelType = modelType || selectedDashboardModelType;
+
+    // Update headers based on model type
+    if (activeModelType === 'ranking') {
+        if (subtitle) subtitle.textContent = 'Compare ranking results across different datasets';
+        if (metric1Header) metric1Header.textContent = 'Best RMSE';
+        if (metric2Header) metric2Header.textContent = 'Avg RMSE';
+        if (metric3Header) metric3Header.textContent = 'Avg Loss';
+    } else {
+        if (subtitle) subtitle.textContent = 'Compare results across different datasets';
+        if (metric1Header) metric1Header.textContent = 'Best R@100';
+        if (metric2Header) metric2Header.textContent = 'Avg R@100';
+        if (metric3Header) metric3Header.textContent = 'Avg Loss';
+    }
+
+    // For Hybrid, show empty state (not implemented yet)
+    if (activeModelType === 'hybrid') {
+        tbody.parentElement.style.display = 'none';
+        emptyEl.innerHTML = '<i class="fas fa-layer-group"></i><p>Hybrid dataset comparison coming soon</p>';
+        emptyEl.classList.remove('hidden');
+        return;
+    }
 
     try {
-        const response = await fetch('/api/experiments/dataset-comparison/');
+        const response = await fetch(`/api/experiments/dataset-comparison/?model_type=${activeModelType}`);
         const data = await response.json();
 
         if (!data.success || !data.datasets || data.datasets.length === 0) {
             tbody.parentElement.style.display = 'none';
+            emptyEl.innerHTML = '<i class="fas fa-database"></i><p>No dataset comparison data available</p>';
             emptyEl.classList.remove('hidden');
             return;
         }
@@ -11281,26 +11417,51 @@ async function loadDatasetComparison() {
         tbody.parentElement.style.display = 'table';
         emptyEl.classList.add('hidden');
 
-        const bestRecall = Math.max(...data.datasets.map(d => d.best_recall || 0));
+        if (activeModelType === 'ranking') {
+            // For ranking: lower RMSE is better
+            const bestRmse = Math.min(...data.datasets.map(d => d.best_rmse || Infinity));
 
-        tbody.innerHTML = data.datasets.map(ds => {
-            const isBest = ds.best_recall === bestRecall;
-            return `
-                <tr>
-                    <td><strong>${ds.name}</strong></td>
-                    <td style="text-align: center;">${ds.experiment_count}</td>
-                    <td style="text-align: right;" class="${isBest ? 'metric-best' : ''}">
-                        ${ds.best_recall !== null ? ds.best_recall.toFixed(4) : '-'}
-                    </td>
-                    <td style="text-align: right;">
-                        ${ds.avg_recall !== null ? ds.avg_recall.toFixed(4) : '-'}
-                    </td>
-                    <td style="text-align: right;">
-                        ${ds.avg_loss !== null ? ds.avg_loss.toFixed(4) : '-'}
-                    </td>
-                </tr>
-            `;
-        }).join('');
+            tbody.innerHTML = data.datasets.map(ds => {
+                const isBest = ds.best_rmse === bestRmse;
+                return `
+                    <tr>
+                        <td><strong>${ds.name}</strong></td>
+                        <td style="text-align: center;">${ds.experiment_count}</td>
+                        <td style="text-align: right;" class="${isBest ? 'metric-best' : ''}">
+                            ${ds.best_rmse !== null ? ds.best_rmse.toFixed(4) : '-'}
+                        </td>
+                        <td style="text-align: right;">
+                            ${ds.avg_rmse !== null ? ds.avg_rmse.toFixed(4) : '-'}
+                        </td>
+                        <td style="text-align: right;">
+                            ${ds.avg_loss !== null ? ds.avg_loss.toFixed(4) : '-'}
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        } else {
+            // For retrieval: higher recall is better
+            const bestRecall = Math.max(...data.datasets.map(d => d.best_recall || 0));
+
+            tbody.innerHTML = data.datasets.map(ds => {
+                const isBest = ds.best_recall === bestRecall;
+                return `
+                    <tr>
+                        <td><strong>${ds.name}</strong></td>
+                        <td style="text-align: center;">${ds.experiment_count}</td>
+                        <td style="text-align: right;" class="${isBest ? 'metric-best' : ''}">
+                            ${ds.best_recall !== null ? ds.best_recall.toFixed(4) : '-'}
+                        </td>
+                        <td style="text-align: right;">
+                            ${ds.avg_recall !== null ? ds.avg_recall.toFixed(4) : '-'}
+                        </td>
+                        <td style="text-align: right;">
+                            ${ds.avg_loss !== null ? ds.avg_loss.toFixed(4) : '-'}
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
 
     } catch (error) {
         console.error('Failed to load dataset comparison:', error);

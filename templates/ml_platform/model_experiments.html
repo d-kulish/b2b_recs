@@ -10704,13 +10704,14 @@ async function loadMetricsTrend(modelType = null) {
             ];
         } else {
             // Retrieval: R@5, R@10, R@50, R@100 (higher is better)
+            // Cascade area chart: each metric fills down to the next one
             datasets = [
                 {
                     label: 'Best R@100',
                     data: data.trend.map(d => d.best_r100),
                     borderColor: '#10b981',
-                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                    fill: false,
+                    backgroundColor: 'rgba(16, 185, 129, 0.4)',
+                    fill: '+1',  // Fill down to R@50
                     tension: 0.3,
                     pointRadius: 3,
                     pointHoverRadius: 5,
@@ -10720,7 +10721,8 @@ async function loadMetricsTrend(modelType = null) {
                     label: 'Best R@50',
                     data: data.trend.map(d => d.best_r50),
                     borderColor: '#3b82f6',
-                    fill: false,
+                    backgroundColor: 'rgba(59, 130, 246, 0.4)',
+                    fill: '+1',  // Fill down to R@10
                     tension: 0.3,
                     pointRadius: 3,
                     pointHoverRadius: 5,
@@ -10730,7 +10732,8 @@ async function loadMetricsTrend(modelType = null) {
                     label: 'Best R@10',
                     data: data.trend.map(d => d.best_r10),
                     borderColor: '#f59e0b',
-                    fill: false,
+                    backgroundColor: 'rgba(245, 158, 11, 0.4)',
+                    fill: '+1',  // Fill down to R@5
                     tension: 0.3,
                     pointRadius: 3,
                     pointHoverRadius: 5,
@@ -10740,7 +10743,8 @@ async function loadMetricsTrend(modelType = null) {
                     label: 'Best R@5',
                     data: data.trend.map(d => d.best_r5),
                     borderColor: '#ef4444',
-                    fill: false,
+                    backgroundColor: 'rgba(239, 68, 68, 0.4)',
+                    fill: 'origin',  // Fill down to X-axis
                     tension: 0.3,
                     pointRadius: 3,
                     pointHoverRadius: 5,

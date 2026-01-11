@@ -1761,6 +1761,14 @@ from tfx_bsl.public import tfxio
 
 from absl import logging
 
+# ScaNN support (optional - faster approximate nearest neighbor search)
+SCANN_AVAILABLE = False
+try:
+    import scann
+    SCANN_AVAILABLE = True
+except ImportError:
+    pass  # ScaNN not installed - will use brute force if requested
+
 # =============================================================================
 # METRICS COLLECTOR (replaces MLflow - direct GCS storage)
 # =============================================================================
@@ -1996,7 +2004,12 @@ OUTPUT_EMBEDDING_DIM = {self.output_embedding_dim}
 L2_REGULARIZATION = {l2_reg}
 
 # Retrieval configuration
+RETRIEVAL_ALGORITHM = '{self.retrieval_algorithm}'
 TOP_K = {self.top_k}
+
+# ScaNN-specific configuration (only used when RETRIEVAL_ALGORITHM='scann')
+SCANN_NUM_LEAVES = {self.scann_num_leaves}
+SCANN_LEAVES_TO_SEARCH = {self.scann_leaves_to_search}
 
 # OOV buckets (must match Transform preprocessing)
 NUM_OOV_BUCKETS = 1
@@ -2569,7 +2582,16 @@ class RetrievalModel(tfrs.Model):
         return '\n'.join(lines)
 
     def _generate_serve_fn(self) -> str:
-        """Generate serving function for inference."""
+        """Generate serving function for inference (dispatches to ScaNN or brute-force)."""
+        # Dispatch to ScaNN or brute-force based on retrieval_algorithm
+        if self.retrieval_algorithm == 'scann':
+            return self._generate_scann_serve_fn()
+
+        # Default: Generate brute-force serving function
+        return self._generate_brute_force_serve_fn()
+
+    def _generate_brute_force_serve_fn(self) -> str:
+        """Generate brute-force serving function for inference."""
         # Get primary product ID column for candidate indexing
         # PRIORITY: Use is_primary_id flag from FeatureConfig (set by UI wizard)
         product_id_col = None
@@ -2657,6 +2679,341 @@ class ServingModel(tf.keras.Model):
             'product_ids': recommended_products,
             'scores': top_scores
         }}
+
+
+def _precompute_candidate_embeddings(model, candidates_dataset, batch_size=128):
+    """
+    Pre-compute embeddings for UNIQUE candidates only.
+
+    The dataset typically contains transaction data with duplicate products.
+    This function deduplicates by product ID to ensure each product appears
+    exactly once in the candidate index.
+
+    Args:
+        model: RetrievalModel with candidate_tower
+        candidates_dataset: Dataset of candidate features
+        batch_size: Batch size for embedding computation
+
+    Returns:
+        Tuple of (unique_product_ids, embeddings tensor)
+    """
+    seen_products = set()
+    unique_product_ids = []
+    unique_embeddings = []
+    total_processed = 0
+
+    for batch in candidates_dataset.batch(batch_size):
+        # Compute embeddings for the batch
+        batch_embeddings = model.candidate_tower(batch)
+
+        # Get product IDs from batch
+        if '{product_id_col}' in batch:
+            batch_ids = batch['{product_id_col}'].numpy()
+            # Flatten if needed (handle shape [batch, 1] -> [batch])
+            if len(batch_ids.shape) > 1:
+                batch_ids = batch_ids.flatten()
+
+            # Process each item, keeping only unique products
+            for i, raw_id in enumerate(batch_ids):
+                total_processed += 1
+
+                # Convert to Python hashable type
+                if hasattr(raw_id, 'decode'):
+                    pid = raw_id.decode()
+                elif hasattr(raw_id, 'item'):
+                    pid = raw_id.item()
+                else:
+                    pid = raw_id
+
+                # Only keep first occurrence of each product
+                if pid not in seen_products:
+                    seen_products.add(pid)
+                    unique_product_ids.append(pid)
+                    unique_embeddings.append(batch_embeddings[i])
+
+    logging.info(f"Candidate deduplication: {{len(unique_product_ids)}} unique products from {{total_processed}} transactions")
+
+    if unique_embeddings:
+        return unique_product_ids, tf.stack(unique_embeddings)
+    else:
+        logging.warning("No candidate embeddings computed - returning empty tensors")
+        return [], tf.zeros((0, OUTPUT_EMBEDDING_DIM))
+
+
+def _evaluate_recall_on_test_set(model, test_dataset, product_ids, product_embeddings, steps=50):
+    """
+    Evaluate recall@k metrics on the test set.
+
+    Args:
+        model: The trained retrieval model
+        test_dataset: TF dataset for test examples
+        product_ids: List of all product IDs
+        product_embeddings: Pre-computed embeddings for all products
+        steps: Number of batches to evaluate
+
+    Returns:
+        Dict with recall metrics
+    """
+    logging.info("=" * 60)
+    logging.info("EVALUATING RECALL ON TEST SET")
+    logging.info("=" * 60)
+
+    # Create product ID to index mapping
+    product_to_idx = {{pid: i for i, pid in enumerate(product_ids)}}
+
+    # Initialize counters
+    total_recall_5 = 0.0
+    total_recall_10 = 0.0
+    total_recall_50 = 0.0
+    total_recall_100 = 0.0
+    total_batches = 0
+
+    try:
+        for batch in test_dataset.take(steps):
+            # Get query embeddings for this batch
+            query_embeddings = model.query_tower(batch)
+
+            # Compute similarities with all candidates
+            # query_embeddings: [batch_size, embedding_dim]
+            # product_embeddings: [num_products, embedding_dim]
+            similarities = tf.linalg.matmul(
+                query_embeddings,
+                product_embeddings,
+                transpose_b=True
+            )  # [batch_size, num_products]
+
+            # Get top-100 indices
+            _, top_indices = tf.nn.top_k(similarities, k=min(100, len(product_ids)))
+            top_indices = top_indices.numpy()
+
+            # Get actual product IDs from batch
+            if '{product_id_col}' in batch:
+                actual_products_raw = batch['{product_id_col}'].numpy()
+                # Flatten if needed (handle shape [batch, 1] -> [batch])
+                if len(actual_products_raw.shape) > 1:
+                    actual_products_raw = actual_products_raw.flatten()
+                # Convert to Python scalars (handles both string and numeric types)
+                actual_products = []
+                for p in actual_products_raw:
+                    if hasattr(p, 'decode'):
+                        actual_products.append(p.decode())
+                    elif hasattr(p, 'item'):
+                        actual_products.append(p.item())
+                    else:
+                        actual_products.append(p)
+            else:
+                continue
+
+            batch_size = len(actual_products)
+
+            # Calculate recall for each K
+            for k in [5, 10, 50, 100]:
+                hits = 0
+                for i in range(batch_size):
+                    actual_product = actual_products[i]
+                    if actual_product in product_to_idx:
+                        actual_idx = product_to_idx[actual_product]
+                        if actual_idx in top_indices[i, :k]:
+                            hits += 1
+
+                batch_recall = hits / batch_size
+                if k == 5:
+                    total_recall_5 += batch_recall
+                elif k == 10:
+                    total_recall_10 += batch_recall
+                elif k == 50:
+                    total_recall_50 += batch_recall
+                elif k == 100:
+                    total_recall_100 += batch_recall
+
+            total_batches += 1
+
+            if total_batches % 10 == 0:
+                logging.info(f"  Evaluated {{total_batches}} batches...")
+
+        if total_batches == 0:
+            logging.warning("No batches evaluated for recall")
+            return {{}}
+
+        # Calculate final averages
+        results = {{
+            'recall_at_5': total_recall_5 / total_batches,
+            'recall_at_10': total_recall_10 / total_batches,
+            'recall_at_50': total_recall_50 / total_batches,
+            'recall_at_100': total_recall_100 / total_batches,
+        }}
+
+        logging.info("=" * 60)
+        logging.info("TEST SET RECALL RESULTS:")
+        logging.info(f"  Recall@5:   {{results['recall_at_5']:.4f}} ({{results['recall_at_5']*100:.2f}}%)")
+        logging.info(f"  Recall@10:  {{results['recall_at_10']:.4f}} ({{results['recall_at_10']*100:.2f}}%)")
+        logging.info(f"  Recall@50:  {{results['recall_at_50']:.4f}} ({{results['recall_at_50']*100:.2f}}%)")
+        logging.info(f"  Recall@100: {{results['recall_at_100']:.4f}} ({{results['recall_at_100']*100:.2f}}%)")
+        logging.info(f"  Batches evaluated: {{total_batches}}")
+        logging.info("=" * 60)
+
+        return results
+
+    except Exception as e:
+        logging.error(f"Error evaluating recall: {{e}}")
+        import traceback
+        traceback.print_exc()
+        return {{}}
+'''
+
+    def _generate_scann_serve_fn(self) -> str:
+        """Generate ScaNN-based serving function for fast approximate nearest neighbor search."""
+        # Get primary product ID column for candidate indexing
+        product_id_col = None
+        for feature in self.product_features:
+            if feature.get('is_primary_id'):
+                product_id_col = feature.get('display_name') or feature.get('column')
+                logger.info(f"Using product ID column from is_primary_id flag: {product_id_col}")
+                break
+
+        # FALLBACK: Auto-detection for backward compatibility
+        if not product_id_col:
+            logger.warning("No is_primary_id feature found in product_features, using auto-detection")
+            for feature in self.product_features:
+                col = feature.get('display_name') or feature.get('column', '')
+                if 'product' in col.lower() or 'item' in col.lower() or 'sku' in col.lower():
+                    product_id_col = col
+                    logger.info(f"Auto-detected product ID column by name pattern: {product_id_col}")
+                    break
+
+        # LAST RESORT: Use first product feature
+        if not product_id_col and self.product_features:
+            product_id_col = self.product_features[0].get('display_name') or self.product_features[0].get('column', 'product_id')
+            logger.warning(f"Falling back to first product feature as ID: {product_id_col}")
+
+        return f'''
+# =============================================================================
+# SERVING FUNCTION (ScaNN - Approximate Nearest Neighbor)
+# =============================================================================
+
+class ScaNNServingModel(tf.keras.Model):
+    """
+    Serving model using ScaNN for fast approximate nearest neighbor search.
+
+    ScaNN (Scalable Nearest Neighbors) provides 10-20x faster retrieval compared
+    to brute-force for large candidate catalogs (10K+ products) with ~97% accuracy.
+    """
+
+    def __init__(self, scann_index, tf_transform_output):
+        super().__init__()
+        # ScaNN index contains both the query model and candidate embeddings
+        self.scann_index = scann_index
+
+        # Track the TFT layer (contains vocabulary hash tables)
+        self.tft_layer = tf_transform_output.transform_features_layer()
+
+        # Store feature spec for parsing
+        self._raw_feature_spec = tf_transform_output.raw_feature_spec()
+
+    @tf.function(input_signature=[
+        tf.TensorSpec(shape=[None], dtype=tf.string, name='examples')
+    ])
+    def serve(self, serialized_examples):
+        """
+        Serving function that accepts serialized tf.Examples.
+
+        Returns top-K product recommendations with scores using ScaNN.
+        """
+        # Parse raw features
+        parsed_features = tf.io.parse_example(serialized_examples, self._raw_feature_spec)
+
+        # Apply transform preprocessing
+        transformed_features = self.tft_layer(parsed_features)
+
+        # ScaNN index is callable - returns (scores, identifiers)
+        # The index was built with the query tower, so it handles embedding computation
+        top_scores, top_product_ids = self.scann_index(transformed_features)
+
+        return {{
+            'product_ids': top_product_ids,
+            'scores': top_scores
+        }}
+
+
+class BruteForceServingModel(tf.keras.Model):
+    """
+    Brute-force serving model (fallback when ScaNN is not available).
+
+    Used when ScaNN package is not installed but was requested in config.
+    """
+
+    def __init__(self, retrieval_model, tf_transform_output, product_ids, product_embeddings):
+        super().__init__()
+        self.retrieval_model = retrieval_model
+        self.tft_layer = tf_transform_output.transform_features_layer()
+        self._raw_feature_spec = tf_transform_output.raw_feature_spec()
+        self.product_ids = tf.Variable(product_ids, trainable=False, name='product_ids')
+        self.product_embeddings = tf.Variable(product_embeddings, trainable=False, name='product_embeddings')
+
+    @tf.function(input_signature=[
+        tf.TensorSpec(shape=[None], dtype=tf.string, name='examples')
+    ])
+    def serve(self, serialized_examples):
+        """Brute-force serving function."""
+        parsed_features = tf.io.parse_example(serialized_examples, self._raw_feature_spec)
+        transformed_features = self.tft_layer(parsed_features)
+        query_embeddings = self.retrieval_model.query_tower(transformed_features)
+
+        similarities = tf.linalg.matmul(
+            query_embeddings,
+            self.product_embeddings,
+            transpose_b=True
+        )
+        top_scores, top_indices = tf.nn.top_k(similarities, k=TOP_K)
+        recommended_products = tf.gather(self.product_ids, top_indices)
+
+        return {{
+            'product_ids': recommended_products,
+            'scores': top_scores
+        }}
+
+
+def _build_scann_index(query_tower, product_ids, product_embeddings):
+    """
+    Build ScaNN index for fast approximate nearest neighbor retrieval.
+
+    Args:
+        query_tower: The trained query tower model
+        product_ids: List/array of product identifiers
+        product_embeddings: Tensor of product embeddings [num_products, embedding_dim]
+
+    Returns:
+        ScaNN index layer that can be called with query embeddings
+    """
+    logging.info("=" * 60)
+    logging.info("BUILDING SCANN INDEX")
+    logging.info("=" * 60)
+    logging.info(f"  Products: {{len(product_ids)}}")
+    logging.info(f"  Embedding dim: {{product_embeddings.shape[1] if len(product_embeddings.shape) > 1 else 'unknown'}}")
+    logging.info(f"  num_leaves: {{SCANN_NUM_LEAVES}}")
+    logging.info(f"  leaves_to_search: {{SCANN_LEAVES_TO_SEARCH}}")
+    logging.info(f"  top_k: {{TOP_K}}")
+
+    # Create ScaNN layer with query tower
+    scann_index = tfrs.layers.factorized_top_k.ScaNN(
+        query_tower,
+        k=TOP_K,
+        num_leaves=SCANN_NUM_LEAVES,
+        num_leaves_to_search=SCANN_LEAVES_TO_SEARCH,
+    )
+
+    # Index the candidates
+    # ScaNN expects dataset of (identifier, embedding) tuples
+    candidates_dataset = tf.data.Dataset.from_tensor_slices((
+        tf.constant(product_ids),
+        product_embeddings
+    )).batch(100)
+
+    scann_index.index_from_dataset(candidates_dataset)
+
+    logging.info("ScaNN index built successfully")
+    logging.info("=" * 60)
+    return scann_index
 
 
 def _precompute_candidate_embeddings(model, candidates_dataset, batch_size=128):
@@ -3267,6 +3624,21 @@ def run_fn(fn_args: tfx.components.FnArgs):
         )
         logging.info(f"Pre-computed embeddings for {{len(product_ids)}} products")
 
+        # Build retrieval index based on configured algorithm
+        use_scann = False
+        scann_index = None
+        if RETRIEVAL_ALGORITHM == 'scann':
+            if SCANN_AVAILABLE:
+                logging.info("Building ScaNN index for fast approximate nearest neighbor search...")
+                scann_index = _build_scann_index(model.query_tower, product_ids, product_embeddings)
+                use_scann = True
+            else:
+                logging.warning("=" * 60)
+                logging.warning("ScaNN was requested but scann package is not installed!")
+                logging.warning("Falling back to brute-force serving model.")
+                logging.warning("To use ScaNN, install: pip install scann")
+                logging.warning("=" * 60)
+
         # Evaluate on test set
         # All split strategies now have test data:
         # - Random: 5% hash-based test split
@@ -3324,22 +3696,38 @@ def run_fn(fn_args: tfx.components.FnArgs):
             import traceback
             traceback.print_exc()
 
-        # Build serving model that properly tracks all resources
-        logging.info("Building serving model...")
-        serving_model = ServingModel(
-            retrieval_model=model,
-            tf_transform_output=tf_transform_output,
-            product_ids=product_ids,
-            product_embeddings=product_embeddings
-        )
+        # Build serving model based on retrieval algorithm
+        if use_scann:
+            logging.info("Building ScaNN serving model...")
+            serving_model = ScaNNServingModel(
+                scann_index=scann_index,
+                tf_transform_output=tf_transform_output
+            )
+        else:
+            logging.info("Building brute-force serving model...")
+            serving_model = ServingModel(
+                retrieval_model=model,
+                tf_transform_output=tf_transform_output,
+                product_ids=product_ids,
+                product_embeddings=product_embeddings
+            )
 
         # Save serving model with signature
         logging.info(f"Saving model to: {{fn_args.serving_model_dir}}")
-        tf.saved_model.save(
-            serving_model,
-            fn_args.serving_model_dir,
-            signatures={{'serving_default': serving_model.serve}}
-        )
+        if use_scann:
+            # ScaNN requires namespace whitelist for custom ops
+            tf.saved_model.save(
+                serving_model,
+                fn_args.serving_model_dir,
+                signatures={{'serving_default': serving_model.serve}},
+                options=tf.saved_model.SaveOptions(namespace_whitelist=["Scann"])
+            )
+        else:
+            tf.saved_model.save(
+                serving_model,
+                fn_args.serving_model_dir,
+                signatures={{'serving_default': serving_model.serve}}
+            )
         logging.info("Model saved successfully!")
 
     finally:

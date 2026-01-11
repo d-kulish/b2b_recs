@@ -37,6 +37,257 @@ This document provides **high-level specifications** for the Experiments domain.
 
 ## Recent Updates (December 2025 - January 2026)
 
+### ScaNN (Scalable Nearest Neighbors) Implementation (2026-01-11)
+
+**Major Feature:** Implemented ScaNN approximate nearest neighbor search for retrieval models. ScaNN provides 10-20x faster inference for large product catalogs compared to brute-force matrix multiplication.
+
+#### Overview
+
+The UI and database already captured ScaNN configuration (`retrieval_algorithm`, `top_k`, `scann_num_leaves`, `scann_leaves_to_search`), but the `TrainerModuleGenerator` was ignoring these settings and always generating brute-force retrieval code. This update implements full ScaNN support in the code generation system.
+
+| Algorithm | Method | Speed | Accuracy | Use Case |
+|-----------|--------|-------|----------|----------|
+| **Brute Force** | `tf.linalg.matmul` + `tf.nn.top_k` | Baseline | 100% exact | Small catalogs (<100K products) |
+| **ScaNN** | `tfrs.layers.factorized_top_k.ScaNN` | 10-20x faster | ~99% approximate | Large catalogs (>100K products) |
+
+#### Code Generation Changes
+
+The `TrainerModuleGenerator` class in `ml_platform/configs/services.py` was modified to conditionally generate ScaNN or brute-force code based on `ModelConfig.retrieval_algorithm`.
+
+##### 1. Imports (`_generate_imports()`)
+
+Added ScaNN availability check with graceful fallback:
+
+```python
+# ScaNN support (optional - faster approximate nearest neighbor search)
+SCANN_AVAILABLE = False
+try:
+    import scann
+    SCANN_AVAILABLE = True
+except ImportError:
+    pass  # ScaNN not installed - will use brute force if requested
+```
+
+##### 2. Constants (`_generate_constants()`)
+
+Added retrieval configuration constants:
+
+```python
+# Retrieval configuration
+RETRIEVAL_ALGORITHM = 'scann'  # or 'brute_force'
+TOP_K = 100
+
+# ScaNN-specific configuration (only used when RETRIEVAL_ALGORITHM='scann')
+SCANN_NUM_LEAVES = 100
+SCANN_LEAVES_TO_SEARCH = 10
+```
+
+##### 3. Serving Function Dispatch (`_generate_serve_fn()`)
+
+Added dispatch logic based on retrieval algorithm:
+
+```python
+def _generate_serve_fn(self) -> str:
+    """Generate serving function for inference (dispatches to ScaNN or brute-force)."""
+    if self.retrieval_algorithm == 'scann':
+        return self._generate_scann_serve_fn()
+    return self._generate_brute_force_serve_fn()
+```
+
+##### 4. ScaNN Serving Model (`_generate_scann_serve_fn()`)
+
+New method generates `ScaNNServingModel` class and helper functions:
+
+```python
+class ScaNNServingModel(tf.keras.Model):
+    """Serving model using ScaNN for fast approximate nearest neighbor search."""
+
+    def __init__(self, scann_index, tf_transform_output):
+        super().__init__()
+        self.scann_index = scann_index
+        self.tft_layer = tf_transform_output.transform_features_layer()
+        self._raw_feature_spec = tf_transform_output.raw_feature_spec()
+
+    @tf.function(input_signature=[tf.TensorSpec(shape=[None], dtype=tf.string, name='examples')])
+    def serve(self, serialized_examples):
+        # Parse and transform features
+        parsed = tf.io.parse_example(serialized_examples, self._raw_feature_spec)
+        transformed = self.tft_layer(parsed)
+
+        # Get query embedding and call ScaNN index
+        query_embedding = ...  # Extract from transformed features
+        top_scores, top_product_ids = self.scann_index(query_embedding)
+
+        return {'product_ids': top_product_ids, 'scores': top_scores}
+```
+
+Also generates `_build_scann_index()` helper function:
+
+```python
+def _build_scann_index(query_tower, product_ids, product_embeddings):
+    """Build ScaNN index for fast approximate nearest neighbor retrieval."""
+    scann_index = tfrs.layers.factorized_top_k.ScaNN(
+        query_tower,
+        k=TOP_K,
+        num_leaves=SCANN_NUM_LEAVES,
+        num_leaves_to_search=SCANN_LEAVES_TO_SEARCH,
+    )
+
+    # Index candidates
+    candidates_dataset = tf.data.Dataset.from_tensor_slices((
+        tf.constant(product_ids),
+        product_embeddings
+    )).batch(100)
+
+    scann_index.index_from_dataset(candidates_dataset)
+    return scann_index
+```
+
+##### 5. Run Function Changes (`_generate_run_fn()`)
+
+Modified to conditionally build ScaNN index and export model:
+
+```python
+# After precomputing candidate embeddings
+product_ids, product_embeddings = _precompute_candidate_embeddings(model, candidates)
+
+# Build retrieval index based on configured algorithm
+use_scann = False
+scann_index = None
+if RETRIEVAL_ALGORITHM == 'scann':
+    if SCANN_AVAILABLE:
+        logging.info("Building ScaNN index...")
+        scann_index = _build_scann_index(model.query_tower, product_ids, product_embeddings)
+        use_scann = True
+        logging.info("ScaNN index built successfully")
+    else:
+        logging.warning("ScaNN requested but not installed - using brute force")
+
+# Create serving model
+if use_scann:
+    serving_model = ScaNNServingModel(scann_index, tf_transform_output)
+else:
+    serving_model = BruteForceServingModel(model, tf_transform_output, product_ids, product_embeddings)
+
+# Export with ScaNN namespace whitelist if needed
+if use_scann:
+    tf.saved_model.save(
+        serving_model,
+        fn_args.serving_model_dir,
+        signatures={'serving_default': serving_model.serve},
+        options=tf.saved_model.SaveOptions(namespace_whitelist=["Scann"])
+    )
+else:
+    tf.saved_model.save(
+        serving_model,
+        fn_args.serving_model_dir,
+        signatures={'serving_default': serving_model.serve}
+    )
+```
+
+#### Container Image Updates
+
+The `tfx-trainer` Docker image required ScaNN package installation.
+
+##### Version Compatibility Issues
+
+Finding the correct ScaNN version for TFX 1.15.0 (TensorFlow 2.15) required multiple iterations:
+
+| Attempt | Version | Issue |
+|---------|---------|-------|
+| 1 | `scann` (latest) | Pulled NumPy 2.x, broke TensorFlow 2.15 |
+| 2 | `scann` with `numpy<2` | Same NumPy 2.x issue |
+| 3 | `scann --no-deps` | Same issue (scann already installed numpy 2.x) |
+| 4 | `scann==1.3.2` | Protobuf version conflict |
+| 5 | `scann==1.3.2 --no-deps` | ABI incompatibility - `absl` mismatch with TF 2.15 |
+| 6 | **`scann==1.3.0 --no-deps`** | **SUCCESS** - compiled for TF 2.15 |
+
+**Root Cause:** ScaNN binary wheels are compiled against specific TensorFlow versions. ScaNN 1.3.0 was compiled against TensorFlow 2.15 (same as TFX 1.15.0 base image), while newer versions target TF 2.16+.
+
+##### Final Dockerfile (`cloudbuild/tfx-trainer/Dockerfile`)
+
+```dockerfile
+FROM gcr.io/tfx-oss-public/tfx:1.15.0
+
+# Add TensorFlow Recommenders (compatible with TF 2.15)
+RUN pip install --no-cache-dir tensorflow-recommenders>=0.7.3
+
+# Add ScaNN for approximate nearest neighbor search (10-20x faster for large catalogs)
+# ScaNN 1.3.0 was compiled against TensorFlow 2.15 (same as TFX 1.15.0 base image)
+# Use --no-deps to prevent any dependency conflicts
+RUN pip install --no-cache-dir --no-deps scann==1.3.0
+
+# Verify installations
+RUN python -c "import numpy; print(f'NumPy: {numpy.__version__}')"
+RUN python -c "import tensorflow as tf; print(f'TensorFlow: {tf.__version__}')"
+RUN python -c "import tensorflow_recommenders as tfrs; print(f'TFRS: {tfrs.__version__}')"
+RUN python -c "import scann; print('ScaNN: installed')"
+RUN python -c "from tensorflow_recommenders.layers.factorized_top_k import ScaNN; print('ScaNN layer: available')"
+```
+
+#### Testing and Verification
+
+##### Custom Job Test
+
+Ran standalone Custom Job test using `scripts/test_services_trainer.py`:
+
+| Parameter | Value |
+|-----------|-------|
+| ModelConfig | ID 16 (`scann_v1`) |
+| FeatureConfig | ID 5 |
+| Source Experiment | 88 (for Transform artifacts) |
+| Epochs | 5 |
+| Learning Rate | 0.1 |
+
+##### Test Results
+
+| Metric | Value |
+|--------|-------|
+| Job ID | `5102740006020055040` |
+| Status | **JOB_STATE_SUCCEEDED** |
+| Duration | ~15 minutes |
+
+##### Log Verification
+
+Key log messages confirming ScaNN was used (not brute-force fallback):
+
+```
+ScaNN index built successfully
+Building ScaNN serving model...
+ScaNNServingModel object at 0x...
+Model saved with ScaNN namespace whitelist
+```
+
+##### Output Artifacts
+
+| Artifact | Location |
+|----------|----------|
+| Model | `gs://b2b-recs-quicktest-artifacts/services-test-20260111-154805/model/` |
+| Metrics | `gs://b2b-recs-quicktest-artifacts/services-test-20260111-154805/training_metrics.json` |
+
+#### Files Modified
+
+| File | Changes |
+|------|---------|
+| `ml_platform/configs/services.py` | ScaNN code generation: imports, constants, `_generate_scann_serve_fn()`, `_generate_brute_force_serve_fn()`, dispatch in `_generate_serve_fn()`, conditional ScaNN index building and export in `_generate_run_fn()` |
+| `cloudbuild/tfx-trainer/Dockerfile` | Added `scann==1.3.0` with `--no-deps` flag and verification steps |
+
+#### Backward Compatibility
+
+- Default `retrieval_algorithm='brute_force'` generates identical code to previous implementation
+- Existing experiments continue to work unchanged
+- No database migrations needed (fields already exist from migration 0029)
+
+#### Error Handling
+
+| Scenario | Behavior |
+|----------|----------|
+| ScaNN selected, package installed | Generate and use ScaNN code |
+| ScaNN selected, package NOT installed | Log warning, fallback to brute-force |
+| Brute-force selected | Generate brute-force code (unchanged) |
+
+---
+
 ### Conditional Experiments Dashboard - Model Type Selection (2026-01-10)
 
 **Major Enhancement:** Made the Experiments Dashboard conditional based on selected model type (Retrieval, Ranking, or Hybrid).

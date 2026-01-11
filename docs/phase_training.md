@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides detailed specifications for implementing the **Training** domain in the ML Platform. The Training domain executes full TFX pipelines for production model training.
 
-**Last Updated**: 2025-12-01
+**Last Updated**: 2026-01-11
 
 ---
 
@@ -748,6 +748,254 @@ def epoch_complete_webhook(request, run_id):
 
     return JsonResponse({'status': 'ok'})
 ```
+
+---
+
+## GPU Support for TFX Training Containers (2026-01-11)
+
+### Problem Statement
+
+When scaling from experiments (small samples, CPU) to production training (full datasets, GPU), there is a critical compatibility issue:
+
+| Component | Current Setup | Issue |
+|-----------|---------------|-------|
+| Base Image | `gcr.io/tfx-oss-public/tfx:1.15.0` | **No CUDA/GPU drivers included** |
+| TensorFlow | 2.15.x (locked by TFX) | Requires CUDA 12.2 + cuDNN 8.9 |
+| ScaNN | 1.3.0 | Compiled against TF 2.15 specifically |
+
+**The standard TFX public Docker image does NOT include NVIDIA/CUDA support.** This is a known limitation confirmed by the TensorFlow community.
+
+### Background: Previous Airflow-Based Solution
+
+Before adopting TFX pipelines, production training used Airflow with custom GPU containers:
+
+```dockerfile
+# past/recs/trainer/Dockerfile
+FROM tensorflow/tensorflow:2.16.2-gpu
+
+RUN apt-get update && apt-get install -y libnccl2 libnccl-dev
+ENV NCCL_DEBUG=INFO
+```
+
+This worked because:
+1. `tensorflow/tensorflow:*-gpu` images include CUDA and cuDNN pre-installed
+2. No TFX dependency constraints
+3. No ScaNN version compatibility requirements (wasn't used)
+
+The Airflow DAG (`past/dags/metro_recommender_production_v2.py`) handled GPU availability gracefully:
+```
+T4 (first choice) → V100 → L4 → 2x T4 (fallback)
+```
+
+### Research Findings
+
+#### TensorFlow 2.15 CUDA Requirements
+
+| Requirement | Version |
+|-------------|---------|
+| CUDA | 12.2 |
+| cuDNN | 8.9.x |
+| Python | 3.9-3.11 |
+| NCCL | 2.16.5 (for multi-GPU) |
+
+Source: [TensorFlow 2.15 Release Notes](https://blog.tensorflow.org/2023/11/whats-new-in-tensorflow-2-15.html)
+
+#### TFX GPU Support
+
+From [TensorFlow community discussion](https://groups.google.com/a/tensorflow.org/g/tfx/c/5oRt1EzCa4E):
+> "TFX docker image does not come with NVIDIA/CUDA support which you have to set up by yourself to create a custom docker image."
+
+#### Vertex AI GPU Configuration
+
+When using GPUs with Vertex AI Training, you must:
+1. Use a container with CUDA pre-installed
+2. Specify `accelerator_type` and `accelerator_count` in the job spec
+3. Set `NCCL_DEBUG=INFO` for troubleshooting multi-GPU issues
+
+Source: [Vertex AI Training GPU Configuration](https://cloud.google.com/vertex-ai/docs/training/configure-compute)
+
+### Solutions
+
+#### Option 1: Custom TFX GPU Container (Recommended)
+
+Build a custom Dockerfile that adds TFX to a GPU-enabled TensorFlow base:
+
+```dockerfile
+# cloudbuild/tfx-trainer-gpu/Dockerfile
+FROM tensorflow/tensorflow:2.15.0-gpu
+
+# Install system dependencies for multi-GPU
+RUN apt-get update && apt-get install -y \
+    libnccl2 \
+    libnccl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set NCCL environment for GPU communication
+ENV NCCL_DEBUG=INFO
+
+# Install TFX and dependencies
+RUN pip install --no-cache-dir \
+    tfx==1.15.0 \
+    tensorflow-recommenders>=0.7.3
+
+# Add ScaNN (compiled for TF 2.15)
+RUN pip install --no-cache-dir --no-deps scann==1.3.0
+
+# Verify GPU support
+RUN python -c "import tensorflow as tf; print(f'TF: {tf.__version__}'); print(f'GPUs: {tf.config.list_physical_devices(\"GPU\")}')"
+RUN python -c "import tensorflow_recommenders as tfrs; print(f'TFRS: {tfrs.__version__}')"
+RUN python -c "from tensorflow_recommenders.layers.factorized_top_k import ScaNN; print('ScaNN: available')"
+```
+
+**Pros:**
+- Uses official TensorFlow GPU image with tested CUDA configuration
+- Maintains TFX 1.15.0 / TF 2.15.x compatibility
+- ScaNN 1.3.0 works (compiled for TF 2.15)
+
+**Cons:**
+- May need to resolve minor dependency conflicts
+- Larger image size (~8-10 GB)
+
+#### Option 2: Google Deep Learning Containers
+
+Use Google's pre-configured containers with GPU support:
+
+```dockerfile
+FROM gcr.io/deeplearning-platform-release/tf2-gpu.2-15.py310
+
+# Add TFX and TFRS
+RUN pip install --no-cache-dir \
+    tfx==1.15.0 \
+    tensorflow-recommenders>=0.7.3
+
+# Add ScaNN
+RUN pip install --no-cache-dir --no-deps scann==1.3.0
+```
+
+**Pros:**
+- Google-maintained, optimized for GCP
+- Includes CUDA, cuDNN, NCCL pre-configured
+- Regular security updates
+
+**Cons:**
+- Larger base image
+- Less control over exact versions
+
+Source: [Google Deep Learning Containers](https://cloud.google.com/deep-learning-containers/docs/choosing-container)
+
+#### Option 3: NVIDIA CUDA Base Image
+
+Start from NVIDIA's official CUDA image:
+
+```dockerfile
+FROM nvidia/cuda:12.2.0-cudnn8-runtime-ubuntu22.04
+
+# Install Python
+RUN apt-get update && apt-get install -y python3.10 python3-pip
+
+# Install TensorFlow with CUDA support
+RUN pip install tensorflow[and-cuda]==2.15.0
+
+# Install TFX and TFRS
+RUN pip install tfx==1.15.0 tensorflow-recommenders>=0.7.3
+
+# Add ScaNN
+RUN pip install --no-deps scann==1.3.0
+```
+
+**Pros:**
+- Minimal base, smaller image size
+- Full control over dependencies
+
+**Cons:**
+- More manual configuration required
+- Need to ensure all CUDA libraries are compatible
+
+### Pipeline Configuration for GPU
+
+When submitting training jobs to Vertex AI, configure GPU resources:
+
+```python
+vertex_job_spec = {
+    'worker_pool_specs': [{
+        'machine_spec': {
+            'machine_type': 'n1-standard-8',
+            'accelerator_type': 'NVIDIA_TESLA_T4',
+            'accelerator_count': 4,
+        },
+        'replica_count': 1,
+        'container_spec': {
+            'image_uri': 'europe-central2-docker.pkg.dev/b2b-recs/tfx-builder/tfx-trainer-gpu:latest',
+        },
+    }],
+}
+```
+
+### GPU Availability Strategy
+
+Follow the fallback pattern from the previous Airflow implementation:
+
+| Priority | GPU Type | Machine Type | Use Case |
+|----------|----------|--------------|----------|
+| 1 | 4x T4 | n1-standard-32 | Best availability, good performance |
+| 2 | 4x V100 | n1-standard-16 | Higher performance, less available |
+| 3 | 4x L4 | g2-standard-48 | Newer GPUs, limited regions |
+| 4 | 2x T4 | n1-standard-16 | Fallback if 4x unavailable |
+
+### ScaNN and GPU Considerations
+
+**Important:** ScaNN is CPU-bound (uses SIMD instructions, not GPU). The GPU accelerates:
+- Model training (embedding lookups, dense layer computations)
+- Forward/backward passes through query and candidate towers
+- Batch processing during training
+
+But ScaNN index building and approximate nearest neighbor search remain CPU operations. This is acceptable because:
+- Index building happens once after training (not during)
+- Inference speed from ScaNN (10-20x) compensates for CPU-based indexing
+
+### Verification Steps
+
+Before running large-scale training, verify GPU access:
+
+```python
+import tensorflow as tf
+
+print(f"TensorFlow version: {tf.__version__}")
+print(f"CUDA built: {tf.test.is_built_with_cuda()}")
+print(f"GPUs available: {tf.config.list_physical_devices('GPU')}")
+
+# Test GPU computation
+with tf.device('/GPU:0'):
+    a = tf.constant([[1.0, 2.0], [3.0, 4.0]])
+    b = tf.constant([[1.0, 1.0], [0.0, 1.0]])
+    c = tf.matmul(a, b)
+    print(f"GPU computation test: {c}")
+```
+
+### Conclusion
+
+**This is a solvable container configuration issue, not an architectural problem.**
+
+The application architecture is sound:
+- Experiments domain works correctly with TFX 1.15.0 + TF 2.15 + ScaNN 1.3.0
+- Training domain requires a GPU-enabled custom container
+- The same trainer code generation (`services.py`) works for both CPU and GPU
+
+**Next Steps:**
+1. Build `tfx-trainer-gpu` container using Option 1 (TF GPU base)
+2. Test GPU detection in a simple Custom Job
+3. Configure TFX pipeline to use GPU container for Trainer component
+4. Implement GPU fallback strategy in pipeline submission
+
+### References
+
+- [Vertex AI Supported Frameworks](https://cloud.google.com/vertex-ai/docs/supported-frameworks-list)
+- [TFX GPU Discussion](https://groups.google.com/a/tensorflow.org/g/tfx/c/5oRt1EzCa4E)
+- [Google Deep Learning Containers](https://cloud.google.com/deep-learning-containers/docs/choosing-container)
+- [TensorFlow 2.15 Release Notes](https://blog.tensorflow.org/2023/11/whats-new-in-tensorflow-2-15.html)
+- [Vertex AI GPU Configuration](https://cloud.google.com/vertex-ai/docs/training/configure-compute)
+- [NVIDIA cuDNN Support Matrix](https://docs.nvidia.com/deeplearning/cudnn/backend/latest/reference/support-matrix.html)
+- [TFX on Vertex AI Tutorial](https://www.tensorflow.org/tfx/tutorials/tfx/gcp/vertex_pipelines_vertex_training)
 
 ---
 

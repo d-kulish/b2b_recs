@@ -37,19 +37,71 @@ def _get_experiment_metrics(qt):
     Returns dict with:
     - For retrieval: recall_at_100, recall_at_50, recall_at_10, loss
     - For ranking: rmse, mae, test_rmse, test_mae, loss
+    - For multitask/hybrid: all metrics from both retrieval and ranking
     Also includes config_type to indicate model type.
     """
-    # Determine model type from feature config
+    # Determine model type - model_config.model_type is the source of truth
     config_type = 'retrieval'
-    if qt.feature_config:
-        config_type = getattr(qt.feature_config, 'config_type', 'retrieval')
+
+    # Check model_config.model_type first (source of truth for hybrid/multitask)
+    if qt.model_config:
+        model_type = getattr(qt.model_config, 'model_type', None)
+        if model_type == 'multitask':
+            config_type = 'multitask'
+        elif model_type in ('ranking', 'retrieval'):
+            config_type = model_type
+
+    # Fallback to feature_config.config_type if model_config didn't set it
+    if config_type == 'retrieval' and qt.feature_config:
+        fc_type = getattr(qt.feature_config, 'config_type', 'retrieval')
+        if fc_type == 'ranking':
+            config_type = 'ranking'
 
     metrics = {
         'config_type': config_type,
         'loss': qt.loss,
     }
 
-    if config_type == 'ranking':
+    if config_type == 'multitask':
+        # Multitask/Hybrid: include BOTH retrieval and ranking metrics
+        metrics.update({
+            # Retrieval metrics
+            'recall_at_100': qt.recall_at_100,
+            'recall_at_50': qt.recall_at_50,
+            'recall_at_10': qt.recall_at_10,
+            # Ranking metrics
+            'rmse': qt.rmse,
+            'mae': qt.mae,
+            'test_rmse': qt.test_rmse,
+            'test_mae': qt.test_mae,
+        })
+
+        # Fallback to training_history_json for both metric types
+        if qt.training_history_json:
+            hist = qt.training_history_json if isinstance(qt.training_history_json, dict) else {}
+            final_metrics = hist.get('final_metrics', {})
+
+            # Retrieval metrics fallback
+            if metrics['recall_at_100'] is None:
+                metrics['recall_at_100'] = final_metrics.get('test_recall_at_100')
+            if metrics['recall_at_50'] is None:
+                metrics['recall_at_50'] = final_metrics.get('test_recall_at_50')
+            if metrics['recall_at_10'] is None:
+                metrics['recall_at_10'] = final_metrics.get('test_recall_at_10')
+
+            # Ranking metrics fallback
+            if metrics['rmse'] is None:
+                metrics['rmse'] = (final_metrics.get('final_val_rmse') or
+                                   final_metrics.get('rmse'))
+            if metrics['mae'] is None:
+                metrics['mae'] = (final_metrics.get('final_val_mae') or
+                                  final_metrics.get('mae'))
+            if metrics['test_rmse'] is None:
+                metrics['test_rmse'] = final_metrics.get('test_rmse')
+            if metrics['test_mae'] is None:
+                metrics['test_mae'] = final_metrics.get('test_mae')
+
+    elif config_type == 'ranking':
         # Ranking model metrics
         metrics.update({
             'rmse': qt.rmse,
@@ -357,7 +409,23 @@ def quick_test_list(request):
         # Model type filter (retrieval/ranking/multitask)
         model_type = request.GET.get('model_type')
         if model_type:
-            queryset = queryset.filter(feature_config__config_type=model_type)
+            # Use model_config.model_type as source of truth for hybrid/multitask
+            from django.db.models import Q
+            if model_type == 'multitask' or model_type == 'hybrid':
+                # Hybrid = model_config.model_type is 'multitask'
+                queryset = queryset.filter(model_config__model_type='multitask')
+            elif model_type == 'ranking':
+                # Ranking = feature_config is 'ranking' AND model is NOT multitask
+                queryset = queryset.filter(
+                    feature_config__config_type='ranking'
+                ).exclude(model_config__model_type='multitask')
+            elif model_type == 'retrieval':
+                # Retrieval = feature_config is retrieval AND model is NOT multitask
+                queryset = queryset.filter(
+                    Q(feature_config__config_type='retrieval') |
+                    Q(feature_config__config_type__isnull=True) |
+                    Q(feature_config__config_type='')
+                ).exclude(model_config__model_type='multitask')
 
         # Dataset filter
         dataset_id = request.GET.get('dataset_id')
@@ -1950,19 +2018,23 @@ def training_heatmaps(request):
             status=QuickTest.STATUS_COMPLETED
         )
 
-        # Filter by model type
+        # Filter by model type - use model_config.model_type as source of truth
+        from django.db.models import Q
         if model_type == 'ranking':
-            completed_qs = completed_qs.filter(feature_config__config_type='ranking')
+            # Ranking = feature_config is 'ranking' AND model is NOT multitask
+            completed_qs = completed_qs.filter(
+                feature_config__config_type='ranking'
+            ).exclude(model_config__model_type='multitask')
         elif model_type == 'hybrid':
-            completed_qs = completed_qs.filter(feature_config__config_type='multitask')
+            # Hybrid = model_config.model_type is 'multitask'
+            completed_qs = completed_qs.filter(model_config__model_type='multitask')
         else:
-            # Default to retrieval - include null/empty config_type for backwards compatibility
-            from django.db.models import Q
+            # Default to retrieval - include null/empty config_type AND exclude multitask
             completed_qs = completed_qs.filter(
                 Q(feature_config__config_type='retrieval') |
                 Q(feature_config__config_type__isnull=True) |
                 Q(feature_config__config_type='')
-            )
+            ).exclude(model_config__model_type='multitask')
 
         # Build experiment data based on model type
         experiment_data = []
@@ -2007,6 +2079,41 @@ def training_heatmaps(request):
                         'mae': mae,
                         'test_mae': test_mae,
                         'sort_key': test_rmse  # Lower is better
+                    })
+            elif model_type == 'hybrid':
+                # For hybrid models: get BOTH retrieval and ranking metrics
+                # Retrieval metrics
+                recall_5 = qt.recall_at_5 if qt.recall_at_5 is not None else final_metrics.get('test_recall_at_5')
+                recall_10 = qt.recall_at_10 if qt.recall_at_10 is not None else final_metrics.get('test_recall_at_10')
+                recall_50 = qt.recall_at_50 if qt.recall_at_50 is not None else final_metrics.get('test_recall_at_50')
+                recall_100 = qt.recall_at_100 if qt.recall_at_100 is not None else final_metrics.get('test_recall_at_100')
+
+                # Ranking metrics
+                rmse = qt.rmse
+                if rmse is None:
+                    rmse = final_metrics.get('final_val_rmse') or final_metrics.get('rmse')
+                test_rmse = qt.test_rmse if qt.test_rmse is not None else final_metrics.get('test_rmse')
+                mae = qt.mae
+                if mae is None:
+                    mae = final_metrics.get('final_val_mae') or final_metrics.get('mae')
+                test_mae = qt.test_mae if qt.test_mae is not None else final_metrics.get('test_mae')
+
+                # Include if has recall_100 (primary sort metric for hybrid)
+                if recall_100 is not None:
+                    experiment_data.append({
+                        'qt': qt,
+                        'history': history,
+                        # Retrieval metrics
+                        'recall_5': recall_5,
+                        'recall_10': recall_10,
+                        'recall_50': recall_50,
+                        'recall_100': recall_100,
+                        # Ranking metrics
+                        'rmse': rmse,
+                        'test_rmse': test_rmse,
+                        'mae': mae,
+                        'test_mae': test_mae,
+                        'sort_key': recall_100  # Higher is better (primary metric)
                     })
             else:
                 # For retrieval models: get recall metrics (higher is better)
@@ -2061,7 +2168,7 @@ def training_heatmaps(request):
                             # Keep 2 decimals for small MSE values
                             val = round(raw_val_loss[i], 2)
                         else:
-                            # Round to integer for large contrastive loss values
+                            # Round to integer for large contrastive loss values (retrieval and hybrid)
                             val = round(raw_val_loss[i])
                     else:
                         val = None
@@ -2078,6 +2185,25 @@ def training_heatmaps(request):
                     'Test MAE': round(exp_data['test_mae'], 4) if exp_data['test_mae'] else None
                 }
                 primary_metric = round(exp_data['test_rmse'], 4) if exp_data['test_rmse'] else None
+
+                for val in final_metrics_dict.values():
+                    if val is not None and val > 0:
+                        all_final_metrics.append(val)
+
+            elif model_type == 'hybrid':
+                # Final metrics for hybrid: BOTH retrieval and ranking metrics
+                # Retrieval metrics as percentages
+                final_metrics_dict = {
+                    'R@5': round((exp_data['recall_5'] or 0) * 100),
+                    'R@10': round((exp_data['recall_10'] or 0) * 100),
+                    'R@50': round((exp_data['recall_50'] or 0) * 100),
+                    'R@100': round((exp_data['recall_100'] or 0) * 100),
+                    'RMSE': round(exp_data['rmse'], 4) if exp_data.get('rmse') else None,
+                    'Test RMSE': round(exp_data['test_rmse'], 4) if exp_data.get('test_rmse') else None,
+                    'MAE': round(exp_data['mae'], 4) if exp_data.get('mae') else None,
+                    'Test MAE': round(exp_data['test_mae'], 4) if exp_data.get('test_mae') else None
+                }
+                primary_metric = round((exp_data['recall_100'] or 0) * 100)
 
                 for val in final_metrics_dict.values():
                     if val is not None and val > 0:
@@ -2189,7 +2315,7 @@ def experiment_dashboard_stats(request):
         # Base queryset
         base_qs = QuickTest.objects.filter(
             feature_config__dataset__model_endpoint=model_endpoint
-        ).select_related('feature_config')
+        ).select_related('feature_config', 'model_config')
 
         # Get counts by status
         status_counts = base_qs.values('status').annotate(count=Count('id'))
@@ -2223,12 +2349,24 @@ def experiment_dashboard_stats(request):
         }
 
         for qt in completed_qs:
-            # Determine model type from feature config
-            config_type = getattr(qt.feature_config, 'config_type', 'retrieval') or 'retrieval'
+            # Determine model type - model_config.model_type is the source of truth
+            config_type = 'retrieval'
 
-            # Map multitask to hybrid for frontend consistency
-            if config_type == 'multitask':
-                config_type = 'hybrid'
+            # Check model_config.model_type first (source of truth for hybrid/multitask)
+            if qt.model_config:
+                model_type = getattr(qt.model_config, 'model_type', None)
+                if model_type == 'multitask':
+                    config_type = 'hybrid'
+                elif model_type == 'ranking':
+                    config_type = 'ranking'
+                elif model_type == 'retrieval':
+                    config_type = 'retrieval'
+
+            # Fallback to feature_config.config_type if model_config didn't determine type
+            if config_type == 'retrieval' and qt.feature_config:
+                fc_type = getattr(qt.feature_config, 'config_type', 'retrieval')
+                if fc_type == 'ranking':
+                    config_type = 'ranking'
 
             if config_type not in model_type_stats:
                 continue
@@ -2458,23 +2596,131 @@ def metrics_trend(request):
             feature_config__dataset__model_endpoint=model_endpoint,
             status=QuickTest.STATUS_COMPLETED,
             completed_at__isnull=False
-        ).select_related('feature_config').order_by('completed_at')
+        ).select_related('feature_config', 'model_config').order_by('completed_at')
 
-        # Filter by model type based on feature_config.config_type
+        # Filter by model type based on feature_config.config_type and model_config.model_type
+        from django.db.models import Q
         if model_type == 'ranking':
-            queryset = queryset.filter(feature_config__config_type='ranking')
+            # Ranking models: feature_config has ranking type but model is NOT multitask
+            queryset = queryset.filter(
+                feature_config__config_type='ranking'
+            ).exclude(
+                model_config__model_type='multitask'
+            )
         elif model_type == 'hybrid':
-            queryset = queryset.filter(feature_config__config_type='multitask')
+            # Hybrid/Multitask models: model_config.model_type is 'multitask'
+            queryset = queryset.filter(
+                model_config__model_type='multitask'
+            )
         else:
             # Default: retrieval - include both retrieval and configs without config_type
-            from django.db.models import Q
+            # Also exclude multitask models
             queryset = queryset.filter(
                 Q(feature_config__config_type='retrieval') |
                 Q(feature_config__config_type__isnull=True) |
                 Q(feature_config__config_type='')
+            ).exclude(
+                model_config__model_type='multitask'
             )
 
-        if model_type == 'ranking':
+        if model_type == 'hybrid':
+            # Hybrid: Extract BOTH retrieval and ranking metrics
+            experiments = []
+            for qt in queryset:
+                if not qt.completed_at:
+                    continue
+
+                hist = qt.training_history_json if isinstance(qt.training_history_json, dict) else {}
+                final_metrics = hist.get('final_metrics', {})
+
+                # Retrieval metrics
+                recall_5 = final_metrics.get('test_recall_at_5')
+                recall_10 = final_metrics.get('test_recall_at_10')
+                recall_50 = qt.recall_at_50 if qt.recall_at_50 is not None else final_metrics.get('test_recall_at_50')
+                recall_100 = qt.recall_at_100 if qt.recall_at_100 is not None else final_metrics.get('test_recall_at_100')
+
+                # Ranking metrics
+                rmse = qt.rmse if qt.rmse is not None else final_metrics.get('final_val_rmse') or final_metrics.get('rmse')
+                test_rmse = qt.test_rmse if qt.test_rmse is not None else final_metrics.get('test_rmse')
+                mae = qt.mae if qt.mae is not None else final_metrics.get('final_val_mae') or final_metrics.get('mae')
+                test_mae = qt.test_mae if qt.test_mae is not None else final_metrics.get('test_mae')
+
+                # Include if any metric exists
+                has_retrieval = any(r is not None for r in [recall_5, recall_10, recall_50, recall_100])
+                has_ranking = any(m is not None for m in [rmse, test_rmse, mae, test_mae])
+
+                if has_retrieval or has_ranking:
+                    experiments.append({
+                        'completed_at': qt.completed_at,
+                        'recall_5': recall_5,
+                        'recall_10': recall_10,
+                        'recall_50': recall_50,
+                        'recall_100': recall_100,
+                        'rmse': rmse,
+                        'test_rmse': test_rmse,
+                        'mae': mae,
+                        'test_mae': test_mae
+                    })
+
+            if not experiments:
+                return JsonResponse({
+                    'success': True,
+                    'trend': []
+                })
+
+            # Build cumulative best tracking for all metrics
+            trend_data = []
+            cumulative_best = {
+                'r5': 0, 'r10': 0, 'r50': 0, 'r100': 0,  # Higher is better
+                'rmse': None, 'test_rmse': None, 'mae': None, 'test_mae': None  # Lower is better
+            }
+            count = 0
+
+            for exp in experiments:
+                count += 1
+
+                # Update retrieval metrics (higher is better)
+                if exp['recall_5'] is not None and exp['recall_5'] > cumulative_best['r5']:
+                    cumulative_best['r5'] = exp['recall_5']
+                if exp['recall_10'] is not None and exp['recall_10'] > cumulative_best['r10']:
+                    cumulative_best['r10'] = exp['recall_10']
+                if exp['recall_50'] is not None and exp['recall_50'] > cumulative_best['r50']:
+                    cumulative_best['r50'] = exp['recall_50']
+                if exp['recall_100'] is not None and exp['recall_100'] > cumulative_best['r100']:
+                    cumulative_best['r100'] = exp['recall_100']
+
+                # Update ranking metrics (lower is better)
+                if exp['rmse'] is not None and (cumulative_best['rmse'] is None or exp['rmse'] < cumulative_best['rmse']):
+                    cumulative_best['rmse'] = exp['rmse']
+                if exp['test_rmse'] is not None and (cumulative_best['test_rmse'] is None or exp['test_rmse'] < cumulative_best['test_rmse']):
+                    cumulative_best['test_rmse'] = exp['test_rmse']
+                if exp['mae'] is not None and (cumulative_best['mae'] is None or exp['mae'] < cumulative_best['mae']):
+                    cumulative_best['mae'] = exp['mae']
+                if exp['test_mae'] is not None and (cumulative_best['test_mae'] is None or exp['test_mae'] < cumulative_best['test_mae']):
+                    cumulative_best['test_mae'] = exp['test_mae']
+
+                trend_data.append({
+                    'date': exp['completed_at'].strftime('%Y-%m-%d'),
+                    'datetime': exp['completed_at'].isoformat(),
+                    # Retrieval metrics
+                    'best_r100': round(cumulative_best['r100'], 4) if cumulative_best['r100'] else None,
+                    'best_r50': round(cumulative_best['r50'], 4) if cumulative_best['r50'] else None,
+                    'best_r10': round(cumulative_best['r10'], 4) if cumulative_best['r10'] else None,
+                    'best_r5': round(cumulative_best['r5'], 4) if cumulative_best['r5'] else None,
+                    # Ranking metrics
+                    'best_rmse': round(cumulative_best['rmse'], 4) if cumulative_best['rmse'] else None,
+                    'best_test_rmse': round(cumulative_best['test_rmse'], 4) if cumulative_best['test_rmse'] else None,
+                    'best_mae': round(cumulative_best['mae'], 4) if cumulative_best['mae'] else None,
+                    'best_test_mae': round(cumulative_best['test_mae'], 4) if cumulative_best['test_mae'] else None,
+                    'experiment_count': count
+                })
+
+            return JsonResponse({
+                'success': True,
+                'trend': trend_data
+            })
+
+        elif model_type == 'ranking':
             # Extract ranking metrics (RMSE, MAE - lower is better)
             experiments = []
             for qt in queryset:
@@ -2672,19 +2918,23 @@ def hyperparameter_analysis(request):
             status=QuickTest.STATUS_COMPLETED
         ).select_related('feature_config', 'model_config')
 
-        # Filter by model type based on feature_config.config_type
+        # Filter by model type - use model_config.model_type as source of truth
+        from django.db.models import Q
         if model_type == 'ranking':
-            queryset = queryset.filter(feature_config__config_type='ranking')
+            # Ranking = feature_config is 'ranking' AND model is NOT multitask
+            queryset = queryset.filter(
+                feature_config__config_type='ranking'
+            ).exclude(model_config__model_type='multitask')
         elif model_type == 'hybrid':
-            queryset = queryset.filter(feature_config__config_type='multitask')
+            # Hybrid = model_config.model_type is 'multitask'
+            queryset = queryset.filter(model_config__model_type='multitask')
         else:
-            # Default: retrieval - include both retrieval and configs without config_type
-            from django.db.models import Q
+            # Default: retrieval - include both retrieval and configs without config_type AND exclude multitask
             queryset = queryset.filter(
                 Q(feature_config__config_type='retrieval') |
                 Q(feature_config__config_type__isnull=True) |
                 Q(feature_config__config_type='')
-            )
+            ).exclude(model_config__model_type='multitask')
 
         # Use HyperparameterAnalyzer for TPE-based analysis
         analyzer = HyperparameterAnalyzer()
@@ -2761,19 +3011,23 @@ def top_configurations(request):
             status=QuickTest.STATUS_COMPLETED
         ).select_related('feature_config', 'feature_config__dataset', 'model_config')
 
-        # Filter by model type based on feature_config.config_type
+        # Filter by model type - use model_config.model_type as source of truth
+        from django.db.models import Q
         if model_type == 'ranking':
-            queryset = queryset.filter(feature_config__config_type='ranking')
+            # Ranking = feature_config is 'ranking' AND model is NOT multitask
+            queryset = queryset.filter(
+                feature_config__config_type='ranking'
+            ).exclude(model_config__model_type='multitask')
         elif model_type == 'hybrid':
-            queryset = queryset.filter(feature_config__config_type='multitask')
+            # Hybrid = model_config.model_type is 'multitask'
+            queryset = queryset.filter(model_config__model_type='multitask')
         else:
-            # Default: retrieval - include both retrieval and configs without config_type
-            from django.db.models import Q
+            # Default: retrieval - include both retrieval and configs without config_type AND exclude multitask
             queryset = queryset.filter(
                 Q(feature_config__config_type='retrieval') |
                 Q(feature_config__config_type__isnull=True) |
                 Q(feature_config__config_type='')
-            )
+            ).exclude(model_config__model_type='multitask')
 
         if model_type == 'ranking':
             # Ranking: sort by test_rmse (lower is better)
@@ -2822,6 +3076,63 @@ def top_configurations(request):
                     'test_mae': round(item['test_mae'], 4) if item['test_mae'] else None,
                     'rmse': round(item['rmse'], 4) if item['rmse'] else None,
                     'mae': round(item['mae'], 4) if item['mae'] else None,
+                })
+        elif model_type == 'hybrid':
+            # Hybrid: sort by recall@100 (higher is better), show both retrieval and ranking metrics
+            experiments_with_metrics = []
+            for qt in queryset:
+                hist = qt.training_history_json if isinstance(qt.training_history_json, dict) else {}
+                final_metrics = hist.get('final_metrics', {})
+
+                # Retrieval metrics
+                recall_100 = qt.recall_at_100 if qt.recall_at_100 is not None else final_metrics.get('test_recall_at_100')
+                recall_50 = qt.recall_at_50 if qt.recall_at_50 is not None else final_metrics.get('test_recall_at_50')
+                recall_10 = qt.recall_at_10 if qt.recall_at_10 is not None else final_metrics.get('test_recall_at_10')
+
+                # Ranking metrics
+                test_rmse = qt.test_rmse if qt.test_rmse is not None else final_metrics.get('test_rmse')
+                test_mae = qt.test_mae if qt.test_mae is not None else final_metrics.get('test_mae')
+
+                # Include if has at least one metric from each type (or just recall for sorting)
+                if recall_100 is not None:
+                    experiments_with_metrics.append({
+                        'qt': qt,
+                        'recall_100': recall_100,
+                        'recall_50': recall_50,
+                        'recall_10': recall_10,
+                        'test_rmse': test_rmse,
+                        'test_mae': test_mae,
+                    })
+
+            # Sort by recall@100 descending (higher is better)
+            experiments_with_metrics.sort(key=lambda x: x['recall_100'], reverse=True)
+
+            # Build configurations list
+            configurations = []
+            for i, item in enumerate(experiments_with_metrics[:limit]):
+                qt = item['qt']
+                configurations.append({
+                    'rank': i + 1,
+                    'experiment_id': qt.id,
+                    'experiment_number': qt.experiment_number,
+                    'display_name': qt.display_name,
+                    'dataset': qt.feature_config.dataset.name if qt.feature_config and qt.feature_config.dataset else None,
+                    'feature_config': qt.feature_config.name if qt.feature_config else None,
+                    'feature_config_id': qt.feature_config.id if qt.feature_config else None,
+                    'model_config': qt.model_config.name if qt.model_config else None,
+                    'model_config_id': qt.model_config.id if qt.model_config else None,
+                    'learning_rate': qt.learning_rate,
+                    'batch_size': qt.batch_size,
+                    'epochs': qt.epochs,
+                    'data_sample_percent': qt.data_sample_percent,
+                    'split_strategy': qt.split_strategy,
+                    # Retrieval metrics
+                    'recall_at_100': round(item['recall_100'], 4) if item['recall_100'] else None,
+                    'recall_at_50': round(item['recall_50'], 4) if item['recall_50'] else None,
+                    'recall_at_10': round(item['recall_10'], 4) if item['recall_10'] else None,
+                    # Ranking metrics
+                    'test_rmse': round(item['test_rmse'], 4) if item['test_rmse'] else None,
+                    'test_mae': round(item['test_mae'], 4) if item['test_mae'] else None,
                 })
         else:
             # Retrieval: sort by recall@100 (higher is better)
@@ -3103,21 +3414,25 @@ def dataset_comparison(request):
         queryset = QuickTest.objects.filter(
             feature_config__dataset__model_endpoint=model_endpoint,
             status=QuickTest.STATUS_COMPLETED
-        ).select_related('feature_config__dataset')
+        ).select_related('feature_config__dataset', 'model_config')
 
-        # Filter by model type
+        # Filter by model type - use model_config.model_type as source of truth
+        from django.db.models import Q
         if model_type == 'ranking':
-            queryset = queryset.filter(feature_config__config_type='ranking')
+            # Ranking = feature_config is 'ranking' AND model is NOT multitask
+            queryset = queryset.filter(
+                feature_config__config_type='ranking'
+            ).exclude(model_config__model_type='multitask')
         elif model_type == 'hybrid':
-            queryset = queryset.filter(feature_config__config_type='multitask')
+            # Hybrid = model_config.model_type is 'multitask'
+            queryset = queryset.filter(model_config__model_type='multitask')
         else:
-            # Default to retrieval - include null/empty config_type for backwards compatibility
-            from django.db.models import Q
+            # Default to retrieval - include null/empty config_type AND exclude multitask
             queryset = queryset.filter(
                 Q(feature_config__config_type='retrieval') |
                 Q(feature_config__config_type__isnull=True) |
                 Q(feature_config__config_type='')
-            )
+            ).exclude(model_config__model_type='multitask')
 
         dataset_experiments = defaultdict(list)
         for qt in queryset:
@@ -3140,6 +3455,28 @@ def dataset_comparison(request):
                         'rmse': rmse,
                         'test_rmse': test_rmse,
                         'mae': mae,
+                        'test_mae': test_mae,
+                        'loss': loss,
+                    })
+            elif model_type == 'hybrid':
+                # Get BOTH retrieval and ranking metrics for hybrid
+                recall_at_100 = exp_metrics.get('recall_at_100')
+                recall_at_50 = exp_metrics.get('recall_at_50')
+                recall_at_10 = exp_metrics.get('recall_at_10')
+                recall_at_5 = exp_metrics.get('recall_at_5')
+                rmse = exp_metrics.get('rmse')
+                test_rmse = exp_metrics.get('test_rmse')
+                mae = exp_metrics.get('mae')
+                test_mae = exp_metrics.get('test_mae')
+                loss = exp_metrics.get('loss')
+
+                if recall_at_100 is not None:
+                    dataset_experiments[ds_id].append({
+                        'recall_at_100': recall_at_100,
+                        'recall_at_50': recall_at_50,
+                        'recall_at_10': recall_at_10,
+                        'recall_at_5': recall_at_5,
+                        'test_rmse': test_rmse,
                         'test_mae': test_mae,
                         'loss': loss,
                     })
@@ -3176,6 +3513,31 @@ def dataset_comparison(request):
                         'avg_mae': round(sum(test_maes) / len(test_maes), 4) if test_maes else None,
                         'avg_loss': round(sum(losses) / len(losses), 4) if losses else None,
                     })
+            elif model_type == 'hybrid':
+                # Hybrid: BOTH retrieval and ranking metrics
+                recalls_100 = [e['recall_at_100'] for e in experiments if e.get('recall_at_100') is not None]
+                recalls_50 = [e['recall_at_50'] for e in experiments if e.get('recall_at_50') is not None]
+                recalls_10 = [e['recall_at_10'] for e in experiments if e.get('recall_at_10') is not None]
+                test_rmses = [e['test_rmse'] for e in experiments if e.get('test_rmse') is not None]
+                test_maes = [e['test_mae'] for e in experiments if e.get('test_mae') is not None]
+                losses = [e['loss'] for e in experiments if e.get('loss') is not None]
+
+                if recalls_100:
+                    dataset_stats.append({
+                        'id': ds_id,
+                        'name': ds_name,
+                        'experiment_count': len(experiments),
+                        # Retrieval metrics (higher is better)
+                        'best_recall': round(max(recalls_100), 4),
+                        'avg_recall': round(sum(recalls_100) / len(recalls_100), 4),
+                        'best_r50': round(max(recalls_50), 4) if recalls_50 else None,
+                        'best_r10': round(max(recalls_10), 4) if recalls_10 else None,
+                        # Ranking metrics (lower is better)
+                        'best_rmse': round(min(test_rmses), 4) if test_rmses else None,
+                        'avg_rmse': round(sum(test_rmses) / len(test_rmses), 4) if test_rmses else None,
+                        'best_mae': round(min(test_maes), 4) if test_maes else None,
+                        'avg_loss': round(sum(losses) / len(losses), 4) if losses else None,
+                    })
             else:
                 # Retrieval metrics - higher is better
                 recalls = [e['recall'] for e in experiments if e['recall'] is not None]
@@ -3196,6 +3558,9 @@ def dataset_comparison(request):
         if model_type == 'ranking':
             # Lower RMSE is better - ascending
             dataset_stats.sort(key=lambda x: x.get('best_rmse') or float('inf'))
+        elif model_type == 'hybrid':
+            # Hybrid: sort by best_recall (higher is better) - descending
+            dataset_stats.sort(key=lambda x: x.get('best_recall') or 0, reverse=True)
         else:
             # Higher recall is better - descending
             dataset_stats.sort(key=lambda x: x.get('best_recall') or 0, reverse=True)

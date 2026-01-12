@@ -10431,6 +10431,17 @@ async function loadTrainingHeatmaps(modelType = null) {
             metricsGradient.classList.remove('recall-gradient');
             metricsGradient.classList.add('loss-gradient');
         }
+    } else if (activeModelType === 'hybrid') {
+        if (sectionHeader) {
+            sectionHeader.querySelector('.text-xs').textContent = 'Top 10 experiments by R@100 (highest)';
+        }
+        if (epochTitle) epochTitle.textContent = 'Validation Loss by Epoch';
+        if (metricsTitle) metricsTitle.textContent = 'Final Metrics (Retrieval + Ranking)';
+        // For hybrid, use recall-gradient for the metrics (higher recall = better)
+        if (metricsGradient) {
+            metricsGradient.classList.remove('loss-gradient');
+            metricsGradient.classList.add('recall-gradient');
+        }
     } else {
         if (sectionHeader) {
             sectionHeader.querySelector('.text-xs').textContent = 'Top 10 experiments by Recall@100';
@@ -10442,14 +10453,6 @@ async function loadTrainingHeatmaps(modelType = null) {
             metricsGradient.classList.remove('loss-gradient');
             metricsGradient.classList.add('recall-gradient');
         }
-    }
-
-    // For Hybrid, show empty state (not implemented yet)
-    if (activeModelType === 'hybrid') {
-        heatmapsContainer.style.display = 'none';
-        emptyEl.innerHTML = '<i class="fas fa-layer-group"></i><p>Hybrid training analysis coming soon</p>';
-        emptyEl.classList.remove('hidden');
-        return;
     }
 
     try {
@@ -10627,9 +10630,18 @@ function renderFinalMetricsHeatmapD3(container, data, modelType) {
     if (!experiments.length) return;
 
     // Metrics differ by model type
-    const metrics = modelType === 'ranking'
-        ? ['RMSE', 'Test RMSE', 'MAE', 'Test MAE']
-        : ['R@5', 'R@10', 'R@50', 'R@100'];
+    let metrics;
+    if (modelType === 'ranking') {
+        metrics = ['RMSE', 'Test RMSE', 'MAE', 'Test MAE'];
+    } else if (modelType === 'hybrid') {
+        // Hybrid: show both retrieval and ranking metrics
+        metrics = ['R@5', 'R@10', 'R@50', 'R@100', 'RMSE', 'Test RMSE', 'MAE', 'Test MAE'];
+    } else {
+        metrics = ['R@5', 'R@10', 'R@50', 'R@100'];
+    }
+
+    // For hybrid, need to know which metrics are "lower is better"
+    const lowerIsBetterMetrics = ['RMSE', 'Test RMSE', 'MAE', 'Test MAE'];
 
     // Calculate min/max per column for per-column normalization
     // This ensures RMSE and MAE are colored relative to their own ranges
@@ -10652,8 +10664,15 @@ function renderFinalMetricsHeatmapD3(container, data, modelType) {
     const margin = { top: 5, right: 10, bottom: 30, left: 70 };
     const cellHeight = 24;
     const containerWidth = container.getBoundingClientRect().width || 300;
-    // Wider cells for ranking metrics (longer labels)
-    const cellWidth = modelType === 'ranking' ? 60 : 45;
+    // Wider cells for ranking metrics (longer labels), narrower for hybrid (more metrics)
+    let cellWidth;
+    if (modelType === 'hybrid') {
+        cellWidth = 50;  // Narrower to fit 8 metrics
+    } else if (modelType === 'ranking') {
+        cellWidth = 60;
+    } else {
+        cellWidth = 45;
+    }
     const width = Math.max(containerWidth, margin.left + metrics.length * cellWidth + margin.right);
     const height = margin.top + experiments.length * cellHeight + margin.bottom;
 
@@ -10666,11 +10685,13 @@ function renderFinalMetricsHeatmapD3(container, data, modelType) {
     // Create color scale function per column
     // - Retrieval (recall): Red (low) -> Green (high) - higher is better
     // - Ranking (RMSE/MAE): Green (low) -> Red (high) - lower is better
+    // - Hybrid: use metric type to determine direction
     const getColorScale = (metric) => {
         const range = columnRanges[metric];
+        const isLowerBetter = modelType === 'ranking' || (modelType === 'hybrid' && lowerIsBetterMetrics.includes(metric));
         return d3.scaleSequential()
             .domain([range.min, range.max])
-            .interpolator(modelType === 'ranking'
+            .interpolator(isLowerBetter
                 ? (t => d3.interpolateRgb('#10b981', '#ef4444')(t))  // Green to Red (lower is better)
                 : (t => d3.interpolateRgb('#ef4444', '#10b981')(t))  // Red to Green (higher is better)
             );
@@ -10707,31 +10728,35 @@ function renderFinalMetricsHeatmapD3(container, data, modelType) {
                 .attr('rx', 2);
 
             if (val !== null) {
-                // Format value based on model type
+                // Format value based on metric type
+                const isLowerBetter = modelType === 'ranking' || (modelType === 'hybrid' && lowerIsBetterMetrics.includes(metric));
                 let displayVal;
-                if (modelType === 'ranking') {
+                if (isLowerBetter) {
                     displayVal = val.toFixed(4);
                 } else {
                     displayVal = val + '%';
                 }
 
-                // Determine text color based on model type and value (per-column midpoint)
+                // Determine text color based on metric direction and value (per-column midpoint)
                 const midpoint = (range.max + range.min) / 2;
                 let textColor;
-                if (modelType === 'ranking') {
-                    // For ranking, lower values are green (good), higher are red
+                if (isLowerBetter) {
+                    // Lower values are green (good), higher are red
                     textColor = val < midpoint ? '#1f2937' : '#fff';
                 } else {
-                    // For retrieval, higher values are green (good)
+                    // Higher values are green (good)
                     textColor = val > midpoint ? '#fff' : '#1f2937';
                 }
+
+                // Use smaller font for hybrid and ranking (more metrics to display)
+                const fontSize = modelType === 'hybrid' ? '7px' : (modelType === 'ranking' ? '8px' : '10px');
 
                 cell.append('text')
                     .attr('x', xScale(metric) + xScale.bandwidth() / 2)
                     .attr('y', yScale(exp.label) + yScale.bandwidth() / 2)
                     .attr('text-anchor', 'middle')
                     .attr('dominant-baseline', 'middle')
-                    .attr('font-size', modelType === 'ranking' ? '8px' : '10px')
+                    .attr('font-size', fontSize)
                     .attr('font-weight', '500')
                     .attr('fill', textColor)
                     .text(displayVal);
@@ -10740,6 +10765,7 @@ function renderFinalMetricsHeatmapD3(container, data, modelType) {
     });
 
     // X axis labels
+    const labelFontSize = modelType === 'hybrid' ? '7px' : (modelType === 'ranking' ? '8px' : '10px');
     svg.append('g')
         .attr('transform', `translate(0, ${height - margin.bottom + 5})`)
         .selectAll('text')
@@ -10749,7 +10775,7 @@ function renderFinalMetricsHeatmapD3(container, data, modelType) {
         .attr('x', d => xScale(d) + xScale.bandwidth() / 2)
         .attr('y', 12)
         .attr('text-anchor', 'middle')
-        .attr('font-size', modelType === 'ranking' ? '8px' : '10px')
+        .attr('font-size', labelFontSize)
         .attr('fill', '#6b7280')
         .text(d => d);
 
@@ -10802,14 +10828,6 @@ async function loadMetricsTrend(modelType = null) {
         trendChart = null;
     }
 
-    // For Hybrid, show empty state (not implemented yet)
-    if (activeModelType === 'hybrid') {
-        canvas.style.display = 'none';
-        emptyEl.innerHTML = '<i class="fas fa-layer-group"></i><p>Hybrid metrics trend coming soon</p>';
-        emptyEl.classList.remove('hidden');
-        return;
-    }
-
     try {
         const response = await fetch(`/api/experiments/metrics-trend/?model_type=${activeModelType}`);
         const data = await response.json();
@@ -10828,15 +10846,17 @@ async function loadMetricsTrend(modelType = null) {
 
         // Build datasets based on model type
         let datasets;
+        let chartOptions;
         if (activeModelType === 'ranking') {
             // Ranking: RMSE, Test RMSE, MAE, Test MAE (lower is better)
+            // Use area fill with origin for visual consistency with retrieval
             datasets = [
                 {
                     label: 'Best RMSE',
                     data: data.trend.map(d => d.best_rmse),
                     borderColor: '#f59e0b',
-                    backgroundColor: 'rgba(245, 158, 11, 0.1)',
-                    fill: false,
+                    backgroundColor: 'rgba(245, 158, 11, 0.25)',
+                    fill: 'origin',
                     tension: 0.3,
                     pointRadius: 3,
                     pointHoverRadius: 5,
@@ -10846,7 +10866,8 @@ async function loadMetricsTrend(modelType = null) {
                     label: 'Best Test RMSE',
                     data: data.trend.map(d => d.best_test_rmse),
                     borderColor: '#d97706',
-                    fill: false,
+                    backgroundColor: 'rgba(217, 119, 6, 0.2)',
+                    fill: 'origin',
                     tension: 0.3,
                     pointRadius: 3,
                     pointHoverRadius: 5,
@@ -10856,7 +10877,8 @@ async function loadMetricsTrend(modelType = null) {
                     label: 'Best MAE',
                     data: data.trend.map(d => d.best_mae),
                     borderColor: '#10b981',
-                    fill: false,
+                    backgroundColor: 'rgba(16, 185, 129, 0.25)',
+                    fill: 'origin',
                     tension: 0.3,
                     pointRadius: 3,
                     pointHoverRadius: 5,
@@ -10866,14 +10888,15 @@ async function loadMetricsTrend(modelType = null) {
                     label: 'Best Test MAE',
                     data: data.trend.map(d => d.best_test_mae),
                     borderColor: '#059669',
-                    fill: false,
+                    backgroundColor: 'rgba(5, 150, 105, 0.2)',
+                    fill: 'origin',
                     tension: 0.3,
                     pointRadius: 3,
                     pointHoverRadius: 5,
                     borderWidth: 2
                 }
             ];
-        } else {
+        } else if (activeModelType === 'retrieval') {
             // Retrieval: R@5, R@10, R@50, R@100 (higher is better)
             // Cascade area chart: each metric fills down to the next one
             datasets = [
@@ -10922,6 +10945,134 @@ async function loadMetricsTrend(modelType = null) {
                     borderWidth: 2
                 }
             ];
+        } else {
+            // Hybrid: Dual Y-axis - Recall metrics (left) and RMSE/MAE metrics (right)
+            datasets = [
+                // Retrieval metrics (left Y-axis) - cascading area fills
+                {
+                    label: 'R@100',
+                    data: data.trend.map(d => d.best_r100),
+                    borderColor: '#10b981',
+                    backgroundColor: 'rgba(16, 185, 129, 0.35)',
+                    fill: '+1',
+                    tension: 0.3,
+                    pointRadius: 3,
+                    pointHoverRadius: 5,
+                    borderWidth: 2,
+                    yAxisID: 'y'
+                },
+                {
+                    label: 'R@50',
+                    data: data.trend.map(d => d.best_r50),
+                    borderColor: '#3b82f6',
+                    backgroundColor: 'rgba(59, 130, 246, 0.35)',
+                    fill: '+1',
+                    tension: 0.3,
+                    pointRadius: 3,
+                    pointHoverRadius: 5,
+                    borderWidth: 2,
+                    yAxisID: 'y'
+                },
+                {
+                    label: 'R@10',
+                    data: data.trend.map(d => d.best_r10),
+                    borderColor: '#8b5cf6',
+                    backgroundColor: 'rgba(139, 92, 246, 0.35)',
+                    fill: 'origin',
+                    tension: 0.3,
+                    pointRadius: 3,
+                    pointHoverRadius: 5,
+                    borderWidth: 2,
+                    yAxisID: 'y'
+                },
+                // Ranking metrics (right Y-axis) - area fills
+                {
+                    label: 'RMSE',
+                    data: data.trend.map(d => d.best_rmse),
+                    borderColor: '#f59e0b',
+                    backgroundColor: 'rgba(245, 158, 11, 0.2)',
+                    fill: 'origin',
+                    tension: 0.3,
+                    pointRadius: 3,
+                    pointHoverRadius: 5,
+                    borderWidth: 2,
+                    borderDash: [5, 5],
+                    yAxisID: 'y1'
+                },
+                {
+                    label: 'Test RMSE',
+                    data: data.trend.map(d => d.best_test_rmse),
+                    borderColor: '#ef4444',
+                    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                    fill: 'origin',
+                    tension: 0.3,
+                    pointRadius: 3,
+                    pointHoverRadius: 5,
+                    borderWidth: 2,
+                    borderDash: [5, 5],
+                    yAxisID: 'y1'
+                }
+            ];
+        }
+
+        // Build chart options based on model type
+        const baseOptions = {
+            responsive: true,
+            maintainAspectRatio: false,
+            layout: {
+                padding: { right: 10 }
+            },
+            plugins: {
+                legend: {
+                    position: 'top',
+                    align: 'end',
+                    labels: { boxWidth: 12, font: { size: 11 } }
+                },
+                tooltip: {
+                    callbacks: {
+                        afterLabel: (context) => {
+                            const idx = context.dataIndex;
+                            return `Experiments: ${data.trend[idx].experiment_count}`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    grid: { display: false },
+                    ticks: { font: { size: 10 }, maxTicksLimit: 10 }
+                },
+                y: {
+                    type: 'linear',
+                    display: true,
+                    position: 'left',
+                    beginAtZero: false,
+                    grid: { color: 'rgba(0,0,0,0.05)' },
+                    ticks: { font: { size: 10 } },
+                    title: activeModelType === 'hybrid' ? {
+                        display: true,
+                        text: 'Recall',
+                        font: { size: 10 }
+                    } : undefined
+                }
+            }
+        };
+
+        // Add right Y-axis for hybrid models
+        if (activeModelType === 'hybrid') {
+            baseOptions.scales.y1 = {
+                type: 'linear',
+                display: true,
+                position: 'right',
+                beginAtZero: false,
+                grid: { drawOnChartArea: false },
+                ticks: { font: { size: 10 } },
+                title: {
+                    display: true,
+                    text: 'RMSE',
+                    font: { size: 10 }
+                }
+            };
         }
 
         trendChart = new Chart(ctx, {
@@ -10930,39 +11081,7 @@ async function loadMetricsTrend(modelType = null) {
                 labels: data.trend.map(d => d.date),
                 datasets: datasets
             },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                layout: {
-                    padding: { right: 10 }
-                },
-                plugins: {
-                    legend: {
-                        position: 'top',
-                        align: 'end',
-                        labels: { boxWidth: 12, font: { size: 11 } }
-                    },
-                    tooltip: {
-                        callbacks: {
-                            afterLabel: (context) => {
-                                const idx = context.dataIndex;
-                                return `Experiments: ${data.trend[idx].experiment_count}`;
-                            }
-                        }
-                    }
-                },
-                scales: {
-                    x: {
-                        grid: { display: false },
-                        ticks: { font: { size: 10 }, maxTicksLimit: 10 }
-                    },
-                    y: {
-                        beginAtZero: false,
-                        grid: { color: 'rgba(0,0,0,0.05)' },
-                        ticks: { font: { size: 10 } }
-                    }
-                }
-            }
+            options: baseOptions
         });
 
     } catch (error) {
@@ -11017,6 +11136,21 @@ async function loadTopConfigurations(modelType = null) {
                 <th style="text-align: center;">Test MAE</th>
             </tr>
         `;
+    } else if (activeModelType === 'hybrid') {
+        thead.innerHTML = `
+            <tr>
+                <th style="width: 40px;">#</th>
+                <th style="text-align: center;">Experiment</th>
+                <th>Dataset</th>
+                <th>Feature</th>
+                <th>Model</th>
+                <th style="text-align: center;">LR</th>
+                <th style="text-align: center;">R@100</th>
+                <th style="text-align: center;">R@50</th>
+                <th style="text-align: center;">Test RMSE</th>
+                <th style="text-align: center;">Test MAE</th>
+            </tr>
+        `;
     } else {
         thead.innerHTML = `
             <tr>
@@ -11034,24 +11168,12 @@ async function loadTopConfigurations(modelType = null) {
         `;
     }
 
-    // For Hybrid, show empty state (not implemented yet)
-    if (activeModelType === 'hybrid') {
-        tbody.innerHTML = `
-            <tr>
-                <td colspan="10" class="text-center text-gray-400 py-4">
-                    <i class="fas fa-layer-group mr-2"></i>No hybrid experiments yet
-                </td>
-            </tr>
-        `;
-        return;
-    }
-
     try {
         const response = await fetch(`/api/experiments/top-configurations/?limit=5&model_type=${activeModelType}`);
         const data = await response.json();
 
         if (!data.success || !data.configurations || data.configurations.length === 0) {
-            const modelLabel = activeModelType === 'ranking' ? 'ranking' : 'retrieval';
+            const modelLabel = activeModelType === 'hybrid' ? 'hybrid' : (activeModelType === 'ranking' ? 'ranking' : 'retrieval');
             tbody.innerHTML = `
                 <tr>
                     <td colspan="10" class="text-center text-gray-400 py-4">
@@ -11085,6 +11207,37 @@ async function loadTopConfigurations(modelType = null) {
                         </td>
                         <td style="text-align: center;">
                             ${cfg.test_mae !== null ? cfg.test_mae.toFixed(4) : '-'}
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        } else if (activeModelType === 'hybrid') {
+            // Hybrid: sort by recall_at_100 (higher is better), show both retrieval and ranking metrics
+            const bestRecall = data.configurations[0]?.recall_at_100;
+
+            tbody.innerHTML = data.configurations.map((cfg, index) => {
+                const rankClass = index < 3 ? `rank-${index + 1}` : '';
+                const isBest = cfg.recall_at_100 === bestRecall;
+
+                return `
+                    <tr onclick="openExpViewModal(${cfg.experiment_id})" style="cursor: pointer;" title="Click to view details">
+                        <td class="rank-cell ${rankClass}">${cfg.rank}</td>
+                        <td style="text-align: center;">${cfg.display_name || 'Exp #' + cfg.experiment_number}</td>
+                        <td>${cfg.dataset || '-'}</td>
+                        <td>${cfg.feature_config || '-'}</td>
+                        <td>${cfg.model_config || '-'}</td>
+                        <td style="text-align: center;">${cfg.learning_rate}</td>
+                        <td style="text-align: center;" class="${isBest ? 'metric-best' : ''}">
+                            ${cfg.recall_at_100 != null ? cfg.recall_at_100.toFixed(3) : '-'}
+                        </td>
+                        <td style="text-align: center;">
+                            ${cfg.recall_at_50 != null ? cfg.recall_at_50.toFixed(3) : '-'}
+                        </td>
+                        <td style="text-align: center;">
+                            ${cfg.test_rmse != null ? cfg.test_rmse.toFixed(4) : '-'}
+                        </td>
+                        <td style="text-align: center;">
+                            ${cfg.test_mae != null ? cfg.test_mae.toFixed(4) : '-'}
                         </td>
                     </tr>
                 `;
@@ -11141,16 +11294,10 @@ async function loadHyperparameterAnalysis(modelType = null) {
     const subtitleConfig = {
         'retrieval': 'TPE-based analysis • Higher score = better association with top 30% results (by R@100)',
         'ranking': 'TPE-based analysis • Higher score = better association with top 30% results (by Test RMSE)',
-        'hybrid': 'TPE-based analysis • Hybrid model experiments'
+        'hybrid': 'TPE-based analysis • Higher score = better association with top 30% results (by R@100)'
     };
     if (sectionSubtitle) {
         sectionSubtitle.textContent = subtitleConfig[activeModelType] || subtitleConfig['retrieval'];
-    }
-
-    // For Hybrid, show empty state (not implemented yet)
-    if (activeModelType === 'hybrid') {
-        container.innerHTML = '<div class="dashboard-empty-section"><i class="fas fa-layer-group"></i><p>Hybrid hyperparameter insights coming soon</p></div>';
-        return;
     }
 
     try {
@@ -11158,7 +11305,7 @@ async function loadHyperparameterAnalysis(modelType = null) {
         const data = await response.json();
 
         if (!data.success || !data.analysis) {
-            const modelLabel = activeModelType === 'ranking' ? 'ranking' : 'retrieval';
+            const modelLabel = activeModelType === 'hybrid' ? 'hybrid' : (activeModelType === 'ranking' ? 'ranking' : 'retrieval');
             container.innerHTML = `<div class="dashboard-empty-section"><i class="fas fa-cogs"></i><p>No ${modelLabel} hyperparameter data available</p></div>`;
             return;
         }
@@ -11171,7 +11318,7 @@ async function loadHyperparameterAnalysis(modelType = null) {
         );
 
         if (!hasData) {
-            const modelLabel = activeModelType === 'ranking' ? 'ranking' : 'retrieval';
+            const modelLabel = activeModelType === 'hybrid' ? 'hybrid' : (activeModelType === 'ranking' ? 'ranking' : 'retrieval');
             container.innerHTML = `<div class="dashboard-empty-section"><i class="fas fa-cogs"></i><p>No ${modelLabel} hyperparameter data available</p></div>`;
             return;
         }
@@ -11185,6 +11332,7 @@ async function loadHyperparameterAnalysis(modelType = null) {
         ];
 
         // Determine metric label based on model type
+        // For hybrid, we use R@100 as the primary metric (same as retrieval)
         const metricLabel = activeModelType === 'ranking' ? 'Test RMSE' : 'R@100';
         const thresholdLabel = activeModelType === 'ranking'
             ? (analysis.good_threshold ? analysis.good_threshold.toFixed(4) : '-')
@@ -11549,33 +11697,47 @@ async function loadSuggestions() {
 
 async function loadDatasetComparison(modelType = null) {
     const tbody = document.getElementById('datasetComparisonBody');
+    const thead = document.getElementById('datasetComparisonHead');
     const emptyEl = document.getElementById('datasetComparisonEmpty');
     const subtitle = document.getElementById('datasetComparisonSubtitle');
-    const metric1Header = document.getElementById('datasetMetric1');
-    const metric2Header = document.getElementById('datasetMetric2');
-    const metric3Header = document.getElementById('datasetMetric3');
 
     const activeModelType = modelType || selectedDashboardModelType;
 
-    // Update headers based on model type
+    // Update headers based on model type (dynamically rebuild thead for different column counts)
     if (activeModelType === 'ranking') {
         if (subtitle) subtitle.textContent = 'Compare ranking results across different datasets';
-        if (metric1Header) metric1Header.textContent = 'Best RMSE';
-        if (metric2Header) metric2Header.textContent = 'Avg RMSE';
-        if (metric3Header) metric3Header.textContent = 'Avg Loss';
+        thead.innerHTML = `
+            <tr>
+                <th>Dataset</th>
+                <th style="text-align: center;">Experiments</th>
+                <th style="text-align: right;">Best RMSE</th>
+                <th style="text-align: right;">Avg RMSE</th>
+                <th style="text-align: right;">Avg Loss</th>
+            </tr>
+        `;
+    } else if (activeModelType === 'hybrid') {
+        if (subtitle) subtitle.textContent = 'Compare hybrid model results across different datasets';
+        thead.innerHTML = `
+            <tr>
+                <th>Dataset</th>
+                <th style="text-align: center;">Experiments</th>
+                <th style="text-align: right;">Best R@100</th>
+                <th style="text-align: right;">Avg R@100</th>
+                <th style="text-align: right;">Best RMSE</th>
+                <th style="text-align: right;">Avg RMSE</th>
+            </tr>
+        `;
     } else {
         if (subtitle) subtitle.textContent = 'Compare results across different datasets';
-        if (metric1Header) metric1Header.textContent = 'Best R@100';
-        if (metric2Header) metric2Header.textContent = 'Avg R@100';
-        if (metric3Header) metric3Header.textContent = 'Avg Loss';
-    }
-
-    // For Hybrid, show empty state (not implemented yet)
-    if (activeModelType === 'hybrid') {
-        tbody.parentElement.style.display = 'none';
-        emptyEl.innerHTML = '<i class="fas fa-layer-group"></i><p>Hybrid dataset comparison coming soon</p>';
-        emptyEl.classList.remove('hidden');
-        return;
+        thead.innerHTML = `
+            <tr>
+                <th>Dataset</th>
+                <th style="text-align: center;">Experiments</th>
+                <th style="text-align: right;">Best R@100</th>
+                <th style="text-align: right;">Avg R@100</th>
+                <th style="text-align: right;">Avg Loss</th>
+            </tr>
+        `;
     }
 
     try {
@@ -11610,6 +11772,31 @@ async function loadDatasetComparison(modelType = null) {
                         </td>
                         <td style="text-align: right;">
                             ${ds.avg_loss !== null ? ds.avg_loss.toFixed(4) : '-'}
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        } else if (activeModelType === 'hybrid') {
+            // For hybrid: higher recall is better (primary), also show RMSE
+            const bestRecall = Math.max(...data.datasets.map(d => d.best_recall || 0));
+
+            tbody.innerHTML = data.datasets.map(ds => {
+                const isBest = ds.best_recall === bestRecall;
+                return `
+                    <tr>
+                        <td><strong>${ds.name}</strong></td>
+                        <td style="text-align: center;">${ds.experiment_count}</td>
+                        <td style="text-align: right;" class="${isBest ? 'metric-best' : ''}">
+                            ${ds.best_recall !== null ? ds.best_recall.toFixed(4) : '-'}
+                        </td>
+                        <td style="text-align: right;">
+                            ${ds.avg_recall !== null ? ds.avg_recall.toFixed(4) : '-'}
+                        </td>
+                        <td style="text-align: right;">
+                            ${ds.best_rmse !== null ? ds.best_rmse.toFixed(4) : '-'}
+                        </td>
+                        <td style="text-align: right;">
+                            ${ds.avg_rmse !== null ? ds.avg_rmse.toFixed(4) : '-'}
                         </td>
                     </tr>
                 `;

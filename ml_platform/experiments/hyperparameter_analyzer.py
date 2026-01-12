@@ -59,14 +59,14 @@ class HyperparameterAnalyzer:
             {'field': 'data_sample_percent', 'label': 'Sample %', 'format': lambda v: f"{v}%"},
         ],
         'model': [
-            {'field': 'buyer_tower_structure', 'label': 'Buyer Tower'},
-            {'field': 'product_tower_structure', 'label': 'Product Tower'},
-            {'field': 'buyer_activation', 'label': 'Buyer Activation'},
-            {'field': 'product_activation', 'label': 'Product Activation'},
-            {'field': 'buyer_l2_category', 'label': 'Buyer L2 Reg'},
-            {'field': 'product_l2_category', 'label': 'Product L2 Reg'},
-            {'field': 'buyer_total_params', 'label': 'Buyer Params'},
-            {'field': 'product_total_params', 'label': 'Product Params'},
+            {'field': 'buyer_tower_structure', 'label': 'Buyer Tower', 'getter': '_get_buyer_tower_structure'},
+            {'field': 'product_tower_structure', 'label': 'Product Tower', 'getter': '_get_product_tower_structure'},
+            {'field': 'buyer_activation', 'label': 'Buyer Activation', 'getter': '_get_buyer_activation'},
+            {'field': 'product_activation', 'label': 'Product Activation', 'getter': '_get_product_activation'},
+            {'field': 'buyer_l2_category', 'label': 'Buyer L2 Reg', 'getter': '_get_buyer_l2_category'},
+            {'field': 'product_l2_category', 'label': 'Product L2 Reg', 'getter': '_get_product_l2_category'},
+            {'field': 'buyer_total_params', 'label': 'Buyer Params', 'getter': '_get_buyer_total_params'},
+            {'field': 'product_total_params', 'label': 'Product Params', 'getter': '_get_product_total_params'},
             # Ranking tower fields (computed from model_config)
             {'field': 'ranking_tower_structure', 'label': 'Ranking Tower', 'getter': '_get_ranking_tower_structure', 'ranking_only': True},
             {'field': 'ranking_total_params', 'label': 'Ranking Params', 'getter': '_get_ranking_total_params', 'ranking_only': True},
@@ -97,7 +97,8 @@ class HyperparameterAnalyzer:
 
         Args:
             experiments: List of QuickTest instances (completed experiments)
-            model_type: 'retrieval' (higher recall = better) or 'ranking' (lower RMSE = better)
+            model_type: 'retrieval' (higher recall = better), 'ranking' (lower RMSE = better),
+                        or 'hybrid' (uses recall as primary metric, but has ranking tower)
 
         Returns:
             Dictionary with analysis results organized by category:
@@ -166,8 +167,8 @@ class HyperparameterAnalyzer:
         for category, params in self.PARAMETERS.items():
             result[category] = []
             for param_def in params:
-                # Skip ranking_only fields when not analyzing ranking models
-                if param_def.get('ranking_only') and model_type != 'ranking':
+                # Skip ranking_only fields when not analyzing ranking or hybrid models
+                if param_def.get('ranking_only') and model_type not in ('ranking', 'hybrid'):
                     continue
 
                 analysis = self._analyze_parameter(
@@ -579,6 +580,124 @@ class HyperparameterAnalyzer:
             return total_params if total_params > 0 else None
         except Exception:
             return None
+
+    def _get_buyer_tower_structure(self, experiment) -> Optional[str]:
+        """Get buyer tower structure, falling back to model_config if QuickTest field is NULL."""
+        # Try direct field first
+        if experiment.buyer_tower_structure:
+            return experiment.buyer_tower_structure
+
+        # Fall back to model_config
+        try:
+            model_config = experiment.model_config
+            if model_config and model_config.buyer_tower_layers:
+                units = [layer['units'] for layer in model_config.buyer_tower_layers if layer.get('type') == 'dense']
+                return '→'.join(map(str, units)) if units else None
+        except Exception:
+            pass
+        return None
+
+    def _get_product_tower_structure(self, experiment) -> Optional[str]:
+        """Get product tower structure, falling back to model_config if QuickTest field is NULL."""
+        if experiment.product_tower_structure:
+            return experiment.product_tower_structure
+
+        try:
+            model_config = experiment.model_config
+            if model_config and model_config.product_tower_layers:
+                units = [layer['units'] for layer in model_config.product_tower_layers if layer.get('type') == 'dense']
+                return '→'.join(map(str, units)) if units else None
+        except Exception:
+            pass
+        return None
+
+    def _get_buyer_activation(self, experiment) -> Optional[str]:
+        """Get buyer activation, falling back to model_config if QuickTest field is NULL."""
+        if experiment.buyer_activation:
+            return experiment.buyer_activation
+
+        try:
+            model_config = experiment.model_config
+            if model_config and model_config.buyer_tower_layers:
+                activations = [layer.get('activation') for layer in model_config.buyer_tower_layers
+                               if layer.get('type') == 'dense' and layer.get('activation')]
+                return activations[0] if activations else None
+        except Exception:
+            pass
+        return None
+
+    def _get_product_activation(self, experiment) -> Optional[str]:
+        """Get product activation, falling back to model_config if QuickTest field is NULL."""
+        if experiment.product_activation:
+            return experiment.product_activation
+
+        try:
+            model_config = experiment.model_config
+            if model_config and model_config.product_tower_layers:
+                activations = [layer.get('activation') for layer in model_config.product_tower_layers
+                               if layer.get('type') == 'dense' and layer.get('activation')]
+                return activations[0] if activations else None
+        except Exception:
+            pass
+        return None
+
+    def _get_buyer_l2_category(self, experiment) -> Optional[str]:
+        """Get buyer L2 reg category, falling back to model_config if QuickTest field is NULL."""
+        if experiment.buyer_l2_category:
+            return experiment.buyer_l2_category
+
+        try:
+            model_config = experiment.model_config
+            if model_config and model_config.buyer_tower_layers:
+                max_l2 = max((layer.get('l2_reg', 0) or 0) for layer in model_config.buyer_tower_layers)
+                return get_l2_category(max_l2)
+        except Exception:
+            pass
+        return None
+
+    def _get_product_l2_category(self, experiment) -> Optional[str]:
+        """Get product L2 reg category, falling back to model_config if QuickTest field is NULL."""
+        if experiment.product_l2_category:
+            return experiment.product_l2_category
+
+        try:
+            model_config = experiment.model_config
+            if model_config and model_config.product_tower_layers:
+                max_l2 = max((layer.get('l2_reg', 0) or 0) for layer in model_config.product_tower_layers)
+                return get_l2_category(max_l2)
+        except Exception:
+            pass
+        return None
+
+    def _get_buyer_total_params(self, experiment) -> Optional[int]:
+        """Get buyer tower params, falling back to model_config if QuickTest field is NULL."""
+        if experiment.buyer_total_params:
+            return experiment.buyer_total_params
+
+        try:
+            model_config = experiment.model_config
+            fc = experiment.feature_config
+            if model_config and model_config.buyer_tower_layers and fc:
+                input_dim = fc.buyer_tensor_dim or 100
+                return estimate_tower_params(model_config.buyer_tower_layers, input_dim)
+        except Exception:
+            pass
+        return None
+
+    def _get_product_total_params(self, experiment) -> Optional[int]:
+        """Get product tower params, falling back to model_config if QuickTest field is NULL."""
+        if experiment.product_total_params:
+            return experiment.product_total_params
+
+        try:
+            model_config = experiment.model_config
+            fc = experiment.feature_config
+            if model_config and model_config.product_tower_layers and fc:
+                input_dim = fc.product_tensor_dim or 100
+                return estimate_tower_params(model_config.product_tower_layers, input_dim)
+        except Exception:
+            pass
+        return None
 
     def _get_confidence(self, count: int) -> str:
         """

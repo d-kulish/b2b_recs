@@ -5141,13 +5141,17 @@ def _precompute_candidate_embeddings(model, candidates_dataset, batch_size=128):
     The dataset typically contains transaction data with duplicate products.
     This function deduplicates by product ID to ensure each product appears
     exactly once in the candidate index.
+
+    NOTE: candidates_dataset is expected to be ALREADY batched from _input_fn.
+    We iterate directly without calling .batch() again.
     """
     seen_products = set()
     unique_product_ids = []
     unique_embeddings = []
     total_processed = 0
 
-    for batch in candidates_dataset.batch(batch_size):
+    # Dataset is already batched from _input_fn, iterate directly
+    for batch in candidates_dataset:
         # Handle (features, labels) tuple from input_fn
         if isinstance(batch, tuple):
             batch_features = batch[0]
@@ -5659,15 +5663,14 @@ def run_fn(fn_args: tfx.components.FnArgs):
         logging.info("=" * 60)
 
         try:
-            # Check for test split
-            test_split_dir = os.path.join(
-                os.path.dirname(os.path.dirname(fn_args.train_files[0])),
-                'Split-test'
-            )
+            # Check for test split - use tf.io.gfile for GCS compatibility
+            train_files_dir = fn_args.train_files[0].rsplit('/', 1)[0]  # Get parent dir
+            parent_dir = train_files_dir.rsplit('/', 1)[0]  # Go up one more level
+            test_split_dir = f"{{parent_dir}}/Split-test"
             logging.info(f"Looking for test split at: {{test_split_dir}}")
 
-            if os.path.exists(test_split_dir):
-                test_files = glob.glob(os.path.join(test_split_dir, '*.gz'))
+            if tf.io.gfile.exists(test_split_dir):
+                test_files = tf.io.gfile.glob(f"{{test_split_dir}}/*.gz")
                 if test_files:
                     logging.info(f"Found {{len(test_files)}} test files")
 

@@ -28,7 +28,7 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
 import django
 django.setup()
 
-from ml_platform.models import FeatureConfig, ModelConfig, Experiment
+from ml_platform.models import FeatureConfig, ModelConfig, QuickTest
 from ml_platform.configs.services import TrainerModuleGenerator, validate_python_code
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
@@ -202,6 +202,140 @@ if __name__ == '__main__':
 '''
 
 
+def create_quicktest_record(feature_config, model_config, run_id: str, epochs: int, learning_rate: float) -> 'QuickTest':
+    """Create a QuickTest record to track this test run."""
+    from django.utils import timezone
+
+    # Get next experiment number
+    last_qt = QuickTest.objects.order_by('-experiment_number').first()
+    next_exp_num = (last_qt.experiment_number or 0) + 1 if last_qt else 1
+
+    qt = QuickTest.objects.create(
+        feature_config=feature_config,
+        model_config=model_config,
+        experiment_name=f'Multitask Test {run_id}',
+        experiment_description=f'Custom job test for multitask trainer (FC#{feature_config.id}, MC#{model_config.id})',
+        experiment_number=next_exp_num,
+        status='running',
+        data_sample_percent=100,
+        split_strategy='random',
+        epochs=epochs,
+        batch_size=4096,
+        learning_rate=learning_rate,
+        gcs_artifacts_path=f'gs://{ARTIFACTS_BUCKET}/{run_id}',
+        submitted_at=timezone.now(),
+        started_at=timezone.now(),
+    )
+    logger.info(f"Created QuickTest record: ID={qt.id}, Exp#{qt.experiment_number}")
+    return qt
+
+
+def wait_for_job_completion(job, timeout_minutes: int = 30) -> str:
+    """Wait for job to complete and return final state."""
+    import time
+    from google.cloud import aiplatform
+
+    logger.info(f"Waiting for job completion (timeout: {timeout_minutes} min)...")
+    start_time = time.time()
+    timeout_seconds = timeout_minutes * 60
+    job_name = job.resource_name
+
+    while True:
+        # Re-fetch job to get latest state
+        current_job = aiplatform.CustomJob.get(job_name)
+        state = current_job.state.name
+        elapsed = int(time.time() - start_time)
+
+        if state in ['JOB_STATE_SUCCEEDED', 'JOB_STATE_FAILED', 'JOB_STATE_CANCELLED']:
+            logger.info(f"Job finished with state: {state} (after {elapsed}s)")
+            return state
+
+        if elapsed > timeout_seconds:
+            logger.error(f"Job timed out after {timeout_minutes} minutes")
+            return 'TIMEOUT'
+
+        logger.info(f"Job state: {state} (elapsed: {elapsed}s)")
+        time.sleep(30)  # Poll every 30 seconds
+
+
+def fetch_metrics_from_gcs(gcs_output_path: str) -> dict:
+    """Fetch training_metrics.json from GCS and extract final metrics."""
+    from google.cloud import storage
+    import json
+
+    # Parse bucket and path
+    path = gcs_output_path.replace('gs://', '')
+    bucket_name = path.split('/')[0]
+    blob_path = '/'.join(path.split('/')[1:]) + '/training_metrics.json'
+
+    logger.info(f"Fetching metrics from gs://{bucket_name}/{blob_path}")
+
+    client = storage.Client()
+    bucket = client.bucket(bucket_name)
+    blob = bucket.blob(blob_path)
+
+    if not blob.exists():
+        logger.warning(f"Metrics file not found: {blob_path}")
+        return {}
+
+    content = blob.download_as_string()
+    metrics_data = json.loads(content)
+
+    # Extract final metrics from the structure
+    final_metrics = metrics_data.get('final_metrics', {})
+    logger.info(f"Retrieved final metrics: {final_metrics}")
+
+    return final_metrics
+
+
+def update_quicktest_with_metrics(qt: 'QuickTest', metrics: dict, job_state: str):
+    """Update QuickTest record with metrics from completed job."""
+    from django.utils import timezone
+
+    # Map job state to QuickTest status
+    status_map = {
+        'JOB_STATE_SUCCEEDED': 'completed',
+        'JOB_STATE_FAILED': 'failed',
+        'JOB_STATE_CANCELLED': 'cancelled',
+        'TIMEOUT': 'failed',
+    }
+
+    qt.status = status_map.get(job_state, 'failed')
+    qt.completed_at = timezone.now()
+
+    if qt.status == 'completed' and metrics:
+        # Retrieval metrics
+        qt.recall_at_5 = metrics.get('recall_at_5')
+        qt.recall_at_10 = metrics.get('recall_at_10')
+        qt.recall_at_50 = metrics.get('recall_at_50')
+        qt.recall_at_100 = metrics.get('recall_at_100')
+
+        # Ranking metrics
+        qt.rmse = metrics.get('rmse') or metrics.get('val_rmse')
+        qt.mae = metrics.get('mae') or metrics.get('val_mae')
+        qt.test_rmse = metrics.get('test_rmse')
+        qt.test_mae = metrics.get('test_mae')
+
+        # Loss
+        qt.loss = metrics.get('final_loss') or metrics.get('loss')
+
+        logger.info(f"Metrics saved to QuickTest #{qt.experiment_number}:")
+        logger.info(f"  Recall@5:  {qt.recall_at_5}")
+        logger.info(f"  Recall@10: {qt.recall_at_10}")
+        logger.info(f"  Recall@50: {qt.recall_at_50}")
+        logger.info(f"  Recall@100: {qt.recall_at_100}")
+        logger.info(f"  RMSE: {qt.rmse}")
+        logger.info(f"  MAE: {qt.mae}")
+        logger.info(f"  Test RMSE: {qt.test_rmse}")
+        logger.info(f"  Test MAE: {qt.test_mae}")
+    elif qt.status == 'failed':
+        qt.error_message = f'Job failed with state: {job_state}'
+        logger.error(f"Job failed: {job_state}")
+
+    qt.save()
+    logger.info(f"QuickTest #{qt.experiment_number} updated with status: {qt.status}")
+
+
 def main():
     parser = argparse.ArgumentParser(description='Test services.py trainer generation')
     parser.add_argument('--feature-config-id', type=int, default=5, help='FeatureConfig ID')
@@ -211,6 +345,9 @@ def main():
     parser.add_argument('--learning-rate', type=float, default=0.1, help='Learning rate')
     parser.add_argument('--output-gcs-path', type=str, default=None, help='Custom GCS output path (e.g., gs://bucket/qt-94-xxx)')
     parser.add_argument('--dry-run', action='store_true', help='Generate code but do not submit job')
+    parser.add_argument('--create-quicktest', action='store_true', help='Create a QuickTest record in Django DB')
+    parser.add_argument('--wait', action='store_true', help='Wait for job completion and fetch metrics')
+    parser.add_argument('--timeout', type=int, default=30, help='Timeout in minutes for --wait (default: 30)')
 
     args = parser.parse_args()
 
@@ -291,6 +428,13 @@ def main():
         logger.info(f"You can inspect it with: gsutil cat {trainer_gcs_path}")
         return
 
+    # Create QuickTest record if requested
+    quicktest = None
+    if args.create_quicktest:
+        quicktest = create_quicktest_record(
+            feature_config, model_config, run_id, args.epochs, args.learning_rate
+        )
+
     # Submit CustomJob
     aiplatform.init(project=PROJECT_ID, location=REGION)
 
@@ -310,6 +454,11 @@ def main():
     logger.info("Submitting CustomJob...")
     job.submit()
 
+    # Update QuickTest with job info
+    if quicktest:
+        quicktest.vertex_pipeline_job_name = job.resource_name
+        quicktest.save()
+
     logger.info(f"""
 ================================================================================
 CUSTOM JOB SUBMITTED - Testing services.py TrainerModuleGenerator
@@ -317,6 +466,7 @@ CUSTOM JOB SUBMITTED - Testing services.py TrainerModuleGenerator
 Run ID: {run_id}
 Job: {job.resource_name}
 Epochs: {args.epochs}
+QuickTest: {'#' + str(quicktest.experiment_number) if quicktest else 'Not created (use --create-quicktest)'}
 
 Monitor:
   gcloud ai custom-jobs describe {job.resource_name.split('/')[-1]} --region={REGION}
@@ -335,6 +485,43 @@ Verify metrics after completion:
   gsutil cat {gcs_output_path}/training_metrics.json | python -m json.tool | head -50
 ================================================================================
 """)
+
+    # Wait for completion and fetch metrics if requested
+    if args.wait:
+        job_state = wait_for_job_completion(job, timeout_minutes=args.timeout)
+
+        if job_state == 'JOB_STATE_SUCCEEDED':
+            # Fetch metrics from GCS
+            metrics = fetch_metrics_from_gcs(gcs_output_path)
+
+            if quicktest:
+                update_quicktest_with_metrics(quicktest, metrics, job_state)
+
+            # Print final summary
+            logger.info(f"""
+================================================================================
+JOB COMPLETED SUCCESSFULLY
+================================================================================
+Final Metrics:
+  Recall@5:   {metrics.get('recall_at_5', 'N/A')}
+  Recall@10:  {metrics.get('recall_at_10', 'N/A')}
+  Recall@50:  {metrics.get('recall_at_50', 'N/A')}
+  Recall@100: {metrics.get('recall_at_100', 'N/A')}
+  RMSE:       {metrics.get('rmse', metrics.get('val_rmse', 'N/A'))}
+  MAE:        {metrics.get('mae', metrics.get('val_mae', 'N/A'))}
+  Test RMSE:  {metrics.get('test_rmse', 'N/A')}
+  Test MAE:   {metrics.get('test_mae', 'N/A')}
+
+QuickTest: {'#' + str(quicktest.experiment_number) + ' (ID: ' + str(quicktest.id) + ')' if quicktest else 'Not created'}
+
+Verify in Django:
+  python -c "from ml_platform.models import QuickTest; qt=QuickTest.objects.get(id={quicktest.id if quicktest else 0}); print(f'recall_at_100={{qt.recall_at_100}}, rmse={{qt.rmse}}')"
+================================================================================
+""")
+        else:
+            if quicktest:
+                update_quicktest_with_metrics(quicktest, {}, job_state)
+            logger.error(f"Job failed with state: {job_state}")
 
 
 if __name__ == '__main__':

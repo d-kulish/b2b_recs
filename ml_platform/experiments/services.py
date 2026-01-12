@@ -27,7 +27,12 @@ def validate_experiment_config(feature_config, model_config):
     """
     Validate that feature config and model config are compatible.
 
-    For ranking models:
+    Compatibility matrix:
+    - Retrieval ModelConfig: Only works with Retrieval FeatureConfig (no target)
+    - Ranking ModelConfig: Only works with Ranking FeatureConfig (has target)
+    - Multitask ModelConfig: Only works with Ranking FeatureConfig (has target)
+
+    For ranking/multitask models:
     - Feature config must have a target column
     - Feature config must be of type 'ranking'
 
@@ -47,24 +52,47 @@ def validate_experiment_config(feature_config, model_config):
     fc_type = getattr(feature_config, 'config_type', 'retrieval')
     mc_type = getattr(model_config, 'model_type', 'retrieval')
 
+    # Retrieval FeatureConfig can ONLY be used with Retrieval ModelConfig
     if fc_type == 'retrieval' and mc_type != 'retrieval':
         errors.append(
-            f"Feature config '{feature_config.name}' is for Retrieval models, "
-            f"but Model config '{model_config.name}' is {model_config.get_model_type_display()}"
+            f"Feature config '{feature_config.name}' is for Retrieval models (no target column), "
+            f"but Model config '{model_config.name}' is {model_config.get_model_type_display()}. "
+            f"Ranking and Multitask models require a Feature config with a target column."
         )
 
+    # Ranking FeatureConfig can be used with Ranking or Multitask ModelConfig
     if fc_type == 'ranking' and mc_type == 'retrieval':
         errors.append(
             f"Feature config '{feature_config.name}' is for Ranking models (has target column), "
-            f"but Model config '{model_config.name}' is Retrieval"
+            f"but Model config '{model_config.name}' is Retrieval. "
+            f"Use a Retrieval feature config (without target column) for retrieval models."
         )
 
-    # Check target column for ranking models
+    # Check target column for ranking/multitask models
     if mc_type in ['ranking', 'multitask']:
         if not feature_config.target_column:
             errors.append(
-                f"Model config '{model_config.name}' requires a target column, "
-                f"but Feature config '{feature_config.name}' has no target column defined"
+                f"Model config '{model_config.name}' ({model_config.get_model_type_display()}) requires a target column, "
+                f"but Feature config '{feature_config.name}' has no target column defined. "
+                f"Please add a target column to the feature config."
+            )
+
+    # Additional multitask validation
+    if mc_type == 'multitask':
+        # Check loss weights
+        retrieval_weight = getattr(model_config, 'retrieval_weight', 1.0)
+        ranking_weight = getattr(model_config, 'ranking_weight', 0.0)
+        if retrieval_weight == 0 and ranking_weight == 0:
+            errors.append(
+                f"Multitask model '{model_config.name}' has both retrieval_weight and ranking_weight set to 0. "
+                f"At least one loss weight must be greater than 0."
+            )
+
+        # Check rating head layers
+        if not getattr(model_config, 'rating_head_layers', None):
+            errors.append(
+                f"Multitask model '{model_config.name}' requires rating_head_layers to be configured "
+                f"for the ranking component."
             )
 
     return (len(errors) == 0, errors)

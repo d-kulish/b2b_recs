@@ -744,18 +744,70 @@ def _get_model_metrics(quick_test):
 
     First tries model fields, then falls back to training_history_json.final_metrics.
     Returns dict with:
-    - config_type: 'retrieval' or 'ranking'
+    - config_type: 'retrieval', 'ranking', or 'multitask'
     - For retrieval: recall_at_5, recall_at_10, recall_at_50, recall_at_100
     - For ranking: rmse, mae, test_rmse, test_mae
+    - For multitask: ALL metrics (both retrieval and ranking)
     """
     # Determine model type from feature config
     config_type = 'retrieval'
     if quick_test.feature_config:
         config_type = getattr(quick_test.feature_config, 'config_type', 'retrieval')
 
+    # Also check model_config for multitask (feature_config may still be 'ranking' type)
+    if quick_test.model_config:
+        model_type = getattr(quick_test.model_config, 'model_type', None)
+        if model_type == 'multitask':
+            config_type = 'multitask'
+
     metrics = {'config_type': config_type}
 
-    if config_type == 'ranking':
+    if config_type == 'multitask':
+        # Multitask: Return BOTH retrieval and ranking metrics
+        metrics.update({
+            # Retrieval metrics
+            'recall_at_5': quick_test.recall_at_5,
+            'recall_at_10': quick_test.recall_at_10,
+            'recall_at_50': quick_test.recall_at_50,
+            'recall_at_100': quick_test.recall_at_100,
+            # Ranking metrics
+            'rmse': quick_test.rmse,
+            'mae': quick_test.mae,
+            'test_rmse': quick_test.test_rmse,
+            'test_mae': quick_test.test_mae,
+        })
+
+        # Fallback to training_history_json for all metrics
+        try:
+            history = quick_test.training_history_json or {}
+            final_metrics = history.get('final_metrics', {})
+            if final_metrics:
+                # Retrieval fallbacks
+                if metrics['recall_at_5'] is None:
+                    metrics['recall_at_5'] = final_metrics.get('test_recall_at_5')
+                if metrics['recall_at_10'] is None:
+                    metrics['recall_at_10'] = final_metrics.get('test_recall_at_10')
+                if metrics['recall_at_50'] is None:
+                    metrics['recall_at_50'] = final_metrics.get('test_recall_at_50')
+                if metrics['recall_at_100'] is None:
+                    metrics['recall_at_100'] = final_metrics.get('test_recall_at_100')
+                # Ranking fallbacks
+                if metrics['rmse'] is None:
+                    metrics['rmse'] = (final_metrics.get('final_val_rmse') or
+                                       final_metrics.get('final_rmse') or
+                                       final_metrics.get('rmse'))
+                if metrics['mae'] is None:
+                    metrics['mae'] = (final_metrics.get('final_val_mae') or
+                                      final_metrics.get('final_mae') or
+                                      final_metrics.get('mae'))
+                if metrics['test_rmse'] is None:
+                    metrics['test_rmse'] = final_metrics.get('test_rmse')
+                if metrics['test_mae'] is None:
+                    metrics['test_mae'] = final_metrics.get('test_mae')
+        except Exception:
+            pass
+
+    elif config_type == 'ranking':
         # Ranking model metrics
         metrics.update({
             'rmse': quick_test.rmse,
@@ -792,7 +844,7 @@ def _get_model_metrics(quick_test):
     else:
         # Retrieval model metrics
         metrics.update({
-            'recall_at_5': None,
+            'recall_at_5': quick_test.recall_at_5,
             'recall_at_10': quick_test.recall_at_10,
             'recall_at_50': quick_test.recall_at_50,
             'recall_at_100': quick_test.recall_at_100,
@@ -889,7 +941,21 @@ def _serialize_quick_test(quick_test, include_details=False):
     }
 
     # Add metrics based on model type
-    if config_type == 'ranking':
+    if config_type == 'multitask':
+        # Multitask: Include BOTH retrieval and ranking metrics
+        data.update({
+            # Retrieval metrics
+            'recall_at_5': model_metrics.get('recall_at_5'),
+            'recall_at_10': model_metrics.get('recall_at_10'),
+            'recall_at_50': model_metrics.get('recall_at_50'),
+            'recall_at_100': model_metrics.get('recall_at_100'),
+            # Ranking metrics
+            'rmse': model_metrics.get('rmse'),
+            'mae': model_metrics.get('mae'),
+            'test_rmse': model_metrics.get('test_rmse'),
+            'test_mae': model_metrics.get('test_mae'),
+        })
+    elif config_type == 'ranking':
         # Ranking model metrics
         data.update({
             'rmse': model_metrics.get('rmse'),
@@ -918,7 +984,21 @@ def _serialize_quick_test(quick_test, include_details=False):
 
     if include_details:
         # Include full results and metrics
-        if config_type == 'ranking':
+        if config_type == 'multitask':
+            data['metrics'] = {
+                'loss': quick_test.loss,
+                # Retrieval metrics
+                'recall_at_5': getattr(quick_test, 'recall_at_5', None),
+                'recall_at_10': quick_test.recall_at_10,
+                'recall_at_50': quick_test.recall_at_50,
+                'recall_at_100': quick_test.recall_at_100,
+                # Ranking metrics
+                'rmse': quick_test.rmse,
+                'mae': quick_test.mae,
+                'test_rmse': quick_test.test_rmse,
+                'test_mae': quick_test.test_mae,
+            }
+        elif config_type == 'ranking':
             data['metrics'] = {
                 'loss': quick_test.loss,
                 'rmse': quick_test.rmse,

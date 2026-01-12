@@ -31,11 +31,58 @@ This document provides **high-level specifications** for the Experiments domain.
 | Pipeline Compilation | On-demand at submission time |
 | Sampling | TFX-level (ExampleGen/Transform) |
 | Train/Val Split | 3 options: random (hash-based), time_holdout (date-filtered + hash), strict_time (true temporal) |
-| Model Type | Retrieval and Ranking (see [ranking_implementation.md](ranking_implementation.md)) |
+| Model Type | Retrieval, Ranking, and Multitask (see [ranking_implementation.md](ranking_implementation.md), [multi_task.md](multi_task.md)) |
 
 ---
 
 ## Recent Updates (December 2025 - January 2026)
+
+### Multitask (Hybrid) Model Implementation (2026-01-12)
+
+**Major Feature:** Implemented multitask model support that combines both retrieval and ranking objectives in a single model with weighted loss optimization.
+
+👉 **[multi_task.md](multi_task.md)** - Complete implementation documentation
+
+#### Overview
+
+Multitask models train a single model that optimizes both objectives simultaneously:
+
+| Component | Purpose | Output |
+|-----------|---------|--------|
+| **Retrieval Task** | Contrastive learning for candidate generation | Top-K candidates |
+| **Ranking Task** | Rating prediction for relevance scoring | Predicted ratings |
+| **Weighted Loss** | `w₁ * L_retrieval + w₂ * L_ranking` | Combined optimization |
+
+#### Implementation Summary
+
+| Area | Changes |
+|------|---------|
+| **Trainer Code Generation** | New `_generate_multitask_trainer()` method (~1,100 lines) in `TrainerModuleGenerator` |
+| **Model Architecture** | `MultitaskModel(tfrs.Model)` with shared towers, dual tasks, rating head |
+| **Serving Model** | `MultitaskServingModel` with dual signatures (`serve` for retrieval, `serve_ranking` for ranking) |
+| **Backend API** | `_get_model_metrics()` returns all 8 metrics; `_serialize_quick_test()` includes both metric types |
+| **Validation** | Enhanced `validate_experiment_config()` checks loss weights, rating head, target column |
+| **Frontend** | Two-row metrics display for multitask experiments (retrieval + ranking metrics) |
+
+#### Files Modified
+
+| File | Changes |
+|------|---------|
+| `ml_platform/configs/services.py` | Dispatch logic (lines 1612-1613) + 10 new multitask methods (lines 4667-5767) |
+| `ml_platform/experiments/api.py` | `_get_model_metrics()`, `_serialize_quick_test()` for multitask (lines 741-869, 943-1016) |
+| `ml_platform/experiments/services.py` | Multitask validation in `validate_experiment_config()` (lines 26-98) |
+| `templates/ml_platform/model_experiments.html` | CSS + JS for dual metrics display |
+| `scripts/test_multitask_generation.py` | New test script (validates syntax + 11 component checks) |
+
+#### Key Features
+
+1. **Configurable Loss Weights**: UI sliders for `retrieval_weight` and `ranking_weight` (0.0 - 2.0)
+2. **Dual Serving Signatures**: `serving_default` (retrieval) + `serve_ranking` (ranking)
+3. **Comprehensive Metrics**: 4 retrieval metrics (Recall@5/10/50/100) + 4 ranking metrics (RMSE/MAE, Test RMSE/MAE)
+4. **3-Tower Weight Tracking**: Query, Candidate, and Rating Head tower statistics logged to MLflow
+5. **Validation**: Ensures target_column, rating_head_layers, and valid loss weights
+
+---
 
 ### ScaNN (Scalable Nearest Neighbors) Implementation (2026-01-11)
 

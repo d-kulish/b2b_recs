@@ -450,6 +450,43 @@
     .exp-card-metric-value.empty {
         color: #9ca3af;
     }
+    /* Multitask metrics display - two rows of metrics */
+    .exp-card-metrics-multitask {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        width: 100%;
+    }
+    .exp-card-metrics-section {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+    .exp-card-metrics-section-label {
+        font-size: 9px;
+        color: #6b7280;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+    .exp-card-metrics-section-label i {
+        font-size: 8px;
+    }
+    .exp-card-metrics-multitask .exp-card-metrics-row {
+        gap: 4px;
+    }
+    .exp-card-metrics-multitask .exp-card-metric {
+        padding: 4px 2px;
+    }
+    .exp-card-metrics-multitask .exp-card-metric-label {
+        font-size: 9px;
+    }
+    .exp-card-metrics-multitask .exp-card-metric-value {
+        font-size: 11px;
+    }
     /* Column 4: Actions (20%) */
     .exp-card-col-actions {
         width: 20%;
@@ -1818,6 +1855,47 @@
         font-size: 18px;
         font-weight: 600;
         color: #1f2937;
+    }
+
+    /* Multitask metrics display in detail view */
+    .exp-view-metrics-multitask {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        width: 100%;
+    }
+    .exp-view-metrics-section {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+    .exp-view-metrics-section-header {
+        font-size: 12px;
+        font-weight: 600;
+        color: #374151;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding-bottom: 4px;
+        border-bottom: 1px solid #e5e7eb;
+    }
+    .exp-view-metrics-section-header i {
+        font-size: 11px;
+        color: #6b7280;
+    }
+    .exp-view-metrics-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 8px;
+    }
+    .exp-view-metrics-multitask .exp-view-metric-card {
+        padding: 8px 6px;
+    }
+    .exp-view-metrics-multitask .exp-view-metric-card-label {
+        font-size: 10px;
+    }
+    .exp-view-metrics-multitask .exp-view-metric-card-value {
+        font-size: 14px;
     }
 
     /* Features Config (Tensor Visualization) */
@@ -5616,11 +5694,52 @@ function renderMetricsRow(exp) {
     const formatRecall = v => v != null ? (v * 100).toFixed(1) + '%' : '--';
     const formatRMSE = v => v != null ? v.toFixed(4) : '--';
 
-    // Check if this is a ranking model
-    const isRanking = exp.feature_config_type === 'ranking';
+    // Check model type
+    const configType = exp.feature_config_type;
 
     let metrics;
-    if (isRanking) {
+    if (configType === 'multitask') {
+        // Multitask: Show BOTH retrieval and ranking metrics in two rows
+        const retrievalMetrics = [
+            { label: 'R@5', value: exp.recall_at_5, format: formatRecall },
+            { label: 'R@10', value: exp.recall_at_10, format: formatRecall },
+            { label: 'R@50', value: exp.recall_at_50, format: formatRecall },
+            { label: 'R@100', value: exp.recall_at_100, format: formatRecall }
+        ];
+        const rankingMetrics = [
+            { label: 'RMSE', value: exp.rmse, format: formatRMSE },
+            { label: 'Test RMSE', value: exp.test_rmse, format: formatRMSE },
+            { label: 'MAE', value: exp.mae, format: formatRMSE },
+            { label: 'Test MAE', value: exp.test_mae, format: formatRMSE }
+        ];
+
+        return `
+            <div class="exp-card-metrics-multitask">
+                <div class="exp-card-metrics-section">
+                    <div class="exp-card-metrics-section-label"><i class="fas fa-search"></i> Retrieval</div>
+                    <div class="exp-card-metrics-row">
+                        ${retrievalMetrics.map(m => `
+                            <div class="exp-card-metric">
+                                <div class="exp-card-metric-label">${m.label}</div>
+                                <div class="exp-card-metric-value ${m.value == null ? 'empty' : ''}">${m.format(m.value)}</div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+                <div class="exp-card-metrics-section">
+                    <div class="exp-card-metrics-section-label"><i class="fas fa-star"></i> Ranking</div>
+                    <div class="exp-card-metrics-row">
+                        ${rankingMetrics.map(m => `
+                            <div class="exp-card-metric">
+                                <div class="exp-card-metric-label">${m.label}</div>
+                                <div class="exp-card-metric-value ${m.value == null ? 'empty' : ''}">${m.format(m.value)}</div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            </div>
+        `;
+    } else if (configType === 'ranking') {
         // Ranking model metrics - RMSE/MAE (lower is better)
         // Group by metric type: RMSEs together, MAEs together
         metrics = [
@@ -7747,7 +7866,59 @@ function renderMetricsSummary(metrics, useTestPrefix = false, configType = 'retr
     const formatRMSE = v => v != null ? v.toFixed(4) : 'N/A';
 
     let items;
-    if (configType === 'ranking') {
+    if (configType === 'multitask') {
+        // Multitask: Show BOTH retrieval and ranking metrics in organized sections
+        const prefix = useTestPrefix ? 'test_' : '';
+        const rmse = metrics['rmse'] ?? metrics['final_val_rmse'] ?? metrics['final_rmse'];
+        const mae = metrics['mae'] ?? metrics['final_val_mae'] ?? metrics['final_mae'];
+        const testRmse = metrics['test_rmse'];
+        const testMae = metrics['test_mae'];
+
+        const retrievalItems = [
+            { label: 'Recall@5', value: metrics[prefix + 'recall_at_5'], format: formatRecall },
+            { label: 'Recall@10', value: metrics[prefix + 'recall_at_10'], format: formatRecall },
+            { label: 'Recall@50', value: metrics[prefix + 'recall_at_50'], format: formatRecall },
+            { label: 'Recall@100', value: metrics[prefix + 'recall_at_100'], format: formatRecall }
+        ];
+        const rankingItems = [
+            { label: 'RMSE', value: rmse, format: formatRMSE },
+            { label: 'Test RMSE', value: testRmse, format: formatRMSE },
+            { label: 'MAE', value: mae, format: formatRMSE },
+            { label: 'Test MAE', value: testMae, format: formatRMSE }
+        ];
+
+        container.innerHTML = `
+            <div class="exp-view-metrics-multitask">
+                <div class="exp-view-metrics-section">
+                    <div class="exp-view-metrics-section-header">
+                        <i class="fas fa-search"></i> Retrieval Metrics
+                    </div>
+                    <div class="exp-view-metrics-grid">
+                        ${retrievalItems.map(item => `
+                            <div class="exp-view-metric-card">
+                                <div class="exp-view-metric-card-label">${item.label}</div>
+                                <div class="exp-view-metric-card-value">${item.format(item.value)}</div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+                <div class="exp-view-metrics-section">
+                    <div class="exp-view-metrics-section-header">
+                        <i class="fas fa-star"></i> Ranking Metrics
+                    </div>
+                    <div class="exp-view-metrics-grid">
+                        ${rankingItems.map(item => `
+                            <div class="exp-view-metric-card">
+                                <div class="exp-view-metric-card-label">${item.label}</div>
+                                <div class="exp-view-metric-card-value">${item.format(item.value)}</div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            </div>
+        `;
+        return;
+    } else if (configType === 'ranking') {
         // Ranking model metrics - show all 4 metrics: training RMSE/MAE and test RMSE/MAE
         // For ranking, we always show both training and test metrics regardless of useTestPrefix
         // Training metrics come from rmse/mae (or final_val_rmse/final_val_mae in training history)

@@ -1610,8 +1610,7 @@ class TrainerModuleGenerator:
         if self.model_type == 'ranking':
             return self._generate_ranking_trainer()
         elif self.model_type == 'multitask':
-            # Future: implement multitask trainer
-            return self._generate_retrieval_trainer()  # Fallback for now
+            return self._generate_multitask_trainer()
         else:
             return self._generate_retrieval_trainer()
 
@@ -4648,6 +4647,1108 @@ def run_fn(fn_args: tfx.components.FnArgs):
         with tf.io.gfile.GFile(params_path, 'w') as f:
             f.write(json.dumps(transform_params_full, indent=2))
         logging.info(f"Transform params saved to {{params_path}}")
+
+    except Exception as e:
+        logging.error(f"Training failed: {{e}}")
+        import traceback
+        traceback.print_exc()
+        raise
+
+    finally:
+        # Save all collected metrics to GCS
+        if _metrics_collector:
+            try:
+                _metrics_collector.save_to_gcs()
+                logging.info("Training metrics saved to GCS successfully")
+            except Exception as e:
+                logging.warning(f"Error saving metrics to GCS: {{e}}")
+'''
+
+    # =========================================================================
+    # MULTITASK MODEL GENERATION METHODS
+    # =========================================================================
+
+    def _generate_multitask_trainer(self) -> str:
+        """Generate trainer module for Multitask (retrieval + ranking) models."""
+        # Collect all features organized by type
+        buyer_by_type = self._collect_features_by_type(self.buyer_features)
+        product_by_type = self._collect_features_by_type(self.product_features)
+
+        # Build code sections
+        sections = [
+            self._generate_header_multitask(),
+            self._generate_imports(),
+            self._generate_constants_multitask(),
+            self._generate_input_fn_multitask(),
+            self._generate_buyer_model(buyer_by_type),
+            self._generate_product_model(product_by_type),
+            self._generate_multitask_model(),
+            self._generate_serve_fn_multitask(),
+            self._generate_metrics_callback_multitask(),
+            self._generate_run_fn_multitask(),
+        ]
+
+        return '\n'.join(sections)
+
+    def _generate_header_multitask(self) -> str:
+        """Generate file header for multitask model."""
+        buyer_cols = [f.get('display_name') or f.get('column', '?') for f in self.buyer_features]
+        product_cols = [f.get('display_name') or f.get('column', '?') for f in self.product_features]
+        target_col = self.target_column.get('display_name') or self.target_column.get('column') if self.target_column else 'N/A'
+
+        buyer_layer_summary = self._summarize_layers(self.buyer_tower_layers)
+        product_layer_summary = self._summarize_layers(self.product_tower_layers)
+        rating_head_summary = self._summarize_layers(self.rating_head_layers)
+
+        return f'''# Auto-generated TFX Trainer Module (MULTITASK)
+# FeatureConfig: "{self.feature_config.name}" (ID: {self.feature_config.id})
+# ModelConfig: "{self.model_config.name}" (ID: {self.model_config.id})
+# Generated at: {datetime.utcnow().isoformat()}Z
+#
+# === Feature Configuration ===
+# BuyerModel features: {', '.join(buyer_cols) if buyer_cols else 'none'}
+# ProductModel features: {', '.join(product_cols) if product_cols else 'none'}
+# Target column: {target_col}
+#
+# === Model Architecture (MULTITASK) ===
+# Buyer tower: {buyer_layer_summary}
+# Product tower: {product_layer_summary}
+# Rating head: {rating_head_summary}
+# Output embedding dim: {self.output_embedding_dim}
+#
+# === Training Configuration ===
+# Optimizer: {self.optimizer} (lr={self.learning_rate})
+# Loss function: {self.loss_function}
+# Retrieval weight: {self.model_config.retrieval_weight}
+# Ranking weight: {self.model_config.ranking_weight}
+# Batch size: {self.batch_size}
+# Epochs: {self.epochs}
+# Retrieval: {self.retrieval_algorithm} (top_k={self.top_k})
+#
+# This module is designed for TFX Trainer component.
+# Multitask model jointly optimizes retrieval and ranking tasks.
+'''
+
+    def _generate_constants_multitask(self) -> str:
+        """Generate constants for multitask model including both retrieval and ranking configs."""
+        target_col = self.target_column.get('display_name') or self.target_column.get('column') if self.target_column else 'target'
+
+        # Extract transform flags
+        transforms = self.target_column.get('transforms', {}) if self.target_column else {}
+        normalize_applied = transforms.get('normalize', {}).get('enabled', False)
+        log_applied = transforms.get('log_transform', {}).get('enabled', False)
+
+        # Handle clip config (backward compatible)
+        clip_config = transforms.get('clip_outliers', {})
+        if 'lower' in clip_config or 'upper' in clip_config:
+            clip_lower_applied = clip_config.get('lower', {}).get('enabled', False)
+            clip_upper_applied = clip_config.get('upper', {}).get('enabled', False)
+        else:
+            clip_lower_applied = False
+            clip_upper_applied = clip_config.get('enabled', False)
+
+        return f'''
+# =============================================================================
+# CONSTANTS (MULTITASK)
+# =============================================================================
+
+OUTPUT_EMBEDDING_DIM = {self.output_embedding_dim}
+BATCH_SIZE = {self.batch_size}
+EPOCHS = {self.epochs}
+LEARNING_RATE = {self.learning_rate}
+
+# Retrieval configuration
+RETRIEVAL_ALGORITHM = '{self.retrieval_algorithm}'
+TOP_K = {self.top_k}
+SCANN_NUM_LEAVES = {self.scann_num_leaves}
+SCANN_LEAVES_TO_SEARCH = {self.scann_leaves_to_search}
+
+# Ranking configuration
+LABEL_KEY = '{target_col}_target'
+TARGET_COL = '{target_col}'
+
+# Multitask loss weights
+RETRIEVAL_WEIGHT = {self.model_config.retrieval_weight}
+RANKING_WEIGHT = {self.model_config.ranking_weight}
+
+# OOV buckets (must match Transform preprocessing)
+NUM_OOV_BUCKETS = 1
+
+# Transform flags for inverse transform at serving time
+NORMALIZE_APPLIED = {normalize_applied}
+LOG_APPLIED = {log_applied}
+CLIP_LOWER_APPLIED = {clip_lower_applied}
+CLIP_UPPER_APPLIED = {clip_upper_applied}
+'''
+
+    def _generate_input_fn_multitask(self) -> str:
+        """Generate input function with label_key for multitask models (same as ranking)."""
+        return '''
+# =============================================================================
+# INPUT FUNCTION (Multitask - with label)
+# =============================================================================
+
+def _input_fn(
+    file_pattern: List[str],
+    data_accessor: tfx.components.DataAccessor,
+    tf_transform_output: tft.TFTransformOutput,
+    batch_size: int = BATCH_SIZE
+) -> tf.data.Dataset:
+    """
+    Generate dataset for multitask model training.
+
+    Returns tuples of (features_dict, label) for supervised learning.
+    The label is extracted from features using label_key for the ranking task.
+    """
+    return data_accessor.tf_dataset_factory(
+        file_pattern,
+        tfxio.TensorFlowDatasetOptions(
+            batch_size=batch_size,
+            label_key=LABEL_KEY,
+            num_epochs=1  # CRITICAL: Must be 1 for finite dataset
+        ),
+        tf_transform_output.transformed_metadata.schema
+    )
+'''
+
+    def _generate_multitask_model(self) -> str:
+        """Generate MultitaskModel class with both retrieval and ranking tasks."""
+        # Generate tower layer code for buyer and product
+        buyer_layers_code = self._generate_tower_layers_code(self.buyer_tower_layers, 'query')
+        product_layers_code = self._generate_tower_layers_code(self.product_tower_layers, 'candidate')
+
+        # Generate rating head layers code
+        rating_head_code = self._generate_rating_head_code()
+
+        # Get loss function
+        loss_mapping = {
+            'mse': 'tf.keras.losses.MeanSquaredError()',
+            'binary_crossentropy': 'tf.keras.losses.BinaryCrossentropy()',
+            'huber': 'tf.keras.losses.Huber()',
+        }
+        loss_class = loss_mapping.get(self.loss_function, 'tf.keras.losses.MeanSquaredError()')
+
+        return f'''
+# =============================================================================
+# MULTITASK MODEL (Retrieval + Ranking)
+# =============================================================================
+
+class MultitaskModel(tfrs.Model):
+    """
+    Multitask model combining retrieval and ranking tasks.
+
+    Architecture:
+    - Query tower: BuyerModel → Dense layers → {self.output_embedding_dim}D embedding
+    - Candidate tower: ProductModel → Dense layers → {self.output_embedding_dim}D embedding
+    - Retrieval task: Dot product of embeddings (for candidate retrieval)
+    - Ranking task: Concatenated embeddings → Rating head → scalar (for scoring)
+
+    Loss: RETRIEVAL_WEIGHT * retrieval_loss + RANKING_WEIGHT * ranking_loss
+
+    Benefits:
+    - Transfer learning: abundant retrieval signal helps sparse ranking predictions
+    - Unified model: single deployment for both tasks
+    - Shared embeddings: both tasks inform the same embedding space
+    """
+
+    def __init__(self, tf_transform_output: tft.TFTransformOutput):
+        super().__init__()
+
+        # Gradient statistics accumulators (tf.Variables for graph-mode updates)
+        self._grad_accum = {{}}
+        for tower in ['query', 'candidate', 'rating_head']:
+            self._grad_accum[tower] = {{
+                'sum': tf.Variable(0.0, trainable=False, name=f'{{tower}}_grad_sum'),
+                'sum_sq': tf.Variable(0.0, trainable=False, name=f'{{tower}}_grad_sum_sq'),
+                'count': tf.Variable(0.0, trainable=False, name=f'{{tower}}_grad_count'),
+                'min': tf.Variable(float('inf'), trainable=False, name=f'{{tower}}_grad_min'),
+                'max': tf.Variable(float('-inf'), trainable=False, name=f'{{tower}}_grad_max'),
+                'hist_counts': tf.Variable(tf.zeros(25, dtype=tf.int32), trainable=False, name=f'{{tower}}_grad_hist'),
+            }}
+
+        # Feature extraction models (shared between both tasks)
+        self.buyer_model = BuyerModel(tf_transform_output)
+        self.product_model = ProductModel(tf_transform_output)
+
+        # Query tower: BuyerModel → Dense layers → OUTPUT_EMBEDDING_DIM
+        query_layers = [self.buyer_model]
+{buyer_layers_code}
+        self.query_tower = tf.keras.Sequential(query_layers, name='query_tower')
+
+        # Candidate tower: ProductModel → Dense layers → OUTPUT_EMBEDDING_DIM
+        candidate_layers = [self.product_model]
+{product_layers_code}
+        self.candidate_tower = tf.keras.Sequential(candidate_layers, name='candidate_tower')
+
+        # Rating head for ranking task
+{rating_head_code}
+
+        # TWO TASKS
+        # Retrieval: uses embeddings directly for dot-product similarity
+        self.retrieval_task = tfrs.tasks.Retrieval()
+
+        # Ranking: uses rating head predictions
+        self.ranking_task = tfrs.tasks.Ranking(
+            loss={loss_class},
+            metrics=[
+                tf.keras.metrics.RootMeanSquaredError(name='rmse'),
+                tf.keras.metrics.MeanAbsoluteError(name='mae'),
+            ]
+        )
+
+        # Loss weights from constants
+        self.retrieval_weight = RETRIEVAL_WEIGHT
+        self.ranking_weight = RANKING_WEIGHT
+
+    def call(self, features: Dict[str, tf.Tensor]) -> tf.Tensor:
+        """
+        Forward pass for ranking predictions.
+        Used by model.predict() and ranking serving signature.
+        """
+        query_embedding = self.query_tower(features)
+        candidate_embedding = self.candidate_tower(features)
+        concatenated = tf.concat([query_embedding, candidate_embedding], axis=1)
+        return self.rating_head(concatenated)
+
+    def compute_loss(
+        self,
+        features: Tuple[Dict[str, tf.Tensor], tf.Tensor],
+        training: bool = False
+    ) -> tf.Tensor:
+        """
+        Compute combined multitask loss.
+
+        Args:
+            features: Tuple of (feature_dict, labels) from input_fn
+
+        Returns:
+            Weighted sum of retrieval and ranking losses
+        """
+        feature_dict, labels = features
+
+        # Get embeddings from both towers
+        query_embedding = self.query_tower(feature_dict)
+        candidate_embedding = self.candidate_tower(feature_dict)
+
+        # RETRIEVAL LOSS: dot product similarity (in-batch negatives)
+        retrieval_loss = self.retrieval_task(query_embedding, candidate_embedding)
+
+        # RANKING LOSS: rating prediction vs actual labels
+        concatenated = tf.concat([query_embedding, candidate_embedding], axis=1)
+        rating_predictions = self.rating_head(concatenated)
+        ranking_loss = self.ranking_task(labels=labels, predictions=rating_predictions)
+
+        # WEIGHTED COMBINATION
+        total_loss = (
+            self.retrieval_weight * retrieval_loss +
+            self.ranking_weight * ranking_loss
+        )
+
+        return total_loss
+
+    def train_step(self, data):
+        """
+        Custom train_step that captures gradient statistics for visualization.
+
+        Updates tf.Variable accumulators for gradient stats (graph-compatible).
+        GradientStatsCallback reads these at epoch end.
+        """
+        with tf.GradientTape() as tape:
+            loss = self.compute_loss(data, training=True)
+            # Extract regularization losses separately for monitoring
+            regularization_loss = sum(self.losses) if self.losses else tf.constant(0.0)
+            total_loss = loss + regularization_loss
+
+        gradients = tape.gradient(total_loss, self.trainable_variables)
+        self.optimizer.apply_gradients(zip(gradients, self.trainable_variables))
+
+        # Accumulate gradient statistics using tf ops (no numpy - graph compatible)
+        for grad, var in zip(gradients, self.trainable_variables):
+            if grad is not None:
+                var_name = var.name.lower()
+                grad_flat = tf.reshape(tf.cast(grad, tf.float32), [-1])
+
+                # Determine tower (rating_head must be checked first)
+                if 'rating' in var_name:
+                    tower = 'rating_head'
+                elif 'query' in var_name or 'buyer' in var_name:
+                    tower = 'query'
+                elif 'candidate' in var_name or 'product' in var_name:
+                    tower = 'candidate'
+                else:
+                    continue
+
+                accum = self._grad_accum[tower]
+
+                # Update running statistics
+                batch_sum = tf.reduce_sum(grad_flat)
+                batch_sum_sq = tf.reduce_sum(tf.square(grad_flat))
+                batch_count = tf.cast(tf.size(grad_flat), tf.float32)
+                batch_min = tf.reduce_min(grad_flat)
+                batch_max = tf.reduce_max(grad_flat)
+
+                accum['sum'].assign_add(batch_sum)
+                accum['sum_sq'].assign_add(batch_sum_sq)
+                accum['count'].assign_add(batch_count)
+                accum['min'].assign(tf.minimum(accum['min'], batch_min))
+                accum['max'].assign(tf.maximum(accum['max'], batch_max))
+
+                # Update histogram (fixed range for stability: -1 to 1, clipped)
+                grad_clipped = tf.clip_by_value(grad_flat, -1.0, 1.0)
+                hist = tf.histogram_fixed_width(grad_clipped, [-1.0, 1.0], nbins=25)
+                accum['hist_counts'].assign_add(hist)
+
+        # Update metrics (regularization_loss logged separately for monitoring)
+        return dict(loss=loss, regularization_loss=regularization_loss, total_loss=total_loss)
+'''
+
+    def _generate_serve_fn_multitask(self) -> str:
+        """Generate dual serving functions for multitask model (retrieval + ranking)."""
+        # Get primary product ID column for candidate indexing
+        product_id_col = None
+        for feature in self.product_features:
+            if feature.get('is_primary_id'):
+                product_id_col = feature.get('display_name') or feature.get('column')
+                break
+
+        # Fallback: Auto-detection
+        if not product_id_col:
+            for feature in self.product_features:
+                col = feature.get('display_name') or feature.get('column', '')
+                if 'product' in col.lower() or 'item' in col.lower() or 'sku' in col.lower():
+                    product_id_col = col
+                    break
+
+        # Last resort: first product feature
+        if not product_id_col and self.product_features:
+            product_id_col = self.product_features[0].get('display_name') or self.product_features[0].get('column', 'product_id')
+
+        return f'''
+# =============================================================================
+# SERVING FUNCTIONS (MULTITASK - Dual Signatures)
+# =============================================================================
+
+class MultitaskServingModel(tf.keras.Model):
+    """
+    Serving model with dual signatures for multitask model.
+
+    Signatures:
+    - serving_default (retrieval): Returns top-K product recommendations
+    - serve_ranking: Returns predicted scores for given user-product pairs
+
+    Typical production usage:
+    1. Call serve() to get top-K candidates from entire catalog
+    2. Call serve_ranking() to re-rank those candidates with the rating head
+    """
+
+    def __init__(self, multitask_model, tf_transform_output, product_ids, product_embeddings, transform_params=None):
+        super().__init__()
+        self.multitask_model = multitask_model
+        self.tft_layer = tf_transform_output.transform_features_layer()
+        self._raw_feature_spec = tf_transform_output.raw_feature_spec()
+
+        # Pre-computed candidate data for retrieval
+        self.product_ids = tf.Variable(product_ids, trainable=False, name='product_ids')
+        self.product_embeddings = tf.Variable(product_embeddings, trainable=False, name='product_embeddings')
+
+        # Transform parameters for inverse transform
+        self.transform_params = transform_params or {{}}
+        self.normalize_applied = NORMALIZE_APPLIED
+        self.log_applied = LOG_APPLIED
+
+        # Get normalization params
+        self.norm_min = tf.constant(
+            self.transform_params.get('norm_min', 0.0), dtype=tf.float32
+        )
+        self.norm_max = tf.constant(
+            self.transform_params.get('norm_max', 1.0), dtype=tf.float32
+        )
+
+    @tf.function(input_signature=[
+        tf.TensorSpec(shape=[None], dtype=tf.string, name='examples')
+    ])
+    def serve(self, serialized_examples):
+        """
+        RETRIEVAL serving (default): Returns top-K product recommendations.
+
+        Use this for initial candidate retrieval from the full catalog.
+        """
+        # Parse raw features
+        parsed_features = tf.io.parse_example(serialized_examples, self._raw_feature_spec)
+
+        # Apply transform preprocessing
+        transformed_features = self.tft_layer(parsed_features)
+
+        # Get query embeddings
+        query_embeddings = self.multitask_model.query_tower(transformed_features)
+
+        # Compute similarities with all candidates
+        similarities = tf.linalg.matmul(
+            query_embeddings,
+            self.product_embeddings,
+            transpose_b=True
+        )
+
+        # Get top-K recommendations
+        top_scores, top_indices = tf.nn.top_k(similarities, k=TOP_K)
+
+        # Map indices to product IDs
+        recommended_products = tf.gather(self.product_ids, top_indices)
+
+        return {{
+            'product_ids': recommended_products,
+            'scores': top_scores
+        }}
+
+    @tf.function(input_signature=[
+        tf.TensorSpec(shape=[None], dtype=tf.string, name='examples')
+    ])
+    def serve_ranking(self, serialized_examples):
+        """
+        RANKING serving: Returns predicted scores for user-product pairs.
+
+        Use this to re-rank a set of candidates retrieved by serve().
+        Input examples should contain both user AND product features.
+        """
+        # Parse raw features
+        parsed_features = tf.io.parse_example(serialized_examples, self._raw_feature_spec)
+
+        # Apply transform preprocessing
+        transformed_features = self.tft_layer(parsed_features)
+
+        # Get rating predictions through the model's call() - uses rating head
+        predictions_normalized = self.multitask_model(transformed_features)
+
+        # Apply inverse transform if needed (same as ranking model)
+        predictions_original = predictions_normalized
+
+        if self.log_applied:
+            predictions_original = tf.math.expm1(predictions_original)
+
+        if self.normalize_applied:
+            predictions_original = predictions_original * (self.norm_max - self.norm_min) + self.norm_min
+
+        return {{
+            'predictions': predictions_original,
+            'predictions_normalized': predictions_normalized
+        }}
+
+
+def _precompute_candidate_embeddings(model, candidates_dataset, batch_size=128):
+    """
+    Pre-compute embeddings for UNIQUE candidates only.
+
+    The dataset typically contains transaction data with duplicate products.
+    This function deduplicates by product ID to ensure each product appears
+    exactly once in the candidate index.
+    """
+    seen_products = set()
+    unique_product_ids = []
+    unique_embeddings = []
+    total_processed = 0
+
+    for batch in candidates_dataset.batch(batch_size):
+        # Handle (features, labels) tuple from input_fn
+        if isinstance(batch, tuple):
+            batch_features = batch[0]
+        else:
+            batch_features = batch
+
+        # Compute embeddings for the batch
+        batch_embeddings = model.candidate_tower(batch_features)
+
+        # Get product IDs from batch
+        if '{product_id_col}' in batch_features:
+            batch_ids = batch_features['{product_id_col}'].numpy()
+            # Flatten if needed
+            if len(batch_ids.shape) > 1:
+                batch_ids = batch_ids.flatten()
+
+            # Process each item, keeping only unique products
+            for i, raw_id in enumerate(batch_ids):
+                total_processed += 1
+
+                # Convert to Python hashable type
+                if hasattr(raw_id, 'decode'):
+                    pid = raw_id.decode()
+                elif hasattr(raw_id, 'item'):
+                    pid = raw_id.item()
+                else:
+                    pid = raw_id
+
+                # Only keep first occurrence of each product
+                if pid not in seen_products:
+                    seen_products.add(pid)
+                    unique_product_ids.append(pid)
+                    unique_embeddings.append(batch_embeddings[i])
+
+    logging.info(f"Candidate deduplication: {{len(unique_product_ids)}} unique products from {{total_processed}} transactions")
+
+    if unique_embeddings:
+        return unique_product_ids, tf.stack(unique_embeddings)
+    else:
+        logging.warning("No candidate embeddings computed - returning empty tensors")
+        return [], tf.zeros((0, OUTPUT_EMBEDDING_DIM))
+
+
+def _evaluate_recall_on_test_set(model, test_dataset, product_ids, product_embeddings, steps=50):
+    """
+    Evaluate recall@k metrics on the test set.
+
+    For multitask models, this evaluates the retrieval component.
+    """
+    logging.info("=" * 60)
+    logging.info("EVALUATING RECALL ON TEST SET (Retrieval metrics)")
+    logging.info("=" * 60)
+
+    # Create product ID to index mapping
+    product_to_idx = {{pid: i for i, pid in enumerate(product_ids)}}
+
+    total_recall_5 = 0.0
+    total_recall_10 = 0.0
+    total_recall_50 = 0.0
+    total_recall_100 = 0.0
+    total_batches = 0
+
+    try:
+        for batch in test_dataset.take(steps):
+            # Handle (features, labels) tuple from input_fn
+            if isinstance(batch, tuple):
+                batch_features = batch[0]
+            else:
+                batch_features = batch
+
+            # Get query embeddings for this batch
+            query_embeddings = model.query_tower(batch_features)
+
+            # Compute similarities with all candidates
+            similarities = tf.linalg.matmul(
+                query_embeddings,
+                product_embeddings,
+                transpose_b=True
+            )
+
+            # Get top-100 indices
+            _, top_indices = tf.nn.top_k(similarities, k=min(100, len(product_ids)))
+            top_indices = top_indices.numpy()
+
+            # Get actual product IDs from batch
+            if '{product_id_col}' in batch_features:
+                actual_products_raw = batch_features['{product_id_col}'].numpy()
+                if len(actual_products_raw.shape) > 1:
+                    actual_products_raw = actual_products_raw.flatten()
+
+                actual_products = []
+                for p in actual_products_raw:
+                    if hasattr(p, 'decode'):
+                        actual_products.append(p.decode())
+                    elif hasattr(p, 'item'):
+                        actual_products.append(p.item())
+                    else:
+                        actual_products.append(p)
+            else:
+                continue
+
+            batch_size = len(actual_products)
+
+            # Calculate recall for each K
+            for k in [5, 10, 50, 100]:
+                hits = 0
+                for i in range(batch_size):
+                    actual_product = actual_products[i]
+                    if actual_product in product_to_idx:
+                        actual_idx = product_to_idx[actual_product]
+                        if actual_idx in top_indices[i, :k]:
+                            hits += 1
+
+                batch_recall = hits / batch_size
+                if k == 5:
+                    total_recall_5 += batch_recall
+                elif k == 10:
+                    total_recall_10 += batch_recall
+                elif k == 50:
+                    total_recall_50 += batch_recall
+                elif k == 100:
+                    total_recall_100 += batch_recall
+
+            total_batches += 1
+
+            if total_batches % 10 == 0:
+                logging.info(f"  Evaluated {{total_batches}} batches...")
+
+        if total_batches == 0:
+            logging.warning("No batches evaluated for recall")
+            return {{}}
+
+        # Calculate final averages
+        results = {{
+            'recall_at_5': total_recall_5 / total_batches,
+            'recall_at_10': total_recall_10 / total_batches,
+            'recall_at_50': total_recall_50 / total_batches,
+            'recall_at_100': total_recall_100 / total_batches,
+        }}
+
+        logging.info("=" * 60)
+        logging.info("TEST SET RECALL RESULTS:")
+        logging.info(f"  Recall@5:   {{results['recall_at_5']:.4f}} ({{results['recall_at_5']*100:.2f}}%)")
+        logging.info(f"  Recall@10:  {{results['recall_at_10']:.4f}} ({{results['recall_at_10']*100:.2f}}%)")
+        logging.info(f"  Recall@50:  {{results['recall_at_50']:.4f}} ({{results['recall_at_50']*100:.2f}}%)")
+        logging.info(f"  Recall@100: {{results['recall_at_100']:.4f}} ({{results['recall_at_100']*100:.2f}}%)")
+        logging.info(f"  Batches evaluated: {{total_batches}}")
+        logging.info("=" * 60)
+
+        return results
+
+    except Exception as e:
+        logging.error(f"Error evaluating recall: {{e}}")
+        import traceback
+        traceback.print_exc()
+        return {{}}
+'''
+
+    def _generate_metrics_callback_multitask(self) -> str:
+        """Generate metrics callbacks for multitask model (tracks 3 towers)."""
+        return '''
+# =============================================================================
+# TRAINING CALLBACKS (MULTITASK - 3 towers: query, candidate, rating_head)
+# =============================================================================
+
+class MetricsCallback(tf.keras.callbacks.Callback):
+    """Log Keras metrics to MetricsCollector after each epoch."""
+
+    def on_epoch_end(self, epoch, logs=None):
+        if _metrics_collector and logs:
+            for metric_name, value in logs.items():
+                _metrics_collector.log_metric(metric_name, float(value), step=epoch)
+
+
+class WeightNormCallback(tf.keras.callbacks.Callback):
+    """
+    Log weight L2 norms for monitoring training dynamics.
+
+    Tracks the total L2 norm of all trainable weights per epoch.
+    For multitask: tracks query, candidate, and rating_head towers.
+    """
+
+    def on_epoch_end(self, epoch, logs=None):
+        if not _metrics_collector:
+            return
+
+        total_norm_sq = 0.0
+        query_norm_sq = 0.0
+        candidate_norm_sq = 0.0
+        rating_norm_sq = 0.0
+
+        for var in self.model.trainable_variables:
+            var_norm_sq = tf.reduce_sum(tf.square(var)).numpy()
+            total_norm_sq += var_norm_sq
+
+            var_name = var.name.lower()
+            if 'rating' in var_name:
+                rating_norm_sq += var_norm_sq
+            elif 'query' in var_name or 'buyer' in var_name:
+                query_norm_sq += var_norm_sq
+            elif 'candidate' in var_name or 'product' in var_name:
+                candidate_norm_sq += var_norm_sq
+
+        _metrics_collector.log_metric('weight_norm', float(np.sqrt(total_norm_sq)), step=epoch)
+        _metrics_collector.log_metric('query_weight_norm', float(np.sqrt(query_norm_sq)), step=epoch)
+        _metrics_collector.log_metric('candidate_weight_norm', float(np.sqrt(candidate_norm_sq)), step=epoch)
+        _metrics_collector.log_metric('rating_head_weight_norm', float(np.sqrt(rating_norm_sq)), step=epoch)
+
+
+class WeightStatsCallback(tf.keras.callbacks.Callback):
+    """
+    Log weight statistics per epoch for each tower.
+
+    For multitask: tracks query, candidate, and rating_head towers.
+    """
+
+    NUM_HISTOGRAM_BINS = 25
+
+    def on_epoch_end(self, epoch, logs=None):
+        if not _metrics_collector:
+            return
+
+        tower_weights = dict(query=[], candidate=[], rating_head=[])
+
+        for var in self.model.trainable_variables:
+            var_name = var.name.lower()
+            weights = var.numpy().flatten()
+
+            if 'rating' in var_name:
+                tower_weights['rating_head'].extend(weights)
+            elif 'query' in var_name or 'buyer' in var_name:
+                tower_weights['query'].extend(weights)
+            elif 'candidate' in var_name or 'product' in var_name:
+                tower_weights['candidate'].extend(weights)
+
+        for tower, weights in tower_weights.items():
+            if weights:
+                weights_arr = np.array(weights)
+
+                stats = {
+                    'mean': float(np.mean(weights_arr)),
+                    'std': float(np.std(weights_arr)),
+                    'min': float(np.min(weights_arr)),
+                    'max': float(np.max(weights_arr)),
+                }
+
+                counts, bin_edges = np.histogram(weights_arr, bins=self.NUM_HISTOGRAM_BINS)
+                histogram = {
+                    'bin_edges': [float(e) for e in bin_edges] if epoch == 0 else None,
+                    'counts': [int(c) for c in counts],
+                }
+
+                _metrics_collector.log_weight_stats(tower, stats, histogram)
+
+
+class GradientStatsCallback(tf.keras.callbacks.Callback):
+    """
+    Log gradient statistics and histogram for training dynamics visualization.
+
+    For multitask: tracks query, candidate, and rating_head towers.
+    """
+
+    NUM_HISTOGRAM_BINS = 25
+
+    def on_epoch_end(self, epoch, logs=None):
+        if not _metrics_collector:
+            return
+
+        if not hasattr(self.model, '_grad_accum'):
+            return
+
+        for tower in ['query', 'candidate', 'rating_head']:
+            accum = self.model._grad_accum.get(tower)
+            if accum is None:
+                continue
+
+            count = float(accum['count'].numpy())
+            if count == 0:
+                continue
+
+            total_sum = float(accum['sum'].numpy())
+            total_sum_sq = float(accum['sum_sq'].numpy())
+            grad_min = float(accum['min'].numpy())
+            grad_max = float(accum['max'].numpy())
+            hist_counts = accum['hist_counts'].numpy()
+
+            mean = total_sum / count
+            variance = (total_sum_sq / count) - (mean ** 2)
+            std = float(np.sqrt(max(0, variance)))
+            norm = float(np.sqrt(total_sum_sq))
+
+            stats = {
+                'mean': mean,
+                'std': std,
+                'min': grad_min,
+                'max': grad_max,
+                'norm': norm,
+            }
+
+            bin_edges = np.linspace(-1.0, 1.0, self.NUM_HISTOGRAM_BINS + 1)
+            histogram = {
+                'bin_edges': [float(e) for e in bin_edges] if epoch == 0 else None,
+                'counts': [int(c) for c in hist_counts],
+            }
+
+            _metrics_collector.log_gradient_stats(tower, stats, histogram)
+
+            # Reset accumulators for next epoch
+            accum['sum'].assign(0.0)
+            accum['sum_sq'].assign(0.0)
+            accum['count'].assign(0.0)
+            accum['min'].assign(float('inf'))
+            accum['max'].assign(float('-inf'))
+            accum['hist_counts'].assign(tf.zeros(self.NUM_HISTOGRAM_BINS, dtype=tf.int32))
+
+
+class GradientCollapseCallback(tf.keras.callbacks.Callback):
+    """
+    Detects gradient collapse and stops training early with clear error message.
+
+    For multitask: monitors all three towers (query, candidate, rating_head).
+    """
+
+    def __init__(self, min_grad_norm=1e-7, patience=3):
+        super().__init__()
+        self.min_grad_norm = min_grad_norm
+        self.patience = patience
+        self.collapse_count = 0
+        self.collapsed_towers = set()
+
+    def on_epoch_end(self, epoch, logs=None):
+        if not hasattr(self.model, '_grad_accum'):
+            return
+
+        epoch_collapsed = False
+
+        for tower in ['query', 'candidate', 'rating_head']:
+            accum = self.model._grad_accum.get(tower)
+            if accum is None:
+                continue
+
+            count = float(accum['count'].numpy())
+            if count == 0:
+                continue
+
+            total_sum_sq = float(accum['sum_sq'].numpy())
+            grad_norm = np.sqrt(total_sum_sq)
+
+            if grad_norm < self.min_grad_norm:
+                epoch_collapsed = True
+                self.collapsed_towers.add(tower)
+                logging.warning(
+                    f"Epoch {epoch}: {tower} tower gradient norm = {grad_norm:.2e} "
+                    f"(below threshold {self.min_grad_norm:.2e})"
+                )
+
+        if epoch_collapsed:
+            self.collapse_count += 1
+            logging.warning(f"Gradient collapse detected for {self.collapse_count}/{self.patience} epochs")
+
+            if self.collapse_count >= self.patience:
+                logging.error("=" * 70)
+                logging.error("GRADIENT COLLAPSE DETECTED - TRAINING STOPPED")
+                logging.error("=" * 70)
+                logging.error(f"Affected towers: {', '.join(self.collapsed_towers)}")
+                logging.error("RECOMMENDATION: Try a lower learning rate (0.01 - 0.05)")
+                logging.error("=" * 70)
+
+                if _metrics_collector:
+                    _metrics_collector.log_metric('gradient_collapse_epoch', float(epoch))
+                    _metrics_collector.log_param('gradient_collapse_detected', True)
+                    _metrics_collector.log_param('collapsed_towers', ','.join(self.collapsed_towers))
+
+                self.model.stop_training = True
+        else:
+            self.collapse_count = 0
+            self.collapsed_towers.clear()
+'''
+
+    def _generate_run_fn_multitask(self) -> str:
+        """Generate run_fn() - the TFX Trainer entry point for multitask models."""
+        # Get optimizer code
+        optimizer_class = self.OPTIMIZER_CODE.get(self.optimizer, 'tf.keras.optimizers.Adam')
+
+        # Get IDs for parameter logging
+        feature_config_id = self.feature_config.id
+        model_config_id = self.model_config.id
+        dataset_id = self.feature_config.dataset.id
+        feature_config_name = self.feature_config.name
+        model_config_name = self.model_config.name
+        dataset_name = self.feature_config.dataset.name
+
+        # Get product ID column
+        product_id_col = None
+        for feature in self.product_features:
+            if feature.get('is_primary_id'):
+                product_id_col = feature.get('display_name') or feature.get('column')
+                break
+        if not product_id_col:
+            for feature in self.product_features:
+                col = feature.get('display_name') or feature.get('column', '')
+                if 'product' in col.lower() or 'item' in col.lower() or 'sku' in col.lower():
+                    product_id_col = col
+                    break
+        if not product_id_col and self.product_features:
+            product_id_col = self.product_features[0].get('display_name') or self.product_features[0].get('column', 'product_id')
+
+        return f'''
+# =============================================================================
+# TFX TRAINER ENTRY POINT (MULTITASK)
+# =============================================================================
+
+def run_fn(fn_args: tfx.components.FnArgs):
+    """
+    TFX Trainer entry point for multitask model.
+
+    Trains a model that jointly optimizes retrieval and ranking tasks.
+    Evaluates BOTH Recall@K (retrieval) and RMSE/MAE (ranking) on test set.
+    Saves model with dual serving signatures.
+    """
+    logging.info("=" * 70)
+    logging.info("Starting TFX Trainer (MULTITASK)")
+    logging.info("=" * 70)
+
+    # Initialize MetricsCollector
+    gcs_output_path = fn_args.custom_config.get('gcs_output_path') if fn_args.custom_config else None
+    global _metrics_collector
+    _metrics_collector = MetricsCollector(gcs_output_path=gcs_output_path)
+
+    # Log training parameters
+    _metrics_collector.log_params({{
+        'model_type': 'multitask',
+        'feature_config_id': {feature_config_id},
+        'feature_config_name': '{feature_config_name}',
+        'model_config_id': {model_config_id},
+        'model_config_name': '{model_config_name}',
+        'dataset_id': {dataset_id},
+        'dataset_name': '{dataset_name}',
+        'epochs': EPOCHS,
+        'batch_size': BATCH_SIZE,
+        'learning_rate': LEARNING_RATE,
+        'output_embedding_dim': OUTPUT_EMBEDDING_DIM,
+        'retrieval_weight': RETRIEVAL_WEIGHT,
+        'ranking_weight': RANKING_WEIGHT,
+        'retrieval_algorithm': RETRIEVAL_ALGORITHM,
+        'top_k': TOP_K,
+    }})
+
+    try:
+        # Load Transform output
+        tf_transform_output = tft.TFTransformOutput(fn_args.transform_output)
+        logging.info(f"Loaded transform output from: {{fn_args.transform_output}}")
+
+        # Create datasets
+        train_files = fn_args.train_files
+        eval_files = fn_args.eval_files
+
+        logging.info(f"Training files: {{len(train_files)}} files")
+        logging.info(f"Eval files: {{len(eval_files)}} files")
+
+        train_dataset = _input_fn(train_files, fn_args.data_accessor, tf_transform_output, BATCH_SIZE)
+        eval_dataset = _input_fn(eval_files, fn_args.data_accessor, tf_transform_output, BATCH_SIZE)
+
+        # Create model
+        logging.info("Creating MultitaskModel...")
+        model = MultitaskModel(tf_transform_output)
+
+        # Compile
+        model.compile(optimizer={optimizer_class}(learning_rate=LEARNING_RATE))
+        logging.info(f"Model compiled with {{'{self.optimizer}'}} optimizer, lr={{LEARNING_RATE}}")
+        logging.info(f"Loss weights: retrieval={{RETRIEVAL_WEIGHT}}, ranking={{RANKING_WEIGHT}}")
+
+        # Train
+        logging.info("=" * 60)
+        logging.info("STARTING TRAINING")
+        logging.info("=" * 60)
+
+        history = model.fit(
+            train_dataset,
+            validation_data=eval_dataset,
+            epochs=EPOCHS,
+            callbacks=[
+                MetricsCallback(),
+                WeightNormCallback(),
+                WeightStatsCallback(),
+                GradientStatsCallback(),
+                GradientCollapseCallback(),
+            ]
+        )
+
+        logging.info("Training completed!")
+
+        # Pre-compute candidate embeddings for retrieval serving
+        logging.info("=" * 60)
+        logging.info("PRE-COMPUTING CANDIDATE EMBEDDINGS")
+        logging.info("=" * 60)
+
+        # Reload eval dataset for candidate embedding computation
+        candidates_dataset = _input_fn(eval_files, fn_args.data_accessor, tf_transform_output, BATCH_SIZE)
+        product_ids, product_embeddings = _precompute_candidate_embeddings(model, candidates_dataset)
+        logging.info(f"Pre-computed embeddings for {{len(product_ids)}} unique products")
+
+        # =========================================================================
+        # TEST SET EVALUATION - BOTH RETRIEVAL AND RANKING METRICS
+        # =========================================================================
+
+        logging.info("=" * 60)
+        logging.info("TEST SET EVALUATION")
+        logging.info("=" * 60)
+
+        try:
+            # Check for test split
+            test_split_dir = os.path.join(
+                os.path.dirname(os.path.dirname(fn_args.train_files[0])),
+                'Split-test'
+            )
+            logging.info(f"Looking for test split at: {{test_split_dir}}")
+
+            if os.path.exists(test_split_dir):
+                test_files = glob.glob(os.path.join(test_split_dir, '*.gz'))
+                if test_files:
+                    logging.info(f"Found {{len(test_files)}} test files")
+
+                    test_dataset = _input_fn(
+                        test_files,
+                        fn_args.data_accessor,
+                        tf_transform_output,
+                        BATCH_SIZE
+                    )
+
+                    # 1. RANKING METRICS (RMSE, MAE)
+                    logging.info("=== TEST SET RANKING METRICS ===")
+                    test_loss_results = model.evaluate(test_dataset, return_dict=True)
+                    for metric_name, metric_value in test_loss_results.items():
+                        logging.info(f"  test_{{metric_name}}: {{metric_value:.6f}}")
+                        if _metrics_collector:
+                            _metrics_collector.log_metric(f'test_{{metric_name}}', float(metric_value))
+
+                    # 2. RETRIEVAL METRICS (Recall@K)
+                    logging.info("=== TEST SET RETRIEVAL METRICS ===")
+                    test_dataset_for_recall = _input_fn(
+                        test_files,
+                        fn_args.data_accessor,
+                        tf_transform_output,
+                        BATCH_SIZE
+                    )
+                    recall_results = _evaluate_recall_on_test_set(
+                        model,
+                        test_dataset_for_recall,
+                        product_ids,
+                        product_embeddings,
+                        steps=50
+                    )
+
+                    # Log recall metrics
+                    if _metrics_collector and recall_results:
+                        for metric_name, metric_value in recall_results.items():
+                            _metrics_collector.log_metric(f'test_{{metric_name}}', float(metric_value))
+                else:
+                    logging.info("Test split directory exists but is empty - skipping test evaluation")
+            else:
+                logging.warning("No test split found - skipping test evaluation")
+
+        except Exception as e:
+            logging.warning(f"Could not evaluate on test set: {{e}}")
+            import traceback
+            traceback.print_exc()
+
+        # =========================================================================
+        # BUILD AND SAVE SERVING MODEL
+        # =========================================================================
+
+        logging.info("=" * 60)
+        logging.info("BUILDING SERVING MODEL")
+        logging.info("=" * 60)
+
+        # Get transform params for inverse transform
+        transform_params = {{}}
+        # TODO: Extract norm_min/norm_max from first batch if needed
+
+        serving_model = MultitaskServingModel(
+            multitask_model=model,
+            tf_transform_output=tf_transform_output,
+            product_ids=product_ids,
+            product_embeddings=product_embeddings,
+            transform_params=transform_params
+        )
+
+        # Save with DUAL signatures
+        logging.info(f"Saving model to: {{fn_args.serving_model_dir}}")
+        tf.saved_model.save(
+            serving_model,
+            fn_args.serving_model_dir,
+            signatures={{
+                'serving_default': serving_model.serve,        # Retrieval (default)
+                'serve_ranking': serving_model.serve_ranking,  # Ranking
+            }}
+        )
+        logging.info("Model saved successfully with dual signatures!")
+        logging.info("  - serving_default: Retrieval (top-K candidates)")
+        logging.info("  - serve_ranking: Ranking (score prediction)")
 
     except Exception as e:
         logging.error(f"Training failed: {{e}}")

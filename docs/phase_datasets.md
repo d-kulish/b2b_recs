@@ -3,7 +3,35 @@
 ## Document Purpose
 This document provides detailed specifications for implementing the **Datasets** domain in the ML Platform. The Datasets domain defines WHAT data goes into model training.
 
-**Last Updated**: 2025-12-29 (v16 - Fixed column aliases not displaying in Feature Config wizard)
+**Last Updated**: 2026-01-12 (v17 - UI merged into Configs page)
+
+---
+
+## UI Location Update (2026-01-12)
+
+**Important:** The Dataset Manager UI has been merged into the **Configs page** as the first of three chapters:
+
+```
+model_configs.html (unified page)
+├── Chapter 1: Datasets          ← Dataset Manager UI now lives here
+│   ├── Header: "Datasets" with [New Dataset] button
+│   ├── Dataset list (scrollable cards)
+│   └── Full wizard + modals (create, edit, view, delete, SQL preview)
+│
+├── Chapter 2: Features          (existing)
+│   └── Feature config list + wizard
+│
+└── Chapter 3: Model Structure   (existing)
+    └── Model config list + wizard
+```
+
+**Key Changes:**
+- **Navigation:** Single "Datasets & Configs" link in sidebar
+- **URL Redirect:** `/models/<id>/dataset/` now redirects to `/models/<id>/configs/`
+- **Legacy Page:** Original `model_dataset.html` preserved for rollback
+- **Backend APIs:** No changes - all `/datasets/` API endpoints work unchanged
+
+See [datasets_migration.md](datasets_migration.md) for the full migration plan and implementation details.
 
 ---
 

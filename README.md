@@ -41,7 +41,10 @@ This platform enables businesses to:
 - ⏰ Automated scheduling with Cloud Scheduler
 - 🔐 Secret Manager integration for credentials
 
-### **Dataset Management** ✅
+### **Datasets & Configs (Unified Page)** ✅
+The Datasets & Configs page provides a three-chapter workflow for configuring ML training:
+
+**Chapter 1: Datasets** - Define WHAT data goes into training
 - 🎨 **Visual Schema Builder:** Power BI-style drag-and-drop interface with visual connection lines
 - 🗃️ **Table Selection:** Browse and select from `raw_data.*` BigQuery tables
 - 🔗 **Multi-Table Joins:** Auto-detect join keys with confidence scoring + manual override
@@ -59,7 +62,7 @@ This platform enables businesses to:
 - 👁️ **Live Preview:** See sample data from joined tables in real-time with seeded sampling
 - 📦 **Dataset as Configuration:** Datasets store configuration only; no BigQuery copies created
 
-### **Modeling (Feature Engineering)** ✅
+**Chapter 2: Feature Engineering** - Define HOW to transform data
 - 🧠 **TFRS Two-Tower Architecture:** Configure BuyerModel (Query Tower) and ProductModel (Candidate Tower)
 - 🎯 **Feature Configuration Wizard:** 2-step wizard for creating feature configs
   - Step 1: Basic info (name, dataset selection)
@@ -86,7 +89,7 @@ This platform enables businesses to:
   - **Results display:** Loss, Recall@10/50/100, vocabulary statistics
   - **Pipeline stages:** ExampleGen → StatisticsGen → SchemaGen → Transform → Trainer
 
-### **Model Structure** ✅
+**Chapter 3: Model Structure** - Define neural network architecture
 - 🏗️ **Architecture Configuration:** Define neural network architecture independent from features
 - 🌐 **Global/Reusable:** ModelConfig is dataset-independent, can be used with any FeatureConfig
 - 🗼 **Tower Builder:** Visual layer configuration for Buyer (Query) and Product (Candidate) towers
@@ -387,6 +390,14 @@ WHERE source_type='gcs';
 ---
 
 ## 📝 Recent Updates
+
+**January 12, 2026 - Datasets & Configs Page Consolidation**
+- ✅ **Unified three-chapter page** - Dataset Manager merged into Configs page as first chapter
+- ✅ **Chapter structure** - Datasets → Feature Engineering → Model Structure
+- ✅ **Navigation update** - Single "Datasets & Configs" sidebar link
+- ✅ **URL redirect** - Old `/models/<id>/dataset/` URL now redirects to `/models/<id>/configs/`
+- ✅ **Legacy preservation** - Original `model_dataset.html` kept for rollback
+- See [datasets_migration.md](docs/datasets_migration.md) for full migration details
 
 **January 4, 2026 - Experiments Dashboard Enhanced**
 - ✅ **8 analytical components** - Complete dashboard overhaul with metrics trend, top configs, hyperparameter insights

@@ -4,7 +4,49 @@
 ## Document Purpose
 This document provides detailed specifications for implementing the **Configs** domain in the ML Platform. This domain defines HOW data is transformed for training (Feature Configs) and the neural network architecture (Model Configs).
 
-**Last Updated**: 2026-01-07
+**Last Updated**: 2026-01-12
+
+---
+
+## Three-Chapter Page Structure (2026-01-12)
+
+The Configs page (`model_configs.html`) now contains **three chapters** providing a unified workflow for ML configuration:
+
+```
+model_configs.html (unified page)
+├── Chapter 1: Datasets          ← NEW (migrated from model_dataset.html)
+│   ├── Header: "Datasets" with [New Dataset] button
+│   ├── Dataset list with filter bar (status, search)
+│   ├── Dataset cards showing tables, filters, row estimates
+│   └── Full 4-step wizard (Info → Tables → Schema → Filters)
+│
+├── Chapter 2: Feature Engineering
+│   ├── Header: "Features" with [New Feature Config] button
+│   ├── Feature Config list with tensor dimension summaries
+│   └── 2-step wizard (Basic Info → Feature Assignment)
+│
+└── Chapter 3: Model Structure
+    ├── Header: "Model Structure" with [New Model Config] button
+    ├── Model Config cards with architecture visualization
+    └── 3-step wizard (Basic Info → Architecture → Training)
+```
+
+**Why Three Chapters?**
+- **Logical workflow:** Define data (Datasets) → Configure transforms (Features) → Design architecture (Model Structure)
+- **Reduced navigation:** No switching between pages when configuring features
+- **Shared context:** Dataset changes immediately visible when creating Feature Configs
+
+**JavaScript Namespacing:**
+Each chapter uses prefixed functions to prevent collisions:
+- `ds_*` - Dataset chapter functions (e.g., `ds_loadDatasets()`, `ds_openWizard()`)
+- `fc_*` - Feature Config functions (e.g., `fc_loadConfigs()`, `fc_openWizard()`)
+- `mc_*` - Model Config functions (e.g., `mc_loadModelConfigs()`, `mc_openWizard()`)
+
+**State Synchronization:**
+- Creating/editing/deleting datasets calls `fc_loadDatasets()` to refresh the Feature Config dropdown
+- All chapters load in parallel on page initialization
+
+See [datasets_migration.md](datasets_migration.md) for the full migration plan.
 
 ---
 

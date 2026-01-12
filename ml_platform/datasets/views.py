@@ -3,14 +3,24 @@ Datasets Page Views
 
 Handles rendering of dataset-related pages.
 """
-from django.shortcuts import render, get_object_or_404
+from django.shortcuts import render, get_object_or_404, redirect
+from django.urls import reverse
 from django.contrib.auth.decorators import login_required
 
 from ml_platform.models import ModelEndpoint, Dataset
 
 
 @login_required
-def model_dataset(request, model_id):
+def redirect_to_configs(request, model_id):
+    """
+    Redirect from old Dataset Manager page to merged Datasets & Configs page.
+    The dataset functionality has been integrated into model_configs.
+    """
+    return redirect(reverse('model_configs', kwargs={'model_id': model_id}))
+
+
+@login_required
+def model_dataset_legacy(request, model_id):
     """
     Dataset Manager Page - Create and manage dataset definitions for ML training.
     """

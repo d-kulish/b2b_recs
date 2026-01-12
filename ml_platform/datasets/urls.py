@@ -3,12 +3,14 @@ Datasets Sub-App URL Configuration
 
 All dataset-related routes are defined here and included in the main urls.py.
 """
-from django.urls import path
+from django.urls import path, reverse_lazy
+from django.views.generic import RedirectView
 from . import views, api
 
 urlpatterns = [
     # === PAGE VIEWS ===
-    path('models/<int:model_id>/dataset/', views.model_dataset, name='model_dataset'),
+    # Redirect to merged Datasets & Configs page (dataset functionality now in model_configs)
+    path('models/<int:model_id>/dataset/', views.redirect_to_configs, name='model_dataset'),
 
     # === DATASET CRUD APIs ===
     path('api/models/<int:model_id>/datasets/', api.list_datasets, name='api_datasets_list'),

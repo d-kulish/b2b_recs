@@ -1,3 +1,26 @@
+{# ============================================================================
+   LEGACY PAGE - PRESERVED FOR ROLLBACK
+   ============================================================================
+
+   This page has been superseded by model_configs.html which now includes
+   Dataset management as Chapter 1 of a three-chapter workflow:
+
+   model_configs.html (unified page)
+   ├── Chapter 1: Datasets          ← This page's functionality
+   ├── Chapter 2: Features
+   └── Chapter 3: Model Structure
+
+   The URL /models/<id>/dataset/ now redirects to /models/<id>/configs/
+
+   This file is preserved as a rollback option in case issues are found
+   with the merged page. To restore:
+   1. Update ml_platform/datasets/urls.py to use model_dataset_legacy view
+   2. Update base_model.html to show separate navigation links
+
+   Migration completed: 2026-01-12
+   See docs/datasets_migration.md for details.
+   ============================================================================ #}
+
 {% extends 'base_model.html' %}
 {% load humanize %}
 {% load static %}
@@ -19,7 +42,7 @@
                 <button onclick="refreshDatasets()" class="btn btn-secondary btn-sm" style="width: 140px;">
                     <i class="fas fa-sync-alt"></i>Refresh
                 </button>
-                <button onclick="openWizard()" class="btn btn-primary btn-sm" style="width: 140px;">
+                <button onclick="ds_openWizard()" class="btn btn-primary btn-sm" style="width: 140px;">
                     <i class="fas fa-plus"></i>New Dataset
                 </button>
             </div>
@@ -37,7 +60,7 @@
             </div>
             <div class="flex-1">
                 <input type="text" id="searchInput" placeholder="Search datasets..."
-                       class="form-input w-full text-sm" onkeyup="debounceSearch()">
+                       class="form-input w-full text-sm" onkeyup="ds_debounceSearch()">
             </div>
         </div>
 
@@ -1335,10 +1358,10 @@
         <!-- Modal Footer (Neumorphic Style) -->
         <div class="modal-footer-wizard-neu">
             <div class="footer-left">
-                <button onclick="prevStep()" class="btn-neu btn-neu-nav hidden" id="prevButton">
+                <button onclick="ds_prevStep()" class="btn-neu btn-neu-nav hidden" id="prevButton">
                     <span class="btn-neu-inner"><i class="fas fa-chevron-left"></i></span>
                 </button>
-                <button onclick="nextStep()" class="btn-neu btn-neu-nav" id="nextButton" disabled>
+                <button onclick="ds_nextStep()" class="btn-neu btn-neu-nav" id="nextButton" disabled>
                     <span class="btn-neu-inner"><i class="fas fa-chevron-right"></i></span>
                 </button>
             </div>
@@ -1346,7 +1369,7 @@
                 <button onclick="saveDataset()" class="btn-neu btn-neu-action btn-neu-save hidden" id="saveButton">
                     <span class="btn-neu-inner">Save</span>
                 </button>
-                <button onclick="closeWizard()" class="btn-neu btn-neu-action btn-neu-cancel">
+                <button onclick="ds_closeWizard()" class="btn-neu btn-neu-action btn-neu-cancel">
                     <span class="btn-neu-inner">Cancel</span>
                 </button>
             </div>
@@ -1524,13 +1547,13 @@ const PREVIEW_DEBOUNCE_MS = 300;
 // PAGE INITIALIZATION
 // ============================================================================
 document.addEventListener('DOMContentLoaded', function() {
-    loadDatasets();
+    ds_loadDatasets();
 });
 
 // ============================================================================
 // DATASET LIST FUNCTIONS
 // ============================================================================
-function loadDatasets(page = 1) {
+function ds_loadDatasets(page = 1) {
     const status = document.getElementById('statusFilter').value;
     const search = document.getElementById('searchInput').value;
 
@@ -1572,7 +1595,7 @@ function renderDatasetsList(datasets) {
     container.innerHTML = datasets.map(ds => {
         // Format description (truncate to 50 chars)
         const description = ds.description
-            ? `${escapeHtml(ds.description.substring(0, 50))}${ds.description.length > 50 ? '...' : ''}`
+            ? `${ds_escapeHtml(ds.description.substring(0, 50))}${ds.description.length > 50 ? '...' : ''}`
             : 'N/A';
 
         // Format primary table (strip raw_data. prefix)
@@ -1588,7 +1611,7 @@ function renderDatasetsList(datasets) {
 
         // Format stats from summary_snapshot
         const rowCount = ds.snapshot_total_rows != null
-            ? formatNumber(ds.snapshot_total_rows)
+            ? ds_formatNumber(ds.snapshot_total_rows)
             : 'N/A';
         const columnCount = ds.snapshot_column_count != null
             ? ds.snapshot_column_count
@@ -1601,7 +1624,7 @@ function renderDatasetsList(datasets) {
                 <div class="card-content">
                     <div class="card-header">
                         <span class="status-dot green"></span>
-                        <h4 class="card-title">${escapeHtml(ds.name)}</h4>
+                        <h4 class="card-title">${ds_escapeHtml(ds.name)}</h4>
                     </div>
                     <div class="card-body">
                         <span class="card-value text-gray-500 text-xs">${description}</span>
@@ -1639,7 +1662,7 @@ function renderDatasetsList(datasets) {
                     <button onclick="editDataset(${ds.id})" class="card-action-btn edit" title="Edit dataset">
                         <i class="fas fa-edit"></i>
                     </button>
-                    <button onclick="deleteDataset(${ds.id}, '${escapeHtml(ds.name)}')" class="card-action-btn delete" title="Delete dataset">
+                    <button onclick="deleteDataset(${ds.id}, '${ds_escapeHtml(ds.name)}')" class="card-action-btn delete" title="Delete dataset">
                         <i class="fas fa-trash"></i>
                     </button>
                 </div>
@@ -1667,44 +1690,44 @@ function renderPagination(pagination) {
 
     let buttons = '';
     if (pagination.has_previous) {
-        buttons += `<button onclick="loadDatasets(${pagination.page - 1})" class="btn btn-secondary btn-sm">Previous</button>`;
+        buttons += `<button onclick="ds_loadDatasets(${pagination.page - 1})" class="btn btn-secondary btn-sm">Previous</button>`;
     }
 
     for (let i = 1; i <= pagination.total_pages; i++) {
         if (i === pagination.page) {
             buttons += `<button class="btn btn-primary btn-sm">${i}</button>`;
         } else if (i === 1 || i === pagination.total_pages || Math.abs(i - pagination.page) <= 1) {
-            buttons += `<button onclick="loadDatasets(${i})" class="btn btn-secondary btn-sm">${i}</button>`;
+            buttons += `<button onclick="ds_loadDatasets(${i})" class="btn btn-secondary btn-sm">${i}</button>`;
         } else if (Math.abs(i - pagination.page) === 2) {
             buttons += `<span class="px-2 text-gray-500">...</span>`;
         }
     }
 
     if (pagination.has_next) {
-        buttons += `<button onclick="loadDatasets(${pagination.page + 1})" class="btn btn-secondary btn-sm">Next</button>`;
+        buttons += `<button onclick="ds_loadDatasets(${pagination.page + 1})" class="btn btn-secondary btn-sm">Next</button>`;
     }
 
     buttonsEl.innerHTML = buttons;
 }
 
 function refreshDatasets() {
-    loadDatasets();
+    ds_loadDatasets();
     showNotification('Datasets refreshed', 'success');
 }
 
 function filterDatasets() {
-    loadDatasets();
+    ds_loadDatasets();
 }
 
-function debounceSearch() {
+function ds_ds_debounceSearch() {
     clearTimeout(searchTimeout);
-    searchTimeout = setTimeout(() => loadDatasets(), 300);
+    searchTimeout = setTimeout(() => ds_loadDatasets(), 300);
 }
 
 // ============================================================================
 // WIZARD FUNCTIONS
 // ============================================================================
-function openWizard(datasetId = null) {
+function ds_openWizard(datasetId = null) {
     wizardEditMode = !!datasetId;
     wizardEditDatasetId = datasetId;
 
@@ -1745,7 +1768,7 @@ function openWizard(datasetId = null) {
     showStep(1);
 }
 
-function closeWizard() {
+function ds_ds_closeWizard() {
     document.getElementById('datasetWizardModal').classList.add('hidden');
     resetWizard();
 }
@@ -1946,7 +1969,7 @@ function validateCurrentStep() {
     saveBtn.disabled = !isValid;
 }
 
-function nextStep() {
+function ds_ds_nextStep() {
     if (currentWizardStep >= 4) return;  // Max step is now 4
 
     // Collect data from current step
@@ -1980,7 +2003,7 @@ function nextStep() {
     showStep(currentWizardStep + 1);
 }
 
-function prevStep() {
+function ds_ds_prevStep() {
     if (currentWizardStep <= 1) return;
     collectStepData(currentWizardStep);
     showStep(currentWizardStep - 1);
@@ -2157,7 +2180,7 @@ function renderPrimaryTableList() {
             <div class="card-content">
                 <div class="card-title">${table.table_id}</div>
                 <div class="card-description">
-                    ${formatNumber(table.row_count)} rows | ${table.column_count} columns | ${formatBytes(table.size_bytes)}
+                    ${ds_formatNumber(table.row_count)} rows | ${table.column_count} columns | ${formatBytes(table.size_bytes)}
                 </div>
             </div>
         </label>
@@ -2200,7 +2223,7 @@ function renderSecondaryTableList() {
             <div class="card-content">
                 <div class="card-title">${table.table_id}</div>
                 <div class="card-description">
-                    ${formatNumber(table.row_count)} rows | ${table.column_count} columns
+                    ${ds_formatNumber(table.row_count)} rows | ${table.column_count} columns
                 </div>
             </div>
         </label>
@@ -7209,8 +7232,8 @@ function renderCategoryFilterCard(filter, index) {
             <div class="category-selected-tags" id="categoryTags_${index}">
                 ${filter.values.map(v => `
                     <span class="category-selected-tag">
-                        ${escapeHtml(v)}
-                        <span class="category-selected-tag-remove" onclick="removeCategoryValue(${index}, '${escapeHtml(v)}')">&times;</span>
+                        ${ds_escapeHtml(v)}
+                        <span class="category-selected-tag-remove" onclick="removeCategoryValue(${index}, '${ds_escapeHtml(v)}')">&times;</span>
                     </span>
                 `).join('')}
             </div>
@@ -7225,10 +7248,10 @@ function renderCategoryFilterCard(filter, index) {
             <div class="category-filter-list" id="categoryList_${index}">
                 ${values.map(v => `
                     <div class="category-filter-item ${filter.values.includes(v.value) ? 'selected' : ''}"
-                         onclick="toggleCategoryValue(${index}, '${escapeHtml(v.value)}')">
+                         onclick="toggleCategoryValue(${index}, '${ds_escapeHtml(v.value)}')">
                         <span class="category-filter-item-label">
                             <input type="checkbox" ${filter.values.includes(v.value) ? 'checked' : ''} readonly>
-                            ${escapeHtml(v.value)}
+                            ${ds_escapeHtml(v.value)}
                         </span>
                         <span class="category-filter-item-count">${v.count.toLocaleString()}</span>
                     </div>
@@ -7349,8 +7372,8 @@ async function searchCategoryValues(index, searchTerm) {
             dropdown.innerHTML = data.values
                 .filter(v => !filter.values.includes(v.value))
                 .map(v => `
-                    <div class="category-autocomplete-item" onclick="addAutocompleteValue(${index}, '${escapeHtml(v.value)}')">
-                        <span>${escapeHtml(v.value)}</span>
+                    <div class="category-autocomplete-item" onclick="addAutocompleteValue(${index}, '${ds_escapeHtml(v.value)}')">
+                        <span>${ds_escapeHtml(v.value)}</span>
                         <span class="category-filter-item-count">${v.count.toLocaleString()}</span>
                     </div>
                 `).join('');
@@ -7801,7 +7824,7 @@ function populateFilterColumnDropdowns() {
     resetProductAnalysis();
 
     // Note: Don't reset dataset summary here - fetchDatasetStats() is called
-    // from nextStep() when entering Step 4 to load initial unfiltered stats
+    // from ds_nextStep() when entering Step 4 to load initial unfiltered stats
 
     // Update button states (disable buttons until timestamp selected)
     updateHistoryButtonStates();
@@ -8604,13 +8627,13 @@ function formatColumnStats(stats) {
         }
     } else if (['INT64', 'FLOAT64', 'NUMERIC', 'BIGNUMERIC', 'INTEGER', 'FLOAT'].includes(stats.type)) {
         if (stats.min !== undefined && stats.min !== null) {
-            items.push(`<span class="stat-item"><span class="stat-label">Min:</span> <span class="stat-value">${formatNumber(stats.min)}</span></span>`);
+            items.push(`<span class="stat-item"><span class="stat-label">Min:</span> <span class="stat-value">${ds_formatNumber(stats.min)}</span></span>`);
         }
         if (stats.max !== undefined && stats.max !== null) {
-            items.push(`<span class="stat-item"><span class="stat-label">Max:</span> <span class="stat-value">${formatNumber(stats.max)}</span></span>`);
+            items.push(`<span class="stat-item"><span class="stat-label">Max:</span> <span class="stat-value">${ds_formatNumber(stats.max)}</span></span>`);
         }
         if (stats.avg !== undefined && stats.avg !== null) {
-            items.push(`<span class="stat-item"><span class="stat-label">Avg:</span> <span class="stat-value">${formatNumber(stats.avg)}</span></span>`);
+            items.push(`<span class="stat-item"><span class="stat-label">Avg:</span> <span class="stat-value">${ds_formatNumber(stats.avg)}</span></span>`);
         }
     } else if (['DATE', 'DATETIME', 'TIMESTAMP'].includes(stats.type)) {
         if (stats.min) {
@@ -8639,7 +8662,7 @@ function formatColumnStats(stats) {
     return `<div class="column-stats-details">${items.join('')}</div>`;
 }
 
-function formatNumber(num) {
+function ds_ds_formatNumber(num) {
     if (num === null || num === undefined) return '-';
     if (Number.isInteger(num)) {
         return num.toLocaleString();
@@ -8658,13 +8681,13 @@ function formatDetailColumnStats(stats) {
         }
     } else if (['INT64', 'FLOAT64', 'NUMERIC', 'BIGNUMERIC', 'INTEGER', 'FLOAT'].includes(stats.type)) {
         if (stats.min !== undefined && stats.min !== null) {
-            items.push(`Min: ${formatNumber(stats.min)}`);
+            items.push(`Min: ${ds_formatNumber(stats.min)}`);
         }
         if (stats.max !== undefined && stats.max !== null) {
-            items.push(`Max: ${formatNumber(stats.max)}`);
+            items.push(`Max: ${ds_formatNumber(stats.max)}`);
         }
         if (stats.avg !== undefined && stats.avg !== null) {
-            items.push(`Avg: ${formatNumber(stats.avg)}`);
+            items.push(`Avg: ${ds_formatNumber(stats.avg)}`);
         }
     } else if (['DATE', 'DATETIME', 'TIMESTAMP'].includes(stats.type)) {
         if (stats.min) {
@@ -9331,8 +9354,8 @@ function saveDataset() {
     .then(data => {
         if (data.status === 'success') {
             showNotification(wizardEditMode ? 'Dataset updated successfully' : 'Dataset created successfully', 'success');
-            closeWizard();
-            loadDatasets();
+            ds_closeWizard();
+            ds_loadDatasets();
         } else {
             showNotification(data.message || 'Failed to save dataset', 'error');
             if (data.errors) {
@@ -9515,10 +9538,10 @@ function renderDatasetDetail(summary) {
             <!-- Info -->
             <div class="flex items-center gap-3">
                 <span class="text-sm text-gray-500">Created ${new Date(summary.timestamps.created_at).toLocaleDateString()}</span>
-                ${snapshot.has_snapshot ? `<span class="px-3 py-1 rounded-full text-sm font-bold bg-green-100 text-green-700">${formatNumber(snapshot.total_rows)} rows</span>` : ''}
+                ${snapshot.has_snapshot ? `<span class="px-3 py-1 rounded-full text-sm font-bold bg-green-100 text-green-700">${ds_formatNumber(snapshot.total_rows)} rows</span>` : ''}
             </div>
 
-            ${summary.description ? `<p class="text-gray-600">${escapeHtml(summary.description)}</p>` : ''}
+            ${summary.description ? `<p class="text-gray-600">${ds_escapeHtml(summary.description)}</p>` : ''}
 
             <!-- Tables & Joins -->
             <div class="bg-gray-50 rounded-lg p-4">
@@ -9601,7 +9624,7 @@ function renderDatasetDetail(summary) {
 function editDataset(datasetId) {
     // Open wizard in edit mode - loadDatasetForEdit is called inside openWizard
     // after tables are loaded to avoid race condition
-    openWizard(datasetId);
+    ds_openWizard(datasetId);
 }
 
 function loadDatasetForEdit(datasetId) {
@@ -9677,7 +9700,7 @@ function confirmDelete() {
         if (data.status === 'success') {
             showNotification('Dataset deleted successfully', 'success');
             closeDeleteModal();
-            loadDatasets();
+            ds_loadDatasets();
         } else {
             showNotification(data.message || 'Failed to delete dataset', 'error');
         }
@@ -9813,13 +9836,13 @@ function closeNotification() {
     }
 }
 
-function escapeHtml(text) {
+function ds_ds_escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
 }
 
-function formatNumber(num) {
+function ds_ds_formatNumber(num) {
     if (!num) return '0';
     if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
     if (num >= 1000) return (num / 1000).toFixed(1) + 'K';

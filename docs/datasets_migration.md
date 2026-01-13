@@ -890,6 +890,107 @@ ds_restoreCustomerFilterState();
 
 ---
 
+## Known Issues - Pending Fix (2026-01-13)
+
+### Issue 17: Filters Saved with Wrong Structure (Requires Browser Refresh)
+
+**Problem**: Dataset 19 was saved with `filters.dates` (camelCase) instead of `filters.history` (snake_case), despite Fix 16 being deployed.
+
+**Analysis**:
+
+Comparing datasets:
+```
+Dataset 16 (correct):          Dataset 19 (wrong):
+filters: {                     filters: {
+  "history": {                   "dates": {
+    "rolling_days": 90,            "rollingDays": 31,
+    "timestamp_column": "..."      "timestampColumn": "..."
+  }                              }
+}                              }
+```
+
+**Root Cause Investigation**:
+
+1. **Code Verification**: The fix IS in the codebase - `ds_collectStepData(4)` correctly sets `filters.history` with snake_case keys
+2. **Database Evidence**: Dataset 19 has the OLD format (camelCase `dates` key) that was removed from the code
+3. **Likely Cause**: Browser cached old JavaScript when dataset 19 was created
+
+**Action Required**:
+- Users must **hard refresh** the browser (Cmd+Shift+R / Ctrl+Shift+R) after deployment
+- Server must be restarted to ensure templates are reloaded
+
+### Issue 18: Dates Filter Not Saved Without "Refresh Dataset" Click
+
+**Problem**: If user selects a timestamp column and rolling days but does NOT click "Refresh Dataset", the filter won't be saved.
+
+**Root Cause**: Current `ds_collectStepData(4)` implementation:
+```javascript
+const datesCommitted = ds_datesFilterState.committed;
+if (datesCommitted.timestampColumn) {  // Only runs if committed state exists
+    ds_wizardData.filters.history = {...};
+}
+```
+
+The code only reads from COMMITTED state, which is empty until user clicks "Refresh Dataset".
+
+**Expected Behavior**: Filter should be saved based on UI selections even without explicit "Refresh Dataset" click.
+
+**Fix Plan**:
+1. In `ds_collectStepData(4)`, fall back to UI element values if committed state is empty:
+```javascript
+// Get from committed state first, fall back to UI elements
+const timestampColumn = datesCommitted.timestampColumn ||
+    document.getElementById('dsTimestampColumn')?.value;
+const rollingDays = datesCommitted.rollingDays ||
+    parseInt(document.getElementById('dsRollingDays')?.value) || 30;
+const startDate = datesCommitted.startDate ||
+    document.getElementById('dsStartDateInput')?.value;
+
+if (timestampColumn) {
+    ds_wizardData.filters.history = {
+        timestamp_column: timestampColumn,
+        rolling_days: rollingDays,
+        start_date: startDate || null
+    };
+}
+```
+
+### Issue 19: column_aliases Saved as None
+
+**Problem**: Dataset 19 has `column_aliases: None` instead of `{}` or actual aliases.
+
+**Analysis**:
+- Save payload code: `column_aliases: ds_schemaBuilderState.columnAliases || {}`
+- This should save at least `{}` if no renaming was done
+- `None` in Python means the field wasn't in the request OR was explicitly `null`
+
+**Possible Causes**:
+1. `ds_schemaBuilderState.columnAliases` is `null` (not `undefined`) - `null || {}` returns `null` in JavaScript!
+2. JSON serialization of `null` becomes Python `None`
+
+**Fix Plan**:
+```javascript
+// Current (buggy):
+column_aliases: ds_schemaBuilderState.columnAliases || {},
+
+// Fixed (handles null explicitly):
+column_aliases: ds_schemaBuilderState.columnAliases ?? {},
+// OR
+column_aliases: ds_schemaBuilderState.columnAliases || ds_wizardData.columnAliases || {},
+```
+
+### Implementation Plan for Issues 17-19
+
+| Step | Task | Priority |
+|------|------|----------|
+| 1 | Fix `ds_collectStepData(4)` to fall back to UI elements for dates filter | High |
+| 2 | Fix `column_aliases` to use nullish coalescing (`??`) instead of OR (`||`) | High |
+| 3 | Add deployment note: require browser hard refresh after deployment | Medium |
+| 4 | Test: Create new dataset without clicking "Refresh Dataset" | High |
+| 5 | Test: Verify column_aliases saves as `{}` not `None` | High |
+
+---
+
 ## References
 
 - `templates/ml_platform/model_dataset.html` - Source page (to migrate from)

@@ -3740,13 +3740,14 @@
                         <!-- SVG for connection lines -->
                         <svg class="schema-connections-svg" id="dsConnectionsSvg"></svg>
 
-                        <!-- Table cards container -->
+                        <!-- Loading state (outside container so it survives innerHTML replacement) -->
+                        <div class="schema-loading" id="dsSchemaLoading">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            Loading table samples...
+                        </div>
+
+                        <!-- Table cards container (contents replaced by ds_renderTableCards) -->
                         <div class="schema-cards-container" id="dsSchemaCardsContainer">
-                            <!-- Loading state -->
-                            <div class="schema-loading" id="dsSchemaLoading">
-                                <i class="fas fa-spinner fa-spin"></i>
-                                Loading table samples...
-                            </div>
                         </div>
                     </div>
 
@@ -4007,24 +4008,55 @@
                     </div>
                 </div>
 
-                <!-- Dataset Summary Panel -->
-                <div class="filter-subchapter" id="dsSummarySubchapter" style="margin-top: 16px;">
-                    <div class="subchapter-header-tablet" style="background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); border-color: #86efac;">
-                        <span class="subchapter-title" style="color: #166534;">
-                            <i class="fas fa-chart-bar mr-2"></i>Dataset Summary
-                        </span>
+                <!-- Dataset Summary Panel (matches original model_dataset.html design) -->
+                <div class="dataset-summary-panel" id="dsSummarySubchapter" style="margin-top: 16px;">
+                    <div class="dataset-summary-header">
+                        <i class="fas fa-chart-bar"></i>
+                        <span>Dataset Summary</span>
+                        <span class="dataset-summary-total-rows" id="dsSummaryTotalRowsBadge"></span>
                     </div>
-                    <div id="dsSummaryContent" class="subchapter-content-outside" style="border-color: #86efac; background: #f0fdf4;">
-                        <div id="dsDatasetSummaryPanel" class="p-4">
-                            <div id="dsSummaryLoading" class="text-center py-4 hidden">
-                                <i class="fas fa-spinner fa-spin text-gray-400 mr-2"></i>
-                                <span class="text-gray-500">Loading statistics...</span>
+                    <div class="dataset-summary-content">
+                        <!-- Loading state -->
+                        <div id="dsSummaryLoading" class="dataset-summary-empty hidden">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            <span>Loading dataset statistics...</span>
+                        </div>
+                        <!-- Empty state before refresh -->
+                        <div id="dsSummaryEmpty" class="dataset-summary-empty">
+                            <i class="fas fa-info-circle"></i>
+                            <span>Loading dataset statistics...</span>
+                        </div>
+                        <!-- Populated state after refresh -->
+                        <div id="dsSummaryStats" class="dataset-summary-data hidden">
+                            <!-- Filters Applied Row -->
+                            <div class="dataset-filters-applied" id="dsFiltersAppliedSection">
+                                <div class="filter-badge" id="dsFilterBadgeDates">
+                                    <i class="fas fa-calendar-alt"></i>
+                                    <span id="dsFilterBadgeDatesText">All dates</span>
+                                </div>
+                                <div class="filter-badge" id="dsFilterBadgeCustomers">
+                                    <i class="fas fa-users"></i>
+                                    <span id="dsFilterBadgeCustomersText">All customers</span>
+                                </div>
+                                <div class="filter-badge" id="dsFilterBadgeProducts">
+                                    <i class="fas fa-box"></i>
+                                    <span id="dsFilterBadgeProductsText">All products</span>
+                                </div>
                             </div>
-                            <div id="dsSummaryEmpty" class="text-center py-4 text-gray-500">
-                                Apply filters and refresh to see dataset statistics
-                            </div>
-                            <div id="dsSummaryStats" class="hidden">
-                                <!-- Stats will be rendered here -->
+                            <!-- Column Stats Table -->
+                            <div class="column-stats-table-wrapper">
+                                <table class="column-stats-table" id="dsColumnStatsTable">
+                                    <thead>
+                                        <tr>
+                                            <th>Column</th>
+                                            <th>Data Type</th>
+                                            <th>Statistics</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="dsColumnStatsTableBody">
+                                        <!-- Populated by JavaScript -->
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
                     </div>
@@ -7169,6 +7201,16 @@ function ds_nextStep() {
         ds_loadSchemaBuilder();
     }
 
+    // Initialize Step 4: Fetch column analysis, populate dropdowns, load stats
+    if (nextStep === 4) {
+        ds_fetchColumnAnalysis().then(() => {
+            // Populate filter dropdowns with selected columns (needs column types for timestamp filter)
+            ds_populateFilterColumnDropdowns();
+            // Load initial dataset statistics
+            ds_loadDatasetStats(false);
+        });
+    }
+
     ds_showStep(nextStep);
 }
 
@@ -7264,6 +7306,7 @@ function ds_loadBqTables() {
             if (data.status === 'success') {
                 ds_availableTables = data.tables;
                 ds_renderPrimaryTableList();
+                ds_renderSecondaryTableList();  // Re-render to clear stale checkboxes from previous session
             }
         })
         .catch(err => console.error('Error loading BQ tables:', err));
@@ -7297,6 +7340,9 @@ function ds_renderPrimaryTableList() {
 function ds_onPrimaryTableSelect(tableName) {
     ds_wizardData.primaryTable = tableName;
     ds_wizardData.secondaryTables = [];
+
+    // Invalidate Schema Builder session so it reloads when returning to Step 3
+    ds_schemaBuilderState.sessionId = null;
 
     ds_renderPrimaryTableList();
     ds_renderSecondaryTableList();
@@ -7346,6 +7392,10 @@ function ds_onSecondaryTableToggle(tableName, isChecked) {
     } else {
         ds_wizardData.secondaryTables = ds_wizardData.secondaryTables.filter(t => t !== tableName);
     }
+
+    // Invalidate Schema Builder session so it reloads when returning to Step 3
+    ds_schemaBuilderState.sessionId = null;
+
     ds_renderSecondaryTableList();
 }
 
@@ -8622,40 +8672,572 @@ function ds_toggleSubchapter(name) {
     }
 }
 
+// Track active filter mode: 'rolling' or 'startDate'
+let ds_historyFilterMode = 'rolling';
+let ds_activeFilterPopup = null;
+
+// Dates Filter State Management
+let ds_datesFilterState = {
+    pending: {
+        timestampColumn: null,
+        mode: 'rolling',
+        rollingDays: 30,
+        startDate: null
+    },
+    committed: {
+        timestampColumn: null,
+        mode: 'rolling',
+        rollingDays: 30,
+        startDate: null
+    }
+};
+
 function ds_toggleFilterPopup(popupName) {
-    const popup = document.getElementById(`ds${popupName.charAt(0).toUpperCase() + popupName.slice(1)}Popup`);
-    if (popup) {
-        popup.classList.toggle('hidden');
+    // Build the correct ID: rollingWindow -> dsRollingWindowPopup
+    const popupId = `ds${popupName.charAt(0).toUpperCase() + popupName.slice(1)}Popup`;
+    const buttonId = `ds${popupName.charAt(0).toUpperCase() + popupName.slice(1)}Btn`;
+    const popup = document.getElementById(popupId);
+    const button = document.getElementById(buttonId);
+
+    if (!popup || !button) return;
+
+    // Don't open popup if button is disabled
+    if (button.disabled) {
+        return;
+    }
+
+    // Close any other open popups
+    document.querySelectorAll('.filter-popup.show').forEach(p => {
+        if (p.id !== popupId) {
+            p.classList.remove('show');
+        }
+    });
+    document.querySelectorAll('.filter-button.active').forEach(b => {
+        if (b.id !== buttonId) {
+            b.classList.remove('active');
+        }
+    });
+
+    // Toggle current popup
+    if (popup.classList.contains('show')) {
+        popup.classList.remove('show');
+        button.classList.remove('active');
+        ds_activeFilterPopup = null;
+    } else {
+        // Position popup below the button using fixed positioning
+        const buttonRect = button.getBoundingClientRect();
+        popup.style.top = (buttonRect.bottom + 8) + 'px';
+        popup.style.left = buttonRect.left + 'px';
+
+        popup.classList.add('show');
+        button.classList.add('active');
+        ds_activeFilterPopup = popupName;
+
+        // If opening start date popup, set default to today
+        if (popupName === 'startDate') {
+            const startDateInput = document.getElementById('dsStartDateInput');
+            if (startDateInput && !startDateInput.value) {
+                startDateInput.value = new Date().toISOString().split('T')[0];
+            }
+        }
     }
 }
 
 function ds_closeFilterPopup(popupName) {
-    const popup = document.getElementById(`ds${popupName.charAt(0).toUpperCase() + popupName.slice(1)}Popup`);
-    if (popup) {
-        popup.classList.add('hidden');
+    const popupId = `ds${popupName.charAt(0).toUpperCase() + popupName.slice(1)}Popup`;
+    const buttonId = `ds${popupName.charAt(0).toUpperCase() + popupName.slice(1)}Btn`;
+    const popup = document.getElementById(popupId);
+    const button = document.getElementById(buttonId);
+
+    if (popup) popup.classList.remove('show');
+    if (button) button.classList.remove('active');
+    if (ds_activeFilterPopup === popupName) {
+        ds_activeFilterPopup = null;
     }
 }
 
+// Close popups when clicking outside
+document.addEventListener('click', function(e) {
+    if (ds_activeFilterPopup && !e.target.closest('.filter-button-wrapper')) {
+        ds_closeFilterPopup(ds_activeFilterPopup);
+    }
+});
+
 function ds_onTimestampColumnChange() {
+    ds_updateDatesRefreshButtonState();
+    ds_updateDatesFilterSummary();
     ds_validateCurrentStep();
 }
 
 function ds_onRollingDaysChange() {
+    ds_historyFilterMode = 'rolling';
+    ds_updateDatesRefreshButtonState();
+    ds_updateDatesFilterSummary();
     ds_validateCurrentStep();
 }
 
 function ds_onStartDateChange() {
+    ds_historyFilterMode = 'startDate';
+    ds_updateDatesRefreshButtonState();
+    ds_updateDatesFilterSummary();
     ds_validateCurrentStep();
 }
 
 function ds_applyRollingWindow() {
+    ds_historyFilterMode = 'rolling';
     ds_closeFilterPopup('rollingWindow');
+    ds_updateDatesRefreshButtonState();
+    ds_updateDatesFilterSummary();
     ds_validateCurrentStep();
 }
 
+// Get current pending dates filter state from UI elements
+function ds_getDatesFilterPendingState() {
+    return {
+        timestampColumn: document.getElementById('dsTimestampColumn')?.value || null,
+        mode: ds_historyFilterMode,
+        rollingDays: parseInt(document.getElementById('dsRollingDays')?.value) || 30,
+        startDate: document.getElementById('dsStartDateInput')?.value || null
+    };
+}
+
+// Update Dates Refresh Dataset button state
+function ds_updateDatesRefreshButtonState() {
+    const refreshBtn = document.getElementById('dsRefreshDatasetBtn');
+    if (!refreshBtn) return;
+
+    // Get current pending state from UI
+    const pendingState = ds_getDatesFilterPendingState();
+
+    // Enable button if we have a timestamp column selected
+    const hasTimestamp = !!pendingState.timestampColumn;
+
+    refreshBtn.disabled = !hasTimestamp;
+    refreshBtn.classList.toggle('filter-button-disabled', !hasTimestamp);
+}
+
+// Update the dates filter summary line
+function ds_updateDatesFilterSummary() {
+    const summaryItems = document.getElementById('dsDatesFilterSummaryItems');
+    if (!summaryItems) return;
+
+    const timestampCol = document.getElementById('dsTimestampColumn')?.value;
+    const rollingDays = document.getElementById('dsRollingDays')?.value || 30;
+    const startDate = document.getElementById('dsStartDateInput')?.value;
+
+    if (!timestampCol) {
+        summaryItems.innerHTML = '<span class="filter-summary-empty">No filters selected</span>';
+        return;
+    }
+
+    let summaryText = '';
+    if (ds_historyFilterMode === 'rolling') {
+        summaryText = `Last ${rollingDays} days from ${timestampCol.split('.').pop()}`;
+    } else if (ds_historyFilterMode === 'startDate' && startDate) {
+        summaryText = `From ${startDate} using ${timestampCol.split('.').pop()}`;
+    } else {
+        summaryText = `Using ${timestampCol.split('.').pop()}`;
+    }
+
+    summaryItems.innerHTML = `<span class="filter-summary-item">${summaryText}</span>`;
+}
+
 function ds_refreshDatasetHistory() {
-    // Placeholder - would fetch stats with date filter
-    ds_showNotification('Date filter applied', 'success');
+    // Refresh dataset stats with current filter settings
+    ds_loadDatasetStats(true);
+}
+
+// =============================================================================
+// STEP 4 - Column Analysis & Filter Dropdowns
+// =============================================================================
+
+/**
+ * Fetch column type information for the selected columns.
+ * Called when entering Step 4 to enable type-aware filtering.
+ */
+async function ds_fetchColumnAnalysis() {
+    if (!ds_schemaBuilderState.sessionId) return;
+
+    try {
+        const response = await fetch(`/api/models/${modelId}/datasets/analyze-columns/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrftoken
+            },
+            body: JSON.stringify({
+                session_id: ds_schemaBuilderState.sessionId,
+                selected_columns: ds_schemaBuilderState.selectedColumns
+            })
+        });
+
+        const data = await response.json();
+        if (data.status === 'success') {
+            ds_productFiltersState.columnAnalysis = data.columns;
+            ds_customerFiltersState.columnAnalysis = data.columns;
+        }
+    } catch (error) {
+        console.error('Error fetching column analysis:', error);
+    }
+}
+
+/**
+ * Populate filter column dropdowns with selected columns.
+ * Timestamp dropdown only shows DATE/DATETIME/TIMESTAMP columns.
+ */
+function ds_populateFilterColumnDropdowns() {
+    // Get all selected columns from schema builder
+    const allColumns = [];
+    Object.entries(ds_schemaBuilderState.selectedColumns || {}).forEach(([table, cols]) => {
+        const shortTable = table.replace('raw_data.', '');
+        cols.forEach(col => {
+            allColumns.push({
+                table: shortTable,
+                column: col,
+                fullName: `${shortTable}.${col}`
+            });
+        });
+    });
+
+    // Populate timestamp column dropdown (only DATE/TIMESTAMP type columns)
+    const timestampSelect = document.getElementById('dsTimestampColumn');
+    if (!timestampSelect) return;
+
+    const currentTimestamp = timestampSelect.value;  // Preserve current selection
+    timestampSelect.innerHTML = '<option value="">Select column...</option>';
+
+    // Get column type info from analysis cache
+    const colAnalysis = ds_productFiltersState.columnAnalysis || ds_customerFiltersState.columnAnalysis || {};
+    const dateTypes = ['DATE', 'DATETIME', 'TIMESTAMP', 'TIME'];
+
+    allColumns.forEach(c => {
+        // Only show DATE/TIMESTAMP type columns
+        const colInfo = colAnalysis[c.fullName];
+        const colType = colInfo?.type?.toUpperCase() || '';
+        if (!dateTypes.includes(colType)) {
+            return;  // Skip non-date columns
+        }
+
+        const option = document.createElement('option');
+        option.value = c.fullName;
+        option.textContent = c.fullName;  // Show full name like "invoices.date"
+        // Restore previous selection if it exists
+        if (c.fullName === currentTimestamp) option.selected = true;
+        timestampSelect.appendChild(option);
+    });
+
+    // Also populate product filter dropdowns
+    ds_populateProductFilterDropdowns(allColumns);
+}
+
+/**
+ * Populate product filter dropdowns (product ID and revenue columns).
+ */
+function ds_populateProductFilterDropdowns(allColumns = null) {
+    if (!allColumns) {
+        allColumns = [];
+        Object.entries(ds_schemaBuilderState.selectedColumns || {}).forEach(([table, cols]) => {
+            const shortTable = table.replace('raw_data.', '');
+            cols.forEach(col => {
+                allColumns.push({
+                    table: shortTable,
+                    column: col,
+                    fullName: `${shortTable}.${col}`
+                });
+            });
+        });
+    }
+
+    // Get the timestamp column that's currently selected
+    const timestampCol = document.getElementById('dsTimestampColumn')?.value;
+
+    // Get column type info from analysis cache
+    const colAnalysis = ds_productFiltersState.columnAnalysis || {};
+    const numericTypes = ['INTEGER', 'INT64', 'FLOAT', 'FLOAT64', 'NUMERIC', 'BIGNUMERIC', 'DECIMAL'];
+
+    // Populate product ID dropdown
+    const productSelect = document.getElementById('dsProductIdColumn');
+    if (productSelect) {
+        const currentProduct = productSelect.value;
+        productSelect.innerHTML = '<option value="">Select column...</option>';
+        allColumns.forEach(c => {
+            // Exclude timestamp column
+            if (timestampCol && c.fullName === timestampCol) return;
+
+            const option = document.createElement('option');
+            option.value = c.fullName;
+            option.textContent = c.fullName;
+            if (c.fullName === currentProduct) option.selected = true;
+            productSelect.appendChild(option);
+        });
+    }
+
+    // Populate revenue column dropdown (only numeric columns)
+    const revenueSelect = document.getElementById('dsRevenueColumn');
+    if (revenueSelect) {
+        const currentRevenue = revenueSelect.value;
+        const productCol = productSelect?.value;
+
+        revenueSelect.innerHTML = '<option value="">Select column...</option>';
+        allColumns.forEach(c => {
+            // Only show numeric columns for revenue
+            const colInfo = colAnalysis[c.fullName];
+            const colType = colInfo?.type?.toUpperCase() || '';
+            if (!numericTypes.includes(colType)) return;
+
+            // Exclude the selected product column
+            if (productCol && c.fullName === productCol) return;
+            // Exclude timestamp column
+            if (timestampCol && c.fullName === timestampCol) return;
+
+            const option = document.createElement('option');
+            option.value = c.fullName;
+            option.textContent = c.fullName;
+            if (c.fullName === currentRevenue) option.selected = true;
+            revenueSelect.appendChild(option);
+        });
+    }
+}
+
+// =============================================================================
+// DATASET SUMMARY - Step 4 Statistics
+// =============================================================================
+
+/**
+ * Load dataset statistics for the Summary panel in Step 4.
+ * Called when entering Step 4 or when user clicks "Refresh Dataset".
+ *
+ * @param {boolean} withFilters - If true, include current filter settings
+ */
+function ds_loadDatasetStats(withFilters = false) {
+    const loadingEl = document.getElementById('dsSummaryLoading');
+    const emptyEl = document.getElementById('dsSummaryEmpty');
+    const statsEl = document.getElementById('dsSummaryStats');
+
+    // Show loading state
+    loadingEl.classList.remove('hidden');
+    emptyEl.classList.add('hidden');
+    statsEl.classList.add('hidden');
+
+    // Build request payload from wizard state
+    const payload = {
+        primary_table: ds_wizardData.primaryTable,
+        secondary_tables: ds_wizardData.secondaryTables || [],
+        selected_columns: ds_schemaBuilderState.selectedColumns || {},
+        join_config: ds_convertJoinsToConfig(ds_schemaBuilderState.joins || [])
+    };
+
+    // Include filters if requested (for Refresh button)
+    if (withFilters) {
+        payload.filters = ds_buildFiltersPayload();
+    }
+
+    fetch(`/api/models/${modelId}/datasets/stats/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrftoken
+        },
+        body: JSON.stringify(payload)
+    })
+    .then(r => r.json())
+    .then(data => {
+        loadingEl.classList.add('hidden');
+
+        if (data.status === 'success') {
+            ds_renderDatasetStats(data);
+            statsEl.classList.remove('hidden');
+        } else {
+            emptyEl.textContent = data.message || 'Failed to load statistics';
+            emptyEl.classList.remove('hidden');
+        }
+    })
+    .catch(err => {
+        console.error('Error loading dataset stats:', err);
+        loadingEl.classList.add('hidden');
+        emptyEl.textContent = 'Failed to load statistics. Please try again.';
+        emptyEl.classList.remove('hidden');
+    });
+}
+
+/**
+ * Build filters payload from current filter state.
+ */
+function ds_buildFiltersPayload() {
+    const filters = {};
+
+    // Date filter
+    const timestampCol = document.getElementById('dsTimestampColumn')?.value;
+    const rollingDays = parseInt(document.getElementById('dsRollingDays')?.value) || 30;
+
+    if (timestampCol) {
+        filters.timestamp_column = timestampCol;
+        filters.date_filter = { type: 'rolling', days: rollingDays };
+    }
+
+    // Product filters (from committed state)
+    if (ds_productFiltersState?.committed?.topRevenue?.enabled) {
+        const tr = ds_productFiltersState.committed.topRevenue;
+        filters.product_filter = {
+            type: 'top_revenue',
+            product_column: tr.productColumn,
+            revenue_column: tr.revenueColumn,
+            percent: tr.thresholdPercent
+        };
+    }
+
+    // Customer filters (from committed state)
+    if (ds_customerFiltersState?.committed?.topRevenue?.enabled) {
+        const tr = ds_customerFiltersState.committed.topRevenue;
+        filters.customer_filter = {
+            type: 'top_revenue',
+            customer_column: tr.customerColumn,
+            revenue_column: tr.revenueColumn,
+            percent: tr.thresholdPercent
+        };
+    }
+
+    return Object.keys(filters).length > 0 ? filters : null;
+}
+
+/**
+ * Render dataset statistics in the Summary panel.
+ * Matches the original model_dataset.html design.
+ */
+function ds_renderDatasetStats(data) {
+    const filters = data.filters_applied || {};
+    const summary = data.summary || {};
+    const columnStats = data.column_stats || {};
+
+    // --- Total Rows Badge in Header ---
+    const totalRowsBadge = document.getElementById('dsSummaryTotalRowsBadge');
+    if (summary.total_rows) {
+        totalRowsBadge.textContent = `${summary.total_rows.toLocaleString()} rows`;
+    } else {
+        totalRowsBadge.textContent = '';
+    }
+
+    // --- Filter Badges ---
+    const datesBadge = document.getElementById('dsFilterBadgeDates');
+    const customersBadge = document.getElementById('dsFilterBadgeCustomers');
+    const productsBadge = document.getElementById('dsFilterBadgeProducts');
+
+    // Dates filter
+    if (filters.dates?.type === 'rolling') {
+        document.getElementById('dsFilterBadgeDatesText').textContent = `Last ${filters.dates.days} days`;
+        datesBadge.classList.add('filter-active');
+    } else if (filters.dates?.type === 'fixed') {
+        document.getElementById('dsFilterBadgeDatesText').textContent = `From ${filters.dates.start_date}`;
+        datesBadge.classList.add('filter-active');
+    } else {
+        document.getElementById('dsFilterBadgeDatesText').textContent = 'All dates';
+        datesBadge.classList.remove('filter-active');
+    }
+
+    // Customers filter
+    if (filters.customers?.type === 'multiple') {
+        const count = filters.customers.count || filters.customers.filters?.length || 0;
+        document.getElementById('dsFilterBadgeCustomersText').textContent = count === 1 ? '1 filter' : `${count} filters`;
+        customersBadge.classList.add('filter-active');
+    } else if (filters.customers?.type && filters.customers.type !== 'none') {
+        document.getElementById('dsFilterBadgeCustomersText').textContent = 'Filtered';
+        customersBadge.classList.add('filter-active');
+    } else {
+        document.getElementById('dsFilterBadgeCustomersText').textContent = 'All customers';
+        customersBadge.classList.remove('filter-active');
+    }
+
+    // Products filter
+    if (filters.products?.type === 'multiple') {
+        const count = filters.products.count || filters.products.filters?.length || 0;
+        document.getElementById('dsFilterBadgeProductsText').textContent = count === 1 ? '1 filter' : `${count} filters`;
+        productsBadge.classList.add('filter-active');
+    } else if (filters.products?.type === 'top_revenue') {
+        document.getElementById('dsFilterBadgeProductsText').textContent = `Top ${filters.products.percent}% revenue`;
+        productsBadge.classList.add('filter-active');
+    } else if (filters.products?.type && filters.products.type !== 'none') {
+        document.getElementById('dsFilterBadgeProductsText').textContent = 'Filtered';
+        productsBadge.classList.add('filter-active');
+    } else {
+        document.getElementById('dsFilterBadgeProductsText').textContent = 'All products';
+        productsBadge.classList.remove('filter-active');
+    }
+
+    // --- Column Stats Table ---
+    const tableBody = document.getElementById('dsColumnStatsTableBody');
+    tableBody.innerHTML = '';
+
+    for (const [columnName, stats] of Object.entries(columnStats)) {
+        const row = document.createElement('tr');
+
+        // Column name cell (show short name)
+        const nameCell = document.createElement('td');
+        const shortName = columnName.split('.').pop();
+        nameCell.innerHTML = `<span class="column-name">${ds_escapeHtml(shortName)}</span>`;
+        row.appendChild(nameCell);
+
+        // Data type cell
+        const typeCell = document.createElement('td');
+        typeCell.innerHTML = `<span class="column-type">${stats.type || 'N/A'}</span>`;
+        row.appendChild(typeCell);
+
+        // Stats cell
+        const statsCell = document.createElement('td');
+        statsCell.innerHTML = ds_formatColumnStats(stats);
+        row.appendChild(statsCell);
+
+        tableBody.appendChild(row);
+    }
+}
+
+/**
+ * Format column statistics for display in the stats table.
+ * Matches the original model_dataset.html formatColumnStats function.
+ */
+function ds_formatColumnStats(stats) {
+    const items = [];
+
+    // Handle different column types
+    if (stats.type === 'STRING' || stats.type === 'BYTES') {
+        if (stats.unique_count !== undefined) {
+            items.push(`<span class="stat-item"><span class="stat-label">Unique:</span> <span class="stat-value">${stats.unique_count.toLocaleString()}</span></span>`);
+        }
+    } else if (['INT64', 'FLOAT64', 'NUMERIC', 'BIGNUMERIC', 'INTEGER', 'FLOAT'].includes(stats.type)) {
+        if (stats.min !== undefined && stats.min !== null) {
+            items.push(`<span class="stat-item"><span class="stat-label">Min:</span> <span class="stat-value">${ds_formatNumber(stats.min)}</span></span>`);
+        }
+        if (stats.max !== undefined && stats.max !== null) {
+            items.push(`<span class="stat-item"><span class="stat-label">Max:</span> <span class="stat-value">${ds_formatNumber(stats.max)}</span></span>`);
+        }
+        if (stats.avg !== undefined && stats.avg !== null) {
+            items.push(`<span class="stat-item"><span class="stat-label">Avg:</span> <span class="stat-value">${ds_formatNumber(stats.avg)}</span></span>`);
+        }
+    } else if (['DATE', 'DATETIME', 'TIMESTAMP'].includes(stats.type)) {
+        if (stats.min) {
+            items.push(`<span class="stat-item"><span class="stat-label">Min:</span> <span class="stat-value">${stats.min}</span></span>`);
+        }
+        if (stats.max) {
+            items.push(`<span class="stat-item"><span class="stat-label">Max:</span> <span class="stat-value">${stats.max}</span></span>`);
+        }
+        if (stats.unique_count !== undefined) {
+            items.push(`<span class="stat-item"><span class="stat-label">Unique:</span> <span class="stat-value">${stats.unique_count.toLocaleString()}</span></span>`);
+        }
+    } else if (stats.type === 'BOOL') {
+        if (stats.true_count !== undefined) {
+            items.push(`<span class="stat-item"><span class="stat-label">True:</span> <span class="stat-value">${stats.true_count.toLocaleString()}</span></span>`);
+        }
+        if (stats.false_count !== undefined) {
+            items.push(`<span class="stat-item"><span class="stat-label">False:</span> <span class="stat-value">${stats.false_count.toLocaleString()}</span></span>`);
+        }
+    }
+
+    // Add null count if present
+    if (stats.null_count !== undefined && stats.null_count > 0) {
+        const nullPercent = stats.null_percent !== undefined ? ` (${stats.null_percent.toFixed(1)}%)` : '';
+        items.push(`<span class="stat-item"><span class="stat-label">Nulls:</span> <span class="stat-value">${stats.null_count.toLocaleString()}${nullPercent}</span></span>`);
+    }
+
+    return items.length > 0 ? `<span class="column-stats-details">${items.join('')}</span>` : '<span class="text-gray-400">—</span>';
 }
 
 // =============================================================================
@@ -10364,6 +10946,24 @@ function ds_refreshCustomerFilters() {
 // DATASET WIZARD - Save Dataset
 // =============================================================================
 
+/**
+ * Convert joins array format to dict format expected by backend validation.
+ * From: [{leftTable, rightTable, leftCol, rightCol, type}, ...]
+ * To: {rightTable: {join_key: rightCol, primary_column: leftCol, join_type: type}, ...}
+ */
+function ds_convertJoinsToConfig(joinsArray) {
+    const config = {};
+    for (const join of joinsArray) {
+        config[join.rightTable] = {
+            join_key: join.rightCol,
+            primary_column: join.leftCol,
+            secondary_column: join.rightCol,
+            join_type: join.type
+        };
+    }
+    return config;
+}
+
 function ds_saveDataset() {
     ds_collectStepData(4);
 
@@ -10372,7 +10972,7 @@ function ds_saveDataset() {
         description: ds_wizardData.description,
         primary_table: ds_wizardData.primaryTable,
         secondary_tables: ds_wizardData.secondaryTables,
-        join_config: ds_schemaBuilderState.joins || [],
+        join_config: ds_convertJoinsToConfig(ds_schemaBuilderState.joins || []),
         selected_columns: ds_schemaBuilderState.selectedColumns,
         column_aliases: ds_schemaBuilderState.columnAliases || {},
         filters: ds_wizardData.filters

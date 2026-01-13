@@ -618,6 +618,116 @@ New classes added for Schema Builder enhancements:
 
 ---
 
+## Bug Fixes (2026-01-13)
+
+After testing the migration, several bugs were identified and fixed:
+
+### Fix 1: Excessive Logging in Preview Service ✅
+
+**Problem**: The Schema Builder preview was generating huge JSON outputs in server logs with column names and sample values.
+
+**Solution**: Removed debug logging statements from `ml_platform/datasets/preview_service.py`:
+- Removed `[Preview]` prefix logs (session info, tables, joins)
+- Removed `[Preview Join]` prefix logs (column names, sample values, merge stats)
+- Kept error logging for actual failures
+
+### Fix 2: 400 Error on Dataset Save ✅
+
+**Problem**: Saving a dataset at Step 4 (Filter) returned a 400 Bad Request error.
+
+**Root Cause**: The frontend was sending `join_config` as an array format, but the backend validation expected a dictionary format.
+
+**Solution**: Added `ds_convertJoinsToConfig()` function to convert the array format to dict format:
+```javascript
+// From: [{leftTable, rightTable, leftCol, rightCol, type}, ...]
+// To: {rightTable: {join_key, primary_column, secondary_column, join_type}, ...}
+```
+
+### Fix 3: Schema Builder State Not Resetting on New Wizard ✅
+
+**Problem**: When creating a second dataset after the first, the wizard showed stale table selections and threw errors.
+
+**Root Cause**: Two issues:
+1. `dsSchemaLoading` element was inside `dsSchemaCardsContainer` and got destroyed when innerHTML was replaced
+2. `ds_renderSecondaryTableList()` wasn't called when loading BQ tables
+
+**Solution**:
+- Moved `dsSchemaLoading` element outside `dsSchemaCardsContainer` (sibling instead of child)
+- Added `ds_renderSecondaryTableList()` call to `ds_loadBqTables()` to clear stale checkboxes
+
+### Fix 4: Tables Not Updating When Returning to Step 3 ✅
+
+**Problem**: When going back to Step 2 to add/remove tables, then returning to Step 3, the Schema Builder didn't show the updated tables.
+
+**Root Cause**: `ds_schemaBuilderState.sessionId` was only cleared on wizard reset, not when tables changed.
+
+**Solution**: Added `ds_schemaBuilderState.sessionId = null;` to:
+- `ds_onPrimaryTableSelect()` - when primary table changes
+- `ds_onSecondaryTableToggle()` - when secondary tables are added/removed
+
+This forces the Schema Builder to reload when returning to Step 3 after table changes.
+
+### Fix 5: Dataset Summary Not Loading at Step 4 ✅
+
+**Problem**: The Dataset Summary panel at Step 4 showed "Apply filters and refresh" but never loaded statistics.
+
+**Root Cause**: Missing Step 4 initialization - no code to fetch column analysis or call the stats API.
+
+**Solution**:
+1. Added `ds_fetchColumnAnalysis()` - fetches column types from `/api/models/${modelId}/datasets/analyze-columns/`
+2. Added `ds_loadDatasetStats()` - fetches stats from `/api/models/${modelId}/datasets/stats/`
+3. Added `ds_renderDatasetStats()` - renders stats matching original design (filter badges + column table)
+4. Updated `ds_nextStep()` to call these functions when entering Step 4
+
+### Fix 6: Dataset Summary Wrong Design ✅
+
+**Problem**: The Dataset Summary was showing custom cards (Total Rows, Unique Customers, Unique Products) instead of the original design.
+
+**Solution**: Updated to match original `model_dataset.html` design:
+- Header with total rows badge
+- Filter badges (Dates, Customers, Products) with active state
+- Column stats table with Column, Data Type, Statistics columns
+- Added `ds_formatColumnStats()` helper for type-aware formatting
+
+### Fix 7: Timestamp Column Dropdown Empty ✅
+
+**Problem**: The "Select timestamp column" dropdown was empty - no date columns shown.
+
+**Root Cause**: Missing column analysis step that fetches column types to filter for DATE/TIMESTAMP columns.
+
+**Solution**:
+1. Added `ds_fetchColumnAnalysis()` - fetches column type info via API
+2. Added `ds_populateFilterColumnDropdowns()` - populates timestamp dropdown with only DATE/DATETIME/TIMESTAMP/TIME columns
+3. Added `ds_populateProductFilterDropdowns()` - populates product/revenue dropdowns
+4. Updated `ds_nextStep()` to call `ds_fetchColumnAnalysis().then(() => ds_populateFilterColumnDropdowns())` when entering Step 4
+
+### Fix 8: Rolling Window and Start Date Popups Not Working ✅
+
+**Problem**: Clicking "Rolling Window" or "Start Date" buttons did nothing.
+
+**Root Cause**:
+1. `ds_toggleFilterPopup()` was using `classList.toggle('hidden')` instead of `classList.toggle('show')`
+2. CSS uses `.filter-popup.show { display: block; }` not `.hidden` removal
+3. Missing popup positioning logic
+
+**Solution**:
+1. Rewrote `ds_toggleFilterPopup()` to use `.show` class and fixed positioning
+2. Rewrote `ds_closeFilterPopup()` to use `.show` class
+3. Added click-outside handler to close popups
+4. Added `ds_historyFilterMode` state tracking ('rolling' or 'startDate')
+5. Added `ds_datesFilterState` for pending/committed state management
+6. Added `ds_updateDatesRefreshButtonState()` to enable/disable Refresh button
+7. Added `ds_updateDatesFilterSummary()` to show filter summary text
+
+### Files Modified for Bug Fixes
+
+| File | Changes |
+|------|---------|
+| `ml_platform/datasets/preview_service.py` | Removed excessive debug logging |
+| `templates/ml_platform/model_configs.html` | Fixed join_config format, Schema Builder state management, Dataset Summary, column dropdowns, filter popups |
+
+---
+
 ## References
 
 - `templates/ml_platform/model_dataset.html` - Source page (to migrate from)

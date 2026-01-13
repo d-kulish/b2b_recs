@@ -6993,6 +6993,23 @@ let ds_schemaBuilderState = {
     selectedJoinIndex: null
 };
 
+// Store card positions for Schema Builder
+let ds_cardPositions = {};
+
+// Drag state for Schema Builder
+let ds_dragState = {
+    isDragging: false,
+    table: null,
+    startX: 0,
+    startY: 0,
+    cardStartX: 0,
+    cardStartY: 0
+};
+
+// Preview debounce
+let ds_previewDebounceTimer = null;
+const DS_PREVIEW_DEBOUNCE_MS = 500;
+
 // =============================================================================
 // DATASET WIZARD - Open/Close/Reset
 // =============================================================================
@@ -7043,6 +7060,9 @@ function ds_resetWizard() {
         previewData: null,
         selectedJoinIndex: null
     };
+
+    // Reset card positions so tables are re-positioned fresh
+    ds_cardPositions = {};
 
     // Reset form fields
     document.getElementById('dsDatasetName').value = '';
@@ -7385,28 +7405,100 @@ function ds_renderTableCards() {
         const tableData = ds_schemaBuilderState.tables[tableName] || {};
         const columns = tableData.columns || [];
         const selectedCols = ds_schemaBuilderState.selectedColumns[tableName] || [];
+        const allSelected = columns.length > 0 && selectedCols.length === columns.length;
 
         html += `
-            <div class="schema-table-card ${isPrimary ? 'primary' : 'secondary'}" data-table="${tableName}">
-                <div class="schema-card-header">
+            <div class="schema-table-card ${isPrimary ? 'primary' : 'secondary'}" data-table="${tableName}" id="dsCard_${shortName}">
+                <div class="schema-card-header" onmousedown="ds_startDrag(event, '${tableName}')">
                     <span class="schema-card-title">${ds_escapeHtml(shortName)}</span>
                     <span class="schema-card-badge ${isPrimary ? 'primary' : 'secondary'}">${isPrimary ? 'Primary' : 'Secondary'}</span>
                 </div>
-                <div class="schema-card-columns">
-                    ${columns.map(col => `
-                        <label class="schema-column-item ${selectedCols.includes(col.name) ? 'selected' : ''}">
-                            <input type="checkbox" ${selectedCols.includes(col.name) ? 'checked' : ''}
-                                   onchange="ds_onColumnToggle('${tableName}', '${col.name}', this.checked)">
-                            <span class="column-name">${ds_escapeHtml(col.name)}</span>
-                            <span class="column-type">${col.type}</span>
-                        </label>
-                    `).join('')}
+                <div class="schema-select-all-row">
+                    <label class="schema-select-all-label">
+                        <input type="checkbox" ${allSelected ? 'checked' : ''}
+                               onchange="ds_toggleAllColumns('${tableName}', this.checked)">
+                        <span>${allSelected ? 'Deselect All' : 'Select All'}</span>
+                    </label>
+                    <span class="schema-column-count">${selectedCols.length}/${columns.length}</span>
+                </div>
+                <div class="schema-column-list" id="dsColumnList_${shortName}">
+                    ${columns.map(col => ds_renderColumnItem(tableName, col, selectedCols, isPrimary)).join('')}
                 </div>
             </div>
         `;
     });
 
     container.innerHTML = html;
+
+    // Position cards: distribute evenly across container
+    ds_positionCardsInitially(allTables);
+
+    // Setup drag handlers for moving cards
+    ds_setupDragHandlers();
+
+    // Setup scroll handlers for column lists
+    ds_setupColumnScrollHandlers();
+
+    // Update connection lines after rendering
+    setTimeout(ds_updateConnectionLines, 50);
+}
+
+// Render a single column item with connection dot/plus
+function ds_renderColumnItem(table, col, selectedCols, isPrimary) {
+    const shortTable = table.replace('raw_data.', '');
+    const isSelected = selectedCols.includes(col.name);
+
+    // Determine if column is a recommended join key based on naming patterns
+    const colLower = col.name.toLowerCase();
+    const keyPatterns = ['_id', 'id_', '_key', 'key_', '_code', 'code_'];
+    const isRecommendedJoinKey = col.is_potential_join_key ||
+                      keyPatterns.some(p => colLower.includes(p)) ||
+                      colLower === 'id';
+
+    // Check if this column is part of an existing join
+    const isConnected = ds_schemaBuilderState.joins.some(j =>
+        (j.leftCol === col.name && ds_wizardData.primaryTable === table) ||
+        (j.rightCol === col.name && j.rightTable === table)
+    );
+
+    // Determine what to show in the connection area:
+    // - Connected: colored dot (always visible)
+    // - Recommended but not connected: empty dot (always visible)
+    // - Not recommended and not connected: "+" on hover
+    let connectionElement;
+    if (isConnected) {
+        // Connected column - show colored dot
+        connectionElement = `
+            <div class="schema-connection-dot connected"
+                 data-table="${table}" data-column="${col.name}"
+                 onclick="ds_onConnectionDotClick('${table}', '${col.name}', event)"></div>
+        `;
+    } else if (isRecommendedJoinKey) {
+        // Recommended join key - show empty dot
+        connectionElement = `
+            <div class="schema-connection-dot recommended"
+                 data-table="${table}" data-column="${col.name}"
+                 onclick="ds_onConnectionDotClick('${table}', '${col.name}', event)"></div>
+        `;
+    } else {
+        // Regular column - show "+" on hover
+        connectionElement = `
+            <div class="schema-connection-plus"
+                 data-table="${table}" data-column="${col.name}"
+                 onclick="ds_onConnectionDotClick('${table}', '${col.name}', event)">+</div>
+        `;
+    }
+
+    return `
+        <div class="schema-column-item ${isConnected ? 'connected' : ''}" data-table="${table}" data-column="${col.name}"
+             data-type="${col.type || 'unknown'}">
+            <input type="checkbox" ${isSelected ? 'checked' : ''}
+                   onchange="ds_onColumnToggle('${table}', '${col.name}', this.checked)">
+            <span class="schema-column-name">${col.name}</span>
+            <span class="schema-column-type">${(col.type || '').substring(0, 3).toLowerCase()}</span>
+            ${connectionElement}
+        </div>
+    `;
 }
 
 function ds_onColumnToggle(tableName, columnName, isChecked) {
@@ -7424,23 +7516,1007 @@ function ds_onColumnToggle(tableName, columnName, isChecked) {
     }
 
     ds_validateCurrentStep();
+    ds_debouncedRefreshPreview();
+}
+
+// Toggle all columns for a table (Select All / Deselect All)
+function ds_toggleAllColumns(tableName, selectAll) {
+    const tableData = ds_schemaBuilderState.tables[tableName] || {};
+    const columns = tableData.columns || [];
+
+    if (selectAll) {
+        // Select all columns
+        ds_schemaBuilderState.selectedColumns[tableName] = columns.map(col => col.name);
+    } else {
+        // Deselect all columns
+        ds_schemaBuilderState.selectedColumns[tableName] = [];
+    }
+
+    // Re-render cards to update checkboxes and Select All state
+    ds_renderTableCards();
+    ds_validateCurrentStep();
     ds_refreshPreview();
 }
 
+function ds_debouncedRefreshPreview() {
+    if (ds_previewDebounceTimer) {
+        clearTimeout(ds_previewDebounceTimer);
+    }
+    ds_previewDebounceTimer = setTimeout(ds_refreshPreview, DS_PREVIEW_DEBOUNCE_MS);
+}
+
 function ds_refreshPreview() {
-    // Simplified preview - just show selected column count
+    // Check if we have a session and selected columns
+    if (!ds_schemaBuilderState.sessionId) {
+        ds_renderPreviewEmpty();
+        return;
+    }
+
     const totalCols = Object.values(ds_schemaBuilderState.selectedColumns)
         .reduce((sum, cols) => sum + (cols?.length || 0), 0);
 
-    document.getElementById('dsPreviewColCount').textContent = totalCols;
-
-    if (totalCols > 0) {
-        document.getElementById('dsPreviewEmpty').style.display = 'none';
-        document.getElementById('dsPreviewRowCount').textContent = '~100';
-    } else {
-        document.getElementById('dsPreviewEmpty').style.display = 'flex';
-        document.getElementById('dsPreviewRowCount').textContent = '-';
+    if (totalCols === 0) {
+        ds_renderPreviewEmpty();
+        return;
     }
+
+    // Build joins array for API
+    const joins = ds_schemaBuilderState.joins.map(j => ({
+        table: j.rightTable,
+        left_col: j.leftCol,
+        right_col: j.rightCol,
+        type: j.type
+    }));
+
+    // Debug logging for join issues
+    console.log('[DS Preview] Session ID:', ds_schemaBuilderState.sessionId);
+    console.log('[DS Preview] Primary table:', ds_wizardData.primaryTable);
+    console.log('[DS Preview] Joins:', JSON.stringify(joins, null, 2));
+    console.log('[DS Preview] Selected columns:', JSON.stringify(ds_schemaBuilderState.selectedColumns, null, 2));
+
+    // Make API call to get preview data
+    fetch(`/api/models/${modelId}/datasets/preview/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrftoken
+        },
+        body: JSON.stringify({
+            session_id: ds_schemaBuilderState.sessionId,
+            primary_table: ds_wizardData.primaryTable,
+            joins: joins,
+            selected_columns: ds_schemaBuilderState.selectedColumns
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        console.log('[DS Preview] Response:', JSON.stringify(data, null, 2));
+        if (data.stats?.warnings?.length > 0) {
+            console.warn('[DS Preview] Warnings:', data.stats.warnings);
+        }
+        if (data.status === 'success') {
+            ds_schemaBuilderState.previewData = data;
+            ds_renderPreview(data);
+        } else {
+            ds_renderPreviewError(data.message || 'Failed to generate preview');
+        }
+    })
+    .catch(error => {
+        console.error('Error generating preview:', error);
+        ds_renderPreviewError('Failed to generate preview');
+    });
+}
+
+function ds_renderPreviewEmpty() {
+    document.getElementById('dsPreviewRowCount').textContent = '-';
+    document.getElementById('dsPreviewColCount').textContent = '-';
+    document.getElementById('dsPreviewTable').style.display = 'none';
+    document.getElementById('dsPreviewEmpty').style.display = 'flex';
+    document.getElementById('dsPreviewWarnings').style.display = 'none';
+}
+
+function ds_renderPreview(data) {
+    // Update stats
+    document.getElementById('dsPreviewRowCount').textContent = data.stats?.total_rows || 0;
+    document.getElementById('dsPreviewColCount').textContent = data.column_order?.length || 0;
+
+    // Show warnings if any
+    const warningsEl = document.getElementById('dsPreviewWarnings');
+    const warningTextEl = document.getElementById('dsPreviewWarningText');
+    if (data.stats?.warnings?.length > 0) {
+        warningsEl.style.display = 'flex';
+        warningTextEl.textContent = data.stats.warnings[0];
+    } else if (Object.keys(data.stats?.null_counts || {}).length > 0) {
+        const nullCounts = data.stats.null_counts;
+        const firstNull = Object.entries(nullCounts)[0];
+        warningsEl.style.display = 'flex';
+        warningTextEl.textContent = `${firstNull[1]} nulls in ${firstNull[0]}`;
+    } else {
+        warningsEl.style.display = 'none';
+    }
+
+    // Render table
+    const table = document.getElementById('dsPreviewTable');
+    const thead = document.getElementById('dsPreviewTableHead');
+    const tbody = document.getElementById('dsPreviewTableBody');
+    const empty = document.getElementById('dsPreviewEmpty');
+
+    if (!data.preview_rows || data.preview_rows.length === 0) {
+        table.style.display = 'none';
+        empty.style.display = 'flex';
+        return;
+    }
+
+    table.style.display = 'table';
+    empty.style.display = 'none';
+
+    // Headers
+    const aliases = ds_schemaBuilderState.columnAliases || {};
+    thead.innerHTML = '<tr>' + (data.column_order || []).map(col => {
+        const alias = aliases[col] || col;
+        return `<th title="${col}">${ds_escapeHtml(alias)}</th>`;
+    }).join('') + '</tr>';
+
+    // Rows
+    tbody.innerHTML = (data.preview_rows || []).filter(row => row != null).map(row => {
+        return '<tr>' + (data.column_order || []).map(col => {
+            const val = row[col];
+            if (val === null || val === undefined) {
+                return `<td class="null-value">NULL</td>`;
+            }
+            const strVal = String(val);
+            const displayVal = strVal.length > 30 ? strVal.substring(0, 30) + '...' : strVal;
+            return `<td title="${ds_escapeHtml(strVal)}">${ds_escapeHtml(displayVal)}</td>`;
+        }).join('') + '</tr>';
+    }).join('');
+
+    ds_validateCurrentStep();
+}
+
+function ds_renderPreviewError(message) {
+    document.getElementById('dsPreviewRowCount').textContent = '-';
+    document.getElementById('dsPreviewColCount').textContent = '-';
+    document.getElementById('dsPreviewTable').style.display = 'none';
+    document.getElementById('dsPreviewEmpty').style.display = 'flex';
+    document.getElementById('dsPreviewEmpty').innerHTML = `
+        <i class="fas fa-exclamation-triangle" style="color: #f59e0b;"></i>
+        <span style="color: #b45309;">${ds_escapeHtml(message)}</span>
+    `;
+}
+
+// =============================================================================
+// DATASET WIZARD - Step 3: Schema Builder Positioning & Drag
+// =============================================================================
+
+function ds_positionCardsInitially(allTables) {
+    const container = document.getElementById('dsSchemaCardsContainer');
+    if (!container) return;
+
+    const containerRect = container.getBoundingClientRect();
+
+    // Use fixed dimensions based on CSS if container not yet sized
+    const containerWidth = Math.max(containerRect.width, 900);
+    const containerHeight = Math.max(containerRect.height, 350);
+
+    const cardWidth = 220;
+    const cardHeight = 280; // Approximate card height including columns
+    const horizontalGap = 40; // Gap between cards
+
+    const numTables = allTables.length;
+
+    allTables.forEach((table, index) => {
+        const shortName = table.replace('raw_data.', '');
+        const card = document.getElementById(`dsCard_${shortName}`);
+        if (!card) return;
+
+        let x, y;
+
+        // Check if we have saved positions
+        if (ds_cardPositions[table]) {
+            x = ds_cardPositions[table].x;
+            y = ds_cardPositions[table].y;
+        } else {
+            // Calculate horizontal layout: distribute cards evenly across container width
+            const totalCardsWidth = numTables * cardWidth + (numTables - 1) * horizontalGap;
+            const startX = Math.max(20, (containerWidth - totalCardsWidth) / 2);
+
+            // Position each card in a row
+            x = startX + index * (cardWidth + horizontalGap);
+            y = (containerHeight - cardHeight) / 2;
+
+            // Keep within bounds
+            x = Math.max(10, Math.min(x, containerWidth - cardWidth - 10));
+            y = Math.max(10, Math.min(y, containerHeight - cardHeight - 10));
+        }
+
+        card.style.left = x + 'px';
+        card.style.top = y + 'px';
+
+        // Save position
+        ds_cardPositions[table] = { x, y };
+    });
+}
+
+function ds_setupDragHandlers() {
+    // Remove existing handlers to avoid duplicates
+    document.removeEventListener('mousemove', ds_onDragMove);
+    document.removeEventListener('mouseup', ds_onDragEnd);
+
+    // Add fresh handlers
+    document.addEventListener('mousemove', ds_onDragMove);
+    document.addEventListener('mouseup', ds_onDragEnd);
+}
+
+function ds_startDrag(event, table) {
+    // Don't start drag if clicking on checkbox or other interactive elements
+    if (event.target.tagName === 'INPUT' || event.target.tagName === 'LABEL') {
+        return;
+    }
+
+    event.preventDefault();
+
+    const shortName = table.replace('raw_data.', '');
+    const card = document.getElementById(`dsCard_${shortName}`);
+    if (!card) return;
+
+    ds_dragState = {
+        isDragging: true,
+        table: table,
+        startX: event.clientX,
+        startY: event.clientY,
+        cardStartX: parseInt(card.style.left) || 0,
+        cardStartY: parseInt(card.style.top) || 0
+    };
+
+    card.classList.add('dragging');
+}
+
+function ds_onDragMove(event) {
+    if (!ds_dragState.isDragging) return;
+
+    const shortName = ds_dragState.table.replace('raw_data.', '');
+    const card = document.getElementById(`dsCard_${shortName}`);
+    if (!card) return;
+
+    const container = document.getElementById('dsSchemaCardsContainer');
+    const containerRect = container.getBoundingClientRect();
+
+    const deltaX = event.clientX - ds_dragState.startX;
+    const deltaY = event.clientY - ds_dragState.startY;
+
+    let newX = ds_dragState.cardStartX + deltaX;
+    let newY = ds_dragState.cardStartY + deltaY;
+
+    // Keep within container bounds
+    const cardRect = card.getBoundingClientRect();
+    const maxX = containerRect.width - cardRect.width;
+    const maxY = containerRect.height - cardRect.height;
+
+    newX = Math.max(0, Math.min(newX, maxX));
+    newY = Math.max(0, Math.min(newY, maxY));
+
+    card.style.left = newX + 'px';
+    card.style.top = newY + 'px';
+
+    // Save position
+    ds_cardPositions[ds_dragState.table] = { x: newX, y: newY };
+
+    // Update connection lines while dragging
+    ds_updateConnectionLines();
+}
+
+function ds_onDragEnd(event) {
+    if (!ds_dragState.isDragging) return;
+
+    const shortName = ds_dragState.table.replace('raw_data.', '');
+    const card = document.getElementById(`dsCard_${shortName}`);
+    if (card) {
+        card.classList.remove('dragging');
+    }
+
+    ds_dragState.isDragging = false;
+    ds_dragState.table = null;
+}
+
+function ds_setupColumnScrollHandlers() {
+    // Setup scroll event listeners on column lists (if needed for connection lines later)
+    document.querySelectorAll('#dsSchemaCardsContainer .schema-column-list').forEach(list => {
+        list.removeEventListener('scroll', ds_onColumnScroll);
+        list.addEventListener('scroll', ds_onColumnScroll);
+    });
+}
+
+function ds_onColumnScroll() {
+    // Update connection lines when column list is scrolled
+    ds_updateConnectionLines();
+}
+
+// =============================================================================
+// DATASET WIZARD - Step 3: Connection/Join System
+// =============================================================================
+
+// Color palette for connection lines
+const DS_JOIN_COLORS = [
+    '#2563eb', // Blue
+    '#16a34a', // Green
+    '#dc2626', // Red
+    '#9333ea', // Purple
+    '#ea580c', // Orange
+    '#0891b2', // Cyan
+    '#c026d3', // Fuchsia
+    '#ca8a04', // Yellow
+];
+
+// Connection dot/plus click handling
+function ds_onConnectionDotClick(table, column, event) {
+    // Get click position for popover
+    const clickX = event ? event.clientX : 0;
+    const clickY = event ? event.clientY : 0;
+
+    const connectMode = ds_schemaBuilderState.connectMode;
+
+    if (!connectMode) {
+        // Start connect mode
+        ds_schemaBuilderState.connectMode = { table, column };
+
+        // Show source column info popover
+        ds_showColumnInfoPopover(table, column, clickX, clickY, true);
+
+        // Highlight source element and valid targets
+        ds_highlightConnectModeElements(table, column);
+
+        // Add event listeners for cancel actions
+        document.addEventListener('keydown', ds_handleConnectModeKeydown);
+        document.addEventListener('click', ds_handleConnectModeOutsideClick, true);
+
+    } else {
+        // Complete or cancel connection
+        if (connectMode.table === table && connectMode.column === column) {
+            // Clicked same element - cancel
+            ds_exitConnectMode();
+        } else if (connectMode.table !== table) {
+            // Valid target - create join
+            ds_createJoin(connectMode.table, connectMode.column, table, column);
+            ds_exitConnectMode();
+        }
+        // If same table but different column - ignore
+    }
+}
+
+// Highlight elements during connect mode
+function ds_highlightConnectModeElements(sourceTable, sourceColumn) {
+    // Highlight source dot/plus
+    document.querySelectorAll('#dsSchemaCardsContainer .schema-connection-dot, #dsSchemaCardsContainer .schema-connection-plus').forEach(el => {
+        if (el.dataset.table === sourceTable && el.dataset.column === sourceColumn) {
+            el.classList.add('connect-mode');
+        } else if (el.dataset.table !== sourceTable) {
+            // Highlight valid targets (different table)
+            el.classList.add('connect-mode-target');
+        }
+    });
+
+    // Add hover listeners for target columns
+    document.querySelectorAll('#dsSchemaCardsContainer .schema-column-item').forEach(item => {
+        if (item.dataset.table !== sourceTable) {
+            item.addEventListener('mouseenter', ds_handleTargetColumnHover);
+            item.addEventListener('mouseleave', ds_handleTargetColumnLeave);
+        }
+    });
+}
+
+// Handle hover on target column during connect mode
+function ds_handleTargetColumnHover(event) {
+    const item = event.currentTarget;
+    const table = item.dataset.table;
+    const column = item.dataset.column;
+
+    if (!ds_schemaBuilderState.connectMode || table === ds_schemaBuilderState.connectMode.table) {
+        return;
+    }
+
+    // Get column type for compatibility check
+    const sourceType = ds_getColumnType(ds_schemaBuilderState.connectMode.table, ds_schemaBuilderState.connectMode.column);
+    const targetType = ds_getColumnType(table, column);
+    const isCompatible = ds_checkTypeCompatibility(sourceType, targetType);
+
+    // Show target popover near cursor
+    ds_showColumnInfoPopover(table, column, event.clientX + 15, event.clientY + 15, false, sourceType, isCompatible);
+}
+
+// Handle mouse leave on target column
+function ds_handleTargetColumnLeave(event) {
+    // Hide target info but keep source info
+    if (ds_schemaBuilderState.connectMode) {
+        const popover = document.getElementById('dsColumnInfoPopover');
+        // Reset to source info
+        ds_showColumnInfoPopover(
+            ds_schemaBuilderState.connectMode.table,
+            ds_schemaBuilderState.connectMode.column,
+            parseInt(popover.style.left),
+            parseInt(popover.style.top),
+            true
+        );
+    }
+}
+
+// Get column type from state
+function ds_getColumnType(table, column) {
+    const tableData = ds_schemaBuilderState.tables[table];
+    if (!tableData || !tableData.columns) return 'unknown';
+
+    const col = tableData.columns.find(c => c.name === column);
+    return col ? col.type : 'unknown';
+}
+
+// Get sample values for a column
+function ds_getColumnSamples(table, column) {
+    const tableData = ds_schemaBuilderState.tables[table];
+    if (!tableData || !tableData.sample_preview) return [];
+
+    return tableData.sample_preview
+        .map(row => row[column])
+        .filter(v => v !== null && v !== undefined)
+        .slice(0, 5);
+}
+
+// Format sample values for display
+function ds_formatSampleValues(samples) {
+    if (!samples || samples.length === 0) return 'No samples';
+
+    return samples.map(v => {
+        if (typeof v === 'string') {
+            // Truncate long strings
+            return v.length > 15 ? `"${v.substring(0, 15)}..."` : `"${v}"`;
+        }
+        return String(v);
+    }).join(', ');
+}
+
+// Check if two types are compatible for joining
+function ds_checkTypeCompatibility(type1, type2) {
+    if (!type1 || !type2 || type1 === 'unknown' || type2 === 'unknown') {
+        return true; // Allow if unknown
+    }
+
+    // Normalize types
+    const normalize = (t) => {
+        t = t.toUpperCase();
+        if (t.includes('INT')) return 'INTEGER';
+        if (t.includes('FLOAT') || t.includes('NUMERIC') || t.includes('DECIMAL')) return 'NUMERIC';
+        if (t.includes('STRING') || t.includes('VARCHAR') || t.includes('CHAR')) return 'STRING';
+        if (t.includes('DATE') || t.includes('TIME')) return 'DATETIME';
+        if (t.includes('BOOL')) return 'BOOLEAN';
+        return t;
+    };
+
+    const n1 = normalize(type1);
+    const n2 = normalize(type2);
+
+    // Same normalized type
+    if (n1 === n2) return true;
+
+    // Numeric types can join together
+    if ((n1 === 'INTEGER' || n1 === 'NUMERIC') && (n2 === 'INTEGER' || n2 === 'NUMERIC')) {
+        return true;
+    }
+
+    return false;
+}
+
+// Show column info popover
+function ds_showColumnInfoPopover(table, column, x, y, isSource, sourceType = null, isCompatible = true) {
+    const popover = document.getElementById('dsColumnInfoPopover');
+    const type = ds_getColumnType(table, column);
+    const samples = ds_getColumnSamples(table, column);
+
+    // Update popover content
+    document.getElementById('dsColumnInfoName').textContent = column;
+    document.getElementById('dsColumnInfoTypeValue').textContent = type || 'unknown';
+    document.getElementById('dsColumnInfoSamplesValue').textContent = ds_formatSampleValues(samples);
+
+    // Show/hide hint, warning, compatible messages
+    const hintEl = document.getElementById('dsColumnInfoHint');
+    const warningEl = document.getElementById('dsColumnInfoWarning');
+    const compatibleEl = document.getElementById('dsColumnInfoCompatible');
+
+    if (isSource) {
+        hintEl.classList.remove('hidden');
+        warningEl.classList.add('hidden');
+        compatibleEl.classList.add('hidden');
+    } else {
+        hintEl.classList.add('hidden');
+
+        if (!isCompatible) {
+            warningEl.classList.remove('hidden');
+            compatibleEl.classList.add('hidden');
+            document.getElementById('dsColumnInfoWarningText').textContent =
+                `Type mismatch: ${sourceType} ↔ ${type}`;
+        } else {
+            warningEl.classList.add('hidden');
+            compatibleEl.classList.remove('hidden');
+        }
+    }
+
+    // Position popover
+    popover.style.left = `${x + 10}px`;
+    popover.style.top = `${y + 10}px`;
+
+    // Ensure popover stays within viewport
+    const rect = popover.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+
+    if (rect.right > viewportWidth) {
+        popover.style.left = `${x - rect.width - 10}px`;
+    }
+    if (rect.bottom > viewportHeight) {
+        popover.style.top = `${y - rect.height - 10}px`;
+    }
+
+    popover.classList.remove('hidden');
+}
+
+// Hide column info popover
+function ds_hideColumnInfoPopover() {
+    document.getElementById('dsColumnInfoPopover').classList.add('hidden');
+}
+
+// Handle Escape key to cancel connect mode
+function ds_handleConnectModeKeydown(event) {
+    if (event.key === 'Escape') {
+        ds_exitConnectMode();
+    }
+}
+
+// Handle click outside to cancel connect mode
+function ds_handleConnectModeOutsideClick(event) {
+    // Check if click is on a connection element
+    const isConnectionElement = event.target.closest('.schema-connection-dot, .schema-connection-plus');
+    const isColumnItem = event.target.closest('.schema-column-item');
+
+    if (!isConnectionElement && !isColumnItem) {
+        ds_exitConnectMode();
+    }
+}
+
+function ds_exitConnectMode() {
+    ds_schemaBuilderState.connectMode = null;
+
+    // Remove highlight classes
+    document.querySelectorAll('#dsSchemaCardsContainer .schema-connection-dot, #dsSchemaCardsContainer .schema-connection-plus').forEach(el => {
+        el.classList.remove('connect-mode', 'connect-mode-target');
+    });
+
+    // Remove hover listeners
+    document.querySelectorAll('#dsSchemaCardsContainer .schema-column-item').forEach(item => {
+        item.removeEventListener('mouseenter', ds_handleTargetColumnHover);
+        item.removeEventListener('mouseleave', ds_handleTargetColumnLeave);
+    });
+
+    // Remove event listeners
+    document.removeEventListener('keydown', ds_handleConnectModeKeydown);
+    document.removeEventListener('click', ds_handleConnectModeOutsideClick, true);
+
+    // Hide popover
+    ds_hideColumnInfoPopover();
+}
+
+function ds_createJoin(leftTable, leftCol, rightTable, rightCol) {
+    console.log('[DS Join] Creating join - Input:', { leftTable, leftCol, rightTable, rightCol });
+    console.log('[DS Join] Primary table:', ds_wizardData.primaryTable);
+
+    // Ensure primary table is always on the left
+    if (leftTable !== ds_wizardData.primaryTable && rightTable === ds_wizardData.primaryTable) {
+        [leftTable, leftCol, rightTable, rightCol] = [rightTable, rightCol, leftTable, leftCol];
+        console.log('[DS Join] Swapped to:', { leftTable, leftCol, rightTable, rightCol });
+    }
+
+    // Check if join already exists for this secondary table
+    const existingIndex = ds_schemaBuilderState.joins.findIndex(j =>
+        j.rightTable === rightTable
+    );
+
+    const joinData = {
+        leftTable,
+        leftCol,
+        rightTable,
+        rightCol,
+        type: 'left',
+        warning: null  // Will be populated if join key is not unique
+    };
+
+    console.log('[DS Join] Final join data:', joinData);
+
+    if (existingIndex >= 0) {
+        // Update existing join
+        ds_schemaBuilderState.joins[existingIndex] = joinData;
+    } else {
+        // Add new join
+        ds_schemaBuilderState.joins.push(joinData);
+    }
+
+    ds_renderTableCards();
+    ds_refreshPreview();
+}
+
+function ds_removeJoin(index) {
+    ds_schemaBuilderState.joins.splice(index, 1);
+    ds_renderTableCards();
+    ds_refreshPreview();
+    ds_hideJoinPopover();
+}
+
+function ds_setJoinType(type) {
+    if (ds_schemaBuilderState.selectedJoinIndex !== null) {
+        ds_schemaBuilderState.joins[ds_schemaBuilderState.selectedJoinIndex].type = type;
+        ds_refreshPreview();
+        ds_hideJoinPopover();
+    }
+}
+
+function ds_removeSelectedJoin() {
+    if (ds_schemaBuilderState.selectedJoinIndex !== null) {
+        ds_removeJoin(ds_schemaBuilderState.selectedJoinIndex);
+    }
+}
+
+function ds_showJoinPopover(index, clientX, clientY) {
+    ds_schemaBuilderState.selectedJoinIndex = index;
+    const popover = document.getElementById('dsJoinPopover');
+    const join = ds_schemaBuilderState.joins[index];
+
+    // Update active state for join type options
+    popover.querySelectorAll('.join-popover-option[data-type]').forEach(opt => {
+        opt.classList.toggle('active', opt.dataset.type === join.type);
+    });
+
+    // Show/hide warning section
+    const warningEl = document.getElementById('dsJoinPopoverWarning');
+    const warningTextEl = document.getElementById('dsJoinPopoverWarningText');
+    if (join.warning) {
+        warningEl.classList.remove('hidden');
+        warningTextEl.textContent = join.warning;
+    } else {
+        warningEl.classList.add('hidden');
+    }
+
+    // Use fixed positioning with viewport coordinates
+    popover.style.position = 'fixed';
+    popover.style.left = clientX + 'px';
+    popover.style.top = clientY + 'px';
+    popover.classList.remove('hidden');
+
+    // Ensure popover stays within viewport
+    const rect = popover.getBoundingClientRect();
+    if (rect.right > window.innerWidth) {
+        popover.style.left = (clientX - rect.width) + 'px';
+    }
+    if (rect.bottom > window.innerHeight) {
+        popover.style.top = (clientY - rect.height) + 'px';
+    }
+
+    // Add click-outside listener to close popover (delayed to avoid immediate trigger)
+    setTimeout(() => {
+        document.addEventListener('click', ds_handleJoinPopoverOutsideClick, true);
+    }, 0);
+}
+
+function ds_hideJoinPopover() {
+    ds_schemaBuilderState.selectedJoinIndex = null;
+    document.getElementById('dsJoinPopover').classList.add('hidden');
+    document.removeEventListener('click', ds_handleJoinPopoverOutsideClick, true);
+}
+
+// Handle click outside join popover to close it
+function ds_handleJoinPopoverOutsideClick(event) {
+    const popover = document.getElementById('dsJoinPopover');
+    if (!popover.contains(event.target)) {
+        ds_hideJoinPopover();
+    }
+}
+
+// =============================================================================
+// DATASET WIZARD - Step 3: SVG Connection Lines
+// =============================================================================
+
+function ds_updateConnectionLines() {
+    const svg = document.getElementById('dsConnectionsSvg');
+    const cardsArea = document.getElementById('dsSchemaCardsArea');
+
+    if (!svg || !cardsArea) return;
+
+    // Clear existing lines
+    svg.innerHTML = '';
+
+    // Reset all connection dot colors first
+    document.querySelectorAll('#dsSchemaCardsContainer .schema-connection-dot.connected').forEach(dot => {
+        dot.style.borderColor = '';
+        dot.style.backgroundColor = '';
+    });
+
+    // Draw lines for each join
+    ds_schemaBuilderState.joins.forEach((join, index) => {
+        // Get the card elements
+        const leftCard = document.querySelector(`#dsSchemaCardsContainer .schema-table-card[data-table="${join.leftTable}"]`);
+        const rightCard = document.querySelector(`#dsSchemaCardsContainer .schema-table-card[data-table="${join.rightTable}"]`);
+
+        if (leftCard && rightCard) {
+            const areaRect = cardsArea.getBoundingClientRect();
+
+            // Determine which side each card should connect from
+            const sides = ds_getConnectionSides(leftCard, rightCard);
+
+            // Get column-level anchor points
+            const leftAnchor = ds_getColumnAnchorPoint(join.leftTable, join.leftCol, sides.leftSide, areaRect, cardsArea);
+            const rightAnchor = ds_getColumnAnchorPoint(join.rightTable, join.rightCol, sides.rightSide, areaRect, cardsArea);
+
+            // If we couldn't find the columns, fall back to card-level connection
+            if (!leftAnchor || !rightAnchor) {
+                const leftCardRect = leftCard.getBoundingClientRect();
+                const rightCardRect = rightCard.getBoundingClientRect();
+                const connection = ds_calculateBestConnectionPoints(leftCardRect, rightCardRect, areaRect, cardsArea);
+                ds_drawConnectionLine(svg, connection.x1, connection.y1, connection.x2, connection.y2, index, areaRect, false, false, null, null);
+                return;
+            }
+
+            // Get color for this join
+            const color = DS_JOIN_COLORS[index % DS_JOIN_COLORS.length];
+
+            // Draw the connection line (pass warning info)
+            const hasWarning = join.warning !== null;
+            ds_drawConnectionLine(svg, leftAnchor.x, leftAnchor.y, rightAnchor.x, rightAnchor.y, index, areaRect,
+                leftAnchor.isClipped, rightAnchor.isClipped, leftAnchor.clipDirection, rightAnchor.clipDirection, hasWarning);
+
+            // Color the connection dots
+            const leftDot = document.querySelector(`#dsSchemaCardsContainer .schema-connection-dot[data-table="${join.leftTable}"][data-column="${join.leftCol}"]`);
+            const rightDot = document.querySelector(`#dsSchemaCardsContainer .schema-connection-dot[data-table="${join.rightTable}"][data-column="${join.rightCol}"]`);
+
+            if (leftDot) {
+                leftDot.style.borderColor = color;
+                leftDot.style.backgroundColor = color;
+            }
+            if (rightDot) {
+                rightDot.style.borderColor = color;
+                rightDot.style.backgroundColor = color;
+            }
+        }
+    });
+}
+
+// Determine which side each card should connect from based on relative positions
+function ds_getConnectionSides(leftCard, rightCard) {
+    const leftRect = leftCard.getBoundingClientRect();
+    const rightRect = rightCard.getBoundingClientRect();
+
+    const leftCenterX = leftRect.left + leftRect.width / 2;
+    const rightCenterX = rightRect.left + rightRect.width / 2;
+
+    if (leftCenterX < rightCenterX) {
+        // Left card is actually on the left
+        return { leftSide: 'right', rightSide: 'left' };
+    } else {
+        // Left card is actually on the right
+        return { leftSide: 'left', rightSide: 'right' };
+    }
+}
+
+// Get anchor point for a column, handling scrolled/clipped columns
+function ds_getColumnAnchorPoint(table, column, side, areaRect, cardsArea) {
+    const shortName = table.replace('raw_data.', '');
+    const card = document.getElementById(`dsCard_${shortName}`);
+    const columnEl = document.querySelector(`#dsSchemaCardsContainer .schema-column-item[data-table="${table}"][data-column="${column}"]`);
+
+    if (!card || !columnEl) {
+        return null;
+    }
+
+    const cardRect = card.getBoundingClientRect();
+    const columnRect = columnEl.getBoundingClientRect();
+
+    // Find the scrollable column list container
+    const columnList = card.querySelector('.schema-column-list');
+    const listRect = columnList ? columnList.getBoundingClientRect() : cardRect;
+
+    // Determine X coordinate based on which side to connect
+    const x = side === 'right' ? cardRect.right : cardRect.left;
+
+    // Calculate column's vertical center
+    const columnCenterY = columnRect.top + columnRect.height / 2;
+
+    // Check if column is visible within the scrollable area
+    let y = columnCenterY;
+    let isClipped = false;
+    let clipDirection = null;
+
+    if (columnList) {
+        if (columnRect.bottom < listRect.top) {
+            // Column is scrolled above visible area
+            y = listRect.top + 10;
+            isClipped = true;
+            clipDirection = 'up';
+        } else if (columnRect.top > listRect.bottom) {
+            // Column is scrolled below visible area
+            y = listRect.bottom - 10;
+            isClipped = true;
+            clipDirection = 'down';
+        } else if (columnRect.top < listRect.top) {
+            // Column is partially clipped at top
+            y = listRect.top + 5;
+            isClipped = true;
+            clipDirection = 'up';
+        } else if (columnRect.bottom > listRect.bottom) {
+            // Column is partially clipped at bottom
+            y = listRect.bottom - 5;
+            isClipped = true;
+            clipDirection = 'down';
+        }
+    }
+
+    // Convert to SVG coordinates (relative to cards area)
+    return {
+        x: x - areaRect.left + cardsArea.scrollLeft,
+        y: y - areaRect.top + cardsArea.scrollTop,
+        isClipped,
+        clipDirection
+    };
+}
+
+function ds_calculateBestConnectionPoints(rect1, rect2, areaRect, cardsArea) {
+    // Calculate centers of each card
+    const center1 = {
+        x: rect1.left + rect1.width / 2,
+        y: rect1.top + rect1.height / 2
+    };
+    const center2 = {
+        x: rect2.left + rect2.width / 2,
+        y: rect2.top + rect2.height / 2
+    };
+
+    // Determine which edges to connect based on relative positions
+    let x1, y1, x2, y2;
+
+    // Horizontal distance vs vertical distance
+    const dx = center2.x - center1.x;
+    const dy = center2.y - center1.y;
+
+    if (Math.abs(dx) > Math.abs(dy)) {
+        // Cards are more horizontal - connect left/right edges
+        if (dx > 0) {
+            // Card 2 is to the right of Card 1
+            x1 = rect1.right;
+            y1 = center1.y;
+            x2 = rect2.left;
+            y2 = center2.y;
+        } else {
+            // Card 2 is to the left of Card 1
+            x1 = rect1.left;
+            y1 = center1.y;
+            x2 = rect2.right;
+            y2 = center2.y;
+        }
+    } else {
+        // Cards are more vertical - connect top/bottom edges
+        if (dy > 0) {
+            // Card 2 is below Card 1
+            x1 = center1.x;
+            y1 = rect1.bottom;
+            x2 = center2.x;
+            y2 = rect2.top;
+        } else {
+            // Card 2 is above Card 1
+            x1 = center1.x;
+            y1 = rect1.top;
+            x2 = center2.x;
+            y2 = rect2.bottom;
+        }
+    }
+
+    // Convert to SVG coordinates (relative to cards area)
+    return {
+        x1: x1 - areaRect.left + cardsArea.scrollLeft,
+        y1: y1 - areaRect.top + cardsArea.scrollTop,
+        x2: x2 - areaRect.left + cardsArea.scrollLeft,
+        y2: y2 - areaRect.top + cardsArea.scrollTop
+    };
+}
+
+// Draw a connection line with optional arrow indicators for clipped columns
+function ds_drawConnectionLine(svg, x1, y1, x2, y2, index, areaRect, leftClipped, rightClipped, leftClipDir, rightClipDir, hasWarning = false) {
+    const color = hasWarning ? '#f59e0b' : DS_JOIN_COLORS[index % DS_JOIN_COLORS.length]; // Orange for warning
+    const cardsArea = document.getElementById('dsSchemaCardsArea');
+
+    // Create a curved path for better visibility
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    const d = ds_createCurvedPath(x1, y1, x2, y2);
+    path.setAttribute('d', d);
+    path.setAttribute('class', hasWarning ? 'join-line join-line-warning' : 'join-line');
+    path.setAttribute('stroke', color);
+    path.setAttribute('fill', 'none');
+    if (hasWarning) {
+        path.setAttribute('stroke-dasharray', '8,4'); // Dashed line for warning
+        path.setAttribute('stroke-width', '3');
+    }
+    path.style.pointerEvents = 'stroke';
+    path.onclick = (e) => {
+        e.stopPropagation();
+        ds_showJoinPopover(index, e.clientX, e.clientY);
+    };
+
+    svg.appendChild(path);
+
+    // Add circles or arrows at connection points
+    if (leftClipped && leftClipDir) {
+        ds_drawClipArrow(svg, x1, y1, leftClipDir, color);
+    } else {
+        const circle1 = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        circle1.setAttribute('cx', x1);
+        circle1.setAttribute('cy', y1);
+        circle1.setAttribute('r', 4);
+        circle1.setAttribute('fill', color);
+        svg.appendChild(circle1);
+    }
+
+    if (rightClipped && rightClipDir) {
+        ds_drawClipArrow(svg, x2, y2, rightClipDir, color);
+    } else {
+        const circle2 = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        circle2.setAttribute('cx', x2);
+        circle2.setAttribute('cy', y2);
+        circle2.setAttribute('r', 4);
+        circle2.setAttribute('fill', color);
+        svg.appendChild(circle2);
+    }
+}
+
+// Draw an arrow indicator for clipped columns
+function ds_drawClipArrow(svg, x, y, direction, color) {
+    const arrow = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    const size = 6;
+
+    let d;
+    if (direction === 'up') {
+        // Upward arrow (▲)
+        d = `M ${x} ${y - size} L ${x - size} ${y + size} L ${x + size} ${y + size} Z`;
+    } else {
+        // Downward arrow (▼)
+        d = `M ${x} ${y + size} L ${x - size} ${y - size} L ${x + size} ${y - size} Z`;
+    }
+
+    arrow.setAttribute('d', d);
+    arrow.setAttribute('fill', color);
+    arrow.setAttribute('class', 'clip-arrow');
+    svg.appendChild(arrow);
+}
+
+function ds_createCurvedPath(x1, y1, x2, y2) {
+    // Create a smooth bezier curve between the two points
+    const midX = (x1 + x2) / 2;
+    const midY = (y1 + y2) / 2;
+
+    // Calculate control points for a smooth curve
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+
+    // Curve amount based on distance
+    const curveAmount = Math.min(Math.abs(dx), Math.abs(dy)) * 0.3;
+
+    let cx1, cy1, cx2, cy2;
+
+    if (Math.abs(dx) > Math.abs(dy)) {
+        // Horizontal connection - curve vertically
+        cx1 = x1 + dx * 0.3;
+        cy1 = y1;
+        cx2 = x2 - dx * 0.3;
+        cy2 = y2;
+    } else {
+        // Vertical connection - curve horizontally
+        cx1 = x1;
+        cy1 = y1 + dy * 0.3;
+        cx2 = x2;
+        cy2 = y2 - dy * 0.3;
+    }
+
+    return `M ${x1} ${y1} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${x2} ${y2}`;
 }
 
 // =============================================================================
@@ -9197,15 +10273,8 @@ function ds_refreshCustomerFilters() {
     // Would trigger a refresh of filter analysis data
 }
 
-function ds_setJoinType(type) {
-    console.log('Set join type:', type);
-    // Would update join configuration
-}
-
-function ds_removeSelectedJoin() {
-    console.log('Remove join');
-    // Would remove selected join
-}
+// NOTE: ds_setJoinType and ds_removeSelectedJoin are defined in the
+// "Step 3: Connection/Join System" section above
 
 // =============================================================================
 // DATASET WIZARD - Save Dataset

@@ -5,8 +5,8 @@
 This document describes the plan to migrate the Dataset Manager functionality from `model_dataset.html` into `model_configs.html` as a new "Datasets" chapter. This consolidates all configuration work (data, features, models) into a single unified page.
 
 **Created**: 2026-01-12
-**Status**: MIGRATION COMPLETE (All 7 Phases Done)
-**Last Updated**: 2026-01-12
+**Status**: MIGRATION COMPLETE (All 7 Phases Done) + Post-Migration Enhancements
+**Last Updated**: 2026-01-13
 
 ---
 
@@ -493,6 +493,128 @@ If migration fails or causes issues:
 - [ ] Page load time < 3 seconds (to be verified in production)
 - [ ] No JavaScript console errors (to be verified in production)
 - [ ] Works on Chrome, Firefox, Safari (to be verified in production)
+
+---
+
+## Post-Migration Enhancements (2026-01-13)
+
+After the initial migration was complete, several enhancements were made to the Schema Builder (Step 3) to fully replicate the original functionality:
+
+### Enhancement 1: Table Card Positioning & Dragging ✅
+
+**Problem**: Table cards in the Schema Builder were stacking on top of each other instead of being positioned side by side.
+
+**Solution**: Added positioning and drag functionality:
+- `ds_cardPositions` - Tracks card positions
+- `ds_dragState` - Manages drag state (isDragging, table, coordinates)
+- `ds_positionCardsInitially()` - Positions cards horizontally with spacing
+- `ds_setupDragHandlers()` - Sets up mouse event listeners
+- `ds_startDrag()`, `ds_onDragMove()`, `ds_onDragEnd()` - Drag handlers
+- Cards are absolutely positioned within a relative container
+
+### Enhancement 2: Table Connection System ✅
+
+**Problem**: No functionality to connect columns between tables for joins.
+
+**Solution**: Implemented full connection system with SVG lines:
+
+**Connection Mode Functions:**
+- `ds_onConnectionDotClick()` - Handles clicks on connection dots/plus icons
+- `ds_highlightConnectModeElements()` - Highlights valid connection targets
+- `ds_handleTargetColumnHover()` - Shows column info on hover during connect mode
+- `ds_exitConnectMode()` - Cancels connection mode
+
+**Join Management:**
+- `ds_createJoin()` - Creates a join between two columns (ensures primary is always left)
+- `ds_removeJoin()` - Removes a join by index
+- `ds_setJoinType()` - Changes join type (left/inner/right)
+- `ds_showJoinPopover()` - Shows popover for join configuration
+- `ds_hideJoinPopover()` - Hides join popover
+
+**SVG Line Drawing:**
+- `ds_updateConnectionLines()` - Redraws all connection lines
+- `ds_getConnectionSides()` - Determines which side of cards to connect
+- `ds_getColumnAnchorPoint()` - Gets exact anchor point for a column
+- `ds_drawConnectionLine()` - Draws a single curved connection line
+- `ds_createCurvedPath()` - Creates SVG path with bezier curves
+
+**Column Rendering:**
+- `ds_renderColumnItem()` - Renders column with connection dot/plus, checkbox, type badge
+- Connection dots show: connected (colored), recommended (empty), or plus on hover
+
+### Enhancement 3: Select All Functionality ✅
+
+**Problem**: No way to select/deselect all columns in a table at once.
+
+**Solution**: Added "Select All" row to table cards:
+- `ds_toggleAllColumns()` - Toggles all columns in a table
+- Select All row appears at top of column list with column count badge
+- CSS classes: `.schema-select-all-row`, `.schema-select-all-label`, `.schema-column-count`
+- Fixed column list height (200px) for consistent card sizing
+
+### Enhancement 4: Join Type Switching ✅
+
+**Problem**: Join type options (left/inner/right) in popover weren't switchable.
+
+**Solution**:
+- Made join type options clickable with `ds_setJoinType()` handler
+- Added CSS for checkmark visibility (hidden by default, visible when `.active`)
+- Clicking a join type updates the join and refreshes preview
+
+### Enhancement 5: Preview Table ✅
+
+**Problem**: Preview table wasn't showing sample data after joins.
+
+**Solution**: Implemented full preview functionality:
+- `ds_debouncedRefreshPreview()` - Debounced wrapper (500ms) to prevent API spam
+- `ds_refreshPreview()` - Makes POST request to `/api/models/${modelId}/datasets/preview/`
+- `ds_renderPreview()` - Renders preview table with headers and rows
+- `ds_renderPreviewEmpty()` - Shows empty state when no data
+- `ds_renderPreviewError()` - Shows error state
+
+**Preview displays:**
+- Row count and column count stats
+- Warnings (null counts, join issues)
+- Scrollable data table with column headers
+- Updates automatically when columns selected or joins changed
+
+### Enhancement 6: Debug Logging (Development) 🔧
+
+Added comprehensive logging to diagnose join issues:
+
+**Frontend (Browser Console):**
+```javascript
+console.log('[DS Join] Creating join - Input:', {...});
+console.log('[DS Preview] Session ID:', ...);
+console.log('[DS Preview] Joins:', ...);
+console.log('[DS Preview] Response:', ...);
+```
+
+**Backend (Server Logs):**
+```python
+logger.info(f"[Preview] Session {session_id}: Tables in cache: {tables}")
+logger.info(f"[Preview Join] left_join_col: {col}, right_join_col: {col}")
+logger.info(f"[Preview Join] Sample left values: {values}")
+logger.info(f"[Preview Join] Merge completed: {before} rows -> {after} rows")
+```
+
+### CSS Updates (modals.css)
+
+New classes added for Schema Builder enhancements:
+- `.schema-select-all-row` - Select All row styling
+- `.schema-select-all-label` - Label styling
+- `.schema-column-count` - Column count badge
+- `.schema-column-list` - Fixed 200px height, overflow-y scroll
+- `.join-popover-option i.fa-check` - Hidden by default
+- `.join-popover-option.active i.fa-check` - Visible when active
+
+### Files Modified
+
+| File | Changes |
+|------|---------|
+| `templates/ml_platform/model_configs.html` | +500 lines: positioning, connections, SVG, preview |
+| `static/css/modals.css` | +50 lines: Select All, join popover styles |
+| `ml_platform/datasets/preview_service.py` | +20 lines: debug logging |
 
 ---
 

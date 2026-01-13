@@ -476,6 +476,11 @@ class DatasetPreviewService:
         for table_name, records in session_data.get('dataframes', {}).items():
             dataframes[table_name] = pd.DataFrame(records)
 
+        # Debug logging
+        logger.info(f"[Preview] Session {session_id}: Tables in cache: {list(dataframes.keys())}")
+        logger.info(f"[Preview] Requested primary_table: {primary_table}")
+        logger.info(f"[Preview] Requested joins: {joins}")
+
         if primary_table not in dataframes:
             raise ValueError(f"Primary table {primary_table} not found in session")
 
@@ -515,6 +520,19 @@ class DatasetPreviewService:
             left_join_col = f"{primary_short}_{left_col}"
             right_join_col = f"{right_short}_{right_col}"
 
+            # Debug logging
+            logger.info(f"[Preview Join] Attempting join: {join_table}")
+            logger.info(f"[Preview Join] left_join_col: {left_join_col}, right_join_col: {right_join_col}")
+            logger.info(f"[Preview Join] result_df columns: {list(result_df.columns)}")
+            logger.info(f"[Preview Join] right_df columns: {list(right_df.columns)}")
+
+            # Log sample values for debugging data mismatches
+            if left_join_col in result_df.columns and right_join_col in right_df.columns:
+                left_vals = result_df[left_join_col].dropna().head(5).tolist()
+                right_vals = right_df[right_join_col].dropna().head(5).tolist()
+                logger.info(f"[Preview Join] Sample left values: {left_vals}")
+                logger.info(f"[Preview Join] Sample right values: {right_vals}")
+
             # Check if join columns exist
             if left_join_col not in result_df.columns:
                 # Try without prefix (might be from a previous join)
@@ -529,6 +547,7 @@ class DatasetPreviewService:
 
             # Perform the join
             try:
+                pre_merge_rows = len(result_df)
                 result_df = result_df.merge(
                     right_df,
                     left_on=left_join_col,
@@ -536,6 +555,7 @@ class DatasetPreviewService:
                     how=join_type,
                     suffixes=('', '_dup')
                 )
+                logger.info(f"[Preview Join] Merge completed: {pre_merge_rows} rows -> {len(result_df)} rows")
 
                 # Remove duplicate join column from right table
                 dup_col = f"{right_join_col}_dup"
@@ -543,6 +563,7 @@ class DatasetPreviewService:
                     result_df = result_df.drop(columns=[dup_col])
 
             except Exception as e:
+                logger.error(f"[Preview Join] Merge failed: {str(e)}")
                 warnings.append(f"Join failed for {join_table}: {str(e)}")
 
         # Select columns based on configuration

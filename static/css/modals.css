@@ -1489,9 +1489,48 @@
     color: #6b7280;
 }
 
+/* Select All row */
+.schema-select-all-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 10px;
+    border-bottom: 1px solid #e5e7eb;
+    background-color: #f9fafb;
+}
+
+.schema-select-all-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: #4b5563;
+    cursor: pointer;
+}
+
+.schema-select-all-label:hover {
+    color: #111827;
+}
+
+.schema-select-all-label input[type="checkbox"] {
+    width: 14px;
+    height: 14px;
+    cursor: pointer;
+}
+
+.schema-column-count {
+    font-size: 10px;
+    color: #6b7280;
+    background-color: #e5e7eb;
+    padding: 2px 6px;
+    border-radius: 10px;
+}
+
 /* Column list */
 .schema-column-list {
-    max-height: 160px;
+    height: 200px;
+    min-height: 200px;
+    max-height: 200px;
     overflow-y: auto;
     padding: 6px 0;
 }
@@ -1837,6 +1876,15 @@
     margin-right: 6px;
     width: 12px;
     text-align: center;
+}
+
+/* Hide checkmark by default, show only when active */
+.join-popover-option i.fa-check {
+    visibility: hidden;
+}
+
+.join-popover-option.active i.fa-check {
+    visibility: visible;
 }
 
 .join-popover-warning {

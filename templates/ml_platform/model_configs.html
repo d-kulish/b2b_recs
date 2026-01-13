@@ -7013,6 +7013,7 @@ let ds_wizardData = {
 let ds_availableTables = [];
 let ds_tableSchemas = {};
 let ds_currentDatasetId = null;
+let ds_datasetStatsData = null;  // Store stats for snapshot when saving
 
 let ds_schemaBuilderState = {
     sessionId: null,
@@ -7112,6 +7113,9 @@ function ds_resetWizard() {
         }
     };
     ds_historyFilterMode = 'rolling';
+
+    // Reset dataset stats data (for snapshot)
+    ds_datasetStatsData = null;
 
     // Reset product filters state (pending/committed model)
     ds_productFiltersState = {
@@ -7266,8 +7270,10 @@ function ds_nextStep() {
             // Populate filter dropdowns with selected columns (needs column types for timestamp filter)
             ds_populateFilterColumnDropdowns();
 
-            // Restore filter state if editing an existing dataset
+            // Restore filter states if editing an existing dataset
             ds_restoreDatesFilterState();
+            ds_restoreProductFilterState();
+            ds_restoreCustomerFilterState();
 
             // Load initial dataset statistics
             ds_loadDatasetStats(false);
@@ -7295,18 +7301,32 @@ function ds_collectStepData(step) {
             // Schema builder data already in ds_schemaBuilderState
             break;
         case 4:
-            // Collect filter data
-            const timestampCol = document.getElementById('dsTimestampColumn')?.value;
-            const rollingDays = parseInt(document.getElementById('dsRollingDays')?.value) || 30;
-            const startDate = document.getElementById('dsStartDateInput')?.value || null;
+            // Collect filter data from committed state (set when user clicks "Refresh Dataset")
+            // IMPORTANT: Merge with existing filters, don't overwrite!
+            // Product and customer filters are already in ds_wizardData.filters from their refresh buttons.
 
-            ds_wizardData.filters = {
-                dates: {
-                    timestampColumn: timestampCol,
-                    rollingDays: rollingDays,
-                    startDate: startDate
+            // Ensure filters object exists
+            if (!ds_wizardData.filters) {
+                ds_wizardData.filters = {};
+            }
+
+            // History filter (dates) - use committed state and snake_case keys for DB
+            const datesCommitted = ds_datesFilterState.committed;
+            if (datesCommitted.timestampColumn) {
+                if (datesCommitted.mode === 'startDate' && datesCommitted.startDate) {
+                    // Start Date mode
+                    ds_wizardData.filters.history = {
+                        timestamp_column: datesCommitted.timestampColumn,
+                        start_date: datesCommitted.startDate
+                    };
+                } else {
+                    // Rolling Window mode (default)
+                    ds_wizardData.filters.history = {
+                        timestamp_column: datesCommitted.timestampColumn,
+                        rolling_days: datesCommitted.rollingDays || 30
+                    };
                 }
-            };
+            }
             break;
     }
 }
@@ -8917,10 +8937,108 @@ function ds_restoreDatesFilterState() {
         rollingDays: history.rolling_days || 30,
         startDate: history.start_date || null
     };
+    // Copy to pending so "no changes" state is detected
+    ds_datesFilterState.pending = {...ds_datesFilterState.committed};
 
     // Update UI state
     ds_updateDatesFilterSummary();
     ds_updateDatesRefreshButtonState();
+}
+
+/**
+ * Restore product filter state from saved dataset filters.
+ * Converts DB format (snake_case) to state format.
+ */
+function ds_restoreProductFilterState() {
+    const productFilter = ds_wizardData.filters?.product_filter;
+    if (!productFilter) return;
+
+    // Restore top revenue filter
+    if (productFilter.top_revenue) {
+        const topRev = productFilter.top_revenue;
+        ds_productFiltersState.committed.topRevenue = {
+            enabled: topRev.enabled !== false,  // Default to true if exists
+            productColumn: topRev.product_column,
+            revenueColumn: topRev.revenue_column,
+            thresholdPercent: topRev.threshold_percent || topRev.percent || 80
+        };
+        ds_productFiltersState.pending.topRevenue = {...ds_productFiltersState.committed.topRevenue};
+    }
+
+    // Restore category filters
+    if (productFilter.category_filters?.length > 0) {
+        ds_productFiltersState.committed.categoryFilters = productFilter.category_filters.map(f => ({
+            column: f.column,
+            mode: f.mode,
+            values: f.values || []
+        }));
+        ds_productFiltersState.pending.categoryFilters = [...ds_productFiltersState.committed.categoryFilters];
+    }
+
+    // Restore aggregation filters
+    if (productFilter.aggregation_filters?.length > 0) {
+        ds_productFiltersState.committed.aggregationFilters = productFilter.aggregation_filters.map(f => ({
+            type: f.type,
+            productColumn: f.product_column,
+            amountColumn: f.amount_column,
+            filterType: f.filter_type,
+            value: f.value,
+            min: f.min,
+            max: f.max
+        }));
+        ds_productFiltersState.pending.aggregationFilters = [...ds_productFiltersState.committed.aggregationFilters];
+    }
+
+    // Update UI summary
+    ds_updateProductsFilterStatus();
+}
+
+/**
+ * Restore customer filter state from saved dataset filters.
+ * Converts DB format (snake_case) to state format.
+ */
+function ds_restoreCustomerFilterState() {
+    const customerFilter = ds_wizardData.filters?.customer_filter;
+    if (!customerFilter) return;
+
+    // Restore top revenue filter
+    if (customerFilter.top_revenue) {
+        const topRev = customerFilter.top_revenue;
+        ds_customerFiltersState.committed.topRevenue = {
+            enabled: topRev.enabled !== false,  // Default to true if exists
+            customerColumn: topRev.customer_column,
+            revenueColumn: topRev.revenue_column,
+            thresholdPercent: topRev.threshold_percent || topRev.percent || 80
+        };
+        ds_customerFiltersState.pending.topRevenue = {...ds_customerFiltersState.committed.topRevenue};
+    }
+
+    // Restore category filters
+    if (customerFilter.category_filters?.length > 0) {
+        ds_customerFiltersState.committed.categoryFilters = customerFilter.category_filters.map(f => ({
+            column: f.column,
+            mode: f.mode,
+            values: f.values || []
+        }));
+        ds_customerFiltersState.pending.categoryFilters = [...ds_customerFiltersState.committed.categoryFilters];
+    }
+
+    // Restore aggregation filters
+    if (customerFilter.aggregation_filters?.length > 0) {
+        ds_customerFiltersState.committed.aggregationFilters = customerFilter.aggregation_filters.map(f => ({
+            type: f.type,
+            customerColumn: f.customer_column,
+            amountColumn: f.amount_column,
+            filterType: f.filter_type,
+            value: f.value,
+            min: f.min,
+            max: f.max
+        }));
+        ds_customerFiltersState.pending.aggregationFilters = [...ds_customerFiltersState.committed.aggregationFilters];
+    }
+
+    // Update UI summary
+    ds_updateCustomersFilterStatus();
 }
 
 // Update the dates filter summary line
@@ -9183,6 +9301,7 @@ function ds_loadDatasetStats(withFilters = false) {
         loadingEl.classList.add('hidden');
 
         if (data.status === 'success') {
+            ds_datasetStatsData = data;  // Store for snapshot when saving
             ds_renderDatasetStats(data);
             statsEl.classList.remove('hidden');
         } else {
@@ -11658,6 +11777,15 @@ function ds_convertJoinsToConfig(joinsArray) {
 function ds_saveDataset() {
     ds_collectStepData(4);
 
+    // Build summary snapshot from current Dataset Summary panel data
+    // This captures whatever is currently displayed (filtered or unfiltered)
+    const summarySnapshot = ds_datasetStatsData ? {
+        total_rows: ds_datasetStatsData.summary?.total_rows || 0,
+        filters_applied: ds_datasetStatsData.filters_applied || {},
+        column_stats: ds_datasetStatsData.column_stats || {},
+        snapshot_at: new Date().toISOString()
+    } : {};
+
     const payload = {
         name: ds_wizardData.name,
         description: ds_wizardData.description,
@@ -11666,7 +11794,8 @@ function ds_saveDataset() {
         join_config: ds_convertJoinsToConfig(ds_schemaBuilderState.joins || []),
         selected_columns: ds_schemaBuilderState.selectedColumns,
         column_aliases: ds_schemaBuilderState.columnAliases || {},
-        filters: ds_wizardData.filters
+        filters: ds_wizardData.filters,
+        summary_snapshot: summarySnapshot
     };
 
     const url = ds_wizardEditMode
@@ -11964,17 +12093,32 @@ function ds_loadDatasetForEdit(datasetId) {
         .then(data => {
             if (data.status === 'success') {
                 const ds = data.dataset;
+
+                // Populate wizard data - all fields
                 ds_wizardData.name = ds.name || '';
                 ds_wizardData.description = ds.description || '';
                 ds_wizardData.primaryTable = ds.primary_table;
                 ds_wizardData.secondaryTables = ds.secondary_tables || [];
+                ds_wizardData.joinConfig = ds.join_config || {};
+                ds_wizardData.selectedColumns = ds.selected_columns || {};
+                ds_wizardData.columnAliases = ds.column_aliases || {};
                 ds_wizardData.filters = ds.filters || {};
 
-                // Update form
+                // Restore schema builder state for Step 3
+                ds_schemaBuilderState.selectedColumns = {...ds_wizardData.selectedColumns};
+                ds_schemaBuilderState.columnAliases = {...ds_wizardData.columnAliases};
+
+                // Convert join_config dict to joins array for schema builder
+                ds_schemaBuilderState.joins = ds_convertJoinConfigToArray(
+                    ds_wizardData.joinConfig,
+                    ds_wizardData.primaryTable
+                );
+
+                // Update form fields
                 document.getElementById('dsDatasetName').value = ds_wizardData.name;
                 document.getElementById('dsDatasetDescription').value = ds_wizardData.description;
 
-                // Re-render tables
+                // Re-render tables with selections
                 ds_renderPrimaryTableList();
                 ds_renderSecondaryTableList();
 
@@ -11982,6 +12126,30 @@ function ds_loadDatasetForEdit(datasetId) {
             }
         })
         .catch(err => console.error('Error loading dataset:', err));
+}
+
+/**
+ * Convert join_config dict format (from DB) to joins array format (for schema builder).
+ *
+ * DB format: { "raw_data.products": { join_key: "x", primary_column: "x", secondary_column: "y", join_type: "LEFT" } }
+ * Schema builder format: [{ leftTable, rightTable, leftCol, rightCol, type }]
+ */
+function ds_convertJoinConfigToArray(joinConfig, primaryTable) {
+    if (!joinConfig || Object.keys(joinConfig).length === 0) {
+        return [];
+    }
+
+    const joins = [];
+    for (const [secondaryTable, config] of Object.entries(joinConfig)) {
+        joins.push({
+            leftTable: primaryTable,
+            rightTable: secondaryTable,
+            leftCol: config.primary_column || config.join_key,
+            rightCol: config.secondary_column || config.join_key,
+            type: (config.join_type || 'LEFT').toLowerCase()
+        });
+    }
+    return joins;
 }
 
 function ds_deleteDataset(datasetId, name) {

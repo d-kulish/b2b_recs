@@ -811,12 +811,82 @@ This forces the Schema Builder to reload when returning to Step 3 after table ch
 4. Updated `ds_renderExistingFilters()` to read from correct state based on context
 5. Updated `ds_applyFilterColumnsModal()` to add filters to correct state and call correct summary function
 
+### Fix 15: Dataset Snapshot Not Saved ✅
+
+**Problem**: Newly created datasets showed "N/A" for Rows and Columns on the card, and "No summary snapshot available" when clicking View.
+
+**Root Cause**: The migrated `ds_saveDataset()` function was missing the `summary_snapshot` field in the payload:
+1. No `ds_datasetStatsData` variable to store fetched stats
+2. No snapshot building code before save
+3. Missing `summary_snapshot` field in the save payload
+
+**Solution**:
+1. Added `let ds_datasetStatsData = null;` global variable (line 7016)
+2. Store stats when fetched: `ds_datasetStatsData = data;` in `ds_loadDatasetStats()` success handler (line 9187)
+3. Build snapshot in `ds_saveDataset()`:
+   ```javascript
+   const summarySnapshot = ds_datasetStatsData ? {
+       total_rows: ds_datasetStatsData.summary?.total_rows || 0,
+       filters_applied: ds_datasetStatsData.filters_applied || {},
+       column_stats: ds_datasetStatsData.column_stats || {},
+       snapshot_at: new Date().toISOString()
+   } : {};
+   ```
+4. Include `summary_snapshot: summarySnapshot` in payload
+5. Reset variable in `ds_resetWizard()`: `ds_datasetStatsData = null;`
+
+### Fix 16: Edit Mode Not Restoring Schema/Filters ✅
+
+**Problem**: When editing an existing dataset, Step 3 (Schema Builder) showed no selected columns and Step 4 showed no restored filters.
+
+**Root Cause**: `ds_loadDatasetForEdit()` was incomplete:
+1. Missing: `joinConfig`, `selectedColumns`, `columnAliases` restoration to `ds_wizardData`
+2. Missing: `selectedColumns`, `columnAliases`, `joins` restoration to `ds_schemaBuilderState`
+3. Missing: Product and customer filter state restoration functions
+4. `ds_collectStepData(4)` was overwriting all filters instead of merging
+
+**Solution**:
+
+**A. Fixed `ds_loadDatasetForEdit()` (lines 11976-12015):**
+```javascript
+// Added missing field restorations
+ds_wizardData.joinConfig = ds.join_config || {};
+ds_wizardData.selectedColumns = ds.selected_columns || {};
+ds_wizardData.columnAliases = ds.column_aliases || {};
+
+// Restore schema builder state
+ds_schemaBuilderState.selectedColumns = {...ds_wizardData.selectedColumns};
+ds_schemaBuilderState.columnAliases = {...ds_wizardData.columnAliases};
+ds_schemaBuilderState.joins = ds_convertJoinConfigToArray(ds_wizardData.joinConfig, ds_wizardData.primaryTable);
+```
+
+**B. Added `ds_convertJoinConfigToArray()` helper (lines 12017-12039):**
+Converts DB join_config dict format to schema builder joins array format.
+
+**C. Fixed `ds_collectStepData()` case 4 (lines 7301-7328):**
+- Changed from overwriting to merging filters
+- Changed key from `dates` to `history` (matching DB format)
+- Changed to snake_case property names (`timestamp_column`, `rolling_days`)
+- Uses committed state from `ds_datesFilterState`
+
+**D. Added filter restoration functions:**
+- `ds_restoreProductFilterState()` (lines 8948-8990) - restores product filter state
+- `ds_restoreCustomerFilterState()` (lines 8996-9038) - restores customer filter state
+- Updated `ds_restoreDatesFilterState()` to also set pending state (line 8941)
+
+**E. Updated Step 4 initialization (lines 7274-7276):**
+```javascript
+ds_restoreDatesFilterState();
+ds_restoreProductFilterState();
+ds_restoreCustomerFilterState();
+```
+
 ### Files Modified for Bug Fixes
 
 | File | Changes |
 |------|---------|
 | `ml_platform/datasets/preview_service.py` | Removed excessive debug logging |
-| `templates/ml_platform/model_configs.html` | Fixed join_config format, Schema Builder state management, Dataset Summary, column dropdowns, filter popups, Refresh button states, filter payload structure, Filter Columns modal functionality, context-aware filtering |
+| `templates/ml_platform/model_configs.html` | Fixed join_config format, Schema Builder state management, Dataset Summary, column dropdowns, filter popups, Refresh button states, filter payload structure, Filter Columns modal functionality, context-aware filtering, **snapshot save**, **edit mode restoration** |
 
 ---
 

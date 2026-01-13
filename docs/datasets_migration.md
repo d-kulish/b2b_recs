@@ -719,12 +719,104 @@ This forces the Schema Builder to reload when returning to Step 3 after table ch
 6. Added `ds_updateDatesRefreshButtonState()` to enable/disable Refresh button
 7. Added `ds_updateDatesFilterSummary()` to show filter summary text
 
+### Fix 9: Dates Refresh Dataset Button Not Deactivating ✅
+
+**Problem**: After clicking "Refresh Dataset" in the Dates filter, the button remained active instead of becoming disabled.
+
+**Root Cause**:
+1. `ds_updateDatesRefreshButtonState()` only checked if timestamp was selected, not if there were changes
+2. `ds_refreshDatasetHistory()` didn't commit pending state or call button state update
+
+**Solution**:
+1. Updated `ds_updateDatesRefreshButtonState()` to compare `pending` vs `committed` state:
+   ```javascript
+   const pendingJson = JSON.stringify(pendingState);
+   const committedJson = JSON.stringify(ds_datesFilterState.committed);
+   const hasChanges = pendingJson !== committedJson;
+   const shouldEnable = hasTimestamp && hasChanges;
+   ```
+2. Updated `ds_refreshDatasetHistory()` to commit state and update button
+3. Added `ds_restoreDatesFilterState()` for edit mode restoration
+4. Added filter state reset in `ds_resetWizard()`
+
+### Fix 10: Products/Customers Refresh Buttons Not Working ✅
+
+**Problem**: The "Refresh Dataset" buttons in Products and Customers sub-chapters never activated when filters were applied.
+
+**Root Cause**:
+1. Missing `ds_updateProductsRefreshButtonState()` and `ds_updateCustomersRefreshButtonState()` functions
+2. `ds_refreshProductFilters()` and `ds_refreshCustomerFilters()` were stubs that only showed notifications
+3. Summary update functions didn't call button state updates
+
+**Solution**:
+1. Added `ds_updateProductsRefreshButtonState()` - compares pending vs committed state
+2. Added `ds_updateCustomersRefreshButtonState()` - compares pending vs committed state
+3. Rewrote `ds_refreshProductFilters()` - commits state, saves to wizardData, updates summary
+4. Rewrote `ds_refreshCustomerFilters()` - commits state, saves to wizardData, updates summary
+5. Added helper functions: `ds_buildProductFilterConfig()`, `ds_buildCustomerFilterConfig()`
+6. Added status functions: `ds_updateProductsFilterStatus()`, `ds_updateCustomersFilterStatus()`
+7. Updated `ds_resetWizard()` to reset `ds_productFiltersState` and `ds_customerFiltersState`
+
+### Fix 11: Filters Not Applied to Dataset Summary ✅
+
+**Problem**: Clicking "Refresh Dataset" deactivated the button but the Dataset Summary didn't reflect the filter changes.
+
+**Root Cause**: `ds_buildFiltersPayload()` was using wrong structure:
+- Was: `{ customer_filter: { type: 'top_revenue', customer_column: ... } }` (flat)
+- Expected: `{ customer_filter: { top_revenue: { customer_column: ... } } }` (nested)
+
+**Solution**: Rewrote `ds_buildFiltersPayload()` to:
+1. Read from committed state instead of UI elements
+2. Use nested structure for `top_revenue` objects
+3. Support all filter types: aggregation, category, numeric filters
+4. Match the original `model_dataset.html` API payload structure
+
+### Fix 12: Filter Columns Modal Not Showing Values ✅
+
+**Problem**: Selecting a column (e.g., "city") in the Filter Columns modal didn't show available values to select.
+
+**Root Cause**:
+1. `ds_onFilterColumnSelect()` wasn't async and didn't fetch column analysis
+2. Used basic column type (STRING) instead of `filter_type` from analysis (category)
+3. Missing functions to populate category values list
+
+**Solution**:
+1. Made `ds_onFilterColumnSelect()` async with `await ds_fetchColumnAnalysis()`
+2. Added `ds_showFilterConfigForType()` - routes to appropriate config function
+3. Added `ds_showCategoryFilterConfig()` - populates values with checkboxes or autocomplete
+4. Added `ds_showNumericFilterConfig()` - shows range stats and inputs
+5. Added `ds_showDateFilterConfig()` - shows date range stats
+6. Added helper functions: `ds_filterCategoryValues()`, `ds_toggleCategoryValue()`, `ds_searchCategoryValues()`
+
+### Fix 13: Filter Columns Apply Saving 0 Values ✅
+
+**Problem**: After selecting values and clicking Apply, the filter showed "Include: 0 values".
+
+**Root Cause**: `ds_applyFilterColumnsModal()` had `values: []` hardcoded instead of collecting selected values.
+
+**Solution**: Updated to collect values from:
+- Checkboxes (list mode): `#dsNewCategoryValuesList input[type="checkbox"]:checked`
+- Tags (autocomplete mode): `#dsCategorySelectedTags .category-tag`
+
+### Fix 14: Customer Filters Going to Wrong State ✅
+
+**Problem**: Filters created in Customers sub-chapter were being added to Products state.
+
+**Root Cause**: Single Filter Columns modal was always adding to `ds_productFiltersState` regardless of which sub-chapter opened it.
+
+**Solution**:
+1. Added `ds_filterColumnsContext` variable to track which sub-chapter opened the modal
+2. Updated `ds_openFilterColumnsModal()` to set context to 'product'
+3. Updated `ds_openCustomerFilterColumnsModal()` to set context to 'customer'
+4. Updated `ds_renderExistingFilters()` to read from correct state based on context
+5. Updated `ds_applyFilterColumnsModal()` to add filters to correct state and call correct summary function
+
 ### Files Modified for Bug Fixes
 
 | File | Changes |
 |------|---------|
 | `ml_platform/datasets/preview_service.py` | Removed excessive debug logging |
-| `templates/ml_platform/model_configs.html` | Fixed join_config format, Schema Builder state management, Dataset Summary, column dropdowns, filter popups |
+| `templates/ml_platform/model_configs.html` | Fixed join_config format, Schema Builder state management, Dataset Summary, column dropdowns, filter popups, Refresh button states, filter payload structure, Filter Columns modal functionality, context-aware filtering |
 
 ---
 

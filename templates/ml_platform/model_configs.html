@@ -7096,6 +7096,65 @@ function ds_resetWizard() {
     // Reset card positions so tables are re-positioned fresh
     ds_cardPositions = {};
 
+    // Reset dates filter state (pending/committed model)
+    ds_datesFilterState = {
+        pending: {
+            timestampColumn: null,
+            mode: 'rolling',
+            rollingDays: 30,
+            startDate: null
+        },
+        committed: {
+            timestampColumn: null,
+            mode: 'rolling',
+            rollingDays: 30,
+            startDate: null
+        }
+    };
+    ds_historyFilterMode = 'rolling';
+
+    // Reset product filters state (pending/committed model)
+    ds_productFiltersState = {
+        columnAnalysis: {},
+        committed: {
+            topRevenue: { enabled: false, productColumn: null, revenueColumn: null, thresholdPercent: 80 },
+            categoryFilters: [],
+            numericFilters: [],
+            dateFilters: [],
+            aggregationFilters: []
+        },
+        pending: {
+            topRevenue: { enabled: false, productColumn: null, revenueColumn: null, thresholdPercent: 80 },
+            categoryFilters: [],
+            numericFilters: [],
+            dateFilters: [],
+            aggregationFilters: []
+        }
+    };
+
+    // Reset customer filters state (pending/committed model)
+    ds_customerFiltersState = {
+        columnAnalysis: {},
+        committed: {
+            topRevenue: { enabled: false, customerColumn: null, revenueColumn: null, thresholdPercent: 80 },
+            categoryFilters: [],
+            numericFilters: [],
+            dateFilters: [],
+            aggregationFilters: []
+        },
+        pending: {
+            topRevenue: { enabled: false, customerColumn: null, revenueColumn: null, thresholdPercent: 80 },
+            categoryFilters: [],
+            numericFilters: [],
+            dateFilters: [],
+            aggregationFilters: []
+        }
+    };
+
+    // Reset analysis data
+    ds_productAnalysisData = null;
+    ds_customerAnalysisData = null;
+
     // Reset form fields
     document.getElementById('dsDatasetName').value = '';
     document.getElementById('dsDatasetDescription').value = '';
@@ -7206,6 +7265,10 @@ function ds_nextStep() {
         ds_fetchColumnAnalysis().then(() => {
             // Populate filter dropdowns with selected columns (needs column types for timestamp filter)
             ds_populateFilterColumnDropdowns();
+
+            // Restore filter state if editing an existing dataset
+            ds_restoreDatesFilterState();
+
             // Load initial dataset statistics
             ds_loadDatasetStats(false);
         });
@@ -8809,11 +8872,55 @@ function ds_updateDatesRefreshButtonState() {
     // Get current pending state from UI
     const pendingState = ds_getDatesFilterPendingState();
 
-    // Enable button if we have a timestamp column selected
+    // Enable button if pending state differs from committed state
+    const pendingJson = JSON.stringify(pendingState);
+    const committedJson = JSON.stringify(ds_datesFilterState.committed);
+    const hasChanges = pendingJson !== committedJson;
+
+    // Also need a timestamp column selected to enable
     const hasTimestamp = !!pendingState.timestampColumn;
 
-    refreshBtn.disabled = !hasTimestamp;
-    refreshBtn.classList.toggle('filter-button-disabled', !hasTimestamp);
+    const shouldEnable = hasTimestamp && hasChanges;
+
+    refreshBtn.disabled = !shouldEnable;
+    refreshBtn.classList.toggle('filter-button-disabled', !shouldEnable);
+}
+
+// Restore dates filter state when editing an existing dataset
+function ds_restoreDatesFilterState() {
+    const history = ds_wizardData.filters?.history;
+    if (!history || !history.timestamp_column) return;
+
+    // Populate UI elements
+    const timestampSelect = document.getElementById('dsTimestampColumn');
+    const rollingDaysInput = document.getElementById('dsRollingDays');
+    const startDateInput = document.getElementById('dsStartDateInput');
+
+    if (timestampSelect) {
+        timestampSelect.value = history.timestamp_column;
+    }
+
+    // Determine filter mode and populate corresponding input
+    if (history.start_date) {
+        ds_historyFilterMode = 'startDate';
+        if (startDateInput) startDateInput.value = history.start_date;
+        if (rollingDaysInput) rollingDaysInput.value = history.rolling_days || 30;
+    } else {
+        ds_historyFilterMode = 'rolling';
+        if (rollingDaysInput) rollingDaysInput.value = history.rolling_days || 30;
+    }
+
+    // Set committed state to match saved filters (pending = committed means no changes)
+    ds_datesFilterState.committed = {
+        timestampColumn: history.timestamp_column,
+        mode: history.start_date ? 'startDate' : 'rolling',
+        rollingDays: history.rolling_days || 30,
+        startDate: history.start_date || null
+    };
+
+    // Update UI state
+    ds_updateDatesFilterSummary();
+    ds_updateDatesRefreshButtonState();
 }
 
 // Update the dates filter summary line
@@ -8843,8 +8950,39 @@ function ds_updateDatesFilterSummary() {
 }
 
 function ds_refreshDatasetHistory() {
+    const timestampCol = document.getElementById('dsTimestampColumn')?.value;
+    const rollingDays = document.getElementById('dsRollingDays')?.value || 30;
+    const startDate = document.getElementById('dsStartDateInput')?.value;
+
+    if (!timestampCol) {
+        alert('Please select a timestamp column first');
+        return;
+    }
+
+    // Commit the current pending state
+    ds_datesFilterState.committed = {
+        timestampColumn: timestampCol,
+        mode: ds_historyFilterMode,
+        rollingDays: parseInt(rollingDays) || 30,
+        startDate: startDate || null
+    };
+
+    // Save to wizardData.filters for persistence
+    ds_wizardData.filters = ds_wizardData.filters || {};
+    ds_wizardData.filters.history = {
+        timestamp_column: timestampCol,
+        rolling_days: parseInt(rollingDays) || 30,
+        start_date: startDate || null
+    };
+
     // Refresh dataset stats with current filter settings
     ds_loadDatasetStats(true);
+
+    // Update button state (should become disabled since pending = committed)
+    ds_updateDatesRefreshButtonState();
+
+    // Re-validate step 4
+    ds_validateCurrentStep();
 }
 
 // =============================================================================
@@ -9061,40 +9199,130 @@ function ds_loadDatasetStats(withFilters = false) {
 }
 
 /**
- * Build filters payload from current filter state.
+ * Build filters payload from committed filter states.
+ * Uses the COMMITTED state from each sub-chapter (set when user clicks "Refresh Dataset").
  */
 function ds_buildFiltersPayload() {
     const filters = {};
 
-    // Date filter
-    const timestampCol = document.getElementById('dsTimestampColumn')?.value;
-    const rollingDays = parseInt(document.getElementById('dsRollingDays')?.value) || 30;
+    // ===========================================
+    // 1. DATE FILTERS (from committed state)
+    // ===========================================
+    const datesCommitted = ds_datesFilterState.committed;
+    if (datesCommitted.timestampColumn) {
+        filters.timestamp_column = datesCommitted.timestampColumn;
 
-    if (timestampCol) {
-        filters.timestamp_column = timestampCol;
-        filters.date_filter = { type: 'rolling', days: rollingDays };
+        if (datesCommitted.mode === 'rolling') {
+            filters.date_filter = { type: 'rolling', days: datesCommitted.rollingDays };
+        } else if (datesCommitted.mode === 'startDate' && datesCommitted.startDate) {
+            filters.date_filter = { type: 'fixed', start_date: datesCommitted.startDate };
+        }
     }
 
-    // Product filters (from committed state)
-    if (ds_productFiltersState?.committed?.topRevenue?.enabled) {
-        const tr = ds_productFiltersState.committed.topRevenue;
-        filters.product_filter = {
-            type: 'top_revenue',
-            product_column: tr.productColumn,
-            revenue_column: tr.revenueColumn,
-            percent: tr.thresholdPercent
+    // ===========================================
+    // 2. CUSTOMER FILTERS (from committed state)
+    // ===========================================
+    const customerCommitted = ds_customerFiltersState.committed;
+    const customerFilter = {};
+
+    // Top customers by revenue (nested structure expected by API)
+    if (customerCommitted.topRevenue?.enabled) {
+        customerFilter.top_revenue = {
+            customer_column: customerCommitted.topRevenue.customerColumn,
+            revenue_column: customerCommitted.topRevenue.revenueColumn,
+            percent: customerCommitted.topRevenue.thresholdPercent
         };
     }
 
-    // Customer filters (from committed state)
-    if (ds_customerFiltersState?.committed?.topRevenue?.enabled) {
-        const tr = ds_customerFiltersState.committed.topRevenue;
-        filters.customer_filter = {
-            type: 'top_revenue',
-            customer_column: tr.customerColumn,
-            revenue_column: tr.revenueColumn,
-            percent: tr.thresholdPercent
+    // Aggregation filters (transaction count, spending)
+    if (customerCommitted.aggregationFilters?.length > 0) {
+        customerFilter.aggregation_filters = customerCommitted.aggregationFilters.map(f => ({
+            type: f.type,
+            customer_column: f.customerColumn,
+            amount_column: f.amountColumn || null,
+            filter_type: f.filterType,
+            value: f.value,
+            min: f.min,
+            max: f.max
+        }));
+    }
+
+    // Category filters
+    if (customerCommitted.categoryFilters?.length > 0) {
+        customerFilter.category_filters = customerCommitted.categoryFilters.map(f => ({
+            column: f.column,
+            mode: f.mode,
+            values: f.values
+        }));
+    }
+
+    // Numeric filters
+    if (customerCommitted.numericFilters?.length > 0) {
+        customerFilter.numeric_filters = customerCommitted.numericFilters.map(f => ({
+            column: f.column,
+            type: f.type,
+            min: f.min,
+            max: f.max,
+            value: f.value,
+            include_nulls: f.includeNulls
+        }));
+    }
+
+    if (Object.keys(customerFilter).length > 0) {
+        filters.customer_filter = customerFilter;
+    }
+
+    // ===========================================
+    // 3. PRODUCT FILTERS (from committed state)
+    // ===========================================
+    const productCommitted = ds_productFiltersState.committed;
+    const productFilter = {};
+
+    // Top products by revenue (nested structure expected by API)
+    if (productCommitted.topRevenue?.enabled) {
+        productFilter.top_revenue = {
+            product_column: productCommitted.topRevenue.productColumn,
+            revenue_column: productCommitted.topRevenue.revenueColumn,
+            percent: productCommitted.topRevenue.thresholdPercent
         };
+    }
+
+    // Aggregation filters (transaction count, total revenue)
+    if (productCommitted.aggregationFilters?.length > 0) {
+        productFilter.aggregation_filters = productCommitted.aggregationFilters.map(f => ({
+            type: f.type,
+            product_column: f.productColumn,
+            amount_column: f.amountColumn || null,
+            filter_type: f.filterType,
+            value: f.value,
+            min: f.min,
+            max: f.max
+        }));
+    }
+
+    // Category filters
+    if (productCommitted.categoryFilters?.length > 0) {
+        productFilter.category_filters = productCommitted.categoryFilters.map(f => ({
+            column: f.column,
+            mode: f.mode,
+            values: f.values
+        }));
+    }
+
+    // Numeric filters
+    if (productCommitted.numericFilters?.length > 0) {
+        productFilter.numeric_filters = productCommitted.numericFilters.map(f => ({
+            column: f.column,
+            type: f.type,
+            min: f.min,
+            max: f.max,
+            value: f.value,
+            include_nulls: f.includeNulls
+        }));
+    }
+
+    if (Object.keys(productFilter).length > 0) {
+        filters.product_filter = productFilter;
     }
 
     return Object.keys(filters).length > 0 ? filters : null;
@@ -10647,8 +10875,17 @@ function ds_removeAggregationFilter(index) {
 // FILTER COLUMNS MODAL
 // =============================================================================
 
+// Track which sub-chapter (product/customer) opened the modal
+let ds_filterColumnsContext = 'product';
+
 function ds_openFilterColumnsModal() {
+    ds_filterColumnsContext = 'product';
     const modal = document.getElementById('dsFilterColumnsModal');
+
+    // Update modal title
+    const titleEl = modal.querySelector('.modal-header-title');
+    if (titleEl) titleEl.textContent = 'Filter Columns (Products)';
+
     modal.classList.remove('hidden');
 
     ds_populateFilterColumnsDropdown();
@@ -10661,8 +10898,18 @@ function ds_closeFilterColumnsModal() {
 }
 
 function ds_openCustomerFilterColumnsModal() {
-    // For now, use the same filter columns modal
-    ds_openFilterColumnsModal();
+    ds_filterColumnsContext = 'customer';
+    const modal = document.getElementById('dsFilterColumnsModal');
+
+    // Update modal title
+    const titleEl = modal.querySelector('.modal-header-title');
+    if (titleEl) titleEl.textContent = 'Filter Columns (Customers)';
+
+    modal.classList.remove('hidden');
+
+    ds_populateFilterColumnsDropdown();
+    ds_renderExistingFilters();
+    ds_resetFilterColumnsInputs();
 }
 
 function ds_populateFilterColumnsDropdown() {
@@ -10685,40 +10932,260 @@ function ds_populateFilterColumnsDropdown() {
     });
 }
 
-function ds_onFilterColumnSelect() {
+async function ds_onFilterColumnSelect() {
     const select = document.getElementById('dsFilterColumnSelect');
     const selectedColumn = select.value;
     const configContainer = document.getElementById('dsFilterConfigContainer');
 
+    // Store selected column for later use
+    ds_productFiltersState.selectedFilterColumn = selectedColumn;
+
     if (!selectedColumn) {
-        configContainer.classList.add('hidden');
+        ds_resetFilterConfigArea();
         return;
     }
 
+    // Fetch column analysis if not cached
+    if (!ds_productFiltersState.columnAnalysis[selectedColumn] ||
+        Object.keys(ds_productFiltersState.columnAnalysis).length === 0) {
+        await ds_fetchColumnAnalysis();
+    }
+
+    const colInfo = ds_productFiltersState.columnAnalysis[selectedColumn];
+    if (!colInfo) {
+        console.error('Column analysis not found for:', selectedColumn);
+        ds_resetFilterConfigArea();
+        return;
+    }
+
+    ds_showFilterConfigForType(selectedColumn, colInfo);
+}
+
+function ds_resetFilterConfigArea() {
+    const configContainer = document.getElementById('dsFilterConfigContainer');
+    const categoryConfig = document.getElementById('dsCategoryFilterConfig');
+    const numericConfig = document.getElementById('dsNumericFilterConfig');
+    const dateConfig = document.getElementById('dsDateFilterConfig');
+
+    configContainer.classList.add('hidden');
+    categoryConfig.classList.add('hidden');
+    numericConfig.classList.add('hidden');
+    dateConfig.classList.add('hidden');
+}
+
+function ds_showFilterConfigForType(columnName, colInfo) {
+    const configContainer = document.getElementById('dsFilterConfigContainer');
+    const categoryConfig = document.getElementById('dsCategoryFilterConfig');
+    const numericConfig = document.getElementById('dsNumericFilterConfig');
+    const dateConfig = document.getElementById('dsDateFilterConfig');
+
+    // Hide all configs first
+    categoryConfig.classList.add('hidden');
+    numericConfig.classList.add('hidden');
+    dateConfig.classList.add('hidden');
     configContainer.classList.remove('hidden');
 
-    // Get column info from analysis
-    const colAnalysis = ds_productFiltersState.columnAnalysis || {};
-    const info = colAnalysis[selectedColumn];
-
-    // Hide all config panels first
-    document.getElementById('dsCategoryFilterConfig').classList.add('hidden');
-    document.getElementById('dsNumericFilterConfig').classList.add('hidden');
-    document.getElementById('dsDateFilterConfig').classList.add('hidden');
-
-    const colType = info?.type?.toUpperCase() || 'STRING';
-
-    if (['INTEGER', 'FLOAT', 'INT64', 'FLOAT64', 'NUMERIC', 'BIGNUMERIC'].includes(colType)) {
-        document.getElementById('dsNumericFilterConfig').classList.remove('hidden');
-        document.getElementById('dsNumericFilterColumnName').textContent = ds_getColumnDisplayName(selectedColumn);
-        document.getElementById('dsNumericFilterTypeBadge').textContent = colType;
-    } else if (['DATE', 'DATETIME', 'TIMESTAMP'].includes(colType)) {
-        document.getElementById('dsDateFilterConfig').classList.remove('hidden');
-        document.getElementById('dsDateFilterColumnName').textContent = ds_getColumnDisplayName(selectedColumn);
-    } else {
-        document.getElementById('dsCategoryFilterConfig').classList.remove('hidden');
-        document.getElementById('dsCategoryFilterColumnName').textContent = ds_getColumnDisplayName(selectedColumn);
+    // Use filter_type from analysis (category, numeric, date)
+    if (colInfo.filter_type === 'category') {
+        ds_showCategoryFilterConfig(columnName, colInfo);
+    } else if (colInfo.filter_type === 'numeric') {
+        ds_showNumericFilterConfig(columnName, colInfo);
+    } else if (colInfo.filter_type === 'date') {
+        ds_showDateFilterConfig(columnName, colInfo);
     }
+}
+
+function ds_showCategoryFilterConfig(columnName, colInfo) {
+    const config = document.getElementById('dsCategoryFilterConfig');
+    document.getElementById('dsCategoryFilterColumnName').textContent =
+        `${ds_getColumnDisplayName(columnName)} - ${colInfo.unique_count} unique values`;
+
+    // Render values list
+    const valuesContainer = document.getElementById('dsNewCategoryValuesContainer');
+
+    // Backend returns 'values' as array of {value, count} objects in list mode
+    if (colInfo.display_mode === 'list' && colInfo.values) {
+        valuesContainer.innerHTML = `
+            <div class="category-filter-search">
+                <input type="text" placeholder="Search values..." oninput="ds_filterCategoryValues(this.value)">
+            </div>
+            <div class="category-filter-list" id="dsNewCategoryValuesList">
+                ${colInfo.values.map(item => `
+                    <div class="category-filter-item" onclick="ds_toggleCategoryValue(this, '${String(item.value).replace(/'/g, "\\'")}', event)">
+                        <label class="category-filter-item-label" onclick="event.stopPropagation()">
+                            <input type="checkbox" value="${item.value}" onchange="this.closest('.category-filter-item').classList.toggle('selected', this.checked)">
+                            ${item.value}
+                        </label>
+                        <span class="category-filter-item-count">(${item.count})</span>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    } else {
+        // Autocomplete mode for >100 values
+        valuesContainer.innerHTML = `
+            <div class="category-autocomplete-container">
+                <input type="text" class="category-autocomplete-input" placeholder="Type to search values..."
+                       oninput="ds_searchCategoryValues(this.value, '${columnName}')" id="dsCategoryAutocompleteInput">
+                <div class="category-autocomplete-dropdown hidden" id="dsCategoryAutocompleteDropdown"></div>
+            </div>
+            <div class="category-selected-tags" id="dsCategorySelectedTags"></div>
+        `;
+    }
+
+    // Reset mode selection
+    const modeRadio = document.querySelector('input[name="dsNewCategoryMode"][value="include"]');
+    if (modeRadio) modeRadio.checked = true;
+
+    config.classList.remove('hidden');
+}
+
+function ds_showNumericFilterConfig(columnName, colInfo) {
+    const config = document.getElementById('dsNumericFilterConfig');
+    document.getElementById('dsNumericFilterColumnName').textContent = ds_getColumnDisplayName(columnName);
+    document.getElementById('dsNumericFilterTypeBadge').textContent = colInfo.type;
+
+    const statsEl = document.getElementById('dsNumericFilterStats');
+    if (statsEl) {
+        statsEl.textContent = `Range: ${colInfo.min} - ${colInfo.max} | Nulls: ${colInfo.null_percent || 0}%`;
+    }
+
+    // Reset filter type to range
+    const rangeRadio = document.querySelector('input[name="dsNewNumericType"][value="range"]');
+    if (rangeRadio) rangeRadio.checked = true;
+
+    // Set placeholder values
+    const minInput = document.getElementById('dsNewNumericMin');
+    const maxInput = document.getElementById('dsNewNumericMax');
+    if (minInput) {
+        minInput.value = '';
+        minInput.placeholder = colInfo.min || '';
+    }
+    if (maxInput) {
+        maxInput.value = '';
+        maxInput.placeholder = colInfo.max || '';
+    }
+
+    const includeNullsCheckbox = document.getElementById('dsNewNumericIncludeNulls');
+    if (includeNullsCheckbox) includeNullsCheckbox.checked = true;
+
+    config.classList.remove('hidden');
+}
+
+function ds_showDateFilterConfig(columnName, colInfo) {
+    const config = document.getElementById('dsDateFilterConfig');
+    document.getElementById('dsDateFilterColumnName').textContent = ds_getColumnDisplayName(columnName);
+
+    const statsEl = document.getElementById('dsDateFilterStats');
+    if (statsEl) {
+        statsEl.textContent = `Range: ${colInfo.min_date || 'N/A'} - ${colInfo.max_date || 'N/A'}`;
+    }
+
+    // Reset inputs
+    const relativeRadio = document.querySelector('input[name="dsNewDateType"][value="relative"]');
+    if (relativeRadio) relativeRadio.checked = true;
+
+    const relativeOption = document.getElementById('dsNewDateRelativeOption');
+    if (relativeOption) relativeOption.value = 'last_30_days';
+
+    config.classList.remove('hidden');
+}
+
+// Filter category values in the list based on search input
+function ds_filterCategoryValues(searchText) {
+    const items = document.querySelectorAll('#dsNewCategoryValuesList .category-filter-item');
+    const searchLower = searchText.toLowerCase();
+
+    items.forEach(item => {
+        const label = item.querySelector('.category-filter-item-label');
+        const text = label ? label.textContent.toLowerCase() : '';
+        item.style.display = text.includes(searchLower) ? '' : 'none';
+    });
+}
+
+// Toggle category value selection
+function ds_toggleCategoryValue(element, value, event) {
+    // Prevent double-toggle when clicking on the checkbox itself
+    if (event && event.target.type === 'checkbox') {
+        // Checkbox was clicked directly, let it handle its own state
+        element.classList.toggle('selected', event.target.checked);
+        return;
+    }
+
+    const checkbox = element.querySelector('input[type="checkbox"]');
+    if (checkbox) {
+        checkbox.checked = !checkbox.checked;
+        element.classList.toggle('selected', checkbox.checked);
+    }
+}
+
+// Search category values via API (for autocomplete mode with >100 values)
+async function ds_searchCategoryValues(searchText, columnName) {
+    if (!searchText || searchText.length < 2) {
+        document.getElementById('dsCategoryAutocompleteDropdown').classList.add('hidden');
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/models/${modelId}/datasets/search-column-values/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrftoken
+            },
+            body: JSON.stringify({
+                session_id: ds_schemaBuilderState.sessionId,
+                column: columnName,
+                search: searchText,
+                limit: 20
+            })
+        });
+
+        const data = await response.json();
+        if (data.status === 'success') {
+            ds_renderCategoryAutocompleteResults(data.values);
+        }
+    } catch (error) {
+        console.error('Error searching category values:', error);
+    }
+}
+
+function ds_renderCategoryAutocompleteResults(values) {
+    const dropdown = document.getElementById('dsCategoryAutocompleteDropdown');
+
+    if (!values || values.length === 0) {
+        dropdown.classList.add('hidden');
+        return;
+    }
+
+    dropdown.innerHTML = values.map(item => `
+        <div class="category-autocomplete-item" onclick="ds_selectAutocompleteValue('${String(item.value).replace(/'/g, "\\'")}')">
+            ${item.value} <span class="count">(${item.count})</span>
+        </div>
+    `).join('');
+
+    dropdown.classList.remove('hidden');
+}
+
+function ds_selectAutocompleteValue(value) {
+    const tagsContainer = document.getElementById('dsCategorySelectedTags');
+
+    // Check if already selected
+    const existingTags = tagsContainer.querySelectorAll('.category-tag');
+    for (const tag of existingTags) {
+        if (tag.dataset.value === value) return;
+    }
+
+    // Add tag
+    const tag = document.createElement('span');
+    tag.className = 'category-tag';
+    tag.dataset.value = value;
+    tag.innerHTML = `${value} <i class="fas fa-times" onclick="this.parentElement.remove()"></i>`;
+    tagsContainer.appendChild(tag);
+
+    // Clear input and hide dropdown
+    document.getElementById('dsCategoryAutocompleteInput').value = '';
+    document.getElementById('dsCategoryAutocompleteDropdown').classList.add('hidden');
 }
 
 function ds_resetFilterColumnsInputs() {
@@ -10730,11 +11197,16 @@ function ds_renderExistingFilters() {
     const container = document.getElementById('dsExistingFiltersList');
     const section = document.getElementById('dsExistingFiltersSection');
 
+    // Use the correct state based on context
+    const filterState = ds_filterColumnsContext === 'customer'
+        ? ds_customerFiltersState
+        : ds_productFiltersState;
+
     // Combine all pending filters
     const allFilters = [
-        ...ds_productFiltersState.pending.categoryFilters.map(f => ({ ...f, filterCategory: 'category' })),
-        ...ds_productFiltersState.pending.numericFilters.map(f => ({ ...f, filterCategory: 'numeric' })),
-        ...ds_productFiltersState.pending.dateFilters.map(f => ({ ...f, filterCategory: 'date' }))
+        ...filterState.pending.categoryFilters.map(f => ({ ...f, filterCategory: 'category' })),
+        ...filterState.pending.numericFilters.map(f => ({ ...f, filterCategory: 'numeric' })),
+        ...filterState.pending.dateFilters.map(f => ({ ...f, filterCategory: 'date' }))
     ];
 
     if (allFilters.length === 0) {
@@ -10843,6 +11315,11 @@ function ds_applyFilterColumnsModal() {
         return;
     }
 
+    // Use the correct state based on context
+    const filterState = ds_filterColumnsContext === 'customer'
+        ? ds_customerFiltersState
+        : ds_productFiltersState;
+
     // Determine which filter type is active and create the filter
     const categoryConfig = document.getElementById('dsCategoryFilterConfig');
     const numericConfig = document.getElementById('dsNumericFilterConfig');
@@ -10851,11 +11328,33 @@ function ds_applyFilterColumnsModal() {
     if (!categoryConfig.classList.contains('hidden')) {
         // Add category filter
         const mode = document.querySelector('input[name="dsNewCategoryMode"]:checked')?.value || 'include';
-        // Get selected values (simplified - would need proper implementation for value selection)
-        ds_productFiltersState.pending.categoryFilters.push({
+
+        // Collect selected values from checkboxes (list mode) or tags (autocomplete mode)
+        const selectedValues = [];
+
+        // Check list mode - get checked checkboxes
+        const checkboxes = document.querySelectorAll('#dsNewCategoryValuesList input[type="checkbox"]:checked');
+        checkboxes.forEach(cb => {
+            selectedValues.push(cb.value);
+        });
+
+        // Check autocomplete mode - get selected tags
+        const tags = document.querySelectorAll('#dsCategorySelectedTags .category-tag');
+        tags.forEach(tag => {
+            if (tag.dataset.value) {
+                selectedValues.push(tag.dataset.value);
+            }
+        });
+
+        if (selectedValues.length === 0) {
+            alert('Please select at least one value to filter by');
+            return;
+        }
+
+        filterState.pending.categoryFilters.push({
             column: selectedColumn,
             mode: mode,
-            values: []  // Would need to collect selected values
+            values: selectedValues
         });
     } else if (!numericConfig.classList.contains('hidden')) {
         // Add numeric filter
@@ -10864,7 +11363,7 @@ function ds_applyFilterColumnsModal() {
         const max = parseFloat(document.getElementById('dsNewNumericMax').value);
         const includeNulls = document.getElementById('dsNewNumericIncludeNulls').checked;
 
-        ds_productFiltersState.pending.numericFilters.push({
+        filterState.pending.numericFilters.push({
             column: selectedColumn,
             type: filterType,
             min: filterType === 'range' ? min : null,
@@ -10879,7 +11378,7 @@ function ds_applyFilterColumnsModal() {
         const startDate = document.getElementById('dsNewDateStart').value;
         const endDate = document.getElementById('dsNewDateEnd').value;
 
-        ds_productFiltersState.pending.dateFilters.push({
+        filterState.pending.dateFilters.push({
             column: selectedColumn,
             type: filterType,
             relativePeriod: filterType === 'relative' ? relativePeriod : null,
@@ -10889,7 +11388,13 @@ function ds_applyFilterColumnsModal() {
         });
     }
 
-    ds_updateProductsFilterSummary();
+    // Update the correct summary based on context
+    if (ds_filterColumnsContext === 'customer') {
+        ds_updateCustomersFilterSummary();
+    } else {
+        ds_updateProductsFilterSummary();
+    }
+
     ds_closeFilterColumnsModal();
 }
 
@@ -10898,7 +11403,7 @@ function ds_applyFilterColumnsModal() {
 // =============================================================================
 
 function ds_updateProductsFilterSummary() {
-    // Count active filters
+    // Count active filters from pending state
     const pending = ds_productFiltersState.pending;
     let filterCount = 0;
     if (pending.topRevenue.enabled) filterCount++;
@@ -10907,14 +11412,22 @@ function ds_updateProductsFilterSummary() {
     filterCount += pending.dateFilters.length;
     filterCount += pending.aggregationFilters.length;
 
-    // Update UI elements if they exist
-    const summaryEl = document.getElementById('dsProductsFilterSummary');
-    if (summaryEl) {
-        summaryEl.textContent = filterCount > 0 ? `${filterCount} filter(s) configured` : 'No filters';
+    // Update summary items
+    const summaryItemsEl = document.getElementById('dsProductsFilterSummaryItems');
+    if (summaryItemsEl) {
+        if (filterCount > 0) {
+            summaryItemsEl.innerHTML = `<span class="filter-summary-item">${filterCount} filter(s) configured</span>`;
+        } else {
+            summaryItemsEl.innerHTML = '<span class="filter-summary-empty">No filters selected</span>';
+        }
     }
+
+    // Update refresh button state
+    ds_updateProductsRefreshButtonState();
 }
 
 function ds_updateCustomersFilterSummary() {
+    // Count active filters from pending state
     const pending = ds_customerFiltersState.pending;
     let filterCount = 0;
     if (pending.topRevenue.enabled) filterCount++;
@@ -10923,20 +11436,198 @@ function ds_updateCustomersFilterSummary() {
     filterCount += pending.dateFilters.length;
     filterCount += pending.aggregationFilters.length;
 
-    const summaryEl = document.getElementById('dsCustomersFilterSummary');
-    if (summaryEl) {
-        summaryEl.textContent = filterCount > 0 ? `${filterCount} filter(s) configured` : 'No filters';
+    // Update summary items
+    const summaryItemsEl = document.getElementById('dsCustomersFilterSummaryItems');
+    if (summaryItemsEl) {
+        if (filterCount > 0) {
+            summaryItemsEl.innerHTML = `<span class="filter-summary-item">${filterCount} filter(s) configured</span>`;
+        } else {
+            summaryItemsEl.innerHTML = '<span class="filter-summary-empty">No filters selected</span>';
+        }
+    }
+
+    // Update refresh button state
+    ds_updateCustomersRefreshButtonState();
+}
+
+// Update Products Refresh Dataset button state
+function ds_updateProductsRefreshButtonState() {
+    const refreshBtn = document.getElementById('dsRefreshProductFiltersBtn');
+    if (!refreshBtn) return;
+
+    // Enable button if pending state differs from committed state
+    const pendingJson = JSON.stringify(ds_productFiltersState.pending);
+    const committedJson = JSON.stringify(ds_productFiltersState.committed);
+    const hasChanges = pendingJson !== committedJson;
+
+    refreshBtn.disabled = !hasChanges;
+    refreshBtn.classList.toggle('filter-button-disabled', !hasChanges);
+}
+
+// Update Customers Refresh Dataset button state
+function ds_updateCustomersRefreshButtonState() {
+    const refreshBtn = document.getElementById('dsRefreshCustomerFiltersBtn');
+    if (!refreshBtn) return;
+
+    // Enable button if pending state differs from committed state
+    const pendingJson = JSON.stringify(ds_customerFiltersState.pending);
+    const committedJson = JSON.stringify(ds_customerFiltersState.committed);
+    const hasChanges = pendingJson !== committedJson;
+
+    refreshBtn.disabled = !hasChanges;
+    refreshBtn.classList.toggle('filter-button-disabled', !hasChanges);
+}
+
+// Refresh Product Filters - commits pending to committed and updates Dataset Summary
+function ds_refreshProductFilters() {
+    const refreshBtn = document.getElementById('dsRefreshProductFiltersBtn');
+    if (!refreshBtn) return;
+
+    const originalHtml = refreshBtn.innerHTML;
+    refreshBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Refreshing...';
+    refreshBtn.disabled = true;
+
+    // Deep copy pending to committed
+    ds_productFiltersState.committed = JSON.parse(JSON.stringify(ds_productFiltersState.pending));
+
+    // Save to wizardData.filters for persistence
+    ds_wizardData.filters = ds_wizardData.filters || {};
+    ds_wizardData.filters.product_filter = ds_buildProductFilterConfig();
+
+    // Update Dataset Summary
+    ds_loadDatasetStats(true);
+
+    // Restore button and update state
+    setTimeout(() => {
+        refreshBtn.innerHTML = originalHtml;
+        ds_updateProductsRefreshButtonState();
+        ds_updateProductsFilterStatus();
+    }, 300);
+}
+
+// Refresh Customer Filters - commits pending to committed and updates Dataset Summary
+function ds_refreshCustomerFilters() {
+    const refreshBtn = document.getElementById('dsRefreshCustomerFiltersBtn');
+    if (!refreshBtn) return;
+
+    const originalHtml = refreshBtn.innerHTML;
+    refreshBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Refreshing...';
+    refreshBtn.disabled = true;
+
+    // Deep copy pending to committed
+    ds_customerFiltersState.committed = JSON.parse(JSON.stringify(ds_customerFiltersState.pending));
+
+    // Save to wizardData.filters for persistence
+    ds_wizardData.filters = ds_wizardData.filters || {};
+    ds_wizardData.filters.customer_filter = ds_buildCustomerFilterConfig();
+
+    // Update Dataset Summary
+    ds_loadDatasetStats(true);
+
+    // Restore button and update state
+    setTimeout(() => {
+        refreshBtn.innerHTML = originalHtml;
+        ds_updateCustomersRefreshButtonState();
+        ds_updateCustomersFilterStatus();
+    }, 300);
+}
+
+// Build product filter config from committed state for saving
+function ds_buildProductFilterConfig() {
+    const committed = ds_productFiltersState.committed;
+    const config = {};
+
+    if (committed.topRevenue.enabled) {
+        config.top_revenue = {
+            product_column: committed.topRevenue.productColumn,
+            revenue_column: committed.topRevenue.revenueColumn,
+            percent: committed.topRevenue.thresholdPercent
+        };
+    }
+
+    if (committed.aggregationFilters.length > 0) {
+        config.aggregation_filters = committed.aggregationFilters;
+    }
+
+    if (committed.categoryFilters.length > 0) {
+        config.category_filters = committed.categoryFilters;
+    }
+
+    if (committed.numericFilters.length > 0) {
+        config.numeric_filters = committed.numericFilters;
+    }
+
+    return Object.keys(config).length > 0 ? config : null;
+}
+
+// Build customer filter config from committed state for saving
+function ds_buildCustomerFilterConfig() {
+    const committed = ds_customerFiltersState.committed;
+    const config = {};
+
+    if (committed.topRevenue.enabled) {
+        config.top_revenue = {
+            customer_column: committed.topRevenue.customerColumn,
+            revenue_column: committed.topRevenue.revenueColumn,
+            percent: committed.topRevenue.thresholdPercent
+        };
+    }
+
+    if (committed.aggregationFilters.length > 0) {
+        config.aggregation_filters = committed.aggregationFilters;
+    }
+
+    if (committed.categoryFilters.length > 0) {
+        config.category_filters = committed.categoryFilters;
+    }
+
+    if (committed.numericFilters.length > 0) {
+        config.numeric_filters = committed.numericFilters;
+    }
+
+    return Object.keys(config).length > 0 ? config : null;
+}
+
+// Update Products filter status badge in sub-chapter header
+function ds_updateProductsFilterStatus() {
+    const statusEl = document.getElementById('dsProductsFilterStatus');
+    if (!statusEl) return;
+
+    const committed = ds_productFiltersState.committed;
+    let filterCount = 0;
+
+    if (committed.topRevenue.enabled) filterCount++;
+    filterCount += committed.aggregationFilters.length;
+    filterCount += committed.categoryFilters.length;
+    filterCount += committed.numericFilters.length;
+    filterCount += committed.dateFilters.length;
+
+    if (filterCount === 0) {
+        statusEl.textContent = '';
+    } else {
+        statusEl.textContent = `${filterCount} filter${filterCount !== 1 ? 's' : ''} applied`;
     }
 }
 
-function ds_refreshProductFilters() {
-    ds_showNotification('Refreshing product filters...', 'info');
-    // Would trigger a refresh of filter analysis data
-}
+// Update Customers filter status badge in sub-chapter header
+function ds_updateCustomersFilterStatus() {
+    const statusEl = document.getElementById('dsCustomersFilterStatus');
+    if (!statusEl) return;
 
-function ds_refreshCustomerFilters() {
-    ds_showNotification('Refreshing customer filters...', 'info');
-    // Would trigger a refresh of filter analysis data
+    const committed = ds_customerFiltersState.committed;
+    let filterCount = 0;
+
+    if (committed.topRevenue.enabled) filterCount++;
+    filterCount += committed.aggregationFilters.length;
+    filterCount += committed.categoryFilters.length;
+    filterCount += committed.numericFilters.length;
+    filterCount += committed.dateFilters.length;
+
+    if (filterCount === 0) {
+        statusEl.textContent = '';
+    } else {
+        statusEl.textContent = `${filterCount} filter${filterCount !== 1 ? 's' : ''} applied`;
+    }
 }
 
 // NOTE: ds_setJoinType and ds_removeSelectedJoin are defined in the

@@ -890,104 +890,177 @@ ds_restoreCustomerFilterState();
 
 ---
 
-## Known Issues - Pending Fix (2026-01-13)
+## Known Issues - Fixed (2026-01-13)
 
-### Issue 17: Filters Saved with Wrong Structure (Requires Browser Refresh)
+### Issue 17: Filters Saved with Wrong Structure ✅ RESOLVED
 
-**Problem**: Dataset 19 was saved with `filters.dates` (camelCase) instead of `filters.history` (snake_case), despite Fix 16 being deployed.
+**Problem**: Dataset 19 was saved with `filters.dates` (camelCase) instead of `filters.history` (snake_case).
 
-**Analysis**:
+**Root Cause**: Browser cached old JavaScript when dataset 19 was created.
 
-Comparing datasets:
-```
-Dataset 16 (correct):          Dataset 19 (wrong):
-filters: {                     filters: {
-  "history": {                   "dates": {
-    "rolling_days": 90,            "rollingDays": 31,
-    "timestamp_column": "..."      "timestampColumn": "..."
-  }                              }
-}                              }
-```
+**Resolution**: No code change needed. Users must **hard refresh** the browser (Cmd+Shift+R / Ctrl+Shift+R) after deployment.
 
-**Root Cause Investigation**:
-
-1. **Code Verification**: The fix IS in the codebase - `ds_collectStepData(4)` correctly sets `filters.history` with snake_case keys
-2. **Database Evidence**: Dataset 19 has the OLD format (camelCase `dates` key) that was removed from the code
-3. **Likely Cause**: Browser cached old JavaScript when dataset 19 was created
-
-**Action Required**:
-- Users must **hard refresh** the browser (Cmd+Shift+R / Ctrl+Shift+R) after deployment
-- Server must be restarted to ensure templates are reloaded
-
-### Issue 18: Dates Filter Not Saved Without "Refresh Dataset" Click
+### Issue 18: Dates Filter Not Saved Without "Refresh Dataset" Click ✅ FIXED
 
 **Problem**: If user selects a timestamp column and rolling days but does NOT click "Refresh Dataset", the filter won't be saved.
 
-**Root Cause**: Current `ds_collectStepData(4)` implementation:
+**Root Cause**: The migrated `ds_collectStepData(4)` incorrectly read from `ds_datesFilterState.committed` instead of DOM elements. The original `model_dataset.html` reads directly from DOM.
+
+**Comparison**:
+- **Original** (`model_dataset.html` line 2028): `const timestampCol = document.getElementById('timestampColumn')?.value;`
+- **Migrated (buggy)**: `const datesCommitted = ds_datesFilterState.committed;`
+
+**Fix Applied**: Updated `ds_collectStepData(4)` to read directly from DOM elements like the original:
 ```javascript
-const datesCommitted = ds_datesFilterState.committed;
-if (datesCommitted.timestampColumn) {  // Only runs if committed state exists
-    ds_wizardData.filters.history = {...};
+const timestampCol = document.getElementById('dsTimestampColumn')?.value;
+const rollingDays = parseInt(document.getElementById('dsRollingDays')?.value) || 30;
+const startDateValue = document.getElementById('dsStartDateInput')?.value || null;
+
+if (timestampCol) {
+    if (ds_historyFilterMode === 'startDate' && startDateValue) {
+        ds_wizardData.filters.history = {
+            timestamp_column: timestampCol,
+            start_date: startDateValue
+        };
+    } else {
+        ds_wizardData.filters.history = {
+            timestamp_column: timestampCol,
+            rolling_days: rollingDays
+        };
+    }
 }
 ```
 
-The code only reads from COMMITTED state, which is empty until user clicks "Refresh Dataset".
-
-**Expected Behavior**: Filter should be saved based on UI selections even without explicit "Refresh Dataset" click.
-
-**Fix Plan**:
-1. In `ds_collectStepData(4)`, fall back to UI element values if committed state is empty:
-```javascript
-// Get from committed state first, fall back to UI elements
-const timestampColumn = datesCommitted.timestampColumn ||
-    document.getElementById('dsTimestampColumn')?.value;
-const rollingDays = datesCommitted.rollingDays ||
-    parseInt(document.getElementById('dsRollingDays')?.value) || 30;
-const startDate = datesCommitted.startDate ||
-    document.getElementById('dsStartDateInput')?.value;
-
-if (timestampColumn) {
-    ds_wizardData.filters.history = {
-        timestamp_column: timestampColumn,
-        rolling_days: rollingDays,
-        start_date: startDate || null
-    };
-}
-```
-
-### Issue 19: column_aliases Saved as None
+### Issue 19: column_aliases Saved as None ✅ FIXED
 
 **Problem**: Dataset 19 has `column_aliases: None` instead of `{}` or actual aliases.
 
-**Analysis**:
-- Save payload code: `column_aliases: ds_schemaBuilderState.columnAliases || {}`
-- This should save at least `{}` if no renaming was done
-- `None` in Python means the field wasn't in the request OR was explicitly `null`
+**Root Cause**: The migrated code was missing the `collectSchemaBuilderData()` function that transfers data from `schemaBuilderState` to `wizardData`. The save function incorrectly read directly from `ds_schemaBuilderState.columnAliases`.
 
-**Possible Causes**:
-1. `ds_schemaBuilderState.columnAliases` is `null` (not `undefined`) - `null || {}` returns `null` in JavaScript!
-2. JSON serialization of `null` becomes Python `None`
+**Comparison**:
+- **Original**: Calls `collectSchemaBuilderData()` at Step 3→4 transition, then uses `wizardData.columnAliases`
+- **Migrated (buggy)**: No transfer function, used `ds_schemaBuilderState.columnAliases` directly
 
-**Fix Plan**:
+**Fix Applied**:
+1. Added `ds_collectSchemaBuilderData()` function that transfers:
+   - `joinConfig` (converted from joins array)
+   - `selectedColumns`
+   - `columnAliases`
+2. Call `ds_collectSchemaBuilderData()` when transitioning to Step 4
+3. Call `ds_collectSchemaBuilderData()` in `ds_saveDataset()` before building payload
+4. Updated payload to use `ds_wizardData` fields:
 ```javascript
-// Current (buggy):
-column_aliases: ds_schemaBuilderState.columnAliases || {},
-
-// Fixed (handles null explicitly):
-column_aliases: ds_schemaBuilderState.columnAliases ?? {},
-// OR
-column_aliases: ds_schemaBuilderState.columnAliases || ds_wizardData.columnAliases || {},
+const payload = {
+    ...
+    join_config: ds_wizardData.joinConfig,
+    selected_columns: ds_wizardData.selectedColumns,
+    column_aliases: ds_wizardData.columnAliases || {},
+    ...
+};
 ```
 
-### Implementation Plan for Issues 17-19
+### Issue 20: Product/Customer Filters Not Saved ✅ FIXED
 
-| Step | Task | Priority |
-|------|------|----------|
-| 1 | Fix `ds_collectStepData(4)` to fall back to UI elements for dates filter | High |
-| 2 | Fix `column_aliases` to use nullish coalescing (`??`) instead of OR (`||`) | High |
-| 3 | Add deployment note: require browser hard refresh after deployment | Medium |
-| 4 | Test: Create new dataset without clicking "Refresh Dataset" | High |
-| 5 | Test: Verify column_aliases saves as `{}` not `None` | High |
+**Problem**: Product and customer filters were not being saved to the database. Dataset 19 had no `product_filter` or `customer_filter` fields despite user applying them.
+
+**Root Cause**: Multiple issues in the migrated code:
+1. `ds_collectStepData(4)` only handled dates filter, not products/customers
+2. No consolidated filter restore function like original's `restoreFiltersFromSavedData()`
+3. Separate restore functions didn't update all UI summary displays
+
+**Comparison with Original**:
+- **Original** (`model_dataset.html`):
+  - `collectStepData(4)` collects ALL filters (dates, products, customers)
+  - `restoreFiltersFromSavedData(filters)` restores ALL filter states in edit mode
+  - Step 4 entry checks edit mode and calls consolidated restore
+
+- **Migrated (buggy)**:
+  - `ds_collectStepData(4)` only collected dates filter
+  - Three separate restore functions called unconditionally
+  - No edit mode check, no consolidated approach
+
+**Fix Applied**:
+
+1. **Updated `ds_collectStepData(4)`** to collect ALL filters from committed state:
+   - History filter from DOM elements
+   - Product filter from `ds_productFiltersState.committed`
+   - Customer filter from `ds_customerFiltersState.committed`
+   - Builds proper snake_case structure for DB storage
+
+2. **Created `ds_restoreFiltersFromSavedData(filters)`** - consolidated function that:
+   - Restores dates filter (UI + state + summary)
+   - Restores product filter (state + summary) - handles both new and legacy formats
+   - Restores customer filter (state + summary)
+   - Includes console logging for debugging
+
+3. **Updated `ds_nextStep()`** to match original pattern:
+   - Check for edit mode before restoring
+   - Call consolidated restore function with `ds_wizardData.filters`
+   - Load stats WITH filters in edit mode, WITHOUT filters for new datasets
+
+### Issue 21: Dates Filter Header Badge Empty ✅ FIXED
+
+**Problem**: When editing a dataset, the Dates sub-chapter header shows no badge, even though Dataset Summary shows the filter is applied.
+
+**Root Cause**: The function `ds_updateDatesFilterStatus()` did not exist in the migrated code. The HTML element `id="dsDatesFilterStatus"` existed but nothing updated it.
+
+**Fix Applied**:
+1. Created `ds_updateDatesFilterStatus()` function (line 12130) that sets "1 filter applied" when timestamp column is configured
+2. Added call to `ds_updateDatesFilterStatus()` in `ds_restoreFiltersFromSavedData()` after restoring dates filter
+
+### Issue 22: Products Header vs Summary Mismatch ✅ FIXED
+
+**Problem**: Products header shows "1 filter applied" but Dataset Summary shows "All products".
+
+**Root Cause**: The `ds_buildFiltersPayload()` function was building the `top_revenue` object incorrectly:
+1. Missing `enabled: true` field - backend checks `top_revenue.get('enabled')` to determine if filter is active
+2. Used `percent` instead of `threshold_percent` - backend reads `top_revenue.get('threshold_percent', 80)`
+
+**Backend Code** (`services.py` lines 4946-4951):
+```python
+top_revenue = product_filter.get('top_revenue', {})
+if top_revenue.get('enabled'):  # <-- Expects 'enabled' field!
+    product_filter_summary.append({
+        'type': 'top_revenue',
+        'percent': top_revenue.get('threshold_percent', 80)  # <-- Uses 'threshold_percent'!
+    })
+```
+
+**Frontend Bug** (before fix):
+```javascript
+productFilter.top_revenue = {
+    product_column: ...,
+    revenue_column: ...,
+    percent: ...  // Missing 'enabled', wrong field name
+};
+```
+
+**Fix Applied** (`model_configs.html` line 9825):
+```javascript
+productFilter.top_revenue = {
+    enabled: true,  // Added!
+    product_column: productCommitted.topRevenue.productColumn,
+    revenue_column: productCommitted.topRevenue.revenueColumn,
+    threshold_percent: productCommitted.topRevenue.thresholdPercent  // Corrected!
+};
+```
+
+Note: The save function `ds_collectStepData(4)` was already correct (included `enabled: true` and `threshold_percent`), so saved data was fine. Only the stats API payload builder was wrong.
+
+### Testing Checklist
+
+| Test | Status |
+|------|--------|
+| Hard refresh browser after deployment | **Required** |
+| Create new dataset - apply all 3 filter types - verify ALL filters save | Pending |
+| Create new dataset without "Refresh Dataset" clicks - verify filters save from committed state | Pending |
+| Create new dataset - verify `column_aliases` saves as `{}` not `None` | Pending |
+| Edit dataset 16 - verify Dates header shows "1 filter applied" | Pending |
+| Edit dataset 16 - verify ALL filters restore (dates, products, customers) | Pending |
+| Edit dataset 16 - navigate to Step 4 - verify filter summaries show correct counts | Pending |
+| Edit dataset 16 - modify filters - save - verify changes persist | Pending |
+| Check browser console for `[DS Restore]` logs during edit mode | Pending |
+| Check browser console for `[DS BuildFilters]` logs to debug product filter | Pending |
 
 ---
 

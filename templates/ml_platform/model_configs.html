@@ -7264,19 +7264,25 @@ function ds_nextStep() {
         ds_loadSchemaBuilder();
     }
 
-    // Initialize Step 4: Fetch column analysis, populate dropdowns, load stats
+    // Moving to Step 4: Collect schema builder data, then fetch column analysis
     if (nextStep === 4) {
+        // Transfer data from schemaBuilderState to wizardData (like original model_dataset.html)
+        ds_collectSchemaBuilderData();
+
         ds_fetchColumnAnalysis().then(() => {
             // Populate filter dropdowns with selected columns (needs column types for timestamp filter)
             ds_populateFilterColumnDropdowns();
 
-            // Restore filter states if editing an existing dataset
-            ds_restoreDatesFilterState();
-            ds_restoreProductFilterState();
-            ds_restoreCustomerFilterState();
-
-            // Load initial dataset statistics
-            ds_loadDatasetStats(false);
+            // In edit mode, restore ALL saved filter states using consolidated function
+            // (matches original model_dataset.html approach with restoreFiltersFromSavedData)
+            if (ds_wizardEditMode && ds_wizardData.filters && Object.keys(ds_wizardData.filters).length > 0) {
+                ds_restoreFiltersFromSavedData(ds_wizardData.filters);
+                // Load stats WITH filters applied
+                ds_loadDatasetStats(true);
+            } else {
+                // New dataset - load unfiltered stats
+                ds_loadDatasetStats(false);
+            }
         });
     }
 
@@ -7301,31 +7307,182 @@ function ds_collectStepData(step) {
             // Schema builder data already in ds_schemaBuilderState
             break;
         case 4:
-            // Collect filter data from committed state (set when user clicks "Refresh Dataset")
-            // IMPORTANT: Merge with existing filters, don't overwrite!
-            // Product and customer filters are already in ds_wizardData.filters from their refresh buttons.
+            // Collect ALL filter data - matches original model_dataset.html approach
+            // This ensures filters are saved even if user didn't click "Refresh Dataset"
 
             // Ensure filters object exists
             if (!ds_wizardData.filters) {
                 ds_wizardData.filters = {};
             }
 
-            // History filter (dates) - use committed state and snake_case keys for DB
-            const datesCommitted = ds_datesFilterState.committed;
-            if (datesCommitted.timestampColumn) {
-                if (datesCommitted.mode === 'startDate' && datesCommitted.startDate) {
-                    // Start Date mode
+            // ===========================================
+            // 1. HISTORY FILTER (dates) - read from DOM
+            // ===========================================
+            const timestampCol = document.getElementById('dsTimestampColumn')?.value;
+            const rollingDays = parseInt(document.getElementById('dsRollingDays')?.value) || 30;
+            const startDateValue = document.getElementById('dsStartDateInput')?.value || null;
+
+            if (timestampCol) {
+                // Save based on the current filter mode (ds_historyFilterMode is 'rolling' or 'startDate')
+                if (ds_historyFilterMode === 'startDate' && startDateValue) {
+                    // Start Date mode - save start_date, no rolling_days
                     ds_wizardData.filters.history = {
-                        timestamp_column: datesCommitted.timestampColumn,
-                        start_date: datesCommitted.startDate
+                        timestamp_column: timestampCol,
+                        start_date: startDateValue
                     };
                 } else {
-                    // Rolling Window mode (default)
+                    // Rolling Window mode (default) - save rolling_days, no start_date
                     ds_wizardData.filters.history = {
-                        timestamp_column: datesCommitted.timestampColumn,
-                        rolling_days: datesCommitted.rollingDays || 30
+                        timestamp_column: timestampCol,
+                        rolling_days: rollingDays
                     };
                 }
+            }
+
+            // ===========================================
+            // 2. PRODUCT FILTER - build from committed state
+            // ===========================================
+            const productCommitted = ds_productFiltersState.committed;
+            const hasProductFilters = productCommitted.topRevenue.enabled ||
+                productCommitted.aggregationFilters.length > 0 ||
+                productCommitted.categoryFilters.length > 0 ||
+                productCommitted.numericFilters.length > 0 ||
+                productCommitted.dateFilters.length > 0;
+
+            if (hasProductFilters) {
+                const productFilter = {};
+
+                // Top revenue filter
+                if (productCommitted.topRevenue.enabled) {
+                    productFilter.top_revenue = {
+                        enabled: true,
+                        product_column: productCommitted.topRevenue.productColumn,
+                        revenue_column: productCommitted.topRevenue.revenueColumn,
+                        threshold_percent: productCommitted.topRevenue.thresholdPercent
+                    };
+                }
+
+                // Aggregation filters
+                if (productCommitted.aggregationFilters.length > 0) {
+                    productFilter.aggregation_filters = productCommitted.aggregationFilters.map(f => ({
+                        type: f.type,
+                        product_column: f.productColumn,
+                        amount_column: f.amountColumn,
+                        filter_type: f.filterType,
+                        value: f.value,
+                        min: f.min,
+                        max: f.max
+                    }));
+                }
+
+                // Category filters
+                if (productCommitted.categoryFilters.length > 0) {
+                    productFilter.category_filters = productCommitted.categoryFilters
+                        .filter(f => f.values && f.values.length > 0)
+                        .map(f => ({
+                            column: f.column,
+                            mode: f.mode,
+                            values: f.values
+                        }));
+                }
+
+                // Numeric filters
+                if (productCommitted.numericFilters.length > 0) {
+                    productFilter.numeric_filters = productCommitted.numericFilters.map(f => ({
+                        column: f.column,
+                        type: f.type,
+                        min: f.min,
+                        max: f.max,
+                        value: f.value,
+                        include_nulls: f.includeNulls
+                    }));
+                }
+
+                // Date filters
+                if (productCommitted.dateFilters.length > 0) {
+                    productFilter.date_filters = productCommitted.dateFilters.map(f => ({
+                        column: f.column,
+                        type: f.type,
+                        value: f.value,
+                        start: f.start,
+                        end: f.end
+                    }));
+                }
+
+                ds_wizardData.filters.product_filter = productFilter;
+            }
+
+            // ===========================================
+            // 3. CUSTOMER FILTER - build from committed state
+            // ===========================================
+            const customerCommitted = ds_customerFiltersState.committed;
+            const hasCustomerFilters = customerCommitted.topRevenue.enabled ||
+                customerCommitted.aggregationFilters.length > 0 ||
+                customerCommitted.categoryFilters.length > 0 ||
+                customerCommitted.numericFilters.length > 0 ||
+                customerCommitted.dateFilters.length > 0;
+
+            if (hasCustomerFilters) {
+                const customerFilter = {};
+
+                // Top revenue filter
+                if (customerCommitted.topRevenue.enabled) {
+                    customerFilter.top_revenue = {
+                        enabled: true,
+                        customer_column: customerCommitted.topRevenue.customerColumn,
+                        revenue_column: customerCommitted.topRevenue.revenueColumn,
+                        percent: customerCommitted.topRevenue.thresholdPercent
+                    };
+                }
+
+                // Aggregation filters
+                if (customerCommitted.aggregationFilters.length > 0) {
+                    customerFilter.aggregation_filters = customerCommitted.aggregationFilters.map(f => ({
+                        type: f.type,
+                        customer_column: f.customerColumn,
+                        amount_column: f.amountColumn,
+                        filter_type: f.filterType,
+                        value: f.value,
+                        min: f.min,
+                        max: f.max
+                    }));
+                }
+
+                // Category filters
+                if (customerCommitted.categoryFilters.length > 0) {
+                    customerFilter.category_filters = customerCommitted.categoryFilters
+                        .filter(f => f.values && f.values.length > 0)
+                        .map(f => ({
+                            column: f.column,
+                            mode: f.mode,
+                            values: f.values
+                        }));
+                }
+
+                // Numeric filters
+                if (customerCommitted.numericFilters.length > 0) {
+                    customerFilter.numeric_filters = customerCommitted.numericFilters.map(f => ({
+                        column: f.column,
+                        type: f.type || f.filterType,
+                        min: f.min,
+                        max: f.max,
+                        value: f.value,
+                        include_nulls: f.includeNulls
+                    }));
+                }
+
+                // Date filters
+                if (customerCommitted.dateFilters.length > 0) {
+                    customerFilter.date_filters = customerCommitted.dateFilters.map(f => ({
+                        column: f.column,
+                        type: f.type,
+                        value: f.value,
+                        start: f.start,
+                        end: f.end
+                    }));
+                }
+
+                ds_wizardData.filters.customer_filter = customerFilter;
             }
             break;
     }
@@ -7899,6 +8056,45 @@ function ds_getColumnDisplayName(columnName) {
         return ds_schemaBuilderState.columnAliases[dotFormat];
     }
     return columnName;
+}
+
+// =============================================================================
+// DATASET WIZARD - Step 3: Collect Schema Builder Data (for Save)
+// =============================================================================
+
+// Transfer data from ds_schemaBuilderState to ds_wizardData before saving
+// This matches the original model_dataset.html behavior
+function ds_collectSchemaBuilderData() {
+    // Convert joins to the format expected by the backend
+    ds_wizardData.joinConfig = {};
+    ds_schemaBuilderState.joins.forEach(join => {
+        ds_wizardData.joinConfig[join.rightTable] = {
+            join_key: join.leftCol,
+            secondary_column: join.rightCol,
+            join_type: join.type
+        };
+    });
+
+    // Update secondaryTables to only include tables that have joins configured
+    // This prevents the backend from trying to join tables without proper configuration
+    const joinedTables = ds_schemaBuilderState.joins.map(j => j.rightTable);
+    ds_wizardData.secondaryTables = ds_wizardData.secondaryTables.filter(table =>
+        joinedTables.includes(table)
+    );
+
+    // Determine which tables are in use (primary + joined secondary tables)
+    const tablesInUse = [ds_wizardData.primaryTable, ...ds_wizardData.secondaryTables];
+
+    // Transfer only selected columns from tables that are in use
+    ds_wizardData.selectedColumns = {};
+    tablesInUse.forEach(table => {
+        if (ds_schemaBuilderState.selectedColumns[table]) {
+            ds_wizardData.selectedColumns[table] = [...ds_schemaBuilderState.selectedColumns[table]];
+        }
+    });
+
+    // Transfer column aliases
+    ds_wizardData.columnAliases = {...ds_schemaBuilderState.columnAliases};
 }
 
 // =============================================================================
@@ -8906,6 +9102,233 @@ function ds_updateDatesRefreshButtonState() {
     refreshBtn.classList.toggle('filter-button-disabled', !shouldEnable);
 }
 
+// =============================================================================
+// CONSOLIDATED FILTER RESTORE (matches original model_dataset.html)
+// =============================================================================
+
+/**
+ * Restore ALL filter states from saved dataset configuration.
+ * Called when entering Step 4 in edit mode.
+ * This is the consolidated function matching original restoreFiltersFromSavedData().
+ *
+ * @param {Object} filters - The saved filters from ds_wizardData.filters
+ */
+function ds_restoreFiltersFromSavedData(filters) {
+    if (!filters || Object.keys(filters).length === 0) {
+        console.log('[DS Restore] No filters to restore');
+        return;
+    }
+
+    console.log('[DS Restore] Restoring filters from saved data:', filters);
+
+    // ===========================================
+    // 1. RESTORE DATES FILTER
+    // ===========================================
+    if (filters.history) {
+        const history = filters.history;
+        console.log('[DS Restore] Restoring history filter:', history);
+
+        // Set UI elements
+        const timestampSelect = document.getElementById('dsTimestampColumn');
+        if (timestampSelect && history.timestamp_column) {
+            // Try to find the option - may need to match with or without table prefix
+            let found = false;
+            for (let i = 0; i < timestampSelect.options.length; i++) {
+                const optVal = timestampSelect.options[i].value;
+                if (optVal === history.timestamp_column ||
+                    optVal.endsWith('.' + history.timestamp_column.split('.').pop())) {
+                    timestampSelect.selectedIndex = i;
+                    found = true;
+                    console.log('[DS Restore] Found timestamp column option:', optVal);
+                    break;
+                }
+            }
+            if (!found) {
+                console.warn('[DS Restore] Could not find timestamp column in dropdown:', history.timestamp_column);
+            }
+        }
+
+        const rollingDaysInput = document.getElementById('dsRollingDays');
+        if (rollingDaysInput && history.rolling_days) {
+            rollingDaysInput.value = history.rolling_days;
+        }
+
+        const startDateInput = document.getElementById('dsStartDateInput');
+        if (history.start_date) {
+            ds_historyFilterMode = 'startDate';
+            if (startDateInput) startDateInput.value = history.start_date;
+        } else {
+            ds_historyFilterMode = 'rolling';
+        }
+
+        // Set committed state - use the actual dropdown value
+        const actualTimestampValue = timestampSelect?.value || history.timestamp_column;
+        ds_datesFilterState.committed = {
+            timestampColumn: actualTimestampValue || null,
+            mode: history.start_date ? 'startDate' : 'rolling',
+            rollingDays: history.rolling_days || 30,
+            startDate: history.start_date || null
+        };
+        // Copy to pending so "no changes" state is detected
+        ds_datesFilterState.pending = {...ds_datesFilterState.committed};
+
+        // Update UI state
+        ds_updateDatesFilterStatus();  // Update header badge
+        ds_updateDatesFilterSummary();
+        ds_updateDatesRefreshButtonState();
+    }
+
+    // ===========================================
+    // 2. RESTORE PRODUCTS FILTER
+    // ===========================================
+    if (filters.product_filter || filters.products) {
+        const productFilter = filters.product_filter || {};
+        const legacyProducts = filters.products || {};
+        console.log('[DS Restore] Restoring product filter:', productFilter);
+
+        // Handle top_revenue filter
+        if (productFilter.top_revenue?.enabled || productFilter.top_revenue?.product_column || legacyProducts.product_column) {
+            const topRevenue = productFilter.top_revenue || {};
+
+            ds_productFiltersState.committed.topRevenue = {
+                enabled: true,
+                productColumn: topRevenue.product_column || legacyProducts.product_column,
+                revenueColumn: topRevenue.revenue_column || legacyProducts.revenue_column,
+                thresholdPercent: topRevenue.threshold_percent || topRevenue.percent || legacyProducts.threshold_percent || 80
+            };
+        }
+
+        // Handle aggregation filters
+        if (productFilter.aggregation_filters?.length > 0) {
+            ds_productFiltersState.committed.aggregationFilters = productFilter.aggregation_filters.map(f => ({
+                type: f.type,
+                productColumn: f.product_column,
+                amountColumn: f.amount_column,
+                filterType: f.filter_type,
+                value: f.value,
+                min: f.min,
+                max: f.max
+            }));
+        }
+
+        // Handle category filters
+        if (productFilter.category_filters?.length > 0) {
+            ds_productFiltersState.committed.categoryFilters = productFilter.category_filters.map(f => ({
+                column: f.column,
+                mode: f.mode,
+                values: f.values || []
+            }));
+        }
+
+        // Handle numeric filters
+        if (productFilter.numeric_filters?.length > 0) {
+            ds_productFiltersState.committed.numericFilters = productFilter.numeric_filters.map(f => ({
+                column: f.column,
+                type: f.type,
+                min: f.min,
+                max: f.max,
+                value: f.value,
+                includeNulls: f.include_nulls
+            }));
+        }
+
+        // Handle date filters
+        if (productFilter.date_filters?.length > 0) {
+            ds_productFiltersState.committed.dateFilters = productFilter.date_filters.map(f => ({
+                column: f.column,
+                type: f.type,
+                value: f.value,
+                start: f.start,
+                end: f.end
+            }));
+        }
+
+        // Copy committed to pending (no unapplied changes)
+        ds_productFiltersState.pending = JSON.parse(JSON.stringify(ds_productFiltersState.committed));
+
+        // Debug: Log the restored state
+        console.log('[DS Restore] Product committed state after restore:', JSON.stringify(ds_productFiltersState.committed, null, 2));
+
+        // Update UI
+        ds_updateProductsFilterStatus();
+        ds_updateProductsRefreshButtonState();
+        ds_updateProductsFilterSummary();
+    }
+
+    // ===========================================
+    // 3. RESTORE CUSTOMERS FILTER
+    // ===========================================
+    if (filters.customer_filter) {
+        const customerFilter = filters.customer_filter;
+        console.log('[DS Restore] Restoring customer filter:', customerFilter);
+
+        // Handle top_revenue filter
+        if (customerFilter.top_revenue) {
+            ds_customerFiltersState.committed.topRevenue = {
+                enabled: true,
+                customerColumn: customerFilter.top_revenue.customer_column,
+                revenueColumn: customerFilter.top_revenue.revenue_column,
+                thresholdPercent: customerFilter.top_revenue.percent || customerFilter.top_revenue.threshold_percent || 80
+            };
+        }
+
+        // Handle aggregation filters
+        if (customerFilter.aggregation_filters?.length > 0) {
+            ds_customerFiltersState.committed.aggregationFilters = customerFilter.aggregation_filters.map(f => ({
+                type: f.type,
+                customerColumn: f.customer_column,
+                amountColumn: f.amount_column,
+                filterType: f.filter_type,
+                value: f.value,
+                min: f.min,
+                max: f.max
+            }));
+        }
+
+        // Handle category filters
+        if (customerFilter.category_filters?.length > 0) {
+            ds_customerFiltersState.committed.categoryFilters = customerFilter.category_filters.map(f => ({
+                column: f.column,
+                mode: f.mode,
+                values: f.values || []
+            }));
+        }
+
+        // Handle numeric filters
+        if (customerFilter.numeric_filters?.length > 0) {
+            ds_customerFiltersState.committed.numericFilters = customerFilter.numeric_filters.map(f => ({
+                column: f.column,
+                type: f.type || f.filter_type,
+                min: f.min,
+                max: f.max,
+                value: f.value,
+                includeNulls: f.include_nulls
+            }));
+        }
+
+        // Handle date filters
+        if (customerFilter.date_filters?.length > 0) {
+            ds_customerFiltersState.committed.dateFilters = customerFilter.date_filters.map(f => ({
+                column: f.column,
+                type: f.type,
+                value: f.value,
+                start: f.start,
+                end: f.end
+            }));
+        }
+
+        // Copy committed to pending (no unapplied changes)
+        ds_customerFiltersState.pending = JSON.parse(JSON.stringify(ds_customerFiltersState.committed));
+
+        // Update UI
+        ds_updateCustomersFilterStatus();
+        ds_updateCustomersRefreshButtonState();
+        ds_updateCustomersFilterSummary();
+    }
+
+    console.log('[DS Restore] Filter restoration complete');
+}
+
 // Restore dates filter state when editing an existing dataset
 function ds_restoreDatesFilterState() {
     const history = ds_wizardData.filters?.history;
@@ -9400,9 +9823,10 @@ function ds_buildFiltersPayload() {
     // Top products by revenue (nested structure expected by API)
     if (productCommitted.topRevenue?.enabled) {
         productFilter.top_revenue = {
+            enabled: true,
             product_column: productCommitted.topRevenue.productColumn,
             revenue_column: productCommitted.topRevenue.revenueColumn,
-            percent: productCommitted.topRevenue.thresholdPercent
+            threshold_percent: productCommitted.topRevenue.thresholdPercent
         };
     }
 
@@ -9443,6 +9867,14 @@ function ds_buildFiltersPayload() {
     if (Object.keys(productFilter).length > 0) {
         filters.product_filter = productFilter;
     }
+
+    // Debug: Log what we're building
+    console.log('[DS BuildFilters] Product state check:', {
+        topRevenueEnabled: ds_productFiltersState.committed.topRevenue?.enabled,
+        topRevenue: ds_productFiltersState.committed.topRevenue,
+        builtProductFilter: productFilter
+    });
+    console.log('[DS BuildFilters] Final filters payload:', JSON.stringify(filters, null, 2));
 
     return Object.keys(filters).length > 0 ? filters : null;
 }
@@ -11707,6 +12139,22 @@ function ds_buildCustomerFilterConfig() {
     return Object.keys(config).length > 0 ? config : null;
 }
 
+// Update Dates filter status badge in sub-chapter header
+function ds_updateDatesFilterStatus() {
+    const statusEl = document.getElementById('dsDatesFilterStatus');
+    if (!statusEl) return;
+
+    const datesCommitted = ds_datesFilterState.committed;
+
+    // Only show badge if timestamp column is selected
+    if (!datesCommitted.timestampColumn) {
+        statusEl.textContent = '';
+        return;
+    }
+
+    statusEl.textContent = '1 filter applied';
+}
+
 // Update Products filter status badge in sub-chapter header
 function ds_updateProductsFilterStatus() {
     const statusEl = document.getElementById('dsProductsFilterStatus');
@@ -11786,14 +12234,18 @@ function ds_saveDataset() {
         snapshot_at: new Date().toISOString()
     } : {};
 
+    // Ensure schema builder data is transferred to wizardData before building payload
+    // (This may have been done already in ds_nextStep, but do it again to be safe)
+    ds_collectSchemaBuilderData();
+
     const payload = {
         name: ds_wizardData.name,
         description: ds_wizardData.description,
         primary_table: ds_wizardData.primaryTable,
         secondary_tables: ds_wizardData.secondaryTables,
-        join_config: ds_convertJoinsToConfig(ds_schemaBuilderState.joins || []),
-        selected_columns: ds_schemaBuilderState.selectedColumns,
-        column_aliases: ds_schemaBuilderState.columnAliases || {},
+        join_config: ds_wizardData.joinConfig,
+        selected_columns: ds_wizardData.selectedColumns,
+        column_aliases: ds_wizardData.columnAliases || {},
         filters: ds_wizardData.filters,
         summary_snapshot: summarySnapshot
     };

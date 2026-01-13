@@ -7650,11 +7650,11 @@ function ds_renderPreview(data) {
     table.style.display = 'table';
     empty.style.display = 'none';
 
-    // Headers
+    // Headers (editable via double-click for column aliasing)
     const aliases = ds_schemaBuilderState.columnAliases || {};
     thead.innerHTML = '<tr>' + (data.column_order || []).map(col => {
         const alias = aliases[col] || col;
-        return `<th title="${col}">${ds_escapeHtml(alias)}</th>`;
+        return `<th class="editable-header" data-original="${col}" title="Double-click to rename" ondblclick="ds_startColumnRename(this, '${col}')">${ds_escapeHtml(alias)}</th>`;
     }).join('') + '</tr>';
 
     // Rows
@@ -7682,6 +7682,90 @@ function ds_renderPreviewError(message) {
         <i class="fas fa-exclamation-triangle" style="color: #f59e0b;"></i>
         <span style="color: #b45309;">${ds_escapeHtml(message)}</span>
     `;
+}
+
+// =============================================================================
+// DATASET WIZARD - Step 3: Column Renaming (Aliases)
+// =============================================================================
+
+// Start inline editing of a column header
+function ds_startColumnRename(th, originalName) {
+    // Prevent double-click text selection
+    if (th.querySelector('input')) return;
+
+    // Ensure columnAliases exists
+    if (!ds_schemaBuilderState.columnAliases) {
+        ds_schemaBuilderState.columnAliases = {};
+    }
+
+    const currentAlias = ds_schemaBuilderState.columnAliases[originalName] || originalName;
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'column-rename-input';
+    input.value = currentAlias;
+    input.dataset.original = originalName;
+
+    input.onblur = () => ds_finishColumnRename(input, th, originalName);
+    input.onkeydown = (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            input.blur();
+        }
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            input.value = currentAlias;
+            input.blur();
+        }
+    };
+
+    th.innerHTML = '';
+    th.appendChild(input);
+    input.focus();
+    input.select();
+}
+
+// Finish inline editing and save the alias
+function ds_finishColumnRename(input, th, originalName) {
+    const newAlias = input.value.trim();
+
+    // Ensure columnAliases exists
+    if (!ds_schemaBuilderState.columnAliases) {
+        ds_schemaBuilderState.columnAliases = {};
+    }
+
+    // Update state: if alias is same as original, remove it; otherwise save it
+    if (newAlias && newAlias !== originalName) {
+        ds_schemaBuilderState.columnAliases[originalName] = newAlias;
+    } else {
+        delete ds_schemaBuilderState.columnAliases[originalName];
+    }
+
+    // Update display
+    const displayName = ds_schemaBuilderState.columnAliases[originalName] || originalName;
+    th.textContent = displayName;
+}
+
+// Helper function to get column display name (alias or original)
+// Handles both formats: "table.column" (dropdowns) and "table_column" (preview)
+function ds_getColumnDisplayName(columnName) {
+    if (!ds_schemaBuilderState.columnAliases) {
+        return columnName;
+    }
+    // Try direct match first
+    if (ds_schemaBuilderState.columnAliases[columnName]) {
+        return ds_schemaBuilderState.columnAliases[columnName];
+    }
+    // Try converting dot to underscore (dropdown format -> preview format)
+    const underscoreFormat = columnName.replace('.', '_');
+    if (ds_schemaBuilderState.columnAliases[underscoreFormat]) {
+        return ds_schemaBuilderState.columnAliases[underscoreFormat];
+    }
+    // Try converting underscore to dot (preview format -> dropdown format)
+    const dotFormat = columnName.replace('_', '.');
+    if (ds_schemaBuilderState.columnAliases[dotFormat]) {
+        return ds_schemaBuilderState.columnAliases[dotFormat];
+    }
+    return columnName;
 }
 
 // =============================================================================

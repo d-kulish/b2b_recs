@@ -7749,6 +7749,13 @@ function ds_loadSchemaBuilder() {
             ds_schemaBuilderState.sessionId = data.session_id;
             ds_schemaBuilderState.tables = data.tables;
             ds_renderTableCards();
+
+            // Trigger preview if columns are already selected (edit mode)
+            const hasSelectedColumns = Object.values(ds_schemaBuilderState.selectedColumns)
+                .some(cols => cols && cols.length > 0);
+            if (hasSelectedColumns) {
+                ds_refreshPreview();
+            }
         }
     })
     .catch(err => {
@@ -8108,25 +8115,43 @@ function ds_finishColumnRename(input, th, originalName) {
     th.textContent = displayName;
 }
 
-// Helper function to get column display name (alias or original)
+// Helper function to get column display name (alias or short column name)
 // Handles both formats: "table.column" (dropdowns) and "table_column" (preview)
+// Returns alias if set, otherwise returns just the column name without table prefix
 function ds_getColumnDisplayName(columnName) {
-    if (!ds_schemaBuilderState.columnAliases) {
-        return columnName;
+    // Try to find alias first
+    if (ds_schemaBuilderState.columnAliases) {
+        // Try direct match first
+        if (ds_schemaBuilderState.columnAliases[columnName]) {
+            return ds_schemaBuilderState.columnAliases[columnName];
+        }
+        // Try converting dot to underscore (dropdown format -> preview format)
+        const underscoreFormat = columnName.replace('.', '_');
+        if (ds_schemaBuilderState.columnAliases[underscoreFormat]) {
+            return ds_schemaBuilderState.columnAliases[underscoreFormat];
+        }
+        // Try converting underscore to dot (preview format -> dropdown format)
+        const dotFormat = columnName.replace('_', '.');
+        if (ds_schemaBuilderState.columnAliases[dotFormat]) {
+            return ds_schemaBuilderState.columnAliases[dotFormat];
+        }
     }
-    // Try direct match first
-    if (ds_schemaBuilderState.columnAliases[columnName]) {
-        return ds_schemaBuilderState.columnAliases[columnName];
+    // No alias found - return short column name (without table prefix)
+    // Handle both "table.column" and "table_column" formats
+    if (columnName.includes('.')) {
+        return columnName.split('.').pop();
     }
-    // Try converting dot to underscore (dropdown format -> preview format)
-    const underscoreFormat = columnName.replace('.', '_');
-    if (ds_schemaBuilderState.columnAliases[underscoreFormat]) {
-        return ds_schemaBuilderState.columnAliases[underscoreFormat];
-    }
-    // Try converting underscore to dot (preview format -> dropdown format)
-    const dotFormat = columnName.replace('_', '.');
-    if (ds_schemaBuilderState.columnAliases[dotFormat]) {
-        return ds_schemaBuilderState.columnAliases[dotFormat];
+    // For underscore format, find the table name and strip it
+    const parts = columnName.split('_');
+    if (parts.length > 1) {
+        // Check if first part looks like a table name (common patterns)
+        const tables = Object.keys(ds_schemaBuilderState.tables || {});
+        for (const table of tables) {
+            const tablePrefix = table.replace('raw_data.', '') + '_';
+            if (columnName.startsWith(tablePrefix)) {
+                return columnName.substring(tablePrefix.length);
+            }
+        }
     }
     return columnName;
 }
@@ -10022,10 +10047,10 @@ function ds_renderDatasetStats(data) {
     for (const [columnName, stats] of Object.entries(columnStats)) {
         const row = document.createElement('tr');
 
-        // Column name cell (show short name)
+        // Column name cell (show alias if set, otherwise short column name)
         const nameCell = document.createElement('td');
-        const shortName = columnName.split('.').pop();
-        nameCell.innerHTML = `<span class="column-name">${ds_escapeHtml(shortName)}</span>`;
+        const displayName = ds_getColumnDisplayName(columnName);
+        nameCell.innerHTML = `<span class="column-name">${ds_escapeHtml(displayName)}</span>`;
         row.appendChild(nameCell);
 
         // Data type cell
@@ -10228,12 +10253,6 @@ function ds_populateTopProductsDropdowns() {
         option.textContent = ds_getColumnDisplayName(col.fullName);
         revenueSelect.appendChild(option);
     });
-}
-
-function ds_getColumnDisplayName(fullName) {
-    // Return just the column name part for display
-    const parts = fullName.split('.');
-    return parts.length > 1 ? parts[1] : fullName;
 }
 
 function ds_onProductColumnChange() {

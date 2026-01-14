@@ -1361,8 +1361,7 @@
     position: relative;
     flex: 1;
     min-height: 250px;
-    max-height: 350px;
-    overflow: auto;
+    /* No max-height or overflow - let wizard body handle scrolling */
     border: 1px solid #e5e7eb;
     border-radius: 8px;
     background-color: #ffffff;

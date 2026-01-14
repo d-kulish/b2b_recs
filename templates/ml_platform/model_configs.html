@@ -10280,8 +10280,6 @@ function ds_updateAnalyzeButtonState() {
 async function ds_analyzeProductRevenue() {
     const productCol = document.getElementById('dsProductIdColumn')?.value;
     const revenueCol = document.getElementById('dsRevenueColumn')?.value;
-    const timestampCol = document.getElementById('dsTimestampColumn')?.value;
-    const rollingDays = parseInt(document.getElementById('dsRollingDays')?.value) || 30;
 
     if (!productCol || !revenueCol) {
         ds_showProductAnalysisError('Please select both Product ID and Revenue columns');
@@ -10292,6 +10290,65 @@ async function ds_analyzeProductRevenue() {
     analyzeBtn.disabled = true;
     analyzeBtn.classList.add('filter-button-disabled');
     analyzeBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>Analyzing...</span>';
+
+    // Build ALL filters from committed state
+    // This ensures product analysis respects all applied filters (dates, customers, products)
+    const filters = {};
+    const datesCommitted = ds_datesFilterState.committed;
+    const customerCommitted = ds_customerFiltersState.committed;
+    const productCommitted = ds_productFiltersState.committed;
+
+    // Get date filter parameters from committed dates state
+    const timestampColumn = datesCommitted.timestampColumn || null;
+    const rollingDays = (datesCommitted.mode === 'rolling' && datesCommitted.timestampColumn)
+        ? datesCommitted.rollingDays
+        : null;
+
+    // Customer category filters (e.g., city, region) - cross-filter
+    if (customerCommitted.categoryFilters?.length > 0) {
+        filters.customer_filter = filters.customer_filter || {};
+        filters.customer_filter.category_filters = customerCommitted.categoryFilters.map(f => ({
+            column: f.column,
+            mode: f.mode,
+            values: f.values
+        }));
+    }
+
+    // Customer numeric filters - cross-filter
+    if (customerCommitted.numericFilters?.length > 0) {
+        filters.customer_filter = filters.customer_filter || {};
+        filters.customer_filter.numeric_filters = customerCommitted.numericFilters.map(f => ({
+            column: f.column,
+            filter_type: f.type,
+            min: f.min,
+            max: f.max,
+            value: f.value,
+            include_nulls: f.includeNulls
+        }));
+    }
+
+    // Product category filters (e.g., category, brand) - same-chapter filter
+    if (productCommitted.categoryFilters?.length > 0) {
+        filters.product_filter = filters.product_filter || {};
+        filters.product_filter.category_filters = productCommitted.categoryFilters.map(f => ({
+            column: f.column,
+            mode: f.mode,
+            values: f.values
+        }));
+    }
+
+    // Product numeric filters - same-chapter filter
+    if (productCommitted.numericFilters?.length > 0) {
+        filters.product_filter = filters.product_filter || {};
+        filters.product_filter.numeric_filters = productCommitted.numericFilters.map(f => ({
+            column: f.column,
+            filter_type: f.type,
+            min: f.min,
+            max: f.max,
+            value: f.value,
+            include_nulls: f.includeNulls
+        }));
+    }
 
     try {
         const response = await fetch(`/api/models/${modelId}/datasets/analyze-product-revenue/`, {
@@ -10304,8 +10361,9 @@ async function ds_analyzeProductRevenue() {
                 primary_table: ds_wizardData.primaryTable,
                 product_column: productCol,
                 revenue_column: revenueCol,
-                timestamp_column: timestampCol || null,
-                rolling_days: timestampCol ? rollingDays : null
+                timestamp_column: timestampColumn,
+                rolling_days: rollingDays,
+                filters: Object.keys(filters).length > 0 ? filters : null
             })
         });
 
@@ -10457,9 +10515,9 @@ function ds_drawRevenueDistributionChart(distribution, threshold = 80) {
         .range([height, 0]);
 
     const formatRevenue = (val) => {
-        if (val >= 1000000) return `$${(val / 1000000).toFixed(1)}M`;
-        if (val >= 1000) return `$${(val / 1000).toFixed(0)}K`;
-        return `$${val.toFixed(0)}`;
+        if (val >= 1000000) return `${(val / 1000000).toFixed(1)}M`;
+        if (val >= 1000) return `${(val / 1000).toFixed(0)}K`;
+        return val.toFixed(0);
     };
 
     // Grid lines
@@ -10706,6 +10764,66 @@ async function ds_analyzeCustomerRevenue() {
     analyzeBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Analyzing...';
     analyzeBtn.disabled = true;
 
+    // Build ALL filters from committed state
+    // This ensures customer analysis respects all applied filters (dates, customers, products)
+    const filters = {};
+    const datesCommitted = ds_datesFilterState.committed;
+    const customerCommitted = ds_customerFiltersState.committed;
+    const productCommitted = ds_productFiltersState.committed;
+
+    // Get date filter parameters from committed dates state
+    const timestampColumn = datesCommitted.timestampColumn || null;
+    const rollingDays = (datesCommitted.mode === 'rolling' && datesCommitted.timestampColumn)
+        ? datesCommitted.rollingDays
+        : null;
+
+    // Product category filters (e.g., category, brand) - cross-filter
+    if (productCommitted.categoryFilters?.length > 0) {
+        filters.product_filter = filters.product_filter || {};
+        filters.product_filter.category_filters = productCommitted.categoryFilters.map(f => ({
+            column: f.column,
+            mode: f.mode,
+            values: f.values
+        }));
+    }
+
+    // Product numeric filters - cross-filter
+    if (productCommitted.numericFilters?.length > 0) {
+        filters.product_filter = filters.product_filter || {};
+        filters.product_filter.numeric_filters = productCommitted.numericFilters.map(f => ({
+            column: f.column,
+            filter_type: f.type,
+            min: f.min,
+            max: f.max,
+            value: f.value,
+            include_nulls: f.includeNulls
+        }));
+    }
+
+    // Customer category filters (e.g., city, region) - same-chapter filter
+    // This is critical for filters like city=RIVNE to be applied
+    if (customerCommitted.categoryFilters?.length > 0) {
+        filters.customer_filter = filters.customer_filter || {};
+        filters.customer_filter.category_filters = customerCommitted.categoryFilters.map(f => ({
+            column: f.column,
+            mode: f.mode,
+            values: f.values
+        }));
+    }
+
+    // Customer numeric filters - same-chapter filter
+    if (customerCommitted.numericFilters?.length > 0) {
+        filters.customer_filter = filters.customer_filter || {};
+        filters.customer_filter.numeric_filters = customerCommitted.numericFilters.map(f => ({
+            column: f.column,
+            filter_type: f.type,
+            min: f.min,
+            max: f.max,
+            value: f.value,
+            include_nulls: f.includeNulls
+        }));
+    }
+
     try {
         const response = await fetch(`/api/models/${modelId}/datasets/analyze-customer-revenue/`, {
             method: 'POST',
@@ -10716,7 +10834,10 @@ async function ds_analyzeCustomerRevenue() {
             body: JSON.stringify({
                 session_id: ds_schemaBuilderState.sessionId,
                 customer_column: customerCol,
-                revenue_column: revenueCol
+                revenue_column: revenueCol,
+                timestamp_column: timestampColumn,
+                rolling_days: rollingDays,
+                filters: Object.keys(filters).length > 0 ? filters : null
             })
         });
 
@@ -10769,10 +10890,10 @@ function ds_renderCustomerRevenueChart(data) {
 
     svg.selectAll('*').remove();
 
-    const margin = { top: 20, right: 30, bottom: 50, left: 50 };
+    const margin = { top: 20, right: 30, bottom: 50, left: 70 };
     const containerWidth = container.clientWidth || container.offsetWidth || 600;
     const width = Math.max(containerWidth - margin.left - margin.right, 200);
-    const height = 180 - margin.top - margin.bottom;
+    const height = 200 - margin.top - margin.bottom;
 
     svg.attr('width', width + margin.left + margin.right)
        .attr('height', height + margin.top + margin.bottom);
@@ -10782,6 +10903,7 @@ function ds_renderCustomerRevenueChart(data) {
 
     const distributionData = data.distribution || [];
     const totalCustomers = data.total_customers || 0;
+    const totalRevenue = data.total_revenue || 0;
 
     if (distributionData.length === 0) return;
 
@@ -10791,70 +10913,98 @@ function ds_renderCustomerRevenueChart(data) {
         .domain([0, totalCustomers])
         .range([0, width]);
 
+    // Y-axis now shows actual revenue in dollars (matching product chart)
     const y = d3.scaleLinear()
-        .domain([0, 100])
+        .domain([0, totalRevenue])
         .range([height, 0]);
 
     const getCustomerCount = (d) => Math.round(totalCustomers * d.customer_percent / 100);
+    const getRevenue = (d) => totalRevenue * d.cumulative_revenue_percent / 100;
+
+    const formatRevenue = (val) => {
+        if (val >= 1000000) return `${(val / 1000000).toFixed(1)}M`;
+        if (val >= 1000) return `${(val / 1000).toFixed(0)}K`;
+        return val.toFixed(0);
+    };
+
+    const formatCustomerCount = (val) => {
+        if (val >= 1000000) return `${(val / 1000000).toFixed(1)}M`;
+        if (val >= 1000) return `${(val / 1000).toFixed(0)}K`;
+        return val.toLocaleString();
+    };
+
+    // Grid lines (matching product chart)
+    g.append('g')
+        .attr('class', 'grid')
+        .attr('transform', `translate(0,${height})`)
+        .call(d3.axisBottom(x).tickSize(-height).tickFormat('').ticks(Math.min(totalCustomers, 10)))
+        .style('stroke-dasharray', '3,3')
+        .style('stroke-opacity', 0.2);
+
+    g.append('g')
+        .attr('class', 'grid')
+        .call(d3.axisLeft(y).tickSize(-width).tickFormat('').ticks(5))
+        .style('stroke-dasharray', '3,3')
+        .style('stroke-opacity', 0.2);
 
     const line = d3.line()
         .x(d => x(getCustomerCount(d)))
-        .y(d => y(d.cumulative_revenue_percent))
+        .y(d => y(getRevenue(d)))
         .curve(d3.curveMonotoneX);
 
     const area = d3.area()
         .x(d => x(getCustomerCount(d)))
         .y0(height)
-        .y1(d => y(d.cumulative_revenue_percent))
+        .y1(d => y(getRevenue(d)))
         .curve(d3.curveMonotoneX);
 
     g.append('path')
         .datum(chartData)
-        .attr('fill', '#dbeafe')
+        .attr('fill', '#3b82f6')
+        .attr('fill-opacity', 0.1)
         .attr('d', area);
 
     g.append('path')
         .datum(chartData)
         .attr('fill', 'none')
-        .attr('stroke', '#2563eb')
+        .attr('stroke', '#3b82f6')
         .attr('stroke-width', 2)
         .attr('d', line);
 
-    const formatCustomerCount = (val) => {
-        if (val >= 1000000) return `${(val / 1000000).toFixed(1)}M`;
-        if (val >= 1000) return `${(val / 1000).toFixed(0)}K`;
-        return val.toString();
-    };
-
+    // X-axis
     g.append('g')
         .attr('transform', `translate(0,${height})`)
-        .call(d3.axisBottom(x).ticks(5).tickFormat(d => formatCustomerCount(d)))
+        .call(d3.axisBottom(x).ticks(Math.min(totalCustomers, 10)).tickFormat(d => formatCustomerCount(d)))
         .selectAll('text')
         .style('font-size', '10px');
 
+    // Y-axis with dollar formatting (matching product chart)
     g.append('g')
-        .call(d3.axisLeft(y).ticks(5).tickFormat(d => d + '%'))
+        .call(d3.axisLeft(y).ticks(5).tickFormat(formatRevenue))
         .selectAll('text')
         .style('font-size', '10px');
 
+    // X-axis label
     g.append('text')
         .attr('x', width / 2)
-        .attr('y', height + 40)
+        .attr('y', height + 45)
         .attr('text-anchor', 'middle')
         .style('font-size', '11px')
-        .style('fill', '#6b7280')
+        .style('fill', '#666')
         .text('Customers (ranked by revenue)');
 
+    // Y-axis label
     g.append('text')
         .attr('transform', 'rotate(-90)')
-        .attr('y', -45)
+        .attr('y', -55)
         .attr('x', -height / 2)
         .attr('text-anchor', 'middle')
         .style('font-size', '11px')
-        .style('fill', '#6b7280')
-        .text('Cumulative Revenue %');
+        .style('fill', '#666')
+        .text('Cumulative Revenue');
 
-    svg.node().chartData = { x, y, height, g, distributionData: chartData, totalCustomers, getCustomerCount };
+    // Store chart data for threshold updates
+    svg.node().chartData = { x, y, height, width, g, distributionData: chartData, totalCustomers, totalRevenue, getCustomerCount, getRevenue, formatRevenue };
 }
 
 function ds_updateCustomerRevenueChart(threshold) {
@@ -10868,10 +11018,10 @@ function ds_updateCustomerRevenueChart(threshold) {
     const chartData = svg.node()?.chartData;
     if (!chartData) return;
 
-    const { x, y, height, g, distributionData, totalCustomers, getCustomerCount } = chartData;
+    const { x, y, height, width, g, distributionData, totalCustomers, totalRevenue, getCustomerCount, formatRevenue } = chartData;
 
     g.selectAll('.threshold-line').remove();
-    g.selectAll('.threshold-area').remove();
+    g.selectAll('.threshold-label').remove();
 
     let customerPercent = 100;
     for (const point of distributionData) {
@@ -10882,30 +11032,55 @@ function ds_updateCustomerRevenueChart(threshold) {
     }
 
     const customerCount = Math.round(totalCustomers * customerPercent / 100);
+    const thresholdRevenue = totalRevenue * threshold / 100;
 
+    // Horizontal threshold line - extends full width (matching product chart)
     g.append('line')
         .attr('class', 'threshold-line')
         .attr('x1', 0)
-        .attr('x2', x(customerCount))
-        .attr('y1', y(threshold))
-        .attr('y2', y(threshold))
-        .attr('stroke', '#16a34a')
+        .attr('x2', width)
+        .attr('y1', y(thresholdRevenue))
+        .attr('y2', y(thresholdRevenue))
+        .attr('stroke', '#ef4444')
         .attr('stroke-width', 1.5)
-        .attr('stroke-dasharray', '4,4');
+        .attr('stroke-dasharray', '5,5');
 
-    g.append('line')
-        .attr('class', 'threshold-line')
-        .attr('x1', x(customerCount))
-        .attr('x2', x(customerCount))
-        .attr('y1', y(threshold))
-        .attr('y2', height)
-        .attr('stroke', '#16a34a')
-        .attr('stroke-width', 1.5)
-        .attr('stroke-dasharray', '4,4');
+    // Horizontal line label (matching product chart)
+    g.append('text')
+        .attr('class', 'threshold-label')
+        .attr('x', width - 5)
+        .attr('y', y(thresholdRevenue) - 5)
+        .attr('text-anchor', 'end')
+        .attr('fill', '#ef4444')
+        .attr('font-size', '11px')
+        .text(`${threshold}% revenue (${formatRevenue(thresholdRevenue)})`);
 
+    // Vertical threshold line (matching product chart)
+    if (customerCount > 0) {
+        g.append('line')
+            .attr('class', 'threshold-line')
+            .attr('x1', x(customerCount))
+            .attr('x2', x(customerCount))
+            .attr('y1', y(thresholdRevenue))
+            .attr('y2', height)
+            .attr('stroke', '#ef4444')
+            .attr('stroke-width', 1)
+            .attr('stroke-dasharray', '3,3');
+
+        // Vertical line label (matching product chart)
+        g.append('text')
+            .attr('class', 'threshold-label')
+            .attr('x', x(customerCount))
+            .attr('y', height + 35)
+            .attr('text-anchor', 'middle')
+            .attr('fill', '#ef4444')
+            .attr('font-size', '10px')
+            .text(`${customerCount.toLocaleString()} customers`);
+    }
+
+    // Update UI elements
     const totalCustomersCount = ds_customerAnalysisData.total_customers || 0;
     const selectedCustomers = Math.round(totalCustomersCount * customerPercent / 100);
-    const totalRevenue = ds_customerAnalysisData.total_revenue || 0;
     const selectedRevenue = totalRevenue * threshold / 100;
 
     document.getElementById('dsTotalCustomersCount').textContent = totalCustomersCount.toLocaleString();

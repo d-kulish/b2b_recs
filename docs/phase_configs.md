@@ -155,11 +155,13 @@ Three filter sub-chapters:
   - Revenue column selection
   - Product column selection
   - Threshold slider (e.g., top 80% by revenue)
+  - **Cross-filter support**: Respects all committed filters (date range, customer filters)
 - **Product Metrics modal**: Transaction count and revenue aggregation filters
 - **Filter Columns modal**: Category/numeric/date column filters
 
 **3. Customers Filter**
 - **Top Customers modal**: D3.js Pareto chart for customer revenue
+  - **Cross-filter support**: Respects all committed filters (date range, product filters, customer category filters like city)
 - **Customer Metrics modal**: Transaction count and spending filters
 - **Filter Columns modal**: Same as Products but for customer-related columns
 
@@ -218,16 +220,26 @@ ds_renderCompareColumn(dataset, side)  // Renders comparison data
 Revenue distribution visualization in Top Products/Top Customers modals:
 
 **Chart Features:**
-- Bar chart showing revenue per product/customer
-- Cumulative percentage line
-- Interactive threshold slider
-- Hover tooltips with exact values
+- Area chart showing cumulative revenue distribution
+- Y-axis: Actual revenue values (currency-neutral, e.g., "40.0M", "500K")
+- X-axis: Products/Customers ranked by revenue
+- Red dashed threshold lines (horizontal extends full width)
+- Labels showing threshold info (e.g., "80% revenue (37.5M)", "3729 products")
+- Grid lines for better readability
+- Interactive threshold slider (70%, 80%, 90%, 95%)
+
+**Cross-Filter Behavior (2026-01-14 fix):**
+Both analyses now respect ALL committed filters from other sub-chapters:
+- **Top Products**: Applies date filter + customer category/numeric filters
+- **Top Customers**: Applies date filter + product category/numeric filters + customer category/numeric filters
+
+This ensures the analysis shows accurate numbers for the filtered subset, not the entire dataset.
 
 **Functions:**
 ```javascript
 ds_drawRevenueDistributionChart(data, threshold)  // Products chart
-ds_renderCustomerRevenueChart(data, threshold)    // Customers chart
-ds_updateCustomerRevenueChart(threshold)          // Update on slider change
+ds_renderCustomerRevenueChart(data)               // Customers chart (initial render)
+ds_updateCustomerRevenueChart(threshold)          // Update threshold lines/labels
 ```
 
 ### Dataset Chapter Functions (ds_ prefix)

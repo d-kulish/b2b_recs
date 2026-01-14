@@ -1358,6 +1358,36 @@
         font-size: 12px;
         color: #4b5563;
     }
+
+    /* New accordion-based layer badges */
+    .mc-layer-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 9px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+        flex-shrink: 0;
+    }
+    .mc-layer-badge.dense {
+        background: #e5e7eb;
+        color: #374151;
+    }
+    .mc-layer-badge.dropout {
+        background: #fef3c7;
+        color: #92400e;
+    }
+    .mc-layer-badge.batch_norm {
+        background: #d1fae5;
+        color: #065f46;
+    }
+    .mc-layer-badge.layer_norm {
+        background: #e0e7ff;
+        color: #3730a3;
+    }
+
     .mc-compare-params-row {
         display: grid;
         grid-template-columns: 1fr 1fr;
@@ -1375,6 +1405,97 @@
     .mc-compare-params-cell.mc-compare-diff {
         color: #92400e;
         font-weight: 600;
+    }
+
+    /* Aligned Tower Styles */
+    .mc-aligned-tower-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+    }
+    .mc-tower-wrapper {
+        display: flex;
+        flex-direction: column;
+    }
+    .mc-tower-layers {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        flex: 1;
+    }
+    .mc-layer-card {
+        border: 1px solid;
+        border-radius: 6px;
+        padding: 8px 10px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        min-height: 36px;
+    }
+    .mc-layer-card .mc-layer-info {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex: 1;
+    }
+    .mc-layer-card .mc-layer-name {
+        font-size: 12px;
+        font-weight: 500;
+    }
+    .mc-layer-card .mc-layer-units {
+        font-size: 11px;
+        font-family: 'Monaco', 'Menlo', monospace;
+        opacity: 0.8;
+    }
+    .mc-layer-output {
+        border-width: 2px !important;
+        border-style: solid !important;
+    }
+    .mc-layer-params-text {
+        font-size: 11px;
+        font-family: 'Monaco', 'Menlo', monospace;
+        color: #6b7280;
+        white-space: nowrap;
+    }
+    .mc-layer-placeholder {
+        border: 1px dashed #d1d5db;
+        border-radius: 6px;
+        min-height: 36px;
+        background: #f9fafb;
+    }
+    .mc-tower-params {
+        margin-top: 6px;
+        padding: 6px 10px;
+        background: #f9fafb;
+        border-radius: 4px;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+    .mc-param-row {
+        display: flex;
+        justify-content: space-between;
+        font-size: 11px;
+        font-family: 'Monaco', 'Menlo', monospace;
+    }
+    .mc-param-row .mc-param-label {
+        opacity: 0.7;
+    }
+    .mc-param-row .mc-param-value {
+        font-weight: 500;
+    }
+    .mc-tower-na {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100px;
+        border: 2px dashed #d1d5db;
+        border-radius: 8px;
+        background: #f9fafb;
+        color: #9ca3af;
+        font-style: italic;
+        font-size: 13px;
     }
 
     /* Settings comparison grid */
@@ -3521,7 +3642,7 @@
                 <h2 class="text-2xl font-bold text-gray-900">Features</h2>
             </div>
             <div class="btn-group">
-                <button onclick="openCompareModal()" class="btn btn-secondary btn-sm" style="width: 150px;">
+                <button onclick="fc_openCompareModal()" class="btn btn-secondary btn-sm" style="width: 150px;">
                     <i class="fas fa-columns"></i>Compare
                 </button>
                 <button onclick="fc_openWizard()" class="btn btn-primary btn-sm" style="width: 150px;">
@@ -3570,7 +3691,7 @@
             </div>
             <h2 class="chapter-title">Model Structure</h2>
             <div class="ml-auto flex gap-2">
-                <button onclick="openModelConfigCompareModal()" class="btn btn-secondary btn-sm" style="width: 150px;">
+                <button onclick="mc_openCompareModal()" class="btn btn-secondary btn-sm" style="width: 150px;">
                     <i class="fas fa-columns mr-1"></i>Compare
                 </button>
                 <button onclick="openModelConfigWizard()" class="btn btn-primary btn-sm" style="width: 150px;">
@@ -4153,7 +4274,7 @@
                 <!-- Accordion 1: Basic Info -->
                 <div class="filter-subchapter ds-compare-section" id="dsCompareBasicInfoSection">
                     <div class="subchapter-header-tablet" onclick="ds_toggleCompareSection('basicInfo')">
-                        <span class="subchapter-title"><i class="fas fa-info-circle mr-2 text-gray-400"></i>Basic Info</span>
+                        <span class="subchapter-title"><i class="fas fa-info-circle mr-2 text-blue-500"></i>Basic Info</span>
                         <span class="subchapter-filter-status" id="dsCompareBasicInfoStatus"></span>
                         <i id="dsCompareBasicInfoChevron" class="fas fa-chevron-right subchapter-chevron"></i>
                     </div>
@@ -4172,7 +4293,7 @@
                 <!-- Accordion 2: Tables & Joins -->
                 <div class="filter-subchapter ds-compare-section" id="dsCompareTablesSection">
                     <div class="subchapter-header-tablet" onclick="ds_toggleCompareSection('tables')">
-                        <span class="subchapter-title"><i class="fas fa-database mr-2 text-gray-400"></i>Tables & Joins</span>
+                        <span class="subchapter-title"><i class="fas fa-database mr-2 text-purple-500"></i>Tables & Joins</span>
                         <span class="subchapter-filter-status" id="dsCompareTablesStatus"></span>
                         <i id="dsCompareTablesChevron" class="fas fa-chevron-right subchapter-chevron"></i>
                     </div>
@@ -4187,7 +4308,7 @@
                 <!-- Accordion 3: Columns Selected -->
                 <div class="filter-subchapter ds-compare-section" id="dsCompareColumnsSection">
                     <div class="subchapter-header-tablet" onclick="ds_toggleCompareSection('columns')">
-                        <span class="subchapter-title"><i class="fas fa-columns mr-2 text-gray-400"></i>Columns Selected</span>
+                        <span class="subchapter-title"><i class="fas fa-columns mr-2 text-teal-500"></i>Columns Selected</span>
                         <span class="subchapter-filter-status" id="dsCompareColumnsStatus"></span>
                         <i id="dsCompareColumnsChevron" class="fas fa-chevron-right subchapter-chevron"></i>
                     </div>
@@ -4202,7 +4323,7 @@
                 <!-- Accordion 4: Filters Applied -->
                 <div class="filter-subchapter ds-compare-section" id="dsCompareFiltersSection">
                     <div class="subchapter-header-tablet" onclick="ds_toggleCompareSection('filters')">
-                        <span class="subchapter-title"><i class="fas fa-filter mr-2 text-gray-400"></i>Filters Applied</span>
+                        <span class="subchapter-title"><i class="fas fa-filter mr-2 text-green-500"></i>Filters Applied</span>
                         <span class="subchapter-filter-status" id="dsCompareFiltersStatus"></span>
                         <i id="dsCompareFiltersChevron" class="fas fa-chevron-right subchapter-chevron"></i>
                     </div>
@@ -4217,7 +4338,7 @@
                 <!-- Accordion 5: Statistics -->
                 <div class="filter-subchapter ds-compare-section" id="dsCompareStatsSection">
                     <div class="subchapter-header-tablet" onclick="ds_toggleCompareSection('stats')">
-                        <span class="subchapter-title"><i class="fas fa-chart-bar mr-2 text-gray-400"></i>Statistics</span>
+                        <span class="subchapter-title"><i class="fas fa-chart-bar mr-2 text-orange-500"></i>Statistics</span>
                         <span class="subchapter-filter-status" id="dsCompareStatsStatus"></span>
                         <i id="dsCompareStatsChevron" class="fas fa-chevron-right subchapter-chevron"></i>
                     </div>
@@ -6013,87 +6134,126 @@
 
 <!-- Compare Model Configs Modal -->
 <div id="compareModelConfigsModal" class="modal-overlay hidden">
-    <div class="modal-container" style="max-width: 950px; max-height: 85vh; display: flex; flex-direction: column;">
+    <div class="modal-container" style="max-width: 1000px;">
         <div class="modal-header">
             <div class="modal-header-icon info">
                 <i class="fas fa-columns"></i>
             </div>
             <h3 class="modal-header-title">Compare Model Configs</h3>
         </div>
-        <div class="modal-body" style="overflow-y: auto; flex: 1;">
+        <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
             <!-- Dropdowns row -->
             <div class="grid grid-cols-2 gap-4 mb-4">
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-2">Left Model Config</label>
-                    <select id="mcCompareLeftSelect" onchange="onMcCompareSelectChange('left')"
+                    <select id="mcCompareLeftSelect" onchange="mc_onCompareSelectChange('left')"
                             class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                         <option value="">Select model config...</option>
                     </select>
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-2">Right Model Config</label>
-                    <select id="mcCompareRightSelect" onchange="onMcCompareSelectChange('right')"
+                    <select id="mcCompareRightSelect" onchange="mc_onCompareSelectChange('right')"
                             class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                         <option value="">Select model config...</option>
                     </select>
                 </div>
             </div>
-            <!-- Comparison content -->
-            <div id="mcCompareContent" class="space-y-4">
-                <!-- Header Section -->
-                <div id="mcCompareHeaders" class="grid grid-cols-2 gap-4">
-                    <div id="mcCompareLeftHeader" class="p-4 bg-white border border-gray-200 rounded-lg">
-                        <div class="flex items-center justify-center h-full text-gray-400 py-4">
-                            <span>Select a model config</span>
+
+            <!-- Comparison content - accordion layout -->
+            <div id="mcCompareAccordions" class="ds-compare-accordions">
+                <!-- Accordion 1: Basic Info -->
+                <div class="filter-subchapter ds-compare-section" id="mcCompareBasicInfoSection">
+                    <div class="subchapter-header-tablet" onclick="mc_toggleCompareSection('basicInfo')">
+                        <span class="subchapter-title"><i class="fas fa-info-circle mr-2 text-blue-500"></i>Basic Info</span>
+                        <span class="subchapter-filter-status" id="mcCompareBasicInfoStatus"></span>
+                        <i id="mcCompareBasicInfoChevron" class="fas fa-chevron-right subchapter-chevron"></i>
+                    </div>
+                    <div id="mcCompareBasicInfoContent" class="subchapter-content-outside hidden">
+                        <div class="ds-compare-grid">
+                            <div id="mcCompareLeftBasicInfo" class="ds-compare-cell">
+                                <div class="ds-compare-placeholder">Select a model config</div>
+                            </div>
+                            <div id="mcCompareRightBasicInfo" class="ds-compare-cell">
+                                <div class="ds-compare-placeholder">Select a model config</div>
+                            </div>
                         </div>
                     </div>
-                    <div id="mcCompareRightHeader" class="p-4 bg-white border border-gray-200 rounded-lg">
-                        <div class="flex items-center justify-center h-full text-gray-400 py-4">
-                            <span>Select a model config</span>
+                </div>
+
+                <!-- Accordion 2: Buyer Tower -->
+                <div class="filter-subchapter ds-compare-section" id="mcCompareBuyerSection">
+                    <div class="subchapter-header-tablet" onclick="mc_toggleCompareSection('buyer')">
+                        <span class="subchapter-title"><i class="fas fa-user mr-2 text-blue-500"></i>Buyer Tower</span>
+                        <span class="subchapter-filter-status" id="mcCompareBuyerStatus"></span>
+                        <i id="mcCompareBuyerChevron" class="fas fa-chevron-right subchapter-chevron"></i>
+                    </div>
+                    <div id="mcCompareBuyerContent" class="subchapter-content-outside hidden">
+                        <div class="ds-compare-grid">
+                            <div id="mcCompareLeftBuyer" class="ds-compare-cell">
+                                <div class="ds-compare-placeholder">Select a model config</div>
+                            </div>
+                            <div id="mcCompareRightBuyer" class="ds-compare-cell">
+                                <div class="ds-compare-placeholder">Select a model config</div>
+                            </div>
                         </div>
                     </div>
                 </div>
-                <!-- Buyer Tower Section (aligned layers) -->
-                <div id="mcCompareBuyerSection" class="mc-compare-tower-section buyer hidden">
-                    <div class="mc-compare-tower-header">
-                        <span class="mc-compare-tower-title">Buyer Tower</span>
+
+                <!-- Accordion 3: Product Tower -->
+                <div class="filter-subchapter ds-compare-section" id="mcCompareProductSection">
+                    <div class="subchapter-header-tablet" onclick="mc_toggleCompareSection('product')">
+                        <span class="subchapter-title"><i class="fas fa-box mr-2 text-green-500"></i>Product Tower</span>
+                        <span class="subchapter-filter-status" id="mcCompareProductStatus"></span>
+                        <i id="mcCompareProductChevron" class="fas fa-chevron-right subchapter-chevron"></i>
                     </div>
-                    <div id="mcCompareBuyerLayers" class="mc-compare-layers-grid">
-                        <!-- Layer rows will be rendered here -->
-                    </div>
-                    <div id="mcCompareBuyerParams" class="mc-compare-params-row">
-                        <!-- Params will be rendered here -->
-                    </div>
-                </div>
-                <!-- Product Tower Section (aligned layers) -->
-                <div id="mcCompareProductSection" class="mc-compare-tower-section product hidden">
-                    <div class="mc-compare-tower-header">
-                        <span class="mc-compare-tower-title">Product Tower</span>
-                    </div>
-                    <div id="mcCompareProductLayers" class="mc-compare-layers-grid">
-                        <!-- Layer rows will be rendered here -->
-                    </div>
-                    <div id="mcCompareProductParams" class="mc-compare-params-row">
-                        <!-- Params will be rendered here -->
+                    <div id="mcCompareProductContent" class="subchapter-content-outside hidden">
+                        <div class="ds-compare-grid">
+                            <div id="mcCompareLeftProduct" class="ds-compare-cell">
+                                <div class="ds-compare-placeholder">Select a model config</div>
+                            </div>
+                            <div id="mcCompareRightProduct" class="ds-compare-cell">
+                                <div class="ds-compare-placeholder">Select a model config</div>
+                            </div>
+                        </div>
                     </div>
                 </div>
-                <!-- Rating Head Section (for Ranking models) -->
-                <div id="mcCompareRatingHeadSection" class="mc-compare-tower-section ranking hidden">
-                    <div class="mc-compare-tower-header">
-                        <span class="mc-compare-tower-title">Rating Head</span>
+
+                <!-- Accordion 4: Rating Head (for Ranking/Multitask models) -->
+                <div class="filter-subchapter ds-compare-section hidden" id="mcCompareRatingHeadSection">
+                    <div class="subchapter-header-tablet" onclick="mc_toggleCompareSection('ratingHead')">
+                        <span class="subchapter-title"><i class="fas fa-star mr-2 text-purple-500"></i>Rating Head</span>
+                        <span class="subchapter-filter-status" id="mcCompareRatingHeadStatus"></span>
+                        <i id="mcCompareRatingHeadChevron" class="fas fa-chevron-right subchapter-chevron"></i>
                     </div>
-                    <div id="mcCompareRating_headLayers" class="mc-compare-layers-grid">
-                        <!-- Layer rows will be rendered here -->
-                    </div>
-                    <div id="mcCompareRating_headParams" class="mc-compare-params-row">
-                        <!-- Params will be rendered here -->
+                    <div id="mcCompareRatingHeadContent" class="subchapter-content-outside hidden">
+                        <div class="ds-compare-grid">
+                            <div id="mcCompareLeftRatingHead" class="ds-compare-cell">
+                                <div class="ds-compare-placeholder">Select a model config</div>
+                            </div>
+                            <div id="mcCompareRightRatingHead" class="ds-compare-cell">
+                                <div class="ds-compare-placeholder">Select a model config</div>
+                            </div>
+                        </div>
                     </div>
                 </div>
-                <!-- Training Settings Section -->
-                <div id="mcCompareSettingsSection" class="hidden">
-                    <div class="text-sm font-semibold text-gray-700 mb-3">Training Settings</div>
-                    <div id="mcCompareSettingsGrid" class="mc-compare-settings-grid">
-                        <!-- Settings cards will be rendered here -->
+
+                <!-- Accordion 5: Training Settings -->
+                <div class="filter-subchapter ds-compare-section" id="mcCompareSettingsSection">
+                    <div class="subchapter-header-tablet" onclick="mc_toggleCompareSection('settings')">
+                        <span class="subchapter-title"><i class="fas fa-cog mr-2 text-orange-500"></i>Training Settings</span>
+                        <span class="subchapter-filter-status" id="mcCompareSettingsStatus"></span>
+                        <i id="mcCompareSettingsChevron" class="fas fa-chevron-right subchapter-chevron"></i>
+                    </div>
+                    <div id="mcCompareSettingsContent" class="subchapter-content-outside hidden">
+                        <div class="ds-compare-grid">
+                            <div id="mcCompareLeftSettings" class="ds-compare-cell">
+                                <div class="ds-compare-placeholder">Select a model config</div>
+                            </div>
+                            <div id="mcCompareRightSettings" class="ds-compare-cell">
+                                <div class="ds-compare-placeholder">Select a model config</div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -6101,7 +6261,7 @@
         <div class="modal-footer-wizard-neu">
             <div class="footer-left"></div>
             <div class="footer-right">
-                <button type="button" class="btn-neu btn-neu-action btn-neu-cancel" onclick="closeModelConfigCompareModal()">
+                <button type="button" class="btn-neu btn-neu-action btn-neu-cancel" onclick="mc_closeCompareModal()">
                     <span class="btn-neu-inner">Close</span>
                 </button>
             </div>
@@ -6634,64 +6794,103 @@
             <div class="grid grid-cols-2 gap-4 mb-4">
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-2">Left Feature Set</label>
-                    <select id="compareLeftSelect" onchange="onCompareSelectChange('left')"
+                    <select id="compareLeftSelect" onchange="fc_onCompareSelectChange('left')"
                             class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                         <option value="">Select feature set...</option>
                     </select>
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-2">Right Feature Set</label>
-                    <select id="compareRightSelect" onchange="onCompareSelectChange('right')"
+                    <select id="compareRightSelect" onchange="fc_onCompareSelectChange('right')"
                             class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                         <option value="">Select feature set...</option>
                     </select>
                 </div>
             </div>
 
-            <!-- Comparison content - table layout for aligned rows -->
-            <div class="border border-gray-200 rounded-lg overflow-hidden bg-white">
-                <table class="w-full compare-table" id="compareTable">
-                    <colgroup>
-                        <col style="width: 50%">
-                        <col style="width: 50%">
-                    </colgroup>
-                    <tbody id="compareTableBody">
-                        <!-- Header row -->
-                        <tr class="compare-row-header">
-                            <td id="compareLeftHeader" class="p-4 align-top border-r border-gray-200 border-b">
-                                <div class="flex items-center justify-center h-full text-gray-400 py-4">
-                                    <span>Select a feature set</span>
-                                </div>
-                            </td>
-                            <td id="compareRightHeader" class="p-4 align-top border-b">
-                                <div class="flex items-center justify-center h-full text-gray-400 py-4">
-                                    <span>Select a feature set</span>
-                                </div>
-                            </td>
-                        </tr>
-                        <!-- Source row -->
-                        <tr class="compare-row-source hidden">
-                            <td id="compareLeftSource" class="p-4 align-top border-r border-gray-200 border-b"></td>
-                            <td id="compareRightSource" class="p-4 align-top border-b"></td>
-                        </tr>
-                        <!-- Buyer Tensor row -->
-                        <tr class="compare-row-buyer hidden">
-                            <td id="compareLeftBuyer" class="p-4 align-top border-r border-gray-200 border-b"></td>
-                            <td id="compareRightBuyer" class="p-4 align-top border-b"></td>
-                        </tr>
-                        <!-- Product Tensor row -->
-                        <tr class="compare-row-product hidden">
-                            <td id="compareLeftProduct" class="p-4 align-top border-r border-gray-200"></td>
-                            <td id="compareRightProduct" class="p-4 align-top"></td>
-                        </tr>
-                    </tbody>
-                </table>
+            <!-- Comparison content - accordion layout -->
+            <div id="fcCompareAccordions" class="ds-compare-accordions">
+                <!-- Accordion 1: Basic Info -->
+                <div class="filter-subchapter ds-compare-section" id="fcCompareBasicInfoSection">
+                    <div class="subchapter-header-tablet" onclick="fc_toggleCompareSection('basicInfo')">
+                        <span class="subchapter-title"><i class="fas fa-info-circle mr-2 text-blue-500"></i>Basic Info</span>
+                        <span class="subchapter-filter-status" id="fcCompareBasicInfoStatus"></span>
+                        <i id="fcCompareBasicInfoChevron" class="fas fa-chevron-right subchapter-chevron"></i>
+                    </div>
+                    <div id="fcCompareBasicInfoContent" class="subchapter-content-outside hidden">
+                        <div class="ds-compare-grid">
+                            <div id="fcCompareLeftBasicInfo" class="ds-compare-cell">
+                                <div class="ds-compare-placeholder">Select a feature set</div>
+                            </div>
+                            <div id="fcCompareRightBasicInfo" class="ds-compare-cell">
+                                <div class="ds-compare-placeholder">Select a feature set</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Accordion 2: Source (Dataset Info) -->
+                <div class="filter-subchapter ds-compare-section" id="fcCompareSourceSection">
+                    <div class="subchapter-header-tablet" onclick="fc_toggleCompareSection('source')">
+                        <span class="subchapter-title"><i class="fas fa-database mr-2 text-purple-500"></i>Source</span>
+                        <span class="subchapter-filter-status" id="fcCompareSourceStatus"></span>
+                        <i id="fcCompareSourceChevron" class="fas fa-chevron-right subchapter-chevron"></i>
+                    </div>
+                    <div id="fcCompareSourceContent" class="subchapter-content-outside hidden">
+                        <div class="ds-compare-grid">
+                            <div id="fcCompareLeftSource" class="ds-compare-cell">
+                                <div class="ds-compare-placeholder">Select a feature set</div>
+                            </div>
+                            <div id="fcCompareRightSource" class="ds-compare-cell">
+                                <div class="ds-compare-placeholder">Select a feature set</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Accordion 3: Buyer Tensor -->
+                <div class="filter-subchapter ds-compare-section" id="fcCompareBuyerSection">
+                    <div class="subchapter-header-tablet" onclick="fc_toggleCompareSection('buyer')">
+                        <span class="subchapter-title"><i class="fas fa-user mr-2 text-blue-500"></i>Buyer Tensor</span>
+                        <span class="subchapter-filter-status" id="fcCompareBuyerStatus"></span>
+                        <i id="fcCompareBuyerChevron" class="fas fa-chevron-right subchapter-chevron"></i>
+                    </div>
+                    <div id="fcCompareBuyerContent" class="subchapter-content-outside hidden">
+                        <div class="ds-compare-grid">
+                            <div id="fcCompareLeftBuyer" class="ds-compare-cell">
+                                <div class="ds-compare-placeholder">Select a feature set</div>
+                            </div>
+                            <div id="fcCompareRightBuyer" class="ds-compare-cell">
+                                <div class="ds-compare-placeholder">Select a feature set</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Accordion 4: Product Tensor -->
+                <div class="filter-subchapter ds-compare-section" id="fcCompareProductSection">
+                    <div class="subchapter-header-tablet" onclick="fc_toggleCompareSection('product')">
+                        <span class="subchapter-title"><i class="fas fa-box mr-2 text-green-500"></i>Product Tensor</span>
+                        <span class="subchapter-filter-status" id="fcCompareProductStatus"></span>
+                        <i id="fcCompareProductChevron" class="fas fa-chevron-right subchapter-chevron"></i>
+                    </div>
+                    <div id="fcCompareProductContent" class="subchapter-content-outside hidden">
+                        <div class="ds-compare-grid">
+                            <div id="fcCompareLeftProduct" class="ds-compare-cell">
+                                <div class="ds-compare-placeholder">Select a feature set</div>
+                            </div>
+                            <div id="fcCompareRightProduct" class="ds-compare-cell">
+                                <div class="ds-compare-placeholder">Select a feature set</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
         <div class="modal-footer-wizard-neu">
             <div class="footer-left"></div>
             <div class="footer-right">
-                <button type="button" class="btn-neu btn-neu-action btn-neu-cancel" onclick="closeCompareModal()">
+                <button type="button" class="btn-neu btn-neu-action btn-neu-cancel" onclick="fc_closeCompareModal()">
                     <span class="btn-neu-inner">Close</span>
                 </button>
             </div>
@@ -16579,13 +16778,21 @@ function closeViewModal() {
 }
 
 // =============================================================================
-// COMPARE FEATURE SETS FUNCTIONS
+// COMPARE FEATURE SETS FUNCTIONS (Accordion-based UI)
 // =============================================================================
 
-let compareLeftConfig = null;
-let compareRightConfig = null;
+let fc_compareLeftConfig = null;
+let fc_compareRightConfig = null;
 
-function openCompareModal() {
+// Track which accordion sections are expanded
+let fc_compareExpandedSections = {
+    basicInfo: false,
+    source: false,
+    buyer: false,
+    product: false
+};
+
+function fc_openCompareModal() {
     // Populate dropdowns with all feature sets
     const leftSelect = document.getElementById('compareLeftSelect');
     const rightSelect = document.getElementById('compareRightSelect');
@@ -16608,58 +16815,102 @@ function openCompareModal() {
     });
 
     // Reset to placeholder state
-    resetCompareColumn('left');
-    resetCompareColumn('right');
+    fc_resetCompareColumn('left');
+    fc_resetCompareColumn('right');
 
-    // Hide data rows
-    document.querySelector('.compare-row-source').classList.add('hidden');
-    document.querySelector('.compare-row-buyer').classList.add('hidden');
-    document.querySelector('.compare-row-product').classList.add('hidden');
+    // Reset accordion states - collapse all
+    fc_compareExpandedSections = {
+        basicInfo: false,
+        source: false,
+        buyer: false,
+        product: false
+    };
+    fc_syncCompareAccordionStates();
 
     // Reset state
-    compareLeftConfig = null;
-    compareRightConfig = null;
+    fc_compareLeftConfig = null;
+    fc_compareRightConfig = null;
 
     // Show modal
     document.getElementById('compareModal').classList.remove('hidden');
 }
 
-function closeCompareModal() {
+function fc_closeCompareModal() {
     document.getElementById('compareModal').classList.add('hidden');
-    compareLeftConfig = null;
-    compareRightConfig = null;
+    fc_compareLeftConfig = null;
+    fc_compareRightConfig = null;
 }
 
-function resetCompareColumn(side) {
-    const prefix = side === 'left' ? 'compareLeft' : 'compareRight';
+// Toggle accordion section
+function fc_toggleCompareSection(sectionName) {
+    fc_compareExpandedSections[sectionName] = !fc_compareExpandedSections[sectionName];
+    fc_syncCompareAccordionStates();
+}
 
-    document.getElementById(`${prefix}Header`).innerHTML = `
-        <div class="flex items-center justify-center h-full text-gray-400 py-4">
-            <span>Select a feature set</span>
-        </div>
+// Sync accordion visual states with tracked state
+function fc_syncCompareAccordionStates() {
+    const sections = ['basicInfo', 'source', 'buyer', 'product'];
+
+    sections.forEach(section => {
+        const contentId = `fcCompare${section.charAt(0).toUpperCase() + section.slice(1)}Content`;
+        const chevronId = `fcCompare${section.charAt(0).toUpperCase() + section.slice(1)}Chevron`;
+
+        const content = document.getElementById(contentId);
+        const chevron = document.getElementById(chevronId);
+
+        if (content && chevron) {
+            if (fc_compareExpandedSections[section]) {
+                content.classList.remove('hidden');
+                chevron.classList.add('expanded');
+            } else {
+                content.classList.add('hidden');
+                chevron.classList.remove('expanded');
+            }
+        }
+    });
+}
+
+function fc_resetCompareColumn(side) {
+    const prefix = side === 'left' ? 'fcCompareLeft' : 'fcCompareRight';
+
+    // Reset BasicInfo
+    document.getElementById(`${prefix}BasicInfo`).innerHTML = `
+        <div class="ds-compare-placeholder">Select a feature set</div>
     `;
-    document.getElementById(`${prefix}Source`).innerHTML = '';
-    document.getElementById(`${prefix}Buyer`).innerHTML = '';
-    document.getElementById(`${prefix}Product`).innerHTML = '';
+
+    // Reset Source
+    document.getElementById(`${prefix}Source`).innerHTML = `
+        <div class="ds-compare-placeholder">Select a feature set</div>
+    `;
+
+    // Reset Buyer
+    document.getElementById(`${prefix}Buyer`).innerHTML = `
+        <div class="ds-compare-placeholder">Select a feature set</div>
+    `;
+
+    // Reset Product
+    document.getElementById(`${prefix}Product`).innerHTML = `
+        <div class="ds-compare-placeholder">Select a feature set</div>
+    `;
 }
 
-function onCompareSelectChange(side) {
+function fc_onCompareSelectChange(side) {
     const selectId = side === 'left' ? 'compareLeftSelect' : 'compareRightSelect';
     const configId = document.getElementById(selectId).value;
 
     if (!configId) {
         // Reset this side
-        resetCompareColumn(side);
-        if (side === 'left') compareLeftConfig = null;
-        else compareRightConfig = null;
-        updateCompareRowVisibility();
+        fc_resetCompareColumn(side);
+        if (side === 'left') fc_compareLeftConfig = null;
+        else fc_compareRightConfig = null;
+        fc_updateCompareStatuses();
         return;
     }
 
-    // Show loading state in header
-    const prefix = side === 'left' ? 'compareLeft' : 'compareRight';
-    document.getElementById(`${prefix}Header`).innerHTML = `
-        <div class="flex items-center justify-center h-full text-gray-400 py-4">
+    // Show loading state
+    const prefix = side === 'left' ? 'fcCompareLeft' : 'fcCompareRight';
+    document.getElementById(`${prefix}BasicInfo`).innerHTML = `
+        <div class="ds-compare-placeholder">
             <i class="fas fa-spinner fa-spin mr-2"></i>Loading...
         </div>
     `;
@@ -16669,38 +16920,103 @@ function onCompareSelectChange(side) {
         .then(r => r.json())
         .then(data => {
             if (data.success) {
-                if (side === 'left') compareLeftConfig = data.data;
-                else compareRightConfig = data.data;
-                renderCompareColumn(data.data, side);
-                updateCompareRowVisibility();
+                const config = data.data;
+                if (side === 'left') fc_compareLeftConfig = config;
+                else fc_compareRightConfig = config;
+                fc_renderCompareColumn(config, side);
+                fc_updateCompareStatuses();
             } else {
-                document.getElementById(`${prefix}Header`).innerHTML = `
-                    <div class="flex items-center justify-center h-full text-red-400 py-4">
-                        <span>Failed to load</span>
+                document.getElementById(`${prefix}BasicInfo`).innerHTML = `
+                    <div class="ds-compare-placeholder" style="color: #ef4444;">
+                        Failed to load
                     </div>
                 `;
             }
         })
         .catch(err => {
             console.error('Error loading config for compare:', err);
-            document.getElementById(`${prefix}Header`).innerHTML = `
-                <div class="flex items-center justify-center h-full text-red-400 py-4">
-                    <span>Error loading</span>
+            document.getElementById(`${prefix}BasicInfo`).innerHTML = `
+                <div class="ds-compare-placeholder" style="color: #ef4444;">
+                    Error loading
                 </div>
             `;
         });
 }
 
-function updateCompareRowVisibility() {
-    // Show rows only if at least one side has data
-    const hasData = compareLeftConfig || compareRightConfig;
-    document.querySelector('.compare-row-source').classList.toggle('hidden', !hasData);
-    document.querySelector('.compare-row-buyer').classList.toggle('hidden', !hasData);
-    document.querySelector('.compare-row-product').classList.toggle('hidden', !hasData);
+// Update status badges in accordion headers
+function fc_updateCompareStatuses() {
+    const left = fc_compareLeftConfig;
+    const right = fc_compareRightConfig;
+
+    // Basic Info status
+    const basicInfoStatus = document.getElementById('fcCompareBasicInfoStatus');
+    if (left && right) {
+        const diffs = [];
+        if (left.name !== right.name) diffs.push('name');
+        if (left.dataset_name !== right.dataset_name) diffs.push('dataset');
+        basicInfoStatus.textContent = diffs.length > 0 ? `${diffs.length} difference${diffs.length > 1 ? 's' : ''}` : '';
+    } else {
+        basicInfoStatus.textContent = '';
+    }
+
+    // Source status
+    const sourceStatus = document.getElementById('fcCompareSourceStatus');
+    if (left && right) {
+        const leftInfo = left.dataset_info || {};
+        const rightInfo = right.dataset_info || {};
+        if (leftInfo.primary_table !== rightInfo.primary_table ||
+            leftInfo.estimated_rows !== rightInfo.estimated_rows) {
+            sourceStatus.textContent = 'Different';
+        } else {
+            sourceStatus.textContent = '';
+        }
+    } else {
+        sourceStatus.textContent = '';
+    }
+
+    // Buyer Tensor status
+    const buyerStatus = document.getElementById('fcCompareBuyerStatus');
+    if (left && right) {
+        const leftBuyer = calculateTensorBreakdown(
+            left.buyer_model_features || [],
+            left.buyer_model_crosses || []
+        );
+        const rightBuyer = calculateTensorBreakdown(
+            right.buyer_model_features || [],
+            right.buyer_model_crosses || []
+        );
+        if (leftBuyer.total !== rightBuyer.total) {
+            buyerStatus.textContent = `${leftBuyer.total}D vs ${rightBuyer.total}D`;
+        } else {
+            buyerStatus.textContent = '';
+        }
+    } else {
+        buyerStatus.textContent = '';
+    }
+
+    // Product Tensor status
+    const productStatus = document.getElementById('fcCompareProductStatus');
+    if (left && right) {
+        const leftProduct = calculateTensorBreakdown(
+            left.product_model_features || [],
+            left.product_model_crosses || []
+        );
+        const rightProduct = calculateTensorBreakdown(
+            right.product_model_features || [],
+            right.product_model_crosses || []
+        );
+        if (leftProduct.total !== rightProduct.total) {
+            productStatus.textContent = `${leftProduct.total}D vs ${rightProduct.total}D`;
+        } else {
+            productStatus.textContent = '';
+        }
+    } else {
+        productStatus.textContent = '';
+    }
 }
 
-function renderCompareColumn(config, side) {
-    const prefix = side === 'left' ? 'compareLeft' : 'compareRight';
+function fc_renderCompareColumn(config, side) {
+    const prefix = side === 'left' ? 'fcCompareLeft' : 'fcCompareRight';
 
     // Calculate tensor breakdowns
     const buyerResult = calculateTensorBreakdown(
@@ -16715,50 +17031,46 @@ function renderCompareColumn(config, side) {
     // Build dataset info
     const datasetInfo = config.dataset_info || {};
 
-    // Render Header
-    document.getElementById(`${prefix}Header`).innerHTML = `
-        <h4 class="font-semibold text-gray-900">${escapeHtml(config.name)}</h4>
+    // Render BasicInfo
+    document.getElementById(`${prefix}BasicInfo`).innerHTML = `
+        <h4 class="font-semibold text-gray-900 mb-1">${escapeHtml(config.name)}</h4>
         <div class="text-sm text-gray-500">Dataset: ${escapeHtml(config.dataset_name)}</div>
     `;
 
     // Render Source
-    document.getElementById(`${prefix}Source`).innerHTML = buildCompareSourceHtml(datasetInfo);
+    document.getElementById(`${prefix}Source`).innerHTML = fc_buildCompareSourceHtml(datasetInfo);
 
-    // Render Buyer Tensor
+    // Render Buyer Tensor (keeping the colored bars)
     document.getElementById(`${prefix}Buyer`).innerHTML = `
-        <div class="p-3 bg-blue-50 rounded-lg">
-            <div class="flex items-center justify-between mb-2">
-                <h5 class="font-semibold text-blue-800 text-sm">Buyer Tensor</h5>
-                <span class="font-semibold text-blue-600 text-sm">${buyerResult.total}D</span>
-            </div>
-            <div id="compare-${side}-buyer-bar" class="tensor-breakdown-bar mb-2"></div>
-            <div class="space-y-1">
-                ${buyerResult.breakdown.map(item => `
-                    <div class="flex items-center justify-between text-xs">
-                        <span class="${item.is_cross ? 'text-blue-600 italic' : 'text-blue-700'}">${item.name}</span>
-                        <span class="text-blue-500 font-medium">${item.dim}D</span>
-                    </div>
-                `).join('')}
-            </div>
+        <div class="flex items-center justify-between mb-2">
+            <h5 class="font-semibold text-blue-800 text-sm">Buyer Tensor</h5>
+            <span class="font-semibold text-blue-600 text-sm">${buyerResult.total}D</span>
+        </div>
+        <div id="fc-compare-${side}-buyer-bar" class="tensor-breakdown-bar mb-3"></div>
+        <div class="space-y-1">
+            ${buyerResult.breakdown.map(item => `
+                <div class="flex items-center justify-between text-xs">
+                    <span class="${item.is_cross ? 'text-blue-600 italic' : 'text-blue-700'}">${item.name}</span>
+                    <span class="text-blue-500 font-medium">${item.dim}D</span>
+                </div>
+            `).join('')}
         </div>
     `;
 
-    // Render Product Tensor
+    // Render Product Tensor (keeping the colored bars)
     document.getElementById(`${prefix}Product`).innerHTML = `
-        <div class="p-3 bg-green-50 rounded-lg">
-            <div class="flex items-center justify-between mb-2">
-                <h5 class="font-semibold text-green-800 text-sm">Product Tensor</h5>
-                <span class="font-semibold text-green-600 text-sm">${productResult.total}D</span>
-            </div>
-            <div id="compare-${side}-product-bar" class="tensor-breakdown-bar mb-2"></div>
-            <div class="space-y-1">
-                ${productResult.breakdown.map(item => `
-                    <div class="flex items-center justify-between text-xs">
-                        <span class="${item.is_cross ? 'text-green-600 italic' : 'text-green-700'}">${item.name}</span>
-                        <span class="text-green-500 font-medium">${item.dim}D</span>
-                    </div>
-                `).join('')}
-            </div>
+        <div class="flex items-center justify-between mb-2">
+            <h5 class="font-semibold text-green-800 text-sm">Product Tensor</h5>
+            <span class="font-semibold text-green-600 text-sm">${productResult.total}D</span>
+        </div>
+        <div id="fc-compare-${side}-product-bar" class="tensor-breakdown-bar mb-3"></div>
+        <div class="space-y-1">
+            ${productResult.breakdown.map(item => `
+                <div class="flex items-center justify-between text-xs">
+                    <span class="${item.is_cross ? 'text-green-600 italic' : 'text-green-700'}">${item.name}</span>
+                    <span class="text-green-500 font-medium">${item.dim}D</span>
+                </div>
+            `).join('')}
         </div>
     `;
 
@@ -16766,8 +17078,8 @@ function renderCompareColumn(config, side) {
     const maxTotal = Math.max(buyerResult.total || 0, productResult.total || 0);
 
     setTimeout(() => {
-        const buyerBar = document.getElementById(`compare-${side}-buyer-bar`);
-        const productBar = document.getElementById(`compare-${side}-product-bar`);
+        const buyerBar = document.getElementById(`fc-compare-${side}-buyer-bar`);
+        const productBar = document.getElementById(`fc-compare-${side}-product-bar`);
         if (buyerBar && buyerResult.breakdown.length > 0) {
             renderTensorPreview('buyer', buyerResult.total, buyerResult.breakdown, buyerBar, null, maxTotal);
         }
@@ -16778,11 +17090,11 @@ function renderCompareColumn(config, side) {
 }
 
 /**
- * Build compact source info HTML for Compare modal
+ * Build compact source info HTML for Feature Compare modal
  */
-function buildCompareSourceHtml(info) {
+function fc_buildCompareSourceHtml(info) {
     if (!info || !info.primary_table) {
-        return '<div class="p-3 bg-gray-100 rounded-lg text-sm text-gray-400 italic">No dataset info</div>';
+        return '<div class="text-sm text-gray-400 italic">No dataset info</div>';
     }
 
     // Build tables line
@@ -16807,58 +17119,8 @@ function buildCompareSourceHtml(info) {
         : '';
 
     return `
-        <div class="p-3 bg-gray-100 rounded-lg">
-            <div class="flex items-center justify-between mb-2">
-                <span class="font-medium text-gray-700 text-sm">
-                    <i class="fas fa-database mr-1 text-gray-400"></i>Source
-                </span>
-                ${rowsBadge ? `<span class="text-xs font-medium text-gray-500">${rowsBadge}</span>` : ''}
-            </div>
-            <div class="space-y-1 text-xs">
-                <div><span class="text-gray-500">Tables:</span> <span class="text-gray-700">${tablesLine}</span></div>
-                <div><span class="text-gray-500">Filters:</span> <span class="text-gray-700">${filtersLine}</span></div>
-            </div>
-        </div>
-    `;
-}
-
-/**
- * Build compact dataset info HTML for Compare modal columns (legacy - kept for compatibility)
- */
-function buildCompareDatasetHtml(info) {
-    if (!info || !info.primary_table) {
-        return '<div class="mb-4 p-3 bg-gray-100 rounded-lg text-sm text-gray-400 italic">No dataset info</div>';
-    }
-
-    // Build tables line
-    const tables = [info.primary_table];
-    (info.secondary_tables || []).forEach(t => {
-        if (t) tables.push(t);
-    });
-    const tablesLine = tables.join(', ');
-
-    // Build filters
-    const filterBadges = [];
-    if (info.filters?.dates) filterBadges.push(info.filters.dates);
-    if (info.filters?.customers) filterBadges.push(info.filters.customers);
-    if (info.filters?.products) filterBadges.push(info.filters.products);
-    const filtersLine = filterBadges.length > 0
-        ? filterBadges.join(' &bull; ')
-        : '<span class="text-gray-400 italic">None</span>';
-
-    // Row count
-    const rowsBadge = info.estimated_rows
-        ? `${info.estimated_rows.toLocaleString()} rows`
-        : '';
-
-    return `
-        <div class="mb-4 p-3 bg-gray-100 rounded-lg">
-            <div class="flex items-center justify-between mb-2">
-                <span class="font-medium text-gray-700 text-sm">
-                    <i class="fas fa-database mr-1 text-gray-400"></i>Source
-                </span>
-                ${rowsBadge ? `<span class="text-xs font-medium text-gray-500">${rowsBadge}</span>` : ''}
-            </div>
+        <div class="space-y-2">
+            ${rowsBadge ? `<div class="text-sm font-medium text-gray-700">${rowsBadge}</div>` : ''}
             <div class="space-y-1 text-xs">
                 <div><span class="text-gray-500">Tables:</span> <span class="text-gray-700">${tablesLine}</span></div>
                 <div><span class="text-gray-500">Filters:</span> <span class="text-gray-700">${filtersLine}</span></div>
@@ -17382,8 +17644,6 @@ let presetsData = {};
 let mcSearchTimeout = null;
 let mcNameCheckTimeout = null;
 let mcNameIsValid = false;
-let mcCompareLeftConfig = null;  // Left side config in compare modal
-let mcCompareRightConfig = null; // Right side config in compare modal
 
 // Model Config State
 let mcState = {
@@ -20026,10 +20286,22 @@ function submitModelConfigClone() {
 }
 
 // =============================================================================
-// MODEL CONFIG COMPARE FUNCTIONALITY
+// MODEL CONFIG COMPARE FUNCTIONALITY (Accordion-based UI)
 // =============================================================================
 
-function openModelConfigCompareModal() {
+let mc_compareLeftConfig = null;
+let mc_compareRightConfig = null;
+
+// Track which accordion sections are expanded
+let mc_compareExpandedSections = {
+    basicInfo: false,
+    buyer: false,
+    product: false,
+    ratingHead: false,
+    settings: false
+};
+
+function mc_openCompareModal() {
     // Populate dropdowns with all model configs
     const leftSelect = document.getElementById('mcCompareLeftSelect');
     const rightSelect = document.getElementById('mcCompareRightSelect');
@@ -20051,67 +20323,113 @@ function openModelConfigCompareModal() {
         rightSelect.appendChild(optionRight);
     });
 
+    // Reset to placeholder state
+    mc_resetCompareColumn('left');
+    mc_resetCompareColumn('right');
+
+    // Reset accordion states - collapse all
+    mc_compareExpandedSections = {
+        basicInfo: false,
+        buyer: false,
+        product: false,
+        ratingHead: false,
+        settings: false
+    };
+    mc_syncCompareAccordionStates();
+
     // Reset state
-    mcCompareLeftConfig = null;
-    mcCompareRightConfig = null;
+    mc_compareLeftConfig = null;
+    mc_compareRightConfig = null;
 
-    // Reset headers to placeholder state
-    document.getElementById('mcCompareLeftHeader').innerHTML = `
-        <div class="flex items-center justify-center h-full text-gray-400 py-4">
-            <span>Select a model config</span>
-        </div>
-    `;
-    document.getElementById('mcCompareRightHeader').innerHTML = `
-        <div class="flex items-center justify-center h-full text-gray-400 py-4">
-            <span>Select a model config</span>
-        </div>
-    `;
-
-    // Hide data sections
-    document.getElementById('mcCompareBuyerSection').classList.add('hidden');
-    document.getElementById('mcCompareProductSection').classList.add('hidden');
-    document.getElementById('mcCompareSettingsSection').classList.add('hidden');
+    // Hide Rating Head section by default
+    document.getElementById('mcCompareRatingHeadSection').classList.add('hidden');
 
     // Show modal
     document.getElementById('compareModelConfigsModal').classList.remove('hidden');
 }
 
-function closeModelConfigCompareModal() {
+function mc_closeCompareModal() {
     document.getElementById('compareModelConfigsModal').classList.add('hidden');
-    mcCompareLeftConfig = null;
-    mcCompareRightConfig = null;
+    mc_compareLeftConfig = null;
+    mc_compareRightConfig = null;
 }
 
-function resetMcCompareColumn(side) {
+// Toggle accordion section
+function mc_toggleCompareSection(sectionName) {
+    mc_compareExpandedSections[sectionName] = !mc_compareExpandedSections[sectionName];
+    mc_syncCompareAccordionStates();
+}
+
+// Sync accordion visual states with tracked state
+function mc_syncCompareAccordionStates() {
+    const sections = ['basicInfo', 'buyer', 'product', 'ratingHead', 'settings'];
+
+    sections.forEach(section => {
+        const contentId = `mcCompare${section.charAt(0).toUpperCase() + section.slice(1)}Content`;
+        const chevronId = `mcCompare${section.charAt(0).toUpperCase() + section.slice(1)}Chevron`;
+
+        const content = document.getElementById(contentId);
+        const chevron = document.getElementById(chevronId);
+
+        if (content && chevron) {
+            if (mc_compareExpandedSections[section]) {
+                content.classList.remove('hidden');
+                chevron.classList.add('expanded');
+            } else {
+                content.classList.add('hidden');
+                chevron.classList.remove('expanded');
+            }
+        }
+    });
+}
+
+function mc_resetCompareColumn(side) {
     const prefix = side === 'left' ? 'mcCompareLeft' : 'mcCompareRight';
 
-    document.getElementById(`${prefix}Header`).innerHTML = `
-        <div class="flex items-center justify-center h-full text-gray-400 py-4">
-            <span>Select a model config</span>
-        </div>
+    // Reset BasicInfo
+    document.getElementById(`${prefix}BasicInfo`).innerHTML = `
+        <div class="ds-compare-placeholder">Select a model config</div>
     `;
 
-    // Re-render comparison view
-    renderMcCompareView();
+    // Reset Buyer
+    document.getElementById(`${prefix}Buyer`).innerHTML = `
+        <div class="ds-compare-placeholder">Select a model config</div>
+    `;
+
+    // Reset Product
+    document.getElementById(`${prefix}Product`).innerHTML = `
+        <div class="ds-compare-placeholder">Select a model config</div>
+    `;
+
+    // Reset Rating Head
+    document.getElementById(`${prefix}RatingHead`).innerHTML = `
+        <div class="ds-compare-placeholder">Select a model config</div>
+    `;
+
+    // Reset Settings
+    document.getElementById(`${prefix}Settings`).innerHTML = `
+        <div class="ds-compare-placeholder">Select a model config</div>
+    `;
 }
 
-function onMcCompareSelectChange(side) {
+function mc_onCompareSelectChange(side) {
     const selectId = side === 'left' ? 'mcCompareLeftSelect' : 'mcCompareRightSelect';
     const configId = document.getElementById(selectId).value;
 
     if (!configId) {
         // Reset this side
-        if (side === 'left') mcCompareLeftConfig = null;
-        else mcCompareRightConfig = null;
-        resetMcCompareColumn(side);
-        updateMcCompareRowVisibility();
+        mc_resetCompareColumn(side);
+        if (side === 'left') mc_compareLeftConfig = null;
+        else mc_compareRightConfig = null;
+        mc_updateCompareStatuses();
+        mc_updateRatingHeadVisibility();
         return;
     }
 
     // Show loading state
     const prefix = side === 'left' ? 'mcCompareLeft' : 'mcCompareRight';
-    document.getElementById(`${prefix}Header`).innerHTML = `
-        <div class="flex items-center justify-center h-full text-gray-400 py-4">
+    document.getElementById(`${prefix}BasicInfo`).innerHTML = `
+        <div class="ds-compare-placeholder">
             <i class="fas fa-spinner fa-spin mr-2"></i>Loading...
         </div>
     `;
@@ -20121,165 +20439,332 @@ function onMcCompareSelectChange(side) {
         .then(r => r.json())
         .then(data => {
             if (data.success) {
-                if (side === 'left') mcCompareLeftConfig = data.data;
-                else mcCompareRightConfig = data.data;
-                renderMcCompareView();
-                updateMcCompareRowVisibility();
+                const config = data.data;
+                if (side === 'left') mc_compareLeftConfig = config;
+                else mc_compareRightConfig = config;
+                mc_renderCompareColumn(config, side);
+                mc_updateCompareStatuses();
+                mc_updateRatingHeadVisibility();
             } else {
-                document.getElementById(`${prefix}Header`).innerHTML = `
-                    <div class="flex items-center justify-center h-full text-red-400 py-4">
-                        <span>Failed to load</span>
+                document.getElementById(`${prefix}BasicInfo`).innerHTML = `
+                    <div class="ds-compare-placeholder" style="color: #ef4444;">
+                        Failed to load
                     </div>
                 `;
             }
         })
         .catch(err => {
             console.error('Error loading model config:', err);
-            document.getElementById(`${prefix}Header`).innerHTML = `
-                <div class="flex items-center justify-center h-full text-red-400 py-4">
-                    <span>Error loading config</span>
+            document.getElementById(`${prefix}BasicInfo`).innerHTML = `
+                <div class="ds-compare-placeholder" style="color: #ef4444;">
+                    Error loading
                 </div>
             `;
         });
 }
 
-function updateMcCompareRowVisibility() {
-    const hasAny = mcCompareLeftConfig !== null || mcCompareRightConfig !== null;
+// Show/hide Rating Head section based on model types
+function mc_updateRatingHeadVisibility() {
+    const left = mc_compareLeftConfig;
+    const right = mc_compareRightConfig;
 
-    document.getElementById('mcCompareBuyerSection').classList.toggle('hidden', !hasAny);
-    document.getElementById('mcCompareProductSection').classList.toggle('hidden', !hasAny);
-    document.getElementById('mcCompareSettingsSection').classList.toggle('hidden', !hasAny);
-}
+    const leftHasRatingHead = ['ranking', 'multitask'].includes(left?.model_type);
+    const rightHasRatingHead = ['ranking', 'multitask'].includes(right?.model_type);
 
-/**
- * Main render function for the comparison view
- * Renders both configs side-by-side with aligned layers
- */
-function renderMcCompareView() {
-    const leftConfig = mcCompareLeftConfig;
-    const rightConfig = mcCompareRightConfig;
-
-    // Render headers
-    renderMcCompareHeader('mcCompareLeftHeader', leftConfig);
-    renderMcCompareHeader('mcCompareRightHeader', rightConfig);
-
-    // Render tower sections with aligned layers
-    renderMcCompareTowerSection(
-        'buyer',
-        leftConfig?.buyer_tower_layers || [],
-        rightConfig?.buyer_tower_layers || [],
-        leftConfig,
-        rightConfig
-    );
-
-    renderMcCompareTowerSection(
-        'product',
-        leftConfig?.product_tower_layers || [],
-        rightConfig?.product_tower_layers || [],
-        leftConfig,
-        rightConfig
-    );
-
-    // Render Rating Head section (for Ranking and Multitask models)
-    const leftHasRatingHead = ['ranking', 'multitask'].includes(leftConfig?.model_type);
-    const rightHasRatingHead = ['ranking', 'multitask'].includes(rightConfig?.model_type);
     const ratingHeadSection = document.getElementById('mcCompareRatingHeadSection');
-
     if (leftHasRatingHead || rightHasRatingHead) {
         ratingHeadSection.classList.remove('hidden');
-        renderMcCompareTowerSection(
-            'rating_head',
-            leftHasRatingHead ? (leftConfig?.rating_head_layers || []) : [],
-            rightHasRatingHead ? (rightConfig?.rating_head_layers || []) : [],
-            leftConfig,
-            rightConfig,
-            leftHasRatingHead,  // leftSupported - true if model has rating head
-            rightHasRatingHead  // rightSupported - true if model has rating head
-        );
     } else {
         ratingHeadSection.classList.add('hidden');
     }
-
-    // Render settings section
-    renderMcCompareSettings(leftConfig, rightConfig);
 }
 
-/**
- * Render a single header card
- */
-function renderMcCompareHeader(elementId, config) {
-    const element = document.getElementById(elementId);
-    if (!config) {
-        element.innerHTML = `
-            <div class="flex items-center justify-center h-full text-gray-400 py-4">
-                <span>Select a model config</span>
+// Update status badges in accordion headers
+function mc_updateCompareStatuses() {
+    const left = mc_compareLeftConfig;
+    const right = mc_compareRightConfig;
+
+    // Basic Info status
+    const basicInfoStatus = document.getElementById('mcCompareBasicInfoStatus');
+    if (left && right) {
+        const diffs = [];
+        if (left.name !== right.name) diffs.push('name');
+        if (left.model_type !== right.model_type) diffs.push('type');
+        basicInfoStatus.textContent = diffs.length > 0 ? `${diffs.length} difference${diffs.length > 1 ? 's' : ''}` : '';
+    } else {
+        basicInfoStatus.textContent = '';
+    }
+
+    // Buyer Tower status
+    const buyerStatus = document.getElementById('mcCompareBuyerStatus');
+    if (left && right) {
+        const leftLayers = left.buyer_tower_layers || [];
+        const rightLayers = right.buyer_tower_layers || [];
+        if (leftLayers.length !== rightLayers.length) {
+            buyerStatus.textContent = `${leftLayers.length} vs ${rightLayers.length} layers`;
+        } else if (mc_towersAreDifferent(leftLayers, rightLayers)) {
+            buyerStatus.textContent = 'Different';
+        } else {
+            buyerStatus.textContent = '';
+        }
+    } else {
+        buyerStatus.textContent = '';
+    }
+
+    // Product Tower status
+    const productStatus = document.getElementById('mcCompareProductStatus');
+    if (left && right) {
+        const leftLayers = left.product_tower_layers || [];
+        const rightLayers = right.product_tower_layers || [];
+        if (leftLayers.length !== rightLayers.length) {
+            productStatus.textContent = `${leftLayers.length} vs ${rightLayers.length} layers`;
+        } else if (mc_towersAreDifferent(leftLayers, rightLayers)) {
+            productStatus.textContent = 'Different';
+        } else {
+            productStatus.textContent = '';
+        }
+    } else {
+        productStatus.textContent = '';
+    }
+
+    // Rating Head status
+    const ratingHeadStatus = document.getElementById('mcCompareRatingHeadStatus');
+    const leftHasRatingHead = ['ranking', 'multitask'].includes(left?.model_type);
+    const rightHasRatingHead = ['ranking', 'multitask'].includes(right?.model_type);
+    if (left && right) {
+        if (leftHasRatingHead && rightHasRatingHead) {
+            const leftLayers = left.rating_head_layers || [];
+            const rightLayers = right.rating_head_layers || [];
+            if (leftLayers.length !== rightLayers.length) {
+                ratingHeadStatus.textContent = `${leftLayers.length} vs ${rightLayers.length} layers`;
+            } else if (mc_towersAreDifferent(leftLayers, rightLayers)) {
+                ratingHeadStatus.textContent = 'Different';
+            } else {
+                ratingHeadStatus.textContent = '';
+            }
+        } else if (leftHasRatingHead !== rightHasRatingHead) {
+            ratingHeadStatus.textContent = 'N/A vs layers';
+        } else {
+            ratingHeadStatus.textContent = '';
+        }
+    } else {
+        ratingHeadStatus.textContent = '';
+    }
+
+    // Settings status
+    const settingsStatus = document.getElementById('mcCompareSettingsStatus');
+    if (left && right) {
+        let diffCount = 0;
+        if (left.optimizer !== right.optimizer) diffCount++;
+        if (left.learning_rate !== right.learning_rate) diffCount++;
+        if (left.batch_size !== right.batch_size) diffCount++;
+        if (left.output_embedding_dim !== right.output_embedding_dim) diffCount++;
+        settingsStatus.textContent = diffCount > 0 ? `${diffCount} difference${diffCount > 1 ? 's' : ''}` : '';
+    } else {
+        settingsStatus.textContent = '';
+    }
+}
+
+// Check if two towers are different
+function mc_towersAreDifferent(layers1, layers2) {
+    if (layers1.length !== layers2.length) return true;
+    for (let i = 0; i < layers1.length; i++) {
+        if (mc_layersAreDifferent(layers1[i], layers2[i])) return true;
+    }
+    return false;
+}
+
+// Check if two layers are different
+function mc_layersAreDifferent(layer1, layer2) {
+    if (!layer1 || !layer2) return true;
+    if (layer1.type !== layer2.type) return true;
+
+    if (layer1.type === 'dense') {
+        if (layer1.units !== layer2.units) return true;
+        if (layer1.activation !== layer2.activation) return true;
+        const l2_1 = layer1.l2_regularization || layer1.l2_reg || 0;
+        const l2_2 = layer2.l2_regularization || layer2.l2_reg || 0;
+        if (l2_1 !== l2_2) return true;
+    } else if (layer1.type === 'dropout') {
+        if (layer1.rate !== layer2.rate) return true;
+    } else if (layer1.type === 'layer_norm') {
+        if (layer1.epsilon !== layer2.epsilon) return true;
+    }
+
+    return false;
+}
+
+function mc_renderCompareColumn(config, side) {
+    const prefix = side === 'left' ? 'mcCompareLeft' : 'mcCompareRight';
+
+    // Render BasicInfo
+    document.getElementById(`${prefix}BasicInfo`).innerHTML = `
+        <div class="flex items-start justify-between">
+            <div>
+                <h4 class="font-semibold text-gray-900 mb-1">${escapeHtml(config.name)}</h4>
+                ${config.description ? `<div class="text-sm text-gray-500 mb-2">${escapeHtml(config.description)}</div>` : ''}
             </div>
-        `;
+            ${mc_generateTypeBadge(config.model_type)}
+        </div>
+    `;
+
+    // Render Settings
+    document.getElementById(`${prefix}Settings`).innerHTML = mc_renderSettingsCard(config);
+
+    // Re-render all tower sections with aligned layers (both sides)
+    mc_renderAlignedTowers();
+}
+
+// Render all tower sections with aligned layers
+function mc_renderAlignedTowers() {
+    const left = mc_compareLeftConfig;
+    const right = mc_compareRightConfig;
+
+    // Render Buyer Tower (aligned)
+    mc_renderAlignedTowerSection(
+        'Buyer',
+        left?.buyer_tower_layers || [],
+        right?.buyer_tower_layers || [],
+        'buyer',
+        left,
+        right
+    );
+
+    // Render Product Tower (aligned)
+    mc_renderAlignedTowerSection(
+        'Product',
+        left?.product_tower_layers || [],
+        right?.product_tower_layers || [],
+        'product',
+        left,
+        right
+    );
+
+    // Render Rating Head (aligned) - only if at least one side has it
+    const leftHasRatingHead = ['ranking', 'multitask'].includes(left?.model_type);
+    const rightHasRatingHead = ['ranking', 'multitask'].includes(right?.model_type);
+
+    mc_renderAlignedTowerSection(
+        'RatingHead',
+        leftHasRatingHead ? (left?.rating_head_layers || []) : [],
+        rightHasRatingHead ? (right?.rating_head_layers || []) : [],
+        'ratingHead',
+        left,
+        right,
+        !leftHasRatingHead,  // leftNA
+        !rightHasRatingHead  // rightNA
+    );
+}
+
+// Render a tower section with aligned layers (both sides together)
+function mc_renderAlignedTowerSection(sectionName, leftLayers, rightLayers, towerType, leftConfig, rightConfig, leftNA = false, rightNA = false) {
+    const leftCell = document.getElementById(`mcCompareLeft${sectionName}`);
+    const rightCell = document.getElementById(`mcCompareRight${sectionName}`);
+
+    if (!leftCell || !rightCell) return;
+
+    const colorScheme = {
+        buyer: {
+            dashedBorder: 'border-blue-300',
+            bg: 'bg-blue-50',
+            layerBorder: 'border-blue-200',
+            outputBorder: 'border-red-400',
+            outputBg: 'bg-blue-100',
+            text: 'text-blue-700',
+            paramsBg: 'bg-blue-50'
+        },
+        product: {
+            dashedBorder: 'border-green-300',
+            bg: 'bg-green-50',
+            layerBorder: 'border-green-200',
+            outputBorder: 'border-red-400',
+            outputBg: 'bg-green-100',
+            text: 'text-green-700',
+            paramsBg: 'bg-green-50'
+        },
+        ratingHead: {
+            dashedBorder: 'border-purple-300',
+            bg: 'bg-purple-50',
+            layerBorder: 'border-purple-200',
+            outputBorder: 'border-red-400',
+            outputBg: 'bg-purple-100',
+            text: 'text-purple-700',
+            paramsBg: 'bg-purple-50'
+        }
+    };
+    const colors = colorScheme[towerType] || colorScheme.buyer;
+
+    // Handle N/A cases
+    if (!leftConfig && !rightConfig) {
+        leftCell.innerHTML = '<div class="ds-compare-placeholder">Select a model config</div>';
+        rightCell.innerHTML = '<div class="ds-compare-placeholder">Select a model config</div>';
         return;
     }
 
-    element.innerHTML = `
-        <div class="flex items-start justify-between">
-            <div>
-                <div class="font-semibold text-gray-900 text-lg">${escapeHtml(config.name)}</div>
-                ${config.description ? `<div class="text-sm text-gray-400 mt-1 max-w-xs truncate">${escapeHtml(config.description)}</div>` : ''}
-            </div>
-            ${generateMcTypeBadge(config.model_type)}
-        </div>
-    `;
-}
-
-/**
- * Render a tower section with aligned layers
- */
-function renderMcCompareTowerSection(tower, leftLayers, rightLayers, leftConfig, rightConfig, leftSupported = true, rightSupported = true) {
-    const layersContainer = document.getElementById(`mcCompare${tower.charAt(0).toUpperCase() + tower.slice(1)}Layers`);
-    const paramsContainer = document.getElementById(`mcCompare${tower.charAt(0).toUpperCase() + tower.slice(1)}Params`);
-
-    // Check if we need to show N/A for either side (model doesn't support this component)
-    const leftShowNA = leftConfig && !leftSupported;
-    const rightShowNA = rightConfig && !rightSupported;
-
-    // Align layers with output layers at the bottom
-    const alignedRows = alignTowerLayers(leftLayers, rightLayers);
-
-    // Render aligned layer rows
-    layersContainer.innerHTML = alignedRows.map((row, idx) => {
-        const isOutput = idx === alignedRows.length - 1 && (row.left || row.right);
-        const isDifferent = layersAreDifferent(row.left, row.right);
-
-        return `
-            <div class="mc-compare-layer-row">
-                ${renderMcCompareLayerCell(row.left, isOutput, isDifferent && row.left && row.right, leftShowNA)}
-                ${renderMcCompareLayerCell(row.right, isOutput, isDifferent && row.left && row.right, rightShowNA)}
+    // Handle left N/A
+    if (leftNA && leftConfig) {
+        leftCell.innerHTML = `
+            <div class="mc-tower-wrapper">
+                <div class="mc-tower-na">N/A for ${leftConfig.model_type || 'retrieval'} model</div>
             </div>
         `;
-    }).join('');
+    } else if (!leftConfig) {
+        leftCell.innerHTML = '<div class="ds-compare-placeholder">Select a model config</div>';
+    } else {
+        // Align layers: output layer at bottom
+        const alignedRows = mc_alignLayers(leftLayers, rightLayers);
+        const leftParams = mc_calculateTowerParams(leftLayers);
 
-    // Render params comparison
-    const leftParams = calculateSingleTowerParams(leftLayers);
-    const rightParams = calculateSingleTowerParams(rightLayers);
-    const paramsDifferent = leftConfig && rightConfig && leftParams !== rightParams;
+        leftCell.innerHTML = `
+            <div class="mc-tower-wrapper">
+                <div class="mc-tower-layers">
+                    ${alignedRows.map((row, idx) => {
+                        const isOutput = idx === alignedRows.length - 1 && row.left;
+                        return mc_renderAlignedLayerCell(row.left, isOutput, colors, idx === alignedRows.length - 1);
+                    }).join('')}
+                </div>
+                <div class="mc-tower-params">
+                    <div class="mc-param-row"><span class="mc-param-label">Total params:</span><span class="mc-param-value">${leftParams.toLocaleString()}</span></div>
+                </div>
+            </div>
+        `;
+    }
 
-    paramsContainer.innerHTML = `
-        <div class="mc-compare-params-cell ${paramsDifferent ? 'mc-compare-diff' : ''}">
-            ${leftShowNA ? 'N/A' : (leftConfig ? `Params: ${leftParams.toLocaleString()}` : '')}
-        </div>
-        <div class="mc-compare-params-cell ${paramsDifferent ? 'mc-compare-diff' : ''}">
-            ${rightShowNA ? 'N/A' : (rightConfig ? `Params: ${rightParams.toLocaleString()}` : '')}
-        </div>
-    `;
+    // Handle right N/A
+    if (rightNA && rightConfig) {
+        rightCell.innerHTML = `
+            <div class="mc-tower-wrapper">
+                <div class="mc-tower-na">N/A for ${rightConfig.model_type || 'retrieval'} model</div>
+            </div>
+        `;
+    } else if (!rightConfig) {
+        rightCell.innerHTML = '<div class="ds-compare-placeholder">Select a model config</div>';
+    } else {
+        // Align layers: output layer at bottom
+        const alignedRows = mc_alignLayers(leftLayers, rightLayers);
+        const rightParams = mc_calculateTowerParams(rightLayers);
+
+        rightCell.innerHTML = `
+            <div class="mc-tower-wrapper">
+                <div class="mc-tower-layers">
+                    ${alignedRows.map((row, idx) => {
+                        const isOutput = idx === alignedRows.length - 1 && row.right;
+                        return mc_renderAlignedLayerCell(row.right, isOutput, colors, idx === alignedRows.length - 1);
+                    }).join('')}
+                </div>
+                <div class="mc-tower-params">
+                    <div class="mc-param-row"><span class="mc-param-label">Total params:</span><span class="mc-param-value">${rightParams.toLocaleString()}</span></div>
+                </div>
+            </div>
+        `;
+    }
 }
 
-/**
- * Align two tower layer arrays with output layers at bottom
- * Returns array of {left, right} pairs
- */
-function alignTowerLayers(leftLayers, rightLayers) {
+// Align two layer arrays with output layers at the bottom
+function mc_alignLayers(leftLayers, rightLayers) {
     const result = [];
-    const maxLen = Math.max(leftLayers.length, rightLayers.length);
 
-    if (maxLen === 0) {
+    if (leftLayers.length === 0 && rightLayers.length === 0) {
         return [{ left: null, right: null }];
     }
 
@@ -20289,7 +20774,7 @@ function alignTowerLayers(leftLayers, rightLayers) {
     const rightRegular = rightLayers.length > 0 ? rightLayers.slice(0, -1) : [];
     const rightOutput = rightLayers.length > 0 ? rightLayers[rightLayers.length - 1] : null;
 
-    // Calculate placeholders needed before output layer
+    // Calculate max regular layers
     const maxRegular = Math.max(leftRegular.length, rightRegular.length);
 
     // Add regular layers with placeholders
@@ -20311,172 +20796,108 @@ function alignTowerLayers(leftLayers, rightLayers) {
     return result;
 }
 
-/**
- * Render a single layer cell
- */
-function renderMcCompareLayerCell(layer, isOutput, isDifferent, showNA = false) {
+// Render a single aligned layer cell
+function mc_renderAlignedLayerCell(layer, isOutput, colors, isLastRow) {
     if (!layer) {
-        if (showNA) {
-            return `<div class="mc-compare-layer-cell placeholder na-cell"><span class="text-gray-400 text-sm">N/A</span></div>`;
-        }
-        return `<div class="mc-compare-layer-cell placeholder"></div>`;
+        // Empty placeholder to maintain alignment
+        return `<div class="mc-layer-card mc-layer-placeholder"></div>`;
     }
 
     let badge = '';
     let params = '';
 
     if (layer.type === 'dense') {
-        badge = '<span class="layer-badge dense">Dense</span>';
+        badge = '<span class="mc-layer-badge dense">DENSE</span>';
         params = `${layer.units} units, ${layer.activation || 'relu'}`;
         const l2 = layer.l2_regularization || layer.l2_reg;
         if (l2) params += `, L2=${l2}`;
     } else if (layer.type === 'dropout') {
-        badge = '<span class="layer-badge dropout">Dropout</span>';
+        badge = '<span class="mc-layer-badge dropout">DROPOUT</span>';
         params = `rate: ${layer.rate}`;
     } else if (layer.type === 'batch_norm') {
-        badge = '<span class="layer-badge batch_norm">BatchNorm</span>';
+        badge = '<span class="mc-layer-badge batch_norm">BATCHNORM</span>';
         params = '';
     } else if (layer.type === 'layer_norm') {
-        badge = '<span class="layer-badge layer_norm">LayerNorm</span>';
+        badge = '<span class="mc-layer-badge layer_norm">LAYERNORM</span>';
         params = layer.epsilon ? `ε: ${layer.epsilon}` : '';
     }
 
-    const classes = ['mc-compare-layer-cell'];
-    if (isOutput) classes.push('output-layer');
-    if (isDifferent) classes.push('mc-compare-diff');
+    const outputClass = isOutput && isLastRow
+        ? `mc-layer-output ${colors.outputBg} ${colors.outputBorder}`
+        : `${colors.bg} ${colors.layerBorder}`;
 
     return `
-        <div class="${classes.join(' ')}">
+        <div class="mc-layer-card ${outputClass}">
             ${badge}
-            <span class="layer-params">${params}</span>
+            <span class="mc-layer-params-text">${params}</span>
         </div>
     `;
 }
 
-/**
- * Check if two layers are different
- */
-function layersAreDifferent(layer1, layer2) {
-    if (!layer1 || !layer2) return true;
-    if (layer1.type !== layer2.type) return true;
-
-    if (layer1.type === 'dense') {
-        if (layer1.units !== layer2.units) return true;
-        if (layer1.activation !== layer2.activation) return true;
-        const l2_1 = layer1.l2_regularization || layer1.l2_reg || 0;
-        const l2_2 = layer2.l2_regularization || layer2.l2_reg || 0;
-        if (l2_1 !== l2_2) return true;
-    } else if (layer1.type === 'dropout') {
-        if (layer1.rate !== layer2.rate) return true;
-    } else if (layer1.type === 'layer_norm') {
-        if (layer1.epsilon !== layer2.epsilon) return true;
-    }
-    // batch_norm has no params to compare
-
-    return false;
+// Generate model type badge
+function mc_generateTypeBadge(modelType) {
+    const types = {
+        retrieval: { label: 'Retrieval', color: 'bg-blue-100 text-blue-700' },
+        ranking: { label: 'Ranking', color: 'bg-purple-100 text-purple-700' },
+        multitask: { label: 'Multitask', color: 'bg-orange-100 text-orange-700' }
+    };
+    const typeInfo = types[modelType] || { label: modelType, color: 'bg-gray-100 text-gray-700' };
+    return `<span class="px-2 py-1 rounded text-xs font-medium ${typeInfo.color}">${typeInfo.label}</span>`;
 }
 
-/**
- * Render the settings comparison section
- */
-function renderMcCompareSettings(leftConfig, rightConfig) {
-    const container = document.getElementById('mcCompareSettingsGrid');
+// Calculate tower params
+function mc_calculateTowerParams(layers) {
+    let total = 0;
+    let prevUnits = 0;
 
-    // Build settings rows data
-    const settingsRows = [
-        { label: 'Optimizer', leftValue: leftConfig?.optimizer_display || leftConfig?.optimizer, rightValue: rightConfig?.optimizer_display || rightConfig?.optimizer, leftRaw: leftConfig?.optimizer, rightRaw: rightConfig?.optimizer },
-        { label: 'Learning Rate', leftValue: leftConfig?.learning_rate, rightValue: rightConfig?.learning_rate },
-        { label: 'Batch Size', leftValue: leftConfig?.batch_size, rightValue: rightConfig?.batch_size },
-        { label: 'Output Dim', leftValue: leftConfig ? `${leftConfig.output_embedding_dim}D` : null, rightValue: rightConfig ? `${rightConfig.output_embedding_dim}D` : null, leftRaw: leftConfig?.output_embedding_dim, rightRaw: rightConfig?.output_embedding_dim },
+    layers.forEach(layer => {
+        if (layer.type === 'dense') {
+            const inputDim = prevUnits || 64; // Default input dim
+            total += (inputDim * layer.units) + layer.units;
+            prevUnits = layer.units;
+        }
+    });
+
+    return total;
+}
+
+// Render settings card
+function mc_renderSettingsCard(config) {
+    const settings = [
+        { label: 'Optimizer', value: config.optimizer_display || config.optimizer || '-' },
+        { label: 'Learning Rate', value: config.learning_rate || '-' },
+        { label: 'Batch Size', value: config.batch_size || '-' },
+        { label: 'Output Dim', value: config.output_embedding_dim ? `${config.output_embedding_dim}D` : '-' }
     ];
 
-    // Helper functions to check model capabilities
-    const hasRetrievalSettings = (modelType) => ['retrieval', 'multitask'].includes(modelType);
-    const hasRankingSettings = (modelType) => ['ranking', 'multitask'].includes(modelType);
-    const isMultitask = (modelType) => modelType === 'multitask';
+    // Add model-specific settings
+    const hasRetrieval = ['retrieval', 'multitask'].includes(config.model_type);
+    const hasRanking = ['ranking', 'multitask'].includes(config.model_type);
 
-    // Add retrieval-specific settings (for retrieval and multitask models)
-    if (hasRetrievalSettings(leftConfig?.model_type) || hasRetrievalSettings(rightConfig?.model_type)) {
-        settingsRows.push(
-            {
-                label: 'Algorithm',
-                leftValue: hasRetrievalSettings(leftConfig?.model_type) ? (leftConfig?.retrieval_algorithm_display || leftConfig?.retrieval_algorithm || 'Brute Force') : 'N/A',
-                rightValue: hasRetrievalSettings(rightConfig?.model_type) ? (rightConfig?.retrieval_algorithm_display || rightConfig?.retrieval_algorithm || 'Brute Force') : 'N/A',
-                leftRaw: hasRetrievalSettings(leftConfig?.model_type) ? leftConfig?.retrieval_algorithm : null,
-                rightRaw: hasRetrievalSettings(rightConfig?.model_type) ? rightConfig?.retrieval_algorithm : null
-            },
-            {
-                label: 'Top-K',
-                leftValue: hasRetrievalSettings(leftConfig?.model_type) ? (leftConfig?.top_k || 100) : 'N/A',
-                rightValue: hasRetrievalSettings(rightConfig?.model_type) ? (rightConfig?.top_k || 100) : 'N/A',
-                leftRaw: hasRetrievalSettings(leftConfig?.model_type) ? (leftConfig?.top_k || 100) : null,
-                rightRaw: hasRetrievalSettings(rightConfig?.model_type) ? (rightConfig?.top_k || 100) : null
-            }
-        );
+    if (hasRetrieval) {
+        settings.push({ label: 'Algorithm', value: config.retrieval_algorithm_display || config.retrieval_algorithm || 'Brute Force' });
+        settings.push({ label: 'Top-K', value: config.top_k || 100 });
     }
 
-    // Add ranking-specific settings (for ranking and multitask models)
-    if (hasRankingSettings(leftConfig?.model_type) || hasRankingSettings(rightConfig?.model_type)) {
-        settingsRows.push(
-            {
-                label: 'Loss Function',
-                leftValue: hasRankingSettings(leftConfig?.model_type) ? (leftConfig?.loss_function_display || leftConfig?.loss_function || 'MSE') : 'N/A',
-                rightValue: hasRankingSettings(rightConfig?.model_type) ? (rightConfig?.loss_function_display || rightConfig?.loss_function || 'MSE') : 'N/A',
-                leftRaw: hasRankingSettings(leftConfig?.model_type) ? leftConfig?.loss_function : null,
-                rightRaw: hasRankingSettings(rightConfig?.model_type) ? rightConfig?.loss_function : null
-            }
-        );
+    if (hasRanking) {
+        settings.push({ label: 'Loss Function', value: config.loss_function_display || config.loss_function || 'MSE' });
     }
 
-    // Add multitask-specific settings (loss weights as percentages)
-    if (isMultitask(leftConfig?.model_type) || isMultitask(rightConfig?.model_type)) {
-        const formatWeight = (weight) => weight !== null && weight !== undefined ? `${Math.round(weight * 100)}%` : 'N/A';
-        settingsRows.push(
-            {
-                label: 'Retrieval Weight',
-                leftValue: isMultitask(leftConfig?.model_type) ? formatWeight(leftConfig?.retrieval_weight) : 'N/A',
-                rightValue: isMultitask(rightConfig?.model_type) ? formatWeight(rightConfig?.retrieval_weight) : 'N/A',
-                leftRaw: isMultitask(leftConfig?.model_type) ? leftConfig?.retrieval_weight : null,
-                rightRaw: isMultitask(rightConfig?.model_type) ? rightConfig?.retrieval_weight : null
-            },
-            {
-                label: 'Ranking Weight',
-                leftValue: isMultitask(leftConfig?.model_type) ? formatWeight(leftConfig?.ranking_weight) : 'N/A',
-                rightValue: isMultitask(rightConfig?.model_type) ? formatWeight(rightConfig?.ranking_weight) : 'N/A',
-                leftRaw: isMultitask(leftConfig?.model_type) ? leftConfig?.ranking_weight : null,
-                rightRaw: isMultitask(rightConfig?.model_type) ? rightConfig?.ranking_weight : null
-            }
-        );
+    if (config.model_type === 'multitask') {
+        const formatWeight = (w) => w != null ? `${Math.round(w * 100)}%` : '-';
+        settings.push({ label: 'Retrieval Weight', value: formatWeight(config.retrieval_weight) });
+        settings.push({ label: 'Ranking Weight', value: formatWeight(config.ranking_weight) });
     }
 
-    const renderSettingsCard = (config, rows, side) => {
-        if (!config) {
-            return `<div class="mc-compare-settings-card">
-                <div class="text-center text-gray-400 py-4">No config selected</div>
-            </div>`;
-        }
-
-        return `<div class="mc-compare-settings-card">
-            ${rows.map(row => {
-                const value = side === 'left' ? row.leftValue : row.rightValue;
-                const rawLeft = row.leftRaw !== undefined ? row.leftRaw : row.leftValue;
-                const rawRight = row.rightRaw !== undefined ? row.rightRaw : row.rightValue;
-                const otherConfig = side === 'left' ? rightConfig : leftConfig;
-                const isDiff = otherConfig && rawLeft !== rawRight;
-
-                return `
-                    <div class="setting-row ${isDiff ? 'mc-compare-diff' : ''}">
-                        <span class="label">${row.label}</span>
-                        <span class="value">${value !== null && value !== undefined ? value : '-'}</span>
-                    </div>
-                `;
-            }).join('')}
-        </div>`;
-    };
-
-    container.innerHTML = `
-        ${renderSettingsCard(leftConfig, settingsRows, 'left')}
-        ${renderSettingsCard(rightConfig, settingsRows, 'right')}
+    return `
+        <div class="space-y-1">
+            ${settings.map(s => `
+                <div class="flex justify-between text-sm">
+                    <span class="text-gray-500">${s.label}</span>
+                    <span class="font-medium text-gray-700">${s.value}</span>
+                </div>
+            `).join('')}
+        </div>
     `;
 }
 

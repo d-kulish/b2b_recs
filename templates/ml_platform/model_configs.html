@@ -4130,29 +4130,19 @@
 
 <!-- Dataset Detail Modal -->
 <div id="dsDetailModal" class="modal-overlay hidden">
-    <div class="modal-container modal-container-lg">
+    <div class="modal-container" style="max-width: 880px;">
         <div class="modal-header">
             <div class="modal-header-icon info">
                 <i class="fas fa-database"></i>
             </div>
             <h3 class="modal-header-title" id="dsDetailTitle">Dataset Details</h3>
         </div>
-        <div class="modal-body" id="dsDetailContent" style="max-height: 60vh; overflow-y: auto;">
+        <div class="modal-body" id="dsDetailContent" style="max-height: 70vh; overflow-y: auto;">
             <!-- Content will be loaded dynamically -->
         </div>
         <div class="modal-footer-wizard-neu">
-            <div class="footer-left">
-                <button onclick="ds_viewGeneratedQuery()" class="btn-neu btn-neu-action btn-neu-secondary">
-                    <span class="btn-neu-inner"><i class="fas fa-code mr-1"></i>View SQL</span>
-                </button>
-            </div>
+            <div class="footer-left"></div>
             <div class="footer-right">
-                <button onclick="ds_editDatasetFromDetail()" class="btn-neu btn-neu-action btn-neu-primary">
-                    <span class="btn-neu-inner"><i class="fas fa-edit mr-1"></i>Edit</span>
-                </button>
-                <button onclick="ds_cloneDatasetFromDetail()" class="btn-neu btn-neu-action btn-neu-secondary">
-                    <span class="btn-neu-inner"><i class="fas fa-clone mr-1"></i>Clone</span>
-                </button>
                 <button onclick="ds_closeDetailModal()" class="btn-neu btn-neu-action btn-neu-cancel">
                     <span class="btn-neu-inner">Close</span>
                 </button>
@@ -6846,7 +6836,7 @@ function ds_renderDatasetsList(datasets) {
     const loadingState = document.getElementById('datasetsLoading');
 
     // Remove existing cards (keep loading and empty states)
-    container.querySelectorAll('.dataset-card').forEach(el => el.remove());
+    container.querySelectorAll('.card').forEach(el => el.remove());
 
     loadingState.classList.add('hidden');
 
@@ -6858,21 +6848,23 @@ function ds_renderDatasetsList(datasets) {
     emptyState.classList.add('hidden');
 
     datasets.forEach(ds => {
+        // Format description (truncate to 50 chars)
         const description = ds.description
-            ? (ds.description.length > 60 ? ds.description.substring(0, 60) + '...' : ds.description)
-            : '<span class="text-gray-400">N/A</span>';
+            ? `${ds_escapeHtml(ds.description.substring(0, 50))}${ds.description.length > 50 ? '...' : ''}`
+            : 'N/A';
 
+        // Format primary table (strip raw_data. prefix)
         const primaryTable = ds.primary_table
             ? ds.primary_table.replace('raw_data.', '')
-            : 'None';
+            : 'N/A';
 
+        // Format secondary tables count
         const secondaryCount = ds.secondary_tables?.length || 0;
         const secondaryText = secondaryCount === 0
             ? 'None'
-            : secondaryCount === 1
-                ? '1 table'
-                : `${secondaryCount} tables`;
+            : `${secondaryCount} table${secondaryCount !== 1 ? 's' : ''}`;
 
+        // Format stats from summary_snapshot
         const rowCount = ds.snapshot_total_rows != null
             ? ds_formatNumber(ds.snapshot_total_rows)
             : 'N/A';
@@ -6880,46 +6872,62 @@ function ds_renderDatasetsList(datasets) {
             ? ds.snapshot_column_count
             : 'N/A';
 
-        const statusClass = ds.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800';
-
         const card = document.createElement('div');
-        card.className = 'dataset-card bg-white border border-gray-200 rounded-lg p-4 hover:border-gray-300 transition-all';
+        card.className = 'card';
         card.innerHTML = `
-            <div class="flex items-center justify-between">
-                <div class="flex-1 min-w-0">
-                    <div class="flex items-center gap-2 mb-1">
-                        <span class="inline-block w-2 h-2 rounded-full ${ds.status === 'active' ? 'bg-green-500' : 'bg-yellow-500'}"></span>
-                        <h4 class="font-semibold text-gray-900 truncate">${ds_escapeHtml(ds.name)}</h4>
+            <div class="card-container-dataset">
+                <!-- Column 1 (40%): Name + Description + Version -->
+                <div class="card-content">
+                    <div class="card-header">
+                        <span class="status-dot green"></span>
+                        <h4 class="card-title">${ds_escapeHtml(ds.name)}</h4>
                     </div>
-                    <p class="text-sm text-gray-500 truncate">${description}</p>
-                    <p class="text-xs text-gray-400 mt-1">Version: ${ds.version || 1}</p>
-                </div>
-                <div class="flex items-center gap-6 ml-4">
-                    <div class="text-right">
-                        <p class="text-xs text-gray-500">Primary:</p>
-                        <p class="text-sm font-medium text-gray-700">${ds_escapeHtml(primaryTable)}</p>
-                        <p class="text-xs text-gray-500 mt-1">Secondary:</p>
-                        <p class="text-sm text-gray-600">${secondaryText}</p>
+                    <div class="card-body">
+                        <span class="card-value text-gray-500 text-xs">${description}</span>
                     </div>
-                    <div class="text-right">
-                        <p class="text-xs text-gray-500">Rows:</p>
-                        <p class="text-sm font-medium text-gray-700">${rowCount}</p>
-                        <p class="text-xs text-gray-500 mt-1">Columns:</p>
-                        <p class="text-sm text-gray-600">${columnCount}</p>
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <button onclick="ds_editDataset(${ds.id})" class="p-2 text-gray-400 hover:text-gray-600" title="Edit">
-                            <i class="fas fa-edit"></i>
-                        </button>
-                        <button onclick="ds_cloneDataset(${ds.id}, '${ds_escapeHtml(ds.name)}')" class="p-2 text-gray-400 hover:text-blue-600" title="Clone">
-                            <i class="fas fa-clone"></i>
-                        </button>
-                        <button onclick="ds_viewDataset(${ds.id})" class="btn btn-primary btn-sm">View</button>
-                        <button onclick="ds_deleteDataset(${ds.id}, '${ds_escapeHtml(ds.name)}')" class="p-2 text-red-400 hover:text-red-600" title="Delete">
-                            <i class="fas fa-trash"></i>
-                        </button>
+                    <div class="card-version text-gray-400" style="font-size: 10px; margin-top: 2px;">
+                        Version: ${ds.version || 1}
                     </div>
                 </div>
+
+                <!-- Column 2 (30%): Primary + Secondary Tables -->
+                <div class="card-meta-column">
+                    <span class="card-label">Primary:</span>
+                    <span class="card-schedule-info">${ds_escapeHtml(primaryTable)}</span>
+                    <span class="card-label">Secondary:</span>
+                    <span class="card-schedule-info">${secondaryText}</span>
+                </div>
+
+                <!-- Column 3 (15%): Dataset Stats -->
+                <div class="card-meta-column">
+                    <span class="card-label">Rows:</span>
+                    <span class="card-schedule-info">${rowCount}</span>
+                    <span class="card-label">Columns:</span>
+                    <span class="card-schedule-info">${columnCount}</span>
+                </div>
+
+                <!-- Column 4+5: View, Edit & Delete (horizontal row like Features card) -->
+                <div class="flex items-center gap-2" style="grid-column: span 2; justify-content: flex-end;">
+                    <button onclick="ds_viewDataset(${ds.id})" class="card-action-btn view" title="View details">
+                        View
+                    </button>
+                    <button onclick="ds_editDataset(${ds.id})" class="card-action-btn edit" title="Edit dataset">
+                        <i class="fas fa-external-link-alt"></i>
+                    </button>
+                    <button onclick="ds_deleteDataset(${ds.id}, '${ds_escapeHtml(ds.name)}')" class="card-action-btn delete" title="Delete dataset">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Footer: Clone & SQL buttons (matching Features card style) -->
+            <div class="flex items-center gap-2 mt-3 pt-3 border-t border-gray-100">
+                <button onclick="ds_cloneDataset(${ds.id}, '${ds_escapeHtml(ds.name)}')" class="btn btn-secondary btn-sm" style="width: 150px;">
+                    <i class="fas fa-copy"></i>Clone
+                </button>
+                <button onclick="ds_viewGeneratedQuery(${ds.id})" class="btn btn-secondary btn-sm" style="width: 150px;" title="View generated SQL query">
+                    <i class="fas fa-code"></i>SQL
+                </button>
             </div>
         `;
         container.appendChild(card);
@@ -12438,7 +12446,7 @@ function ds_renderDatasetDetail(summary) {
             ${summary.description ? `<p class="text-gray-600">${ds_escapeHtml(summary.description)}</p>` : ''}
 
             <!-- Tables & Joins -->
-            <div class="bg-gray-50 rounded-lg p-4">
+            <div class="bg-white rounded-lg p-4 border border-gray-300">
                 <h4 class="font-semibold text-gray-900 mb-2"><i class="fas fa-database mr-2 text-gray-500"></i>Tables & Joins</h4>
                 <div class="space-y-2">
                     <div class="flex items-center">
@@ -12462,14 +12470,14 @@ function ds_renderDatasetDetail(summary) {
 
             <!-- Filters Applied (Detailed) -->
             ${filterDetails.length > 0 ? `
-            <div class="bg-gray-50 rounded-lg p-4">
+            <div class="bg-white rounded-lg p-4 border border-gray-300">
                 <h4 class="font-semibold text-gray-900 mb-3"><i class="fas fa-filter mr-2 text-gray-500"></i>Filters Applied</h4>
                 <div class="space-y-3">
                     ${filterDetails.join('')}
                 </div>
             </div>
             ` : `
-            <div class="bg-gray-50 rounded-lg p-4">
+            <div class="bg-white rounded-lg p-4 border border-gray-300">
                 <h4 class="font-semibold text-gray-900 mb-2"><i class="fas fa-filter mr-2 text-gray-500"></i>Filters Applied</h4>
                 <p class="text-sm text-gray-500">No filters applied - using all data</p>
             </div>
@@ -12477,11 +12485,11 @@ function ds_renderDatasetDetail(summary) {
 
             <!-- Column Statistics -->
             ${snapshot.has_snapshot && Object.keys(columnStats).length > 0 ? `
-            <div class="bg-gray-50 rounded-lg p-4">
+            <div class="bg-white rounded-lg p-4 border border-gray-300">
                 <h4 class="font-semibold text-gray-900 mb-3"><i class="fas fa-chart-bar mr-2 text-gray-500"></i>Column Statistics</h4>
-                <div class="bg-white rounded-lg border border-gray-200 overflow-hidden max-h-48 overflow-y-auto">
+                <div class="bg-white rounded-lg border border-gray-200 overflow-hidden">
                     <table class="w-full text-left">
-                        <thead class="bg-gray-100 sticky top-0">
+                        <thead class="bg-gray-100">
                             <tr>
                                 <th class="px-3 py-2 text-xs font-semibold text-gray-700 uppercase">Column</th>
                                 <th class="px-3 py-2 text-xs font-semibold text-gray-700 uppercase">Type</th>
@@ -12646,10 +12654,12 @@ function ds_confirmDelete() {
 // DATASET - Query Preview
 // =============================================================================
 
-function ds_viewGeneratedQuery() {
-    if (!ds_currentDatasetId) return;
+function ds_viewGeneratedQuery(datasetId) {
+    // Use provided datasetId or fall back to ds_currentDatasetId (from detail modal)
+    const id = datasetId || ds_currentDatasetId;
+    if (!id) return;
 
-    fetch(`/api/datasets/${ds_currentDatasetId}/query/`)
+    fetch(`/api/datasets/${id}/query/`)
         .then(r => r.json())
         .then(data => {
             if (data.status === 'success') {

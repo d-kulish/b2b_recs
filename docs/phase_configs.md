@@ -2,9 +2,12 @@
 # Phase: Configs Domain
 
 ## Document Purpose
-This document provides detailed specifications for implementing the **Configs** domain in the ML Platform. This domain defines HOW data is transformed for training (Feature Configs) and the neural network architecture (Model Configs).
+This document provides detailed specifications for implementing the **Configs** domain in the ML Platform. The unified Configs page (`model_configs.html`) now contains three chapters:
+1. **Datasets** - Define WHAT data goes into training (migrated from model_dataset.html)
+2. **Feature Engineering** - Define HOW data is transformed (Feature Configs)
+3. **Model Structure** - Define neural network architecture (Model Configs)
 
-**Last Updated**: 2026-01-12
+**Last Updated**: 2026-01-14 (Added comprehensive Datasets chapter documentation)
 
 ---
 
@@ -50,7 +53,326 @@ See [datasets_migration.md](datasets_migration.md) for the full migration plan.
 
 ---
 
+## Datasets Chapter (Chapter 1) - Migrated 2026-01-12
+
+The Datasets chapter was migrated from the standalone `model_dataset.html` page into `model_configs.html` as the first of three chapters. This provides a unified workflow for data → features → model configuration.
+
+### Dataset Cards
+
+Dataset cards display:
+- **Name and description** (truncated to 80 chars)
+- **Tables**: Primary table with secondary tables count
+- **Filters**: Badges showing applied filters (Dates, Customers, Products)
+- **Statistics**: Row count and column count from saved snapshot
+- **Timestamps**: Created and updated dates
+- **Action buttons**: View, Edit, Delete, Clone, View SQL
+
+```
+┌────────────────────────────────────────────────────────────────────────────┐
+│ [Database Icon] Dataset Name                           [View][Edit][Delete] │
+│ Description text (truncated)...                                              │
+├────────────────────────────────────────────────────────────────────────────┤
+│ Tables: primary_table + 2 secondary                                          │
+│ Filters: [Dates: 30 days] [Products: Top 80%] [Customers: 2 filters]        │
+│ ~2.4M rows • 14 columns                                                      │
+├────────────────────────────────────────────────────────────────────────────┤
+│ Created: 2 hours ago • Updated: 30 min ago                                   │
+│ [Clone] [View SQL]                                                          │
+└────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Dataset Wizard (4 Steps)
+
+The dataset wizard has **4 steps**:
+
+#### Step 1: Basic Info
+- **Name**: Required, validated for uniqueness
+- **Description**: Optional
+
+#### Step 2: Source Tables
+- **Primary table selection**: Required, single table
+- **Secondary tables**: Optional, multi-select checkboxes
+- Tables populated from BigQuery metadata
+
+#### Step 3: Schema Builder
+Visual schema builder for column selection and table joining:
+
+**Features:**
+- **Table cards**: Draggable cards showing columns with type badges
+- **Column selection**: Checkboxes with "Select All" option
+- **Connection system**: Click connection dots to create joins between tables
+- **SVG line drawing**: Curved bezier lines connecting columns across tables
+- **Join popover**: Configure join type (LEFT/INNER/RIGHT) with dropdown
+- **Preview table**: Real-time preview showing sample rows after join
+
+**Table Card Layout:**
+```
+┌─────────────────────────────────────┐
+│ [≡] primary_table         [─ drag] │
+├─────────────────────────────────────┤
+│ [✓] Select All           (14 cols) │
+├─────────────────────────────────────┤
+│ [○][✓] customer_id      STRING     │
+│ [●][✓] product_id       STRING     │ ←─ Connected (colored dot)
+│ [○][✓] trans_date       TIMESTAMP  │
+│ [+][✓] category         STRING     │ ←─ Hover shows + icon
+│ [○][✓] revenue          FLOAT64    │
+└─────────────────────────────────────┘
+```
+
+**Connection Dots:**
+- Empty circle (○): Available for connection (recommended columns)
+- Filled colored circle (●): Connected to another table
+- Plus icon (+): Appears on hover for non-recommended columns
+
+**State Variables:**
+```javascript
+let ds_schemaBuilderState = {
+    sessionId: null,        // Backend session for cached data
+    tables: {},             // Table metadata
+    selectedColumns: {},    // {tableName: ['col1', 'col2']}
+    columnAliases: {},      // {tableName_colName: 'alias'}
+    joins: [],              // [{leftTable, rightTable, leftCol, rightCol, type}]
+    previewData: null       // Sample rows from preview API
+};
+
+let ds_cardPositions = {};  // Card positions for drag
+let ds_dragState = { isDragging: false, table: null, startX: 0, startY: 0 };
+```
+
+#### Step 4: Filters
+
+Three filter sub-chapters:
+
+**1. Dates Filter (History)**
+- **Timestamp column dropdown**: Populated from DATE/TIMESTAMP columns
+- **Rolling Window**: Last N days (default: 30)
+- **Start Date**: Alternative to rolling window
+- **Refresh Dataset button**: Applies filter and updates stats
+
+**2. Products Filter**
+- **Top Products modal**: D3.js Pareto chart showing revenue distribution
+  - Revenue column selection
+  - Product column selection
+  - Threshold slider (e.g., top 80% by revenue)
+- **Product Metrics modal**: Transaction count and revenue aggregation filters
+- **Filter Columns modal**: Category/numeric/date column filters
+
+**3. Customers Filter**
+- **Top Customers modal**: D3.js Pareto chart for customer revenue
+- **Customer Metrics modal**: Transaction count and spending filters
+- **Filter Columns modal**: Same as Products but for customer-related columns
+
+**Filter State Variables:**
+```javascript
+let ds_productFiltersState = {
+    pending: { topRevenue: null, aggregation: {}, columnFilters: [] },
+    committed: { topRevenue: null, aggregation: {}, columnFilters: [] }
+};
+
+let ds_customerFiltersState = {
+    pending: { topRevenue: null, aggregation: {}, columnFilters: [] },
+    committed: { topRevenue: null, aggregation: {}, columnFilters: [] }
+};
+
+let ds_datesFilterState = {
+    pending: { timestampColumn: null, rollingDays: 30, startDate: null },
+    committed: { timestampColumn: null, rollingDays: 30, startDate: null }
+};
+```
+
+**Dataset Summary Panel:**
+Shows real-time statistics after filters are applied:
+- Total rows badge
+- Active filter badges (Dates, Customers, Products)
+- Column statistics table with Data Type and Statistics columns
+
+### Dataset Compare Feature (2026-01-14)
+
+Side-by-side comparison modal for any two datasets:
+
+**UI Components:**
+- Compare button in Datasets chapter header
+- Modal with two dropdown selectors (Left/Right)
+- Comparison table with colored sections
+
+**Comparison Sections:**
+| Section | Background Color | Content |
+|---------|-----------------|---------|
+| Header | None | Name, description, timestamps |
+| Tables | Purple (`bg-purple-100`) | Primary table, secondary tables list |
+| Columns | Blue (`bg-blue-100`) | Selected columns per table |
+| Filters | Green (`bg-green-100`) | Date/history, product, customer filters |
+| Statistics | Gray (`bg-gray-100`) | Row count, unique users/products |
+
+**JavaScript Functions:**
+```javascript
+ds_openCompareModal()           // Opens modal, populates dropdowns
+ds_closeCompareModal()          // Closes modal
+ds_onCompareSelectChange(side)  // Fetches dataset via API
+ds_renderCompareColumn(dataset, side)  // Renders comparison data
+```
+
+### D3.js Pareto Charts
+
+Revenue distribution visualization in Top Products/Top Customers modals:
+
+**Chart Features:**
+- Bar chart showing revenue per product/customer
+- Cumulative percentage line
+- Interactive threshold slider
+- Hover tooltips with exact values
+
+**Functions:**
+```javascript
+ds_drawRevenueDistributionChart(data, threshold)  // Products chart
+ds_renderCustomerRevenueChart(data, threshold)    // Customers chart
+ds_updateCustomerRevenueChart(threshold)          // Update on slider change
+```
+
+### Dataset Chapter Functions (ds_ prefix)
+
+**List & Cards:**
+- `ds_loadDatasets(page)` - Fetch datasets with pagination
+- `ds_renderDatasetsList(datasets)` - Render dataset cards
+- `ds_refreshDatasets()` - Refresh current page
+- `ds_filterDatasets()` - Apply status/search filters
+
+**Wizard Lifecycle:**
+- `ds_openWizard(mode, datasetId)` - Open create/edit wizard
+- `ds_closeWizard()` - Close wizard
+- `ds_resetWizard()` - Reset all wizard state
+- `ds_showStep(step)` - Navigate to step
+- `ds_nextStep()` / `ds_prevStep()` - Step navigation
+- `ds_validateCurrentStep()` - Validate before proceeding
+- `ds_saveDataset()` - Save to backend
+
+**Schema Builder:**
+- `ds_loadSchemaBuilder()` - Initialize schema builder
+- `ds_renderTableCards()` - Render draggable table cards
+- `ds_positionCardsInitially()` - Position cards horizontally
+- `ds_setupDragHandlers()` - Enable drag-drop
+- `ds_onColumnToggle(table, column)` - Toggle column selection
+- `ds_toggleAllColumns(table)` - Select/deselect all
+- `ds_onConnectionDotClick(table, column)` - Start connection mode
+- `ds_createJoin(leftTable, leftCol, rightTable, rightCol)` - Create join
+- `ds_removeJoin(index)` - Remove join
+- `ds_setJoinType(index, type)` - Change join type
+- `ds_updateConnectionLines()` - Redraw SVG lines
+- `ds_debouncedRefreshPreview()` - Update preview table
+
+**Filter Modals:**
+- `ds_openTopProductsModal()` / `ds_closeTopProductsModal()`
+- `ds_openTopCustomersModal()` / `ds_closeTopCustomersModal()`
+- `ds_openProductMetricsModal()` / `ds_closeProductMetricsModal()`
+- `ds_openCustomerMetricsModal()` / `ds_closeCustomerMetricsModal()`
+- `ds_openFilterColumnsModal()` / `ds_openCustomerFilterColumnsModal()`
+- `ds_applyFilterColumnsModal()` - Apply selected filters
+
+**CRUD Actions:**
+- `ds_viewDataset(id)` - Open view modal
+- `ds_editDataset(id)` - Open wizard in edit mode
+- `ds_deleteDataset(id)` - Open delete confirmation
+- `ds_confirmDelete()` - Execute delete
+- `ds_cloneDataset(id)` - Open clone modal
+- `ds_confirmClone()` - Execute clone
+- `ds_viewGeneratedQuery(id)` - View SQL modal
+- `ds_copyQuery()` - Copy SQL to clipboard
+
+### Dataset Modals
+
+| Modal ID | Purpose |
+|----------|---------|
+| `dsWizardModal` | 4-step dataset creation/edit wizard |
+| `dsDetailModal` | View dataset details |
+| `dsDeleteModal` | Delete confirmation |
+| `dsCloneModal` | Clone with new name |
+| `dsQueryModal` | View generated SQL |
+| `dsCompareModal` | Side-by-side comparison |
+| `dsTopProductsModal` | Top products Pareto chart |
+| `dsTopCustomersModal` | Top customers Pareto chart |
+| `dsProductMetricsModal` | Product aggregation filters |
+| `dsCustomerMetricsModal` | Customer aggregation filters |
+| `dsFilterColumnsModal` | Column-based filters |
+| `dsNotificationModal` | Auto-closing notifications |
+
+### API Endpoints (Dataset Chapter)
+
+The Datasets chapter uses the existing `/datasets/` API endpoints:
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/models/{id}/datasets/` | List datasets for model |
+| POST | `/api/models/{id}/datasets/create/` | Create new dataset |
+| GET | `/api/models/{id}/datasets/{ds_id}/` | Get dataset details |
+| PUT | `/api/models/{id}/datasets/{ds_id}/` | Update dataset |
+| DELETE | `/api/models/{id}/datasets/{ds_id}/` | Delete dataset |
+| POST | `/api/models/{id}/datasets/{ds_id}/clone/` | Clone dataset |
+| GET | `/api/models/{id}/datasets/{ds_id}/query/` | Get generated SQL |
+| POST | `/api/models/{id}/datasets/preview/` | Preview with joins |
+| POST | `/api/models/{id}/datasets/stats/` | Get filtered statistics |
+| POST | `/api/models/{id}/datasets/analyze-columns/` | Get column type analysis |
+| GET | `/api/models/{id}/bq-tables/` | List BigQuery tables |
+| GET | `/api/models/{id}/bq-tables/{table}/columns/` | Get table columns |
+| POST | `/api/models/{id}/revenue-analysis/` | Revenue distribution for Pareto |
+
+### Migration Bug Fixes (2026-01-13 - 2026-01-14)
+
+Key bugs fixed after migration:
+
+| Issue | Problem | Fix |
+|-------|---------|-----|
+| #1 | Excessive logging in preview | Removed debug logs from preview_service.py |
+| #2 | 400 error on save | Added `ds_convertJoinsToConfig()` for join format |
+| #3 | Schema Builder not resetting | Reset `sessionId` when tables change |
+| #4 | Tables not updating Step 3 | Clear session when returning from Step 2 |
+| #5 | Stats not loading Step 4 | Added `ds_fetchColumnAnalysis()` and `ds_loadDatasetStats()` |
+| #6 | Wrong Dataset Summary design | Updated to match original filter badges + column table |
+| #7 | Empty timestamp dropdown | Added column analysis to populate DATE columns |
+| #8-9 | Filter popups not working | Fixed CSS class toggle (`.show` not `.hidden`) |
+| #10 | Refresh button not deactivating | Compare pending vs committed state |
+| #11 | Filters not in summary | Fixed `ds_buildFiltersPayload()` nested structure |
+| #12-13 | Filter columns modal issues | Made async, added config functions per type |
+| #14 | Customer filters in product state | Added `ds_filterColumnsContext` variable |
+| #15 | Snapshot not saved | Store stats in `ds_datasetStatsData`, include in payload |
+| #16 | Edit mode not restoring | Added `ds_convertJoinConfigToArray()`, restore functions |
+| #17-19 | Filter save structure issues | Fixed snake_case keys, DOM reading |
+| #20-22 | Filter save/display issues | Fixed `ds_collectStepData(4)`, consolidated restore |
+
+See [datasets_migration.md](datasets_migration.md) for complete bug fix details.
+
+---
+
 ## Recent Updates (December 2025 - January 2026)
+
+### Dataset Manager Migration Complete (2026-01-12 - 2026-01-14)
+
+**Major Change:** The Dataset Manager UI has been migrated from `model_dataset.html` into `model_configs.html` as Chapter 1 of a three-chapter workflow.
+
+**What Changed:**
+- Datasets chapter now appears as the **first chapter** in the Configs page
+- **All dataset functionality preserved**: 4-step wizard, Schema Builder, filter modals, D3.js Pareto charts
+- **JavaScript namespaced** with `ds_` prefix to prevent collisions with `fc_` and `mc_` functions
+- **Navigation consolidated**: Single "Datasets & Configs" link in sidebar
+- **URL redirect**: `/models/<id>/dataset/` now redirects to `/models/<id>/configs/`
+- **Dataset Compare feature** added (2026-01-14) matching Features/Model Structure pattern
+
+**Post-Migration Enhancements:**
+- Table card positioning and dragging
+- Full connection system with SVG lines and join popovers
+- Select All functionality for table columns
+- Preview table with real-time data
+- 22 bug fixes for filter handling, state management, and edit mode restoration
+
+**Files Modified:**
+- `templates/ml_platform/model_configs.html` - Added ~7,500 lines of dataset functionality
+- `templates/base_model.html` - Updated sidebar navigation
+- `ml_platform/datasets/urls.py` + `views.py` - Added URL redirect
+- `static/css/modals.css` - Added Schema Builder styles
+
+See the "Datasets Chapter (Chapter 1)" section above and [datasets_migration.md](datasets_migration.md) for full details.
+
+---
 
 ### Ranking Feature Config Support & UI Enhancements (2026-01-07)
 

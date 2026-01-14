@@ -743,6 +743,102 @@
     padding: 12px 0 0 0;
 }
 
+/* Chevron rotation when expanded */
+.subchapter-chevron.expanded {
+    transform: rotate(90deg);
+}
+
+/* ============================================================================
+   DATASET COMPARE ACCORDION STYLES
+   Two-column comparison layout within accordion sections
+   ============================================================================ */
+
+.ds-compare-accordions {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.ds-compare-section {
+    margin-bottom: 0;  /* Override default filter-subchapter margin */
+}
+
+.ds-compare-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
+.ds-compare-cell {
+    padding: 16px;
+    background: #fff;
+    border-radius: 8px;
+    border: 1px solid #e5e7eb;
+    min-height: 80px;
+}
+
+.ds-compare-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    min-height: 48px;
+    color: #9ca3af;
+    font-size: 14px;
+}
+
+/* Compare cell content styling */
+.ds-compare-cell h4 {
+    font-size: 15px;
+    font-weight: 600;
+    color: #111827;
+    margin-bottom: 4px;
+}
+
+.ds-compare-cell .ds-compare-description {
+    font-size: 13px;
+    color: #6b7280;
+    margin-bottom: 8px;
+}
+
+.ds-compare-cell .ds-compare-meta {
+    font-size: 12px;
+    color: #9ca3af;
+}
+
+.ds-compare-cell .ds-compare-label {
+    font-size: 12px;
+    color: #6b7280;
+    margin-bottom: 2px;
+}
+
+.ds-compare-cell .ds-compare-value {
+    font-size: 13px;
+    color: #111827;
+    font-weight: 500;
+}
+
+.ds-compare-cell .ds-compare-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 0;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.ds-compare-cell .ds-compare-row:last-child {
+    border-bottom: none;
+}
+
+/* Difference highlighting */
+.ds-compare-diff {
+    background: #fef3c7 !important;
+}
+
+.ds-compare-diff-text {
+    color: #92400e;
+    font-weight: 600;
+}
+
 /* ============================================================================
    FILTER BUTTONS ROW (Define History section)
    Equal width buttons spanning full width with popup dropdowns

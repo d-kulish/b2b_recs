@@ -126,7 +126,8 @@ def serialize_dataset(ds, include_details=False):
             'filters': ds.filters,
             'date_range_start': ds.date_range_start.isoformat() if ds.date_range_start else None,
             'date_range_end': ds.date_range_end.isoformat() if ds.date_range_end else None,
-            'column_stats': ds.column_stats,
+            # Use snapshot column_stats (from Step 4 wizard) if available, fallback to model field
+            'column_stats': column_stats if column_stats else ds.column_stats,
         })
 
     return data

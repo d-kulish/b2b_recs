@@ -6,7 +6,7 @@ This document describes the plan to migrate the Dataset Manager functionality fr
 
 **Created**: 2026-01-12
 **Status**: MIGRATION COMPLETE (All 7 Phases Done) + Post-Migration Enhancements
-**Last Updated**: 2026-01-13
+**Last Updated**: 2026-01-14
 
 ---
 
@@ -597,6 +597,45 @@ logger.info(f"[Preview Join] left_join_col: {col}, right_join_col: {col}")
 logger.info(f"[Preview Join] Sample left values: {values}")
 logger.info(f"[Preview Join] Merge completed: {before} rows -> {after} rows")
 ```
+
+### Enhancement 7: Dataset Compare Feature ✅
+
+**Problem**: No way to compare two datasets side-by-side, unlike Features and Model Structure chapters which had Compare buttons.
+
+**Solution**: Implemented full Compare functionality matching the existing pattern:
+
+**UI Components Added:**
+- Compare button in Datasets chapter header (purple icon, matches other chapters)
+- Compare modal (`dsCompareModal`) with side-by-side layout
+- Two dropdown selectors for Left and Right dataset selection
+- Comparison table with colored sections for visual hierarchy
+
+**Comparison Sections (with colored backgrounds):**
+| Section | Color | Content |
+|---------|-------|---------|
+| Header | None | Dataset name, description, timestamps |
+| Tables | Purple (`bg-purple-100`) | Primary table, secondary tables list |
+| Columns | Blue (`bg-blue-100`) | Selected columns per table |
+| Filters | Green (`bg-green-100`) | Date/history, product, customer filters |
+| Statistics | Gray (`bg-gray-100`) | Row count, unique users/products |
+
+**JavaScript Functions Added:**
+- `ds_openCompareModal()` - Opens modal, populates dropdowns from `ds_allDatasets`
+- `ds_closeCompareModal()` - Closes modal, resets state
+- `ds_resetCompareColumn(side)` - Clears a single comparison column
+- `ds_onCompareSelectChange(side)` - Fetches dataset details via API
+- `ds_updateCompareRowVisibility()` - Shows/hides rows based on selections
+- `ds_renderCompareColumn(dataset, side)` - Renders all sections for a dataset
+
+**State Variables:**
+```javascript
+let ds_compareLeftDataset = null;   // Left dataset data
+let ds_compareRightDataset = null;  // Right dataset data
+```
+
+**API Integration:**
+- Uses existing endpoint: `GET /api/models/${modelId}/datasets/${datasetId}/`
+- Same endpoint used by View functionality
 
 ### CSS Updates (modals.css)
 

@@ -3468,8 +3468,8 @@
                 <h2 class="text-2xl font-bold text-gray-900">Datasets</h2>
             </div>
             <div class="btn-group">
-                <button onclick="ds_refreshDatasets()" class="btn btn-secondary btn-sm" style="width: 140px;">
-                    <i class="fas fa-sync-alt"></i>Refresh
+                <button onclick="ds_openCompareModal()" class="btn btn-secondary btn-sm" style="width: 140px;">
+                    <i class="fas fa-columns"></i>Compare
                 </button>
                 <button onclick="ds_openWizard()" class="btn btn-primary btn-sm" style="width: 140px;">
                     <i class="fas fa-plus"></i>New Dataset
@@ -3479,14 +3479,6 @@
 
         <!-- Filter Bar -->
         <div class="flex items-center gap-4 mb-4">
-            <div class="flex items-center gap-2">
-                <label class="text-sm font-medium text-gray-600">Status:</label>
-                <select id="dsStatusFilter" onchange="ds_filterDatasets()" class="form-select text-sm" style="width: 120px;">
-                    <option value="">All</option>
-                    <option value="draft">Draft</option>
-                    <option value="active">Active</option>
-                </select>
-            </div>
             <div class="flex-1">
                 <input type="text" id="dsSearchInput" placeholder="Search datasets..."
                        class="form-input w-full text-sm" onkeyup="ds_debounceSearch()">
@@ -4122,6 +4114,90 @@
                 </button>
                 <button onclick="ds_closeDeleteModal()" class="btn-neu btn-neu-action btn-neu-cancel">
                     <span class="btn-neu-inner">Cancel</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Dataset Compare Modal -->
+<div id="dsCompareModal" class="modal-overlay hidden">
+    <div class="modal-container" style="max-width: 1000px;">
+        <div class="modal-header">
+            <div class="modal-header-icon info">
+                <i class="fas fa-columns"></i>
+            </div>
+            <h3 class="modal-header-title">Compare Datasets</h3>
+        </div>
+        <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
+            <!-- Dropdowns row -->
+            <div class="grid grid-cols-2 gap-4 mb-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Left Dataset</label>
+                    <select id="dsCompareLeftSelect" onchange="ds_onCompareSelectChange('left')"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <option value="">Select dataset...</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Right Dataset</label>
+                    <select id="dsCompareRightSelect" onchange="ds_onCompareSelectChange('right')"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <option value="">Select dataset...</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Comparison content - table layout for aligned rows -->
+            <div class="border border-gray-200 rounded-lg overflow-hidden bg-white">
+                <table class="w-full compare-table" id="dsCompareTable">
+                    <colgroup>
+                        <col style="width: 50%">
+                        <col style="width: 50%">
+                    </colgroup>
+                    <tbody id="dsCompareTableBody">
+                        <!-- Header row -->
+                        <tr class="ds-compare-row-header">
+                            <td id="dsCompareLeftHeader" class="p-4 align-top border-r border-gray-200 border-b">
+                                <div class="flex items-center justify-center h-full text-gray-400 py-4">
+                                    <span>Select a dataset</span>
+                                </div>
+                            </td>
+                            <td id="dsCompareRightHeader" class="p-4 align-top border-b">
+                                <div class="flex items-center justify-center h-full text-gray-400 py-4">
+                                    <span>Select a dataset</span>
+                                </div>
+                            </td>
+                        </tr>
+                        <!-- Tables & Joins row -->
+                        <tr class="ds-compare-row-tables hidden">
+                            <td id="dsCompareLeftTables" class="p-4 align-top border-r border-gray-200 border-b"></td>
+                            <td id="dsCompareRightTables" class="p-4 align-top border-b"></td>
+                        </tr>
+                        <!-- Columns row -->
+                        <tr class="ds-compare-row-columns hidden">
+                            <td id="dsCompareLeftColumns" class="p-4 align-top border-r border-gray-200 border-b"></td>
+                            <td id="dsCompareRightColumns" class="p-4 align-top border-b"></td>
+                        </tr>
+                        <!-- Filters row -->
+                        <tr class="ds-compare-row-filters hidden">
+                            <td id="dsCompareLeftFilters" class="p-4 align-top border-r border-gray-200 border-b"></td>
+                            <td id="dsCompareRightFilters" class="p-4 align-top border-b"></td>
+                        </tr>
+                        <!-- Statistics row -->
+                        <tr class="ds-compare-row-stats hidden">
+                            <td id="dsCompareLeftStats" class="p-4 align-top border-r border-gray-200"></td>
+                            <td id="dsCompareRightStats" class="p-4 align-top"></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="modal-footer-wizard-neu">
+            <div class="footer-left"></div>
+            <div class="footer-right">
+                <button type="button" class="btn-neu btn-neu-action btn-neu-cancel" onclick="ds_closeCompareModal()">
+                    <span class="btn-neu-inner">Close</span>
                 </button>
             </div>
         </div>
@@ -6799,11 +6875,9 @@ let ds_currentPage = 1;
 // =============================================================================
 
 function ds_loadDatasets(page = 1) {
-    const status = document.getElementById('dsStatusFilter').value;
     const search = document.getElementById('dsSearchInput').value;
 
     let url = `/api/models/${modelId}/datasets/?page=${page}&per_page=10`;
-    if (status) url += `&status=${status}`;
     if (search) url += `&search=${encodeURIComponent(search)}`;
 
     document.getElementById('datasetsLoading').classList.remove('hidden');
@@ -6879,7 +6953,6 @@ function ds_renderDatasetsList(datasets) {
                 <!-- Column 1 (40%): Name + Description + Version -->
                 <div class="card-content">
                     <div class="card-header">
-                        <span class="status-dot green"></span>
                         <h4 class="card-title">${ds_escapeHtml(ds.name)}</h4>
                     </div>
                     <div class="card-body">
@@ -6968,14 +7041,6 @@ function ds_renderPagination(pagination) {
     }
 
     buttonsEl.innerHTML = buttons;
-}
-
-function ds_refreshDatasets() {
-    ds_loadDatasets(ds_currentPage);
-}
-
-function ds_filterDatasets() {
-    ds_loadDatasets(1);
 }
 
 function ds_debounceSearch() {
@@ -12757,6 +12822,270 @@ function ds_cloneDatasetFromDetail() {
         const name = dataset?.name || 'Dataset';
         ds_cloneDataset(ds_currentDatasetId, name);
     }
+}
+
+// =============================================================================
+// DATASET - Compare
+// =============================================================================
+
+let ds_compareLeftDataset = null;
+let ds_compareRightDataset = null;
+
+function ds_openCompareModal() {
+    // Populate dropdowns with all datasets
+    const leftSelect = document.getElementById('dsCompareLeftSelect');
+    const rightSelect = document.getElementById('dsCompareRightSelect');
+
+    // Clear existing options except the placeholder
+    leftSelect.innerHTML = '<option value="">Select dataset...</option>';
+    rightSelect.innerHTML = '<option value="">Select dataset...</option>';
+
+    // Add all datasets to both dropdowns
+    ds_allDatasets.forEach(dataset => {
+        const optionLeft = document.createElement('option');
+        optionLeft.value = dataset.id;
+        optionLeft.textContent = dataset.name;
+        leftSelect.appendChild(optionLeft);
+
+        const optionRight = document.createElement('option');
+        optionRight.value = dataset.id;
+        optionRight.textContent = dataset.name;
+        rightSelect.appendChild(optionRight);
+    });
+
+    // Reset to placeholder state
+    ds_resetCompareColumn('left');
+    ds_resetCompareColumn('right');
+
+    // Hide data rows
+    document.querySelector('.ds-compare-row-tables').classList.add('hidden');
+    document.querySelector('.ds-compare-row-columns').classList.add('hidden');
+    document.querySelector('.ds-compare-row-filters').classList.add('hidden');
+    document.querySelector('.ds-compare-row-stats').classList.add('hidden');
+
+    // Reset state
+    ds_compareLeftDataset = null;
+    ds_compareRightDataset = null;
+
+    // Show modal
+    document.getElementById('dsCompareModal').classList.remove('hidden');
+}
+
+function ds_closeCompareModal() {
+    document.getElementById('dsCompareModal').classList.add('hidden');
+    ds_compareLeftDataset = null;
+    ds_compareRightDataset = null;
+}
+
+function ds_resetCompareColumn(side) {
+    const prefix = side === 'left' ? 'dsCompareLeft' : 'dsCompareRight';
+
+    document.getElementById(`${prefix}Header`).innerHTML = `
+        <div class="flex items-center justify-center h-full text-gray-400 py-4">
+            <span>Select a dataset</span>
+        </div>
+    `;
+    document.getElementById(`${prefix}Tables`).innerHTML = '';
+    document.getElementById(`${prefix}Columns`).innerHTML = '';
+    document.getElementById(`${prefix}Filters`).innerHTML = '';
+    document.getElementById(`${prefix}Stats`).innerHTML = '';
+}
+
+function ds_onCompareSelectChange(side) {
+    const selectId = side === 'left' ? 'dsCompareLeftSelect' : 'dsCompareRightSelect';
+    const datasetId = document.getElementById(selectId).value;
+
+    if (!datasetId) {
+        // Reset this side
+        ds_resetCompareColumn(side);
+        if (side === 'left') ds_compareLeftDataset = null;
+        else ds_compareRightDataset = null;
+        ds_updateCompareRowVisibility();
+        return;
+    }
+
+    // Show loading state in header
+    const prefix = side === 'left' ? 'dsCompareLeft' : 'dsCompareRight';
+    document.getElementById(`${prefix}Header`).innerHTML = `
+        <div class="flex items-center justify-center h-full text-gray-400 py-4">
+            <i class="fas fa-spinner fa-spin mr-2"></i>Loading...
+        </div>
+    `;
+
+    // Fetch dataset data
+    fetch(`/api/datasets/${datasetId}/`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.status === 'success') {
+                const dataset = data.dataset;
+                if (side === 'left') ds_compareLeftDataset = dataset;
+                else ds_compareRightDataset = dataset;
+                ds_renderCompareColumn(dataset, side);
+                ds_updateCompareRowVisibility();
+            } else {
+                document.getElementById(`${prefix}Header`).innerHTML = `
+                    <div class="flex items-center justify-center h-full text-red-400 py-4">
+                        <span>Failed to load</span>
+                    </div>
+                `;
+            }
+        })
+        .catch(err => {
+            console.error('Error loading dataset for compare:', err);
+            document.getElementById(`${prefix}Header`).innerHTML = `
+                <div class="flex items-center justify-center h-full text-red-400 py-4">
+                    <span>Error loading</span>
+                </div>
+            `;
+        });
+}
+
+function ds_updateCompareRowVisibility() {
+    // Show rows only if at least one side has data
+    const hasData = ds_compareLeftDataset || ds_compareRightDataset;
+    document.querySelector('.ds-compare-row-tables').classList.toggle('hidden', !hasData);
+    document.querySelector('.ds-compare-row-columns').classList.toggle('hidden', !hasData);
+    document.querySelector('.ds-compare-row-filters').classList.toggle('hidden', !hasData);
+    document.querySelector('.ds-compare-row-stats').classList.toggle('hidden', !hasData);
+}
+
+function ds_renderCompareColumn(dataset, side) {
+    const prefix = side === 'left' ? 'dsCompareLeft' : 'dsCompareRight';
+    const snapshot = dataset.summary_snapshot || {};
+
+    // Render Header
+    document.getElementById(`${prefix}Header`).innerHTML = `
+        <h4 class="font-semibold text-gray-900">${ds_escapeHtml(dataset.name)}</h4>
+        ${dataset.description ? `<div class="text-sm text-gray-500 mt-1">${ds_escapeHtml(dataset.description.substring(0, 60))}${dataset.description.length > 60 ? '...' : ''}</div>` : ''}
+        <div class="text-xs text-gray-400 mt-1">Version: ${dataset.version || 1}</div>
+    `;
+
+    // Render Tables & Joins
+    const primaryTable = dataset.primary_table ? dataset.primary_table.replace('raw_data.', '') : 'N/A';
+    const secondaryTables = dataset.secondary_tables || [];
+    const joinConfig = dataset.join_config || {};
+
+    let joinsHtml = '';
+    if (Object.keys(joinConfig).length > 0) {
+        joinsHtml = Object.entries(joinConfig).map(([table, config]) => {
+            const tableName = table.replace('raw_data.', '');
+            return `<div class="text-xs text-gray-600">
+                <span class="font-medium">${tableName}</span>: ${config.join_key}
+                <span class="px-1 py-0.5 bg-gray-100 rounded text-xs">${config.join_type || 'LEFT'}</span>
+            </div>`;
+        }).join('');
+    }
+
+    document.getElementById(`${prefix}Tables`).innerHTML = `
+        <div class="p-3 bg-purple-50 rounded-lg">
+            <h5 class="font-semibold text-purple-800 text-sm mb-2"><i class="fas fa-database mr-1"></i>Tables & Joins</h5>
+            <div class="space-y-2">
+                <div>
+                    <span class="text-xs text-gray-500">Primary:</span>
+                    <span class="text-sm font-medium text-gray-900 ml-1">${ds_escapeHtml(primaryTable)}</span>
+                </div>
+                <div>
+                    <span class="text-xs text-gray-500">Secondary:</span>
+                    <span class="text-sm text-gray-700 ml-1">${secondaryTables.length > 0 ? secondaryTables.map(t => t.replace('raw_data.', '')).join(', ') : 'None'}</span>
+                </div>
+                ${joinsHtml ? `<div class="mt-2 pt-2 border-t border-purple-200"><div class="text-xs text-gray-500 mb-1">Join Config:</div>${joinsHtml}</div>` : ''}
+            </div>
+        </div>
+    `;
+
+    // Render Columns
+    const selectedColumns = dataset.selected_columns || {};
+    let totalColumns = 0;
+    let columnsListHtml = '';
+
+    Object.entries(selectedColumns).forEach(([table, columns]) => {
+        const tableName = table.replace('raw_data.', '');
+        if (columns && columns.length > 0) {
+            totalColumns += columns.length;
+            const displayCols = columns.slice(0, 5);
+            const moreCols = columns.length > 5 ? columns.length - 5 : 0;
+            columnsListHtml += `
+                <div class="text-xs">
+                    <span class="font-medium text-gray-700">${tableName}:</span>
+                    <span class="text-gray-600">${displayCols.join(', ')}${moreCols > 0 ? ` <span class="text-gray-400">+${moreCols} more</span>` : ''}</span>
+                </div>
+            `;
+        }
+    });
+
+    document.getElementById(`${prefix}Columns`).innerHTML = `
+        <div class="p-3 bg-blue-50 rounded-lg">
+            <h5 class="font-semibold text-blue-800 text-sm mb-2"><i class="fas fa-columns mr-1"></i>Columns Selected</h5>
+            <div class="text-sm font-medium text-blue-600 mb-2">${totalColumns} columns total</div>
+            <div class="space-y-1">
+                ${columnsListHtml || '<div class="text-xs text-gray-500">No columns selected</div>'}
+            </div>
+        </div>
+    `;
+
+    // Render Filters
+    const filtersApplied = snapshot.filters_applied || {};
+
+    let filtersHtml = '<div class="space-y-2">';
+
+    // Date filter
+    if (filtersApplied.dates && filtersApplied.dates.type !== 'none') {
+        const dateFilter = filtersApplied.dates;
+        let dateDesc = '';
+        if (dateFilter.type === 'rolling') {
+            dateDesc = `Last ${dateFilter.days} days`;
+        } else if (dateFilter.type === 'fixed') {
+            dateDesc = `Since ${dateFilter.start_date}`;
+        }
+        filtersHtml += `<div class="text-xs"><i class="fas fa-calendar-alt text-blue-500 mr-1"></i><span class="text-gray-700">${dateDesc}</span></div>`;
+    } else {
+        filtersHtml += `<div class="text-xs text-gray-400"><i class="fas fa-calendar-alt mr-1"></i>No date filter</div>`;
+    }
+
+    // Customer filter
+    if (filtersApplied.customers && filtersApplied.customers.type !== 'none' && filtersApplied.customers.count > 0) {
+        filtersHtml += `<div class="text-xs"><i class="fas fa-users text-green-500 mr-1"></i><span class="text-gray-700">${filtersApplied.customers.count} customer filter(s)</span></div>`;
+    } else {
+        filtersHtml += `<div class="text-xs text-gray-400"><i class="fas fa-users mr-1"></i>No customer filter</div>`;
+    }
+
+    // Product filter
+    if (filtersApplied.products && filtersApplied.products.type !== 'none' && filtersApplied.products.count > 0) {
+        filtersHtml += `<div class="text-xs"><i class="fas fa-box text-orange-500 mr-1"></i><span class="text-gray-700">${filtersApplied.products.count} product filter(s)</span></div>`;
+    } else {
+        filtersHtml += `<div class="text-xs text-gray-400"><i class="fas fa-box mr-1"></i>No product filter</div>`;
+    }
+
+    filtersHtml += '</div>';
+
+    document.getElementById(`${prefix}Filters`).innerHTML = `
+        <div class="p-3 bg-green-50 rounded-lg">
+            <h5 class="font-semibold text-green-800 text-sm mb-2"><i class="fas fa-filter mr-1"></i>Filters Applied</h5>
+            ${filtersHtml}
+        </div>
+    `;
+
+    // Render Statistics
+    const totalRows = snapshot.total_rows;
+    const columnCount = snapshot.column_count || Object.keys(snapshot.column_stats || {}).length;
+    const snapshotAt = snapshot.snapshot_at;
+
+    document.getElementById(`${prefix}Stats`).innerHTML = `
+        <div class="p-3 bg-gray-100 rounded-lg">
+            <h5 class="font-semibold text-gray-800 text-sm mb-2"><i class="fas fa-chart-bar mr-1"></i>Statistics</h5>
+            <div class="grid grid-cols-2 gap-2">
+                <div>
+                    <span class="text-xs text-gray-500">Total Rows:</span>
+                    <div class="text-sm font-semibold text-gray-900">${totalRows != null ? ds_formatNumber(totalRows) : 'N/A'}</div>
+                </div>
+                <div>
+                    <span class="text-xs text-gray-500">Columns:</span>
+                    <div class="text-sm font-semibold text-gray-900">${columnCount || 'N/A'}</div>
+                </div>
+            </div>
+            ${snapshotAt ? `<div class="text-xs text-gray-400 mt-2"><i class="fas fa-clock mr-1"></i>Snapshot: ${new Date(snapshotAt).toLocaleDateString()}</div>` : ''}
+        </div>
+    `;
 }
 
 // =============================================================================

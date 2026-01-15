@@ -1868,6 +1868,7 @@
         display: flex;
         flex-direction: column;
         gap: 8px;
+        width: 100%;
     }
     .exp-view-metrics-section-header {
         font-size: 12px;
@@ -1886,16 +1887,17 @@
     .exp-view-metrics-grid {
         display: grid;
         grid-template-columns: repeat(4, 1fr);
-        gap: 8px;
+        gap: 12px;
+        width: 100%;
     }
     .exp-view-metrics-multitask .exp-view-metric-card {
-        padding: 8px 6px;
+        padding: 10px 8px;
     }
     .exp-view-metrics-multitask .exp-view-metric-card-label {
-        font-size: 10px;
+        font-size: 11px;
     }
     .exp-view-metrics-multitask .exp-view-metric-card-value {
-        font-size: 14px;
+        font-size: 16px;
     }
 
     /* Features Config (Tensor Visualization) */
@@ -7868,6 +7870,9 @@ function renderMetricsSummary(metrics, useTestPrefix = false, configType = 'retr
     let items;
     if (configType === 'multitask') {
         // Multitask: Show BOTH retrieval and ranking metrics in organized sections
+        // Remove the grid class from container since multitask uses its own layout
+        container.classList.remove('exp-view-metrics-row');
+
         const prefix = useTestPrefix ? 'test_' : '';
         const rmse = metrics['rmse'] ?? metrics['final_val_rmse'] ?? metrics['final_rmse'];
         const mae = metrics['mae'] ?? metrics['final_val_mae'] ?? metrics['final_mae'];
@@ -7919,6 +7924,9 @@ function renderMetricsSummary(metrics, useTestPrefix = false, configType = 'retr
         `;
         return;
     } else if (configType === 'ranking') {
+        // Ensure grid class is present for non-multitask views
+        container.classList.add('exp-view-metrics-row');
+
         // Ranking model metrics - show all 4 metrics: training RMSE/MAE and test RMSE/MAE
         // For ranking, we always show both training and test metrics regardless of useTestPrefix
         // Training metrics come from rmse/mae (or final_val_rmse/final_val_mae in training history)
@@ -7935,6 +7943,9 @@ function renderMetricsSummary(metrics, useTestPrefix = false, configType = 'retr
             { label: 'Test MAE', value: testMae, format: formatRMSE }
         ];
     } else {
+        // Ensure grid class is present for non-multitask views
+        container.classList.add('exp-view-metrics-row');
+
         // Retrieval model metrics - Recall@K
         const prefix = useTestPrefix ? 'test_' : '';
         items = [
@@ -8047,9 +8058,12 @@ async function preloadTrainingHistory() {
             viewModalDataCache.trainingHistory = data.training_history;
 
             // Update Overview metrics with accurate test_recall values
+            // Skip for multitask - final_metrics may not have all ranking metrics
             if (data.training_history.final_metrics) {
                 const configType = window.currentViewExp?.feature_config_type || 'retrieval';
-                renderMetricsSummary(data.training_history.final_metrics, true, configType);
+                if (configType !== 'multitask') {
+                    renderMetricsSummary(data.training_history.final_metrics, true, configType);
+                }
             }
         }
     } catch (error) {
@@ -8575,9 +8589,12 @@ async function loadTrainingHistory() {
         chartsEl.classList.remove('hidden');
 
         // Update Overview tab metrics with accurate test_recall values from final_metrics
+        // Skip for multitask - final_metrics may not have all ranking metrics
         if (history.final_metrics) {
             const configType = window.currentViewExp?.feature_config_type || 'retrieval';
-            renderMetricsSummary(history.final_metrics, true, configType);
+            if (configType !== 'multitask') {
+                renderMetricsSummary(history.final_metrics, true, configType);
+            }
         }
 
     } catch (error) {
@@ -11193,7 +11210,7 @@ async function loadTopConfigurations(modelType = null) {
                 const isBest = cfg.test_rmse === bestMetric;
 
                 return `
-                    <tr onclick="openExpViewModal(${cfg.experiment_id})" style="cursor: pointer;" title="Click to view details">
+                    <tr onclick="openExpDetails(${cfg.experiment_id})" style="cursor: pointer;" title="Click to view details">
                         <td class="rank-cell ${rankClass}">${cfg.rank}</td>
                         <td style="text-align: center;">${cfg.display_name || 'Exp #' + cfg.experiment_number}</td>
                         <td>${cfg.dataset || '-'}</td>
@@ -11220,7 +11237,7 @@ async function loadTopConfigurations(modelType = null) {
                 const isBest = cfg.recall_at_100 === bestRecall;
 
                 return `
-                    <tr onclick="openExpViewModal(${cfg.experiment_id})" style="cursor: pointer;" title="Click to view details">
+                    <tr onclick="openExpDetails(${cfg.experiment_id})" style="cursor: pointer;" title="Click to view details">
                         <td class="rank-cell ${rankClass}">${cfg.rank}</td>
                         <td style="text-align: center;">${cfg.display_name || 'Exp #' + cfg.experiment_number}</td>
                         <td>${cfg.dataset || '-'}</td>
@@ -11251,7 +11268,7 @@ async function loadTopConfigurations(modelType = null) {
                 const isBest = cfg.recall_at_100 === bestRecall;
 
                 return `
-                    <tr onclick="openExpViewModal(${cfg.experiment_id})" style="cursor: pointer;" title="Click to view details">
+                    <tr onclick="openExpDetails(${cfg.experiment_id})" style="cursor: pointer;" title="Click to view details">
                         <td class="rank-cell ${rankClass}">${cfg.rank}</td>
                         <td style="text-align: center;">${cfg.display_name || 'Exp #' + cfg.experiment_number}</td>
                         <td>${cfg.dataset || '-'}</td>

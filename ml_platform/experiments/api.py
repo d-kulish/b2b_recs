@@ -1052,35 +1052,36 @@ def _serialize_quick_test(quick_test, include_details=False):
 
     if include_details:
         # Include full results and metrics
+        # Use model_metrics (which has fallback logic) for consistency with top-level fields
         if config_type == 'multitask':
             data['metrics'] = {
                 'loss': quick_test.loss,
-                # Retrieval metrics
-                'recall_at_5': getattr(quick_test, 'recall_at_5', None),
-                'recall_at_10': quick_test.recall_at_10,
-                'recall_at_50': quick_test.recall_at_50,
-                'recall_at_100': quick_test.recall_at_100,
-                # Ranking metrics
-                'rmse': quick_test.rmse,
-                'mae': quick_test.mae,
-                'test_rmse': quick_test.test_rmse,
-                'test_mae': quick_test.test_mae,
+                # Retrieval metrics (use model_metrics for fallback support)
+                'recall_at_5': model_metrics.get('recall_at_5'),
+                'recall_at_10': model_metrics.get('recall_at_10'),
+                'recall_at_50': model_metrics.get('recall_at_50'),
+                'recall_at_100': model_metrics.get('recall_at_100'),
+                # Ranking metrics (use model_metrics for fallback support)
+                'rmse': model_metrics.get('rmse'),
+                'mae': model_metrics.get('mae'),
+                'test_rmse': model_metrics.get('test_rmse'),
+                'test_mae': model_metrics.get('test_mae'),
             }
         elif config_type == 'ranking':
             data['metrics'] = {
                 'loss': quick_test.loss,
-                'rmse': quick_test.rmse,
-                'mae': quick_test.mae,
-                'test_rmse': quick_test.test_rmse,
-                'test_mae': quick_test.test_mae,
+                'rmse': model_metrics.get('rmse'),
+                'mae': model_metrics.get('mae'),
+                'test_rmse': model_metrics.get('test_rmse'),
+                'test_mae': model_metrics.get('test_mae'),
             }
         else:
             data['metrics'] = {
                 'loss': quick_test.loss,
-                'recall_at_5': getattr(quick_test, 'recall_at_5', None),
-                'recall_at_10': quick_test.recall_at_10,
-                'recall_at_50': quick_test.recall_at_50,
-                'recall_at_100': quick_test.recall_at_100,
+                'recall_at_5': model_metrics.get('recall_at_5'),
+                'recall_at_10': model_metrics.get('recall_at_10'),
+                'recall_at_50': model_metrics.get('recall_at_50'),
+                'recall_at_100': model_metrics.get('recall_at_100'),
             }
         data['vocabulary_stats'] = quick_test.vocabulary_stats
         data['error_message'] = quick_test.error_message

@@ -150,6 +150,188 @@ Key CSS classes for the view modal visualization:
 - `.target-column-view-card` - Target column for ranking models
 - `.exp-view-param-chip` - Parameter display chips
 
+### Reusable View Modal Module (2026-01-15)
+
+The experiment view modal has been refactored into a reusable external JavaScript module that can be shared across multiple pages (Training, Experiments). This provides consistent UX and eliminates code duplication.
+
+#### Architecture Overview
+
+The reusable modal system consists of three components:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    REUSABLE VIEW MODAL ARCHITECTURE                          │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│   ┌─────────────────────────────────────────────────────────────────────┐   │
+│   │  _exp_view_modal.html (Template Include)                            │   │
+│   │  - Reusable HTML structure for modal                                │   │
+│   │  - 4 tabs: Overview, Pipeline, Data Insights, Training              │   │
+│   │  - Includes _pipeline_dag.html for DAG visualization                │   │
+│   └─────────────────────────────────────────────────────────────────────┘   │
+│                              │                                               │
+│                              ▼                                               │
+│   ┌─────────────────────────────────────────────────────────────────────┐   │
+│   │  exp_view_modal.js (JavaScript Module)                              │   │
+│   │  - IIFE pattern exposing global ExpViewModal object                 │   │
+│   │  - Configuration, state management, API calls                       │   │
+│   │  - Tab switching, lazy loading, live polling                        │   │
+│   │  - Chart rendering with Chart.js                                    │   │
+│   └─────────────────────────────────────────────────────────────────────┘   │
+│                              │                                               │
+│                              ▼                                               │
+│   ┌─────────────────────────────────────────────────────────────────────┐   │
+│   │  exp_view_modal.css (Stylesheet)                                    │   │
+│   │  - Complete styling for modal and all tabs                          │   │
+│   │  - Status gradients, tensor visualization, tower architecture       │   │
+│   │  - Training charts, metrics cards                                   │   │
+│   └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+#### Files
+
+| File | Size | Description |
+|------|------|-------------|
+| `templates/includes/_exp_view_modal.html` | 19KB | Reusable HTML template partial |
+| `static/js/exp_view_modal.js` | 93KB | JavaScript module (IIFE pattern) |
+| `static/css/exp_view_modal.css` | 26KB | Complete CSS styling |
+| `static/js/pipeline_dag.js` | - | Pipeline DAG visualization (existing) |
+| `templates/includes/_pipeline_dag.html` | - | Pipeline DAG template (existing) |
+
+#### JavaScript API
+
+The `ExpViewModal` module exposes the following public API:
+
+```javascript
+// Configuration (call once on page load)
+ExpViewModal.configure({
+    showTabs: ['overview', 'pipeline', 'data', 'training'],
+    showDataInsights: true,
+    showTrainingTab: true,
+    fieldMapping: { ... },  // Custom field mapping for different data sources
+    onClose: function() { },
+    onUpdate: function(exp) { },  // Called when experiment status updates
+    endpoints: {
+        experimentDetails: '/api/experiments/{id}/',
+        componentLogs: '/api/experiments/{id}/component-logs/',
+        dataInsights: '/api/experiments/{id}/data-insights/',
+        trainingData: '/api/experiments/{id}/training-data/'
+    }
+});
+
+// Open modal for an experiment (fetches data from API)
+ExpViewModal.open(experimentId);
+
+// Open modal with pre-loaded data (no API call)
+ExpViewModal.openWithData(experimentData);
+
+// Close the modal
+ExpViewModal.close();
+
+// Handle overlay click (for closing on background click)
+ExpViewModal.handleOverlayClick(event);
+
+// Switch to a specific tab
+ExpViewModal.switchTab(tabName);  // 'overview', 'pipeline', 'data', 'training'
+
+// Toggle error details visibility
+ExpViewModal.toggleErrorDetails();
+
+// Refresh component logs (Pipeline tab)
+ExpViewModal.refreshComponentLogs();
+
+// Update weight analysis charts (Training tab)
+ExpViewModal.updateWeightAnalysisCharts();
+
+// Update weight histogram chart (Training tab)
+ExpViewModal.updateWeightHistogramChart();
+
+// Get current state
+ExpViewModal.getState();
+
+// Get current experiment data
+ExpViewModal.getCurrentExp();
+```
+
+#### Integration Example
+
+To integrate the reusable view modal into a page:
+
+**1. Add CSS and JS includes in the template:**
+
+```django
+{% load static %}
+
+<!-- In <head> section -->
+<link rel="stylesheet" href="{% static 'css/exp_view_modal.css' %}?v=1">
+
+<!-- Before closing </body> tag -->
+<script src="{% static 'js/pipeline_dag.js' %}?v=1"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
+<script src="{% static 'js/exp_view_modal.js' %}?v=1"></script>
+```
+
+**2. Include the modal template:**
+
+```django
+<!-- At the end of the page, before scripts -->
+{% include 'includes/_exp_view_modal.html' %}
+```
+
+**3. Configure the module on page load:**
+
+```javascript
+document.addEventListener('DOMContentLoaded', function() {
+    ExpViewModal.configure({
+        showTabs: ['overview', 'pipeline', 'data', 'training'],
+        onUpdate: function(exp) {
+            // Optional: refresh related UI when experiment updates
+            refreshBestExperiments();
+        }
+    });
+});
+```
+
+**4. Open modal from table row click:**
+
+```javascript
+function openExpDetails(expId) {
+    ExpViewModal.open(expId);
+}
+```
+
+#### Key Features
+
+1. **Live Polling**: For running experiments, the modal polls the API every 3 seconds to update status and metrics.
+
+2. **Lazy Loading**: Data Insights and Training tabs load content only when first accessed, reducing initial load time.
+
+3. **Chart.js Integration**: Training tab displays interactive charts for:
+   - Loss curves (train/eval)
+   - Recall metrics (R@5, R@10, R@50, R@100)
+   - Weight analysis (L1/L2 norms, distribution)
+   - Weight histograms (TensorBoard-style ridgeline)
+
+4. **Tensor Visualization**: Overview tab renders feature configurations as visual tensor bars showing proportional feature dimensions.
+
+5. **Tower Architecture**: Model configurations display query/candidate tower layers with parameter counts.
+
+6. **Pipeline DAG**: Pipeline tab shows TFX pipeline stages with status icons and durations.
+
+7. **Error Handling**: Failed experiments display error details with expandable stack traces.
+
+#### Migration Notes
+
+When migrating from page-specific modal code to the reusable module:
+
+1. Remove all old modal-related functions (e.g., `populateExpViewModal`, `renderFeaturesConfigForExp`, etc.)
+2. Replace inline modal HTML with `{% include 'includes/_exp_view_modal.html' %}`
+3. Update `openExpDetails()` to call `ExpViewModal.open(expId)`
+4. Add `ExpViewModal.configure()` call in `DOMContentLoaded`
+5. Ensure all required CSS/JS files are included
+
 ---
 
 ### Training Runs List View

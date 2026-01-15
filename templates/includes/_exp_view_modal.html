@@ -1,0 +1,354 @@
+{% load static %}
+<!--
+    Experiment View Modal Component
+
+    A reusable modal for displaying experiment details, styled like Vertex AI Pipelines.
+
+    Usage:
+        { % include 'includes/_exp_view_modal.html' % }
+
+    Required CSS:
+        <link rel="stylesheet" href="{ % static 'css/exp_view_modal.css' % }?v=1">
+        <link rel="stylesheet" href="{ % static 'css/modals.css' % }?v=1">
+
+    Required JavaScript:
+        <script src="{ % static 'js/exp_view_modal.js' % }?v=1"></script>
+        <script src="{ % static 'js/pipeline_dag.js' % }?v=1"></script>
+
+    JavaScript API:
+        - ExpViewModal.open(experimentId, options) - Open modal for an experiment
+        - ExpViewModal.close() - Close the modal
+        - ExpViewModal.populate(experimentData, options) - Populate modal with data
+        - ExpViewModal.switchTab(tabName) - Switch to a specific tab
+
+    Configuration options:
+        {
+            showTabs: ['overview', 'pipeline', 'data', 'training'],
+            showDataInsights: true,
+            showTrainingTab: true,
+            fieldMapping: { ... },  // Custom field mapping
+            onClose: function() { },  // Callback when modal closes
+            endpoints: {
+                experimentDetails: '/api/...',
+                componentLogs: '/api/...',
+                dataInsights: '/api/...',
+                trainingData: '/api/...'
+            }
+        }
+-->
+
+<!-- Experiment View Modal -->
+<div id="expViewModal" class="modal-overlay hidden" onclick="ExpViewModal.handleOverlayClick(event)">
+    <div class="modal-container exp-view-modal" onclick="event.stopPropagation()">
+        <!-- Header - Vertex Pipelines Style - 3 Column Layout -->
+        <div class="modal-header exp-view-header" id="expViewHeader">
+            <!-- Column 1: Experiment Number (20%, centered) -->
+            <div class="exp-view-header-number">
+                <h3 class="exp-view-title" id="expViewTitle">Exp #1</h3>
+            </div>
+            <!-- Column 2: Name, Description, Times (60%, left-aligned) -->
+            <div class="exp-view-header-info">
+                <div class="exp-view-exp-name" id="expViewExpName"></div>
+                <div class="exp-view-description" id="expViewDescription"></div>
+                <div class="exp-view-times">
+                    <div>Start: <span id="expViewStartTime">-</span></div>
+                    <div>End: <span id="expViewEndTime">-</span></div>
+                </div>
+                <div class="exp-view-header-type-row">
+                    <span class="exp-view-header-type-badge" id="expViewTypeBadge"></span>
+                </div>
+            </div>
+            <!-- Column 3: Status Panel (20%, centered) -->
+            <div class="exp-view-status-panel" id="expViewStatusPanel">
+                <div class="exp-view-status-icon" id="expViewStatusIcon">
+                    <i class="fas fa-spinner fa-spin"></i>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab Navigation -->
+        <div class="exp-view-tabs" id="expViewTabs">
+            <button class="exp-view-tab active" data-tab="overview" onclick="ExpViewModal.switchTab('overview')">
+                Overview
+            </button>
+            <button class="exp-view-tab" data-tab="pipeline" onclick="ExpViewModal.switchTab('pipeline')">
+                Pipeline
+            </button>
+            <button class="exp-view-tab" data-tab="data" onclick="ExpViewModal.switchTab('data')">
+                Data Insights
+            </button>
+            <button class="exp-view-tab" data-tab="training" onclick="ExpViewModal.switchTab('training')">
+                Training
+            </button>
+        </div>
+
+        <!-- Tab Content -->
+        <div class="modal-body exp-view-body">
+            <!-- Overview Tab -->
+            <div id="expViewTabOverview" class="exp-view-tab-content active">
+                <!-- Results Summary (at top for completed experiments) -->
+                <div id="expViewResultsSummary" class="exp-view-results-summary hidden">
+                    <h4 class="exp-view-group-title">Results</h4>
+                    <div class="exp-view-metrics-row" id="expViewMetricsSummary">
+                        <!-- Populated by JavaScript -->
+                    </div>
+                </div>
+
+                <!-- Dataset Section -->
+                <div class="exp-view-section-group">
+                    <h4 class="exp-view-group-title">
+                        <span><i class="fas fa-layer-group" style="margin-right:6px;"></i>DATASET: <span id="expViewDatasetName" style="color:#374151;">-</span></span>
+                    </h4>
+                    <div id="expViewDatasetDetails" class="exp-view-dataset-details">
+                        <div class="exp-view-loading"><i class="fas fa-spinner fa-spin"></i> Loading...</div>
+                    </div>
+                </div>
+
+                <!-- Features Config Section -->
+                <div class="exp-view-section-group">
+                    <h4 class="exp-view-group-title">
+                        <span>Features config: <span id="expViewFeaturesConfigName" style="color:#374151;">-</span></span>
+                    </h4>
+                    <div id="expViewFeaturesConfigContent">
+                        <div class="exp-view-loading"><i class="fas fa-spinner fa-spin"></i> Loading...</div>
+                    </div>
+                </div>
+
+                <!-- Model Config Section -->
+                <div class="exp-view-section-group">
+                    <h4 class="exp-view-group-title">
+                        <span>Model config: <span id="expViewModelConfigName" style="color:#374151;">-</span></span>
+                    </h4>
+                    <div id="expViewModelConfigContent">
+                        <div class="exp-view-loading"><i class="fas fa-spinner fa-spin"></i> Loading...</div>
+                    </div>
+                </div>
+
+                <!-- Sampling Section -->
+                <div class="exp-view-section-group">
+                    <h4 class="exp-view-group-title">Sampling</h4>
+                    <div id="expViewSamplingChips" class="exp-view-training-params">
+                        <!-- Populated by JavaScript -->
+                    </div>
+                </div>
+
+                <!-- Training Parameters Section -->
+                <div class="exp-view-section-group">
+                    <h4 class="exp-view-group-title">Training Parameters</h4>
+                    <div id="expViewTrainingParamsChips" class="exp-view-training-params">
+                        <!-- Populated by JavaScript -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pipeline Tab -->
+            <div id="expViewTabPipeline" class="exp-view-tab-content">
+                <!-- Progress Bar (for running experiments) -->
+                <div id="expViewProgressSection" class="exp-view-progress-section" style="display: none;">
+                    <div class="exp-view-progress-bar-container">
+                        <div class="exp-view-progress-bar" id="expViewProgressBar" style="width: 0%"></div>
+                    </div>
+                    <span class="exp-view-progress-text" id="expViewProgressText">0%</span>
+                </div>
+
+                <!-- Pipeline DAG (include the pipeline DAG component) -->
+                {% include 'includes/_pipeline_dag.html' %}
+
+                <!-- Component Detail Panel (shown on node click) -->
+                <div id="expViewComponentDetail" class="exp-view-component-detail hidden">
+                    <div class="exp-view-component-header">
+                        <span class="exp-view-component-name" id="expViewComponentName">Component</span>
+                        <span class="exp-view-component-status" id="expViewComponentStatus">pending</span>
+                        <span class="exp-view-component-duration" id="expViewComponentDuration">
+                            <i class="fas fa-clock"></i>
+                            <span id="expViewComponentDurationText">-</span>
+                        </span>
+                    </div>
+                    <div class="exp-view-logs-section">
+                        <div class="exp-view-logs-header">
+                            <span>Recent Logs</span>
+                            <button class="exp-view-refresh-btn" id="expViewRefreshLogsBtn" onclick="ExpViewModal.refreshComponentLogs()">
+                                <i class="fas fa-sync-alt"></i>
+                                Refresh
+                            </button>
+                        </div>
+                        <div class="exp-view-logs-container" id="expViewLogsContainer">
+                            <div class="exp-view-logs-empty">Click a component to view logs</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Error Section (for failed experiments) -->
+                <div id="expViewErrorSection" class="exp-view-error-box hidden">
+                    <div class="exp-view-error-header">
+                        <i class="fas fa-exclamation-circle"></i>
+                        <span id="expViewErrorTitle">Pipeline Failed</span>
+                    </div>
+                    <p class="exp-view-error-suggestion" id="expViewErrorSuggestion"></p>
+                    <div class="exp-view-error-details">
+                        <button class="exp-view-error-toggle" onclick="ExpViewModal.toggleErrorDetails()">
+                            <span id="expViewErrorToggleText">Show Error Details</span>
+                            <i class="fas fa-chevron-down" id="expViewErrorToggleIcon"></i>
+                        </button>
+                        <div id="expViewErrorDetails" class="exp-view-error-content hidden">
+                            <pre id="expViewErrorMessage"></pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Data Insights Tab (lazy-loaded) -->
+            <div id="expViewTabData" class="exp-view-tab-content">
+                <div id="expViewDataLoading" class="exp-view-loading">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <span>Loading data insights...</span>
+                </div>
+                <div id="expViewDataContent" class="hidden">
+                    <!-- Statistics Summary Section -->
+                    <div class="exp-view-section-group">
+                        <div class="exp-view-group-header">
+                            <h4 class="exp-view-group-title">Dataset Statistics</h4>
+                            <a id="expViewTfdvBtn" class="exp-view-tfdv-btn hidden" href="#" target="_blank">
+                                <i class="fas fa-external-link-alt"></i> Open Full Report
+                            </a>
+                        </div>
+                        <div id="expViewStatsContent">
+                            <!-- Populated by JavaScript -->
+                        </div>
+                    </div>
+
+                    <!-- Numeric Features Section -->
+                    <div id="expViewNumericSection" class="exp-view-section-group hidden">
+                        <h4 class="exp-view-group-title">
+                            <span>Numeric Features</span>
+                            <span id="expViewNumericCount" class="exp-view-feature-count"></span>
+                        </h4>
+                        <div id="expViewNumericContent">
+                            <!-- Populated by JavaScript -->
+                        </div>
+                    </div>
+
+                    <!-- Categorical Features Section -->
+                    <div id="expViewCategoricalSection" class="exp-view-section-group hidden">
+                        <h4 class="exp-view-group-title">
+                            <span>Categorical Features</span>
+                            <span id="expViewCategoricalCount" class="exp-view-feature-count"></span>
+                        </h4>
+                        <div id="expViewCategoricalContent">
+                            <!-- Populated by JavaScript -->
+                        </div>
+                    </div>
+
+                    <!-- Schema Section -->
+                    <div class="exp-view-section-group">
+                        <h4 class="exp-view-group-title">Schema</h4>
+                        <div id="expViewSchemaContent">
+                            <!-- Populated by JavaScript -->
+                        </div>
+                    </div>
+                </div>
+                <div id="expViewDataError" class="exp-view-data-message hidden">
+                    <i class="fas fa-info-circle"></i>
+                    <span id="expViewDataErrorMessage">Data insights not available</span>
+                </div>
+            </div>
+
+            <!-- Training Tab (lazy-loaded) -->
+            <div id="expViewTabTraining" class="exp-view-tab-content">
+                <div id="expViewTrainingLoading" class="exp-view-loading hidden">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <span>Loading training data...</span>
+                </div>
+
+                <!-- Training Curves - Placeholder (shown when no MLflow data) -->
+                <div id="expViewTrainingPlaceholder" class="exp-view-section-group">
+                    <h4 class="exp-view-group-title">Training Progress</h4>
+                    <div class="exp-view-chart-placeholder">
+                        <i class="fas fa-chart-line"></i>
+                        <p id="expViewTrainingMessage">Loading training data...</p>
+                    </div>
+                </div>
+
+                <!-- Training Curves - Charts (shown when MLflow data available) -->
+                <div id="expViewTrainingCharts" class="exp-view-section-group hidden">
+                    <h4 class="exp-view-group-title">Training Progress</h4>
+                    <div class="training-charts-container">
+                        <div class="training-chart-wrapper">
+                            <h5 class="training-chart-title">Loss</h5>
+                            <canvas id="trainingLossChart" height="170"></canvas>
+                        </div>
+                        <div class="training-chart-wrapper">
+                            <h5 id="metricsChartTitle" class="training-chart-title">Recall Metrics</h5>
+                            <canvas id="trainingMetricsChart" height="170"></canvas>
+                        </div>
+                    </div>
+                    <!-- Second row: Combined Weight Analysis (Norm + Distribution) -->
+                    <div class="training-chart-wrapper" style="margin-top: 16px;">
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                            <h5 class="training-chart-title" style="margin: 0;">Weight Analysis</h5>
+                            <select id="weightAnalysisTower" class="weight-stats-select" onchange="ExpViewModal.updateWeightAnalysisCharts()">
+                                <option value="query">Query Tower</option>
+                                <option value="candidate">Candidate Tower</option>
+                            </select>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                            <div>
+                                <h6 style="font-size: 12px; font-weight: 500; color: #6b7280; margin: 0 0 4px 0;">Weight Norm (L1/L2)</h6>
+                                <canvas id="trainingGradientChart" height="150"></canvas>
+                            </div>
+                            <div>
+                                <h6 style="font-size: 12px; font-weight: 500; color: #6b7280; margin: 0 0 4px 0;">Weight Distribution</h6>
+                                <canvas id="trainingWeightStatsChart" height="150"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Third row: Distribution Histogram (TensorBoard-style ridgeline) - Weights or Gradients -->
+                    <div class="training-charts-container" style="margin-top: 16px;">
+                        <div class="training-chart-wrapper" style="grid-column: span 2;">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                                <h5 id="histogramChartTitle" class="training-chart-title" style="margin: 0;">Weight Distribution Histogram</h5>
+                                <div style="display: flex; gap: 8px;">
+                                    <select id="histogramDataType" class="weight-stats-select" onchange="ExpViewModal.updateWeightHistogramChart()">
+                                        <option value="weights">Weights</option>
+                                        <option value="gradients">Gradients</option>
+                                    </select>
+                                    <select id="weightHistogramTower" class="weight-stats-select" onchange="ExpViewModal.updateWeightHistogramChart()">
+                                        <option value="query">Query Tower</option>
+                                        <option value="candidate">Candidate Tower</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div id="trainingWeightHistogramChart" style="width: 100%;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Final Metrics -->
+                <div id="expViewFinalMetrics" class="exp-view-section-group hidden">
+                    <h4 class="exp-view-group-title">Final Metrics</h4>
+                    <div class="exp-view-rows" id="expViewMetricsRows">
+                        <!-- Populated by JavaScript -->
+                    </div>
+                </div>
+
+                <!-- Vocabulary Stats -->
+                <div id="expViewVocabSection" class="exp-view-section-group hidden">
+                    <h4 class="exp-view-group-title">Vocabularies</h4>
+                    <div class="exp-view-rows" id="expViewVocabRows">
+                        <!-- Populated by JavaScript -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="modal-footer-wizard-neu">
+            <div class="footer-left"></div>
+            <div class="footer-right">
+                <button type="button" class="btn-neu btn-neu-action btn-neu-cancel" onclick="ExpViewModal.close()">
+                    <span class="btn-neu-inner">Close</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>

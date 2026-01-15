@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides specifications for the **Experiments** page (`model_experiments.html`). The Experiments page enables running Quick Tests to validate configurations and provides an analytics dashboard for comparing results.
 
-**Last Updated**: 2026-01-15
+**Last Updated**: 2026-01-15 (View Modal migrated to reusable module)
 
 ---
 
@@ -151,27 +151,72 @@ Clicking a KPI filters all dashboard content by that model type.
 
 ## Experiment View Modal
 
-Tabbed modal for viewing experiment details:
+Tabbed modal for viewing experiment details. **Now uses the reusable `ExpViewModal` module** shared with the Training page.
 
-### Config Tab
-- Dataset summary (name, rows, columns)
-- Feature Config (tensor preview, assigned features)
-- Model Config (tower architecture visualization)
+### Architecture
 
-### Data Insights Tab
-- Dataset statistics
-- Feature distributions
+The view modal is implemented as a stand-alone reusable module:
+
+| File | Purpose |
+|------|---------|
+| `static/js/exp_view_modal.js` | JavaScript module (IIFE pattern) |
+| `static/css/exp_view_modal.css` | Complete CSS styling |
+| `templates/includes/_exp_view_modal.html` | Reusable HTML template |
+| `static/js/pipeline_dag.js` | Pipeline DAG visualization |
+
+### Integration
+
+```javascript
+// Configure module on page load
+ExpViewModal.configure({
+    showTabs: ['overview', 'pipeline', 'data', 'training'],
+    onUpdate: function(exp) {
+        loadTopConfigurations();
+        loadRecentExperiments();
+    }
+});
+
+// Open modal (from card View button or table row click)
+ExpViewModal.open(expId);
+```
+
+### Tabs
+
+#### Overview Tab
+- Results summary (metrics for completed experiments)
+- Dataset details (tables, joins, filters)
+- Feature Config (tensor visualization with dimension breakdown)
+- Model Config (tower architecture with layer badges)
+- Sampling parameters
+- Training parameters
+
+#### Pipeline Tab
+- Pipeline DAG visualization with status icons
+- Progress bar (for running experiments)
+- Component logs (click node to view)
+- Error details (for failed experiments)
+
+#### Data Insights Tab (lazy-loaded)
+- Dataset statistics summary
+- Feature distributions (numeric and categorical)
 - Schema information
+- Link to full TFDV report
 
-### Training Tab
-- Loss curves (train/val/total)
-- Metrics charts (Recall or RMSE over epochs)
-- Gradient analysis
-- Weight histogram (loaded on demand)
+#### Training Tab (lazy-loaded)
+- Loss curves (train/eval)
+- Metrics charts (Recall@K or RMSE/MAE)
+- Weight analysis (L1/L2 norms by tower)
+- Weight histogram (TensorBoard-style ridgeline)
+- Final metrics table
+- Vocabulary statistics
 
-### Error Tab (if failed)
-- Error message and stack trace
-- Stage where failure occurred
+### Live Polling
+
+For running experiments, the modal automatically:
+- Polls experiment status every 10 seconds
+- Updates pipeline DAG node statuses
+- Refreshes progress bar and metrics
+- Stops polling when experiment completes/fails/cancels
 
 ---
 
@@ -375,6 +420,7 @@ TPE-based analysis of what configurations work best:
 - [x] Model type selection (Retrieval/Ranking/Multitask)
 - [x] Experiment comparison (2-4 experiments)
 - [x] View modal with Config/Data Insights/Training/Error tabs
+- [x] **View modal migrated to reusable ExpViewModal module** (2026-01-15)
 - [x] Cancel and Delete functionality
 - [x] Experiments Dashboard with 8 analytical components
 - [x] Model type conditional filtering for dashboard
@@ -396,6 +442,7 @@ TPE-based analysis of what configurations work best:
 
 - [phase_experiments_implementation.md](phase_experiments_implementation.md) - Detailed implementation guide
 - [phase_experiments_changelog.md](phase_experiments_changelog.md) - Detailed changelog history
+- [phase_training.md](phase_training.md) - Training page (contains full ExpViewModal module documentation)
 - [multi_task.md](multi_task.md) - Multitask model implementation
 - [ranking_implementation.md](ranking_implementation.md) - Ranking model implementation
 - [phase_configs.md](phase_configs.md) - Datasets & Configs page specification

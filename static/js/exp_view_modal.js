@@ -2007,30 +2007,460 @@ const ExpViewModal = (function() {
         const ctx = document.getElementById('trainingGradientChart');
         if (!ctx) return;
 
+        // Store data for tower switching
         weightData.norms = history;
+
         const weightNorms = history.gradient || {};
         const epochs = history.epochs || [];
 
+        // Check if we have data for selected tower
         const towerData = weightNorms[tower];
         const hasData = towerData && towerData.length > 0;
 
         if (!hasData) return;
 
-        // Simplified chart - just render placeholder for now
-        // Full implementation would mirror the experiments page
+        // Destroy existing chart
+        if (charts.gradientChart) {
+            charts.gradientChart.destroy();
+            charts.gradientChart = null;
+        }
+
+        // Tower display config
+        const towerConfig = {
+            query: { label: 'Query Tower', color: '#3b82f6' },
+            candidate: { label: 'Candidate Tower', color: '#10b981' }
+        };
+
+        const config = towerConfig[tower];
+
+        charts.gradientChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: epochs.map(e => e + 1),
+                datasets: [{
+                    label: config.label,
+                    data: towerData,
+                    borderColor: config.color,
+                    backgroundColor: `${config.color}1a`,
+                    fill: true,
+                    tension: 0.3,
+                    pointRadius: 3
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                layout: chartDefaults.layout,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { mode: 'index', intersect: false }
+                },
+                scales: {
+                    y: {
+                        grace: chartDefaults.scales.y.grace,
+                        title: { display: true, text: 'L1/L2 Norm', ...chartDefaults.scales.y.title },
+                        ticks: chartDefaults.scales.y.ticks
+                    },
+                    x: {
+                        ticks: chartDefaults.scales.x.ticks
+                    }
+                }
+            }
+        });
     }
 
     function renderWeightStatsChart(history, tower = 'query') {
         const ctx = document.getElementById('trainingWeightStatsChart');
         if (!ctx) return;
 
+        // Store data for tower switching
         weightData.stats = history;
-        // Simplified - full implementation would mirror experiments page
+
+        const weightStats = history.weight_stats || {};
+        const epochs = history.epochs || [];
+        const towerStats = weightStats[tower] || {};
+
+        // Check if we have data
+        const hasData = towerStats.mean && towerStats.mean.length > 0;
+
+        if (!hasData) {
+            // Show placeholder
+            ctx.style.display = 'none';
+            const placeholder = document.createElement('div');
+            placeholder.style.cssText = 'display: flex; flex-direction: column; align-items: center; justify-content: center; height: 160px; color: #9ca3af; text-align: center;';
+            placeholder.innerHTML = `
+                <i class="fas fa-layer-group" style="font-size: 24px; margin-bottom: 8px; opacity: 0.5;"></i>
+                <span style="font-size: 13px;">Weight data not available</span>
+                <span style="font-size: 11px; margin-top: 4px;">Run a new experiment to collect weight stats</span>
+            `;
+            const existingPlaceholder = ctx.parentElement.querySelector('.weight-placeholder');
+            if (existingPlaceholder) existingPlaceholder.remove();
+            placeholder.className = 'weight-placeholder';
+            ctx.parentElement.appendChild(placeholder);
+            return;
+        }
+
+        // Remove placeholder if exists and show canvas
+        const existingPlaceholder = ctx.parentElement.querySelector('.weight-placeholder');
+        if (existingPlaceholder) existingPlaceholder.remove();
+        ctx.style.display = 'block';
+
+        // Destroy existing chart
+        if (charts.weightStatsChart) {
+            charts.weightStatsChart.destroy();
+            charts.weightStatsChart = null;
+        }
+
+        const datasets = [
+            {
+                label: 'Mean',
+                data: towerStats.mean,
+                borderColor: '#3b82f6',
+                tension: 0.3,
+                fill: false,
+                pointRadius: 2
+            },
+            {
+                label: 'Std Dev',
+                data: towerStats.std,
+                borderColor: '#f59e0b',
+                tension: 0.3,
+                fill: false,
+                pointRadius: 2
+            }
+        ];
+
+        // Add min/max as filled area if available
+        if (towerStats.min && towerStats.max) {
+            datasets.push({
+                label: 'Min',
+                data: towerStats.min,
+                borderColor: '#10b981',
+                borderDash: [2, 2],
+                tension: 0.3,
+                fill: false,
+                pointRadius: 0
+            });
+            datasets.push({
+                label: 'Max',
+                data: towerStats.max,
+                borderColor: '#ef4444',
+                borderDash: [2, 2],
+                tension: 0.3,
+                fill: false,
+                pointRadius: 0
+            });
+        }
+
+        charts.weightStatsChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: epochs.map(e => e + 1),
+                datasets: datasets
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                layout: chartDefaults.layout,
+                plugins: {
+                    legend: {
+                        position: 'top',
+                        labels: chartDefaults.legend.labels
+                    },
+                    tooltip: { mode: 'index', intersect: false }
+                },
+                scales: {
+                    y: {
+                        grace: chartDefaults.scales.y.grace,
+                        title: { display: true, text: 'Value', ...chartDefaults.scales.y.title },
+                        ticks: chartDefaults.scales.y.ticks
+                    },
+                    x: {
+                        ticks: chartDefaults.scales.x.ticks
+                    }
+                }
+            }
+        });
     }
 
-    function renderWeightHistogramChart(history) {
+    // Fetch histogram data on-demand from MLflow (not cached due to size)
+    async function fetchHistogramData(history, tower, isGradients) {
+        try {
+            console.log('[Histogram] Fetching on-demand from MLflow...');
+            const url = buildUrl(config.endpoints.histogramData || '/api/quick-tests/{id}/histogram-data/', { id: state.expId });
+            const response = await fetch(url);
+            const data = await response.json();
+
+            // Mark fetch attempted to prevent infinite loops
+            history._histogramFetchAttempted = true;
+
+            if (data.success && data.histogram_data) {
+                // Merge histogram data into history
+                const histData = data.histogram_data;
+
+                // Merge weight_stats histograms
+                if (histData.weight_stats) {
+                    for (const t of ['query', 'candidate']) {
+                        if (histData.weight_stats[t]?.histogram) {
+                            if (!history.weight_stats) history.weight_stats = {};
+                            if (!history.weight_stats[t]) history.weight_stats[t] = {};
+                            history.weight_stats[t].histogram = histData.weight_stats[t].histogram;
+                        }
+                    }
+                }
+
+                // Merge gradient_stats histograms
+                if (histData.gradient_stats) {
+                    for (const t of ['query', 'candidate']) {
+                        if (histData.gradient_stats[t]?.histogram) {
+                            if (!history.gradient_stats) history.gradient_stats = {};
+                            if (!history.gradient_stats[t]) history.gradient_stats[t] = {};
+                            history.gradient_stats[t].histogram = histData.gradient_stats[t].histogram;
+                        }
+                    }
+                }
+
+                console.log('[Histogram] Data fetched and merged successfully');
+
+                // Update cache
+                state.dataCache.trainingHistory = history;
+                weightData.histogram = history;
+
+                // Re-render chart with new data
+                renderWeightHistogramChart(history, tower);
+            } else {
+                console.log('[Histogram] No histogram data available from MLflow');
+                // Re-render to show "not available" message
+                renderWeightHistogramChart(history, tower);
+            }
+        } catch (error) {
+            console.error('[Histogram] Failed to fetch:', error);
+            history._histogramFetchAttempted = true;
+            renderWeightHistogramChart(history, tower);
+        }
+    }
+
+    function renderWeightHistogramChart(history, tower = null) {
+        const container = document.getElementById('trainingWeightHistogramChart');
+        if (!container) return;
+
+        // Store data for tower switching
         weightData.histogram = history;
-        // Simplified - full Plotly implementation would be added
+
+        // Get tower from dropdown or use provided value
+        tower = tower || document.getElementById('weightHistogramTower')?.value || 'query';
+
+        // Get data type (weights or gradients)
+        const dataType = document.getElementById('histogramDataType')?.value || 'weights';
+        const isGradients = dataType === 'gradients';
+
+        // Select appropriate data source
+        const statsSource = isGradients ? (history.gradient_stats || {}) : (history.weight_stats || {});
+        const towerStats = statsSource[tower] || {};
+        const histogram = towerStats.histogram;
+
+        // Update chart title
+        const titleEl = document.getElementById('histogramChartTitle');
+        if (titleEl) {
+            titleEl.textContent = isGradients ? 'Gradient Distribution Histogram' : 'Weight Distribution Histogram';
+        }
+
+        // Check if histogram data is available
+        if (!histogram || !histogram.bin_edges || !histogram.counts || histogram.counts.length === 0) {
+            // Check if histogram data is available via on-demand fetch
+            if (history.histogram_available && state.expId && !history._histogramFetchAttempted) {
+                // Show loading state
+                container.innerHTML = `
+                    <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: #9ca3af; text-align: center;">
+                        <i class="fas fa-spinner fa-spin" style="font-size: 32px; margin-bottom: 12px; opacity: 0.5;"></i>
+                        <span style="font-size: 14px;">Loading histogram data from MLflow...</span>
+                        <span style="font-size: 12px; margin-top: 6px;">This may take a moment</span>
+                    </div>
+                `;
+                // Fetch histogram data on-demand
+                fetchHistogramData(history, tower, isGradients);
+                return;
+            }
+
+            const dataTypeName = isGradients ? 'Gradient' : 'Weight';
+            const featureNote = isGradients
+                ? 'Run a new experiment to collect gradient distribution histograms.'
+                : 'Run a new experiment to collect weight distribution histograms.';
+            container.innerHTML = `
+                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: #9ca3af; text-align: center;">
+                    <i class="fas fa-chart-area" style="font-size: 32px; margin-bottom: 12px; opacity: 0.5;"></i>
+                    <span style="font-size: 14px;">${dataTypeName} histogram data not available</span>
+                    <span style="font-size: 12px; margin-top: 6px; max-width: 400px;">
+                        ${featureNote}
+                    </span>
+                </div>
+            `;
+            return;
+        }
+
+        // Check if container is visible (has dimensions)
+        const rect = container.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) {
+            requestAnimationFrame(() => renderWeightHistogramChart(history, tower));
+            return;
+        }
+
+        // Clear container
+        container.innerHTML = '';
+
+        const { bin_edges, counts } = histogram;
+        const epochs = history.epochs || [];
+        const numEpochs = counts.length;
+        const numBins = bin_edges.length - 1;
+
+        // Dimensions - dynamic top margin to prevent clipping of ridges
+        const baseMargin = { top: 10, right: 50, bottom: 40, left: 50 };
+        const width = Math.floor(rect.width) - baseMargin.left - baseMargin.right;
+        const prelimHeight = Math.floor(rect.height) - baseMargin.top - baseMargin.bottom;
+
+        // Calculate bandwidth from preliminary yEpoch scale
+        const prelimYEpoch = d3.scaleBand()
+            .domain(d3.range(numEpochs))
+            .range([0, prelimHeight])
+            .paddingInner(0);
+        const bandWidth = prelimYEpoch.bandwidth();
+
+        // Calculate dynamic ridge height
+        const baseRidgeHeight = prelimHeight * 0.15;
+        const scaledRidgeHeight = bandWidth * 2.5;
+        const maxRidgeHeight = Math.min(baseRidgeHeight, scaledRidgeHeight);
+
+        // Calculate dynamic top margin to accommodate ridge overflow
+        const dynamicTopMargin = maxRidgeHeight + 15;
+        const margin = {
+            top: dynamicTopMargin,
+            right: baseMargin.right,
+            bottom: baseMargin.bottom,
+            left: baseMargin.left
+        };
+
+        // Recalculate final height with dynamic margin
+        const height = Math.floor(rect.height) - margin.top - margin.bottom;
+
+        // Create SVG
+        const svg = d3.select(container)
+            .append('svg')
+            .attr('width', width + margin.left + margin.right)
+            .attr('height', height + margin.top + margin.bottom)
+            .append('g')
+            .attr('transform', `translate(${margin.left},${margin.top})`);
+
+        // Data range
+        const maxCount = Math.max(...counts.flat());
+        const xMin = bin_edges[0];
+        const xMax = bin_edges[bin_edges.length - 1];
+
+        // X scale: weight values
+        const xScale = d3.scaleLinear()
+            .domain([xMin, xMax])
+            .range([0, width]);
+
+        // Y scale for density (height of each ridge)
+        const yDensity = d3.scaleLinear()
+            .domain([0, maxCount])
+            .range([0, maxRidgeHeight]);
+
+        // Y scale for epoch positioning (band scale)
+        const yEpoch = d3.scaleBand()
+            .domain(d3.range(numEpochs))
+            .range([0, height])
+            .paddingInner(0);
+
+        // Color scale: light orange (old) to dark orange (new)
+        const colorScale = d3.scaleLinear()
+            .domain([0, numEpochs - 1])
+            .range(['#fdd4b3', '#e25822']);
+
+        // Prepare data for each epoch
+        const ridgeData = counts.map((epochCounts, epochIdx) => {
+            const points = epochCounts.map((count, binIdx) => ({
+                x: (bin_edges[binIdx] + bin_edges[binIdx + 1]) / 2,
+                y: count
+            }));
+            return {
+                epochIdx,
+                points: [
+                    { x: bin_edges[0], y: 0 },
+                    ...points,
+                    { x: bin_edges[numBins], y: 0 }
+                ]
+            };
+        });
+
+        // Area generator
+        const area = d3.area()
+            .x(d => xScale(d.x))
+            .y0(0)
+            .y1(d => -yDensity(d.y))
+            .curve(d3.curveBasis);
+
+        // Draw ridges from back to front (oldest first)
+        svg.selectAll('.ridge')
+            .data(ridgeData)
+            .join('path')
+            .attr('class', 'ridge')
+            .attr('transform', d => `translate(0, ${yEpoch(d.epochIdx) + yEpoch.bandwidth()})`)
+            .attr('d', d => area(d.points))
+            .attr('fill', d => colorScale(d.epochIdx))
+            .attr('fill-opacity', d => 0.7 + (d.epochIdx / Math.max(numEpochs - 1, 1)) * 0.25)
+            .attr('stroke', '#fff')
+            .attr('stroke-width', 1);
+
+        // X-axis
+        const xAxis = d3.axisBottom(xScale)
+            .ticks(8)
+            .tickFormat(d => (xMax - xMin) > 1 ? d.toFixed(1) : d.toFixed(2));
+
+        svg.append('g')
+            .attr('transform', `translate(0, ${height})`)
+            .call(xAxis)
+            .selectAll('text')
+            .style('font-size', '11px')
+            .style('fill', '#6b7280');
+
+        // X-axis label (dynamic based on data type)
+        const xAxisLabel = isGradients ? 'Gradient Value' : 'Weight Value';
+        svg.append('text')
+            .attr('x', width / 2)
+            .attr('y', height + 35)
+            .attr('text-anchor', 'middle')
+            .style('font-size', '12px')
+            .style('fill', '#374151')
+            .text(xAxisLabel);
+
+        // Epoch labels on right side
+        const epochStep = Math.max(1, Math.ceil(numEpochs / 15));
+        const epochLabels = d3.range(0, numEpochs, epochStep);
+        if ((numEpochs - 1) % epochStep !== 0) epochLabels.push(numEpochs - 1);
+
+        // Horizontal grid lines for major epochs
+        svg.selectAll('.epoch-grid-line')
+            .data(epochLabels)
+            .join('line')
+            .attr('class', 'epoch-grid-line')
+            .attr('x1', 0)
+            .attr('x2', width)
+            .attr('y1', d => yEpoch(d) + yEpoch.bandwidth())
+            .attr('y2', d => yEpoch(d) + yEpoch.bandwidth())
+            .attr('stroke', '#e5e7eb')
+            .attr('stroke-width', 1)
+            .attr('stroke-opacity', 0.4);
+
+        svg.selectAll('.epoch-label')
+            .data(epochLabels)
+            .join('text')
+            .attr('class', 'epoch-label')
+            .attr('x', width + 8)
+            .attr('y', d => yEpoch(d) + yEpoch.bandwidth())
+            .attr('dy', '0.35em')
+            .style('font-size', '10px')
+            .style('fill', '#9ca3af')
+            .text(d => epochs[d] !== undefined ? epochs[d] + 1 : d + 1);
     }
 
     function renderFinalMetricsTable(history) {

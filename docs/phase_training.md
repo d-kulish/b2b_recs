@@ -322,7 +322,80 @@ function openExpDetails(expId) {
 
 7. **Error Handling**: Failed experiments display error details with expandable stack traces.
 
-#### Migration Notes
+#### Style Alignment Fixes (2026-01-15)
+
+The stand-alone view modal (`exp_view_modal.css/js`) was updated to match the styling of the standard view modal on the Experiments page (`model_experiments.html`). The following fixes were applied:
+
+#### CSS Style Fixes
+
+1. **Tab Navigation Styling**
+   - Removed inline tab styles from `model_training.html` that created underline-style tabs
+   - Now uses pill button style tabs with rounded borders from `exp_view_modal.css`
+   - Active tab: light blue background (`#eff6ff`) with blue border (`#2563eb`)
+
+2. **Status Icon Styling**
+   - Removed conflicting status icon styles with light backgrounds
+   - Now uses solid colored backgrounds with white icons (e.g., green circle with white checkmark)
+
+3. **Results Summary / Metric Cards**
+   - Removed green-tinted backgrounds (`#f0fdf4`) and green borders
+   - Now uses white background with dark gray borders (`#1f2937`)
+   - Metric values display in dark text instead of green
+
+4. **Dataset Details Section**
+   - Removed boxed card styling with gray backgrounds
+   - Now uses flat layout with colored left-border indicators for filters:
+     - Blue (`#3b82f6`) for Date filters
+     - Green (`#22c55e`) for Customer filters
+     - Purple (`#a855f7`) for Product filters
+
+5. **Data Insights Tab**
+   - Added missing `.exp-view-stats-summary` and `.exp-view-stat-box` styles for statistics cards
+   - Added `.exp-view-features-table` styles for legacy feature tables
+   - Added TFDV rich statistics table styles (`.tfdv-table-container`, `.tfdv-features-table`)
+   - Added mini histogram and horizontal bar chart styles for distribution visualization
+   - Updated `.exp-view-tfdv-btn` from light blue outline to purple solid button (`#4f46e5`)
+
+6. **Training Tab Height Constraint**
+   - Added `max-height: 600px` and `overflow: hidden` to `.exp-view-modal`
+   - Added `min-height: 0` to `.exp-view-body` for proper flex shrinking
+   - Added `max-height: 170px` to training chart canvases
+   - Added fixed height constraints to `#trainingWeightHistogramChart` container (250px)
+   - Added final metrics table and weight stats select dropdown styling
+
+#### JavaScript Chart Implementations
+
+The following chart functions in `exp_view_modal.js` were updated from placeholders to full implementations:
+
+1. **`renderGradientChart(history, tower)`**
+   - Full Chart.js line chart for Weight Norm (L1/L2)
+   - Supports tower switching (Query/Candidate)
+   - Blue color for Query Tower, green for Candidate Tower
+
+2. **`renderWeightStatsChart(history, tower)`**
+   - Full Chart.js line chart for Weight Distribution statistics
+   - Shows Mean (blue), Std Dev (orange), Min (green dashed), Max (red dashed)
+   - Displays placeholder message when weight data is unavailable
+
+3. **`renderWeightHistogramChart(history, tower)`**
+   - Full D3.js ridgeline chart for TensorBoard-style weight/gradient distributions
+   - Color gradient from light orange (older epochs) to dark orange (newer epochs)
+   - Supports both "Weights" and "Gradients" data types
+   - Epoch labels on right side with grid lines
+
+4. **`fetchHistogramData(history, tower, isGradients)`**
+   - New async function for on-demand histogram data fetch from MLflow
+   - Shows loading spinner while fetching
+   - Merges histogram data into training history and re-renders chart
+
+#### Dependency Addition
+
+Added D3.js library to `model_training.html` for ridgeline histogram visualization:
+```html
+<script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+```
+
+### Migration Notes
 
 When migrating from page-specific modal code to the reusable module:
 

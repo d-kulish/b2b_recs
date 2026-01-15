@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides detailed specifications for implementing the **Training** domain in the ML Platform. The Training domain executes full TFX pipelines for production model training.
 
-**Last Updated**: 2026-01-11
+**Last Updated**: 2026-01-15
 
 ---
 
@@ -29,6 +29,128 @@ The Training domain allows users to:
 ---
 
 ## User Interface
+
+### Best Experiments Container (2026-01-15)
+
+The Training page now features a "Best Experiments" container that displays top-performing experiments across all model types (Retrieval, Ranking, Hybrid). This mirrors functionality from the Experiments page.
+
+#### Layout Structure
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 🏆 Best Experiments                                                          │
+│    Top performing experiment configurations                                  │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│ ┌─────────────────────────────────────────────────────────────────────────┐ │
+│ │ 🔍 RETRIEVAL │ Exps: 15 │ R@5: 0.234 │ R@10: 0.412 │ R@50: 0.687 │ R@100: 0.823 │ │
+│ └─────────────────────────────────────────────────────────────────────────┘ │
+│                                                                              │
+│ ┌─────────────────────────────────────────────────────────────────────────┐ │
+│ │ 📊 RANKING   │ Exps: 8  │ RMSE: 0.4521 │ Test RMSE: 0.4789 │ MAE: 0.3124 │ Test MAE: 0.3456 │ │
+│ └─────────────────────────────────────────────────────────────────────────┘ │
+│                                                                              │
+│ ┌─────────────────────────────────────────────────────────────────────────┐ │
+│ │ 📚 HYBRID    │ Exps: 5  │ R@50: 0.654 │ R@100: 0.801 │ RMSE: 0.4234 │ Test RMSE: 0.4567 │ │
+│ └─────────────────────────────────────────────────────────────────────────┘ │
+│                                                                              │
+│ ═══════════════════════════════════════════════════════════════════════════ │
+│ TOP CONFIGURATIONS (Scrollable - 5 visible, 5 more with scroll)             │
+│ ═══════════════════════════════════════════════════════════════════════════ │
+│                                                                              │
+│ │ #  │ Experiment │ Dataset │ Feature │ Model │ LR  │ Batch │ Epochs │ R@100 │ Loss │ │
+│ │ 1  │ Exp #47    │ Q4 Data │ cfg-042 │ mdl-1 │ 0.1 │ 8192  │ 20     │ 0.823 │ 0.31 │ │
+│ │ 2  │ Exp #45    │ Q4 Data │ cfg-038 │ mdl-2 │ 0.05│ 4096  │ 15     │ 0.801 │ 0.35 │ │
+│ │ ... │           │         │         │       │     │       │        │       │      │ │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+#### Features
+
+1. **Model Type KPI Rows**: Three horizontal rows stacked vertically
+   - Each row shows icon + model type name + 5 KPI boxes
+   - Clicking a row selects it and updates the table below
+   - Default selection: Retrieval
+
+2. **Top Configurations Table**
+   - Shows best 10 experiments for the selected model type
+   - 5 rows visible, remaining 5 accessible via scroll
+   - Sticky header for easy reference while scrolling
+   - Click any row to open the View Modal
+
+3. **View Modal with Full Feature Parity**
+   - Identical to the Experiments page view modal
+   - Three tabs: Overview, Pipeline, Training
+
+#### View Modal - Overview Tab
+
+The Overview tab displays comprehensive experiment details:
+
+1. **Results Summary**: Final metrics (R@K for retrieval, RMSE/MAE for ranking)
+
+2. **Dataset Section**: Tables and statistics from the dataset
+
+3. **Features Config Section**: Full tensor visualization
+   - Target Column card (for ranking models) with transforms
+   - Buyer Tensor panel with color-coded dimension breakdown
+   - Product Tensor panel with feature list and dimensions
+   - Visual tensor bars showing proportional feature sizes
+
+4. **Model Config Section**: Tower architecture visualization
+   - Model type badge (Retrieval/Ranking/Hybrid)
+   - Buyer Tower layers with badges (DENSE, DROPOUT, BATCHNORM)
+   - Product Tower layers
+   - Rating Head (for ranking/multitask models)
+   - Parameter counts for each tower
+
+5. **Sampling Section**: Data sampling configuration
+   - Sample percentage
+   - Split strategy (Random/Time Holdout/Strict Temporal)
+   - Date column (for temporal strategies)
+   - Holdout days (for time_holdout)
+
+6. **Training Parameters Section**
+   - Optimizer (populated from model config)
+   - Epochs, Batch Size, Learning Rate
+   - Hardware specifications (vCPUs, memory)
+
+#### JavaScript Functions
+
+The following functions power the view modal (copied from Experiments page):
+
+```javascript
+// Feature Config Visualization
+loadFeaturesConfigForExp(featureConfigId)    // API call to fetch config
+renderFeaturesConfigForExp(config)           // Render tensor breakdown
+calculateExpTensorBreakdown(features, crosses)
+getExpFeatureDimension(feature)
+getExpDataTypeFromBqType(bqType)
+getExpCrossFeatureNames(cross)
+renderExpTensorBar(model, total, breakdown, maxTotal)
+
+// Model Config Visualization
+loadModelConfigForExp(modelConfigId)         // API call to fetch config
+renderModelConfigForExp(mc)                  // Render tower architecture
+renderExpTowerLayers(layers)                 // Render layer items
+calculateExpTowerParams(layers, inputDim)   // Calculate parameters
+
+// Parameters
+renderSamplingChips(exp)                     // Full sampling display
+renderTrainingParamsChips(exp)               // Full training params
+```
+
+#### CSS Classes
+
+Key CSS classes for the view modal visualization:
+
+- `.exp-view-tensor-panel`, `.exp-view-tensor-bar` - Tensor visualization
+- `.exp-view-tower-stack`, `.exp-view-layer-item` - Tower architecture
+- `.exp-view-layer-badge.dense`, `.dropout`, `.batch_norm` - Layer badges
+- `.target-column-view-card` - Target column for ranking models
+- `.exp-view-param-chip` - Parameter display chips
+
+---
 
 ### Training Runs List View
 

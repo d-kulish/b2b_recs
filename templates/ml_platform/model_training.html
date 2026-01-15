@@ -1,10 +1,2716 @@
 {% extends 'base_model.html' %}
+{% load humanize %}
+{% load static %}
 
-{% block title %}{{ model.name }} - PLACEHOLDER{% endblock %}
+{% block title %}{{ model.name }} - Training{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/modals.css' %}?v=2">
+<link rel="stylesheet" href="{% static 'css/pipeline_dag.css' %}?v=1">
+<style>
+    /* =========================================================================
+       Best Experiments Container Styles
+       ========================================================================= */
+
+    /* KPI Rows Container - 3 rows stacked vertically */
+    .best-exp-kpi-rows {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-bottom: 18px;
+    }
+
+    /* Each Model Type Row - Full width, single horizontal line */
+    .best-exp-model-row {
+        width: 100%;
+        background: white;
+        border: 1px solid #e5e7eb;
+        border-radius: 10px;
+        padding: 10px 14px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .best-exp-model-row:hover:not(.selected) {
+        border-color: #d1d5db;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    }
+
+    /* Row Header - Icon + Title (fixed width) */
+    .best-exp-row-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-shrink: 0;
+        min-width: 120px;
+    }
+
+    .best-exp-model-icon {
+        width: 22px;
+        height: 22px;
+        border-radius: 5px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        color: white;
+        flex-shrink: 0;
+    }
+
+    .best-exp-model-icon.retrieval {
+        background: linear-gradient(135deg, #8b5cf6 0%, #a78bfa 100%);
+    }
+
+    .best-exp-model-icon.ranking {
+        background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%);
+    }
+
+    .best-exp-model-icon.hybrid {
+        background: linear-gradient(135deg, #ec4899 0%, #f472b6 100%);
+    }
+
+    .best-exp-model-title {
+        font-size: 12px;
+        font-weight: 700;
+        color: #111827;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    /* KPI Boxes Container - Fills remaining space */
+    .best-exp-kpi-boxes {
+        display: flex;
+        flex-direction: row;
+        gap: 8px;
+        flex: 1;
+    }
+
+    /* Individual KPI Box - Equal width, fills row */
+    .best-exp-kpi-box {
+        flex: 1;
+        text-align: center;
+        padding: 6px 5px;
+        background: white;
+        border: 1px solid #e5e7eb;
+        border-radius: 6px;
+        min-width: 0;
+    }
+
+    .best-exp-kpi-box .best-exp-kpi-label {
+        font-size: 8px;
+        margin-bottom: 1px;
+        color: #6b7280;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+    }
+
+    .best-exp-kpi-box .best-exp-kpi-value {
+        font-size: 13px;
+        font-weight: 700;
+        color: #374151;
+    }
+
+    /* Model type color themes for metric values */
+    .best-exp-model-row.retrieval .best-exp-kpi-value.highlight {
+        color: #8b5cf6;
+    }
+
+    .best-exp-model-row.ranking .best-exp-kpi-value.highlight {
+        color: #f59e0b;
+    }
+
+    .best-exp-model-row.hybrid .best-exp-kpi-value.highlight {
+        color: #ec4899;
+    }
+
+    /* Row selection states */
+    .best-exp-model-row.retrieval.selected {
+        border-color: #8b5cf6;
+        border-width: 2px;
+        box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.15), 0 4px 12px rgba(139, 92, 246, 0.1);
+    }
+
+    .best-exp-model-row.ranking.selected {
+        border-color: #f59e0b;
+        border-width: 2px;
+        box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.15), 0 4px 12px rgba(245, 158, 11, 0.1);
+    }
+
+    .best-exp-model-row.hybrid.selected {
+        border-color: #ec4899;
+        border-width: 2px;
+        box-shadow: 0 0 0 3px rgba(236, 72, 153, 0.15), 0 4px 12px rgba(236, 72, 153, 0.1);
+    }
+
+    /* Best Experiments Section */
+    .best-exp-section {
+        margin-bottom: 0;
+    }
+
+    .best-exp-section-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 12px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid #e5e7eb;
+    }
+
+    .best-exp-section-title {
+        font-size: 14px;
+        font-weight: 600;
+        color: #374151;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    /* Best Experiments Table Container - Scrollable */
+    .best-exp-table-container {
+        max-height: 220px;
+        overflow-y: auto;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+    }
+
+    /* Best Experiments Table Styles */
+    .best-exp-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+    }
+
+    .best-exp-table th {
+        text-align: left;
+        padding: 10px 12px;
+        font-weight: 600;
+        color: #374151;
+        background: #f9fafb;
+        border-bottom: 2px solid #e5e7eb;
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        position: sticky;
+        top: 0;
+        z-index: 1;
+    }
+
+    .best-exp-table td {
+        padding: 10px 12px;
+        border-bottom: 1px solid #f3f4f6;
+        color: #4b5563;
+    }
+
+    .best-exp-table tr:hover {
+        background: #f9fafb;
+    }
+
+    .best-exp-table tr:last-child td {
+        border-bottom: none;
+    }
+
+    .best-exp-table .rank-cell {
+        font-weight: 700;
+        color: #6b7280;
+    }
+
+    .best-exp-table .rank-1 {
+        color: #f59e0b;
+    }
+
+    .best-exp-table .rank-2 {
+        color: #9ca3af;
+    }
+
+    .best-exp-table .rank-3 {
+        color: #b45309;
+    }
+
+    .best-exp-table .metric-best {
+        color: #10b981;
+        font-weight: 600;
+    }
+
+    /* Empty Section */
+    .best-exp-empty-section {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 32px;
+        color: #9ca3af;
+        text-align: center;
+    }
+
+    .best-exp-empty-section i {
+        font-size: 32px;
+        margin-bottom: 12px;
+        opacity: 0.5;
+    }
+
+    .best-exp-empty-section p {
+        font-size: 13px;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+        .best-exp-kpi-boxes {
+            flex-wrap: wrap;
+        }
+        .best-exp-kpi-box {
+            flex: 1 1 calc(50% - 4px);
+            min-width: calc(50% - 4px);
+        }
+    }
+
+    /* =========================================================================
+       Experiment View Modal Styles (Tabbed Design)
+       ========================================================================= */
+    .exp-view-modal {
+        width: 780px;
+        max-width: 780px;
+        height: 600px;
+    }
+
+    /* Header - Vertex Pipelines Style - 3 Column Layout */
+    .exp-view-header {
+        display: flex;
+        align-items: stretch;
+        gap: 0;
+        padding: 0;
+        border-radius: 12px 12px 0 0;
+        background: white;
+        overflow: hidden;
+        min-height: 110px;
+        position: relative;
+    }
+
+    /* Status gradient backgrounds for header */
+    .exp-view-header.running {
+        background: linear-gradient(to right,
+            rgba(255,255,255,1) 0%,
+            rgba(219,234,254,0.3) 30%,
+            rgba(219,234,254,0.7) 60%,
+            rgba(191,219,254,1) 100%);
+    }
+
+    .exp-view-header.submitting {
+        background: linear-gradient(to right,
+            rgba(255,255,255,1) 0%,
+            rgba(219,234,254,0.3) 30%,
+            rgba(219,234,254,0.7) 60%,
+            rgba(191,219,254,1) 100%);
+    }
+
+    .exp-view-header.completed {
+        background: linear-gradient(to right,
+            rgba(255,255,255,1) 0%,
+            rgba(220,237,222,0.4) 30%,
+            rgba(200,225,204,0.7) 60%,
+            rgba(178,212,183,1) 100%);
+    }
+
+    .exp-view-header.failed {
+        background: linear-gradient(to right,
+            rgba(255,255,255,1) 0%,
+            rgba(254,226,226,0.3) 30%,
+            rgba(254,226,226,0.7) 60%,
+            rgba(254,202,202,1) 100%);
+    }
+
+    .exp-view-header.cancelled {
+        background: linear-gradient(to right,
+            rgba(255,255,255,1) 0%,
+            rgba(229,231,235,0.3) 30%,
+            rgba(229,231,235,0.7) 60%,
+            rgba(209,213,219,1) 100%);
+    }
+
+    .exp-view-header.pending {
+        background: linear-gradient(to right,
+            rgba(255,255,255,1) 0%,
+            rgba(229,231,235,0.3) 30%,
+            rgba(229,231,235,0.7) 60%,
+            rgba(209,213,219,1) 100%);
+    }
+
+    /* Column 1: Experiment Number (20%, centered) */
+    .exp-view-header-number {
+        width: 20%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 16px;
+    }
+
+    .exp-view-title {
+        font-size: 18px;
+        font-weight: 700;
+        color: #111827;
+        margin: 0;
+    }
+
+    /* Column 2: Name, Description, Times (60%, left-aligned) */
+    .exp-view-header-info {
+        width: 60%;
+        padding: 16px 24px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+    }
+
+    .exp-view-exp-name {
+        font-size: 15px;
+        font-weight: 600;
+        color: #374151;
+        margin: 0 0 4px;
+    }
+
+    .exp-view-header-type-row {
+        margin-top: 8px;
+    }
+
+    .exp-view-header-type-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 3px 10px;
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        white-space: nowrap;
+    }
+
+    .exp-view-header-type-badge i {
+        font-size: 10px;
+    }
+
+    .exp-view-header-type-badge.retrieval {
+        background: #dbeafe;
+        color: #1e40af;
+        border: 1px solid #bfdbfe;
+    }
+
+    .exp-view-header-type-badge.ranking {
+        background: #fef3c7;
+        color: #92400e;
+        border: 1px solid #fde68a;
+    }
+
+    .exp-view-header-type-badge.multitask {
+        background: linear-gradient(135deg, #dbeafe 0%, #f3e8ff 100%);
+        color: #6b21a8;
+        border: 1px solid #e9d5ff;
+    }
+
+    .exp-view-description {
+        font-size: 13px;
+        color: #9ca3af;
+        margin: 0 0 8px;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        line-height: 1.4;
+    }
+
+    .exp-view-times {
+        display: flex;
+        gap: 24px;
+        font-size: 13px;
+        color: #9ca3af;
+    }
+
+    .exp-view-times span {
+        color: #374151;
+        font-weight: 500;
+    }
+
+    /* Column 3: Status Panel (20%, centered) */
+    .exp-view-status-panel {
+        width: 20%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 16px;
+    }
+
+    .exp-view-status-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 20px;
+    }
+
+    .exp-view-status-icon.pending {
+        background: #e5e7eb;
+        color: #6b7280;
+    }
+
+    .exp-view-status-icon.submitting,
+    .exp-view-status-icon.running {
+        background: #dbeafe;
+        color: #2563eb;
+    }
+
+    .exp-view-status-icon.completed {
+        background: #dcfce7;
+        color: #16a34a;
+    }
+
+    .exp-view-status-icon.failed {
+        background: #fee2e2;
+        color: #dc2626;
+    }
+
+    .exp-view-status-icon.cancelled {
+        background: #e5e7eb;
+        color: #6b7280;
+    }
+
+    /* Tab Navigation */
+    .exp-view-tabs {
+        display: flex;
+        border-bottom: 1px solid #e5e7eb;
+        padding: 0 24px;
+        background: #fafafa;
+    }
+
+    .exp-view-tab {
+        padding: 12px 20px;
+        font-size: 13px;
+        font-weight: 500;
+        color: #6b7280;
+        background: none;
+        border: none;
+        cursor: pointer;
+        position: relative;
+        transition: all 0.15s ease;
+    }
+
+    .exp-view-tab:hover {
+        color: #374151;
+    }
+
+    .exp-view-tab.active {
+        color: #2563eb;
+    }
+
+    .exp-view-tab.active::after {
+        content: '';
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 2px;
+        background: #2563eb;
+    }
+
+    /* Tab Content */
+    .exp-view-body {
+        padding: 20px 24px;
+        overflow-y: auto;
+        max-height: calc(600px - 170px);
+    }
+
+    .exp-view-tab-content {
+        display: none;
+    }
+
+    .exp-view-tab-content.active {
+        display: block;
+    }
+
+    /* Section Groups */
+    .exp-view-section-group {
+        margin-bottom: 20px;
+    }
+
+    .exp-view-group-title {
+        font-size: 12px;
+        font-weight: 600;
+        color: #6b7280;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin: 0 0 10px 0;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .exp-view-loading {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: #9ca3af;
+        font-size: 13px;
+        padding: 16px;
+    }
+
+    /* Training params chips */
+    .exp-view-training-params {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .exp-view-param-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        background: #f3f4f6;
+        border-radius: 6px;
+        font-size: 12px;
+    }
+
+    .exp-view-param-chip .param-label {
+        color: #6b7280;
+    }
+
+    .exp-view-param-chip .param-value {
+        color: #111827;
+        font-weight: 600;
+    }
+
+    /* Results Summary */
+    .exp-view-results-summary {
+        background: #f0fdf4;
+        border: 1px solid #bbf7d0;
+        border-radius: 8px;
+        padding: 16px;
+        margin-bottom: 20px;
+    }
+
+    .exp-view-metrics-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+    }
+
+    .exp-view-metric-card {
+        flex: 1;
+        min-width: 100px;
+        background: white;
+        border: 1px solid #dcfce7;
+        border-radius: 8px;
+        padding: 12px;
+        text-align: center;
+    }
+
+    .exp-view-metric-label {
+        font-size: 11px;
+        color: #6b7280;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+        margin-bottom: 4px;
+    }
+
+    .exp-view-metric-value {
+        font-size: 18px;
+        font-weight: 700;
+        color: #16a34a;
+    }
+
+    /* Error Box */
+    .exp-view-error-box {
+        background: #fef2f2;
+        border: 1px solid #fecaca;
+        border-radius: 8px;
+        padding: 16px;
+        margin-top: 16px;
+    }
+
+    .exp-view-error-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 14px;
+        font-weight: 600;
+        color: #dc2626;
+        margin-bottom: 8px;
+    }
+
+    .exp-view-error-suggestion {
+        font-size: 13px;
+        color: #7f1d1d;
+        margin-bottom: 12px;
+    }
+
+    .exp-view-error-toggle {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        background: none;
+        border: none;
+        font-size: 12px;
+        color: #b91c1c;
+        cursor: pointer;
+        padding: 0;
+    }
+
+    .exp-view-error-content {
+        margin-top: 12px;
+        padding: 12px;
+        background: #fef2f2;
+        border-radius: 6px;
+        overflow-x: auto;
+    }
+
+    .exp-view-error-content pre {
+        margin: 0;
+        font-size: 11px;
+        color: #991b1b;
+        white-space: pre-wrap;
+        word-break: break-all;
+    }
+
+    /* Dataset Details */
+    .exp-view-ds-section {
+        background: #f9fafb;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        padding: 12px;
+        margin-bottom: 12px;
+    }
+
+    .exp-view-ds-title {
+        font-size: 12px;
+        font-weight: 600;
+        color: #374151;
+        margin-bottom: 8px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .exp-view-ds-title i {
+        color: #6b7280;
+    }
+
+    .exp-view-ds-grid {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 4px 12px;
+        font-size: 12px;
+    }
+
+    .exp-view-ds-grid .label {
+        color: #6b7280;
+    }
+
+    .exp-view-ds-grid .value {
+        color: #374151;
+        font-weight: 500;
+    }
+
+    .exp-view-ds-join {
+        margin-top: 8px;
+        padding-top: 8px;
+        border-top: 1px dashed #e5e7eb;
+        font-size: 12px;
+    }
+
+    .exp-view-ds-join > span {
+        color: #6b7280;
+        display: block;
+        margin-bottom: 4px;
+    }
+
+    .exp-view-ds-join-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 0;
+    }
+
+    .exp-view-ds-join-row .key {
+        font-family: monospace;
+        font-size: 11px;
+        color: #374151;
+        background: #e5e7eb;
+        padding: 2px 6px;
+        border-radius: 4px;
+    }
+
+    .exp-view-ds-join-row .badge {
+        font-size: 10px;
+        color: #6b7280;
+        background: #f3f4f6;
+        padding: 2px 6px;
+        border-radius: 4px;
+        text-transform: uppercase;
+    }
+
+    .exp-view-ds-filter {
+        background: white;
+        border: 1px solid #e5e7eb;
+        border-radius: 6px;
+        padding: 10px;
+        margin-bottom: 8px;
+    }
+
+    .exp-view-ds-filter-title {
+        font-size: 11px;
+        font-weight: 600;
+        color: #374151;
+        margin-bottom: 6px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .exp-view-ds-filter-title i {
+        color: #6b7280;
+    }
+
+    .exp-view-ds-filter-detail {
+        font-size: 11px;
+        color: #6b7280;
+        margin-left: 18px;
+    }
+
+    .exp-view-no-filters {
+        font-size: 12px;
+        color: #9ca3af;
+        font-style: italic;
+        padding: 8px;
+    }
+
+    /* Progress Bar */
+    .exp-view-progress-section {
+        margin-bottom: 16px;
+    }
+
+    .exp-view-progress-bar-container {
+        height: 8px;
+        background: #e5e7eb;
+        border-radius: 4px;
+        overflow: hidden;
+        margin-bottom: 4px;
+    }
+
+    .exp-view-progress-bar {
+        height: 100%;
+        background: linear-gradient(90deg, #3b82f6, #60a5fa);
+        border-radius: 4px;
+        transition: width 0.3s ease;
+    }
+
+    .exp-view-progress-text {
+        font-size: 11px;
+        color: #6b7280;
+    }
+
+    /* Target Column Card (for Overview tab - ranking models) */
+    .target-column-view-card {
+        background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+        border: 1.5px solid #fbbf24;
+        border-radius: 10px;
+        padding: 12px 14px;
+        margin-bottom: 16px;
+    }
+    .target-column-view-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 10px;
+        font-size: 13px;
+        font-weight: 600;
+        color: #b45309;
+    }
+    .target-column-view-header i {
+        color: #f59e0b;
+    }
+    .target-column-view-badge {
+        background: #fbbf24;
+        color: white;
+        font-size: 10px;
+        font-weight: 600;
+        padding: 2px 8px;
+        border-radius: 10px;
+        margin-left: auto;
+    }
+    .target-column-view-content {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        background: white;
+        border: 1px solid #fcd34d;
+        border-radius: 8px;
+        padding: 8px 12px;
+    }
+    .target-column-view-name {
+        font-weight: 600;
+        color: #92400e;
+        font-size: 14px;
+    }
+    .target-column-view-type {
+        background: #fef3c7;
+        color: #b45309;
+        font-size: 11px;
+        font-weight: 500;
+        padding: 2px 8px;
+        border-radius: 4px;
+        text-transform: uppercase;
+    }
+    .target-column-view-transforms {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 10px;
+    }
+    .target-transform-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        background: white;
+        border: 1px solid #fde68a;
+        padding: 3px 8px;
+        border-radius: 4px;
+        font-size: 11px;
+        color: #92400e;
+    }
+
+    /* Features Config (Tensor Visualization) */
+    .exp-view-features-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+    }
+    .exp-view-tensor-panel {
+        padding: 16px;
+        border-radius: 10px;
+    }
+    .exp-view-tensor-panel.buyer {
+        background: #eff6ff;
+    }
+    .exp-view-tensor-panel.product {
+        background: #ecfdf5;
+    }
+    .exp-view-tensor-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 12px;
+    }
+    .exp-view-tensor-title {
+        font-size: 14px;
+        font-weight: 600;
+    }
+    .exp-view-tensor-title.buyer {
+        color: #1d4ed8;
+    }
+    .exp-view-tensor-title.product {
+        color: #059669;
+    }
+    .exp-view-tensor-total {
+        font-size: 14px;
+        font-weight: 600;
+    }
+    .exp-view-tensor-total.buyer {
+        color: #3b82f6;
+    }
+    .exp-view-tensor-total.product {
+        color: #10b981;
+    }
+    .exp-view-tensor-bar {
+        display: flex;
+        height: 20px;
+        border-radius: 5px;
+        overflow: hidden;
+        background: #e5e7eb;
+        margin-bottom: 10px;
+    }
+    .exp-view-tensor-segment {
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 10px;
+        font-weight: 500;
+        color: white;
+        transition: width 0.3s ease;
+        overflow: hidden;
+        white-space: nowrap;
+    }
+    .exp-view-tensor-features {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+    .exp-view-tensor-feature-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 12px;
+    }
+    .exp-view-tensor-feature-name {
+        color: #374151;
+    }
+    .exp-view-tensor-feature-name.cross {
+        font-style: italic;
+    }
+    .exp-view-tensor-feature-name.buyer {
+        color: #1d4ed8;
+    }
+    .exp-view-tensor-feature-name.product {
+        color: #059669;
+    }
+    .exp-view-tensor-feature-dim {
+        font-weight: 500;
+    }
+    .exp-view-tensor-feature-dim.buyer {
+        color: #3b82f6;
+    }
+    .exp-view-tensor-feature-dim.product {
+        color: #10b981;
+    }
+
+    /* Model Config (Tower Architecture Visualization) */
+    .exp-view-model-type-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 12px;
+        border-radius: 6px;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 16px;
+    }
+    .exp-view-model-type-badge i {
+        font-size: 10px;
+    }
+    .exp-view-model-type-badge.retrieval {
+        background: #dbeafe;
+        color: #1e40af;
+        border: 1px solid #bfdbfe;
+    }
+    .exp-view-model-type-badge.ranking {
+        background: #fef3c7;
+        color: #92400e;
+        border: 1px solid #fde68a;
+    }
+    .exp-view-model-type-badge.multitask {
+        background: linear-gradient(135deg, #dbeafe 0%, #f3e8ff 100%);
+        color: #6b21a8;
+        border: 1px solid #e9d5ff;
+    }
+    .exp-view-tower-section-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: #374151;
+        margin-bottom: 12px;
+    }
+    .exp-view-towers-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+        margin-bottom: 16px;
+    }
+    .exp-view-tower-column {
+        min-width: 0;
+    }
+    .exp-view-tower-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 8px;
+    }
+    .exp-view-tower-label {
+        font-size: 10px;
+        font-weight: 600;
+        color: #6b7280;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .exp-view-tower-stack {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        border-radius: 10px;
+        padding: 10px;
+        border: 2px dashed;
+        min-height: 80px;
+    }
+    .exp-view-tower-stack.buyer {
+        background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+        border-color: #3b82f6;
+    }
+    .exp-view-tower-stack.product {
+        background: linear-gradient(135deg, #f0fdf4 0%, #d1fae5 100%);
+        border-color: #10b981;
+    }
+    .exp-view-tower-stack.ranking {
+        background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%);
+        border-color: #8b5cf6;
+    }
+    .exp-view-layer-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 10px;
+        background: white;
+        border-radius: 6px;
+        border: 1px solid rgba(0, 0, 0, 0.08);
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    }
+    .exp-view-tower-stack.buyer .exp-view-layer-item {
+        border-color: rgba(59, 130, 246, 0.2);
+    }
+    .exp-view-tower-stack.product .exp-view-layer-item {
+        border-color: rgba(16, 185, 129, 0.2);
+    }
+    .exp-view-tower-stack.ranking .exp-view-layer-item {
+        border-color: rgba(139, 92, 246, 0.2);
+    }
+    .exp-view-layer-item.output-layer {
+        border: 2px solid #f87171;
+    }
+    .exp-view-layer-drag {
+        color: #c4c4c4;
+        font-size: 11px;
+    }
+    .exp-view-layer-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 9px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+        flex-shrink: 0;
+    }
+    .exp-view-layer-badge.dense {
+        background: #e5e7eb;
+        color: #374151;
+    }
+    .exp-view-layer-badge.dropout {
+        background: #fef3c7;
+        color: #92400e;
+    }
+    .exp-view-layer-badge.batch_norm,
+    .exp-view-layer-badge.layer_norm {
+        background: #f3e8ff;
+        color: #7c3aed;
+    }
+    .exp-view-layer-params {
+        font-size: 11px;
+        color: #4b5563;
+    }
+    .exp-view-tower-params {
+        margin-top: 8px;
+        padding: 8px 10px;
+        border-radius: 6px;
+        border: 2px dashed;
+        font-size: 11px;
+        font-family: 'SF Mono', Monaco, monospace;
+    }
+    .exp-view-tower-params.buyer {
+        border-color: #93c5fd;
+        background: #eff6ff;
+    }
+    .exp-view-tower-params.product {
+        border-color: #6ee7b7;
+        background: #ecfdf5;
+    }
+    .exp-view-tower-params.ranking {
+        border-color: #c4b5fd;
+        background: #f5f3ff;
+    }
+    .exp-view-tower-params-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 2px 0;
+    }
+    .exp-view-tower-params-row span:first-child {
+        color: #6b7280;
+    }
+    .exp-view-tower-params-row span:last-child {
+        font-weight: 500;
+        color: #374151;
+    }
+    .exp-view-param-chip-label {
+        color: #6b7280;
+    }
+    .exp-view-param-chip-value {
+        font-weight: 600;
+        color: #111827;
+    }
+    .exp-view-rating-head-section {
+        margin-top: 16px;
+    }
+    .exp-view-rating-head-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: #374151;
+        margin-bottom: 8px;
+    }
+    .exp-view-rating-head-label {
+        font-size: 10px;
+        font-weight: 600;
+        color: #8b5cf6;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 8px;
+    }
+    .exp-view-rating-tower-wrapper {
+        max-width: 280px;
+    }
+</style>
+{% endblock %}
 
 {% block model_content %}
-<div class="bg-white rounded-lg shadow p-6">
-    <h2 class="text-2xl font-bold text-gray-900 mb-4">PLACEHOLDER_TITLE</h2>
-    <p class="text-gray-600">This page is under development.</p>
+<!-- Best Experiments Container -->
+<div class="bg-white rounded-xl border border-black shadow-lg p-6">
+    <div class="flex items-center gap-3 mb-6">
+        <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
+            <i class="fas fa-trophy text-white text-lg"></i>
+        </div>
+        <div>
+            <h2 class="text-lg font-bold text-gray-900">Best Experiments</h2>
+            <p class="text-sm text-gray-500">Top performing experiment configurations</p>
+        </div>
+    </div>
+
+    <!-- Loading State -->
+    <div id="bestExpLoading" class="flex items-center justify-center py-12">
+        <i class="fas fa-spinner fa-spin text-2xl text-gray-400 mr-3"></i>
+        <span class="text-gray-500">Loading experiments...</span>
+    </div>
+
+    <!-- Empty State -->
+    <div id="bestExpEmpty" class="hidden">
+        <div class="best-exp-empty-section">
+            <i class="fas fa-flask"></i>
+            <p>No completed experiments yet.<br>Run some experiments to see results here.</p>
+        </div>
+    </div>
+
+    <!-- Content -->
+    <div id="bestExpContent" class="hidden">
+        <!-- KPI Rows: 3 Full-Width Rows Stacked Vertically -->
+        <div class="best-exp-kpi-rows">
+            <!-- Row 1: Retrieval -->
+            <div id="bestExpRetrievalRow" class="best-exp-model-row retrieval selected" onclick="selectBestExpModelType('retrieval')">
+                <div class="best-exp-row-header">
+                    <div class="best-exp-model-icon retrieval">
+                        <i class="fas fa-search"></i>
+                    </div>
+                    <span class="best-exp-model-title">Retrieval</span>
+                </div>
+                <div class="best-exp-kpi-boxes">
+                    <div class="best-exp-kpi-box">
+                        <div class="best-exp-kpi-label">Experiments</div>
+                        <div class="best-exp-kpi-value" id="bestExpRetrievalCount">0</div>
+                    </div>
+                    <div class="best-exp-kpi-box">
+                        <div class="best-exp-kpi-label">R@5</div>
+                        <div class="best-exp-kpi-value highlight" id="bestExpRetrievalR5">-</div>
+                    </div>
+                    <div class="best-exp-kpi-box">
+                        <div class="best-exp-kpi-label">R@10</div>
+                        <div class="best-exp-kpi-value highlight" id="bestExpRetrievalR10">-</div>
+                    </div>
+                    <div class="best-exp-kpi-box">
+                        <div class="best-exp-kpi-label">R@50</div>
+                        <div class="best-exp-kpi-value highlight" id="bestExpRetrievalR50">-</div>
+                    </div>
+                    <div class="best-exp-kpi-box">
+                        <div class="best-exp-kpi-label">R@100</div>
+                        <div class="best-exp-kpi-value highlight" id="bestExpRetrievalR100">-</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Row 2: Ranking -->
+            <div id="bestExpRankingRow" class="best-exp-model-row ranking" onclick="selectBestExpModelType('ranking')">
+                <div class="best-exp-row-header">
+                    <div class="best-exp-model-icon ranking">
+                        <i class="fas fa-sort-amount-down"></i>
+                    </div>
+                    <span class="best-exp-model-title">Ranking</span>
+                </div>
+                <div class="best-exp-kpi-boxes">
+                    <div class="best-exp-kpi-box">
+                        <div class="best-exp-kpi-label">Experiments</div>
+                        <div class="best-exp-kpi-value" id="bestExpRankingCount">0</div>
+                    </div>
+                    <div class="best-exp-kpi-box">
+                        <div class="best-exp-kpi-label">RMSE</div>
+                        <div class="best-exp-kpi-value highlight" id="bestExpRankingRMSE">-</div>
+                    </div>
+                    <div class="best-exp-kpi-box">
+                        <div class="best-exp-kpi-label">Test RMSE</div>
+                        <div class="best-exp-kpi-value highlight" id="bestExpRankingTestRMSE">-</div>
+                    </div>
+                    <div class="best-exp-kpi-box">
+                        <div class="best-exp-kpi-label">MAE</div>
+                        <div class="best-exp-kpi-value highlight" id="bestExpRankingMAE">-</div>
+                    </div>
+                    <div class="best-exp-kpi-box">
+                        <div class="best-exp-kpi-label">Test MAE</div>
+                        <div class="best-exp-kpi-value highlight" id="bestExpRankingTestMAE">-</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Row 3: Hybrid -->
+            <div id="bestExpHybridRow" class="best-exp-model-row hybrid" onclick="selectBestExpModelType('hybrid')">
+                <div class="best-exp-row-header">
+                    <div class="best-exp-model-icon hybrid">
+                        <i class="fas fa-layer-group"></i>
+                    </div>
+                    <span class="best-exp-model-title">Hybrid</span>
+                </div>
+                <div class="best-exp-kpi-boxes">
+                    <div class="best-exp-kpi-box">
+                        <div class="best-exp-kpi-label">Experiments</div>
+                        <div class="best-exp-kpi-value" id="bestExpHybridCount">0</div>
+                    </div>
+                    <div class="best-exp-kpi-box">
+                        <div class="best-exp-kpi-label">R@50</div>
+                        <div class="best-exp-kpi-value highlight" id="bestExpHybridR50">-</div>
+                    </div>
+                    <div class="best-exp-kpi-box">
+                        <div class="best-exp-kpi-label">R@100</div>
+                        <div class="best-exp-kpi-value highlight" id="bestExpHybridR100">-</div>
+                    </div>
+                    <div class="best-exp-kpi-box">
+                        <div class="best-exp-kpi-label">RMSE</div>
+                        <div class="best-exp-kpi-value highlight" id="bestExpHybridRMSE">-</div>
+                    </div>
+                    <div class="best-exp-kpi-box">
+                        <div class="best-exp-kpi-label">Test RMSE</div>
+                        <div class="best-exp-kpi-value highlight" id="bestExpHybridTestRMSE">-</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Top Configurations Table -->
+        <div class="best-exp-section">
+            <div class="best-exp-section-header">
+                <span class="best-exp-section-title" id="bestExpTableTitle">Top Configurations</span>
+                <span class="text-xs text-gray-400" id="bestExpTableSubtitle">Best performing experiment configurations</span>
+            </div>
+            <div id="bestExpTableContainer" class="best-exp-table-container">
+                <table class="best-exp-table">
+                    <thead id="bestExpTableHead">
+                        <tr>
+                            <th style="width: 40px;">#</th>
+                            <th style="text-align: center;">Experiment</th>
+                            <th>Dataset</th>
+                            <th>Feature</th>
+                            <th>Model</th>
+                            <th style="text-align: center;">LR</th>
+                            <th style="text-align: center;">Batch</th>
+                            <th style="text-align: center;">Epochs</th>
+                            <th style="text-align: center;">R@100</th>
+                            <th style="text-align: center;">Loss</th>
+                        </tr>
+                    </thead>
+                    <tbody id="bestExpTableBody">
+                        <!-- Populated by JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
 </div>
+
+<!-- ============================================================================
+     EXPERIMENT VIEW MODAL (Tabbed design)
+     ============================================================================ -->
+<div id="expViewModal" class="modal-overlay hidden" onclick="closeExpViewModal(event)">
+    <div class="modal-container exp-view-modal" onclick="event.stopPropagation()">
+        <!-- Header - 3 Column Layout -->
+        <div class="modal-header exp-view-header" id="expViewHeader">
+            <!-- Column 1: Experiment Number -->
+            <div class="exp-view-header-number">
+                <h3 class="exp-view-title" id="expViewTitle">Exp #1</h3>
+            </div>
+            <!-- Column 2: Name, Description, Times -->
+            <div class="exp-view-header-info">
+                <div class="exp-view-exp-name" id="expViewExpName"></div>
+                <div class="exp-view-description" id="expViewDescription"></div>
+                <div class="exp-view-times">
+                    <div>Start: <span id="expViewStartTime">-</span></div>
+                    <div>End: <span id="expViewEndTime">-</span></div>
+                </div>
+                <div class="exp-view-header-type-row">
+                    <span class="exp-view-header-type-badge" id="expViewTypeBadge"></span>
+                </div>
+            </div>
+            <!-- Column 3: Status Panel -->
+            <div class="exp-view-status-panel" id="expViewStatusPanel">
+                <div class="exp-view-status-icon" id="expViewStatusIcon">
+                    <i class="fas fa-spinner fa-spin"></i>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab Navigation -->
+        <div class="exp-view-tabs">
+            <button class="exp-view-tab active" data-tab="overview" onclick="switchExpViewTab('overview')">
+                Overview
+            </button>
+            <button class="exp-view-tab" data-tab="pipeline" onclick="switchExpViewTab('pipeline')">
+                Pipeline
+            </button>
+            <button class="exp-view-tab" data-tab="training" onclick="switchExpViewTab('training')">
+                Training
+            </button>
+        </div>
+
+        <!-- Tab Content -->
+        <div class="modal-body exp-view-body">
+            <!-- Overview Tab -->
+            <div id="expViewTabOverview" class="exp-view-tab-content active">
+                <!-- Results Summary (for completed experiments) -->
+                <div id="expViewResultsSummary" class="exp-view-results-summary hidden">
+                    <h4 class="exp-view-group-title">Results</h4>
+                    <div class="exp-view-metrics-row" id="expViewMetricsSummary">
+                        <!-- Populated by JavaScript -->
+                    </div>
+                </div>
+
+                <!-- Dataset Section -->
+                <div class="exp-view-section-group">
+                    <h4 class="exp-view-group-title">
+                        <span><i class="fas fa-layer-group" style="margin-right:6px;"></i>DATASET: <span id="expViewDatasetName" style="color:#374151;">-</span></span>
+                    </h4>
+                    <div id="expViewDatasetDetails" class="exp-view-dataset-details">
+                        <div class="exp-view-loading"><i class="fas fa-spinner fa-spin"></i> Loading...</div>
+                    </div>
+                </div>
+
+                <!-- Features Config Section -->
+                <div class="exp-view-section-group">
+                    <h4 class="exp-view-group-title">
+                        <span>Features config: <span id="expViewFeaturesConfigName" style="color:#374151;">-</span></span>
+                    </h4>
+                    <div id="expViewFeaturesConfigContent">
+                        <div class="exp-view-loading"><i class="fas fa-spinner fa-spin"></i> Loading...</div>
+                    </div>
+                </div>
+
+                <!-- Model Config Section -->
+                <div class="exp-view-section-group">
+                    <h4 class="exp-view-group-title">
+                        <span>Model config: <span id="expViewModelConfigName" style="color:#374151;">-</span></span>
+                    </h4>
+                    <div id="expViewModelConfigContent">
+                        <div class="exp-view-loading"><i class="fas fa-spinner fa-spin"></i> Loading...</div>
+                    </div>
+                </div>
+
+                <div class="exp-view-section-group">
+                    <h4 class="exp-view-group-title">Sampling</h4>
+                    <div id="expViewSamplingChips" class="exp-view-training-params">
+                        <!-- Populated by JavaScript -->
+                    </div>
+                </div>
+
+                <div class="exp-view-section-group">
+                    <h4 class="exp-view-group-title">Training Parameters</h4>
+                    <div id="expViewTrainingParamsChips" class="exp-view-training-params">
+                        <!-- Populated by JavaScript -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pipeline Tab -->
+            <div id="expViewTabPipeline" class="exp-view-tab-content">
+                <!-- Progress Bar (for running experiments) -->
+                <div id="expViewProgressSection" class="exp-view-progress-section" style="display: none;">
+                    <div class="exp-view-progress-bar-container">
+                        <div class="exp-view-progress-bar" id="expViewProgressBar" style="width: 0%"></div>
+                    </div>
+                    <span class="exp-view-progress-text" id="expViewProgressText">0%</span>
+                </div>
+
+                {% include 'includes/_pipeline_dag.html' %}
+
+                <!-- Error Section (for failed experiments) -->
+                <div id="expViewErrorSection" class="exp-view-error-box hidden">
+                    <div class="exp-view-error-header">
+                        <i class="fas fa-exclamation-circle"></i>
+                        <span id="expViewErrorTitle">Pipeline Failed</span>
+                    </div>
+                    <p class="exp-view-error-suggestion" id="expViewErrorSuggestion"></p>
+                    <div class="exp-view-error-details">
+                        <button class="exp-view-error-toggle" onclick="toggleErrorDetails()">
+                            <span id="expViewErrorToggleText">Show Error Details</span>
+                            <i class="fas fa-chevron-down" id="expViewErrorToggleIcon"></i>
+                        </button>
+                        <div id="expViewErrorDetails" class="exp-view-error-content hidden">
+                            <pre id="expViewErrorMessage"></pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Training Tab -->
+            <div id="expViewTabTraining" class="exp-view-tab-content">
+                <div id="expViewTrainingLoading" class="exp-view-loading">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <span>Loading training history...</span>
+                </div>
+                <div id="expViewTrainingContent" class="hidden">
+                    <div id="expViewTrainingChartContainer" style="height: 300px; position: relative;">
+                        <canvas id="expViewTrainingChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+// =============================================================================
+// BEST EXPERIMENTS - STATE & INITIALIZATION
+// =============================================================================
+
+let selectedBestExpModelType = 'retrieval';
+let viewModalExpId = null;
+let viewModalPollInterval = null;
+let viewModalDataCache = {
+    statistics: null,
+    trainingHistory: null
+};
+let currentViewTab = 'overview';
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', function() {
+    loadBestExperiments();
+});
+
+// =============================================================================
+// LOAD BEST EXPERIMENTS DATA
+// =============================================================================
+
+async function loadBestExperiments() {
+    const loadingEl = document.getElementById('bestExpLoading');
+    const contentEl = document.getElementById('bestExpContent');
+    const emptyEl = document.getElementById('bestExpEmpty');
+
+    try {
+        // Load dashboard stats
+        const statsResponse = await fetch('/api/experiments/dashboard-stats/');
+        const statsData = await statsResponse.json();
+
+        if (!statsData.success) {
+            console.warn('Dashboard stats error:', statsData.error);
+            loadingEl.classList.add('hidden');
+            emptyEl.classList.remove('hidden');
+            return;
+        }
+
+        const stats = statsData.stats;
+
+        // Check if we have any experiments
+        if (stats.total === 0) {
+            loadingEl.classList.add('hidden');
+            emptyEl.classList.remove('hidden');
+            return;
+        }
+
+        // Render Model Type KPI Sections
+        renderBestExpKPIs(stats);
+
+        // Show content, hide loading
+        loadingEl.classList.add('hidden');
+        contentEl.classList.remove('hidden');
+
+        // Load top configurations for default model type
+        await loadBestExpConfigurations();
+
+    } catch (error) {
+        console.error('Failed to load best experiments:', error);
+        loadingEl.classList.add('hidden');
+        emptyEl.classList.remove('hidden');
+    }
+}
+
+function renderBestExpKPIs(stats) {
+    const formatMetric = (v, decimals = 3) => v !== null && v !== undefined ? v.toFixed(decimals) : '-';
+
+    // Retrieval Section
+    const retrieval = stats.retrieval || {};
+    document.getElementById('bestExpRetrievalCount').textContent = retrieval.count || 0;
+    document.getElementById('bestExpRetrievalR5').textContent = formatMetric(retrieval.best_r5);
+    document.getElementById('bestExpRetrievalR10').textContent = formatMetric(retrieval.best_r10);
+    document.getElementById('bestExpRetrievalR50').textContent = formatMetric(retrieval.best_r50);
+    document.getElementById('bestExpRetrievalR100').textContent = formatMetric(retrieval.best_r100);
+
+    // Ranking Section
+    const ranking = stats.ranking || {};
+    document.getElementById('bestExpRankingCount').textContent = ranking.count || 0;
+    document.getElementById('bestExpRankingRMSE').textContent = formatMetric(ranking.best_rmse, 4);
+    document.getElementById('bestExpRankingTestRMSE').textContent = formatMetric(ranking.best_test_rmse, 4);
+    document.getElementById('bestExpRankingMAE').textContent = formatMetric(ranking.best_mae, 4);
+    document.getElementById('bestExpRankingTestMAE').textContent = formatMetric(ranking.best_test_mae, 4);
+
+    // Hybrid Section
+    const hybrid = stats.hybrid || {};
+    document.getElementById('bestExpHybridCount').textContent = hybrid.count || 0;
+    document.getElementById('bestExpHybridR50').textContent = formatMetric(hybrid.best_r50);
+    document.getElementById('bestExpHybridR100').textContent = formatMetric(hybrid.best_r100);
+    document.getElementById('bestExpHybridRMSE').textContent = formatMetric(hybrid.best_rmse, 4);
+    document.getElementById('bestExpHybridTestRMSE').textContent = formatMetric(hybrid.best_test_rmse, 4);
+}
+
+// =============================================================================
+// MODEL TYPE SELECTION
+// =============================================================================
+
+function selectBestExpModelType(modelType) {
+    if (selectedBestExpModelType === modelType) return;
+
+    selectedBestExpModelType = modelType;
+
+    // Update visual selection
+    const rows = document.querySelectorAll('.best-exp-model-row');
+    rows.forEach(row => row.classList.remove('selected'));
+
+    const rowId = {
+        'retrieval': 'bestExpRetrievalRow',
+        'ranking': 'bestExpRankingRow',
+        'hybrid': 'bestExpHybridRow'
+    }[modelType];
+
+    const selectedRow = document.getElementById(rowId);
+    if (selectedRow) {
+        selectedRow.classList.add('selected');
+    }
+
+    // Reload configurations table for the selected model type
+    loadBestExpConfigurations(modelType);
+}
+
+// =============================================================================
+// TOP CONFIGURATIONS TABLE
+// =============================================================================
+
+async function loadBestExpConfigurations(modelType = null) {
+    const thead = document.getElementById('bestExpTableHead');
+    const tbody = document.getElementById('bestExpTableBody');
+    const titleEl = document.getElementById('bestExpTableTitle');
+    const subtitleEl = document.getElementById('bestExpTableSubtitle');
+
+    const activeModelType = modelType || selectedBestExpModelType;
+
+    // Update header based on model type
+    const headerConfig = {
+        'retrieval': {
+            title: 'Top Configurations',
+            subtitle: 'Best performing retrieval experiments (by R@100)'
+        },
+        'ranking': {
+            title: 'Top Configurations',
+            subtitle: 'Best performing ranking experiments (by Test RMSE, lower is better)'
+        },
+        'hybrid': {
+            title: 'Top Configurations',
+            subtitle: 'Best performing hybrid experiments'
+        }
+    };
+    const config = headerConfig[activeModelType] || headerConfig['retrieval'];
+    if (titleEl) titleEl.textContent = config.title;
+    if (subtitleEl) subtitleEl.textContent = config.subtitle;
+
+    // Update table header based on model type
+    if (activeModelType === 'ranking') {
+        thead.innerHTML = `
+            <tr>
+                <th style="width: 40px;">#</th>
+                <th style="text-align: center;">Experiment</th>
+                <th>Dataset</th>
+                <th>Feature</th>
+                <th>Model</th>
+                <th style="text-align: center;">LR</th>
+                <th style="text-align: center;">Batch</th>
+                <th style="text-align: center;">Epochs</th>
+                <th style="text-align: center;">Test RMSE</th>
+                <th style="text-align: center;">Test MAE</th>
+            </tr>
+        `;
+    } else if (activeModelType === 'hybrid') {
+        thead.innerHTML = `
+            <tr>
+                <th style="width: 40px;">#</th>
+                <th style="text-align: center;">Experiment</th>
+                <th>Dataset</th>
+                <th>Feature</th>
+                <th>Model</th>
+                <th style="text-align: center;">LR</th>
+                <th style="text-align: center;">R@100</th>
+                <th style="text-align: center;">R@50</th>
+                <th style="text-align: center;">Test RMSE</th>
+                <th style="text-align: center;">Test MAE</th>
+            </tr>
+        `;
+    } else {
+        thead.innerHTML = `
+            <tr>
+                <th style="width: 40px;">#</th>
+                <th style="text-align: center;">Experiment</th>
+                <th>Dataset</th>
+                <th>Feature</th>
+                <th>Model</th>
+                <th style="text-align: center;">LR</th>
+                <th style="text-align: center;">Batch</th>
+                <th style="text-align: center;">Epochs</th>
+                <th style="text-align: center;">R@100</th>
+                <th style="text-align: center;">Loss</th>
+            </tr>
+        `;
+    }
+
+    try {
+        const response = await fetch(`/api/experiments/top-configurations/?limit=10&model_type=${activeModelType}`);
+        const data = await response.json();
+
+        if (!data.success || !data.configurations || data.configurations.length === 0) {
+            const modelLabel = activeModelType === 'hybrid' ? 'hybrid' : (activeModelType === 'ranking' ? 'ranking' : 'retrieval');
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="10" class="text-center text-gray-400 py-4">
+                        No completed ${modelLabel} experiments yet
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
+        if (activeModelType === 'ranking') {
+            const bestMetric = data.configurations[0]?.test_rmse;
+
+            tbody.innerHTML = data.configurations.map((cfg, index) => {
+                const rankClass = index < 3 ? `rank-${index + 1}` : '';
+                const isBest = cfg.test_rmse === bestMetric;
+
+                return `
+                    <tr onclick="openExpDetails(${cfg.experiment_id})" style="cursor: pointer;" title="Click to view details">
+                        <td class="rank-cell ${rankClass}">${cfg.rank}</td>
+                        <td style="text-align: center;">${cfg.display_name || 'Exp #' + cfg.experiment_number}</td>
+                        <td>${cfg.dataset || '-'}</td>
+                        <td>${cfg.feature_config || '-'}</td>
+                        <td>${cfg.model_config || '-'}</td>
+                        <td style="text-align: center;">${cfg.learning_rate}</td>
+                        <td style="text-align: center;">${cfg.batch_size}</td>
+                        <td style="text-align: center;">${cfg.epochs}</td>
+                        <td style="text-align: center;" class="${isBest ? 'metric-best' : ''}">
+                            ${cfg.test_rmse !== null ? cfg.test_rmse.toFixed(4) : '-'}
+                        </td>
+                        <td style="text-align: center;">
+                            ${cfg.test_mae !== null ? cfg.test_mae.toFixed(4) : '-'}
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        } else if (activeModelType === 'hybrid') {
+            const bestRecall = data.configurations[0]?.recall_at_100;
+
+            tbody.innerHTML = data.configurations.map((cfg, index) => {
+                const rankClass = index < 3 ? `rank-${index + 1}` : '';
+                const isBest = cfg.recall_at_100 === bestRecall;
+
+                return `
+                    <tr onclick="openExpDetails(${cfg.experiment_id})" style="cursor: pointer;" title="Click to view details">
+                        <td class="rank-cell ${rankClass}">${cfg.rank}</td>
+                        <td style="text-align: center;">${cfg.display_name || 'Exp #' + cfg.experiment_number}</td>
+                        <td>${cfg.dataset || '-'}</td>
+                        <td>${cfg.feature_config || '-'}</td>
+                        <td>${cfg.model_config || '-'}</td>
+                        <td style="text-align: center;">${cfg.learning_rate}</td>
+                        <td style="text-align: center;" class="${isBest ? 'metric-best' : ''}">
+                            ${cfg.recall_at_100 != null ? cfg.recall_at_100.toFixed(3) : '-'}
+                        </td>
+                        <td style="text-align: center;">
+                            ${cfg.recall_at_50 != null ? cfg.recall_at_50.toFixed(3) : '-'}
+                        </td>
+                        <td style="text-align: center;">
+                            ${cfg.test_rmse != null ? cfg.test_rmse.toFixed(4) : '-'}
+                        </td>
+                        <td style="text-align: center;">
+                            ${cfg.test_mae != null ? cfg.test_mae.toFixed(4) : '-'}
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        } else {
+            const bestRecall = data.configurations[0]?.recall_at_100;
+
+            tbody.innerHTML = data.configurations.map((cfg, index) => {
+                const rankClass = index < 3 ? `rank-${index + 1}` : '';
+                const isBest = cfg.recall_at_100 === bestRecall;
+
+                return `
+                    <tr onclick="openExpDetails(${cfg.experiment_id})" style="cursor: pointer;" title="Click to view details">
+                        <td class="rank-cell ${rankClass}">${cfg.rank}</td>
+                        <td style="text-align: center;">${cfg.display_name || 'Exp #' + cfg.experiment_number}</td>
+                        <td>${cfg.dataset || '-'}</td>
+                        <td>${cfg.feature_config || '-'}</td>
+                        <td>${cfg.model_config || '-'}</td>
+                        <td style="text-align: center;">${cfg.learning_rate}</td>
+                        <td style="text-align: center;">${cfg.batch_size}</td>
+                        <td style="text-align: center;">${cfg.epochs}</td>
+                        <td style="text-align: center;" class="${isBest ? 'metric-best' : ''}">
+                            ${cfg.recall_at_100 !== null ? cfg.recall_at_100.toFixed(3) : '-'}
+                        </td>
+                        <td style="text-align: center;">
+                            ${cfg.loss !== null ? cfg.loss.toFixed(1) : '-'}
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+    } catch (error) {
+        console.error('Failed to load top configurations:', error);
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="10" class="text-center text-red-400 py-4">
+                    Failed to load configurations
+                </td>
+            </tr>
+        `;
+    }
+}
+
+// =============================================================================
+// VIEW MODAL
+// =============================================================================
+
+async function openExpDetails(expId) {
+    try {
+        const response = await fetch(`/api/quick-tests/${expId}/`);
+        const data = await response.json();
+
+        if (!data.success) {
+            showError(data.error || 'Failed to load experiment details');
+            return;
+        }
+
+        const exp = data.quick_test;
+        openExpViewModal(exp);
+    } catch (error) {
+        console.error('Error loading experiment details:', error);
+        showError('Failed to load experiment details');
+    }
+}
+
+function openExpViewModal(exp) {
+    viewModalExpId = exp.id;
+
+    // Reset state
+    viewModalDataCache = { statistics: null, trainingHistory: null };
+    currentViewTab = 'overview';
+
+    // Reset tabs to default
+    document.querySelectorAll('.exp-view-tab').forEach(t => t.classList.remove('active'));
+    document.querySelector('.exp-view-tab[data-tab="overview"]').classList.add('active');
+    document.querySelectorAll('.exp-view-tab-content').forEach(c => c.classList.remove('active'));
+    document.getElementById('expViewTabOverview').classList.add('active');
+
+    // Populate modal
+    populateExpViewModal(exp);
+    document.getElementById('expViewModal').classList.remove('hidden');
+
+    // Preload training history for completed experiments
+    if (exp.status === 'completed') {
+        preloadTrainingHistory();
+    }
+
+    // Start polling if experiment is running
+    if (exp.status === 'running' || exp.status === 'submitting') {
+        startViewModalPolling(exp.id);
+    }
+}
+
+function closeExpViewModal(event) {
+    if (event && event.target !== event.currentTarget) return;
+    document.getElementById('expViewModal').classList.add('hidden');
+    stopViewModalPolling();
+    viewModalExpId = null;
+    viewModalDataCache = { statistics: null, trainingHistory: null };
+}
+
+function populateExpViewModal(exp) {
+    // Header
+    document.getElementById('expViewTitle').textContent = `Exp #${exp.experiment_number || exp.id}`;
+    document.getElementById('expViewExpName').textContent = exp.name || '';
+    document.getElementById('expViewDescription').textContent = exp.description || '';
+
+    // Format times
+    const formatTime = (dateStr) => {
+        if (!dateStr) return '-';
+        const d = new Date(dateStr);
+        return d.toLocaleString('en-US', {
+            month: 'short', day: 'numeric',
+            hour: '2-digit', minute: '2-digit'
+        });
+    };
+    document.getElementById('expViewStartTime').textContent = formatTime(exp.started_at);
+    document.getElementById('expViewEndTime').textContent = formatTime(exp.completed_at);
+
+    // Model type badge
+    const typeBadge = document.getElementById('expViewTypeBadge');
+    const modelType = exp.model_config?.model_type || 'retrieval';
+    const typeLabels = {
+        'retrieval': { label: 'Retrieval', icon: 'fa-search', class: 'retrieval' },
+        'ranking': { label: 'Ranking', icon: 'fa-sort-amount-down', class: 'ranking' },
+        'multitask': { label: 'Hybrid', icon: 'fa-layer-group', class: 'multitask' }
+    };
+    const typeInfo = typeLabels[modelType] || typeLabels['retrieval'];
+    typeBadge.className = `exp-view-header-type-badge ${typeInfo.class}`;
+    typeBadge.innerHTML = `<i class="fas ${typeInfo.icon}"></i> ${typeInfo.label}`;
+
+    // Status
+    const header = document.getElementById('expViewHeader');
+    header.className = `modal-header exp-view-header ${exp.status}`;
+
+    const statusIcon = document.getElementById('expViewStatusIcon');
+    const statusIcons = {
+        'pending': { icon: 'fa-clock', class: 'pending' },
+        'submitting': { icon: 'fa-spinner fa-spin', class: 'submitting' },
+        'running': { icon: 'fa-cog fa-spin', class: 'running' },
+        'completed': { icon: 'fa-check', class: 'completed' },
+        'failed': { icon: 'fa-times', class: 'failed' },
+        'cancelled': { icon: 'fa-ban', class: 'cancelled' }
+    };
+    const statusInfo = statusIcons[exp.status] || statusIcons['pending'];
+    statusIcon.className = `exp-view-status-icon ${statusInfo.class}`;
+    statusIcon.innerHTML = `<i class="fas ${statusInfo.icon}"></i>`;
+
+    // Results Summary (for completed experiments)
+    const resultsSummary = document.getElementById('expViewResultsSummary');
+    const metricsContainer = document.getElementById('expViewMetricsSummary');
+    if (exp.status === 'completed' && exp.training_history_json) {
+        try {
+            const history = typeof exp.training_history_json === 'string'
+                ? JSON.parse(exp.training_history_json)
+                : exp.training_history_json;
+
+            let metricsHtml = '';
+            if (modelType === 'retrieval' || modelType === 'multitask') {
+                const r100 = history.recall_at_100?.[history.recall_at_100.length - 1];
+                const r50 = history.recall_at_50?.[history.recall_at_50.length - 1];
+                if (r100 != null) metricsHtml += `<div class="exp-view-metric-card"><div class="exp-view-metric-label">R@100</div><div class="exp-view-metric-value">${r100.toFixed(3)}</div></div>`;
+                if (r50 != null) metricsHtml += `<div class="exp-view-metric-card"><div class="exp-view-metric-label">R@50</div><div class="exp-view-metric-value">${r50.toFixed(3)}</div></div>`;
+            }
+            if (modelType === 'ranking' || modelType === 'multitask') {
+                const testRmse = history.test_rmse?.[history.test_rmse.length - 1];
+                const testMae = history.test_mae?.[history.test_mae.length - 1];
+                if (testRmse != null) metricsHtml += `<div class="exp-view-metric-card"><div class="exp-view-metric-label">Test RMSE</div><div class="exp-view-metric-value">${testRmse.toFixed(4)}</div></div>`;
+                if (testMae != null) metricsHtml += `<div class="exp-view-metric-card"><div class="exp-view-metric-label">Test MAE</div><div class="exp-view-metric-value">${testMae.toFixed(4)}</div></div>`;
+            }
+
+            if (metricsHtml) {
+                metricsContainer.innerHTML = metricsHtml;
+                resultsSummary.classList.remove('hidden');
+            } else {
+                resultsSummary.classList.add('hidden');
+            }
+        } catch (e) {
+            resultsSummary.classList.add('hidden');
+        }
+    } else {
+        resultsSummary.classList.add('hidden');
+    }
+
+    // Dataset info
+    document.getElementById('expViewDatasetName').textContent = exp.dataset?.name || '-';
+    if (exp.dataset?.id) {
+        loadDatasetDetailsForExp(exp.dataset.id);
+    } else {
+        document.getElementById('expViewDatasetDetails').innerHTML = '<div class="exp-view-no-filters">No dataset information</div>';
+    }
+
+    // Feature config - load full tensor visualization
+    const featureConfigName = exp.feature_config?.name || exp.feature_config_name || '-';
+    const featureConfigId = exp.feature_config?.id || exp.feature_config_id;
+    document.getElementById('expViewFeaturesConfigName').textContent = featureConfigName;
+    if (featureConfigId) {
+        loadFeaturesConfigForExp(featureConfigId);
+    } else {
+        document.getElementById('expViewFeaturesConfigContent').innerHTML = '<div class="exp-view-no-filters">No feature config</div>';
+    }
+
+    // Model config - load full tower architecture visualization
+    const modelConfigName = exp.model_config?.name || exp.model_config_name || '-';
+    const modelConfigId = exp.model_config?.id || exp.model_config_id;
+    document.getElementById('expViewModelConfigName').textContent = modelConfigName;
+    if (modelConfigId) {
+        loadModelConfigForExp(modelConfigId);
+    } else {
+        document.getElementById('expViewModelConfigContent').innerHTML = '<div class="exp-view-no-filters">No model config</div>';
+    }
+
+    // Sampling chips - use full function
+    renderSamplingChips(exp);
+
+    // Training params chips - use full function
+    renderTrainingParamsChips(exp);
+
+    // Error section
+    const errorSection = document.getElementById('expViewErrorSection');
+    if (exp.status === 'failed' && exp.error_message) {
+        errorSection.classList.remove('hidden');
+        document.getElementById('expViewErrorMessage').textContent = exp.error_message;
+        document.getElementById('expViewErrorSuggestion').textContent = 'Check the error details below for more information.';
+    } else {
+        errorSection.classList.add('hidden');
+    }
+}
+
+function loadDatasetDetailsForExp(datasetId) {
+    const container = document.getElementById('expViewDatasetDetails');
+    container.innerHTML = '<div class="exp-view-loading"><i class="fas fa-spinner fa-spin"></i> Loading...</div>';
+
+    fetch(`/api/datasets/${datasetId}/summary/`, {
+        headers: { 'X-CSRFToken': getCookie('csrftoken') }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status !== 'success') {
+            container.innerHTML = '<div class="exp-view-no-filters">Failed to load dataset details</div>';
+            return;
+        }
+        renderDatasetDetailsForExp(data.summary);
+    })
+    .catch(error => {
+        console.error('Error loading dataset details:', error);
+        container.innerHTML = '<div class="exp-view-no-filters">Failed to load dataset details</div>';
+    });
+}
+
+function renderDatasetDetailsForExp(summary) {
+    const container = document.getElementById('expViewDatasetDetails');
+    const snapshot = summary.summary_snapshot || {};
+
+    let html = `
+        <div class="exp-view-ds-section">
+            <div class="exp-view-ds-title"><i class="fas fa-database"></i>Tables</div>
+            <div class="exp-view-ds-grid">
+                <span class="label">Primary:</span>
+                <span class="value">${summary.tables?.primary?.replace('raw_data.', '') || '-'}</span>
+            </div>
+        </div>
+    `;
+
+    if (snapshot.total_rows) {
+        html += `
+            <div class="exp-view-ds-section">
+                <div class="exp-view-ds-title"><i class="fas fa-chart-bar"></i>Statistics</div>
+                <div class="exp-view-ds-grid">
+                    <span class="label">Total Rows:</span>
+                    <span class="value">${Number(snapshot.total_rows).toLocaleString()}</span>
+                </div>
+            </div>
+        `;
+    }
+
+    container.innerHTML = html;
+}
+
+// =============================================================================
+// FEATURES CONFIG VISUALIZATION (for View Modal)
+// =============================================================================
+
+function loadFeaturesConfigForExp(featureConfigId) {
+    const container = document.getElementById('expViewFeaturesConfigContent');
+    container.innerHTML = '<div class="exp-view-loading"><i class="fas fa-spinner fa-spin"></i> Loading...</div>';
+
+    fetch(`/api/feature-configs/${featureConfigId}/`, {
+        headers: { 'X-CSRFToken': getCookie('csrftoken') }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (!data.success) {
+            container.innerHTML = '<div class="exp-view-no-filters">Failed to load features config</div>';
+            return;
+        }
+        renderFeaturesConfigForExp(data.data);
+    })
+    .catch(error => {
+        console.error('Error loading features config:', error);
+        container.innerHTML = '<div class="exp-view-no-filters">Failed to load features config</div>';
+    });
+}
+
+function renderFeaturesConfigForExp(config) {
+    const container = document.getElementById('expViewFeaturesConfigContent');
+
+    // Calculate tensor breakdowns
+    const buyerResult = calculateExpTensorBreakdown(
+        config.buyer_model_features || [],
+        config.buyer_model_crosses || []
+    );
+    const productResult = calculateExpTensorBreakdown(
+        config.product_model_features || [],
+        config.product_model_crosses || []
+    );
+
+    const maxTotal = Math.max(buyerResult.total || 0, productResult.total || 0);
+
+    // Build target column section (for ranking models)
+    let targetColumnHtml = '';
+    if (config.target_column && config.config_type === 'ranking') {
+        const tc = config.target_column;
+        const tcName = tc.display_name || tc.column || '-';
+        const tcType = tc.bq_type || 'FLOAT';
+        const transforms = tc.transforms || {};
+
+        // Build transforms tags
+        let transformsHtml = '';
+        if (transforms.log_transform && transforms.log_transform.enabled) {
+            transformsHtml += '<span class="target-transform-tag"><i class="fas fa-chart-line"></i> Log transform</span>';
+        }
+        if (transforms.clip_outliers && transforms.clip_outliers.enabled) {
+            const lower = transforms.clip_outliers.lower?.enabled ? transforms.clip_outliers.lower.percentile : null;
+            const upper = transforms.clip_outliers.upper?.enabled ? transforms.clip_outliers.upper.percentile : null;
+            let clipText = 'Clip';
+            if (lower && upper) {
+                clipText = `Clip ${lower}%-${upper}%`;
+            } else if (lower) {
+                clipText = `Clip lower ${lower}%`;
+            } else if (upper) {
+                clipText = `Clip upper ${upper}%`;
+            }
+            transformsHtml += `<span class="target-transform-tag"><i class="fas fa-cut"></i> ${clipText}</span>`;
+        }
+
+        targetColumnHtml = `
+            <div class="target-column-view-card">
+                <div class="target-column-view-header">
+                    <i class="fas fa-bullseye"></i>
+                    <span>Target Column</span>
+                    <span class="target-column-view-badge">For Ranking</span>
+                </div>
+                <div class="target-column-view-content">
+                    <span class="target-column-view-name">${tcName}</span>
+                    <span class="target-column-view-type">${tcType}</span>
+                </div>
+                ${transformsHtml ? `<div class="target-column-view-transforms">${transformsHtml}</div>` : ''}
+            </div>
+        `;
+    }
+
+    // Build HTML
+    let html = targetColumnHtml + '<div class="exp-view-features-grid">';
+
+    // Buyer Tensor Panel
+    html += `
+        <div class="exp-view-tensor-panel buyer">
+            <div class="exp-view-tensor-header">
+                <span class="exp-view-tensor-title buyer">Buyer Tensor</span>
+                <span class="exp-view-tensor-total buyer">${buyerResult.total}D</span>
+            </div>
+            <div id="expViewBuyerBar" class="exp-view-tensor-bar"></div>
+            <div class="exp-view-tensor-features">
+                ${buyerResult.breakdown.map(item => `
+                    <div class="exp-view-tensor-feature-row">
+                        <span class="exp-view-tensor-feature-name buyer ${item.is_cross ? 'cross' : ''}">${item.name}</span>
+                        <span class="exp-view-tensor-feature-dim buyer">${item.dim}D</span>
+                    </div>
+                `).join('')}
+            </div>
+        </div>`;
+
+    // Product Tensor Panel
+    html += `
+        <div class="exp-view-tensor-panel product">
+            <div class="exp-view-tensor-header">
+                <span class="exp-view-tensor-title product">Product Tensor</span>
+                <span class="exp-view-tensor-total product">${productResult.total}D</span>
+            </div>
+            <div id="expViewProductBar" class="exp-view-tensor-bar"></div>
+            <div class="exp-view-tensor-features">
+                ${productResult.breakdown.map(item => `
+                    <div class="exp-view-tensor-feature-row">
+                        <span class="exp-view-tensor-feature-name product ${item.is_cross ? 'cross' : ''}">${item.name}</span>
+                        <span class="exp-view-tensor-feature-dim product">${item.dim}D</span>
+                    </div>
+                `).join('')}
+            </div>
+        </div>`;
+
+    html += '</div>';
+    container.innerHTML = html;
+
+    // Render tensor bars after DOM update
+    setTimeout(() => {
+        renderExpTensorBar('buyer', buyerResult.total, buyerResult.breakdown, maxTotal);
+        renderExpTensorBar('product', productResult.total, productResult.breakdown, maxTotal);
+    }, 0);
+}
+
+function calculateExpTensorBreakdown(features, crosses) {
+    const breakdown = [];
+    let total = 0;
+
+    // Process features
+    (features || []).forEach(feature => {
+        const dim = getExpFeatureDimension(feature);
+        if (dim > 0) {
+            // Use display_name (alias) if available
+            breakdown.push({ name: feature.display_name || feature.column, dim: dim });
+            total += dim;
+        }
+    });
+
+    // Process cross features
+    (crosses || []).forEach(cross => {
+        const dim = cross.embedding_dim || 16;
+        const featureNames = getExpCrossFeatureNames(cross);
+        const name = featureNames.join(' × ');
+        breakdown.push({ name: name, dim: dim, is_cross: true });
+        total += dim;
+    });
+
+    return { total, breakdown };
+}
+
+function getExpFeatureDimension(feature) {
+    const dataType = feature.data_type || getExpDataTypeFromBqType(feature.bq_type);
+    const transforms = feature.transforms || {};
+    let totalDim = 0;
+
+    if (dataType === 'numeric') {
+        if (transforms.normalize?.enabled) totalDim += 1;
+        if (transforms.bucketize?.enabled) totalDim += (transforms.bucketize.embedding_dim || 32);
+    } else if (dataType === 'text') {
+        if (transforms.embedding?.enabled) totalDim += (transforms.embedding.embedding_dim || 32);
+    } else if (dataType === 'temporal') {
+        if (transforms.normalize?.enabled) totalDim += 1;
+        if (transforms.cyclical?.enabled) {
+            const c = transforms.cyclical;
+            if (c.yearly || c.annual) totalDim += 2;
+            if (c.quarterly) totalDim += 2;
+            if (c.monthly) totalDim += 2;
+            if (c.weekly) totalDim += 2;
+            if (c.daily) totalDim += 2;
+        }
+        if (transforms.bucketize?.enabled) totalDim += (transforms.bucketize.embedding_dim || 32);
+    }
+
+    return totalDim;
+}
+
+function getExpDataTypeFromBqType(bqType) {
+    const type = (bqType || 'STRING').toUpperCase();
+    if (['INTEGER', 'INT64', 'FLOAT', 'FLOAT64', 'NUMERIC', 'BIGNUMERIC'].includes(type)) {
+        return 'numeric';
+    } else if (['TIMESTAMP', 'DATETIME', 'DATE', 'TIME'].includes(type)) {
+        return 'temporal';
+    }
+    return 'text';
+}
+
+function getExpCrossFeatureNames(cross) {
+    // Use display_name (alias) if available
+    if (!cross.features || cross.features.length === 0) return [];
+    if (typeof cross.features[0] === 'string') return cross.features;
+    return cross.features.map(f => f.display_name || f.column);
+}
+
+function renderExpTensorBar(model, total, breakdown, maxTotal) {
+    const barId = model === 'buyer' ? 'expViewBuyerBar' : 'expViewProductBar';
+    const bar = document.getElementById(barId);
+    if (!bar) return;
+
+    bar.innerHTML = '';
+    if (!breakdown || breakdown.length === 0) return;
+
+    // Set bar width proportionally
+    if (maxTotal && maxTotal > 0) {
+        bar.style.width = `${(total / maxTotal) * 100}%`;
+    }
+
+    const colors = model === 'buyer'
+        ? ['#3b82f6', '#60a5fa', '#93c5fd', '#bfdbfe', '#dbeafe']
+        : ['#10b981', '#34d399', '#6ee7b7', '#a7f3d0', '#d1fae5'];
+
+    breakdown.forEach((item, idx) => {
+        const pct = (item.dim / total) * 100;
+        const color = colors[idx % colors.length];
+
+        const segment = document.createElement('div');
+        segment.className = 'exp-view-tensor-segment';
+        segment.style.width = `${pct}%`;
+        segment.style.backgroundColor = color;
+        segment.title = `${item.name}: ${item.dim}D`;
+        if (pct > 10) {
+            segment.textContent = item.dim;
+        }
+        bar.appendChild(segment);
+    });
+}
+
+// =============================================================================
+// MODEL CONFIG VISUALIZATION (for View Modal)
+// =============================================================================
+
+function loadModelConfigForExp(modelConfigId) {
+    const container = document.getElementById('expViewModelConfigContent');
+    container.innerHTML = '<div class="exp-view-loading"><i class="fas fa-spinner fa-spin"></i> Loading...</div>';
+
+    fetch(`/api/model-configs/${modelConfigId}/`, {
+        headers: { 'X-CSRFToken': getCookie('csrftoken') }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (!data.success) {
+            container.innerHTML = '<div class="exp-view-no-filters">Failed to load model config</div>';
+            return;
+        }
+        renderModelConfigForExp(data.data);
+    })
+    .catch(error => {
+        console.error('Error loading model config:', error);
+        container.innerHTML = '<div class="exp-view-no-filters">Failed to load model config</div>';
+    });
+}
+
+function renderModelConfigForExp(mc) {
+    const container = document.getElementById('expViewModelConfigContent');
+
+    // Model type badge with icon (unified style)
+    const modelTypeBadges = {
+        'retrieval': '<i class="fas fa-search"></i> Retrieval',
+        'ranking': '<i class="fas fa-sort-amount-down"></i> Ranking',
+        'multitask': '<i class="fas fa-layer-group"></i> Retrieval / Ranking'
+    };
+    const modelTypeBadgeContent = modelTypeBadges[mc.model_type] || modelTypeBadges['retrieval'];
+
+    // Build tower layers HTML
+    const buyerLayers = mc.buyer_tower_layers || [];
+    const productLayers = mc.product_tower_layers || [];
+    const buyerParams = calculateExpTowerParams(buyerLayers);
+    const productParams = calculateExpTowerParams(productLayers);
+
+    let html = `
+        <span class="exp-view-model-type-badge ${mc.model_type}">${modelTypeBadgeContent}</span>
+
+        <div class="exp-view-tower-section-title">Tower Architecture</div>
+        <div class="exp-view-towers-grid">
+            <div class="exp-view-tower-column">
+                <div class="exp-view-tower-header">
+                    <span class="exp-view-tower-label">BUYER TOWER</span>
+                </div>
+                <div class="exp-view-tower-stack buyer">
+                    ${renderExpTowerLayers(buyerLayers)}
+                </div>
+                <div class="exp-view-tower-params buyer">
+                    <div class="exp-view-tower-params-row"><span>Total params:</span><span>${buyerParams.toLocaleString()}</span></div>
+                    <div class="exp-view-tower-params-row"><span>Trainable params:</span><span>${buyerParams.toLocaleString()}</span></div>
+                    <div class="exp-view-tower-params-row"><span>Non-trainable params:</span><span>0</span></div>
+                </div>
+            </div>
+            <div class="exp-view-tower-column">
+                <div class="exp-view-tower-header">
+                    <span class="exp-view-tower-label">PRODUCT TOWER</span>
+                </div>
+                <div class="exp-view-tower-stack product">
+                    ${renderExpTowerLayers(productLayers)}
+                </div>
+                <div class="exp-view-tower-params product">
+                    <div class="exp-view-tower-params-row"><span>Total params:</span><span>${productParams.toLocaleString()}</span></div>
+                    <div class="exp-view-tower-params-row"><span>Trainable params:</span><span>${productParams.toLocaleString()}</span></div>
+                    <div class="exp-view-tower-params-row"><span>Non-trainable params:</span><span>0</span></div>
+                </div>
+            </div>
+        </div>`;
+
+    // Rating Head section (for ranking and multitask models)
+    if (['ranking', 'multitask'].includes(mc.model_type)) {
+        const ratingHeadLayers = mc.rating_head_layers || [];
+        const ratingHeadParams = calculateExpTowerParams(ratingHeadLayers, (mc.output_embedding_dim || 32) * 2);
+
+        html += `
+        <div class="exp-view-rating-head-section">
+            <div class="exp-view-rating-head-title">Rating Head</div>
+            <div class="exp-view-rating-head-label">RANKING TOWER</div>
+            <div class="exp-view-rating-tower-wrapper">
+                <div class="exp-view-tower-stack ranking">
+                    ${renderExpTowerLayers(ratingHeadLayers)}
+                </div>
+                <div class="exp-view-tower-params ranking">
+                    <div class="exp-view-tower-params-row"><span>Total params:</span><span>${ratingHeadParams.toLocaleString()}</span></div>
+                    <div class="exp-view-tower-params-row"><span>Trainable params:</span><span>${ratingHeadParams.toLocaleString()}</span></div>
+                    <div class="exp-view-tower-params-row"><span>Non-trainable params:</span><span>0</span></div>
+                </div>
+            </div>
+        </div>`;
+    }
+
+    container.innerHTML = html;
+
+    // Update Optimizer in Training Parameters section (from model config)
+    const optimizerEl = document.getElementById('expViewOptimizerValue');
+    if (optimizerEl) {
+        optimizerEl.textContent = mc.optimizer_display || mc.optimizer || 'Adagrad';
+    }
+}
+
+function renderExpTowerLayers(layers) {
+    if (!layers || layers.length === 0) {
+        return '<div class="text-xs text-gray-400 italic p-2">No layers</div>';
+    }
+
+    return layers.map((layer, idx) => {
+        const isOutput = idx === layers.length - 1;
+        let badge = '';
+        let params = '';
+
+        if (layer.type === 'dense') {
+            badge = '<span class="exp-view-layer-badge dense">DENSE</span>';
+            params = `${layer.units} units`;
+            if (layer.activation) params += `, ${layer.activation}`;
+            if (layer.l2_regularization) params += `, L2=${layer.l2_regularization}`;
+            else if (layer.l2_reg) params += `, L2=${layer.l2_reg}`;
+        } else if (layer.type === 'dropout') {
+            badge = '<span class="exp-view-layer-badge dropout">DROPOUT</span>';
+            params = `rate: ${layer.rate}`;
+        } else if (layer.type === 'batch_norm') {
+            badge = '<span class="exp-view-layer-badge batch_norm">BATCHNORM</span>';
+            params = '';
+        } else if (layer.type === 'layer_norm') {
+            badge = '<span class="exp-view-layer-badge layer_norm">LAYERNORM</span>';
+            params = layer.epsilon ? `ε: ${layer.epsilon}` : '';
+        }
+
+        return `
+            <div class="exp-view-layer-item${isOutput ? ' output-layer' : ''}">
+                <span class="exp-view-layer-drag"><i class="fas fa-grip-vertical"></i></span>
+                ${badge}
+                <span class="exp-view-layer-params">${params}</span>
+            </div>
+        `;
+    }).join('');
+}
+
+function calculateExpTowerParams(layers, inputDim = 128) {
+    // Approximate parameter calculation for tower
+    if (!layers || layers.length === 0) return 0;
+
+    let total = 0;
+    let prevDim = inputDim;
+
+    layers.forEach(layer => {
+        if (layer.type === 'dense') {
+            // Dense layer: input_dim * units + units (bias)
+            total += prevDim * layer.units + layer.units;
+            prevDim = layer.units;
+        }
+        // Dropout and norm layers don't add trainable parameters
+    });
+
+    return total;
+}
+
+// =============================================================================
+// SAMPLING CHIPS (for View Modal)
+// =============================================================================
+
+function renderSamplingChips(exp) {
+    const container = document.getElementById('expViewSamplingChips');
+    if (!container) return;
+
+    const splitLabels = {
+        'random': 'Random 80/15/5',
+        'time_holdout': 'Time Holdout',
+        'strict_time': 'Strict Temporal'
+    };
+
+    let html = `
+        <div class="exp-view-param-chip">
+            <span class="exp-view-param-chip-label">Sample:</span>
+            <span class="exp-view-param-chip-value">${exp.data_sample_percent || 100}%</span>
+        </div>
+        <div class="exp-view-param-chip">
+            <span class="exp-view-param-chip-label">Split Strategy:</span>
+            <span class="exp-view-param-chip-value">${splitLabels[exp.split_strategy] || exp.split_strategy || 'random'}</span>
+        </div>
+    `;
+
+    // Add Date Column chip for temporal strategies
+    if (exp.split_strategy !== 'random' && exp.date_column) {
+        html += `
+        <div class="exp-view-param-chip">
+            <span class="exp-view-param-chip-label">Date Column:</span>
+            <span class="exp-view-param-chip-value">${exp.date_column}</span>
+        </div>
+        `;
+    }
+
+    // Add Holdout Days chip for time_holdout strategy
+    if (exp.split_strategy === 'time_holdout') {
+        html += `
+        <div class="exp-view-param-chip">
+            <span class="exp-view-param-chip-label">Test (last N days):</span>
+            <span class="exp-view-param-chip-value">${exp.holdout_days || 1} days</span>
+        </div>
+        `;
+    }
+
+    container.innerHTML = html;
+}
+
+// =============================================================================
+// TRAINING PARAMETERS CHIPS (for View Modal - actual pipeline values)
+// =============================================================================
+
+function renderTrainingParamsChips(exp) {
+    const container = document.getElementById('expViewTrainingParamsChips');
+    if (!container) return;
+
+    // Hardware specifications mapping
+    const hardwareSpecs = {
+        'n1-standard-4': { name: 'Small', cpu: '4 vCPUs', memory: '15 GB' },
+        'n1-standard-8': { name: 'Medium', cpu: '8 vCPUs', memory: '30 GB' },
+        'n1-standard-16': { name: 'Large', cpu: '16 vCPUs', memory: '60 GB' },
+        'n1-highmem-4': { name: 'High Memory', cpu: '4 vCPUs', memory: '26 GB' },
+        'n1-highmem-8': { name: 'High Memory', cpu: '8 vCPUs', memory: '52 GB' }
+    };
+
+    const machineType = exp.machine_type || 'n1-standard-4';
+    const hwSpec = hardwareSpecs[machineType] || { name: 'Custom', cpu: '-', memory: '-' };
+    const hardwareDisplay = `${hwSpec.cpu}, ${hwSpec.memory}`;
+
+    let html = `
+        <div class="exp-view-param-chip" id="expViewOptimizerChip">
+            <span class="exp-view-param-chip-label">Optimizer:</span>
+            <span class="exp-view-param-chip-value" id="expViewOptimizerValue">-</span>
+        </div>
+        <div class="exp-view-param-chip">
+            <span class="exp-view-param-chip-label">Epochs:</span>
+            <span class="exp-view-param-chip-value">${exp.epochs || '-'}</span>
+        </div>
+        <div class="exp-view-param-chip">
+            <span class="exp-view-param-chip-label">Batch Size:</span>
+            <span class="exp-view-param-chip-value">${exp.batch_size?.toLocaleString() || '-'}</span>
+        </div>
+        <div class="exp-view-param-chip">
+            <span class="exp-view-param-chip-label">Learning Rate:</span>
+            <span class="exp-view-param-chip-value">${exp.learning_rate || '-'}</span>
+        </div>
+        <div class="exp-view-param-chip">
+            <span class="exp-view-param-chip-label">Hardware:</span>
+            <span class="exp-view-param-chip-value">${hardwareDisplay}</span>
+        </div>
+    `;
+
+    container.innerHTML = html;
+}
+
+function switchExpViewTab(tabName) {
+    currentViewTab = tabName;
+
+    // Update tab buttons
+    document.querySelectorAll('.exp-view-tab').forEach(t => t.classList.remove('active'));
+    document.querySelector(`.exp-view-tab[data-tab="${tabName}"]`).classList.add('active');
+
+    // Update tab content
+    document.querySelectorAll('.exp-view-tab-content').forEach(c => c.classList.remove('active'));
+    document.getElementById(`expViewTab${tabName.charAt(0).toUpperCase() + tabName.slice(1)}`).classList.add('active');
+
+    // Lazy load tab content
+    if (tabName === 'training' && !viewModalDataCache.trainingHistory) {
+        loadTrainingHistoryTab();
+    }
+}
+
+async function preloadTrainingHistory() {
+    if (viewModalDataCache.trainingHistory) return;
+
+    try {
+        const response = await fetch(`/api/quick-tests/${viewModalExpId}/training-history/`);
+        const data = await response.json();
+        if (data.success) {
+            viewModalDataCache.trainingHistory = data.history;
+        }
+    } catch (error) {
+        console.error('Failed to preload training history:', error);
+    }
+}
+
+async function loadTrainingHistoryTab() {
+    const loadingEl = document.getElementById('expViewTrainingLoading');
+    const contentEl = document.getElementById('expViewTrainingContent');
+
+    if (viewModalDataCache.trainingHistory) {
+        renderTrainingChart(viewModalDataCache.trainingHistory);
+        loadingEl.classList.add('hidden');
+        contentEl.classList.remove('hidden');
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/quick-tests/${viewModalExpId}/training-history/`);
+        const data = await response.json();
+
+        if (data.success && data.history) {
+            viewModalDataCache.trainingHistory = data.history;
+            renderTrainingChart(data.history);
+            loadingEl.classList.add('hidden');
+            contentEl.classList.remove('hidden');
+        } else {
+            loadingEl.innerHTML = '<span class="text-gray-400">No training history available</span>';
+        }
+    } catch (error) {
+        console.error('Failed to load training history:', error);
+        loadingEl.innerHTML = '<span class="text-red-400">Failed to load training history</span>';
+    }
+}
+
+let trainingChart = null;
+
+function renderTrainingChart(history) {
+    const ctx = document.getElementById('expViewTrainingChart').getContext('2d');
+
+    if (trainingChart) {
+        trainingChart.destroy();
+    }
+
+    const epochs = history.loss?.length || 0;
+    const labels = Array.from({ length: epochs }, (_, i) => `Epoch ${i + 1}`);
+
+    const datasets = [];
+
+    if (history.loss) {
+        datasets.push({
+            label: 'Loss',
+            data: history.loss,
+            borderColor: '#ef4444',
+            backgroundColor: 'rgba(239, 68, 68, 0.1)',
+            yAxisID: 'y'
+        });
+    }
+
+    if (history.recall_at_100) {
+        datasets.push({
+            label: 'R@100',
+            data: history.recall_at_100,
+            borderColor: '#10b981',
+            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+            yAxisID: 'y1'
+        });
+    }
+
+    trainingChart = new Chart(ctx, {
+        type: 'line',
+        data: { labels, datasets },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+                mode: 'index',
+                intersect: false
+            },
+            scales: {
+                y: {
+                    type: 'linear',
+                    display: true,
+                    position: 'left',
+                    title: { display: true, text: 'Loss' }
+                },
+                y1: {
+                    type: 'linear',
+                    display: true,
+                    position: 'right',
+                    title: { display: true, text: 'Recall' },
+                    grid: { drawOnChartArea: false }
+                }
+            }
+        }
+    });
+}
+
+function toggleErrorDetails() {
+    const details = document.getElementById('expViewErrorDetails');
+    const toggleText = document.getElementById('expViewErrorToggleText');
+    const toggleIcon = document.getElementById('expViewErrorToggleIcon');
+
+    if (details.classList.contains('hidden')) {
+        details.classList.remove('hidden');
+        toggleText.textContent = 'Hide Error Details';
+        toggleIcon.classList.add('fa-rotate-180');
+    } else {
+        details.classList.add('hidden');
+        toggleText.textContent = 'Show Error Details';
+        toggleIcon.classList.remove('fa-rotate-180');
+    }
+}
+
+function startViewModalPolling(expId) {
+    stopViewModalPolling();
+    viewModalPollInterval = setInterval(async () => {
+        try {
+            const response = await fetch(`/api/quick-tests/${expId}/`);
+            const data = await response.json();
+            if (data.success) {
+                populateExpViewModal(data.quick_test);
+                if (data.quick_test.status !== 'running' && data.quick_test.status !== 'submitting') {
+                    stopViewModalPolling();
+                }
+            }
+        } catch (error) {
+            console.error('Polling error:', error);
+        }
+    }, 5000);
+}
+
+function stopViewModalPolling() {
+    if (viewModalPollInterval) {
+        clearInterval(viewModalPollInterval);
+        viewModalPollInterval = null;
+    }
+}
+
+// =============================================================================
+// UTILITIES
+// =============================================================================
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+function showError(message) {
+    // Simple alert for now - can be enhanced with toast notifications
+    alert(message);
+}
+
+function showSuccess(message) {
+    console.log('Success:', message);
+}
+</script>
 {% endblock %}

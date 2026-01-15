@@ -423,20 +423,6 @@ const ExpViewModal = (function() {
             renderPipelineStages(exp.stage_details || getDefaultStages());
         }
 
-        // Error section (pipeline tab)
-        const errorSection = document.getElementById('expViewErrorSection');
-        if (exp.status === 'failed') {
-            errorSection.classList.remove('hidden');
-            document.getElementById('expViewErrorTitle').textContent = 'Pipeline Failed';
-            document.getElementById('expViewErrorSuggestion').textContent = '';
-            document.getElementById('expViewErrorMessage').textContent = exp.error_message || 'No error details available';
-            if (state.currentTab === 'pipeline') {
-                loadErrorDetails();
-            }
-        } else {
-            errorSection.classList.add('hidden');
-        }
-
         // Training Tab - Final Metrics (hidden until MLflow data loads)
         const finalMetrics = document.getElementById('expViewFinalMetrics');
         if (finalMetrics) finalMetrics.classList.add('hidden');
@@ -491,9 +477,6 @@ const ExpViewModal = (function() {
             } else {
                 loadTrainingHistory();
             }
-        }
-        if (tabName === 'pipeline' && !state.dataCache.errorDetails) {
-            loadErrorDetails();
         }
     }
 
@@ -1222,43 +1205,6 @@ const ExpViewModal = (function() {
                 <span class="exp-view-row-value">${typeof size === 'number' ? size.toLocaleString() : size}</span>
             </div>
         `).join('');
-    }
-
-    // =============================================================================
-    // ERROR DETAILS
-    // =============================================================================
-
-    async function loadErrorDetails() {
-        if (!state.expId || state.dataCache.errorDetails) return;
-
-        try {
-            const url = buildUrl(config.endpoints.errors, { id: state.expId });
-            const response = await fetch(url);
-            const data = await response.json();
-
-            if (data.success && data.error_details?.has_error) {
-                state.dataCache.errorDetails = data.error_details;
-
-                const details = data.error_details;
-                document.getElementById('expViewErrorTitle').textContent = details.title || 'Pipeline Failed';
-                document.getElementById('expViewErrorSuggestion').textContent = details.suggestion || '';
-                if (details.full_message) {
-                    document.getElementById('expViewErrorMessage').textContent = details.full_message;
-                }
-            }
-        } catch (error) {
-            console.error('Error loading error details:', error);
-        }
-    }
-
-    function toggleErrorDetails() {
-        const content = document.getElementById('expViewErrorDetails');
-        const icon = document.getElementById('expViewErrorToggleIcon');
-        const text = document.getElementById('expViewErrorToggleText');
-
-        content.classList.toggle('hidden');
-        icon.classList.toggle('expanded');
-        text.textContent = content.classList.contains('hidden') ? 'Show Error Details' : 'Hide Error Details';
     }
 
     // =============================================================================
@@ -2587,9 +2533,6 @@ const ExpViewModal = (function() {
 
         // Tab switching
         switchTab: switchTab,
-
-        // Error details
-        toggleErrorDetails: toggleErrorDetails,
 
         // Component logs
         refreshComponentLogs: refreshComponentLogs,

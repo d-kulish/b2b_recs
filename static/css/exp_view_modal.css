@@ -1254,23 +1254,25 @@
    ========================================================================== */
 .exp-view-component-detail {
     margin-top: 16px;
-    padding: 16px;
-    background: #f9fafb;
-    border: 1px solid #e5e7eb;
-    border-radius: 8px;
+    padding-top: 16px;
+    border-top: 1px solid #111827;
 }
 
+/* Single header row: Name | Status | Duration | Button */
 .exp-view-component-header {
     display: flex;
     align-items: center;
     gap: 12px;
+    padding-bottom: 12px;
     margin-bottom: 12px;
+    border-bottom: 1px solid #e5e7eb;
 }
 
 .exp-view-component-name {
-    font-size: 14px;
-    font-weight: 600;
+    font-size: 16px;
+    font-weight: 700;
     color: #111827;
+    letter-spacing: -0.01em;
 }
 
 .exp-view-component-status {
@@ -1282,59 +1284,159 @@
 }
 
 .exp-view-component-duration {
+    font-size: 12px;
+    color: #6b7280;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* Load Logs button - uses .btn .btn-secondary .btn-sm classes */
+.exp-view-component-header .btn {
     margin-left: auto;
-    font-size: 12px;
-    color: #6b7280;
-    display: flex;
-    align-items: center;
-    gap: 4px;
 }
 
-.exp-view-logs-section {
-    margin-top: 12px;
-}
-
-.exp-view-logs-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 8px;
-    font-size: 12px;
-    font-weight: 500;
-    color: #374151;
-}
-
-.exp-view-refresh-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 4px 8px;
-    font-size: 11px;
-    color: #6b7280;
-    background: white;
-    border: 1px solid #e5e7eb;
-    border-radius: 4px;
-    cursor: pointer;
-}
-
-.exp-view-refresh-btn:hover {
-    background: #f3f4f6;
-}
-
+/* Logs Container - No inner scroll, flows with modal */
 .exp-view-logs-container {
-    max-height: 150px;
-    overflow-y: auto;
-    padding: 8px;
-    background: #1f2937;
-    border-radius: 6px;
-    font-family: monospace;
-    font-size: 11px;
-    color: #d1d5db;
+    background: #ffffff;
 }
 
-.exp-view-logs-empty {
+/* Log Entry Table Layout */
+.exp-view-log-entry {
+    display: grid;
+    grid-template-columns: 24px 70px 1fr;
+    gap: 8px;
+    align-items: start;
+    padding: 10px 12px;
+    border-bottom: 1px solid #f3f4f6;
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.exp-view-log-entry:last-child {
+    border-bottom: none;
+}
+
+.exp-view-log-entry:hover {
+    background: #f9fafb;
+}
+
+/* Severity Icon */
+.exp-view-log-severity {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    font-size: 0;
+}
+
+.exp-view-log-severity::before {
+    font-family: 'Font Awesome 5 Free';
+    font-weight: 900;
+    font-size: 10px;
+}
+
+.exp-view-log-severity.ERROR {
+    background: #fef2f2;
+    color: #dc2626;
+}
+
+.exp-view-log-severity.ERROR::before {
+    content: '\f06a'; /* exclamation-circle */
+}
+
+.exp-view-log-severity.WARNING {
+    background: #fffbeb;
+    color: #d97706;
+}
+
+.exp-view-log-severity.WARNING::before {
+    content: '\f071'; /* exclamation-triangle */
+}
+
+.exp-view-log-severity.INFO {
+    background: #eff6ff;
+    color: #2563eb;
+}
+
+.exp-view-log-severity.INFO::before {
+    content: '\f05a'; /* info-circle */
+}
+
+.exp-view-log-severity.DEBUG {
+    background: #f3f4f6;
     color: #6b7280;
-    font-style: italic;
+}
+
+.exp-view-log-severity.DEBUG::before {
+    content: '\f188'; /* bug */
+}
+
+/* Timestamp */
+.exp-view-log-time {
+    font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+    font-size: 11px;
+    color: #6b7280;
+    white-space: nowrap;
+}
+
+/* Message */
+.exp-view-log-message {
+    font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+    font-size: 11px;
+    color: #1f2937;
+    word-break: break-word;
+    white-space: pre-wrap;
+}
+
+/* Empty/Placeholder State */
+.exp-view-logs-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 32px 16px;
+    color: #6b7280;
+    text-align: center;
+}
+
+.exp-view-logs-empty i {
+    font-size: 24px;
+    margin-bottom: 8px;
+    color: #9ca3af;
+}
+
+.exp-view-logs-empty span {
+    font-size: 13px;
+}
+
+/* Error State */
+.exp-view-logs-error {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 24px 16px;
+    color: #dc2626;
+    font-size: 13px;
+}
+
+/* Source Note */
+.exp-view-logs-note {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    background: #f0f9ff;
+    border-bottom: 1px solid #e0f2fe;
+    font-size: 11px;
+    color: #0369a1;
+}
+
+.exp-view-logs-note i {
+    font-size: 12px;
 }
 
 /* ==========================================================================

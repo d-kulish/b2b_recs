@@ -156,42 +156,24 @@
 
                 <!-- Component Detail Panel (shown on node click) -->
                 <div id="expViewComponentDetail" class="exp-view-component-detail hidden">
+                    <!-- Single header row: Name | Status | Duration | Button -->
                     <div class="exp-view-component-header">
                         <span class="exp-view-component-name" id="expViewComponentName">Component</span>
                         <span class="exp-view-component-status" id="expViewComponentStatus">pending</span>
-                        <span class="exp-view-component-duration" id="expViewComponentDuration">
+                        <span class="exp-view-component-duration">
                             <i class="fas fa-clock"></i>
                             <span id="expViewComponentDurationText">-</span>
                         </span>
-                    </div>
-                    <div class="exp-view-logs-section">
-                        <div class="exp-view-logs-header">
-                            <span>Recent Logs</span>
-                            <button class="exp-view-refresh-btn" id="expViewRefreshLogsBtn" onclick="ExpViewModal.refreshComponentLogs()">
-                                <i class="fas fa-sync-alt"></i>
-                                Refresh
-                            </button>
-                        </div>
-                        <div class="exp-view-logs-container" id="expViewLogsContainer">
-                            <div class="exp-view-logs-empty">Click a component to view logs</div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Error Section (for failed experiments) -->
-                <div id="expViewErrorSection" class="exp-view-error-box hidden">
-                    <div class="exp-view-error-header">
-                        <i class="fas fa-exclamation-circle"></i>
-                        <span id="expViewErrorTitle">Pipeline Failed</span>
-                    </div>
-                    <p class="exp-view-error-suggestion" id="expViewErrorSuggestion"></p>
-                    <div class="exp-view-error-details">
-                        <button class="exp-view-error-toggle" onclick="ExpViewModal.toggleErrorDetails()">
-                            <span id="expViewErrorToggleText">Show Error Details</span>
-                            <i class="fas fa-chevron-down" id="expViewErrorToggleIcon"></i>
+                        <button class="btn btn-secondary btn-sm" id="expViewLoadLogsBtn" onclick="ExpViewModal.refreshComponentLogs()">
+                            <i class="fas fa-sync-alt"></i>
+                            Load Logs
                         </button>
-                        <div id="expViewErrorDetails" class="exp-view-error-content hidden">
-                            <pre id="expViewErrorMessage"></pre>
+                    </div>
+                    <!-- Logs (no inner scroll) -->
+                    <div class="exp-view-logs-container" id="expViewLogsContainer">
+                        <div class="exp-view-logs-empty">
+                            <i class="fas fa-file-alt"></i>
+                            <span>Click "Load Logs" to fetch recent entries</span>
                         </div>
                     </div>
                 </div>

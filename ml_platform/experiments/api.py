@@ -1550,9 +1550,10 @@ def quick_test_component_logs(request, quick_test_id, component):
                 'error': f'QuickTest {quick_test_id} not found'
             }, status=404)
 
-        # Get component logs
-        artifact_service = ArtifactService(project_id=model_endpoint.gcp_project_id)
-        logs = artifact_service.get_component_logs(quick_test, component)
+        # Get component logs using dedicated logs service
+        from .pipeline_logs_service import PipelineLogsService
+        logs_service = PipelineLogsService(project_id=model_endpoint.gcp_project_id)
+        logs = logs_service.get_component_logs(quick_test, component)
 
         return JsonResponse({
             'success': True,

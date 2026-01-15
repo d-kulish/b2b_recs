@@ -409,6 +409,21 @@ TPE-based analysis of what configurations work best:
 - Threshold: Top 30% by primary metric
 - Output: Cards showing which values correlate with good results
 
+### PipelineLogsService
+
+Fetches pipeline component logs from Cloud Logging for the Pipeline tab:
+- `get_component_logs()` - Fetch logs for a specific TFX component
+- Primary strategy: Task-specific logs via `ml_job` resource type
+- Fallback strategy: Pipeline-level logs via `aiplatform.googleapis.com/PipelineJob`
+- Returns 50 most recent log entries (newest first)
+- Supports all pipeline components: Examples, Stats, Schema, Transform, Train
+
+**Log Display Features:**
+- Clean table layout: Severity icon | Timestamp | Message
+- Color-coded severity (ERROR=red, WARNING=amber, INFO=blue, DEBUG=gray)
+- Manual refresh only (no auto-load on node click)
+- Matches Google Logs Explorer styling
+
 ---
 
 ## Implementation Status
@@ -421,6 +436,7 @@ TPE-based analysis of what configurations work best:
 - [x] Experiment comparison (2-4 experiments)
 - [x] View modal with Config/Data Insights/Training/Error tabs
 - [x] **View modal migrated to reusable ExpViewModal module** (2026-01-15)
+- [x] **Pipeline logs service with Cloud Logging integration** (2026-01-15)
 - [x] Cancel and Delete functionality
 - [x] Experiments Dashboard with 8 analytical components
 - [x] Model type conditional filtering for dashboard

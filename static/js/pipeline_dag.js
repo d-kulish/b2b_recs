@@ -463,9 +463,15 @@ function selectDagComponent(componentId) {
         durationEl.textContent = stage.duration_seconds ? formatDuration(stage.duration_seconds) : '-';
     }
 
-    // Load logs - requires experimentId from the page context
-    if (typeof viewModalExpId !== 'undefined' && viewModalExpId) {
-        loadComponentLogs(componentId, viewModalExpId);
+    // Reset logs container to show placeholder (don't auto-load)
+    const logsContainer = document.getElementById('expViewLogsContainer');
+    if (logsContainer) {
+        logsContainer.innerHTML = `
+            <div class="exp-view-logs-empty">
+                <i class="fas fa-file-alt"></i>
+                <span>Click "Load Logs" to fetch recent entries</span>
+            </div>
+        `;
     }
 }
 
@@ -480,7 +486,14 @@ async function loadComponentLogs(componentId, experimentId) {
     const logsContainer = document.getElementById('expViewLogsContainer');
     if (!logsContainer) return;
 
-    logsContainer.innerHTML = '<div class="exp-view-logs-empty"><i class="fas fa-spinner fa-spin"></i> Loading logs...</div>';
+    // Show loading state
+    const componentName = TFX_PIPELINE.components.find(c => c.id === componentId)?.name || componentId;
+    logsContainer.innerHTML = `
+        <div class="exp-view-logs-empty">
+            <i class="fas fa-spinner fa-spin"></i>
+            <span>Loading ${escapeHtml(componentName)} logs...</span>
+        </div>
+    `;
 
     try {
         const response = await fetch(`/api/quick-tests/${experimentId}/logs/${componentId}/`);
@@ -488,23 +501,41 @@ async function loadComponentLogs(componentId, experimentId) {
 
         if (data.success && data.logs?.available) {
             if (data.logs.logs && data.logs.logs.length > 0) {
-                logsContainer.innerHTML = data.logs.logs.map(log => `
+                // Show source indicator if using fallback
+                let sourceNote = '';
+                if (data.logs.note) {
+                    sourceNote = `<div class="exp-view-logs-note"><i class="fas fa-info-circle"></i> ${escapeHtml(data.logs.note)}</div>`;
+                }
+
+                // Log entries: severity icon | timestamp | message
+                logsContainer.innerHTML = sourceNote + data.logs.logs.map(log => `
                     <div class="exp-view-log-entry">
+                        <span class="exp-view-log-severity ${log.severity}"></span>
                         <span class="exp-view-log-time">${log.timestamp}</span>
-                        <span class="exp-view-log-severity ${log.severity}">${log.severity}</span>
                         <span class="exp-view-log-message">${escapeHtml(log.message)}</span>
                     </div>
                 `).join('');
             } else {
-                logsContainer.innerHTML = '<div class="exp-view-logs-empty">No logs available yet</div>';
+                logsContainer.innerHTML = `
+                    <div class="exp-view-logs-empty">
+                        <i class="fas fa-inbox"></i>
+                        <span>No log entries found</span>
+                    </div>
+                `;
             }
         } else {
-            const msg = data.logs?.message || 'Logs not available';
-            logsContainer.innerHTML = `<div class="exp-view-logs-empty">${escapeHtml(msg)}</div>`;
+            // Show user-friendly message from backend
+            const msg = data.logs?.message || 'Logs not available for this component';
+            logsContainer.innerHTML = `
+                <div class="exp-view-logs-empty">
+                    <i class="fas fa-info-circle"></i>
+                    <span>${escapeHtml(msg)}</span>
+                </div>
+            `;
         }
     } catch (error) {
         console.error('Error loading logs:', error);
-        logsContainer.innerHTML = '<div class="exp-view-logs-error">Failed to load logs</div>';
+        logsContainer.innerHTML = '<div class="exp-view-logs-error"><i class="fas fa-exclamation-triangle"></i> Failed to load logs. Please try again.</div>';
     }
 }
 
@@ -515,17 +546,20 @@ async function loadComponentLogs(componentId, experimentId) {
 function refreshComponentLogs(experimentId) {
     if (!selectedComponentId) return;
 
-    const expId = experimentId || (typeof viewModalExpId !== 'undefined' ? viewModalExpId : null);
+    // Get expId from parameter, or from ExpViewModal state
+    const expId = experimentId || ((typeof ExpViewModal !== 'undefined') ? ExpViewModal.getState().expId : null);
     if (!expId) return;
 
-    const btn = document.getElementById('expViewRefreshLogsBtn');
+    const btn = document.getElementById('expViewLoadLogsBtn');
     if (btn) {
-        btn.classList.add('loading');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...';
     }
 
     loadComponentLogs(selectedComponentId, expId).finally(() => {
         if (btn) {
-            btn.classList.remove('loading');
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-sync-alt"></i> Refresh';
         }
     });
 }

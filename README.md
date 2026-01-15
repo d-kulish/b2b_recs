@@ -105,6 +105,47 @@ The Datasets & Configs page provides a three-chapter workflow for configuring ML
 - 🎯 **Ranking Model Support:** Rating Head builder, loss function selection (MSE/BCE/Huber), drag-drop layer reordering
 - 🔍 **Compare Modal:** Side-by-side model comparison with Rating Head support for Ranking models
 
+### **Experiments** ✅
+The Experiments page (`model_experiments.html`) enables running Quick Tests to validate configurations and provides an analytics dashboard for comparing results.
+
+**Chapter 1: Quick Test** - Create and manage experiments
+- 🧪 **2-Step Wizard:** Select configs (Feature + Model + Dataset) → Set training params
+- 🎯 **Model Type Selection:** Retrieval, Ranking, or Multitask models
+- ⚙️ **Configurable Parameters:** Sample % (5-100%), epochs (1-50), batch size, learning rate
+- 🖥️ **Hardware Tiers:** Small/Medium/Large CPU with auto-recommendation
+- 📊 **Experiment Cards:** Status tracking, metrics display, progress bars for running experiments
+- 🔍 **Filter & Search:** By status, model type, dataset, feature config, model config
+- ⚖️ **Compare Modal:** Side-by-side comparison of 2-4 experiments
+- 👁️ **View Modal:** 4 tabs (Config, Data Insights, Training charts, Errors)
+
+**Chapter 2: Experiments Dashboard** - Analytics and insights
+- 📈 **Model Type KPIs:** Clickable containers (Retrieval/Ranking/Multitask) that filter all dashboard content
+- 📉 **Metrics Trend:** Line chart showing best Recall@100 or RMSE over time
+- 🏆 **Top Configurations:** Table of best-performing experiment configs sorted by primary metric
+- 🔬 **Hyperparameter Insights:** TPE-based analysis showing which parameters correlate with top 30% results
+- 🗺️ **Training Heatmaps:** Epoch-by-experiment loss visualization + final metrics heatmap
+- 📊 **Dataset Performance:** Compare metrics across different datasets
+- 💡 **Suggested Experiments:** AI-powered recommendations for gaps in coverage
+
+**Execution Pipeline:**
+```
+Cloud Build (1-2 min)              Vertex AI Pipeline (5-15 min)
+┌─────────────────────┐           ┌────────────────────────────────────┐
+│ Generate TFX code   │           │ ExampleGen → StatisticsGen →       │
+│ Submit to Vertex AI │ ────────► │ SchemaGen → Transform → Trainer    │
+└─────────────────────┘           │              │                     │
+                                  │              ▼                     │
+                                  │     training_metrics.json (GCS)    │
+                                  └────────────────────────────────────┘
+```
+
+**Model Types & Metrics:**
+| Model Type | Purpose | Primary Metrics |
+|------------|---------|-----------------|
+| **Retrieval** | Find candidate items | Recall@5, Recall@10, Recall@50, Recall@100 |
+| **Ranking** | Score/rank candidates | RMSE, MAE, Test RMSE, Test MAE |
+| **Multitask** | Combined objectives | All 8 metrics (retrieval + ranking) |
+
 ### **Platform Features**
 - 🎨 ETL Wizard UI (5-step data source configuration)
 - 📅 Advanced scheduling (cron with timezone support)
@@ -246,13 +287,11 @@ gcloud run jobs execute django-migrate-and-createsuperuser --region europe-centr
 | [`implementation.md`](implementation.md) | **SaaS architecture, multi-tenant design, shared infrastructure** |
 | [`next_steps.md`](next_steps.md) | Current status, priorities, and roadmap |
 | [`etl_runner/etl_runner.md`](etl_runner/etl_runner.md) | ETL Runner technical documentation |
-| [`ml_platform/datasets/datasets.md`](ml_platform/datasets/datasets.md) | Dataset Manager documentation |
-| [`docs/phase_datasets.md`](docs/phase_datasets.md) | Dataset domain specification |
-| [`docs/phase_configs.md`](docs/phase_configs.md) | Feature + Model Config specification |
-| [`docs/phase_model_structure.md`](docs/phase_model_structure.md) | Model Structure (Architecture) specification |
-| [`docs/phase_experiments.md`](docs/phase_experiments.md) | Experiments (Quick Test + MLflow) specification |
+| [`docs/phase_configs.md`](docs/phase_configs.md) | **Datasets & Configs page specification** (Datasets + Features + Model Structure) |
+| [`docs/phase_experiments.md`](docs/phase_experiments.md) | **Experiments page specification** (Quick Test + Dashboard) |
 | [`docs/phase_experiments_implementation.md`](docs/phase_experiments_implementation.md) | **Experiments implementation guide (TFX, Cloud Build)** |
-| [`docs/phase_mlflow_integration.md`](docs/phase_mlflow_integration.md) | **MLflow integration guide (6 phases)** |
+| [`docs/phase_experiments_changelog.md`](docs/phase_experiments_changelog.md) | Experiments detailed changelog history |
+| [`docs/del_datasets_migration.md`](docs/del_datasets_migration.md) | Migration plan: Dataset Manager → Configs page (reference) |
 | This file | Project overview and quick start |
 
 ---
@@ -303,12 +342,13 @@ gcloud run jobs execute django-migrate-and-createsuperuser --region europe-centr
 - File validation and processing
 - Incremental and snapshot loading
 - Dataflow for large datasets (> 1M rows)
-- **Dataset Management** - Full UI with 4-step wizard and Visual Schema Builder (27 endpoints)
-- **Modeling (Feature Engineering)** - Feature config wizard with drag-drop UI, tensor dimension preview (11 endpoints)
-- **Quick Test Pipeline** - ✅ **Fully working!** TFX pipeline on Vertex AI with TFRS model training and SavedModel export
-- **Model Structure** - Tower architecture builder with presets, layer configuration, training params (9 endpoints)
-- **MLflow Integration** - ✅ **Complete!** Experiment tracking, per-epoch charts, training analysis heatmaps
-- **Experiments Dashboard** - ✅ **Enhanced!** 8 analytical components, AI-powered suggestions, hyperparameter insights
+- **Datasets & Configs (Unified Page)** - Three-chapter workflow with ~47 API endpoints:
+  - Chapter 1: Dataset Management (4-step wizard, Visual Schema Builder, D3.js Pareto charts)
+  - Chapter 2: Feature Engineering (drag-drop UI, tensor preview, TFX code generation)
+  - Chapter 3: Model Structure (tower builder, presets, Retrieval/Ranking/Multitask models)
+- **Experiments Page** - ✅ **Fully working!** Two-chapter workflow:
+  - Chapter 1: Quick Test (2-step wizard, experiment cards, compare modal, view modal)
+  - Chapter 2: Dashboard (KPIs, metrics trend, top configs, hyperparameter insights, heatmaps, suggestions)
 
 ### **🔮 Next Up**
 1. Full Training Pipeline - Extended training with checkpointing
@@ -397,7 +437,7 @@ WHERE source_type='gcs';
 - ✅ **Navigation update** - Single "Datasets & Configs" sidebar link
 - ✅ **URL redirect** - Old `/models/<id>/dataset/` URL now redirects to `/models/<id>/configs/`
 - ✅ **Legacy preservation** - Original `model_dataset.html` kept for rollback
-- See [datasets_migration.md](docs/datasets_migration.md) for full migration details
+- See [del_datasets_migration.md](docs/del_datasets_migration.md) for full migration details
 
 **January 4, 2026 - Experiments Dashboard Enhanced**
 - ✅ **8 analytical components** - Complete dashboard overhaul with metrics trend, top configs, hyperparameter insights
@@ -465,7 +505,7 @@ WHERE source_type='gcs';
 - ✅ **Balanced start default** - 1.0 / 1.0 for initial experiments
 - ✅ **Model cards** - Pink "Multitask" badge with weights display
 - ✅ **Full CRUD** - Save/Load/Edit/Clone/Reset all handle multitask configs
-- See [Phase: Model Structure docs](docs/phase_model_structure.md) for details
+- See [Phase: Configs docs](docs/phase_configs.md) for Model Structure details
 
 **December 13, 2025 - Ranking Model Enhancements**
 - ✅ **LayerNormalization** - Added as 4th layer type to all towers (Buyer, Product, Rating Head)
@@ -473,14 +513,14 @@ WHERE source_type='gcs';
 - ✅ **Compare Modal for Ranking** - Added Rating Head comparison section with purple theme
 - ✅ **Mixed model comparison** - Shows "N/A" for non-applicable settings when comparing Ranking vs Retrieval
 - ✅ **Loss Function comparison** - Added to Training Settings section in Compare modal
-- See [Phase: Model Structure docs](docs/phase_model_structure.md) for details
+- See [Phase: Configs docs](docs/phase_configs.md) for Model Structure details
 
 **December 13, 2025 - Quick Test Moved to Experiments Page**
 - ✅ **Page split** - Quick Test functionality moved from Modeling to dedicated Experiments page
 - ✅ **New Experiments page** (`model_experiments.html`) - 1,129 lines of new code
 - ✅ **Modeling page reduced** - Removed ~714 lines, now focused on Feature + Model Config only
 - ✅ **Clean separation** - Modeling = Configure, Experiments = Run and Compare
-- ✅ **Documentation updated** - `phase_modeling.md`, `phase_experiments.md`, `implementation.md`
+- ✅ **Documentation updated** - `phase_configs.md`, `phase_experiments.md`, `implementation.md`
 - See [Phase: Experiments docs](docs/phase_experiments.md) for details
 
 **December 12, 2025 - Code Generation Architecture Refactored**
@@ -509,7 +549,7 @@ WHERE source_type='gcs';
 - ✅ **Unified Layer Edit Modals** - Consistent UI with dimension button selectors
 - ✅ **All 3 phases complete** - Retrieval, Ranking, and Multitask model types fully implemented
 - ✅ API endpoints: `/api/model-configs/` (full CRUD + clone + presets)
-- See [Phase: Model Structure docs](docs/phase_model_structure.md) for details
+- See [Phase: Configs docs](docs/phase_configs.md) for Model Structure details
 
 **December 10, 2025 - Quick Test Pipeline Integration**
 - ✅ **Vertex AI Pipeline** - Full KFP v2 pipeline for validating feature configs
@@ -550,7 +590,7 @@ WHERE source_type='gcs';
 - ✅ Train/eval split moves to TFX ExampleGen in Training domain
 - ✅ Dataset versioning at training time for reproducibility
 - ✅ Simplified Query Preview modal (shows base query only)
-- ✅ Updated documentation (implementation.md, phase_datasets.md)
+- ✅ Updated documentation (implementation.md, phase_configs.md)
 
 **December 5, 2025 - Enhanced Filtering System**
 - ✅ Cross-sub-chapter column exclusion - columns used in one filter are unavailable in others

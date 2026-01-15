@@ -7,7 +7,7 @@ This document provides detailed specifications for implementing the **Configs** 
 2. **Feature Engineering** - Define HOW data is transformed (Feature Configs)
 3. **Model Structure** - Define neural network architecture (Model Configs)
 
-**Last Updated**: 2026-01-14 (Added comprehensive Datasets chapter documentation)
+**Last Updated**: 2026-01-15 (Comprehensive documentation update: Model Structure chapter, JavaScript architecture, complete modal reference, consolidated API reference)
 
 ---
 
@@ -352,6 +352,443 @@ Key bugs fixed after migration:
 | #20-22 | Filter save/display issues | Fixed `ds_collectStepData(4)`, consolidated restore |
 
 See [datasets_migration.md](datasets_migration.md) for complete bug fix details.
+
+---
+
+## Model Structure Chapter (Chapter 3)
+
+The Model Structure chapter defines neural network architecture independently from feature engineering. This enables flexible experimentation with different architectures using the same feature set.
+
+### Model Config Cards
+
+Model Config cards display:
+- **Name and description**
+- **Model type badge**: Retrieval (blue), Ranking (amber), Multitask (pink)
+- **Tower visualization**: Buyer and Product tower layer summaries
+- **Training params**: Optimizer, learning rate, batch size
+- **Parameter counts**: Total/Trainable/Non-trainable params
+- **Action buttons**: View, Edit, Delete, Clone
+
+```
+┌────────────────────────────────────────────────────────────────────────────┐
+│ [🏗️] Standard Architecture                       [Retrieval]  [View][Edit] │
+│ Standard two-tower model with dropout regularization                        │
+├────────────────────────────────────────────────────────────────────────────┤
+│ Buyer Tower          │ Product Tower        │ Training                      │
+│ Dense(128)→Drop(0.2) │ Dense(128)→Drop(0.2) │ Optimizer: Adam               │
+│ Dense(64)→Output(32) │ Dense(64)→Output(32) │ LR: 0.001 • Batch: 4096       │
+├────────────────────────────────────────────────────────────────────────────┤
+│ Params: 45,312 total (45,312 trainable)                                    │
+│ Created: 2 hours ago                               [Clone] [Delete]        │
+└────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Model Config Wizard (3 Steps)
+
+#### Step 1: Basic Info
+- **Name**: Required, with availability check
+- **Description**: Optional
+- **Model Type**: Retrieval / Ranking / Multitask (radio buttons)
+- **Preset Selection**: Quick-start templates
+
+**Model Types:**
+| Type | Purpose | Output |
+|------|---------|--------|
+| **Retrieval** | Find similar items | Embeddings for dot-product similarity |
+| **Ranking** | Predict ratings | Scalar rating value |
+| **Multitask** | Combined objective | Both embeddings and ratings |
+
+**5 Presets:**
+| Preset | Buyer Tower | Product Tower | Use Case |
+|--------|-------------|---------------|----------|
+| Minimal | 64→32 | 64→32 | Quick experiments, small datasets |
+| Standard | 128→64→32 | 128→64→32 | Default choice, balanced |
+| Deep | 256→128→64→32 | 256→128→64→32 | Complex patterns, large datasets |
+| Asymmetric | 256→128→64→32 | 128→64→32 | Rich user context, simpler products |
+| Regularized | 128→Drop→64→Drop→32 | 128→Drop→64→Drop→32 | Overfitting prevention |
+
+#### Step 2: Architecture
+Visual tower builder for configuring layer architecture:
+
+**Tower Builder UI:**
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ BUYER TOWER (Query)                        PRODUCT TOWER (Candidate)        │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ ┌─────────────────────────┐              ┌─────────────────────────┐        │
+│ │ Dense(128, relu)     ⚙️ │              │ Dense(128, relu)     ⚙️ │        │
+│ │ [↕ drag to reorder]     │              │ [↕ drag to reorder]     │        │
+│ └─────────────────────────┘              └─────────────────────────┘        │
+│ ┌─────────────────────────┐              ┌─────────────────────────┐        │
+│ │ Dropout(0.2)         ⚙️ │              │ Dropout(0.2)         ⚙️ │        │
+│ └─────────────────────────┘              └─────────────────────────┘        │
+│ ┌─────────────────────────┐              ┌─────────────────────────┐        │
+│ │ Dense(64, relu)      ⚙️ │              │ Dense(64, relu)      ⚙️ │        │
+│ └─────────────────────────┘              └─────────────────────────┘        │
+│ ┌─────────────────────────┐              ┌─────────────────────────┐        │
+│ │ Output(32) 🔒 locked    │              │ Output(32) 🔒 locked    │        │
+│ └─────────────────────────┘              └─────────────────────────┘        │
+│ [+ Add Layer]                            [+ Add Layer]                      │
+│                                                                              │
+│ Params: 12,416 total                     Params: 12,416 total               │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Layer Types:**
+| Type | Parameters | Purpose |
+|------|------------|---------|
+| **Dense** | units, activation, L1/L2/L1+L2 regularization | Core transformation layer |
+| **Dropout** | rate (0.0-0.5) | Regularization, prevents overfitting |
+| **BatchNormalization** | - | Normalizes activations between layers |
+| **LayerNormalization** | epsilon | Normalizes across features |
+
+**Retrieval Algorithm (Retrieval/Multitask only):**
+| Algorithm | Description | Best For |
+|-----------|-------------|----------|
+| **Brute Force** | Exact nearest neighbor search | < 10K products |
+| **ScaNN** | Approximate NN with tree partitioning | 10K+ products |
+
+ScaNN Parameters:
+- `num_leaves`: Number of partitions (default: 100)
+- `leaves_to_search`: Partitions to search (default: 10)
+- `top_k`: Candidates to retrieve (default: 100)
+
+**Rating Head (Ranking/Multitask only):**
+Additional dense layers that concatenate tower outputs and predict a scalar rating:
+
+```
+Buyer Embedding (32D) ──┐
+                        ├── Concat (64D) → Dense(256) → Dense(64) → Dense(1)
+Product Embedding (32D)─┘
+```
+
+Rating Head Presets:
+| Preset | Layers | Use Case |
+|--------|--------|----------|
+| Minimal | 64→1 | Simple rating prediction |
+| Standard | 256→64→1 | Default choice |
+| Deep | 512→256→64→1 | Complex rating patterns |
+
+#### Step 3: Training Parameters
+
+**Optimizer Selection:**
+| Optimizer | Best For | Default LR |
+|-----------|----------|------------|
+| **Adagrad** | Sparse features, embeddings | 0.1 |
+| **Adam** | General purpose, default | 0.001 |
+| **SGD** | Large batches, fine-tuning | 0.01 |
+| **RMSprop** | Non-stationary objectives | 0.001 |
+| **AdamW** | Weight decay regularization | 0.001 |
+| **FTRL** | Online learning, CTR prediction | 0.1 |
+
+**Training Hyperparameters:**
+- **Learning Rate**: 0.0001 - 1.0 (presets: 0.001, 0.01, 0.05, 0.1)
+- **Batch Size**: 256, 512, 1024, 2048, 4096, 8192
+- **Output Embedding Dimension**: 16, 32, 64, 128 (must match between towers)
+
+**Loss Function (Ranking/Multitask only):**
+| Loss | Formula | Use Case |
+|------|---------|----------|
+| **MSE** | Mean Squared Error | Continuous ratings (1.0-5.0) |
+| **Binary Crossentropy** | -y·log(ŷ) | Binary feedback (click/no-click) |
+| **Huber** | Quadratic for small, linear for large | Robust to outliers |
+
+**Multitask Weights (Multitask only):**
+- **Retrieval Weight**: 0.0-1.0 (contribution of retrieval loss)
+- **Ranking Weight**: 0.0-1.0 (contribution of ranking loss)
+- At least one weight must be > 0
+
+### Model Config State Variables
+
+```javascript
+let mcState = {
+    modelType: 'retrieval',           // 'retrieval' | 'ranking' | 'multitask'
+    name: '',
+    description: '',
+    selectedPreset: null,             // Preset template name
+
+    // Tower architecture
+    buyerTowerLayers: [],             // [{type, units, activation, regularization}]
+    productTowerLayers: [],
+    ratingHeadLayers: [],             // For ranking/multitask
+
+    // Retrieval settings
+    retrievalAlgorithm: 'brute_force', // 'brute_force' | 'scann'
+    topK: 100,
+    scannParams: { num_leaves: 100, leaves_to_search: 10 },
+
+    // Training settings
+    optimizer: 'adam',
+    learningRate: 0.001,
+    batchSize: 4096,
+    outputEmbeddingDim: 32,
+
+    // Ranking/Multitask settings
+    lossFunction: 'mse',
+    retrievalWeight: 1.0,
+    rankingWeight: 1.0
+};
+```
+
+### Model Config Compare Modal
+
+Side-by-side comparison with aligned tower visualization:
+
+**Comparison Sections:**
+| Section | Content |
+|---------|---------|
+| Header | Name, model type, description |
+| Tower Architecture | Aligned layer-by-layer comparison with difference highlighting |
+| Retrieval Settings | Algorithm, top_k, ScaNN params |
+| Rating Head | Layer comparison (Ranking/Multitask only) |
+| Training Settings | Optimizer, LR, batch size, loss function |
+
+**Aligned Tower Visualization:**
+Layers are aligned row-by-row, with empty cells shown for mismatched layer counts. Differences are highlighted with colored backgrounds.
+
+### Model Config API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/model-configs/` | List all model configs |
+| POST | `/api/model-configs/create/` | Create new config |
+| GET | `/api/model-configs/{id}/` | Get config details |
+| PUT | `/api/model-configs/{id}/` | Update config |
+| DELETE | `/api/model-configs/{id}/` | Delete config |
+| POST | `/api/model-configs/{id}/clone/` | Clone config |
+| GET | `/api/model-configs/presets/` | Get tower presets |
+| GET | `/api/model-configs/rating-head-presets/` | Get Rating Head presets |
+| GET | `/api/model-configs/loss-functions/` | Get loss function options |
+
+### Model Config Database Fields
+
+```python
+class ModelConfig(models.Model):
+    name = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    model_type = models.CharField(choices=['retrieval', 'ranking', 'multitask'])
+
+    # Tower architecture (JSON)
+    buyer_tower_layers = models.JSONField(default=list)
+    product_tower_layers = models.JSONField(default=list)
+    rating_head_layers = models.JSONField(default=list)
+
+    # Retrieval settings
+    retrieval_algorithm = models.CharField(default='brute_force')
+    top_k = models.IntegerField(default=100)
+    scann_num_leaves = models.IntegerField(default=100)
+    scann_leaves_to_search = models.IntegerField(default=10)
+
+    # Training hyperparameters
+    optimizer = models.CharField(default='adam')
+    learning_rate = models.FloatField(default=0.001)
+    batch_size = models.IntegerField(default=4096)
+    output_embedding_dim = models.IntegerField(default=32)
+
+    # Ranking/Multitask settings
+    loss_function = models.CharField(default='mse')
+    retrieval_weight = models.FloatField(default=1.0)
+    ranking_weight = models.FloatField(default=1.0)
+```
+
+---
+
+## Complete Modal Reference
+
+The `model_configs.html` page contains 19 modals:
+
+### Dataset Modals (10)
+| Modal ID | Purpose |
+|----------|---------|
+| `dsWizardModal` | 4-step dataset creation/edit wizard |
+| `dsDetailModal` | View dataset details (tables, filters, stats) |
+| `dsDeleteModal` | Delete confirmation with warning |
+| `dsCloneModal` | Clone with new name input |
+| `dsQueryModal` | View generated SQL query |
+| `dsCompareModal` | Side-by-side dataset comparison |
+| `dsTopProductsModal` | Top products D3.js Pareto chart |
+| `dsTopCustomersModal` | Top customers D3.js Pareto chart |
+| `dsProductMetricsModal` | Product transaction/revenue filters |
+| `dsCustomerMetricsModal` | Customer transaction/spending filters |
+| `dsFilterColumnsModal` | Category/numeric/date column filters |
+
+### Feature Config Modals (6)
+| Modal ID | Purpose |
+|----------|---------|
+| `featureConfigWizardModal` | 2-step feature config wizard |
+| `viewConfigModal` | View feature config details |
+| `cloneConfigModal` | Clone with new name input |
+| `compareModal` | Side-by-side feature comparison |
+| `crossFeatureModal` | Create cross-feature interactions |
+| `transformCodeViewerModal` | View generated TFX transform code |
+| `trainerCodeViewerModal` | View generated trainer code |
+
+### Model Config Modals (5)
+| Modal ID | Purpose |
+|----------|---------|
+| `modelConfigWizardModal` | 3-step model config wizard |
+| `modelConfigViewModal` | View model architecture |
+| `cloneModelConfigModal` | Clone with new name input |
+| `compareModelConfigsModal` | Side-by-side model comparison |
+| `layerModal` | Edit layer parameters |
+| `outputLayerModal` | Edit output layer dimension |
+
+---
+
+## JavaScript Architecture
+
+### Namespace Prefixes
+Each chapter uses prefixed functions to prevent collisions:
+
+| Prefix | Chapter | Example Functions |
+|--------|---------|-------------------|
+| `ds_` | Datasets | `ds_loadDatasets()`, `ds_openWizard()`, `ds_saveDataset()` |
+| `fc_` | Features | `fc_loadDatasets()`, `fc_openWizard()`, `fc_loadConfigs()` |
+| `mc_` | Model Structure | `mc_openCompareModal()`, `mc_renderCompareColumn()` |
+| (none) | Shared/Legacy | `loadConfigs()`, `loadModelConfigs()`, `openModelConfigWizard()` |
+
+### Key Function Counts
+| Chapter | Function Count | Key Categories |
+|---------|----------------|----------------|
+| Datasets (`ds_*`) | ~97 functions | Wizard, Schema Builder, Filters, D3 Charts, CRUD |
+| Features | ~40 functions | Wizard, Drag-Drop, Feature Modals, Code Viewer |
+| Model Structure | ~20 functions | Wizard, Tower Builder, Compare, Layer Edit |
+
+### State Synchronization
+- Creating/editing/deleting datasets calls `fc_loadDatasets()` to refresh Feature Config dropdown
+- All three chapters load in parallel on page initialization via `Promise.all()`
+- Filter state uses pending/committed pattern for rollback support
+
+### Detailed State Variables
+
+**Dataset Chapter:**
+```javascript
+let ds_allDatasets = [];              // Cached dataset list
+let ds_currentPage = 1;               // Pagination state
+let ds_searchTimeout = null;          // Debounce timer
+let ds_currentWizardStep = 1;         // Wizard step (1-4)
+let ds_wizardEditMode = false;        // Create vs Edit mode
+let ds_wizardEditDatasetId = null;    // ID if editing
+
+let ds_wizardData = {
+    datasetName: '',
+    description: '',
+    primaryTable: null,
+    secondaryTables: [],
+    selectedColumns: {},              // {tableName: ['col1', 'col2']}
+    columnAliases: {},                // {tableName_col: 'alias'}
+    joinConfig: {},                   // Join configuration
+    filters: {}                       // Applied filters
+};
+
+let ds_schemaBuilderState = {
+    sessionId: null,                  // Backend session for cached data
+    tables: {},                       // {tableName: {columns, selectedColumns}}
+    selectedColumns: {},
+    columnAliases: {},
+    joins: [],                        // [{leftTable, rightTable, leftCol, rightCol, type}]
+    previewData: null
+};
+
+let ds_datesFilterState = {
+    pending: { timestampColumn: null, mode: 'rolling', rollingDays: 30, startDate: null },
+    committed: { ... }
+};
+
+let ds_productFiltersState = {
+    pending: { topRevenue: null, aggregation: {}, columnFilters: [] },
+    committed: { ... }
+};
+
+let ds_customerFiltersState = {
+    pending: { topRevenue: null, aggregation: {}, columnFilters: [] },
+    committed: { ... }
+};
+```
+
+**Feature Config Chapter:**
+```javascript
+let allConfigs = [];                  // Feature config cache
+let allDatasets = [];                 // Dataset cache for dropdown
+let editingConfigId = null;           // Config being edited
+
+let configState = {
+    name: '',
+    description: '',
+    datasetId: null,
+    startFrom: 'blank',               // 'blank' | 'smart' | 'clone'
+    cloneFromId: null,
+    customerIdFeature: null,          // Primary ID for Buyer
+    productIdFeature: null,           // Primary ID for Product
+    buyerFeatures: [],                // Context features
+    productFeatures: [],
+    buyerCrosses: [],                 // Cross features
+    productCrosses: [],
+    targetColumn: null,               // For ranking models
+    availableColumns: [],
+    sampleRows: [],
+    columnOrder: []
+};
+```
+
+---
+
+## Consolidated API Reference
+
+### Dataset APIs (`/api/models/{modelId}/datasets/`)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/models/{id}/datasets/` | List datasets (paginated) |
+| POST | `/api/models/{id}/datasets/create/` | Create dataset |
+| GET | `/api/models/{id}/datasets/{ds_id}/` | Get dataset details |
+| PUT | `/api/models/{id}/datasets/{ds_id}/` | Update dataset |
+| DELETE | `/api/models/{id}/datasets/{ds_id}/` | Delete dataset |
+| POST | `/api/models/{id}/datasets/{ds_id}/clone/` | Clone dataset |
+| GET | `/api/models/{id}/datasets/{ds_id}/query/` | Get generated SQL |
+| POST | `/api/models/{id}/datasets/check-name/` | Validate name uniqueness |
+| POST | `/api/models/{id}/datasets/preview/` | Preview joined data |
+| POST | `/api/models/{id}/datasets/stats/` | Get filtered statistics |
+| POST | `/api/models/{id}/datasets/analyze-columns/` | Analyze column types |
+| POST | `/api/models/{id}/datasets/load-samples/` | Load sample data |
+
+### BigQuery Table APIs
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/models/{id}/bq-tables/` | List available BigQuery tables |
+| GET | `/api/models/{id}/bq-tables/{table}/schema/` | Get table columns/types |
+| POST | `/api/models/{id}/revenue-analysis/` | Product revenue distribution |
+| POST | `/api/models/{id}/customer-revenue-analysis/` | Customer revenue distribution |
+| POST | `/api/models/{id}/search-column-values/` | Search category values |
+
+### Feature Config APIs (`/api/feature-configs/`)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/models/{id}/feature-configs/` | List feature configs |
+| POST | `/api/feature-configs/create/` | Create feature config |
+| GET | `/api/feature-configs/{id}/` | Get config details |
+| PUT | `/api/feature-configs/{id}/` | Update config |
+| DELETE | `/api/feature-configs/{id}/` | Delete config |
+| POST | `/api/feature-configs/{id}/clone/` | Clone config |
+| GET | `/api/feature-configs/{id}/generated-code/` | Get transform/trainer code |
+| POST | `/api/feature-configs/{id}/regenerate-code/` | Regenerate code |
+| GET | `/api/models/{id}/configs/datasets/` | List datasets for dropdown |
+
+### Model Config APIs (`/api/model-configs/`)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/model-configs/` | List all model configs |
+| POST | `/api/model-configs/create/` | Create model config |
+| GET | `/api/model-configs/{id}/` | Get config details |
+| PUT | `/api/model-configs/{id}/` | Update config |
+| DELETE | `/api/model-configs/{id}/` | Delete config |
+| POST | `/api/model-configs/{id}/clone/` | Clone config |
+| GET | `/api/model-configs/presets/` | Get tower presets |
+| GET | `/api/model-configs/rating-head-presets/` | Get Rating Head presets |
+| GET | `/api/model-configs/loss-functions/` | Get loss function options |
 
 ---
 

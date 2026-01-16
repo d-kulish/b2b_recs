@@ -1,0 +1,41 @@
+# Cloud Build configuration for TFX Trainer GPU image
+#
+# Build command:
+#   cd cloudbuild/tfx-trainer-gpu
+#   gcloud builds submit --config=cloudbuild.yaml --project=b2b-recs
+#
+# Or from repo root:
+#   gcloud builds submit --config=cloudbuild/tfx-trainer-gpu/cloudbuild.yaml \
+#     --project=b2b-recs cloudbuild/tfx-trainer-gpu
+#
+# Note: This build takes ~15-20 minutes due to the large TensorFlow GPU base image
+
+steps:
+  # Build the GPU trainer image
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'europe-central2-docker.pkg.dev/b2b-recs/tfx-builder/tfx-trainer-gpu:latest'
+      - '-t'
+      - 'europe-central2-docker.pkg.dev/b2b-recs/tfx-builder/tfx-trainer-gpu:1.15.0'
+      - '.'
+
+  # Push all tags
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - '--all-tags'
+      - 'europe-central2-docker.pkg.dev/b2b-recs/tfx-builder/tfx-trainer-gpu'
+
+images:
+  - 'europe-central2-docker.pkg.dev/b2b-recs/tfx-builder/tfx-trainer-gpu:latest'
+  - 'europe-central2-docker.pkg.dev/b2b-recs/tfx-builder/tfx-trainer-gpu:1.15.0'
+
+options:
+  # Use high-CPU machine for faster builds
+  machineType: 'E2_HIGHCPU_8'
+  logging: CLOUD_LOGGING_ONLY
+
+# GPU image builds are large and slow - allow 30 minutes
+timeout: '1800s'

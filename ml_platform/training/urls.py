@@ -30,6 +30,11 @@ urlpatterns = [
         api.training_run_delete,
         name='training_run_delete'
     ),
+    path(
+        'api/training-runs/<int:training_run_id>/submit/',
+        api.training_run_submit,
+        name='training_run_submit'
+    ),
 
     # Future endpoints (skeleton)
     # path('api/training-runs/<int:training_run_id>/logs/', ...),

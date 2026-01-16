@@ -11,7 +11,7 @@ from django.views.decorators.http import require_http_methods
 from django.db import transaction
 
 from .models import TrainingRun
-from .services import TrainingService
+from .services import TrainingService, TrainingServiceError
 
 logger = logging.getLogger(__name__)
 
@@ -379,6 +379,21 @@ def _training_run_create(request, model_endpoint):
             created_by=request.user if request.user.is_authenticated else None,
         )
 
+        # Auto-submit pipeline unless explicitly disabled or scheduled
+        # If scheduled_at is provided, keep in PENDING for scheduler
+        auto_submit = data.get('auto_submit', True)
+        scheduled_at = data.get('scheduled_at')
+
+        if auto_submit and not scheduled_at:
+            try:
+                service.submit_training_pipeline(training_run)
+                logger.info(f"Training pipeline submitted for {training_run.display_name}")
+            except Exception as submit_error:
+                # Log but don't fail - training run was created successfully
+                logger.error(f"Failed to submit pipeline for {training_run.display_name}: {submit_error}")
+                # Refresh to get error status
+                training_run.refresh_from_db()
+
         return JsonResponse({
             'success': True,
             'training_run': _serialize_training_run(training_run, include_details=True)
@@ -573,6 +588,79 @@ def training_run_delete(request, training_run_id):
 
     except Exception as e:
         logger.exception(f"Error deleting training run: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def training_run_submit(request, training_run_id):
+    """
+    Submit a PENDING Training Run to Vertex AI.
+
+    POST /api/training-runs/<id>/submit/
+
+    This is used for training runs that were created without auto_submit,
+    or for scheduled training runs that need to be submitted manually.
+
+    Returns:
+    {
+        "success": true,
+        "training_run": {
+            "id": 456,
+            "status": "submitting",
+            ...
+        }
+    }
+    """
+    try:
+        model_endpoint = _get_model_endpoint(request)
+        if not model_endpoint:
+            return JsonResponse({
+                'success': False,
+                'error': 'No model endpoint selected'
+            }, status=400)
+
+        try:
+            training_run = TrainingRun.objects.select_related(
+                'dataset', 'feature_config', 'model_config'
+            ).get(
+                id=training_run_id,
+                ml_model=model_endpoint
+            )
+        except TrainingRun.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': f'TrainingRun {training_run_id} not found'
+            }, status=404)
+
+        # Check if training run can be submitted
+        if training_run.status != TrainingRun.STATUS_PENDING:
+            return JsonResponse({
+                'success': False,
+                'error': f"Cannot submit training run in '{training_run.status}' state. "
+                         f"Only PENDING training runs can be submitted."
+            }, status=400)
+
+        # Submit the training run
+        service = TrainingService(model_endpoint)
+        try:
+            training_run = service.submit_training_pipeline(training_run)
+        except TrainingServiceError as e:
+            return JsonResponse({
+                'success': False,
+                'error': str(e)
+            }, status=500)
+
+        return JsonResponse({
+            'success': True,
+            'training_run': _serialize_training_run(training_run, include_details=True)
+        })
+
+    except Exception as e:
+        logger.exception(f"Error submitting training run: {e}")
         return JsonResponse({
             'success': False,
             'error': str(e)

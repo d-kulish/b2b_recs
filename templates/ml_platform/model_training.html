@@ -8,6 +8,7 @@
 <link rel="stylesheet" href="{% static 'css/modals.css' %}?v=2">
 <link rel="stylesheet" href="{% static 'css/pipeline_dag.css' %}?v=1">
 <link rel="stylesheet" href="{% static 'css/exp_view_modal.css' %}?v=1">
+<link rel="stylesheet" href="{% static 'css/training_wizard.css' %}?v=1">
 <style>
     /* =========================================================================
        Best Experiments Container Styles
@@ -1273,18 +1274,362 @@
 
 <!-- Experiment View Modal (Reusable Component) -->
 {% include 'includes/_exp_view_modal.html' %}
+
+<!-- Training Wizard Modal -->
+<div id="trainingWizardModal" class="modal-overlay hidden" onclick="if(event.target === this) TrainingWizard.close()">
+    <div class="modal-container modal-container-wizard">
+        <!-- Header with progress pills -->
+        <div class="modal-header-wizard">
+            <div class="modal-header-content">
+                <div class="modal-header-icon info">
+                    <i class="fas fa-rocket"></i>
+                </div>
+                <div class="modal-header-info">
+                    <h3 class="modal-header-title">New Training Run</h3>
+                    <div class="modal-step-counter">Step 1 of 3</div>
+                </div>
+            </div>
+            <div class="progress-bar-pills">
+                <span class="progress-step-pill current">Select Experiment</span>
+                <span class="progress-step-pill future">Configuration</span>
+                <span class="progress-step-pill future">GPU & Deploy</span>
+            </div>
+        </div>
+
+        <!-- Body with 3 wizard steps -->
+        <div class="modal-body-wizard">
+            <!-- Step 1: Select Base Experiment -->
+            <div id="wizardStep1" class="wizard-step active">
+                <!-- Run Name -->
+                <div class="wizard-field-group">
+                    <label class="wizard-field-label">
+                        Training Run Name <span class="required">*</span>
+                    </label>
+                    <input type="text" id="wizardRunName" class="form-input" style="width: 100%;"
+                           placeholder="e.g., product-recommender-v3"
+                           oninput="this.value = this.value.toLowerCase().replace(/[^a-z0-9-]/g, '')">
+                    <div id="wizardRunNameError" class="wizard-field-error"></div>
+                    <div class="wizard-field-hint">Lowercase letters, numbers, and hyphens only (3-63 chars)</div>
+                </div>
+
+                <!-- Model Type Selection -->
+                <div class="wizard-field-group">
+                    <label class="wizard-field-label">Model Type</label>
+                    <div class="model-type-cards">
+                        <div class="model-type-card retrieval selected" data-type="retrieval"
+                             onclick="TrainingWizard.selectModelType('retrieval')">
+                            <input type="radio" name="wizardModelType" value="retrieval" checked>
+                            <div class="model-type-icon"><i class="fas fa-search"></i></div>
+                            <div class="model-type-name">Retrieval</div>
+                            <div class="model-type-desc">Two-tower similarity</div>
+                        </div>
+                        <div class="model-type-card ranking" data-type="ranking"
+                             onclick="TrainingWizard.selectModelType('ranking')">
+                            <input type="radio" name="wizardModelType" value="ranking">
+                            <div class="model-type-icon"><i class="fas fa-sort-amount-down"></i></div>
+                            <div class="model-type-name">Ranking</div>
+                            <div class="model-type-desc">Score prediction</div>
+                        </div>
+                        <div class="model-type-card hybrid" data-type="hybrid"
+                             onclick="TrainingWizard.selectModelType('hybrid')">
+                            <input type="radio" name="wizardModelType" value="hybrid">
+                            <div class="model-type-icon"><i class="fas fa-layer-group"></i></div>
+                            <div class="model-type-name">Hybrid</div>
+                            <div class="model-type-desc">Multi-task model</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Experiment Search -->
+                <div class="wizard-field-group">
+                    <label class="wizard-field-label">
+                        Select Base Experiment <span class="required">*</span>
+                    </label>
+                    <div class="wizard-search-input">
+                        <i class="fas fa-search"></i>
+                        <input type="text" placeholder="Search experiments..."
+                               oninput="TrainingWizard.searchExperiments(this.value)">
+                    </div>
+                </div>
+
+                <!-- Experiment List -->
+                <div id="wizardExperimentList" class="wizard-selection-grid cols-1" style="max-height: 200px;">
+                    <div class="wizard-loading"><i class="fas fa-spinner fa-spin"></i> Loading experiments...</div>
+                </div>
+
+                <!-- Selected Experiment Summary -->
+                <div id="wizardSelectedExpSummary" class="selected-experiment-summary"></div>
+            </div>
+
+            <!-- Step 2: Configuration & Parameters -->
+            <div id="wizardStep2" class="wizard-step">
+                <!-- Inherited Config Cards -->
+                <div class="wizard-section-title">Inherited Configuration</div>
+                <div class="config-cards-row">
+                    <div id="wizardDatasetCard" class="config-card">
+                        <div class="config-card-header">
+                            <span class="config-card-title">Dataset</span>
+                            <button class="config-card-change" onclick="TrainingWizard.openConfigChangeModal('dataset')">Change</button>
+                        </div>
+                        <div class="config-card-body">
+                            <div class="config-card-icon dataset"><i class="fas fa-database"></i></div>
+                            <div class="config-card-content">
+                                <div class="config-card-name">-</div>
+                                <div class="config-card-meta">From experiment</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="wizardFeatureCard" class="config-card">
+                        <div class="config-card-header">
+                            <span class="config-card-title">Feature Config</span>
+                            <button class="config-card-change" onclick="TrainingWizard.openConfigChangeModal('feature')">Change</button>
+                        </div>
+                        <div class="config-card-body">
+                            <div class="config-card-icon feature"><i class="fas fa-layer-group"></i></div>
+                            <div class="config-card-content">
+                                <div class="config-card-name">-</div>
+                                <div class="config-card-meta">From experiment</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="wizardModelCard" class="config-card">
+                        <div class="config-card-header">
+                            <span class="config-card-title">Model Config</span>
+                            <button class="config-card-change" onclick="TrainingWizard.openConfigChangeModal('model')">Change</button>
+                        </div>
+                        <div class="config-card-body">
+                            <div class="config-card-icon model"><i class="fas fa-project-diagram"></i></div>
+                            <div class="config-card-content">
+                                <div class="config-card-name">-</div>
+                                <div class="config-card-meta">From experiment</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Training Parameters -->
+                <div class="training-params-section">
+                    <div class="training-params-section-title">
+                        <i class="fas fa-sliders-h"></i> Training Parameters
+                    </div>
+                    <div class="training-params-grid">
+                        <div class="training-param-field">
+                            <label class="training-param-label">Epochs</label>
+                            <select id="wizardEpochs" class="training-param-select"
+                                    onchange="TrainingWizard.updateTrainingParam('epochs', this.value)">
+                                <option value="50">50</option>
+                                <option value="100">100</option>
+                                <option value="150" selected>150</option>
+                                <option value="200">200</option>
+                                <option value="300">300</option>
+                            </select>
+                        </div>
+                        <div class="training-param-field">
+                            <label class="training-param-label">Batch Size</label>
+                            <select id="wizardBatchSize" class="training-param-select"
+                                    onchange="TrainingWizard.updateTrainingParam('batchSize', this.value)">
+                                <option value="4096">4,096</option>
+                                <option value="8192" selected>8,192</option>
+                                <option value="16384">16,384</option>
+                                <option value="32768">32,768</option>
+                            </select>
+                        </div>
+                        <div class="training-param-field">
+                            <label class="training-param-label">Learning Rate</label>
+                            <select id="wizardLearningRate" class="training-param-select"
+                                    onchange="TrainingWizard.updateTrainingParam('learningRate', this.value)">
+                                <option value="0.01">0.01</option>
+                                <option value="0.05">0.05</option>
+                                <option value="0.1" selected>0.1</option>
+                                <option value="0.2">0.2</option>
+                            </select>
+                        </div>
+                        <div class="training-param-field">
+                            <label class="training-param-label">Split Strategy</label>
+                            <select id="wizardSplitStrategy" class="training-param-select"
+                                    onchange="TrainingWizard.updateTrainingParam('splitStrategy', this.value)">
+                                <option value="strict_time" selected>Strict Time</option>
+                                <option value="random">Random</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Early Stopping -->
+                <div class="toggle-row">
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="wizardEarlyStopping" checked
+                               onchange="TrainingWizard.updateTrainingParam('earlyStoppingEnabled', this.checked)">
+                        <span class="toggle-slider"></span>
+                    </label>
+                    <div class="toggle-label">
+                        Early Stopping
+                        <span class="toggle-hint">Stop training when validation metric stops improving</span>
+                    </div>
+                    <select id="wizardPatience" class="training-param-select" style="width: 80px; margin-left: auto;"
+                            onchange="TrainingWizard.updateTrainingParam('earlyStoppingPatience', this.value)">
+                        <option value="5">5</option>
+                        <option value="10" selected>10</option>
+                        <option value="15">15</option>
+                        <option value="20">20</option>
+                    </select>
+                    <span style="font-size: 11px; color: #6b7280;">patience</span>
+                </div>
+
+                <!-- Advanced Parameters (collapsed) -->
+                <div class="advanced-section">
+                    <button id="wizardAdvancedToggle" class="advanced-toggle" onclick="TrainingWizard.toggleAdvanced()">
+                        <i class="fas fa-chevron-right"></i>
+                        Advanced Parameters
+                    </button>
+                    <div id="wizardAdvancedContent" class="advanced-content">
+                        <div class="wizard-info-box info">
+                            <i class="fas fa-info-circle"></i>
+                            <span>Advanced parameters like learning rate schedule and mixed precision are configured automatically for production training.</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 3: GPU & Deployment -->
+            <div id="wizardStep3" class="wizard-step">
+                <!-- GPU Selection -->
+                <div class="wizard-section-title">GPU Configuration</div>
+                <div class="gpu-selection-grid">
+                    <div class="gpu-card" data-gpu="NVIDIA_T4" onclick="TrainingWizard.selectGPU('NVIDIA_T4')">
+                        <input type="radio" name="wizardGpu" value="NVIDIA_T4">
+                        <div class="gpu-card-name">T4</div>
+                        <div class="gpu-card-specs">16GB VRAM</div>
+                    </div>
+                    <div class="gpu-card selected" data-gpu="NVIDIA_L4" onclick="TrainingWizard.selectGPU('NVIDIA_L4')">
+                        <input type="radio" name="wizardGpu" value="NVIDIA_L4" checked>
+                        <span class="badge-recommended"><i class="fas fa-star"></i> Recommended</span>
+                        <div class="gpu-card-name">L4</div>
+                        <div class="gpu-card-specs">24GB VRAM</div>
+                    </div>
+                    <div class="gpu-card" data-gpu="NVIDIA_V100" onclick="TrainingWizard.selectGPU('NVIDIA_V100')">
+                        <input type="radio" name="wizardGpu" value="NVIDIA_V100">
+                        <div class="gpu-card-name">V100</div>
+                        <div class="gpu-card-specs">16GB HBM2</div>
+                    </div>
+                    <div class="gpu-card" data-gpu="NVIDIA_A100" onclick="TrainingWizard.selectGPU('NVIDIA_A100')">
+                        <input type="radio" name="wizardGpu" value="NVIDIA_A100">
+                        <div class="gpu-card-name">A100</div>
+                        <div class="gpu-card-specs">40GB HBM2e</div>
+                    </div>
+                </div>
+
+                <div class="training-params-grid" style="grid-template-columns: 1fr 1fr;">
+                    <div class="training-param-field">
+                        <label class="training-param-label">GPU Count</label>
+                        <select id="wizardGpuCount" class="training-param-select"
+                                onchange="TrainingWizard.updateGPUCount(this.value)">
+                            <option value="1">1 GPU</option>
+                            <option value="2" selected>2 GPUs</option>
+                            <option value="4">4 GPUs</option>
+                            <option value="8">8 GPUs</option>
+                        </select>
+                    </div>
+                    <div class="training-param-field">
+                        <label class="training-param-label">&nbsp;</label>
+                        <div class="toggle-row" style="margin-bottom: 0; padding: 8px 12px;">
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="wizardPreemptible" checked
+                                       onchange="TrainingWizard.updatePreemptible(this.checked)">
+                                <span class="toggle-slider"></span>
+                            </label>
+                            <span style="font-size: 13px; color: #374151;">Use Preemptible VMs</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Evaluator Settings -->
+                <div class="wizard-section-title" style="margin-top: 20px;">Evaluator & Blessing</div>
+                <div class="toggle-row">
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="wizardEvaluatorEnabled" checked
+                               onchange="TrainingWizard.updateEvaluator('enabled', this.checked)">
+                        <span class="toggle-slider"></span>
+                    </label>
+                    <div class="toggle-label">
+                        Enable Model Evaluator
+                        <span class="toggle-hint">Automatically evaluate model after training</span>
+                    </div>
+                </div>
+                <div class="training-params-grid" style="grid-template-columns: 1fr;">
+                    <div class="training-param-field">
+                        <label class="training-param-label">Blessing Threshold</label>
+                        <input type="number" id="wizardBlessingThreshold" class="training-param-input"
+                               value="0.40" step="0.01" min="0" max="1"
+                               onchange="TrainingWizard.updateEvaluator('threshold', this.value)">
+                        <div class="wizard-field-hint">Minimum metric value to bless model for deployment</div>
+                    </div>
+                </div>
+
+                <!-- Schedule Options -->
+                <div class="wizard-section-title" style="margin-top: 20px;">Schedule</div>
+                <div class="schedule-options">
+                    <div class="schedule-option selected" data-schedule="now" onclick="TrainingWizard.selectScheduleOption('now')">
+                        <input type="radio" name="wizardSchedule" value="now" checked>
+                        <div class="schedule-option-icon"><i class="fas fa-play-circle"></i></div>
+                        <div class="schedule-option-title">Run Now</div>
+                    </div>
+                    <div class="schedule-option" data-schedule="later" onclick="TrainingWizard.selectScheduleOption('later')">
+                        <input type="radio" name="wizardSchedule" value="later">
+                        <div class="schedule-option-icon"><i class="fas fa-clock"></i></div>
+                        <div class="schedule-option-title">Save as Draft</div>
+                    </div>
+                </div>
+
+                <!-- Summary Panel -->
+                <div class="wizard-summary-panel">
+                    <div class="wizard-summary-title">
+                        <i class="fas fa-clipboard-list"></i> Training Summary
+                    </div>
+                    <div id="wizardSummaryGrid" class="wizard-summary-grid">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Neumorphic footer -->
+        <div class="modal-footer-wizard-neu">
+            <div class="footer-left">
+                <button id="wizardPrevBtn" class="btn-neu btn-neu-nav hidden" onclick="TrainingWizard.prevStep()">
+                    <span class="btn-neu-inner"><i class="fas fa-chevron-left"></i></span>
+                </button>
+            </div>
+            <div class="footer-right">
+                <button class="btn-neu btn-neu-action btn-neu-cancel" onclick="TrainingWizard.close()">
+                    <span class="btn-neu-inner">Cancel</span>
+                </button>
+                <button id="wizardNextBtn" class="btn-neu btn-neu-nav" onclick="TrainingWizard.nextStep()">
+                    <span class="btn-neu-inner"><i class="fas fa-chevron-right"></i></span>
+                </button>
+                <button id="wizardSubmitBtn" class="btn-neu btn-neu-action btn-neu-save hidden" onclick="TrainingWizard.submit()">
+                    <span class="btn-neu-inner"><i class="fas fa-rocket"></i> Run Training</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- End Training Wizard Modal -->
 </div>
 <!-- End Chapter 1: Best Experiments -->
 
 <!-- Chapter 2: Training -->
 <div class="chapter-content" id="chapter-training">
-    <div class="training-empty-state">
+    <div id="trainingRunsContainer">
+        <!-- Training runs list will be populated here when available -->
+    </div>
+    <div id="trainingEmptyState" class="training-empty-state">
         <div class="empty-icon">
             <i class="fas fa-rocket"></i>
         </div>
         <h3>No training runs yet</h3>
         <p>Run experiments first, then promote the best configurations to full-scale training</p>
-        <button class="btn-primary" disabled>
+        <button class="btn-primary" onclick="TrainingWizard.open()">
             <i class="fas fa-plus"></i>
             New Training Run
         </button>
@@ -1308,6 +1653,7 @@
 <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
 <script src="{% static 'js/pipeline_dag.js' %}?v=1"></script>
 <script src="{% static 'js/exp_view_modal.js' %}?v=1"></script>
+<script src="{% static 'js/training_wizard.js' %}?v=1"></script>
 <script>
 // =============================================================================
 // BEST EXPERIMENTS - STATE & INITIALIZATION
@@ -1370,6 +1716,15 @@ document.addEventListener('DOMContentLoaded', function() {
         onUpdate: function(exp) {
             // Refresh the table if experiment status changes
             loadBestExpConfigurations();
+        }
+    });
+
+    // Configure TrainingWizard
+    TrainingWizard.configure({
+        modelId: {{ model.id }},
+        onComplete: function() {
+            loadTrainingRuns();
+            switchChapter('training');
         }
     });
 });

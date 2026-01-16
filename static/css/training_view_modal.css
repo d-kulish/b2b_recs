@@ -1,0 +1,735 @@
+/**
+ * Training View Modal CSS
+ *
+ * Styles for the training run detail modal, following the pattern
+ * of the experiment view modal.
+ */
+
+/* =========================================================================
+   Modal Base
+   ========================================================================= */
+.training-view-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.training-view-modal.hidden {
+    display: none;
+}
+
+.training-view-modal-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(2px);
+}
+
+.training-view-modal-container {
+    position: relative;
+    width: 90%;
+    max-width: 900px;
+    max-height: 85vh;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* =========================================================================
+   Modal Header
+   ========================================================================= */
+.training-view-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid #e5e7eb;
+    background: #f9fafb;
+}
+
+.training-view-modal-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 18px;
+    font-weight: 600;
+    color: #111827;
+}
+
+.training-view-run-number {
+    font-size: 14px;
+    font-weight: 400;
+    color: #6b7280;
+}
+
+.training-view-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    color: white;
+    text-transform: capitalize;
+}
+
+.training-view-status-badge i {
+    font-size: 11px;
+}
+
+.training-view-modal-close {
+    width: 32px;
+    height: 32px;
+    border: none;
+    background: transparent;
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #6b7280;
+    transition: all 0.15s ease;
+}
+
+.training-view-modal-close:hover {
+    background: #e5e7eb;
+    color: #111827;
+}
+
+/* =========================================================================
+   Modal Tabs
+   ========================================================================= */
+.training-view-modal-tabs {
+    display: flex;
+    gap: 4px;
+    padding: 0 20px;
+    border-bottom: 1px solid #e5e7eb;
+    background: white;
+}
+
+.training-view-tab {
+    padding: 12px 16px;
+    border: none;
+    background: transparent;
+    font-size: 13px;
+    font-weight: 500;
+    color: #6b7280;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    transition: all 0.15s ease;
+}
+
+.training-view-tab:hover {
+    color: #374151;
+}
+
+.training-view-tab.active {
+    color: #3b82f6;
+    border-bottom-color: #3b82f6;
+}
+
+.training-view-tab i {
+    font-size: 12px;
+}
+
+/* =========================================================================
+   Modal Body
+   ========================================================================= */
+.training-view-modal-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+}
+
+/* =========================================================================
+   Loading & Error States
+   ========================================================================= */
+.training-view-loading,
+.training-view-error,
+.training-view-empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 20px;
+    color: #6b7280;
+    text-align: center;
+}
+
+.training-view-loading i,
+.training-view-error i,
+.training-view-empty-state i {
+    font-size: 32px;
+    margin-bottom: 16px;
+}
+
+.training-view-loading i {
+    color: #3b82f6;
+}
+
+.training-view-error i {
+    color: #ef4444;
+}
+
+.training-view-empty-state i {
+    color: #9ca3af;
+}
+
+/* =========================================================================
+   Section Styles
+   ========================================================================= */
+.training-view-section {
+    margin-bottom: 24px;
+}
+
+.training-view-section:last-child {
+    margin-bottom: 0;
+}
+
+.training-view-section-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #f3f4f6;
+}
+
+.training-view-section-title i {
+    color: #6b7280;
+    font-size: 13px;
+}
+
+/* =========================================================================
+   Grid Layout
+   ========================================================================= */
+.training-view-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+}
+
+.training-view-grid-4 {
+    grid-template-columns: repeat(4, 1fr);
+}
+
+.training-view-grid-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.training-view-grid-item.full-width {
+    grid-column: span 2;
+}
+
+.training-view-grid-item .label {
+    font-size: 11px;
+    font-weight: 600;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.training-view-grid-item .value {
+    font-size: 14px;
+    color: #111827;
+}
+
+.training-view-grid-item .value.mono {
+    font-family: 'Monaco', 'Consolas', monospace;
+    font-size: 12px;
+    background: #f3f4f6;
+    padding: 4px 8px;
+    border-radius: 4px;
+    word-break: break-all;
+}
+
+/* =========================================================================
+   Status Progress
+   ========================================================================= */
+.training-view-status-info {
+    margin-bottom: 16px;
+}
+
+.training-view-status-summary {
+    display: flex;
+    gap: 24px;
+}
+
+.training-view-status-summary .status-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.training-view-status-summary .label {
+    font-size: 11px;
+    font-weight: 600;
+    color: #6b7280;
+    text-transform: uppercase;
+}
+
+.training-view-status-summary .value {
+    font-size: 14px;
+    font-weight: 500;
+    color: #111827;
+}
+
+.training-view-progress-section {
+    background: #f9fafb;
+    border-radius: 8px;
+    padding: 16px;
+}
+
+.training-view-progress-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.training-view-progress-info .stage {
+    font-size: 14px;
+    font-weight: 500;
+    color: #374151;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.training-view-progress-info .stage i {
+    color: #3b82f6;
+}
+
+.training-view-progress-info .percent {
+    font-size: 14px;
+    font-weight: 600;
+    color: #3b82f6;
+}
+
+.training-view-progress-bar {
+    height: 8px;
+    background: #e5e7eb;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.training-view-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #3b82f6, #60a5fa);
+    border-radius: 4px;
+    transition: width 0.3s ease;
+}
+
+.training-view-progress-fill.indeterminate {
+    width: 30%;
+    animation: progress-indeterminate 1.5s ease-in-out infinite;
+}
+
+@keyframes progress-indeterminate {
+    0% { margin-left: 0; }
+    50% { margin-left: 70%; }
+    100% { margin-left: 0; }
+}
+
+.training-view-epoch-info {
+    margin-top: 8px;
+    font-size: 12px;
+    color: #6b7280;
+    text-align: center;
+}
+
+/* =========================================================================
+   Metrics Display
+   ========================================================================= */
+.training-view-metrics-group {
+    margin-bottom: 16px;
+}
+
+.training-view-metrics-group:last-child {
+    margin-bottom: 0;
+}
+
+.training-view-metrics-group h4 {
+    font-size: 12px;
+    font-weight: 600;
+    color: #6b7280;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.training-view-metrics-group h4 i {
+    font-size: 11px;
+}
+
+.training-view-metrics-row {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.training-view-metric {
+    flex: 1;
+    min-width: 100px;
+    padding: 12px;
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    text-align: center;
+}
+
+.training-view-metric .label {
+    font-size: 11px;
+    font-weight: 600;
+    color: #6b7280;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+}
+
+.training-view-metric .value {
+    font-size: 18px;
+    font-weight: 700;
+    color: #111827;
+}
+
+/* Blessing Status */
+.training-view-blessing {
+    margin-top: 16px;
+    padding: 12px 16px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.training-view-blessing.blessed {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.training-view-blessing.not-blessed {
+    background: #ffedd5;
+    color: #c2410c;
+}
+
+.training-view-blessing i {
+    font-size: 14px;
+}
+
+/* =========================================================================
+   Error Display
+   ========================================================================= */
+.training-view-error-section .training-view-section-title {
+    color: #dc2626;
+}
+
+.training-view-error-section .training-view-section-title i {
+    color: #dc2626;
+}
+
+.training-view-error-box {
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    border-radius: 8px;
+    padding: 16px;
+}
+
+.training-view-error-box .error-stage {
+    font-size: 13px;
+    color: #991b1b;
+    margin-bottom: 8px;
+}
+
+.training-view-error-box .error-message {
+    font-size: 14px;
+    color: #dc2626;
+    font-weight: 500;
+}
+
+.training-view-error-box .error-details {
+    margin-top: 12px;
+}
+
+.training-view-error-box .error-details summary {
+    font-size: 12px;
+    color: #991b1b;
+    cursor: pointer;
+    outline: none;
+}
+
+.training-view-error-box .error-details pre {
+    margin-top: 8px;
+    padding: 12px;
+    background: #fef2f2;
+    border-radius: 4px;
+    font-size: 11px;
+    color: #7f1d1d;
+    overflow-x: auto;
+}
+
+/* =========================================================================
+   Pipeline DAG
+   ========================================================================= */
+.training-view-pipeline-dag {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 20px;
+    background: #f9fafb;
+    border-radius: 8px;
+    overflow-x: auto;
+}
+
+.training-view-pipeline-stage {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 12px 16px;
+    background: white;
+    border: 2px solid #e5e7eb;
+    border-radius: 8px;
+    min-width: 80px;
+    transition: all 0.2s ease;
+}
+
+.training-view-pipeline-stage.completed {
+    border-color: #10b981;
+    background: #dcfce7;
+}
+
+.training-view-pipeline-stage.running {
+    border-color: #3b82f6;
+    background: #dbeafe;
+}
+
+.training-view-pipeline-stage.failed {
+    border-color: #ef4444;
+    background: #fee2e2;
+}
+
+.training-view-pipeline-stage .stage-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    background: #e5e7eb;
+    color: #6b7280;
+}
+
+.training-view-pipeline-stage.completed .stage-icon {
+    background: #10b981;
+    color: white;
+}
+
+.training-view-pipeline-stage.running .stage-icon {
+    background: #3b82f6;
+    color: white;
+}
+
+.training-view-pipeline-stage.failed .stage-icon {
+    background: #ef4444;
+    color: white;
+}
+
+.training-view-pipeline-stage .stage-name {
+    font-size: 11px;
+    font-weight: 600;
+    color: #374151;
+    text-transform: uppercase;
+}
+
+.training-view-pipeline-stage .stage-status {
+    font-size: 10px;
+    color: #6b7280;
+    text-transform: capitalize;
+}
+
+.stage-connector {
+    width: 20px;
+    height: 2px;
+    background: #d1d5db;
+    flex-shrink: 0;
+}
+
+.training-view-pipeline-info {
+    margin-top: 16px;
+}
+
+.training-view-pipeline-info .info-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 12px;
+}
+
+.training-view-pipeline-info .label {
+    font-size: 11px;
+    font-weight: 600;
+    color: #6b7280;
+    text-transform: uppercase;
+}
+
+.training-view-pipeline-info .value.mono {
+    font-family: 'Monaco', 'Consolas', monospace;
+    font-size: 12px;
+    background: #f3f4f6;
+    padding: 6px 10px;
+    border-radius: 4px;
+    word-break: break-all;
+}
+
+/* =========================================================================
+   Training Charts
+   ========================================================================= */
+.training-view-chart-container {
+    height: 250px;
+    background: #f9fafb;
+    border-radius: 8px;
+    padding: 16px;
+}
+
+/* =========================================================================
+   Artifacts
+   ========================================================================= */
+.training-view-artifact-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    background: #f9fafb;
+    border-radius: 6px;
+    margin-bottom: 8px;
+}
+
+.training-view-artifact-item:last-child {
+    margin-bottom: 0;
+}
+
+.training-view-artifact-item .label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #374151;
+    min-width: 100px;
+}
+
+.training-view-artifact-item .value {
+    flex: 1;
+    font-family: 'Monaco', 'Consolas', monospace;
+    font-size: 12px;
+    color: #6b7280;
+    word-break: break-all;
+}
+
+.training-view-artifact-item .artifact-link {
+    color: #3b82f6;
+    flex-shrink: 0;
+}
+
+.training-view-artifact-item .artifact-link:hover {
+    color: #2563eb;
+}
+
+.training-view-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: #3b82f6;
+    font-size: 13px;
+    text-decoration: none;
+    margin-top: 12px;
+}
+
+.training-view-link:hover {
+    color: #2563eb;
+    text-decoration: underline;
+}
+
+.deployed-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    background: #10b981;
+    color: white;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.deployed-badge i {
+    font-size: 11px;
+}
+
+.empty-text {
+    color: #9ca3af;
+    font-size: 13px;
+    font-style: italic;
+}
+
+/* =========================================================================
+   Responsive Adjustments
+   ========================================================================= */
+@media (max-width: 768px) {
+    .training-view-modal-container {
+        width: 95%;
+        max-height: 90vh;
+    }
+
+    .training-view-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .training-view-grid-4 {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .training-view-grid-item.full-width {
+        grid-column: span 1;
+    }
+
+    .training-view-metrics-row {
+        flex-direction: column;
+    }
+
+    .training-view-metric {
+        min-width: 100%;
+    }
+
+    .training-view-pipeline-dag {
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+
+    .stage-connector {
+        display: none;
+    }
+}

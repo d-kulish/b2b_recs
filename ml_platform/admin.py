@@ -17,6 +17,7 @@ from .models import (
     FeatureConfigVersion,
     ModelConfig,
 )
+from ml_platform.training.models import TrainingRun
 
 
 @admin.register(ModelEndpoint)
@@ -166,3 +167,167 @@ class ModelConfigAdmin(admin.ModelAdmin):
             'fields': ('created_by', 'created_at', 'updated_at'),
         }),
     )
+
+
+@admin.register(TrainingRun)
+class TrainingRunAdmin(admin.ModelAdmin):
+    list_display = [
+        'name',
+        'run_number',
+        'status',
+        'model_type',
+        'is_blessed',
+        'get_primary_metric',
+        'ml_model',
+        'created_at'
+    ]
+    list_filter = [
+        'status',
+        'model_type',
+        'is_blessed',
+        'is_deployed',
+        'created_at'
+    ]
+    search_fields = [
+        'name',
+        'description',
+        'vertex_pipeline_job_name',
+        'ml_model__name'
+    ]
+    readonly_fields = [
+        'run_number',
+        'created_at',
+        'updated_at',
+        'started_at',
+        'completed_at',
+        'duration_seconds',
+        'progress_percent',
+        'current_stage',
+        'current_epoch'
+    ]
+    raw_id_fields = [
+        'ml_model',
+        'base_experiment',
+        'dataset',
+        'feature_config',
+        'model_config',
+        'created_by'
+    ]
+    fieldsets = (
+        ('Basic Info', {
+            'fields': (
+                'name',
+                'run_number',
+                'description',
+                'model_type',
+                'ml_model',
+                'base_experiment'
+            )
+        }),
+        ('Configuration', {
+            'fields': (
+                'dataset',
+                'feature_config',
+                'model_config',
+                'training_params',
+                'gpu_config',
+                'evaluator_config',
+                'deployment_config'
+            ),
+            'classes': ('collapse',),
+        }),
+        ('Status & Progress', {
+            'fields': (
+                'status',
+                'current_stage',
+                'current_epoch',
+                'total_epochs',
+                'progress_percent',
+                'stage_details'
+            )
+        }),
+        ('Metrics - Retrieval', {
+            'fields': (
+                'loss',
+                'recall_at_5',
+                'recall_at_10',
+                'recall_at_50',
+                'recall_at_100'
+            ),
+            'classes': ('collapse',),
+        }),
+        ('Metrics - Ranking', {
+            'fields': (
+                'rmse',
+                'mae',
+                'test_rmse',
+                'test_mae'
+            ),
+            'classes': ('collapse',),
+        }),
+        ('Pipeline', {
+            'fields': (
+                'cloud_build_id',
+                'cloud_build_run_id',
+                'vertex_pipeline_job_name',
+                'gcs_artifacts_path'
+            ),
+            'classes': ('collapse',),
+        }),
+        ('Model Registry', {
+            'fields': (
+                'is_blessed',
+                'evaluation_results',
+                'vertex_model_name',
+                'vertex_model_version',
+                'vertex_model_resource_name'
+            ),
+            'classes': ('collapse',),
+        }),
+        ('Deployment', {
+            'fields': (
+                'is_deployed',
+                'deployed_at',
+                'endpoint_resource_name'
+            ),
+            'classes': ('collapse',),
+        }),
+        ('Artifacts', {
+            'fields': (
+                'artifacts',
+                'training_history_json'
+            ),
+            'classes': ('collapse',),
+        }),
+        ('Errors', {
+            'fields': (
+                'error_message',
+                'error_stage',
+                'error_details'
+            ),
+            'classes': ('collapse',),
+        }),
+        ('Timestamps', {
+            'fields': (
+                'created_by',
+                'created_at',
+                'updated_at',
+                'started_at',
+                'completed_at',
+                'scheduled_at',
+                'duration_seconds'
+            )
+        }),
+    )
+
+    def get_primary_metric(self, obj):
+        """Display primary metric based on model type."""
+        if obj.model_type == 'ranking':
+            if obj.rmse is not None:
+                return f"RMSE: {obj.rmse:.4f}"
+            return '-'
+        else:
+            if obj.recall_at_100 is not None:
+                return f"R@100: {obj.recall_at_100:.3f}"
+            return '-'
+    get_primary_metric.short_description = 'Primary Metric'

@@ -9,6 +9,8 @@
 <link rel="stylesheet" href="{% static 'css/pipeline_dag.css' %}?v=1">
 <link rel="stylesheet" href="{% static 'css/exp_view_modal.css' %}?v=1">
 <link rel="stylesheet" href="{% static 'css/training_wizard.css' %}?v=1">
+<link rel="stylesheet" href="{% static 'css/training_cards.css' %}?v=1">
+<link rel="stylesheet" href="{% static 'css/training_view_modal.css' %}?v=1">
 <style>
     /* =========================================================================
        Best Experiments Container Styles
@@ -1620,10 +1622,31 @@
 
 <!-- Chapter 2: Training -->
 <div class="chapter-content" id="chapter-training">
-    <div id="trainingRunsContainer">
-        <!-- Training runs list will be populated here when available -->
+    <!-- Filter Bar -->
+    <div id="trainingFilterBar">
+        <!-- Filter bar will be rendered by TrainingCards.init() -->
     </div>
-    <div id="trainingEmptyState" class="training-empty-state">
+
+    <!-- Loading State -->
+    <div id="trainingLoading" class="training-loading hidden">
+        <i class="fas fa-spinner fa-spin"></i>
+        <span class="training-loading-text">Loading training runs...</span>
+    </div>
+
+    <!-- Training Runs List -->
+    <div id="trainingRunsContainer">
+        <div id="trainingCardsList">
+            <!-- Training run cards will be populated here by TrainingCards -->
+        </div>
+    </div>
+
+    <!-- Pagination -->
+    <div id="trainingPagination">
+        <!-- Pagination controls will be rendered by TrainingCards -->
+    </div>
+
+    <!-- Empty State -->
+    <div id="trainingEmptyState" class="training-empty-state hidden">
         <div class="empty-icon">
             <i class="fas fa-rocket"></i>
         </div>
@@ -1654,6 +1677,8 @@
 <script src="{% static 'js/pipeline_dag.js' %}?v=1"></script>
 <script src="{% static 'js/exp_view_modal.js' %}?v=1"></script>
 <script src="{% static 'js/training_wizard.js' %}?v=1"></script>
+<script src="{% static 'js/training_cards.js' %}?v=1"></script>
+<script src="{% static 'js/training_view_modal.js' %}?v=1"></script>
 <script>
 // =============================================================================
 // BEST EXPERIMENTS - STATE & INITIALIZATION
@@ -1701,9 +1726,35 @@ function switchChapter(chapterName) {
 // TRAINING RUNS (Chapter 2)
 // =============================================================================
 
+let trainingCardsInitialized = false;
+
 async function loadTrainingRuns() {
-    // TODO: Implement in Phase 2 when we have the full UI
-    console.log('Loading training runs...');
+    if (!trainingCardsInitialized) {
+        // Configure TrainingViewModal
+        TrainingViewModal.configure({
+            onClose: function() {
+                // Refresh cards when modal closes in case status changed
+                TrainingCards.refresh();
+            },
+            onUpdate: function(run) {
+                // Refresh cards when run status updates
+                TrainingCards.refresh();
+            }
+        });
+
+        // Configure TrainingCards
+        TrainingCards.configure({
+            modelId: {{ model.id }},
+            onViewRun: function(runId) {
+                TrainingViewModal.open(runId);
+            }
+        });
+        TrainingCards.init();
+        trainingCardsInitialized = true;
+    } else {
+        // Subsequent calls - just refresh
+        TrainingCards.refresh();
+    }
 }
 
 // Initialize on page load

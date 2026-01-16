@@ -17,6 +17,7 @@ urlpatterns = [
     path('', include('ml_platform.configs.urls')),
     path('', include('ml_platform.pipelines.urls')),
     path('', include('ml_platform.experiments.urls')),
+    path('', include('ml_platform.training.urls')),
 
     # =========================================================================
     # SYSTEM DASHBOARD (Landing Page)

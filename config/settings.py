@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     'django.contrib.humanize',
     # Project apps
     'ml_platform',
+    'ml_platform.training',
 ]
 
 MIDDLEWARE = [

@@ -937,11 +937,183 @@
     .exp-view-rating-tower-wrapper {
         max-width: 280px;
     }
+
+    /* =========================================================================
+       Training Chapter Tabs
+       ========================================================================= */
+    .training-chapters {
+        margin-bottom: 20px;
+    }
+
+    .chapter-tabs {
+        display: flex;
+        gap: 4px;
+        background: #f3f4f6;
+        padding: 4px;
+        border-radius: 10px;
+        width: fit-content;
+    }
+
+    .chapter-tab {
+        padding: 10px 20px;
+        border: none;
+        background: transparent;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 500;
+        color: #6b7280;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .chapter-tab:hover:not(.active):not(.disabled) {
+        background: rgba(255, 255, 255, 0.5);
+        color: #374151;
+    }
+
+    .chapter-tab.active {
+        background: white;
+        color: #111827;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+
+    .chapter-tab.disabled {
+        color: #d1d5db;
+        cursor: not-allowed;
+    }
+
+    .chapter-tab i {
+        font-size: 14px;
+    }
+
+    .chapter-tab.active i {
+        color: #3b82f6;
+    }
+
+    .chapter-content {
+        display: none;
+    }
+
+    .chapter-content.active {
+        display: block;
+    }
+
+    /* Training Empty State */
+    .training-empty-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 60px 40px;
+        text-align: center;
+        background: white;
+        border: 2px dashed #e5e7eb;
+        border-radius: 12px;
+    }
+
+    .training-empty-state .empty-icon {
+        width: 80px;
+        height: 80px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 20px;
+    }
+
+    .training-empty-state .empty-icon i {
+        font-size: 32px;
+        color: #9ca3af;
+    }
+
+    .training-empty-state h3 {
+        font-size: 18px;
+        font-weight: 600;
+        color: #374151;
+        margin: 0 0 8px;
+    }
+
+    .training-empty-state p {
+        font-size: 14px;
+        color: #9ca3af;
+        margin: 0 0 24px;
+        max-width: 300px;
+    }
+
+    .training-empty-state .btn-primary {
+        padding: 10px 20px;
+        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        transition: all 0.2s ease;
+    }
+
+    .training-empty-state .btn-primary:hover:not(:disabled) {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+    }
+
+    .training-empty-state .btn-primary:disabled {
+        background: #d1d5db;
+        cursor: not-allowed;
+    }
+
+    /* Coming Soon Placeholder */
+    .coming-soon {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 80px 40px;
+        text-align: center;
+        background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
+        border: 2px dashed #e5e7eb;
+        border-radius: 12px;
+        font-size: 18px;
+        font-weight: 500;
+        color: #9ca3af;
+    }
+
+    .coming-soon i {
+        font-size: 48px;
+        margin-bottom: 16px;
+        opacity: 0.5;
+    }
 </style>
 {% endblock %}
 
 {% block model_content %}
-<!-- Best Experiments Container -->
+<!-- Chapter Tabs Navigation -->
+<div class="training-chapters">
+    <div class="chapter-tabs">
+        <button class="chapter-tab active" data-chapter="best-experiments" onclick="switchChapter('best-experiments')">
+            <i class="fas fa-trophy"></i>
+            Best Experiments
+        </button>
+        <button class="chapter-tab" data-chapter="training" onclick="switchChapter('training')">
+            <i class="fas fa-cogs"></i>
+            Training
+        </button>
+        <button class="chapter-tab disabled" data-chapter="models-registry" title="Coming Soon">
+            <i class="fas fa-archive"></i>
+            Models Registry
+        </button>
+    </div>
+</div>
+
+<!-- Chapter 1: Best Experiments (existing content) -->
+<div class="chapter-content active" id="chapter-best-experiments">
 <div class="bg-white rounded-xl border border-black shadow-lg p-6">
     <div class="flex items-center gap-3 mb-6">
         <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
@@ -1101,6 +1273,33 @@
 
 <!-- Experiment View Modal (Reusable Component) -->
 {% include 'includes/_exp_view_modal.html' %}
+</div>
+<!-- End Chapter 1: Best Experiments -->
+
+<!-- Chapter 2: Training -->
+<div class="chapter-content" id="chapter-training">
+    <div class="training-empty-state">
+        <div class="empty-icon">
+            <i class="fas fa-rocket"></i>
+        </div>
+        <h3>No training runs yet</h3>
+        <p>Run experiments first, then promote the best configurations to full-scale training</p>
+        <button class="btn-primary" disabled>
+            <i class="fas fa-plus"></i>
+            New Training Run
+        </button>
+    </div>
+</div>
+<!-- End Chapter 2: Training -->
+
+<!-- Chapter 3: Models Registry (Coming Soon) -->
+<div class="chapter-content" id="chapter-models-registry">
+    <div class="coming-soon">
+        <i class="fas fa-box-open"></i>
+        <span>Models Registry - Coming Soon</span>
+    </div>
+</div>
+<!-- End Chapter 3: Models Registry -->
 {% endblock %}
 
 {% block extra_js %}
@@ -1115,6 +1314,51 @@
 // =============================================================================
 
 let selectedBestExpModelType = 'retrieval';
+let currentChapter = 'best-experiments';
+
+// =============================================================================
+// CHAPTER TAB SWITCHING
+// =============================================================================
+
+function switchChapter(chapterName) {
+    // Don't switch to disabled chapters
+    const tab = document.querySelector(`.chapter-tab[data-chapter="${chapterName}"]`);
+    if (tab && tab.classList.contains('disabled')) {
+        return;
+    }
+
+    // Update current chapter
+    currentChapter = chapterName;
+
+    // Update tab active states
+    document.querySelectorAll('.chapter-tab').forEach(t => t.classList.remove('active'));
+    if (tab) {
+        tab.classList.add('active');
+    }
+
+    // Update content visibility
+    document.querySelectorAll('.chapter-content').forEach(content => {
+        content.classList.remove('active');
+    });
+    const chapterContent = document.getElementById(`chapter-${chapterName}`);
+    if (chapterContent) {
+        chapterContent.classList.add('active');
+    }
+
+    // Load chapter-specific data if needed
+    if (chapterName === 'training') {
+        loadTrainingRuns();
+    }
+}
+
+// =============================================================================
+// TRAINING RUNS (Chapter 2)
+// =============================================================================
+
+async function loadTrainingRuns() {
+    // TODO: Implement in Phase 2 when we have the full UI
+    console.log('Loading training runs...');
+}
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', function() {

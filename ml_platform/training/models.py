@@ -1,10 +1,248 @@
 """
 Training Domain Models
 
-Defines the TrainingRun model for tracking full-scale model training on Vertex AI.
+Defines models for training runs and scheduling on Vertex AI.
+- TrainingSchedule: Defines scheduled/recurring training configurations
+- TrainingRun: Tracks individual full-scale training runs
 """
 from django.db import models
 from django.contrib.auth.models import User
+
+
+class TrainingSchedule(models.Model):
+    """
+    Defines a scheduled or recurring training configuration.
+    Each execution creates a new TrainingRun linked back to this schedule.
+
+    Supports:
+    - One-time scheduled training (schedule for a specific datetime)
+    - Daily recurring training
+    - Weekly recurring training
+    """
+
+    # =========================================================================
+    # Schedule Type Choices
+    # =========================================================================
+    SCHEDULE_TYPE_ONCE = 'once'
+    SCHEDULE_TYPE_DAILY = 'daily'
+    SCHEDULE_TYPE_WEEKLY = 'weekly'
+
+    SCHEDULE_TYPE_CHOICES = [
+        (SCHEDULE_TYPE_ONCE, 'One-time'),
+        (SCHEDULE_TYPE_DAILY, 'Daily'),
+        (SCHEDULE_TYPE_WEEKLY, 'Weekly'),
+    ]
+
+    # =========================================================================
+    # Status Choices
+    # =========================================================================
+    STATUS_ACTIVE = 'active'
+    STATUS_PAUSED = 'paused'
+    STATUS_COMPLETED = 'completed'  # For one-time schedules after execution
+    STATUS_CANCELLED = 'cancelled'
+
+    STATUS_CHOICES = [
+        (STATUS_ACTIVE, 'Active'),
+        (STATUS_PAUSED, 'Paused'),
+        (STATUS_COMPLETED, 'Completed'),
+        (STATUS_CANCELLED, 'Cancelled'),
+    ]
+
+    # =========================================================================
+    # Relationships
+    # =========================================================================
+    ml_model = models.ForeignKey(
+        'ml_platform.ModelEndpoint',
+        on_delete=models.CASCADE,
+        related_name='training_schedules',
+        help_text="Parent model/endpoint this schedule belongs to"
+    )
+
+    dataset = models.ForeignKey(
+        'ml_platform.Dataset',
+        on_delete=models.PROTECT,
+        related_name='training_schedules',
+        help_text="Dataset to use for scheduled training"
+    )
+
+    feature_config = models.ForeignKey(
+        'ml_platform.FeatureConfig',
+        on_delete=models.PROTECT,
+        related_name='training_schedules',
+        help_text="Feature configuration to use for scheduled training"
+    )
+
+    model_config = models.ForeignKey(
+        'ml_platform.ModelConfig',
+        on_delete=models.PROTECT,
+        related_name='training_schedules',
+        help_text="Model configuration (architecture) to use for scheduled training"
+    )
+
+    base_experiment = models.ForeignKey(
+        'ml_platform.QuickTest',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='training_schedules',
+        help_text="Base experiment this schedule was created from"
+    )
+
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_training_schedules',
+        help_text="User who created the schedule"
+    )
+
+    # =========================================================================
+    # Schedule Configuration
+    # =========================================================================
+    name = models.CharField(
+        max_length=255,
+        help_text="Human-readable name for this schedule"
+    )
+
+    description = models.TextField(
+        blank=True,
+        help_text="Optional description of the schedule"
+    )
+
+    schedule_type = models.CharField(
+        max_length=20,
+        choices=SCHEDULE_TYPE_CHOICES,
+        help_text="Type of schedule (once, daily, weekly)"
+    )
+
+    # For one-time schedules
+    scheduled_datetime = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Specific datetime for one-time execution (for 'once' type)"
+    )
+
+    # For recurring schedules
+    schedule_time = models.TimeField(
+        null=True,
+        blank=True,
+        help_text="Time of day for recurring execution (HH:MM for 'daily'/'weekly' types)"
+    )
+
+    schedule_day_of_week = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="Day of week for weekly schedules (0=Monday, 6=Sunday)"
+    )
+
+    schedule_timezone = models.CharField(
+        max_length=50,
+        default='UTC',
+        help_text="Timezone for schedule execution"
+    )
+
+    # =========================================================================
+    # Training Configuration (frozen at schedule creation)
+    # =========================================================================
+    training_params = models.JSONField(
+        default=dict,
+        help_text="Training hyperparameters (epochs, batch_size, learning_rate, etc.)"
+    )
+
+    gpu_config = models.JSONField(
+        default=dict,
+        help_text="GPU configuration (machine_type, accelerator_type, accelerator_count)"
+    )
+
+    evaluator_config = models.JSONField(
+        default=dict,
+        help_text="Model evaluation configuration (blessing thresholds, metrics)"
+    )
+
+    deployment_config = models.JSONField(
+        default=dict,
+        help_text="Deployment configuration (auto_deploy, endpoint settings)"
+    )
+
+    # =========================================================================
+    # Cloud Scheduler Integration
+    # =========================================================================
+    cloud_scheduler_job_name = models.CharField(
+        max_length=500,
+        blank=True,
+        help_text="Full Cloud Scheduler job resource name"
+    )
+
+    # =========================================================================
+    # Status & Statistics
+    # =========================================================================
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=STATUS_ACTIVE,
+        db_index=True,
+        help_text="Current status of the schedule"
+    )
+
+    last_run_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the schedule last triggered a training run"
+    )
+
+    next_run_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the schedule will next trigger (calculated)"
+    )
+
+    total_runs = models.IntegerField(
+        default=0,
+        help_text="Total number of training runs triggered by this schedule"
+    )
+
+    successful_runs = models.IntegerField(
+        default=0,
+        help_text="Number of successful (completed/blessed) training runs"
+    )
+
+    failed_runs = models.IntegerField(
+        default=0,
+        help_text="Number of failed/cancelled training runs"
+    )
+
+    # =========================================================================
+    # Timestamps
+    # =========================================================================
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        app_label = 'training'
+        ordering = ['-created_at']
+        verbose_name = 'Training Schedule'
+        verbose_name_plural = 'Training Schedules'
+
+    def __str__(self):
+        return f"TrainingSchedule '{self.name}' ({self.schedule_type}, {self.status})"
+
+    @property
+    def is_active(self):
+        """Check if the schedule is currently active."""
+        return self.status == self.STATUS_ACTIVE
+
+    @property
+    def is_recurring(self):
+        """Check if this is a recurring schedule."""
+        return self.schedule_type in (self.SCHEDULE_TYPE_DAILY, self.SCHEDULE_TYPE_WEEKLY)
+
+    @property
+    def success_rate(self):
+        """Calculate success rate as percentage."""
+        if self.total_runs == 0:
+            return None
+        return round((self.successful_runs / self.total_runs) * 100, 1)
 
 
 class TrainingRun(models.Model):
@@ -97,6 +335,15 @@ class TrainingRun(models.Model):
         blank=True,
         related_name='created_training_runs',
         help_text="User who initiated the training run"
+    )
+
+    schedule = models.ForeignKey(
+        'TrainingSchedule',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='training_runs',
+        help_text="Schedule that triggered this run (null for manual runs)"
     )
 
     # =========================================================================

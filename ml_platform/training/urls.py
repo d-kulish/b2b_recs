@@ -1,15 +1,18 @@
 """
 Training Domain URL Configuration
 
-API endpoints for running and tracking full-scale training runs.
+API endpoints for running and tracking full-scale training runs and schedules.
 """
 from django.urls import path
 from . import api
+from . import webhooks
 
 app_name = 'training'
 
 urlpatterns = [
+    # ==========================================================================
     # Training Run CRUD endpoints
+    # ==========================================================================
     path(
         'api/training-runs/',
         api.training_run_list,
@@ -36,8 +39,46 @@ urlpatterns = [
         name='training_run_submit'
     ),
 
-    # Future endpoints (skeleton)
-    # path('api/training-runs/<int:training_run_id>/logs/', ...),
-    # path('api/training-runs/<int:training_run_id>/training-history/', ...),
-    # path('api/training-runs/<int:training_run_id>/deploy/', ...),
+    # ==========================================================================
+    # Training Schedule CRUD endpoints
+    # ==========================================================================
+    path(
+        'api/training/schedules/',
+        api.training_schedule_list,
+        name='training_schedule_list'
+    ),
+    path(
+        'api/training/schedules/<int:schedule_id>/',
+        api.training_schedule_detail,
+        name='training_schedule_detail'
+    ),
+    path(
+        'api/training/schedules/<int:schedule_id>/pause/',
+        api.training_schedule_pause,
+        name='training_schedule_pause'
+    ),
+    path(
+        'api/training/schedules/<int:schedule_id>/resume/',
+        api.training_schedule_resume,
+        name='training_schedule_resume'
+    ),
+    path(
+        'api/training/schedules/<int:schedule_id>/cancel/',
+        api.training_schedule_cancel,
+        name='training_schedule_cancel'
+    ),
+    path(
+        'api/training/schedules/<int:schedule_id>/trigger/',
+        api.training_schedule_trigger,
+        name='training_schedule_trigger'
+    ),
+
+    # ==========================================================================
+    # Webhook endpoint for Cloud Scheduler
+    # ==========================================================================
+    path(
+        'api/training/schedules/<int:schedule_id>/webhook/',
+        webhooks.training_scheduler_webhook,
+        name='training_scheduler_webhook'
+    ),
 ]

@@ -67,7 +67,13 @@ const TrainingWizard = (function() {
                 blessingThreshold: 0.40
             },
             deploymentOption: 'register_only',
-            scheduleOption: 'now'
+            scheduleConfig: {
+                type: 'now',              // 'now', 'once', 'daily', 'weekly'
+                datetime: null,           // ISO string for 'once'
+                time: '09:00',            // HH:MM for recurring
+                dayOfWeek: 0,             // 0=Monday for weekly
+                timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+            }
         },
         experiments: [],
         datasets: [],
@@ -226,7 +232,13 @@ const TrainingWizard = (function() {
                 blessingThreshold: 0.40
             },
             deploymentOption: 'register_only',
-            scheduleOption: 'now'
+            scheduleConfig: {
+                type: 'now',
+                datetime: null,
+                time: '09:00',
+                dayOfWeek: 0,
+                timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+            }
         };
         state.experiments = [];
         state.validation = { step1: false, step2: true, step3: true };
@@ -769,6 +781,24 @@ const TrainingWizard = (function() {
         if (preemptToggle) {
             preemptToggle.checked = state.formData.gpuConfig.usePreemptible;
         }
+
+        // Initialize schedule type selection
+        selectScheduleType(state.formData.scheduleConfig.type);
+
+        // Set schedule timezone
+        const timezoneSelect = document.getElementById('wizardScheduleTimezone');
+        if (timezoneSelect) {
+            timezoneSelect.value = state.formData.scheduleConfig.timezone;
+        }
+
+        // Set day of week for weekly
+        const daySelect = document.getElementById('wizardScheduleDayOfWeek');
+        if (daySelect) {
+            daySelect.value = state.formData.scheduleConfig.dayOfWeek;
+        }
+
+        // Initialize datetime pickers
+        initializeDatetimePickers();
     }
 
     function renderGPUSelection() {
@@ -810,11 +840,81 @@ const TrainingWizard = (function() {
         });
     }
 
-    function selectScheduleOption(option) {
-        state.formData.scheduleOption = option;
-        document.querySelectorAll('.schedule-option').forEach(opt => {
-            opt.classList.toggle('selected', opt.dataset.schedule === option);
+    function selectScheduleType(type) {
+        state.formData.scheduleConfig.type = type;
+
+        // Update tab selection
+        document.querySelectorAll('.schedule-type-option').forEach(opt => {
+            opt.classList.toggle('selected', opt.dataset.type === type);
         });
+
+        // Show/hide appropriate fields
+        const onceFields = document.getElementById('scheduleOnceFields');
+        const recurringFields = document.getElementById('scheduleRecurringFields');
+        const weeklyDayField = document.getElementById('weeklyDayField');
+
+        if (onceFields) onceFields.classList.toggle('hidden', type !== 'once');
+        if (recurringFields) recurringFields.classList.toggle('hidden', type !== 'daily' && type !== 'weekly');
+        if (weeklyDayField) weeklyDayField.classList.toggle('hidden', type !== 'weekly');
+
+        // Update submit button text
+        const submitBtn = document.getElementById('wizardSubmitBtn');
+        if (submitBtn) {
+            const btnInner = submitBtn.querySelector('.btn-neu-inner');
+            if (btnInner) {
+                if (type === 'now') {
+                    btnInner.innerHTML = '<i class="fas fa-rocket"></i> Run Training';
+                } else {
+                    btnInner.innerHTML = '<i class="fas fa-calendar-check"></i> Schedule Training';
+                }
+            }
+        }
+    }
+
+    function updateScheduleConfig(param, value) {
+        if (param === 'datetime') {
+            state.formData.scheduleConfig.datetime = value;
+        } else if (param === 'time') {
+            state.formData.scheduleConfig.time = value;
+        } else if (param === 'dayOfWeek') {
+            state.formData.scheduleConfig.dayOfWeek = parseInt(value);
+        } else if (param === 'timezone') {
+            state.formData.scheduleConfig.timezone = value;
+        }
+    }
+
+    function initializeDatetimePickers() {
+        // Initialize flatpickr for datetime picker if available
+        if (typeof flatpickr !== 'undefined') {
+            const datetimeInput = document.getElementById('wizardScheduleDatetime');
+            if (datetimeInput) {
+                flatpickr(datetimeInput, {
+                    enableTime: true,
+                    dateFormat: 'Y-m-d H:i',
+                    minDate: 'today',
+                    time_24hr: true,
+                    onChange: function(selectedDates, dateStr) {
+                        if (selectedDates[0]) {
+                            state.formData.scheduleConfig.datetime = selectedDates[0].toISOString();
+                        }
+                    }
+                });
+            }
+
+            const timeInput = document.getElementById('wizardScheduleTime');
+            if (timeInput) {
+                flatpickr(timeInput, {
+                    enableTime: true,
+                    noCalendar: true,
+                    dateFormat: 'H:i',
+                    time_24hr: true,
+                    defaultDate: '09:00',
+                    onChange: function(selectedDates, dateStr) {
+                        state.formData.scheduleConfig.time = dateStr;
+                    }
+                });
+            }
+        }
     }
 
     function renderSummaryPanel() {
@@ -869,15 +969,24 @@ const TrainingWizard = (function() {
         if (!validateStep(3)) return;
 
         const submitBtn = document.getElementById('wizardSubmitBtn');
+        const scheduleType = state.formData.scheduleConfig.type;
+        const isScheduled = scheduleType !== 'now';
+
         if (submitBtn) {
             submitBtn.disabled = true;
-            submitBtn.querySelector('.btn-neu-inner').innerHTML = '<i class="fas fa-spinner fa-spin"></i> Submitting...';
+            const btnInner = submitBtn.querySelector('.btn-neu-inner');
+            if (btnInner) {
+                btnInner.innerHTML = '<i class="fas fa-spinner fa-spin"></i> ' + (isScheduled ? 'Scheduling...' : 'Submitting...');
+            }
         }
 
         try {
             const payload = buildPayload();
 
-            const response = await fetch(config.endpoints.createTrainingRun, {
+            // Use the schedule API endpoint which handles both immediate and scheduled runs
+            const endpoint = '/api/training/schedules/';
+
+            const response = await fetch(endpoint, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -888,10 +997,15 @@ const TrainingWizard = (function() {
 
             const data = await response.json();
 
-            if (data.success || data.id) {
+            if (data.success) {
                 // Success
                 close();
-                showToast('Training run created successfully!', 'success');
+
+                if (isScheduled) {
+                    showToast('Training scheduled successfully!', 'success');
+                } else {
+                    showToast('Training run created successfully!', 'success');
+                }
 
                 // Call completion callback
                 if (config.onComplete) {
@@ -904,15 +1018,22 @@ const TrainingWizard = (function() {
                 }
             } else {
                 // Error
-                showToast(data.error || 'Failed to create training run', 'error');
+                showToast(data.error || 'Failed to create training', 'error');
             }
         } catch (error) {
             console.error('Submit failed:', error);
-            showToast('Failed to create training run', 'error');
+            showToast('Failed to create training', 'error');
         } finally {
             if (submitBtn) {
                 submitBtn.disabled = false;
-                submitBtn.querySelector('.btn-neu-inner').innerHTML = '<i class="fas fa-rocket"></i> Run Training';
+                const btnInner = submitBtn.querySelector('.btn-neu-inner');
+                if (btnInner) {
+                    if (isScheduled) {
+                        btnInner.innerHTML = '<i class="fas fa-calendar-check"></i> Schedule Training';
+                    } else {
+                        btnInner.innerHTML = '<i class="fas fa-rocket"></i> Run Training';
+                    }
+                }
             }
         }
     }
@@ -922,8 +1043,9 @@ const TrainingWizard = (function() {
         const params = state.formData.trainingParams;
         const gpu = state.formData.gpuConfig;
         const evaluator = state.formData.evaluatorConfig;
+        const schedule = state.formData.scheduleConfig;
 
-        return {
+        const payload = {
             name: state.formData.name,
             description: state.formData.description || '',
             dataset_id: exp.dataset_id || state.formData.datasetId,
@@ -948,9 +1070,26 @@ const TrainingWizard = (function() {
             evaluator_config: {
                 enabled: evaluator.enabled,
                 blessing_threshold: evaluator.blessingThreshold
-            },
-            auto_submit: state.formData.scheduleOption === 'now'
+            }
         };
+
+        // Add schedule configuration
+        if (schedule.type === 'now') {
+            payload.schedule_type = 'now';
+        } else {
+            payload.schedule_type = schedule.type;
+            payload.schedule_timezone = schedule.timezone;
+            if (schedule.type === 'once') {
+                payload.scheduled_datetime = schedule.datetime;
+            } else {
+                payload.schedule_time = schedule.time;
+                if (schedule.type === 'weekly') {
+                    payload.schedule_day_of_week = schedule.dayOfWeek;
+                }
+            }
+        }
+
+        return payload;
     }
 
     // =============================================================================
@@ -977,6 +1116,7 @@ const TrainingWizard = (function() {
         updatePreemptible: updatePreemptible,
         updateEvaluator: updateEvaluator,
         selectDeploymentOption: selectDeploymentOption,
-        selectScheduleOption: selectScheduleOption
+        selectScheduleType: selectScheduleType,
+        updateScheduleConfig: updateScheduleConfig
     };
 })();

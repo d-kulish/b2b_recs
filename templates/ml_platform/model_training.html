@@ -8,9 +8,11 @@
 <link rel="stylesheet" href="{% static 'css/modals.css' %}?v=2">
 <link rel="stylesheet" href="{% static 'css/pipeline_dag.css' %}?v=1">
 <link rel="stylesheet" href="{% static 'css/exp_view_modal.css' %}?v=1">
-<link rel="stylesheet" href="{% static 'css/training_wizard.css' %}?v=1">
+<link rel="stylesheet" href="{% static 'css/training_wizard.css' %}?v=2">
 <link rel="stylesheet" href="{% static 'css/training_cards.css' %}?v=1">
 <link rel="stylesheet" href="{% static 'css/training_view_modal.css' %}?v=1">
+<!-- Flatpickr for datetime pickers -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 <style>
     /* =========================================================================
        Best Experiments Container Styles
@@ -1570,16 +1572,72 @@
 
                 <!-- Schedule Options -->
                 <div class="wizard-section-title" style="margin-top: 20px;">Schedule</div>
-                <div class="schedule-options">
-                    <div class="schedule-option selected" data-schedule="now" onclick="TrainingWizard.selectScheduleOption('now')">
-                        <input type="radio" name="wizardSchedule" value="now" checked>
-                        <div class="schedule-option-icon"><i class="fas fa-play-circle"></i></div>
-                        <div class="schedule-option-title">Run Now</div>
+                <div class="schedule-type-tabs">
+                    <div class="schedule-type-option selected" data-type="now" onclick="TrainingWizard.selectScheduleType('now')">
+                        <i class="fas fa-play-circle"></i><span>Run Now</span>
                     </div>
-                    <div class="schedule-option" data-schedule="later" onclick="TrainingWizard.selectScheduleOption('later')">
-                        <input type="radio" name="wizardSchedule" value="later">
-                        <div class="schedule-option-icon"><i class="fas fa-clock"></i></div>
-                        <div class="schedule-option-title">Save as Draft</div>
+                    <div class="schedule-type-option" data-type="once" onclick="TrainingWizard.selectScheduleType('once')">
+                        <i class="fas fa-calendar-day"></i><span>Schedule Once</span>
+                    </div>
+                    <div class="schedule-type-option" data-type="daily" onclick="TrainingWizard.selectScheduleType('daily')">
+                        <i class="fas fa-calendar-alt"></i><span>Daily</span>
+                    </div>
+                    <div class="schedule-type-option" data-type="weekly" onclick="TrainingWizard.selectScheduleType('weekly')">
+                        <i class="fas fa-calendar-week"></i><span>Weekly</span>
+                    </div>
+                </div>
+
+                <!-- One-time scheduling fields -->
+                <div id="scheduleOnceFields" class="schedule-fields hidden">
+                    <div class="training-params-grid">
+                        <div class="training-param-field">
+                            <label class="training-param-label">Date & Time</label>
+                            <input type="text" id="wizardScheduleDatetime" class="training-param-input flatpickr-datetime" placeholder="Select date and time">
+                        </div>
+                        <div class="training-param-field">
+                            <label class="training-param-label">Timezone</label>
+                            <select id="wizardScheduleTimezone" class="training-param-select" onchange="TrainingWizard.updateScheduleConfig('timezone', this.value)">
+                                <option value="UTC">UTC</option>
+                                <option value="Europe/Kyiv">Kyiv (UTC+2/+3)</option>
+                                <option value="Europe/London">London (UTC+0/+1)</option>
+                                <option value="America/New_York">New York (UTC-5/-4)</option>
+                                <option value="America/Los_Angeles">Los Angeles (UTC-8/-7)</option>
+                                <option value="Asia/Tokyo">Tokyo (UTC+9)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recurring scheduling fields -->
+                <div id="scheduleRecurringFields" class="schedule-fields hidden">
+                    <div class="training-params-grid">
+                        <div id="weeklyDayField" class="training-param-field hidden">
+                            <label class="training-param-label">Day of Week</label>
+                            <select id="wizardScheduleDayOfWeek" class="training-param-select" onchange="TrainingWizard.updateScheduleConfig('dayOfWeek', this.value)">
+                                <option value="0">Monday</option>
+                                <option value="1">Tuesday</option>
+                                <option value="2">Wednesday</option>
+                                <option value="3">Thursday</option>
+                                <option value="4">Friday</option>
+                                <option value="5">Saturday</option>
+                                <option value="6">Sunday</option>
+                            </select>
+                        </div>
+                        <div class="training-param-field">
+                            <label class="training-param-label">Time</label>
+                            <input type="text" id="wizardScheduleTime" class="training-param-input flatpickr-time" value="09:00" placeholder="HH:MM">
+                        </div>
+                        <div class="training-param-field">
+                            <label class="training-param-label">Timezone</label>
+                            <select id="wizardScheduleTimezoneRecurring" class="training-param-select" onchange="TrainingWizard.updateScheduleConfig('timezone', this.value)">
+                                <option value="UTC">UTC</option>
+                                <option value="Europe/Kyiv">Kyiv (UTC+2/+3)</option>
+                                <option value="Europe/London">London (UTC+0/+1)</option>
+                                <option value="America/New_York">New York (UTC-5/-4)</option>
+                                <option value="America/Los_Angeles">Los Angeles (UTC-8/-7)</option>
+                                <option value="Asia/Tokyo">Tokyo (UTC+9)</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
 
@@ -1622,6 +1680,21 @@
 
 <!-- Chapter 2: Training -->
 <div class="chapter-content" id="chapter-training">
+    <!-- Active Schedules Section -->
+    <div id="trainingSchedulesSection" class="training-schedules-section hidden">
+        <div class="schedules-section-header">
+            <h3 class="schedules-section-title">
+                <i class="fas fa-calendar-alt"></i> Active Schedules
+            </h3>
+            <button class="btn-text schedules-toggle-btn" onclick="TrainingSchedules.toggleSection()">
+                <i class="fas fa-chevron-up"></i>
+            </button>
+        </div>
+        <div id="schedulesList" class="schedules-list">
+            <!-- Schedule cards will be populated here by TrainingSchedules -->
+        </div>
+    </div>
+
     <!-- Filter Bar -->
     <div id="trainingFilterBar">
         <!-- Filter bar will be rendered by TrainingCards.init() -->
@@ -1674,9 +1747,10 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
 <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <script src="{% static 'js/pipeline_dag.js' %}?v=1"></script>
 <script src="{% static 'js/exp_view_modal.js' %}?v=1"></script>
-<script src="{% static 'js/training_wizard.js' %}?v=1"></script>
+<script src="{% static 'js/training_wizard.js' %}?v=2"></script>
 <script src="{% static 'js/training_cards.js' %}?v=1"></script>
 <script src="{% static 'js/training_view_modal.js' %}?v=1"></script>
 <script>
@@ -1750,10 +1824,12 @@ async function loadTrainingRuns() {
             }
         });
         TrainingCards.init();
+        TrainingSchedules.init();
         trainingCardsInitialized = true;
     } else {
         // Subsequent calls - just refresh
         TrainingCards.refresh();
+        TrainingSchedules.loadSchedules();
     }
 }
 

@@ -1076,3 +1076,367 @@ const TrainingCards = (function() {
         getState: function() { return state; }
     };
 })();
+
+
+/**
+ * Training Schedules Module
+ *
+ * Handles displaying and managing training schedules (recurring/one-time).
+ */
+const TrainingSchedules = (function() {
+    'use strict';
+
+    // =============================================================================
+    // CONFIGURATION & STATE
+    // =============================================================================
+
+    let config = {
+        endpoints: {
+            list: '/api/training/schedules/',
+            pause: '/api/training/schedules/{id}/pause/',
+            resume: '/api/training/schedules/{id}/resume/',
+            cancel: '/api/training/schedules/{id}/cancel/',
+            trigger: '/api/training/schedules/{id}/trigger/'
+        }
+    };
+
+    let state = {
+        schedules: [],
+        isCollapsed: false,
+        isLoading: false
+    };
+
+    const STATUS_CONFIG = {
+        active: { icon: 'fa-play-circle', label: 'Active', color: '#16a34a' },
+        paused: { icon: 'fa-pause-circle', label: 'Paused', color: '#f59e0b' },
+        completed: { icon: 'fa-check-circle', label: 'Completed', color: '#6b7280' },
+        cancelled: { icon: 'fa-times-circle', label: 'Cancelled', color: '#dc2626' }
+    };
+
+    const SCHEDULE_TYPE_LABELS = {
+        once: 'One-time',
+        daily: 'Daily',
+        weekly: 'Weekly'
+    };
+
+    const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+    // =============================================================================
+    // UTILITY FUNCTIONS
+    // =============================================================================
+
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
+    function buildUrl(template, params) {
+        let url = template;
+        for (const [key, value] of Object.entries(params)) {
+            url = url.replace(`{${key}}`, value);
+        }
+        return url;
+    }
+
+    function formatDateTime(isoString) {
+        if (!isoString) return '-';
+        const date = new Date(isoString);
+        return date.toLocaleString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    }
+
+    function formatScheduleDescription(schedule) {
+        if (schedule.schedule_type === 'once') {
+            return `Scheduled for ${formatDateTime(schedule.scheduled_datetime)}`;
+        } else if (schedule.schedule_type === 'daily') {
+            return `Daily at ${schedule.schedule_time || '09:00'} ${schedule.schedule_timezone}`;
+        } else if (schedule.schedule_type === 'weekly') {
+            const day = DAY_NAMES[schedule.schedule_day_of_week] || 'Monday';
+            return `${day}s at ${schedule.schedule_time || '09:00'} ${schedule.schedule_timezone}`;
+        }
+        return '';
+    }
+
+    // =============================================================================
+    // DATA LOADING
+    // =============================================================================
+
+    async function loadSchedules() {
+        state.isLoading = true;
+        try {
+            const response = await fetch(`${config.endpoints.list}?status=active`);
+            const data = await response.json();
+
+            if (data.success && data.schedules) {
+                state.schedules = data.schedules;
+                renderSchedules();
+            }
+        } catch (error) {
+            console.error('Failed to load schedules:', error);
+        } finally {
+            state.isLoading = false;
+        }
+    }
+
+    // =============================================================================
+    // RENDERING
+    // =============================================================================
+
+    function renderSchedules() {
+        const section = document.getElementById('trainingSchedulesSection');
+        const list = document.getElementById('schedulesList');
+
+        if (!section || !list) return;
+
+        // Also load paused schedules
+        loadAllSchedules();
+    }
+
+    async function loadAllSchedules() {
+        try {
+            // Load both active and paused schedules
+            const response = await fetch(config.endpoints.list);
+            const data = await response.json();
+
+            if (data.success && data.schedules) {
+                // Filter to only show active and paused
+                state.schedules = data.schedules.filter(
+                    s => s.status === 'active' || s.status === 'paused'
+                );
+                renderSchedulesList();
+            }
+        } catch (error) {
+            console.error('Failed to load schedules:', error);
+        }
+    }
+
+    function renderSchedulesList() {
+        const section = document.getElementById('trainingSchedulesSection');
+        const list = document.getElementById('schedulesList');
+
+        if (!section || !list) return;
+
+        if (state.schedules.length === 0) {
+            section.classList.add('hidden');
+            return;
+        }
+
+        section.classList.remove('hidden');
+
+        const html = state.schedules.map(schedule => {
+            const statusConfig = STATUS_CONFIG[schedule.status] || STATUS_CONFIG.active;
+            const typeLabel = SCHEDULE_TYPE_LABELS[schedule.schedule_type] || schedule.schedule_type;
+
+            return `
+                <div class="schedule-card ${schedule.status}">
+                    <div class="schedule-card-header">
+                        <div class="schedule-card-icon">
+                            <i class="fas fa-calendar-alt"></i>
+                        </div>
+                        <div class="schedule-card-info">
+                            <div class="schedule-card-name">${schedule.name}</div>
+                            <div class="schedule-card-desc">${formatScheduleDescription(schedule)}</div>
+                        </div>
+                        <div class="schedule-card-badge ${schedule.schedule_type}">
+                            ${typeLabel}
+                        </div>
+                    </div>
+                    <div class="schedule-card-stats">
+                        <div class="schedule-stat">
+                            <span class="schedule-stat-label">Next Run</span>
+                            <span class="schedule-stat-value">${schedule.next_run_at ? formatDateTime(schedule.next_run_at) : '-'}</span>
+                        </div>
+                        <div class="schedule-stat">
+                            <span class="schedule-stat-label">Total Runs</span>
+                            <span class="schedule-stat-value">${schedule.total_runs}</span>
+                        </div>
+                        <div class="schedule-stat">
+                            <span class="schedule-stat-label">Success Rate</span>
+                            <span class="schedule-stat-value">${schedule.success_rate != null ? schedule.success_rate + '%' : '-'}</span>
+                        </div>
+                        <div class="schedule-stat">
+                            <span class="schedule-stat-label">Status</span>
+                            <span class="schedule-stat-value" style="color: ${statusConfig.color}">
+                                <i class="fas ${statusConfig.icon}"></i> ${statusConfig.label}
+                            </span>
+                        </div>
+                    </div>
+                    <div class="schedule-card-actions">
+                        ${schedule.status === 'active' ? `
+                            <button class="schedule-action-btn" onclick="TrainingSchedules.triggerNow(${schedule.id})" title="Run Now">
+                                <i class="fas fa-play"></i>
+                            </button>
+                            <button class="schedule-action-btn" onclick="TrainingSchedules.pauseSchedule(${schedule.id})" title="Pause">
+                                <i class="fas fa-pause"></i>
+                            </button>
+                        ` : ''}
+                        ${schedule.status === 'paused' ? `
+                            <button class="schedule-action-btn" onclick="TrainingSchedules.resumeSchedule(${schedule.id})" title="Resume">
+                                <i class="fas fa-play"></i>
+                            </button>
+                        ` : ''}
+                        <button class="schedule-action-btn danger" onclick="TrainingSchedules.cancelSchedule(${schedule.id})" title="Cancel">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        list.innerHTML = html;
+    }
+
+    // =============================================================================
+    // ACTIONS
+    // =============================================================================
+
+    async function pauseSchedule(scheduleId) {
+        try {
+            const url = buildUrl(config.endpoints.pause, { id: scheduleId });
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                }
+            });
+            const data = await response.json();
+            if (data.success) {
+                loadAllSchedules();
+            } else {
+                alert('Failed to pause schedule: ' + (data.error || 'Unknown error'));
+            }
+        } catch (error) {
+            console.error('Failed to pause schedule:', error);
+            alert('Failed to pause schedule');
+        }
+    }
+
+    async function resumeSchedule(scheduleId) {
+        try {
+            const url = buildUrl(config.endpoints.resume, { id: scheduleId });
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                }
+            });
+            const data = await response.json();
+            if (data.success) {
+                loadAllSchedules();
+            } else {
+                alert('Failed to resume schedule: ' + (data.error || 'Unknown error'));
+            }
+        } catch (error) {
+            console.error('Failed to resume schedule:', error);
+            alert('Failed to resume schedule');
+        }
+    }
+
+    async function cancelSchedule(scheduleId) {
+        if (!confirm('Are you sure you want to cancel this schedule? This will delete the Cloud Scheduler job.')) {
+            return;
+        }
+
+        try {
+            const url = buildUrl(config.endpoints.cancel, { id: scheduleId });
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                }
+            });
+            const data = await response.json();
+            if (data.success) {
+                loadAllSchedules();
+            } else {
+                alert('Failed to cancel schedule: ' + (data.error || 'Unknown error'));
+            }
+        } catch (error) {
+            console.error('Failed to cancel schedule:', error);
+            alert('Failed to cancel schedule');
+        }
+    }
+
+    async function triggerNow(scheduleId) {
+        if (!confirm('Are you sure you want to trigger this schedule now?')) {
+            return;
+        }
+
+        try {
+            const url = buildUrl(config.endpoints.trigger, { id: scheduleId });
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                }
+            });
+            const data = await response.json();
+            if (data.success) {
+                alert('Training run triggered successfully!');
+                loadAllSchedules();
+                // Also refresh training runs
+                if (typeof TrainingCards !== 'undefined') {
+                    TrainingCards.refresh();
+                }
+            } else {
+                alert('Failed to trigger schedule: ' + (data.error || 'Unknown error'));
+            }
+        } catch (error) {
+            console.error('Failed to trigger schedule:', error);
+            alert('Failed to trigger schedule');
+        }
+    }
+
+    function toggleSection() {
+        state.isCollapsed = !state.isCollapsed;
+        const list = document.getElementById('schedulesList');
+        const btn = document.querySelector('.schedules-toggle-btn i');
+
+        if (list) {
+            list.classList.toggle('collapsed', state.isCollapsed);
+        }
+        if (btn) {
+            btn.className = state.isCollapsed ? 'fas fa-chevron-down' : 'fas fa-chevron-up';
+        }
+    }
+
+    // =============================================================================
+    // INITIALIZATION
+    // =============================================================================
+
+    function init() {
+        loadAllSchedules();
+    }
+
+    // =============================================================================
+    // PUBLIC API
+    // =============================================================================
+
+    return {
+        init: init,
+        loadSchedules: loadAllSchedules,
+        pauseSchedule: pauseSchedule,
+        resumeSchedule: resumeSchedule,
+        cancelSchedule: cancelSchedule,
+        triggerNow: triggerNow,
+        toggleSection: toggleSection
+    };
+})();

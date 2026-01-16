@@ -665,3 +665,715 @@ def training_run_submit(request, training_run_id):
             'success': False,
             'error': str(e)
         }, status=500)
+
+
+# =============================================================================
+# Training Schedule API Endpoints
+# =============================================================================
+
+from .models import TrainingSchedule
+from .schedule_service import TrainingScheduleService, TrainingScheduleServiceError
+
+
+def _serialize_training_schedule(schedule, include_runs=False):
+    """
+    Serialize a TrainingSchedule model to dict.
+
+    Args:
+        schedule: TrainingSchedule model instance
+        include_runs: If True, include recent training runs
+
+    Returns:
+        Dict representation of the schedule
+    """
+    data = {
+        'id': schedule.id,
+        'name': schedule.name,
+        'description': schedule.description,
+
+        # Schedule configuration
+        'schedule_type': schedule.schedule_type,
+        'schedule_type_display': schedule.get_schedule_type_display(),
+        'scheduled_datetime': schedule.scheduled_datetime.isoformat() if schedule.scheduled_datetime else None,
+        'schedule_time': schedule.schedule_time.strftime('%H:%M') if schedule.schedule_time else None,
+        'schedule_day_of_week': schedule.schedule_day_of_week,
+        'schedule_timezone': schedule.schedule_timezone,
+
+        # Relationships
+        'ml_model_id': schedule.ml_model_id,
+        'dataset_id': schedule.dataset_id,
+        'dataset_name': schedule.dataset.name if schedule.dataset else None,
+        'feature_config_id': schedule.feature_config_id,
+        'feature_config_name': schedule.feature_config.name if schedule.feature_config else None,
+        'model_config_id': schedule.model_config_id,
+        'model_config_name': schedule.model_config.name if schedule.model_config else None,
+        'base_experiment_id': schedule.base_experiment_id,
+
+        # Status
+        'status': schedule.status,
+        'status_display': schedule.get_status_display(),
+        'is_active': schedule.is_active,
+        'is_recurring': schedule.is_recurring,
+
+        # Statistics
+        'last_run_at': schedule.last_run_at.isoformat() if schedule.last_run_at else None,
+        'next_run_at': schedule.next_run_at.isoformat() if schedule.next_run_at else None,
+        'total_runs': schedule.total_runs,
+        'successful_runs': schedule.successful_runs,
+        'failed_runs': schedule.failed_runs,
+        'success_rate': schedule.success_rate,
+
+        # Configuration
+        'training_params': schedule.training_params,
+        'gpu_config': schedule.gpu_config,
+        'evaluator_config': schedule.evaluator_config,
+        'deployment_config': schedule.deployment_config,
+
+        # User
+        'created_by': schedule.created_by.username if schedule.created_by else None,
+
+        # Timestamps
+        'created_at': schedule.created_at.isoformat() if schedule.created_at else None,
+        'updated_at': schedule.updated_at.isoformat() if schedule.updated_at else None,
+    }
+
+    if include_runs:
+        # Include recent training runs
+        recent_runs = schedule.training_runs.order_by('-created_at')[:5]
+        data['recent_runs'] = [
+            {
+                'id': run.id,
+                'run_number': run.run_number,
+                'status': run.status,
+                'created_at': run.created_at.isoformat() if run.created_at else None,
+                'completed_at': run.completed_at.isoformat() if run.completed_at else None,
+            }
+            for run in recent_runs
+        ]
+
+    return data
+
+
+@csrf_exempt
+@require_http_methods(["GET", "POST"])
+def training_schedule_list(request):
+    """
+    List or create Training Schedules.
+
+    GET /api/training/schedules/?status=active
+    POST /api/training/schedules/
+    {
+        "name": "Weekly Retraining",
+        "schedule_type": "weekly",  // 'once', 'daily', 'weekly', or 'now' for immediate
+        "schedule_time": "09:00",
+        "schedule_day_of_week": 0,
+        "schedule_timezone": "UTC",
+        "dataset_id": 1,
+        "feature_config_id": 2,
+        "model_config_id": 3,
+        "base_experiment_id": 456,
+        "training_params": {...},
+        "gpu_config": {...},
+        "evaluator_config": {...}
+    }
+    """
+    model_endpoint = _get_model_endpoint(request)
+    if not model_endpoint:
+        return JsonResponse({
+            'success': False,
+            'error': 'No model endpoint selected'
+        }, status=400)
+
+    if request.method == 'GET':
+        return _training_schedule_list_get(request, model_endpoint)
+    else:
+        return _training_schedule_create(request, model_endpoint)
+
+
+def _training_schedule_list_get(request, model_endpoint):
+    """Handle GET request for training schedule list."""
+    try:
+        queryset = TrainingSchedule.objects.filter(
+            ml_model=model_endpoint
+        ).select_related('dataset', 'feature_config', 'model_config', 'created_by')
+
+        # Filter by status
+        status = request.GET.get('status')
+        if status:
+            queryset = queryset.filter(status=status)
+
+        # Order by most recent first
+        queryset = queryset.order_by('-created_at')
+
+        # Pagination
+        try:
+            page = int(request.GET.get('page', 1))
+            page_size = int(request.GET.get('page_size', 20))
+        except ValueError:
+            page = 1
+            page_size = 20
+
+        page = max(1, page)
+        page_size = max(1, min(50, page_size))
+
+        total_count = queryset.count()
+        total_pages = (total_count + page_size - 1) // page_size if total_count > 0 else 1
+        page = min(page, total_pages)
+
+        start_idx = (page - 1) * page_size
+        end_idx = start_idx + page_size
+
+        schedules = list(queryset[start_idx:end_idx])
+
+        return JsonResponse({
+            'success': True,
+            'schedules': [_serialize_training_schedule(s) for s in schedules],
+            'pagination': {
+                'page': page,
+                'page_size': page_size,
+                'total_count': total_count,
+                'total_pages': total_pages,
+                'has_next': page < total_pages,
+                'has_prev': page > 1
+            }
+        })
+
+    except Exception as e:
+        logger.exception(f"Error listing training schedules: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+def _training_schedule_create(request, model_endpoint):
+    """Handle POST request to create a training schedule."""
+    try:
+        data = json.loads(request.body)
+
+        # Required fields
+        required_fields = ['name', 'schedule_type', 'dataset_id', 'feature_config_id', 'model_config_id']
+        missing = [f for f in required_fields if f not in data]
+        if missing:
+            return JsonResponse({
+                'success': False,
+                'error': f"Missing required fields: {', '.join(missing)}"
+            }, status=400)
+
+        schedule_type = data['schedule_type']
+
+        # If schedule_type is 'now', create a TrainingRun and submit immediately
+        if schedule_type == 'now' or schedule_type == 'immediate':
+            return _create_immediate_training_run(request, model_endpoint, data)
+
+        # Validate schedule type
+        valid_types = [TrainingSchedule.SCHEDULE_TYPE_ONCE, TrainingSchedule.SCHEDULE_TYPE_DAILY, TrainingSchedule.SCHEDULE_TYPE_WEEKLY]
+        if schedule_type not in valid_types:
+            return JsonResponse({
+                'success': False,
+                'error': f"Invalid schedule_type. Must be one of: {', '.join(valid_types)}, 'now'"
+            }, status=400)
+
+        # Import models
+        from ml_platform.models import Dataset, FeatureConfig, ModelConfig, QuickTest
+        from datetime import datetime, time as dt_time
+
+        # Validate dataset
+        try:
+            dataset = Dataset.objects.get(
+                id=data['dataset_id'],
+                model_endpoint=model_endpoint
+            )
+        except Dataset.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': f"Dataset {data['dataset_id']} not found"
+            }, status=404)
+
+        # Validate feature config
+        try:
+            feature_config = FeatureConfig.objects.get(
+                id=data['feature_config_id'],
+                dataset__model_endpoint=model_endpoint
+            )
+        except FeatureConfig.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': f"FeatureConfig {data['feature_config_id']} not found"
+            }, status=404)
+
+        # Validate model config
+        try:
+            model_config = ModelConfig.objects.get(
+                id=data['model_config_id'],
+                model_endpoint=model_endpoint
+            )
+        except ModelConfig.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': f"ModelConfig {data['model_config_id']} not found"
+            }, status=404)
+
+        # Validate base experiment (optional)
+        base_experiment = None
+        if data.get('base_experiment_id'):
+            try:
+                base_experiment = QuickTest.objects.get(
+                    id=data['base_experiment_id'],
+                    feature_config__dataset__model_endpoint=model_endpoint
+                )
+            except QuickTest.DoesNotExist:
+                return JsonResponse({
+                    'success': False,
+                    'error': f"Base experiment {data['base_experiment_id']} not found"
+                }, status=404)
+
+        # Parse schedule-specific fields
+        scheduled_datetime = None
+        schedule_time = None
+        schedule_day_of_week = None
+
+        if schedule_type == TrainingSchedule.SCHEDULE_TYPE_ONCE:
+            if not data.get('scheduled_datetime'):
+                return JsonResponse({
+                    'success': False,
+                    'error': 'scheduled_datetime is required for one-time schedules'
+                }, status=400)
+            try:
+                scheduled_datetime = datetime.fromisoformat(data['scheduled_datetime'].replace('Z', '+00:00'))
+            except ValueError as e:
+                return JsonResponse({
+                    'success': False,
+                    'error': f'Invalid scheduled_datetime format: {e}'
+                }, status=400)
+
+        elif schedule_type in (TrainingSchedule.SCHEDULE_TYPE_DAILY, TrainingSchedule.SCHEDULE_TYPE_WEEKLY):
+            if data.get('schedule_time'):
+                try:
+                    hour, minute = map(int, data['schedule_time'].split(':'))
+                    schedule_time = dt_time(hour, minute)
+                except (ValueError, AttributeError):
+                    return JsonResponse({
+                        'success': False,
+                        'error': 'Invalid schedule_time format. Use HH:MM'
+                    }, status=400)
+            else:
+                schedule_time = dt_time(9, 0)  # Default to 9 AM
+
+            if schedule_type == TrainingSchedule.SCHEDULE_TYPE_WEEKLY:
+                schedule_day_of_week = data.get('schedule_day_of_week', 0)
+                if not isinstance(schedule_day_of_week, int) or schedule_day_of_week < 0 or schedule_day_of_week > 6:
+                    return JsonResponse({
+                        'success': False,
+                        'error': 'schedule_day_of_week must be 0-6 (Monday-Sunday)'
+                    }, status=400)
+
+        # Create the schedule
+        schedule = TrainingSchedule.objects.create(
+            ml_model=model_endpoint,
+            name=data['name'],
+            description=data.get('description', ''),
+            schedule_type=schedule_type,
+            scheduled_datetime=scheduled_datetime,
+            schedule_time=schedule_time,
+            schedule_day_of_week=schedule_day_of_week,
+            schedule_timezone=data.get('schedule_timezone', 'UTC'),
+            dataset=dataset,
+            feature_config=feature_config,
+            model_config=model_config,
+            base_experiment=base_experiment,
+            training_params=data.get('training_params', {}),
+            gpu_config=data.get('gpu_config', {}),
+            evaluator_config=data.get('evaluator_config', {}),
+            deployment_config=data.get('deployment_config', {}),
+            created_by=request.user if request.user.is_authenticated else None,
+            status=TrainingSchedule.STATUS_ACTIVE,
+        )
+
+        # Create Cloud Scheduler job
+        service = TrainingScheduleService(model_endpoint)
+        webhook_base_url = request.build_absolute_uri('/').rstrip('/')
+        result = service.create_schedule(schedule, webhook_base_url)
+
+        if not result['success']:
+            # Rollback schedule creation if scheduler job fails
+            schedule.delete()
+            return JsonResponse({
+                'success': False,
+                'error': f"Failed to create Cloud Scheduler job: {result['message']}"
+            }, status=500)
+
+        logger.info(f"Created training schedule {schedule.id}: {schedule.name}")
+
+        return JsonResponse({
+            'success': True,
+            'schedule': _serialize_training_schedule(schedule)
+        }, status=201)
+
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'error': 'Invalid JSON'
+        }, status=400)
+    except Exception as e:
+        logger.exception(f"Error creating training schedule: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+def _create_immediate_training_run(request, model_endpoint, data):
+    """Create and submit a training run immediately (schedule_type='now')."""
+    from ml_platform.models import Dataset, FeatureConfig, ModelConfig, QuickTest
+
+    try:
+        # Validate dataset
+        dataset = Dataset.objects.get(
+            id=data['dataset_id'],
+            model_endpoint=model_endpoint
+        )
+    except Dataset.DoesNotExist:
+        return JsonResponse({
+            'success': False,
+            'error': f"Dataset {data['dataset_id']} not found"
+        }, status=404)
+
+    try:
+        feature_config = FeatureConfig.objects.get(
+            id=data['feature_config_id'],
+            dataset__model_endpoint=model_endpoint
+        )
+    except FeatureConfig.DoesNotExist:
+        return JsonResponse({
+            'success': False,
+            'error': f"FeatureConfig {data['feature_config_id']} not found"
+        }, status=404)
+
+    try:
+        model_config = ModelConfig.objects.get(
+            id=data['model_config_id'],
+            model_endpoint=model_endpoint
+        )
+    except ModelConfig.DoesNotExist:
+        return JsonResponse({
+            'success': False,
+            'error': f"ModelConfig {data['model_config_id']} not found"
+        }, status=404)
+
+    base_experiment = None
+    if data.get('base_experiment_id'):
+        try:
+            base_experiment = QuickTest.objects.get(
+                id=data['base_experiment_id'],
+                feature_config__dataset__model_endpoint=model_endpoint
+            )
+        except QuickTest.DoesNotExist:
+            pass
+
+    # Create and submit training run using existing logic
+    service = TrainingService(model_endpoint)
+    training_run = service.create_training_run(
+        name=data['name'],
+        description=data.get('description', ''),
+        dataset=dataset,
+        feature_config=feature_config,
+        model_config=model_config,
+        base_experiment=base_experiment,
+        training_params=data.get('training_params', {}),
+        gpu_config=data.get('gpu_config', {}),
+        evaluator_config=data.get('evaluator_config', {}),
+        deployment_config=data.get('deployment_config', {}),
+        created_by=request.user if request.user.is_authenticated else None,
+    )
+
+    # Submit pipeline
+    try:
+        service.submit_training_pipeline(training_run)
+        logger.info(f"Training pipeline submitted for {training_run.display_name}")
+    except Exception as submit_error:
+        logger.error(f"Failed to submit pipeline: {submit_error}")
+        training_run.refresh_from_db()
+
+    return JsonResponse({
+        'success': True,
+        'training_run': _serialize_training_run(training_run, include_details=True)
+    }, status=201)
+
+
+@csrf_exempt
+@require_http_methods(["GET", "DELETE"])
+def training_schedule_detail(request, schedule_id):
+    """
+    Get or delete a Training Schedule.
+
+    GET /api/training/schedules/<id>/
+    DELETE /api/training/schedules/<id>/
+    """
+    try:
+        model_endpoint = _get_model_endpoint(request)
+        if not model_endpoint:
+            return JsonResponse({
+                'success': False,
+                'error': 'No model endpoint selected'
+            }, status=400)
+
+        try:
+            schedule = TrainingSchedule.objects.select_related(
+                'dataset', 'feature_config', 'model_config', 'created_by', 'base_experiment'
+            ).get(
+                id=schedule_id,
+                ml_model=model_endpoint
+            )
+        except TrainingSchedule.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': f'TrainingSchedule {schedule_id} not found'
+            }, status=404)
+
+        if request.method == 'GET':
+            return JsonResponse({
+                'success': True,
+                'schedule': _serialize_training_schedule(schedule, include_runs=True)
+            })
+        else:  # DELETE
+            service = TrainingScheduleService(model_endpoint)
+            result = service.delete_schedule(schedule)
+
+            if result['success']:
+                schedule.delete()
+                return JsonResponse({
+                    'success': True,
+                    'message': 'Schedule deleted successfully'
+                })
+            else:
+                return JsonResponse({
+                    'success': False,
+                    'error': result['message']
+                }, status=500)
+
+    except Exception as e:
+        logger.exception(f"Error with training schedule detail: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def training_schedule_pause(request, schedule_id):
+    """
+    Pause a Training Schedule.
+
+    POST /api/training/schedules/<id>/pause/
+    """
+    try:
+        model_endpoint = _get_model_endpoint(request)
+        if not model_endpoint:
+            return JsonResponse({
+                'success': False,
+                'error': 'No model endpoint selected'
+            }, status=400)
+
+        try:
+            schedule = TrainingSchedule.objects.get(
+                id=schedule_id,
+                ml_model=model_endpoint
+            )
+        except TrainingSchedule.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': f'TrainingSchedule {schedule_id} not found'
+            }, status=404)
+
+        if schedule.status != TrainingSchedule.STATUS_ACTIVE:
+            return JsonResponse({
+                'success': False,
+                'error': f'Cannot pause schedule in {schedule.status} status'
+            }, status=400)
+
+        service = TrainingScheduleService(model_endpoint)
+        result = service.pause_schedule(schedule)
+
+        if result['success']:
+            schedule.refresh_from_db()
+            return JsonResponse({
+                'success': True,
+                'schedule': _serialize_training_schedule(schedule)
+            })
+        else:
+            return JsonResponse({
+                'success': False,
+                'error': result['message']
+            }, status=500)
+
+    except Exception as e:
+        logger.exception(f"Error pausing training schedule: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def training_schedule_resume(request, schedule_id):
+    """
+    Resume a paused Training Schedule.
+
+    POST /api/training/schedules/<id>/resume/
+    """
+    try:
+        model_endpoint = _get_model_endpoint(request)
+        if not model_endpoint:
+            return JsonResponse({
+                'success': False,
+                'error': 'No model endpoint selected'
+            }, status=400)
+
+        try:
+            schedule = TrainingSchedule.objects.get(
+                id=schedule_id,
+                ml_model=model_endpoint
+            )
+        except TrainingSchedule.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': f'TrainingSchedule {schedule_id} not found'
+            }, status=404)
+
+        if schedule.status != TrainingSchedule.STATUS_PAUSED:
+            return JsonResponse({
+                'success': False,
+                'error': f'Cannot resume schedule in {schedule.status} status'
+            }, status=400)
+
+        service = TrainingScheduleService(model_endpoint)
+        result = service.resume_schedule(schedule)
+
+        if result['success']:
+            schedule.refresh_from_db()
+            return JsonResponse({
+                'success': True,
+                'schedule': _serialize_training_schedule(schedule)
+            })
+        else:
+            return JsonResponse({
+                'success': False,
+                'error': result['message']
+            }, status=500)
+
+    except Exception as e:
+        logger.exception(f"Error resuming training schedule: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def training_schedule_cancel(request, schedule_id):
+    """
+    Cancel a Training Schedule (deletes Cloud Scheduler job).
+
+    POST /api/training/schedules/<id>/cancel/
+    """
+    try:
+        model_endpoint = _get_model_endpoint(request)
+        if not model_endpoint:
+            return JsonResponse({
+                'success': False,
+                'error': 'No model endpoint selected'
+            }, status=400)
+
+        try:
+            schedule = TrainingSchedule.objects.get(
+                id=schedule_id,
+                ml_model=model_endpoint
+            )
+        except TrainingSchedule.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': f'TrainingSchedule {schedule_id} not found'
+            }, status=404)
+
+        if schedule.status == TrainingSchedule.STATUS_CANCELLED:
+            return JsonResponse({
+                'success': False,
+                'error': 'Schedule is already cancelled'
+            }, status=400)
+
+        service = TrainingScheduleService(model_endpoint)
+        result = service.delete_schedule(schedule)
+
+        schedule.refresh_from_db()
+        return JsonResponse({
+            'success': True,
+            'schedule': _serialize_training_schedule(schedule)
+        })
+
+    except Exception as e:
+        logger.exception(f"Error cancelling training schedule: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def training_schedule_trigger(request, schedule_id):
+    """
+    Manually trigger a scheduled training immediately.
+
+    POST /api/training/schedules/<id>/trigger/
+    """
+    try:
+        model_endpoint = _get_model_endpoint(request)
+        if not model_endpoint:
+            return JsonResponse({
+                'success': False,
+                'error': 'No model endpoint selected'
+            }, status=400)
+
+        try:
+            schedule = TrainingSchedule.objects.get(
+                id=schedule_id,
+                ml_model=model_endpoint
+            )
+        except TrainingSchedule.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': f'TrainingSchedule {schedule_id} not found'
+            }, status=404)
+
+        if schedule.status not in (TrainingSchedule.STATUS_ACTIVE, TrainingSchedule.STATUS_PAUSED):
+            return JsonResponse({
+                'success': False,
+                'error': f'Cannot trigger schedule in {schedule.status} status'
+            }, status=400)
+
+        service = TrainingScheduleService(model_endpoint)
+        result = service.trigger_now(schedule)
+
+        if result['success']:
+            training_run = TrainingRun.objects.get(id=result['training_run_id'])
+            return JsonResponse({
+                'success': True,
+                'training_run': _serialize_training_run(training_run, include_details=True),
+                'message': result['message']
+            })
+        else:
+            return JsonResponse({
+                'success': False,
+                'error': result['message']
+            }, status=500)
+
+    except Exception as e:
+        logger.exception(f"Error triggering training schedule: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)

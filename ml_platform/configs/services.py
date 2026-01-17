@@ -5652,6 +5652,11 @@ def run_fn(fn_args: tfx.components.FnArgs):
 
         logging.info("Training completed!")
 
+        # Log final metrics from training history
+        if _metrics_collector:
+            for metric_name, values in history.history.items():
+                _metrics_collector.log_metric(f'final_{{metric_name}}', float(values[-1]))
+
         # Pre-compute candidate embeddings for retrieval serving
         logging.info("=" * 60)
         logging.info("PRE-COMPUTING CANDIDATE EMBEDDINGS")

@@ -5576,8 +5576,16 @@ def run_fn(fn_args: tfx.components.FnArgs):
     logging.info("Starting TFX Trainer (MULTITASK)")
     logging.info("=" * 70)
 
+    # Get configuration from custom_config or use module defaults
+    custom_config = fn_args.custom_config or {{}}
+    epochs = custom_config.get('epochs', EPOCHS)
+    batch_size = custom_config.get('batch_size', BATCH_SIZE)
+    learning_rate = custom_config.get('learning_rate', LEARNING_RATE)
+    gcs_output_path = custom_config.get('gcs_output_path', '')
+
+    logging.info(f"Training config: epochs={{epochs}}, lr={{learning_rate}}, batch={{batch_size}}")
+
     # Initialize MetricsCollector
-    gcs_output_path = fn_args.custom_config.get('gcs_output_path') if fn_args.custom_config else None
     global _metrics_collector
     _metrics_collector = MetricsCollector(gcs_output_path=gcs_output_path)
 
@@ -5590,9 +5598,9 @@ def run_fn(fn_args: tfx.components.FnArgs):
         'model_config_name': '{model_config_name}',
         'dataset_id': {dataset_id},
         'dataset_name': '{dataset_name}',
-        'epochs': EPOCHS,
-        'batch_size': BATCH_SIZE,
-        'learning_rate': LEARNING_RATE,
+        'epochs': epochs,
+        'batch_size': batch_size,
+        'learning_rate': learning_rate,
         'output_embedding_dim': OUTPUT_EMBEDDING_DIM,
         'retrieval_weight': RETRIEVAL_WEIGHT,
         'ranking_weight': RANKING_WEIGHT,
@@ -5612,16 +5620,16 @@ def run_fn(fn_args: tfx.components.FnArgs):
         logging.info(f"Training files: {{len(train_files)}} files")
         logging.info(f"Eval files: {{len(eval_files)}} files")
 
-        train_dataset = _input_fn(train_files, fn_args.data_accessor, tf_transform_output, BATCH_SIZE)
-        eval_dataset = _input_fn(eval_files, fn_args.data_accessor, tf_transform_output, BATCH_SIZE)
+        train_dataset = _input_fn(train_files, fn_args.data_accessor, tf_transform_output, batch_size)
+        eval_dataset = _input_fn(eval_files, fn_args.data_accessor, tf_transform_output, batch_size)
 
         # Create model
         logging.info("Creating MultitaskModel...")
         model = MultitaskModel(tf_transform_output)
 
         # Compile
-        model.compile(optimizer={optimizer_class}(learning_rate=LEARNING_RATE))
-        logging.info(f"Model compiled with {{'{self.optimizer}'}} optimizer, lr={{LEARNING_RATE}}")
+        model.compile(optimizer={optimizer_class}(learning_rate=learning_rate))
+        logging.info(f"Model compiled with {{'{self.optimizer}'}} optimizer, lr={{learning_rate}}")
         logging.info(f"Loss weights: retrieval={{RETRIEVAL_WEIGHT}}, ranking={{RANKING_WEIGHT}}")
 
         # Train
@@ -5632,7 +5640,7 @@ def run_fn(fn_args: tfx.components.FnArgs):
         history = model.fit(
             train_dataset,
             validation_data=eval_dataset,
-            epochs=EPOCHS,
+            epochs=epochs,
             callbacks=[
                 MetricsCallback(),
                 WeightNormCallback(),
@@ -5650,7 +5658,7 @@ def run_fn(fn_args: tfx.components.FnArgs):
         logging.info("=" * 60)
 
         # Reload eval dataset for candidate embedding computation
-        candidates_dataset = _input_fn(eval_files, fn_args.data_accessor, tf_transform_output, BATCH_SIZE)
+        candidates_dataset = _input_fn(eval_files, fn_args.data_accessor, tf_transform_output, batch_size)
         product_ids, product_embeddings = _precompute_candidate_embeddings(model, candidates_dataset)
         logging.info(f"Pre-computed embeddings for {{len(product_ids)}} unique products")
 
@@ -5678,7 +5686,7 @@ def run_fn(fn_args: tfx.components.FnArgs):
                         test_files,
                         fn_args.data_accessor,
                         tf_transform_output,
-                        BATCH_SIZE
+                        batch_size
                     )
 
                     # 1. RANKING METRICS (RMSE, MAE)
@@ -5695,7 +5703,7 @@ def run_fn(fn_args: tfx.components.FnArgs):
                         test_files,
                         fn_args.data_accessor,
                         tf_transform_output,
-                        BATCH_SIZE
+                        batch_size
                     )
                     recall_results = _evaluate_recall_on_test_set(
                         model,

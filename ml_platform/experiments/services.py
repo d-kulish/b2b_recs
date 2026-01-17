@@ -1544,6 +1544,27 @@ if __name__ == "__main__":
                     quick_test.recall_at_100 = final_metrics['test_recall_at_100']
                     update_fields.append('recall_at_100')
 
+                # Extract ranking metrics for ranking/multitask models
+                # Validation RMSE/MAE from loss arrays (last epoch value)
+                loss_data = training_metrics.get('loss', {})
+
+                if 'val_rmse' in loss_data and loss_data['val_rmse']:
+                    quick_test.rmse = loss_data['val_rmse'][-1]
+                    update_fields.append('rmse')
+
+                if 'val_mae' in loss_data and loss_data['val_mae']:
+                    quick_test.mae = loss_data['val_mae'][-1]
+                    update_fields.append('mae')
+
+                # Test RMSE/MAE from final_metrics
+                if 'test_rmse' in final_metrics:
+                    quick_test.test_rmse = final_metrics['test_rmse']
+                    update_fields.append('test_rmse')
+
+                if 'test_mae' in final_metrics:
+                    quick_test.test_mae = final_metrics['test_mae']
+                    update_fields.append('test_mae')
+
                 if update_fields:
                     quick_test.save(update_fields=update_fields)
 

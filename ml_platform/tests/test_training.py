@@ -820,3 +820,384 @@ class TrainingRunSerializationTests(TestCase):
         # Should include both retrieval and ranking metrics
         self.assertEqual(data['training_run']['recall_at_100'], 0.456)
         self.assertEqual(data['training_run']['rmse'], 0.987)
+
+
+class TrainingRunRetryTests(TestCase):
+    """Tests for Training Run retry endpoint."""
+
+    @classmethod
+    def setUpTestData(cls):
+        """Set up test data once for all tests in this class."""
+        User = get_user_model()
+        cls.user = User.objects.create_user(
+            username='retryuser',
+            email='retry@example.com',
+            password='testpass123'
+        )
+        cls.model_endpoint = ModelEndpoint.objects.create(
+            name='Retry Test Model',
+            created_by=cls.user,
+            status='draft',
+            gcp_project_id='test-project',
+            gcp_region='us-central1'
+        )
+        cls.dataset = Dataset.objects.create(
+            model_endpoint=cls.model_endpoint,
+            name='Retry Dataset',
+            bq_dataset='test_dataset',
+            created_by=cls.user
+        )
+        cls.feature_config = FeatureConfig.objects.create(
+            dataset=cls.dataset,
+            name='Retry Features',
+            feature_type='retrieval',
+            version=1,
+            created_by=cls.user
+        )
+        cls.model_config = ModelConfig.objects.create(
+            model_endpoint=cls.model_endpoint,
+            name='Retry Model Config',
+            model_type='retrieval',
+            created_by=cls.user
+        )
+
+    def setUp(self):
+        """Set up test client for each test."""
+        self.client = Client()
+        self.client.login(username='retryuser', password='testpass123')
+        session = self.client.session
+        session['model_endpoint_id'] = self.model_endpoint.id
+        session.save()
+
+    @patch('ml_platform.training.services.TrainingService.submit_training_pipeline')
+    def test_retry_failed_training_run(self, mock_submit):
+        """Test POST /api/training-runs/<id>/retry/ creates new run for failed run."""
+        mock_submit.return_value = None
+
+        # Create a failed training run
+        training_run = TrainingRun.objects.create(
+            ml_model=self.model_endpoint,
+            name='failed-run',
+            run_number=600,
+            dataset=self.dataset,
+            feature_config=self.feature_config,
+            model_config=self.model_config,
+            status=TrainingRun.STATUS_FAILED,
+            error_message='Pipeline crashed',
+            created_by=self.user
+        )
+
+        response = self.client.post(f'/api/training-runs/{training_run.id}/retry/')
+        self.assertEqual(response.status_code, 200)
+
+        data = response.json()
+        self.assertTrue(data['success'])
+        self.assertIn('retry', data['training_run']['name'])
+        # New run should be created with different ID
+        self.assertNotEqual(data['training_run']['id'], training_run.id)
+
+    def test_retry_non_failed_run_fails(self):
+        """Test POST /api/training-runs/<id>/retry/ returns error for non-failed run."""
+        # Create a completed training run
+        training_run = TrainingRun.objects.create(
+            ml_model=self.model_endpoint,
+            name='completed-run',
+            run_number=601,
+            dataset=self.dataset,
+            feature_config=self.feature_config,
+            model_config=self.model_config,
+            status=TrainingRun.STATUS_COMPLETED,
+            created_by=self.user
+        )
+
+        response = self.client.post(f'/api/training-runs/{training_run.id}/retry/')
+        self.assertEqual(response.status_code, 400)
+
+        data = response.json()
+        self.assertFalse(data['success'])
+        self.assertIn('failed', data['error'].lower())
+
+
+class TrainingRunDeployTests(TestCase):
+    """Tests for Training Run deploy endpoint."""
+
+    @classmethod
+    def setUpTestData(cls):
+        """Set up test data once for all tests in this class."""
+        User = get_user_model()
+        cls.user = User.objects.create_user(
+            username='deployuser',
+            email='deploy@example.com',
+            password='testpass123'
+        )
+        cls.model_endpoint = ModelEndpoint.objects.create(
+            name='Deploy Test Model',
+            created_by=cls.user,
+            status='draft',
+            gcp_project_id='test-project',
+            gcp_region='us-central1'
+        )
+        cls.dataset = Dataset.objects.create(
+            model_endpoint=cls.model_endpoint,
+            name='Deploy Dataset',
+            bq_dataset='test_dataset',
+            created_by=cls.user
+        )
+        cls.feature_config = FeatureConfig.objects.create(
+            dataset=cls.dataset,
+            name='Deploy Features',
+            feature_type='retrieval',
+            version=1,
+            created_by=cls.user
+        )
+        cls.model_config = ModelConfig.objects.create(
+            model_endpoint=cls.model_endpoint,
+            name='Deploy Model Config',
+            model_type='retrieval',
+            created_by=cls.user
+        )
+
+    def setUp(self):
+        """Set up test client for each test."""
+        self.client = Client()
+        self.client.login(username='deployuser', password='testpass123')
+        session = self.client.session
+        session['model_endpoint_id'] = self.model_endpoint.id
+        session.save()
+
+    def test_deploy_non_completed_run_fails(self):
+        """Test POST /api/training-runs/<id>/deploy/ returns error for non-completed run."""
+        training_run = TrainingRun.objects.create(
+            ml_model=self.model_endpoint,
+            name='running-run',
+            run_number=700,
+            dataset=self.dataset,
+            feature_config=self.feature_config,
+            model_config=self.model_config,
+            status=TrainingRun.STATUS_RUNNING,
+            created_by=self.user
+        )
+
+        response = self.client.post(f'/api/training-runs/{training_run.id}/deploy/')
+        self.assertEqual(response.status_code, 400)
+
+        data = response.json()
+        self.assertFalse(data['success'])
+        self.assertIn('completed', data['error'].lower())
+
+    def test_deploy_unblessed_run_fails(self):
+        """Test POST /api/training-runs/<id>/deploy/ returns error for unblessed run."""
+        training_run = TrainingRun.objects.create(
+            ml_model=self.model_endpoint,
+            name='unblessed-run',
+            run_number=701,
+            dataset=self.dataset,
+            feature_config=self.feature_config,
+            model_config=self.model_config,
+            status=TrainingRun.STATUS_COMPLETED,
+            is_blessed=False,
+            created_by=self.user
+        )
+
+        response = self.client.post(f'/api/training-runs/{training_run.id}/deploy/')
+        self.assertEqual(response.status_code, 400)
+
+        data = response.json()
+        self.assertFalse(data['success'])
+        self.assertIn('unblessed', data['error'].lower())
+
+    def test_deploy_already_deployed_run_fails(self):
+        """Test POST /api/training-runs/<id>/deploy/ returns error for already deployed run."""
+        training_run = TrainingRun.objects.create(
+            ml_model=self.model_endpoint,
+            name='deployed-run',
+            run_number=702,
+            dataset=self.dataset,
+            feature_config=self.feature_config,
+            model_config=self.model_config,
+            status=TrainingRun.STATUS_COMPLETED,
+            is_blessed=True,
+            is_deployed=True,
+            endpoint_resource_name='projects/test/endpoints/123',
+            created_by=self.user
+        )
+
+        response = self.client.post(f'/api/training-runs/{training_run.id}/deploy/')
+        self.assertEqual(response.status_code, 400)
+
+        data = response.json()
+        self.assertFalse(data['success'])
+        self.assertIn('already deployed', data['error'].lower())
+
+
+class TrainingRunPushTests(TestCase):
+    """Tests for Training Run push (force-push) endpoint."""
+
+    @classmethod
+    def setUpTestData(cls):
+        """Set up test data once for all tests in this class."""
+        User = get_user_model()
+        cls.user = User.objects.create_user(
+            username='pushuser',
+            email='push@example.com',
+            password='testpass123'
+        )
+        cls.model_endpoint = ModelEndpoint.objects.create(
+            name='Push Test Model',
+            created_by=cls.user,
+            status='draft',
+            gcp_project_id='test-project',
+            gcp_region='us-central1'
+        )
+        cls.dataset = Dataset.objects.create(
+            model_endpoint=cls.model_endpoint,
+            name='Push Dataset',
+            bq_dataset='test_dataset',
+            created_by=cls.user
+        )
+        cls.feature_config = FeatureConfig.objects.create(
+            dataset=cls.dataset,
+            name='Push Features',
+            feature_type='retrieval',
+            version=1,
+            created_by=cls.user
+        )
+        cls.model_config = ModelConfig.objects.create(
+            model_endpoint=cls.model_endpoint,
+            name='Push Model Config',
+            model_type='retrieval',
+            created_by=cls.user
+        )
+
+    def setUp(self):
+        """Set up test client for each test."""
+        self.client = Client()
+        self.client.login(username='pushuser', password='testpass123')
+        session = self.client.session
+        session['model_endpoint_id'] = self.model_endpoint.id
+        session.save()
+
+    def test_push_non_not_blessed_run_fails(self):
+        """Test POST /api/training-runs/<id>/push/ returns error for non-not_blessed run."""
+        # Create a completed (blessed) training run
+        training_run = TrainingRun.objects.create(
+            ml_model=self.model_endpoint,
+            name='completed-run',
+            run_number=800,
+            dataset=self.dataset,
+            feature_config=self.feature_config,
+            model_config=self.model_config,
+            status=TrainingRun.STATUS_COMPLETED,
+            is_blessed=True,
+            created_by=self.user
+        )
+
+        response = self.client.post(f'/api/training-runs/{training_run.id}/push/')
+        self.assertEqual(response.status_code, 400)
+
+        data = response.json()
+        self.assertFalse(data['success'])
+        self.assertIn('not-blessed', data['error'].lower())
+
+    def test_push_failed_run_fails(self):
+        """Test POST /api/training-runs/<id>/push/ returns error for failed run."""
+        training_run = TrainingRun.objects.create(
+            ml_model=self.model_endpoint,
+            name='failed-run',
+            run_number=801,
+            dataset=self.dataset,
+            feature_config=self.feature_config,
+            model_config=self.model_config,
+            status=TrainingRun.STATUS_FAILED,
+            created_by=self.user
+        )
+
+        response = self.client.post(f'/api/training-runs/{training_run.id}/push/')
+        self.assertEqual(response.status_code, 400)
+
+        data = response.json()
+        self.assertFalse(data['success'])
+
+
+class EvaluatorComponentTests(TestCase):
+    """Tests for Evaluator component integration."""
+
+    @classmethod
+    def setUpTestData(cls):
+        """Set up test data once for all tests in this class."""
+        User = get_user_model()
+        cls.user = User.objects.create_user(
+            username='evaluatoruser',
+            email='evaluator@example.com',
+            password='testpass123'
+        )
+        cls.model_endpoint = ModelEndpoint.objects.create(
+            name='Evaluator Test Model',
+            created_by=cls.user,
+            status='draft',
+            gcp_project_id='test-project',
+            gcp_region='us-central1',
+            gcs_bucket='gs://test-bucket'
+        )
+        cls.dataset = Dataset.objects.create(
+            model_endpoint=cls.model_endpoint,
+            name='Evaluator Dataset',
+            bq_dataset='test_dataset',
+            created_by=cls.user
+        )
+        cls.feature_config = FeatureConfig.objects.create(
+            dataset=cls.dataset,
+            name='Evaluator Features',
+            feature_type='retrieval',
+            version=1,
+            created_by=cls.user
+        )
+        cls.model_config = ModelConfig.objects.create(
+            model_endpoint=cls.model_endpoint,
+            name='Evaluator Model Config',
+            model_type='retrieval',
+            created_by=cls.user
+        )
+
+    def test_not_blessed_status_recognized(self):
+        """Test that NOT_BLESSED status is properly handled."""
+        training_run = TrainingRun.objects.create(
+            ml_model=self.model_endpoint,
+            name='not-blessed-run',
+            run_number=900,
+            dataset=self.dataset,
+            feature_config=self.feature_config,
+            model_config=self.model_config,
+            status=TrainingRun.STATUS_NOT_BLESSED,
+            is_blessed=False,
+            created_by=self.user
+        )
+
+        # Verify it's considered terminal
+        self.assertTrue(training_run.is_terminal)
+
+        # Verify it's not cancellable
+        self.assertFalse(training_run.is_cancellable)
+
+    def test_evaluator_config_stored(self):
+        """Test that evaluator config is properly stored on training run."""
+        service = TrainingService(self.model_endpoint)
+
+        evaluator_config = {
+            'enabled': True,
+            'blessing_threshold': 0.45,
+            'blessing_metric': 'recall_at_100'
+        }
+
+        training_run = service.create_training_run(
+            name='evaluator-config-test',
+            dataset=self.dataset,
+            feature_config=self.feature_config,
+            model_config=self.model_config,
+            evaluator_config=evaluator_config,
+            created_by=self.user
+        )
+
+        self.assertEqual(training_run.evaluator_config['enabled'], True)
+        self.assertEqual(training_run.evaluator_config['blessing_threshold'], 0.45)
+        self.assertEqual(training_run.evaluator_config['blessing_metric'], 'recall_at_100')

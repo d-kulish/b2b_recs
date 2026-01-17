@@ -667,6 +667,237 @@ def training_run_submit(request, training_run_id):
         }, status=500)
 
 
+@csrf_exempt
+@require_http_methods(["POST"])
+def training_run_retry(request, training_run_id):
+    """
+    Retry a failed Training Run.
+
+    POST /api/training-runs/<id>/retry/
+
+    Creates a new TrainingRun with the same configuration and submits it.
+
+    Returns:
+    {
+        "success": true,
+        "training_run": {
+            "id": 789,  // New run ID
+            "status": "submitting",
+            ...
+        },
+        "message": "Retry created and submitted"
+    }
+    """
+    try:
+        model_endpoint = _get_model_endpoint(request)
+        if not model_endpoint:
+            return JsonResponse({
+                'success': False,
+                'error': 'No model endpoint selected'
+            }, status=400)
+
+        try:
+            training_run = TrainingRun.objects.select_related(
+                'dataset', 'feature_config', 'model_config', 'base_experiment'
+            ).get(
+                id=training_run_id,
+                ml_model=model_endpoint
+            )
+        except TrainingRun.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': f'TrainingRun {training_run_id} not found'
+            }, status=404)
+
+        # Only allow retry for failed runs
+        if training_run.status != TrainingRun.STATUS_FAILED:
+            return JsonResponse({
+                'success': False,
+                'error': f"Cannot retry training run in '{training_run.status}' state. "
+                         f"Only failed training runs can be retried."
+            }, status=400)
+
+        # Retry the training run
+        service = TrainingService(model_endpoint)
+        try:
+            new_run = service.retry_training_run(training_run)
+        except TrainingServiceError as e:
+            return JsonResponse({
+                'success': False,
+                'error': str(e)
+            }, status=500)
+
+        return JsonResponse({
+            'success': True,
+            'training_run': _serialize_training_run(new_run, include_details=True),
+            'message': f"Retry created as {new_run.display_name}"
+        })
+
+    except Exception as e:
+        logger.exception(f"Error retrying training run: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def training_run_deploy(request, training_run_id):
+    """
+    Deploy a completed, blessed Training Run to a Vertex AI Endpoint.
+
+    POST /api/training-runs/<id>/deploy/
+
+    Returns:
+    {
+        "success": true,
+        "training_run": {
+            "id": 456,
+            "is_deployed": true,
+            "deployed_at": "2024-01-15T10:30:00Z",
+            "endpoint_resource_name": "projects/.../endpoints/...",
+            ...
+        }
+    }
+    """
+    try:
+        model_endpoint = _get_model_endpoint(request)
+        if not model_endpoint:
+            return JsonResponse({
+                'success': False,
+                'error': 'No model endpoint selected'
+            }, status=400)
+
+        try:
+            training_run = TrainingRun.objects.get(
+                id=training_run_id,
+                ml_model=model_endpoint
+            )
+        except TrainingRun.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': f'TrainingRun {training_run_id} not found'
+            }, status=404)
+
+        # Validate state
+        if training_run.status != TrainingRun.STATUS_COMPLETED:
+            return JsonResponse({
+                'success': False,
+                'error': f"Cannot deploy training run in '{training_run.status}' state. "
+                         f"Only completed training runs can be deployed."
+            }, status=400)
+
+        if not training_run.is_blessed:
+            return JsonResponse({
+                'success': False,
+                'error': "Cannot deploy unblessed model. Use 'Push Anyway' first."
+            }, status=400)
+
+        if training_run.is_deployed:
+            return JsonResponse({
+                'success': False,
+                'error': f"Training run is already deployed to: {training_run.endpoint_resource_name}"
+            }, status=400)
+
+        # Deploy the model
+        service = TrainingService(model_endpoint)
+        try:
+            training_run = service.deploy_model(training_run)
+        except TrainingServiceError as e:
+            return JsonResponse({
+                'success': False,
+                'error': str(e)
+            }, status=500)
+
+        return JsonResponse({
+            'success': True,
+            'training_run': _serialize_training_run(training_run, include_details=True),
+            'message': f"Model deployed to {training_run.endpoint_resource_name}"
+        })
+
+    except Exception as e:
+        logger.exception(f"Error deploying training run: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def training_run_push(request, training_run_id):
+    """
+    Force-push a not-blessed Training Run to Vertex AI Model Registry.
+
+    POST /api/training-runs/<id>/push/
+
+    This allows manual override when the evaluator threshold wasn't met
+    but the user wants to use the model anyway.
+
+    Returns:
+    {
+        "success": true,
+        "training_run": {
+            "id": 456,
+            "status": "completed",  // Promoted from not_blessed
+            "is_blessed": true,
+            "vertex_model_resource_name": "projects/.../models/...",
+            ...
+        }
+    }
+    """
+    try:
+        model_endpoint = _get_model_endpoint(request)
+        if not model_endpoint:
+            return JsonResponse({
+                'success': False,
+                'error': 'No model endpoint selected'
+            }, status=400)
+
+        try:
+            training_run = TrainingRun.objects.get(
+                id=training_run_id,
+                ml_model=model_endpoint
+            )
+        except TrainingRun.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': f'TrainingRun {training_run_id} not found'
+            }, status=404)
+
+        # Only allow for not_blessed runs
+        if training_run.status != TrainingRun.STATUS_NOT_BLESSED:
+            return JsonResponse({
+                'success': False,
+                'error': f"Cannot force-push training run in '{training_run.status}' state. "
+                         f"Only not-blessed training runs can be force-pushed."
+            }, status=400)
+
+        # Force push the model
+        service = TrainingService(model_endpoint)
+        try:
+            training_run = service.force_push_model(training_run)
+        except TrainingServiceError as e:
+            return JsonResponse({
+                'success': False,
+                'error': str(e)
+            }, status=500)
+
+        return JsonResponse({
+            'success': True,
+            'training_run': _serialize_training_run(training_run, include_details=True),
+            'message': "Model force-pushed to registry and status promoted to completed"
+        })
+
+    except Exception as e:
+        logger.exception(f"Error force-pushing training run: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
 # =============================================================================
 # Training Schedule API Endpoints
 # =============================================================================

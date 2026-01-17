@@ -634,13 +634,51 @@ class TrainingService:
             logger.warning(f"Error extracting results for {training_run.display_name}: {e}")
 
         # Check blessing status from evaluator output
-        # For MVP, we assume all completed models are blessed
-        # Full evaluator integration will check actual blessing status
         try:
+            blessing_blob_path = training_run.gcs_artifacts_path.replace(
+                f"gs://{self.ARTIFACTS_BUCKET}/", ""
+            ) + "/evaluation_blessing.json"
+
+            blessing_blob = bucket.blob(blessing_blob_path)
+
+            if blessing_blob.exists():
+                blessing_content = blessing_blob.download_as_string().decode('utf-8')
+                blessing_data = json.loads(blessing_content)
+                is_blessed = blessing_data.get('is_blessed', False)
+
+                training_run.is_blessed = is_blessed
+                training_run.evaluation_results = blessing_data
+
+                if not is_blessed:
+                    training_run.status = TrainingRun.STATUS_NOT_BLESSED
+                    logger.info(
+                        f"{training_run.display_name} model not blessed - "
+                        f"threshold not met: {blessing_data.get('threshold_metric')}"
+                    )
+                else:
+                    logger.info(
+                        f"{training_run.display_name} model blessed - "
+                        f"threshold met: {blessing_data.get('threshold_metric')}"
+                    )
+
+                training_run.save(update_fields=['is_blessed', 'evaluation_results', 'status'])
+            else:
+                # No blessing file - evaluator may not have been enabled
+                # Default to blessed for backward compatibility
+                evaluator_config = training_run.evaluator_config or {}
+                if evaluator_config.get('enabled', True):
+                    # Evaluator was enabled but no blessing file - check pipeline output
+                    logger.warning(
+                        f"{training_run.display_name}: No blessing file found, defaulting to blessed"
+                    )
+                training_run.is_blessed = True
+                training_run.save(update_fields=['is_blessed'])
+
+        except Exception as e:
+            logger.warning(f"Error checking blessing status for {training_run.display_name}: {e}")
+            # Default to blessed on error
             training_run.is_blessed = True
             training_run.save(update_fields=['is_blessed'])
-        except Exception as e:
-            logger.warning(f"Error setting blessing status: {e}")
 
     def cancel_training_run(self, training_run: TrainingRun) -> TrainingRun:
         """
@@ -772,6 +810,254 @@ class TrainingService:
         except Exception as e:
             # Log but don't fail - artifacts may already be deleted
             logger.warning(f"Error deleting GCS artifacts for {display_name}: {e}")
+
+    def retry_training_run(self, training_run: TrainingRun) -> TrainingRun:
+        """
+        Retry a failed training run by creating a new run with the same config.
+
+        Creates a new TrainingRun with identical configuration and a "-retry" suffix,
+        then auto-submits it.
+
+        Args:
+            training_run: Failed TrainingRun instance to retry
+
+        Returns:
+            New TrainingRun instance
+
+        Raises:
+            TrainingServiceError: If training run is not in failed state
+        """
+        if training_run.status != TrainingRun.STATUS_FAILED:
+            raise TrainingServiceError(
+                f"Cannot retry training run in '{training_run.status}' state. "
+                "Only failed training runs can be retried."
+            )
+
+        # Create new training run with same config
+        retry_name = training_run.name
+        if not retry_name.endswith('-retry'):
+            retry_name = f"{training_run.name}-retry"
+
+        new_run = self.create_training_run(
+            name=retry_name,
+            description=f"Retry of {training_run.display_name}. Original error: {training_run.error_message or 'Unknown'}",
+            dataset=training_run.dataset,
+            feature_config=training_run.feature_config,
+            model_config=training_run.model_config,
+            base_experiment=training_run.base_experiment,
+            training_params=training_run.training_params,
+            gpu_config=training_run.gpu_config,
+            evaluator_config=training_run.evaluator_config,
+            deployment_config=training_run.deployment_config,
+            created_by=training_run.created_by,
+        )
+
+        logger.info(
+            f"Created retry run {new_run.display_name} for {training_run.display_name}"
+        )
+
+        # Auto-submit the new run
+        try:
+            self.submit_training_pipeline(new_run)
+        except Exception as e:
+            logger.error(f"Failed to submit retry pipeline: {e}")
+            new_run.refresh_from_db()
+
+        return new_run
+
+    def deploy_model(self, training_run: TrainingRun) -> TrainingRun:
+        """
+        Deploy a completed, blessed model to a Vertex AI Endpoint.
+
+        Args:
+            training_run: TrainingRun instance to deploy
+
+        Returns:
+            Updated TrainingRun instance with deployment info
+
+        Raises:
+            TrainingServiceError: If training run cannot be deployed
+        """
+        # Validate state
+        if training_run.status != TrainingRun.STATUS_COMPLETED:
+            raise TrainingServiceError(
+                f"Cannot deploy training run in '{training_run.status}' state. "
+                "Only completed training runs can be deployed."
+            )
+
+        if not training_run.is_blessed:
+            raise TrainingServiceError(
+                "Cannot deploy unblessed model. Use 'Push Anyway' to force-push "
+                "to registry first, or override the blessing check."
+            )
+
+        if training_run.is_deployed:
+            raise TrainingServiceError(
+                f"Training run is already deployed to endpoint: "
+                f"{training_run.endpoint_resource_name}"
+            )
+
+        self._init_aiplatform()
+
+        try:
+            from google.cloud import aiplatform
+
+            # Get or create endpoint
+            endpoint_display_name = f"{self.ml_model.name}-endpoint"
+            endpoints = aiplatform.Endpoint.list(
+                filter=f'display_name="{endpoint_display_name}"',
+                order_by="create_time desc"
+            )
+
+            if endpoints:
+                endpoint = endpoints[0]
+                logger.info(f"Using existing endpoint: {endpoint.resource_name}")
+            else:
+                endpoint = aiplatform.Endpoint.create(
+                    display_name=endpoint_display_name,
+                    project=self.project_id,
+                    location=self.REGION,
+                )
+                logger.info(f"Created new endpoint: {endpoint.resource_name}")
+
+            # Get model from Vertex AI Model Registry
+            model_display_name = training_run.name or f"training-{training_run.id}"
+            models = aiplatform.Model.list(
+                filter=f'display_name="{model_display_name}"',
+                order_by="create_time desc"
+            )
+
+            if not models:
+                # Try to find by pushed_model path
+                pushed_model_path = f"{training_run.gcs_artifacts_path}/pushed_model"
+                logger.info(f"Looking for model at: {pushed_model_path}")
+
+                # Upload model to registry if not found
+                model = aiplatform.Model.upload(
+                    display_name=model_display_name,
+                    artifact_uri=pushed_model_path,
+                    serving_container_image_uri=(
+                        "us-docker.pkg.dev/vertex-ai/prediction/tf2-cpu.2-12:latest"
+                    ),
+                    labels={
+                        'training_run_id': str(training_run.id),
+                        'model_endpoint_id': str(self.ml_model.id),
+                    }
+                )
+                logger.info(f"Uploaded model to registry: {model.resource_name}")
+            else:
+                model = models[0]
+                logger.info(f"Using existing model: {model.resource_name}")
+
+            # Deploy model to endpoint with auto-scaling
+            deployment_config = training_run.deployment_config or {}
+            min_replicas = deployment_config.get('min_replicas', 1)
+            max_replicas = deployment_config.get('max_replicas', 3)
+            machine_type = deployment_config.get('machine_type', 'n1-standard-4')
+
+            model.deploy(
+                endpoint=endpoint,
+                deployed_model_display_name=model_display_name,
+                machine_type=machine_type,
+                min_replica_count=min_replicas,
+                max_replica_count=max_replicas,
+                traffic_percentage=100,
+            )
+
+            # Update training run
+            training_run.is_deployed = True
+            training_run.deployed_at = timezone.now()
+            training_run.endpoint_resource_name = endpoint.resource_name
+            training_run.vertex_model_resource_name = model.resource_name
+            training_run.save(update_fields=[
+                'is_deployed', 'deployed_at', 'endpoint_resource_name',
+                'vertex_model_resource_name'
+            ])
+
+            logger.info(
+                f"Deployed {training_run.display_name} to endpoint {endpoint.resource_name}"
+            )
+
+            return training_run
+
+        except Exception as e:
+            logger.exception(f"Error deploying model: {e}")
+            raise TrainingServiceError(f"Failed to deploy model: {e}")
+
+    def force_push_model(self, training_run: TrainingRun) -> TrainingRun:
+        """
+        Force-push a not-blessed model to Vertex AI Model Registry.
+
+        This allows manual override when the evaluator threshold wasn't met
+        but the user wants to use the model anyway.
+
+        Args:
+            training_run: TrainingRun instance with STATUS_NOT_BLESSED
+
+        Returns:
+            Updated TrainingRun instance
+
+        Raises:
+            TrainingServiceError: If training run is not in not_blessed state
+        """
+        if training_run.status != TrainingRun.STATUS_NOT_BLESSED:
+            raise TrainingServiceError(
+                f"Cannot force-push training run in '{training_run.status}' state. "
+                "Only not-blessed training runs can be force-pushed."
+            )
+
+        self._init_aiplatform()
+
+        try:
+            from google.cloud import aiplatform
+
+            # Get pushed model path
+            pushed_model_path = f"{training_run.gcs_artifacts_path}/pushed_model"
+            model_display_name = f"{training_run.name or f'training-{training_run.id}'}-manual"
+
+            # Upload model to registry with manual_push label
+            model = aiplatform.Model.upload(
+                display_name=model_display_name,
+                artifact_uri=pushed_model_path,
+                serving_container_image_uri=(
+                    "us-docker.pkg.dev/vertex-ai/prediction/tf2-cpu.2-12:latest"
+                ),
+                labels={
+                    'training_run_id': str(training_run.id),
+                    'model_endpoint_id': str(self.ml_model.id),
+                    'manual_push': 'true',
+                    'original_status': 'not_blessed',
+                }
+            )
+
+            logger.info(f"Force-pushed model to registry: {model.resource_name}")
+
+            # Update training run - promote to completed
+            training_run.status = TrainingRun.STATUS_COMPLETED
+            training_run.is_blessed = True  # Mark as blessed after manual override
+            training_run.vertex_model_resource_name = model.resource_name
+            training_run.vertex_model_name = model_display_name
+
+            # Add manual push note to evaluation_results
+            eval_results = training_run.evaluation_results or {}
+            eval_results['manual_push'] = True
+            eval_results['manual_push_at'] = timezone.now().isoformat()
+            training_run.evaluation_results = eval_results
+
+            training_run.save(update_fields=[
+                'status', 'is_blessed', 'vertex_model_resource_name',
+                'vertex_model_name', 'evaluation_results'
+            ])
+
+            logger.info(
+                f"Force-pushed {training_run.display_name} - status promoted to completed"
+            )
+
+            return training_run
+
+        except Exception as e:
+            logger.exception(f"Error force-pushing model: {e}")
+            raise TrainingServiceError(f"Failed to force-push model: {e}")
 
     def submit_training_pipeline(self, training_run: TrainingRun) -> TrainingRun:
         """
@@ -1131,7 +1417,7 @@ def create_training_pipeline(
     eval_steps: Optional[int] = None,
 ):
     """
-    Create 7-stage TFX training pipeline.
+    Create 8-stage TFX training pipeline.
 
     Components:
     1. BigQueryExampleGen - Data extraction with 3-way split
@@ -1139,17 +1425,18 @@ def create_training_pipeline(
     3. SchemaGen - Schema inference
     4. Transform - Preprocessing with vocabulary
     5. Trainer - GPU-enabled TFRS training
-    6. Evaluator - Model validation with blessing
+    6. Evaluator - Model validation with blessing threshold
     7. Pusher - Model Registry upload
     """
     from tfx.extensions.google_cloud_big_query.example_gen.component import BigQueryExampleGen
-    from tfx.components import StatisticsGen, SchemaGen, Transform, Trainer, Pusher
+    from tfx.components import StatisticsGen, SchemaGen, Transform, Trainer, Evaluator, Pusher
     from tfx.proto import example_gen_pb2, trainer_pb2, transform_pb2, pusher_pb2
     from tfx.orchestration import pipeline as tfx_pipeline
     from tfx.dsl.components.common import resolver
     from tfx.dsl.input_resolution.strategies import latest_blessed_model_strategy
     from tfx.types import standard_artifacts
     from tfx.types.standard_component_specs import ResolverNodeSpec
+    import tensorflow_model_analysis as tfma
 
     logger.info(f"Creating TFX training pipeline: {pipeline_name}")
     logger.info(f"  GPU: {gpu_count}x {gpu_type} on {machine_type}")
@@ -1232,9 +1519,67 @@ def create_training_pipeline(
 
     components = [example_gen, statistics_gen, schema_gen, transform, trainer]
 
-    # 6. Pusher - Register model to Vertex AI Model Registry
-    # Note: We push regardless of blessing status, but track blessing separately
-    # This allows manual override for not-blessed models
+    # 6. Evaluator - Model validation with blessing threshold
+    if evaluator_enabled:
+        # Configure TFMA evaluation with blessing threshold
+        # Map blessing_metric to actual TFMA metric name
+        metric_name_map = {
+            'recall_at_5': 'factorized_top_k/top_5_categorical_accuracy',
+            'recall_at_10': 'factorized_top_k/top_10_categorical_accuracy',
+            'recall_at_50': 'factorized_top_k/top_50_categorical_accuracy',
+            'recall_at_100': 'factorized_top_k/top_100_categorical_accuracy',
+            'loss': 'loss',
+            'rmse': 'root_mean_squared_error',
+            'mae': 'mean_absolute_error',
+        }
+        tfma_metric_name = metric_name_map.get(blessing_metric, blessing_metric)
+
+        # For loss/rmse/mae, lower is better; for recall, higher is better
+        lower_is_better_metrics = ['loss', 'rmse', 'mae', 'root_mean_squared_error', 'mean_absolute_error']
+        if blessing_metric in lower_is_better_metrics or tfma_metric_name in lower_is_better_metrics:
+            # For lower-is-better metrics, use upper_bound threshold
+            threshold_config = tfma.MetricThreshold(
+                value_threshold=tfma.GenericValueThreshold(
+                    upper_bound={'value': blessing_min_value}
+                )
+            )
+        else:
+            # For higher-is-better metrics (recall), use lower_bound threshold
+            threshold_config = tfma.MetricThreshold(
+                value_threshold=tfma.GenericValueThreshold(
+                    lower_bound={'value': blessing_min_value}
+                )
+            )
+
+        eval_config = tfma.EvalConfig(
+            model_specs=[
+                tfma.ModelSpec(label_key='label')  # Will be ignored for retrieval models
+            ],
+            slicing_specs=[
+                tfma.SlicingSpec(),  # Overall metrics (no slicing)
+            ],
+            metrics_specs=[
+                tfma.MetricsSpec(
+                    metrics=[
+                        tfma.MetricConfig(class_name='ExampleCount'),
+                    ],
+                    thresholds={
+                        tfma_metric_name: threshold_config
+                    }
+                )
+            ]
+        )
+
+        evaluator = Evaluator(
+            examples=transform.outputs['transformed_examples'],
+            model=trainer.outputs['model'],
+            eval_config=eval_config,
+        )
+        components.append(evaluator)
+        logger.info(f"Added Evaluator with threshold: {tfma_metric_name} >= {blessing_min_value}")
+
+    # 7. Pusher - Register model to Vertex AI Model Registry
+    # Push regardless of blessing status to allow manual override for not-blessed models
     pusher = Pusher(
         model=trainer.outputs['model'],
         push_destination=pusher_pb2.PushDestination(

@@ -27,7 +27,10 @@ const TrainingCards = (function() {
             list: '/api/training-runs/',
             cancel: '/api/training-runs/{id}/cancel/',
             delete: '/api/training-runs/{id}/delete/',
-            submit: '/api/training-runs/{id}/submit/'
+            submit: '/api/training-runs/{id}/submit/',
+            retry: '/api/training-runs/{id}/retry/',
+            deploy: '/api/training-runs/{id}/deploy/',
+            push: '/api/training-runs/{id}/push/'
         },
         pollIntervalMs: 30000,  // 30 seconds
         modelId: null,
@@ -876,10 +879,49 @@ const TrainingCards = (function() {
     // RENDERING - LOADING & EMPTY STATES
     // =============================================================================
 
+    function renderSkeletonCards(count = 3) {
+        const container = document.getElementById(config.containers.cardsList);
+        if (!container) return;
+
+        let html = '';
+        for (let i = 0; i < count; i++) {
+            html += `
+                <div class="training-skeleton-card">
+                    <div class="training-skeleton-header">
+                        <div class="skeleton-icon"></div>
+                        <div class="skeleton-info">
+                            <div class="skeleton-title"></div>
+                            <div class="skeleton-subtitle"></div>
+                        </div>
+                        <div class="skeleton-badge"></div>
+                    </div>
+                    <div class="training-skeleton-body">
+                        <div class="skeleton-metrics">
+                            <div class="skeleton-metric"></div>
+                            <div class="skeleton-metric"></div>
+                            <div class="skeleton-metric"></div>
+                        </div>
+                        <div class="skeleton-actions">
+                            <div class="skeleton-btn"></div>
+                            <div class="skeleton-btn"></div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        container.innerHTML = html;
+    }
+
     function showLoading() {
         const loadingEl = document.getElementById(config.containers.loading);
         if (loadingEl) {
             loadingEl.classList.remove('hidden');
+        }
+
+        // Show skeleton cards if the container is empty
+        const container = document.getElementById(config.containers.cardsList);
+        if (container && container.children.length === 0) {
+            renderSkeletonCards(3);
         }
 
         // Add loading class to refresh button
@@ -1018,22 +1060,91 @@ const TrainingCards = (function() {
         }
     }
 
-    function retryRun(runId) {
-        // TODO: Implement retry - opens wizard pre-filled with failed run's config
-        console.log('Retry training run:', runId);
-        showToast('Retry functionality coming soon', 'info');
+    async function retryRun(runId) {
+        if (!confirm('Are you sure you want to retry this failed training run? This will create a new training run with the same configuration.')) {
+            return;
+        }
+
+        try {
+            const url = buildUrl(config.endpoints.retry, { id: runId });
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                }
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                showToast(data.message || 'Retry created and submitted', 'success');
+                loadTrainingRuns();
+            } else {
+                showToast(data.error || 'Failed to retry training run', 'error');
+            }
+        } catch (error) {
+            console.error('Error retrying training run:', error);
+            showToast('Failed to retry training run', 'error');
+        }
     }
 
-    function deployRun(runId) {
-        // TODO: Implement deploy
-        console.log('Deploy training run:', runId);
-        showToast('Deploy functionality coming soon', 'info');
+    async function deployRun(runId) {
+        if (!confirm('Are you sure you want to deploy this model to a Vertex AI Endpoint? This will make the model available for serving predictions.')) {
+            return;
+        }
+
+        try {
+            const url = buildUrl(config.endpoints.deploy, { id: runId });
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                }
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                showToast(data.message || 'Model deployed successfully', 'success');
+                loadTrainingRuns();
+            } else {
+                showToast(data.error || 'Failed to deploy model', 'error');
+            }
+        } catch (error) {
+            console.error('Error deploying training run:', error);
+            showToast('Failed to deploy model', 'error');
+        }
     }
 
-    function pushAnyway(runId) {
-        // TODO: Implement push anyway (push to registry despite not being blessed)
-        console.log('Push anyway:', runId);
-        showToast('Push anyway functionality coming soon', 'info');
+    async function pushAnyway(runId) {
+        if (!confirm('This model did not meet the blessing threshold. Are you sure you want to push it to the Model Registry anyway? This action cannot be undone.')) {
+            return;
+        }
+
+        try {
+            const url = buildUrl(config.endpoints.push, { id: runId });
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                }
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                showToast(data.message || 'Model pushed to registry', 'success');
+                loadTrainingRuns();
+            } else {
+                showToast(data.error || 'Failed to push model', 'error');
+            }
+        } catch (error) {
+            console.error('Error pushing model:', error);
+            showToast('Failed to push model', 'error');
+        }
     }
 
     // =============================================================================
@@ -1169,6 +1280,30 @@ const TrainingSchedules = (function() {
             return `${day}s at ${schedule.schedule_time || '09:00'} ${schedule.schedule_timezone}`;
         }
         return '';
+    }
+
+    function showToast(message, type = 'success') {
+        const toast = document.createElement('div');
+        toast.className = `toast toast-${type}`;
+        toast.style.cssText = `
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 12px 20px;
+            border-radius: 8px;
+            color: white;
+            font-size: 14px;
+            z-index: 10000;
+            animation: slideIn 0.3s ease;
+            background-color: ${type === 'success' ? '#16a34a' : type === 'error' ? '#dc2626' : '#3b82f6'};
+        `;
+        toast.textContent = message;
+        document.body.appendChild(toast);
+
+        setTimeout(() => {
+            toast.style.animation = 'slideOut 0.3s ease';
+            setTimeout(() => toast.remove(), 300);
+        }, 3000);
     }
 
     // =============================================================================
@@ -1318,11 +1453,11 @@ const TrainingSchedules = (function() {
             if (data.success) {
                 loadAllSchedules();
             } else {
-                alert('Failed to pause schedule: ' + (data.error || 'Unknown error'));
+                showToast('Failed to pause schedule: ' + (data.error || 'Unknown error'), 'error');
             }
         } catch (error) {
             console.error('Failed to pause schedule:', error);
-            alert('Failed to pause schedule');
+            showToast('Failed to pause schedule', 'error');
         }
     }
 
@@ -1340,11 +1475,11 @@ const TrainingSchedules = (function() {
             if (data.success) {
                 loadAllSchedules();
             } else {
-                alert('Failed to resume schedule: ' + (data.error || 'Unknown error'));
+                showToast('Failed to resume schedule: ' + (data.error || 'Unknown error'), 'error');
             }
         } catch (error) {
             console.error('Failed to resume schedule:', error);
-            alert('Failed to resume schedule');
+            showToast('Failed to resume schedule', 'error');
         }
     }
 
@@ -1366,11 +1501,11 @@ const TrainingSchedules = (function() {
             if (data.success) {
                 loadAllSchedules();
             } else {
-                alert('Failed to cancel schedule: ' + (data.error || 'Unknown error'));
+                showToast('Failed to cancel schedule: ' + (data.error || 'Unknown error'), 'error');
             }
         } catch (error) {
             console.error('Failed to cancel schedule:', error);
-            alert('Failed to cancel schedule');
+            showToast('Failed to cancel schedule', 'error');
         }
     }
 
@@ -1390,18 +1525,18 @@ const TrainingSchedules = (function() {
             });
             const data = await response.json();
             if (data.success) {
-                alert('Training run triggered successfully!');
+                showToast('Training run triggered successfully!', 'success');
                 loadAllSchedules();
                 // Also refresh training runs
                 if (typeof TrainingCards !== 'undefined') {
                     TrainingCards.refresh();
                 }
             } else {
-                alert('Failed to trigger schedule: ' + (data.error || 'Unknown error'));
+                showToast('Failed to trigger schedule: ' + (data.error || 'Unknown error'), 'error');
             }
         } catch (error) {
             console.error('Failed to trigger schedule:', error);
-            alert('Failed to trigger schedule');
+            showToast('Failed to trigger schedule', 'error');
         }
     }
 

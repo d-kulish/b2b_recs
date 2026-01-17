@@ -38,6 +38,21 @@ urlpatterns = [
         api.training_run_submit,
         name='training_run_submit'
     ),
+    path(
+        'api/training-runs/<int:training_run_id>/retry/',
+        api.training_run_retry,
+        name='training_run_retry'
+    ),
+    path(
+        'api/training-runs/<int:training_run_id>/deploy/',
+        api.training_run_deploy,
+        name='training_run_deploy'
+    ),
+    path(
+        'api/training-runs/<int:training_run_id>/push/',
+        api.training_run_push,
+        name='training_run_push'
+    ),
 
     # ==========================================================================
     # Training Schedule CRUD endpoints

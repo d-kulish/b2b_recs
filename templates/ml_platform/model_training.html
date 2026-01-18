@@ -944,66 +944,16 @@
     }
 
     /* =========================================================================
-       Training Chapter Tabs
+       Chapter Section Styles
        ========================================================================= */
-    .training-chapters {
-        margin-bottom: 20px;
-    }
-
-    .chapter-tabs {
-        display: flex;
-        gap: 4px;
-        background: #f3f4f6;
-        padding: 4px;
+    .chapter-icon {
+        width: 40px;
+        height: 40px;
         border-radius: 10px;
-        width: fit-content;
-    }
-
-    .chapter-tab {
-        padding: 10px 20px;
-        border: none;
-        background: transparent;
-        border-radius: 8px;
-        font-size: 14px;
-        font-weight: 500;
-        color: #6b7280;
-        cursor: pointer;
-        transition: all 0.2s ease;
         display: flex;
         align-items: center;
-        gap: 8px;
-    }
-
-    .chapter-tab:hover:not(.active):not(.disabled) {
-        background: rgba(255, 255, 255, 0.5);
-        color: #374151;
-    }
-
-    .chapter-tab.active {
-        background: white;
-        color: #111827;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-    }
-
-    .chapter-tab.disabled {
-        color: #d1d5db;
-        cursor: not-allowed;
-    }
-
-    .chapter-tab i {
-        font-size: 14px;
-    }
-
-    .chapter-tab.active i {
-        color: #3b82f6;
-    }
-
-    .chapter-content {
-        display: none;
-    }
-
-    .chapter-content.active {
-        display: block;
+        justify-content: center;
+        font-size: 18px;
     }
 
     /* Training Empty State */
@@ -1099,27 +1049,8 @@
 {% endblock %}
 
 {% block model_content %}
-<!-- Chapter Tabs Navigation -->
-<div class="training-chapters">
-    <div class="chapter-tabs">
-        <button class="chapter-tab active" data-chapter="best-experiments" onclick="switchChapter('best-experiments')">
-            <i class="fas fa-trophy"></i>
-            Best Experiments
-        </button>
-        <button class="chapter-tab" data-chapter="training" onclick="switchChapter('training')">
-            <i class="fas fa-cogs"></i>
-            Training
-        </button>
-        <button class="chapter-tab disabled" data-chapter="models-registry" title="Coming Soon">
-            <i class="fas fa-archive"></i>
-            Models Registry
-        </button>
-    </div>
-</div>
-
-<!-- Chapter 1: Best Experiments (existing content) -->
-<div class="chapter-content active" id="chapter-best-experiments">
-<div class="bg-white rounded-xl border border-black shadow-lg p-6">
+<!-- CHAPTER 1: BEST EXPERIMENTS -->
+<div class="bg-white rounded-xl border border-black shadow-lg p-6 mb-6">
     <div class="flex items-center gap-3 mb-6">
         <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
             <i class="fas fa-trophy text-white text-lg"></i>
@@ -1675,11 +1606,32 @@
     </div>
 </div>
 <!-- End Training Wizard Modal -->
-</div>
 <!-- End Chapter 1: Best Experiments -->
 
-<!-- Chapter 2: Training -->
-<div class="chapter-content" id="chapter-training">
+<!-- CHAPTER 2: TRAINING -->
+<div class="bg-white rounded-xl border border-black shadow-lg p-6 mb-6">
+    <div class="flex items-center justify-between mb-6">
+        <div class="flex items-center gap-3">
+            <div class="chapter-icon" style="background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%);">
+                <i class="fas fa-cogs text-white text-lg"></i>
+            </div>
+            <h2 class="text-lg font-bold text-gray-900">Training</h2>
+        </div>
+        <div class="btn-group">
+            <button onclick="TrainingCards.refresh()" class="btn btn-secondary btn-sm" style="width: 120px;">
+                <i class="fas fa-sync"></i> Refresh
+            </button>
+            <button onclick="TrainingWizard.open()" class="btn btn-primary btn-sm" style="width: 160px;">
+                <i class="fas fa-plus"></i> New Training Run
+            </button>
+        </div>
+    </div>
+
+    <!-- Filter Bar (below header) -->
+    <div id="trainingFilterBar">
+        <!-- Filter bar rendered by TrainingCards.init() -->
+    </div>
+
     <!-- Active Schedules Section -->
     <div id="trainingSchedulesSection" class="training-schedules-section hidden">
         <div class="schedules-section-header">
@@ -1695,11 +1647,6 @@
         </div>
     </div>
 
-    <!-- Filter Bar -->
-    <div id="trainingFilterBar">
-        <!-- Filter bar will be rendered by TrainingCards.init() -->
-    </div>
-
     <!-- Loading State -->
     <div id="trainingLoading" class="training-loading hidden">
         <i class="fas fa-spinner fa-spin"></i>
@@ -1707,15 +1654,15 @@
     </div>
 
     <!-- Training Runs List -->
-    <div id="trainingRunsContainer">
+    <div id="trainingRunsContainer" style="max-height: 420px; overflow-y: auto;">
         <div id="trainingCardsList">
-            <!-- Training run cards will be populated here by TrainingCards -->
+            <!-- Training run cards populated by TrainingCards -->
         </div>
     </div>
 
     <!-- Pagination -->
     <div id="trainingPagination">
-        <!-- Pagination controls will be rendered by TrainingCards -->
+        <!-- Pagination controls -->
     </div>
 
     <!-- Empty State -->
@@ -1733,8 +1680,19 @@
 </div>
 <!-- End Chapter 2: Training -->
 
-<!-- Chapter 3: Models Registry (Coming Soon) -->
-<div class="chapter-content" id="chapter-models-registry">
+<!-- CHAPTER 3: MODELS REGISTRY -->
+<div class="bg-white rounded-xl border border-black shadow-lg p-6">
+    <div class="flex items-center justify-between mb-6">
+        <div class="flex items-center gap-3">
+            <div class="chapter-icon" style="background: linear-gradient(135deg, #9ca3af 0%, #d1d5db 100%);">
+                <i class="fas fa-archive text-white text-lg"></i>
+            </div>
+            <h2 class="text-lg font-bold text-gray-400">Models Registry</h2>
+            <span class="ml-2 px-2 py-1 bg-gray-100 text-gray-500 text-xs rounded-full">Coming Soon</span>
+        </div>
+    </div>
+
+    <!-- Coming Soon Placeholder -->
     <div class="coming-soon">
         <i class="fas fa-box-open"></i>
         <span>Models Registry - Coming Soon</span>
@@ -1759,42 +1717,6 @@
 // =============================================================================
 
 let selectedBestExpModelType = 'retrieval';
-let currentChapter = 'best-experiments';
-
-// =============================================================================
-// CHAPTER TAB SWITCHING
-// =============================================================================
-
-function switchChapter(chapterName) {
-    // Don't switch to disabled chapters
-    const tab = document.querySelector(`.chapter-tab[data-chapter="${chapterName}"]`);
-    if (tab && tab.classList.contains('disabled')) {
-        return;
-    }
-
-    // Update current chapter
-    currentChapter = chapterName;
-
-    // Update tab active states
-    document.querySelectorAll('.chapter-tab').forEach(t => t.classList.remove('active'));
-    if (tab) {
-        tab.classList.add('active');
-    }
-
-    // Update content visibility
-    document.querySelectorAll('.chapter-content').forEach(content => {
-        content.classList.remove('active');
-    });
-    const chapterContent = document.getElementById(`chapter-${chapterName}`);
-    if (chapterContent) {
-        chapterContent.classList.add('active');
-    }
-
-    // Load chapter-specific data if needed
-    if (chapterName === 'training') {
-        loadTrainingRuns();
-    }
-}
 
 // =============================================================================
 // TRAINING RUNS (Chapter 2)
@@ -1835,6 +1757,7 @@ async function loadTrainingRuns() {
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', function() {
+    // Load Best Experiments
     loadBestExperiments();
 
     // Configure ExpViewModal with endpoints and callbacks
@@ -1850,10 +1773,12 @@ document.addEventListener('DOMContentLoaded', function() {
     TrainingWizard.configure({
         modelId: {{ model.id }},
         onComplete: function() {
-            loadTrainingRuns();
-            switchChapter('training');
+            TrainingCards.refresh();
         }
     });
+
+    // Load Training Runs immediately (all chapters visible)
+    loadTrainingRuns();
 });
 
 // =============================================================================

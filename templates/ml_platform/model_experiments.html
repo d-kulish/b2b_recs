@@ -2430,20 +2430,20 @@
                                 <div class="dashboard-kpi-value" id="dashboardHybridCount">0</div>
                             </div>
                             <div class="dashboard-kpi-compact">
-                                <div class="dashboard-kpi-label">R@50</div>
-                                <div class="dashboard-kpi-value highlight" id="dashboardHybridR50">-</div>
-                            </div>
-                            <div class="dashboard-kpi-compact">
-                                <div class="dashboard-kpi-label">R@100</div>
-                                <div class="dashboard-kpi-value highlight" id="dashboardHybridR100">-</div>
-                            </div>
-                            <div class="dashboard-kpi-compact">
                                 <div class="dashboard-kpi-label">RMSE</div>
                                 <div class="dashboard-kpi-value highlight" id="dashboardHybridRMSE">-</div>
                             </div>
                             <div class="dashboard-kpi-compact">
                                 <div class="dashboard-kpi-label">Test RMSE</div>
                                 <div class="dashboard-kpi-value highlight" id="dashboardHybridTestRMSE">-</div>
+                            </div>
+                            <div class="dashboard-kpi-compact">
+                                <div class="dashboard-kpi-label">R@50</div>
+                                <div class="dashboard-kpi-value highlight" id="dashboardHybridR50">-</div>
+                            </div>
+                            <div class="dashboard-kpi-compact">
+                                <div class="dashboard-kpi-label">R@100</div>
+                                <div class="dashboard-kpi-value highlight" id="dashboardHybridR100">-</div>
                             </div>
                         </div>
                     </div>
@@ -7177,8 +7177,8 @@ async function loadHyperparameterAnalysis(modelType = null) {
                         </div>
                 `;
 
-                // Add Ranking Tower row for ranking models
-                if (activeModelType === 'ranking' && (rankingTower || rankingParams)) {
+                // Add Ranking Tower row for ranking and hybrid models
+                if ((activeModelType === 'ranking' || activeModelType === 'hybrid') && (rankingTower || rankingParams)) {
                     html += `
                         <!-- Ranking Tower Row -->
                         <div class="hyperparam-model-row ranking-tower-row">

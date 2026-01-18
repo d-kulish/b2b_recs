@@ -48,7 +48,26 @@ class TrainingService:
     STAGING_BUCKET = 'b2b-recs-pipeline-staging'
 
     # Vertex AI configuration
+    # NOTE: Data infrastructure (BigQuery, GCS, Cloud SQL) is in europe-central2
     REGION = 'europe-central2'
+
+    # GPU Training Region Configuration
+    # ===============================
+    # IMPORTANT: Vertex AI custom training does NOT support GPUs in all regions!
+    # europe-central2 (Warsaw) does NOT support GPU training for custom jobs,
+    # even though GPU quota can be approved and Compute Engine has GPUs available.
+    #
+    # The Vertex AI locations documentation marks T4/L4 GPUs in europe-central2
+    # with † (dagger), meaning "not available for training" - only for prediction.
+    #
+    # Therefore, GPU training jobs must run in a different region:
+    # - europe-west4 (Netherlands): Verified working, 2x T4 quota approved
+    # - Data is read cross-region from europe-central2 BigQuery/GCS (works fine)
+    #
+    # See: https://docs.cloud.google.com/vertex-ai/docs/general/locations
+    # See: docs/training_full.md Section 11 for validation details
+    GPU_TRAINING_REGION = 'europe-west4'
+
     PIPELINE_DISPLAY_NAME_PREFIX = 'training'
 
     # 8 stages for Training (vs 6 for Experiments)
@@ -1287,9 +1306,10 @@ class TrainingService:
         split_strategy = training_params.get('split_strategy', 'strict_time')
 
         # GPU configuration
-        gpu_type = gpu_config.get('gpu_type', 'NVIDIA_L4')
+        # Default to T4 (validated working in europe-west4 with 2x quota approved)
+        gpu_type = gpu_config.get('gpu_type', 'NVIDIA_TESLA_T4')
         gpu_count = gpu_config.get('gpu_count', 2)
-        machine_type = gpu_config.get('machine_type', 'g2-standard-24')
+        machine_type = gpu_config.get('machine_type', 'n1-standard-16')
         preemptible = gpu_config.get('preemptible', True)
 
         # Evaluator configuration
@@ -1345,8 +1365,10 @@ python /tmp/training_compile_and_submit.py \\
     --blessing-min-value="{blessing_min_value}" \\
     --model-name="{model_name}" \\
     --project-id="{self.project_id}" \\
-    --region="{self.REGION}"
+    --region="{self.GPU_TRAINING_REGION}"
 '''
+# NOTE: Using GPU_TRAINING_REGION (europe-west4) instead of REGION (europe-central2)
+# because Vertex AI does not support GPU training in europe-central2
                     ],
                 )
             ],
@@ -1397,15 +1419,17 @@ def create_training_pipeline(
     trainer_module_path: str,
     output_path: str,
     project_id: str,
-    region: str = 'europe-central2',
+    # GPU training must run in europe-west4 (not europe-central2) due to regional GPU limitations
+    # See: https://docs.cloud.google.com/vertex-ai/docs/general/locations
+    region: str = 'europe-west4',
     epochs: int = 100,
     batch_size: int = 8192,
     learning_rate: float = 0.01,
     split_strategy: str = 'strict_time',
-    # GPU configuration
-    gpu_type: str = 'NVIDIA_L4',
+    # GPU configuration - T4 validated working in europe-west4 (2x T4 quota approved)
+    gpu_type: str = 'NVIDIA_TESLA_T4',
     gpu_count: int = 2,
-    machine_type: str = 'g2-standard-24',
+    machine_type: str = 'n1-standard-16',
     preemptible: bool = True,
     # Evaluator configuration
     evaluator_enabled: bool = True,
@@ -1677,9 +1701,10 @@ def main():
     parser.add_argument("--learning-rate", type=float, default=0.01)
     parser.add_argument("--split-strategy", default="strict_time")
     # GPU configuration
-    parser.add_argument("--gpu-type", default="NVIDIA_L4")
+    # T4 GPUs validated working in europe-west4 (2x T4 quota approved)
+    parser.add_argument("--gpu-type", default="NVIDIA_TESLA_T4")
     parser.add_argument("--gpu-count", type=int, default=2)
-    parser.add_argument("--machine-type", default="g2-standard-24")
+    parser.add_argument("--machine-type", default="n1-standard-16")
     parser.add_argument("--preemptible", default="true")
     # Evaluator configuration
     parser.add_argument("--evaluator-enabled", default="true")
@@ -1688,7 +1713,8 @@ def main():
     # Model registry
     parser.add_argument("--model-name", default="recommender-model")
     parser.add_argument("--project-id", required=True)
-    parser.add_argument("--region", default="europe-central2")
+    # GPU training region - europe-west4 because europe-central2 doesn't support GPU training
+    parser.add_argument("--region", default="europe-west4")
     args = parser.parse_args()
 
     # Decode the base64 query

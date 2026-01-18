@@ -448,16 +448,6 @@ const TrainingCards = (function() {
                            placeholder="Search training runs..."
                            oninput="TrainingCards.handleSearchInput(this.value)">
                 </div>
-
-                <div class="training-filter-spacer"></div>
-
-                <button class="training-refresh-btn" onclick="TrainingCards.refresh()">
-                    <i class="fas fa-sync-alt"></i> Refresh
-                </button>
-
-                <button class="btn-new-training" onclick="TrainingWizard.open()">
-                    <i class="fas fa-plus"></i> New Training Run
-                </button>
             </div>
         `;
     }

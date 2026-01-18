@@ -1485,6 +1485,137 @@ Training jobs read data from `europe-central2` BigQuery/GCS but execute on `euro
 
 ---
 
+## GPU Types Reference
+
+### Available GPU Types for Vertex AI Training
+
+| GPU | Architecture | VRAM | FP32 TFLOPS | Price/hr* | Best For |
+|-----|--------------|------|-------------|-----------|----------|
+| **T4** | Turing (2018) | 16 GB | 8.1 | ~$0.35 | Dev/test, small models |
+| **L4** | Ada Lovelace (2023) | 24 GB | 30.3 | ~$0.70 | Production, large embeddings |
+| **V100** | Volta (2017) | 16 GB | 15.7 | ~$2.50 | Legacy workloads |
+| **A100** | Ampere (2020) | 40/80 GB | 19.5/156** | ~$3.50 | Large models, multi-GPU |
+| **H100** | Hopper (2022) | 80 GB | 267** | ~$4.50 | Largest models, fastest training |
+
+*Prices are approximate and vary by region. **Tensor Core performance.
+
+### GPU Regional Availability Matrix
+
+| Region | T4 | L4 | V100 | A100 | H100 | Notes |
+|--------|----|----|------|------|------|-------|
+| `us-central1` (Iowa) | ✅ | ✅ | ✅ | ✅ | ✅ | **Largest capacity, all GPUs** |
+| `us-west1` (Oregon) | ✅ | ✅ | ✅ | ✅ | ✅ | Good US West option |
+| `us-east4` (Virginia) | ✅ | ✅ | ✅ | ✅ | ❌ | US East |
+| `europe-west4` (Netherlands) | ✅ | ✅ | ✅ | ✅ | ❌ | **Best for EU, recommended** |
+| `europe-west1` (Belgium) | ✅ | ✅ | ✅ | ✅ | ❌ | Good EU alternative |
+| `europe-central2` (Warsaw) | ❌ | ❌ | ❌ | ❌ | ❌ | **No GPU training support** |
+| `asia-east1` (Taiwan) | ✅ | ✅ | ✅ | ✅ | ❌ | Best for APAC |
+
+> **Note**: Compute Engine may show GPUs available in a region where Vertex AI training doesn't support them. Always verify with actual job submission.
+
+### Machine Type + GPU Combinations
+
+#### T4 GPU (NVIDIA_TESLA_T4)
+
+| GPUs | Machine Type | vCPUs | Memory | Use Case |
+|------|--------------|-------|--------|----------|
+| 1 | n1-standard-8 | 8 | 30 GB | Development, small models |
+| 2 | n1-standard-16 | 16 | 60 GB | **Recommended for production** |
+| 4 | n1-standard-32 | 32 | 120 GB | Large models, faster training |
+
+#### L4 GPU (NVIDIA_L4)
+
+| GPUs | Machine Type | vCPUs | Memory | Use Case |
+|------|--------------|-------|--------|----------|
+| 1 | g2-standard-8 | 8 | 32 GB | Development |
+| 2 | g2-standard-24 | 24 | 96 GB | **Recommended for production** |
+| 4 | g2-standard-48 | 48 | 192 GB | Large embeddings |
+| 8 | g2-standard-96 | 96 | 384 GB | Very large models |
+
+#### A100 GPU (NVIDIA_TESLA_A100)
+
+| GPUs | Machine Type | vCPUs | Memory | Use Case |
+|------|--------------|-------|--------|----------|
+| 1 | a2-highgpu-1g | 12 | 85 GB | Single large model |
+| 2 | a2-highgpu-2g | 24 | 170 GB | Multi-GPU training |
+| 4 | a2-highgpu-4g | 48 | 340 GB | Distributed training |
+| 8 | a2-highgpu-8g | 96 | 680 GB | Maximum performance |
+
+### Recommendations by Use Case
+
+| Use Case | Recommended GPU | Config | Reasoning |
+|----------|-----------------|--------|-----------|
+| **Development/Testing** | T4 x 1-2 | n1-standard-8/16 | Low cost, sufficient for iteration |
+| **Production TFRS** | T4 x 2 or L4 x 2 | n1-standard-16 / g2-standard-24 | Good price/performance |
+| **Large Embedding Tables** | L4 x 2-4 | g2-standard-24/48 | 24GB VRAM handles large vocabs |
+| **Fastest Training** | A100 x 2-4 | a2-highgpu-2g/4g | When time matters more than cost |
+| **Budget Conscious** | T4 x 2 preemptible | n1-standard-16 | 70% cheaper, use checkpointing |
+
+### Why Regional GPU Disparity Exists
+
+#### 1. Infrastructure Investment Priorities
+
+Google prioritizes GPU infrastructure in:
+- **High-demand regions** (us-central1, europe-west4) - largest ML customer base
+- **Established regions** (europe-west1, us-east4) - built out over years
+- **Strategic AI hubs** (us-west1 for TPUs, europe-west4 for NVIDIA partnerships)
+
+#### 2. Compute Engine vs Vertex AI
+
+| Aspect | Compute Engine | Vertex AI Training |
+|--------|----------------|-------------------|
+| GPU presence | Physical hardware | Managed infrastructure |
+| What you get | Raw VM with GPU | Orchestrated training jobs |
+| Requirements | Just hardware | + Job scheduling, networking, scaling |
+| Availability | Broader | More restricted |
+
+A region may have GPUs in Compute Engine (for self-managed VMs) but lack the Vertex AI managed training infrastructure.
+
+#### 3. Regional Specialization
+
+| Region | Focus |
+|--------|-------|
+| europe-west4 (Netherlands) | Heavy ML/AI, full GPU range, Vertex AI optimized |
+| europe-central2 (Warsaw) | General enterprise, data sovereignty for Poland/CEE |
+| us-central1 (Iowa) | Largest capacity, all GPU types, TPU access |
+
+### Upgrading from T4 to L4
+
+To use L4 GPUs (recommended for larger models):
+
+**1. Request L4 quota in europe-west4:**
+```
+Filter: custom_model_training_nvidia_l4_gpus
+Region: europe-west4
+Amount: 2-4
+```
+
+**2. Update TrainingService defaults:**
+```python
+# In ml_platform/training/services.py
+gpu_type = gpu_config.get('gpu_type', 'NVIDIA_L4')  # Changed from NVIDIA_TESLA_T4
+machine_type = gpu_config.get('machine_type', 'g2-standard-24')  # Changed from n1-standard-16
+```
+
+**3. Test with:**
+```bash
+gcloud ai custom-jobs create \
+  --project=b2b-recs \
+  --region=europe-west4 \
+  --display-name="gpu-test-l4" \
+  --worker-pool-spec="replica-count=1,machine-type=g2-standard-24,accelerator-type=NVIDIA_L4,accelerator-count=2,container-image-uri=europe-central2-docker.pkg.dev/b2b-recs/tfx-builder/tfx-trainer-gpu:latest" \
+  --args="python","-c","import tensorflow as tf; print(tf.config.list_physical_devices('GPU'))"
+```
+
+### References
+
+- [Vertex AI Locations & Accelerators](https://docs.cloud.google.com/vertex-ai/docs/general/locations)
+- [Compute Engine GPU Regions](https://docs.cloud.google.com/compute/docs/gpus/gpu-regions-zones)
+- [Configure Compute for Training](https://cloud.google.com/vertex-ai/docs/training/configure-compute)
+- [GPU Pricing](https://cloud.google.com/compute/gpus-pricing)
+
+---
+
 ## Implementation Checklist
 
 ### Phase 1: Basic Training Run

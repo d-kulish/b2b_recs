@@ -2112,7 +2112,7 @@ The GPU container directory also includes:
 
 ## 11. GPU Container Testing & Validation
 
-> ⚠️ **STATUS: BLOCKED BY GPU QUOTA** (Action Required)
+> ✅ **STATUS: GPU QUOTA APPROVED AND VALIDATED** (2026-01-18)
 
 ### 11.1 Build Validation (Completed)
 
@@ -2130,49 +2130,61 @@ During the Docker build, the following validations passed:
 
 **Note**: GPU device list shows `[]` during build because Cloud Build machines don't have GPUs. This is expected - actual GPU detection requires running on a GPU VM.
 
-### 11.2 Vertex AI GPU Test Attempts
+### 11.2 Critical Discovery: Regional GPU Limitations
 
-Multiple attempts were made to validate GPU detection on Vertex AI Custom Jobs:
+> ⚠️ **IMPORTANT**: Vertex AI custom training does NOT support GPUs in all regions!
 
-#### Attempt 1: T4 GPU in europe-central2
+**Testing revealed that `europe-central2` (Warsaw) does not support GPUs for Vertex AI custom training**, despite:
+- Quota being approved
+- Compute Engine showing T4 GPUs available
+- Documentation suggesting GPU support
+
+The [Vertex AI locations documentation](https://docs.cloud.google.com/vertex-ai/docs/general/locations) confirms this: T4 in europe-central2 is marked with † (dagger), meaning "not available for training".
+
+#### Verified GPU Regions
+
+| Region | T4 Training | Status |
+|--------|-------------|--------|
+| `europe-west4` (Netherlands) | ✅ Supported | **Use this for EU workloads** |
+| `europe-central2` (Warsaw) | ❌ Not supported | Data only, no GPU training |
+| `us-central1` (Iowa) | ✅ Supported | Largest GPU capacity |
+
+### 11.3 GPU Quota Status
+
+**Current approved quota** (as of 2026-01-18):
+
+| Quota Metric | Region | Approved |
+|--------------|--------|----------|
+| `custom_model_training_nvidia_t4_gpus` | europe-west4 | **2** |
+| `custom_model_training_nvidia_t4_gpus` | europe-central2 | 2 (unusable) |
+
+### 11.4 GPU Validation Test Results ✅
+
+Successfully validated GPU access on 2026-01-18:
+
 ```bash
 gcloud ai custom-jobs create \
-  --region=europe-central2 \
-  --worker-pool-spec="machine-type=n1-standard-8,accelerator-type=NVIDIA_TESLA_T4,accelerator-count=1,..."
+  --project=b2b-recs \
+  --region=europe-west4 \
+  --display-name="gpu-test-2xt4" \
+  --worker-pool-spec="replica-count=1,machine-type=n1-standard-16,accelerator-type=NVIDIA_TESLA_T4,accelerator-count=2,container-image-uri=europe-central2-docker.pkg.dev/b2b-recs/tfx-builder/tfx-trainer-gpu:latest" \
+  --args="python","-c","import tensorflow as tf; gpus=tf.config.list_physical_devices('GPU'); print('FOUND '+str(len(gpus))+' GPUs'); print(gpus)"
 ```
-**Result**: `ERROR: Accelerator "NVIDIA_TESLA_T4" is not supported for machine type "n1-standard-8"`
 
-#### Attempt 2: L4 GPU in europe-west1
-```bash
-gcloud ai custom-jobs create \
-  --region=europe-west1 \
-  --worker-pool-spec="machine-type=g2-standard-8,accelerator-type=NVIDIA_L4,accelerator-count=1,..."
+**Result**: ✅ SUCCESS
 ```
-**Result**: `ERROR: Machine type "g2-standard-8" is not supported`
-
-#### Attempt 3: T4/V100/P100/A100 in us-central1
-```bash
-gcloud ai custom-jobs create \
-  --region=us-central1 \
-  --worker-pool-spec="machine-type=n1-standard-4,accelerator-type=NVIDIA_TESLA_T4,..."
+FOUND 2 GPUs
+[PhysicalDevice(name='/physical_device:GPU:0', device_type='GPU'),
+ PhysicalDevice(name='/physical_device:GPU:1', device_type='GPU')]
 ```
-**Result**: `ERROR: RESOURCE_EXHAUSTED: The following quota metrics exceed quota limits: aiplatform.googleapis.com/custom_model_training_nvidia_t4_gpus`
 
-All GPU types (T4, V100, P100, A100) returned quota exhausted errors across all tested regions.
+**Job details**:
+- Job ID: `4811502877883236352`
+- Provisioning time: ~10 minutes
+- TensorFlow version: 2.15.1
+- MirroredStrategy replicas: 2
 
-### 11.3 Root Cause: No Vertex AI GPU Quota
-
-The project `b2b-recs` has **zero GPU quota** for Vertex AI Custom Training:
-
-| Quota Metric | Current Value |
-|--------------|---------------|
-| `custom_model_training_nvidia_t4_gpus` | 0 |
-| `custom_model_training_nvidia_v100_gpus` | 0 |
-| `custom_model_training_nvidia_p100_gpus` | 0 |
-| `custom_model_training_nvidia_a100_gpus` | 0 |
-| `custom_model_training_nvidia_l4_gpus` | 0 |
-
-### 11.4 Required Action: Request GPU Quota
+### 11.5 How to Request GPU Quota
 
 **Steps to request GPU quota:**
 
@@ -2180,16 +2192,21 @@ The project `b2b-recs` has **zero GPU quota** for Vertex AI Custom Training:
 
 2. Filter for:
    - **Service**: `Vertex AI API`
-   - **Metric**: `custom_model_training` (search)
+   - **Metric**: `custom_model_training_nvidia_t4` (or `nvidia_l4`)
 
-3. Request quota increase for at least one GPU type:
+3. **Select region `europe-west4`** (NOT europe-central2!)
+
+4. Request quota increase:
 
    | GPU Type | Recommended Quota | Use Case |
    |----------|-------------------|----------|
-   | **T4** | 2-4 per region | Testing, small models |
-   | **L4** | 2-4 per region | **Recommended** for production training |
-   | **V100** | 1-2 per region | High performance |
-   | **A100** | 1 per region | Very large models |
+   | **T4** | 2-4 per region | Testing, small/medium models |
+   | **L4** | 2-4 per region | Production training (24GB VRAM) |
+
+5. **Description example**:
+   > "Training TensorFlow recommendation models on Vertex AI Pipelines. Development and testing workloads."
+
+6. **Approval time**: Usually 15 minutes to 48 hours
 
 4. **Recommended regions** (in order of preference):
    - `europe-west1` (closest to europe-central2, best GPU availability)
@@ -3160,7 +3177,7 @@ class TestTrainingAPI:
 
 | # | Action | Owner | Status |
 |---|--------|-------|--------|
-| 1 | **Request Vertex AI GPU quota** | User | 🔴 Required (for E2E testing) |
+| 1 | ~~Request Vertex AI GPU quota~~ | User | ✅ **COMPLETE** (2x T4 in europe-west4) |
 | 2 | ~~Phase 1: Foundation~~ | Developer | ✅ **COMPLETE** |
 | 3 | ~~Phase 3: TrainingService~~ | Developer | ✅ **COMPLETE** |
 | 4 | Apply migrations | Developer | 🔜 Pending (run `python manage.py migrate`) |
@@ -3168,13 +3185,15 @@ class TestTrainingAPI:
 | 6 | ~~Phase 8: Scheduling~~ | Developer | ✅ **COMPLETE** |
 | 7 | ~~Phase 9: Polish & Testing~~ | Developer | ✅ **COMPLETE** |
 | 8 | Run unit tests | Developer | 🔜 Pending (`python manage.py test ml_platform.tests.test_training`) |
-| 9 | E2E testing with GPU | Developer | 🔜 Pending (requires GPU quota) |
+| 9 | ~~GPU validation test~~ | Developer | ✅ **COMPLETE** (2 GPUs detected) |
+| 10 | E2E training pipeline test | Developer | 🔜 Ready (GPU quota available) |
+| 11 | Update TrainingService region | Developer | 🔜 Pending (use europe-west4 for GPU jobs) |
 
-**GPU Quota Request Details** (needed for E2E testing):
-- Go to: https://console.cloud.google.com/iam-admin/quotas?project=b2b-recs
-- Filter: Service = "Vertex AI API", Metric contains "custom_model_training"
-- Request: `custom_model_training_nvidia_l4_gpus` = 2-4 in `europe-west1`
-- Alternative: `custom_model_training_nvidia_t4_gpus` = 2-4 if L4 unavailable
+**GPU Quota Status** (as of 2026-01-18):
+- ✅ Approved: 2x T4 GPUs in `europe-west4` (Netherlands)
+- ✅ Validated: Test job successfully detected 2 GPUs
+- ⚠️ Note: `europe-central2` does NOT support GPU training (regional limitation)
+- 📖 See Section 11 for full details on regional GPU availability
 
 ### 18.2 Phase 3 Completion Checklist ✅
 
@@ -3333,16 +3352,21 @@ All Phase 9 tasks have been completed:
 | `static/css/training_cards.css` | Skeleton loader styles, animations |
 | `ml_platform/tests/test_training.py` | 4 new test classes (~200 lines)
 
-### 18.5 Once GPU Quota is Approved
+### 18.5 GPU Quota Approved ✅ (2026-01-18)
 
-After GPU quota is approved (typically 24-48 hours):
+GPU quota has been approved and validated:
 
-1. Create a training run via API or UI
-2. Monitor Cloud Build in GCP Console
-3. Monitor Vertex AI Pipeline execution
-4. Verify 8-stage progress tracking works
-5. Verify metrics extraction after completion
-6. Update this document with test results
+1. ✅ Requested 2x T4 GPUs in `europe-west4`
+2. ✅ Quota approved within 15 minutes
+3. ✅ Submitted test job with 2 GPUs
+4. ✅ TensorFlow detected both GPUs successfully
+5. 🔜 Next: E2E training pipeline test
+6. 🔜 Next: Update TrainingService to use `europe-west4` for GPU jobs
+
+**Important Regional Note**:
+- Training jobs must run in `europe-west4` (not `europe-central2`)
+- Data can remain in `europe-central2` - cross-region access works fine
+- See Section 11 for full details on regional GPU limitations
 
 ### 18.6 Key Files Reference
 

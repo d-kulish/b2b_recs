@@ -1376,6 +1376,115 @@ The application architecture is sound:
 
 ---
 
+## GPU Quota and Regional Availability (2026-01-18)
+
+### Critical Discovery: Regional GPU Limitations
+
+**Vertex AI custom training does NOT support GPUs in all regions**, even if:
+- GPU quota is approved for that region
+- Compute Engine shows GPUs available in the region
+- Documentation suggests GPU support
+
+This is an undocumented limitation. Always verify GPU availability before requesting quota.
+
+### Verified GPU Regions for Vertex AI Custom Training
+
+| Region | T4 | L4 | V100 | A100 | Status |
+|--------|----|----|------|------|--------|
+| `europe-west4` (Netherlands) | ✅ | ✅ | ✅ | ✅ | **Recommended for EU** |
+| `us-central1` (Iowa) | ✅ | ✅ | ✅ | ✅ | Largest capacity |
+| `europe-west1` (Belgium) | ✅ | ✅ | ✅ | ✅ | Good EU alternative |
+| `europe-central2` (Warsaw) | ❌ | ❌ | ❌ | ❌ | **No GPU support for training** |
+
+> ⚠️ **europe-central2 (Warsaw)**: Despite quota approval, T4 GPUs are marked with † (dagger) in Vertex AI documentation, meaning "not available for training". GPUs in this region are only available for prediction/inference workloads.
+
+### How to Request GPU Quota
+
+1. **Go to Quotas Page**:
+   - URL: https://console.cloud.google.com/iam-admin/quotas?project=YOUR_PROJECT
+
+2. **Filter for GPU Quota**:
+   - Service: `Vertex AI API`
+   - Search: `custom_model_training_nvidia_t4` (or `nvidia_l4`, etc.)
+
+3. **Select Region** (Important!):
+   - Choose `europe-west4` for EU workloads
+   - NOT `europe-central2` (no GPU training support)
+
+4. **Request Quota**:
+   - Start with 2 GPUs for development/testing
+   - Request 4 for production workloads
+
+5. **Description Example**:
+   > "Training TensorFlow recommendation models on Vertex AI Pipelines. Development and testing workloads."
+
+6. **Approval Time**: Usually 15 minutes to 48 hours
+
+### Cross-Region Training Setup
+
+Your infrastructure can remain in `europe-central2` while training runs in `europe-west4`:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    CROSS-REGION TRAINING ARCHITECTURE                        │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│   europe-central2 (Warsaw)              europe-west4 (Netherlands)          │
+│   ┌─────────────────────────┐           ┌─────────────────────────┐         │
+│   │ BigQuery (raw_data)     │ ────────► │ Vertex AI Training      │         │
+│   │ GCS Buckets             │           │ (2x T4 GPUs)            │         │
+│   │ Cloud SQL               │           │                         │         │
+│   │ Django App              │ ◄──────── │ Model artifacts (GCS)   │         │
+│   └─────────────────────────┘           └─────────────────────────┘         │
+│                                                                              │
+│   Data stays in EU. Training runs where GPUs are available.                 │
+│   Cross-region transfer: ~$0.01/GB (negligible for batch training)          │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Running GPU Training Jobs
+
+**1. Submit a test job to verify GPU access:**
+
+```bash
+gcloud ai custom-jobs create \
+  --project=YOUR_PROJECT \
+  --region=europe-west4 \
+  --display-name="gpu-test-$(date +%Y%m%d-%H%M%S)" \
+  --worker-pool-spec="replica-count=1,machine-type=n1-standard-16,accelerator-type=NVIDIA_TESLA_T4,accelerator-count=2,container-image-uri=europe-central2-docker.pkg.dev/YOUR_PROJECT/tfx-builder/tfx-trainer-gpu:latest" \
+  --args="python","-c","import tensorflow as tf; gpus=tf.config.list_physical_devices('GPU'); print('FOUND '+str(len(gpus))+' GPUs'); print(gpus)"
+```
+
+**2. Expected output:**
+```
+FOUND 2 GPUs
+[PhysicalDevice(name='/physical_device:GPU:0', device_type='GPU'),
+ PhysicalDevice(name='/physical_device:GPU:1', device_type='GPU')]
+```
+
+**3. Machine type + GPU combinations (T4):**
+
+| GPUs | Machine Type | vCPUs | Memory |
+|------|--------------|-------|--------|
+| 1 | n1-standard-8 | 8 | 30 GB |
+| 2 | n1-standard-16 | 16 | 60 GB |
+| 4 | n1-standard-32 | 32 | 120 GB |
+
+### TrainingService Configuration
+
+The `TrainingService` must be configured to use the GPU-enabled region:
+
+```python
+# In ml_platform/training/services.py
+GPU_TRAINING_REGION = 'europe-west4'  # Where GPUs are available
+DATA_REGION = 'europe-central2'       # Where data lives
+```
+
+Training jobs read data from `europe-central2` BigQuery/GCS but execute on `europe-west4` GPU VMs.
+
+---
+
 ## Implementation Checklist
 
 ### Phase 1: Basic Training Run

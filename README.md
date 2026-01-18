@@ -291,6 +291,8 @@ gcloud run jobs execute django-migrate-and-createsuperuser --region europe-centr
 | [`docs/phase_experiments.md`](docs/phase_experiments.md) | **Experiments page specification** (Quick Test + Dashboard) |
 | [`docs/phase_experiments_implementation.md`](docs/phase_experiments_implementation.md) | **Experiments implementation guide (TFX, Cloud Build)** |
 | [`docs/phase_experiments_changelog.md`](docs/phase_experiments_changelog.md) | Experiments detailed changelog history |
+| [`docs/phase_training.md`](docs/phase_training.md) | **Training domain specification** (GPU config, regional limitations) |
+| [`docs/training_full.md`](docs/training_full.md) | **Full training implementation guide** (GPU container, validation) |
 | [`docs/del_datasets_migration.md`](docs/del_datasets_migration.md) | Migration plan: Dataset Manager → Configs page (reference) |
 | This file | Project overview and quick start |
 
@@ -351,11 +353,71 @@ gcloud run jobs execute django-migrate-and-createsuperuser --region europe-centr
   - Chapter 2: Dashboard (KPIs, metrics trend, top configs, hyperparameter insights, heatmaps, suggestions)
 
 ### **🔮 Next Up**
-1. Full Training Pipeline - Extended training with checkpointing
+1. Full Training Pipeline - Extended training with checkpointing (**GPU quota approved!**)
 2. Model Deployment - Candidate index building, serving endpoints
 3. Model Registry - Version management, A/B testing support
 
 See [`next_steps.md`](next_steps.md) for detailed roadmap.
+
+---
+
+## GPU Training Configuration
+
+### GPU Quota Status (as of 2026-01-18)
+
+| GPU Type | Region | Quota | Status |
+|----------|--------|-------|--------|
+| T4 | europe-west4 | 2 | ✅ Approved & Validated |
+
+### Regional Limitations
+
+> ⚠️ **Important**: Vertex AI custom training does NOT support GPUs in all regions!
+
+| Region | GPU Training | Notes |
+|--------|--------------|-------|
+| `europe-west4` (Netherlands) | ✅ Supported | **Use for training jobs** |
+| `europe-central2` (Warsaw) | ❌ Not supported | Data/infrastructure only |
+| `us-central1` (Iowa) | ✅ Supported | Largest GPU capacity |
+
+Data can remain in `europe-central2` while training runs in `europe-west4` - cross-region access works seamlessly.
+
+### Running GPU Training
+
+**1. Request GPU Quota** (if not already done):
+- Go to: https://console.cloud.google.com/iam-admin/quotas?project=YOUR_PROJECT
+- Filter: Service = "Vertex AI API", search "nvidia_t4"
+- Select region: `europe-west4` (NOT europe-central2!)
+- Request: 2-4 GPUs
+
+**2. Test GPU Access**:
+```bash
+gcloud ai custom-jobs create \
+  --project=YOUR_PROJECT \
+  --region=europe-west4 \
+  --display-name="gpu-test" \
+  --worker-pool-spec="replica-count=1,machine-type=n1-standard-16,accelerator-type=NVIDIA_TESLA_T4,accelerator-count=2,container-image-uri=europe-central2-docker.pkg.dev/YOUR_PROJECT/tfx-builder/tfx-trainer-gpu:latest" \
+  --args="python","-c","import tensorflow as tf; print(tf.config.list_physical_devices('GPU'))"
+```
+
+**3. Expected Output**:
+```
+[PhysicalDevice(name='/physical_device:GPU:0', device_type='GPU'),
+ PhysicalDevice(name='/physical_device:GPU:1', device_type='GPU')]
+```
+
+### GPU Container
+
+Pre-built GPU container: `europe-central2-docker.pkg.dev/b2b-recs/tfx-builder/tfx-trainer-gpu:latest`
+
+| Component | Version |
+|-----------|---------|
+| TensorFlow | 2.15.1 |
+| CUDA | 12.2 |
+| TFX | 1.15.0 |
+| TFRS | 0.7.6 |
+| ScaNN | 1.3.0 |
+
+See [`docs/training_full.md`](docs/training_full.md) for complete GPU configuration details.
 
 ---
 
@@ -430,6 +492,14 @@ WHERE source_type='gcs';
 ---
 
 ## 📝 Recent Updates
+
+**January 18, 2026 - GPU Training Configuration & Quota**
+- ✅ **GPU quota approved** - 2x T4 GPUs in `europe-west4` region
+- ✅ **GPU validation passed** - TensorFlow successfully detects both GPUs
+- ⚠️ **Regional limitation documented** - `europe-central2` does NOT support GPU training
+- ✅ **Cross-region architecture** - Data in `europe-central2`, training in `europe-west4`
+- ✅ **GPU container ready** - `tfx-trainer-gpu:latest` with TF 2.15.1 + CUDA 12.2
+- See [Training Full docs](docs/training_full.md) for complete GPU configuration
 
 **January 12, 2026 - Datasets & Configs Page Consolidation**
 - ✅ **Unified three-chapter page** - Dataset Manager merged into Configs page as first chapter

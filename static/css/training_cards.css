@@ -6,47 +6,38 @@
  */
 
 /* =========================================================================
-   Filter Bar
+   Filter Bar Styles (Experiments-style)
    ========================================================================= */
 .training-filter-bar {
     display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 16px;
-    background: #f9fafb;
-    border-radius: 10px;
+    align-items: flex-end;
+    gap: 16px;
     margin-bottom: 16px;
     flex-wrap: wrap;
 }
 
 .training-filter-group {
     display: flex;
-    align-items: center;
-    gap: 8px;
+    flex-direction: column;
+    gap: 4px;
 }
 
 .training-filter-label {
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 600;
     color: #6b7280;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.05em;
 }
 
 .training-filter-select {
-    padding: 8px 12px;
+    padding: 6px 12px;
     border: 1px solid #e5e7eb;
     border-radius: 6px;
-    background: white;
     font-size: 13px;
+    background: white;
+    min-width: 130px;
     color: #374151;
-    min-width: 140px;
-    cursor: pointer;
-    transition: border-color 0.2s ease;
-}
-
-.training-filter-select:hover {
-    border-color: #d1d5db;
 }
 
 .training-filter-select:focus {
@@ -56,14 +47,13 @@
 }
 
 .training-search-input {
-    padding: 8px 12px 8px 36px;
+    flex: 1;
+    min-width: 200px;
+    padding: 6px 12px;
     border: 1px solid #e5e7eb;
     border-radius: 6px;
-    background: white;
     font-size: 13px;
-    color: #374151;
-    min-width: 200px;
-    transition: border-color 0.2s ease;
+    background: white;
 }
 
 .training-search-input:focus {
@@ -72,17 +62,8 @@
     box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
 }
 
-.training-search-wrapper {
-    position: relative;
-}
-
-.training-search-wrapper i {
-    position: absolute;
-    left: 12px;
-    top: 50%;
-    transform: translateY(-50%);
+.training-search-input::placeholder {
     color: #9ca3af;
-    font-size: 13px;
 }
 
 .training-filter-spacer {
@@ -115,74 +96,6 @@
 @keyframes spin {
     from { transform: rotate(0deg); }
     to { transform: rotate(360deg); }
-}
-
-/* Status Filter Chips */
-.training-status-chips {
-    display: flex;
-    gap: 6px;
-    flex-wrap: wrap;
-}
-
-.training-status-chip {
-    padding: 4px 10px;
-    border-radius: 20px;
-    font-size: 11px;
-    font-weight: 500;
-    cursor: pointer;
-    border: 1px solid transparent;
-    transition: all 0.2s ease;
-    display: flex;
-    align-items: center;
-    gap: 4px;
-}
-
-.training-status-chip i {
-    font-size: 10px;
-}
-
-.training-status-chip.all {
-    background: #e5e7eb;
-    color: #374151;
-}
-
-.training-status-chip.all.active,
-.training-status-chip.all:hover {
-    background: #374151;
-    color: white;
-}
-
-.training-status-chip.running {
-    background: #dbeafe;
-    color: #1e40af;
-}
-
-.training-status-chip.running.active,
-.training-status-chip.running:hover {
-    background: #3b82f6;
-    color: white;
-}
-
-.training-status-chip.completed {
-    background: #dcfce7;
-    color: #166534;
-}
-
-.training-status-chip.completed.active,
-.training-status-chip.completed:hover {
-    background: #16a34a;
-    color: white;
-}
-
-.training-status-chip.failed {
-    background: #fee2e2;
-    color: #991b1b;
-}
-
-.training-status-chip.failed.active,
-.training-status-chip.failed:hover {
-    background: #dc2626;
-    color: white;
 }
 
 /* =========================================================================

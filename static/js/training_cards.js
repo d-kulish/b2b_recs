@@ -359,14 +359,13 @@ const TrainingCards = (function() {
     }
 
     function updateFilterUI() {
-        // Update status chips
-        document.querySelectorAll('.training-status-chip').forEach(chip => {
-            const chipStatus = chip.dataset.status;
-            const isActive = chipStatus === (state.filters.status || 'all');
-            chip.classList.toggle('active', isActive);
-        });
+        // Update status dropdown
+        const statusSelect = document.getElementById('trainingStatusFilter');
+        if (statusSelect) {
+            statusSelect.value = state.filters.status || '';
+        }
 
-        // Update model type select
+        // Update model type dropdown
         const modelTypeSelect = document.getElementById('trainingModelTypeFilter');
         if (modelTypeSelect) {
             modelTypeSelect.value = state.filters.modelType || '';
@@ -415,39 +414,28 @@ const TrainingCards = (function() {
         container.innerHTML = `
             <div class="training-filter-bar">
                 <div class="training-filter-group">
-                    <div class="training-status-chips">
-                        <span class="training-status-chip all active" data-status="all" onclick="TrainingCards.filterByStatus(null)">
-                            All
-                        </span>
-                        <span class="training-status-chip running" data-status="running" onclick="TrainingCards.filterByStatus('running')">
-                            <i class="fas fa-sync fa-spin"></i> Running
-                        </span>
-                        <span class="training-status-chip completed" data-status="completed" onclick="TrainingCards.filterByStatus('completed')">
-                            <i class="fas fa-check"></i> Completed
-                        </span>
-                        <span class="training-status-chip failed" data-status="failed" onclick="TrainingCards.filterByStatus('failed')">
-                            <i class="fas fa-times"></i> Failed
-                        </span>
-                    </div>
-                </div>
-
-                <div class="training-filter-group">
-                    <select id="trainingModelTypeFilter" class="training-filter-select" onchange="TrainingCards.filterByModelType(this.value || null)">
-                        <option value="">All Model Types</option>
-                        <option value="retrieval">Retrieval</option>
-                        <option value="ranking">Ranking</option>
-                        <option value="multitask">Multitask</option>
+                    <label class="training-filter-label">Status</label>
+                    <select id="trainingStatusFilter" class="training-filter-select" onchange="TrainingCards.filterByStatus(this.value || null)">
+                        <option value="">All</option>
+                        <option value="running">Running</option>
+                        <option value="completed">Completed</option>
+                        <option value="failed">Failed</option>
+                        <option value="cancelled">Cancelled</option>
                     </select>
                 </div>
 
-                <div class="training-search-wrapper">
-                    <i class="fas fa-search"></i>
-                    <input type="text"
-                           id="trainingSearchInput"
-                           class="training-search-input"
-                           placeholder="Search training runs..."
-                           oninput="TrainingCards.handleSearchInput(this.value)">
+                <div class="training-filter-group">
+                    <label class="training-filter-label">Model type</label>
+                    <select id="trainingModelTypeFilter" class="training-filter-select" onchange="TrainingCards.filterByModelType(this.value || null)">
+                        <option value="">All</option>
+                        <option value="retrieval">Retrieval</option>
+                        <option value="ranking">Ranking</option>
+                        <option value="multitask">Hybrid</option>
+                    </select>
                 </div>
+
+                <input type="text" id="trainingSearchInput" class="training-search-input"
+                       placeholder="Search training runs..." oninput="TrainingCards.handleSearchInput(this.value)">
             </div>
         `;
     }

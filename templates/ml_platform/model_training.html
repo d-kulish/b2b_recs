@@ -1442,30 +1442,30 @@
                 <!-- GPU Selection -->
                 <div class="wizard-section-title">GPU Configuration</div>
                 <div class="gpu-selection-grid">
-                    <div class="gpu-card" data-gpu="NVIDIA_T4" onclick="TrainingWizard.selectGPU('NVIDIA_T4')">
-                        <input type="radio" name="wizardGpu" value="NVIDIA_T4">
+                    <div class="gpu-card selected" data-gpu="NVIDIA_T4" onclick="TrainingWizard.selectGPU('NVIDIA_T4')">
+                        <input type="radio" name="wizardGpu" value="NVIDIA_T4" checked>
                         <div class="gpu-card-name">T4</div>
                         <div class="gpu-card-specs">16GB VRAM</div>
                     </div>
-                    <div class="gpu-card selected" data-gpu="NVIDIA_L4" onclick="TrainingWizard.selectGPU('NVIDIA_L4')">
-                        <input type="radio" name="wizardGpu" value="NVIDIA_L4" checked>
+                    <div class="gpu-card disabled" data-gpu="NVIDIA_L4">
+                        <input type="radio" name="wizardGpu" value="NVIDIA_L4" disabled>
                         <span class="badge-recommended"><i class="fas fa-star"></i> Recommended</span>
                         <div class="gpu-card-name">L4</div>
                         <div class="gpu-card-specs">24GB VRAM</div>
                     </div>
-                    <div class="gpu-card" data-gpu="NVIDIA_V100" onclick="TrainingWizard.selectGPU('NVIDIA_V100')">
-                        <input type="radio" name="wizardGpu" value="NVIDIA_V100">
+                    <div class="gpu-card disabled" data-gpu="NVIDIA_V100">
+                        <input type="radio" name="wizardGpu" value="NVIDIA_V100" disabled>
                         <div class="gpu-card-name">V100</div>
                         <div class="gpu-card-specs">16GB HBM2</div>
                     </div>
-                    <div class="gpu-card" data-gpu="NVIDIA_A100" onclick="TrainingWizard.selectGPU('NVIDIA_A100')">
-                        <input type="radio" name="wizardGpu" value="NVIDIA_A100">
+                    <div class="gpu-card disabled" data-gpu="NVIDIA_A100">
+                        <input type="radio" name="wizardGpu" value="NVIDIA_A100" disabled>
                         <div class="gpu-card-name">A100</div>
                         <div class="gpu-card-specs">40GB HBM2e</div>
                     </div>
                 </div>
 
-                <div class="training-params-grid" style="grid-template-columns: 1fr 1fr;">
+                <div class="training-params-grid" style="grid-template-columns: 1fr;">
                     <div class="training-param-field">
                         <label class="training-param-label">GPU Count</label>
                         <select id="wizardGpuCount" class="training-param-select"
@@ -1475,40 +1475,6 @@
                             <option value="4">4 GPUs</option>
                             <option value="8">8 GPUs</option>
                         </select>
-                    </div>
-                    <div class="training-param-field">
-                        <label class="training-param-label">&nbsp;</label>
-                        <div class="toggle-row" style="margin-bottom: 0; padding: 8px 12px;">
-                            <label class="toggle-switch">
-                                <input type="checkbox" id="wizardPreemptible" checked
-                                       onchange="TrainingWizard.updatePreemptible(this.checked)">
-                                <span class="toggle-slider"></span>
-                            </label>
-                            <span style="font-size: 13px; color: #374151;">Use Preemptible VMs</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Evaluator Settings -->
-                <div class="wizard-section-title" style="margin-top: 20px;">Evaluator & Blessing</div>
-                <div class="toggle-row">
-                    <label class="toggle-switch">
-                        <input type="checkbox" id="wizardEvaluatorEnabled" checked
-                               onchange="TrainingWizard.updateEvaluator('enabled', this.checked)">
-                        <span class="toggle-slider"></span>
-                    </label>
-                    <div class="toggle-label">
-                        Enable Model Evaluator
-                        <span class="toggle-hint">Automatically evaluate model after training</span>
-                    </div>
-                </div>
-                <div class="training-params-grid" style="grid-template-columns: 1fr;">
-                    <div class="training-param-field">
-                        <label class="training-param-label">Blessing Threshold</label>
-                        <input type="number" id="wizardBlessingThreshold" class="training-param-input"
-                               value="0.40" step="0.01" min="0" max="1"
-                               onchange="TrainingWizard.updateEvaluator('threshold', this.value)">
-                        <div class="wizard-field-hint">Minimum metric value to bless model for deployment</div>
                     </div>
                 </div>
 
@@ -1583,6 +1549,50 @@
                     </div>
                 </div>
 
+                <!-- Advanced Section (collapsed by default) -->
+                <div class="advanced-section" style="margin-top: 20px;">
+                    <button id="wizardStep3AdvancedToggle" class="advanced-toggle" onclick="TrainingWizard.toggleStep3Advanced()">
+                        <i class="fas fa-chevron-right"></i>
+                        Advanced
+                    </button>
+                    <div id="wizardStep3AdvancedContent" class="advanced-content">
+                        <!-- Preemptible VMs -->
+                        <div class="toggle-row" style="margin-bottom: 16px;">
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="wizardPreemptible"
+                                       onchange="TrainingWizard.updatePreemptible(this.checked)">
+                                <span class="toggle-slider"></span>
+                            </label>
+                            <div class="toggle-label">
+                                Use Preemptible VMs
+                                <span class="toggle-hint">70% cost reduction, may be interrupted</span>
+                            </div>
+                        </div>
+
+                        <!-- Evaluator Settings -->
+                        <div class="toggle-row" style="margin-bottom: 12px;">
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="wizardEvaluatorEnabled"
+                                       onchange="TrainingWizard.updateEvaluator('enabled', this.checked)">
+                                <span class="toggle-slider"></span>
+                            </label>
+                            <div class="toggle-label">
+                                Enable Model Evaluator
+                                <span class="toggle-hint">Automatically evaluate model after training</span>
+                            </div>
+                        </div>
+                        <div class="training-params-grid" style="grid-template-columns: 1fr;">
+                            <div class="training-param-field">
+                                <label class="training-param-label">Blessing Threshold</label>
+                                <input type="number" id="wizardBlessingThreshold" class="training-param-input"
+                                       value="0.40" step="0.01" min="0" max="1"
+                                       onchange="TrainingWizard.updateEvaluator('threshold', this.value)">
+                                <div class="wizard-field-hint">Minimum metric value to bless model for deployment</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Summary Panel -->
                 <div class="wizard-summary-panel">
                     <div class="wizard-summary-title">
@@ -1607,7 +1617,7 @@
             </div>
             <div class="footer-right">
                 <button id="wizardSubmitBtn" class="btn-neu btn-neu-action btn-neu-save hidden" onclick="TrainingWizard.submit()">
-                    <span class="btn-neu-inner"><i class="fas fa-rocket"></i> Run Training</span>
+                    <span class="btn-neu-inner">Run</span>
                 </button>
                 <button class="btn-neu btn-neu-action btn-neu-cancel" onclick="TrainingWizard.close()">
                     <span class="btn-neu-inner">Cancel</span>

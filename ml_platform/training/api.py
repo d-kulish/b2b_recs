@@ -337,12 +337,9 @@ def _training_run_create(request, model_endpoint):
                 'error': f"FeatureConfig {data['feature_config_id']} not found"
             }, status=404)
 
-        # Validate model config
+        # Validate model config (ModelConfig is global, not tied to model_endpoint)
         try:
-            model_config = ModelConfig.objects.get(
-                id=data['model_config_id'],
-                model_endpoint=model_endpoint
-            )
+            model_config = ModelConfig.objects.get(id=data['model_config_id'])
         except ModelConfig.DoesNotExist:
             return JsonResponse({
                 'success': False,
@@ -1133,12 +1130,9 @@ def _training_schedule_create(request, model_endpoint):
                 'error': f"FeatureConfig {data['feature_config_id']} not found"
             }, status=404)
 
-        # Validate model config
+        # Validate model config (ModelConfig is global, not tied to model_endpoint)
         try:
-            model_config = ModelConfig.objects.get(
-                id=data['model_config_id'],
-                model_endpoint=model_endpoint
-            )
+            model_config = ModelConfig.objects.get(id=data['model_config_id'])
         except ModelConfig.DoesNotExist:
             return JsonResponse({
                 'success': False,
@@ -1281,11 +1275,9 @@ def _create_immediate_training_run(request, model_endpoint, data):
             'error': f"FeatureConfig {data['feature_config_id']} not found"
         }, status=404)
 
+    # ModelConfig is global, not tied to model_endpoint
     try:
-        model_config = ModelConfig.objects.get(
-            id=data['model_config_id'],
-            model_endpoint=model_endpoint
-        )
+        model_config = ModelConfig.objects.get(id=data['model_config_id'])
     except ModelConfig.DoesNotExist:
         return JsonResponse({
             'success': False,

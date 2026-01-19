@@ -70,12 +70,12 @@ const TrainingWizard = (function() {
                 retrievalAlgorithm: ''
             },
             gpuConfig: {
-                acceleratorType: 'NVIDIA_L4',
+                acceleratorType: 'NVIDIA_T4',
                 acceleratorCount: 2,
-                usePreemptible: true
+                usePreemptible: false
             },
             evaluatorConfig: {
-                enabled: true,
+                enabled: false,
                 blessingThreshold: 0.40
             },
             deploymentOption: 'register_only',
@@ -246,12 +246,12 @@ const TrainingWizard = (function() {
                 retrievalAlgorithm: ''
             },
             gpuConfig: {
-                acceleratorType: 'NVIDIA_L4',
+                acceleratorType: 'NVIDIA_T4',
                 acceleratorCount: 2,
-                usePreemptible: true
+                usePreemptible: false
             },
             evaluatorConfig: {
-                enabled: true,
+                enabled: false,
                 blessingThreshold: 0.40
             },
             deploymentOption: 'register_only',
@@ -878,6 +878,16 @@ const TrainingWizard = (function() {
         }
     }
 
+    function toggleStep3Advanced() {
+        const toggle = document.getElementById('wizardStep3AdvancedToggle');
+        const content = document.getElementById('wizardStep3AdvancedContent');
+
+        if (toggle && content) {
+            const isExpanded = toggle.classList.toggle('expanded');
+            content.classList.toggle('show', isExpanded);
+        }
+    }
+
     // =============================================================================
     // STEP 3: GPU & DEPLOYMENT
     // =============================================================================
@@ -938,6 +948,11 @@ const TrainingWizard = (function() {
     }
 
     function selectGPU(gpuType) {
+        // Only T4 is currently available (quota approved)
+        // Other GPUs are disabled in the UI
+        if (gpuType !== 'NVIDIA_T4') {
+            return;
+        }
         state.formData.gpuConfig.acceleratorType = gpuType;
         renderGPUSelection();
     }
@@ -988,9 +1003,9 @@ const TrainingWizard = (function() {
             const btnInner = submitBtn.querySelector('.btn-neu-inner');
             if (btnInner) {
                 if (type === 'now') {
-                    btnInner.innerHTML = '<i class="fas fa-rocket"></i> Run Training';
+                    btnInner.innerHTML = 'Run';
                 } else {
-                    btnInner.innerHTML = '<i class="fas fa-calendar-check"></i> Schedule Training';
+                    btnInner.innerHTML = 'Schedule';
                 }
             }
         }
@@ -1154,9 +1169,9 @@ const TrainingWizard = (function() {
                 const btnInner = submitBtn.querySelector('.btn-neu-inner');
                 if (btnInner) {
                     if (isScheduled) {
-                        btnInner.innerHTML = '<i class="fas fa-calendar-check"></i> Schedule Training';
+                        btnInner.innerHTML = 'Schedule';
                     } else {
-                        btnInner.innerHTML = '<i class="fas fa-rocket"></i> Run Training';
+                        btnInner.innerHTML = 'Run';
                     }
                 }
             }
@@ -1192,13 +1207,16 @@ const TrainingWizard = (function() {
                 }
             },
             gpu_config: {
-                accelerator_type: gpu.acceleratorType,
-                accelerator_count: gpu.acceleratorCount,
-                use_preemptible: gpu.usePreemptible
+                gpu_type: gpu.acceleratorType.replace('NVIDIA_', 'NVIDIA_TESLA_'),
+                gpu_count: gpu.acceleratorCount,
+                preemptible: gpu.usePreemptible
             },
             evaluator_config: {
                 enabled: evaluator.enabled,
-                blessing_threshold: evaluator.blessingThreshold
+                blessing_threshold: {
+                    metric: 'recall_at_100',
+                    min_value: parseFloat(evaluator.blessingThreshold)
+                }
             }
         };
 
@@ -1238,6 +1256,7 @@ const TrainingWizard = (function() {
         searchExperiments: searchExperiments,
         openExpViewModal: openExpViewModal,
         toggleAdvanced: toggleAdvanced,
+        toggleStep3Advanced: toggleStep3Advanced,
         updateTrainingParam: updateTrainingParam,
         selectGPU: selectGPU,
         updateGPUCount: updateGPUCount,

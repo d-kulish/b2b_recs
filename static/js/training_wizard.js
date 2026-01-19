@@ -53,9 +53,14 @@ const TrainingWizard = (function() {
                 epochs: 150,
                 batchSize: 8192,
                 learningRate: 0.1,
-                splitStrategy: 'strict_time',
+                splitStrategy: 'time_holdout',
+                holdoutDays: 1,
+                dateColumn: '',
                 earlyStoppingEnabled: true,
-                earlyStoppingPatience: 10
+                earlyStoppingPatience: 10,
+                // Store original experiment values for reference
+                expBatchSize: null,
+                expLearningRate: null
             },
             gpuConfig: {
                 acceleratorType: 'NVIDIA_L4',
@@ -218,9 +223,13 @@ const TrainingWizard = (function() {
                 epochs: 150,
                 batchSize: 8192,
                 learningRate: 0.1,
-                splitStrategy: 'strict_time',
+                splitStrategy: 'time_holdout',
+                holdoutDays: 1,
+                dateColumn: '',
                 earlyStoppingEnabled: true,
-                earlyStoppingPatience: 10
+                earlyStoppingPatience: 10,
+                expBatchSize: null,
+                expLearningRate: null
             },
             gpuConfig: {
                 acceleratorType: 'NVIDIA_L4',
@@ -465,9 +474,7 @@ const TrainingWizard = (function() {
                         <span class="metric-label">${metricLabel}</span>
                     </div>
                     <div class="wizard-experiment-actions">
-                        <button class="btn-view" onclick="event.stopPropagation(); TrainingWizard.openExpViewModal(${exp.experiment_id})">
-                            <i class="fas fa-eye"></i> View
-                        </button>
+                        <button class="btn-view" onclick="event.stopPropagation(); TrainingWizard.openExpViewModal(${exp.experiment_id})">View</button>
                     </div>
                 </div>
             `;
@@ -484,6 +491,32 @@ const TrainingWizard = (function() {
         state.formData.datasetId = exp.dataset_id;
         state.formData.featureConfigId = exp.feature_config_id;
         state.formData.modelConfigId = exp.model_config_id;
+
+        // Copy training parameters from experiment
+        // Learning rate: copy one-to-one from experiment
+        if (exp.learning_rate != null) {
+            state.formData.trainingParams.learningRate = exp.learning_rate;
+            state.formData.trainingParams.expLearningRate = exp.learning_rate;
+        }
+
+        // Batch size: store original for reference, keep scaled default for GPUs
+        if (exp.batch_size != null) {
+            state.formData.trainingParams.expBatchSize = exp.batch_size;
+            // Keep default 8192 for GPU training, but store original for reference
+        }
+
+        // Split strategy: copy from experiment, default to time_holdout
+        if (exp.split_strategy) {
+            state.formData.trainingParams.splitStrategy = exp.split_strategy;
+        } else {
+            state.formData.trainingParams.splitStrategy = 'time_holdout';
+        }
+
+        // Holdout days: copy from experiment or default to 1
+        state.formData.trainingParams.holdoutDays = exp.holdout_days || 1;
+
+        // Date column: copy from experiment (required for temporal splits)
+        state.formData.trainingParams.dateColumn = exp.date_column || '';
 
         // Update blessing threshold based on model type
         if (state.formData.modelType === 'ranking') {
@@ -575,9 +608,9 @@ const TrainingWizard = (function() {
                 const response = await fetch(url);
                 const data = await response.json();
 
-                if (data.results && data.results.length > 0) {
+                if (data.success && data.quick_tests && data.quick_tests.length > 0) {
                     // Map to same format as top configs
-                    state.experiments = data.results.slice(0, 10).map(exp => ({
+                    state.experiments = data.quick_tests.slice(0, 10).map(exp => ({
                         experiment_id: exp.id,
                         experiment_number: exp.experiment_number || exp.id,
                         display_name: exp.display_name || `Exp #${exp.experiment_number || exp.id}`,
@@ -587,8 +620,14 @@ const TrainingWizard = (function() {
                         feature_config_id: exp.feature_config_id,
                         model_config: exp.model_config_name,
                         model_config_id: exp.model_config_id,
-                        recall_at_100: exp.metrics?.recall_at_100,
-                        test_rmse: exp.metrics?.test_rmse
+                        recall_at_100: exp.recall_at_100,
+                        test_rmse: exp.test_rmse,
+                        // Training parameters
+                        learning_rate: exp.learning_rate,
+                        batch_size: exp.batch_size,
+                        split_strategy: exp.split_strategy,
+                        holdout_days: exp.holdout_days,
+                        date_column: exp.date_column
                     }));
                     renderExperimentList();
                 } else {
@@ -627,8 +666,14 @@ const TrainingWizard = (function() {
                     feature_config_id: exp.feature_config_id,
                     model_config: exp.model_config_name,
                     model_config_id: exp.model_config_id,
-                    recall_at_100: exp.metrics?.recall_at_100,
-                    test_rmse: exp.metrics?.test_rmse
+                    recall_at_100: exp.metrics?.recall_at_100 || exp.recall_at_100,
+                    test_rmse: exp.metrics?.test_rmse || exp.test_rmse,
+                    // Training parameters
+                    learning_rate: exp.learning_rate,
+                    batch_size: exp.batch_size,
+                    split_strategy: exp.split_strategy,
+                    holdout_days: exp.holdout_days,
+                    date_column: exp.date_column
                 }];
 
                 // Set model type from experiment
@@ -701,10 +746,11 @@ const TrainingWizard = (function() {
         const params = state.formData.trainingParams;
 
         // Set select values
-        setSelectValue('wizardEpochs', params.epochs);
-        setSelectValue('wizardBatchSize', params.batchSize);
-        setSelectValue('wizardLearningRate', params.learningRate);
-        setSelectValue('wizardSplitStrategy', params.splitStrategy);
+        setInputValue('wizardEpochs', params.epochs);
+        setInputValue('wizardBatchSize', params.batchSize);
+        setInputValue('wizardLearningRate', params.learningRate);
+        setInputValue('wizardSplitStrategy', params.splitStrategy);
+        setInputValue('wizardHoldoutDays', params.holdoutDays);
 
         // Set early stopping toggle
         const earlyStopToggle = document.getElementById('wizardEarlyStopping');
@@ -713,12 +759,26 @@ const TrainingWizard = (function() {
         }
 
         // Set patience
-        setSelectValue('wizardPatience', params.earlyStoppingPatience);
+        setInputValue('wizardPatience', params.earlyStoppingPatience);
+
+        // Update holdout days visibility based on split strategy
+        updateHoldoutDaysVisibility();
+
+        // Show experiment reference values (Exp used: X)
+        const batchSizeRef = document.getElementById('wizardBatchSizeRef');
+        if (batchSizeRef) {
+            if (params.expBatchSize != null) {
+                batchSizeRef.textContent = `(Exp used: ${params.expBatchSize.toLocaleString()})`;
+                batchSizeRef.style.display = 'inline';
+            } else {
+                batchSizeRef.style.display = 'none';
+            }
+        }
     }
 
-    function setSelectValue(elementId, value) {
+    function setInputValue(elementId, value) {
         const el = document.getElementById(elementId);
-        if (el) el.value = value;
+        if (el && value != null) el.value = String(value);
     }
 
     function updateTrainingParam(param, value) {
@@ -730,10 +790,27 @@ const TrainingWizard = (function() {
             state.formData.trainingParams.learningRate = parseFloat(value);
         } else if (param === 'splitStrategy') {
             state.formData.trainingParams.splitStrategy = value;
+            // Show/hide holdout days based on split strategy
+            updateHoldoutDaysVisibility();
+        } else if (param === 'holdoutDays') {
+            state.formData.trainingParams.holdoutDays = parseInt(value);
         } else if (param === 'earlyStoppingEnabled') {
             state.formData.trainingParams.earlyStoppingEnabled = value;
         } else if (param === 'earlyStoppingPatience') {
             state.formData.trainingParams.earlyStoppingPatience = parseInt(value);
+        }
+    }
+
+    function updateHoldoutDaysVisibility() {
+        const holdoutDaysGroup = document.getElementById('wizardHoldoutDaysGroup');
+        if (!holdoutDaysGroup) return;
+
+        const strategy = state.formData.trainingParams.splitStrategy;
+        // Show holdout days for time_holdout, hide for random and strict_time
+        if (strategy === 'time_holdout') {
+            holdoutDaysGroup.style.display = 'block';
+        } else {
+            holdoutDaysGroup.style.display = 'none';
         }
     }
 
@@ -809,7 +886,7 @@ const TrainingWizard = (function() {
         });
 
         // Set GPU count
-        setSelectValue('wizardGpuCount', state.formData.gpuConfig.acceleratorCount);
+        setInputValue('wizardGpuCount', state.formData.gpuConfig.acceleratorCount);
     }
 
     function selectGPU(gpuType) {
@@ -1057,6 +1134,8 @@ const TrainingWizard = (function() {
                 batch_size: params.batchSize,
                 learning_rate: params.learningRate,
                 split_strategy: params.splitStrategy,
+                holdout_days: params.holdoutDays,
+                date_column: params.dateColumn,
                 early_stopping: {
                     enabled: params.earlyStoppingEnabled,
                     patience: params.earlyStoppingPatience

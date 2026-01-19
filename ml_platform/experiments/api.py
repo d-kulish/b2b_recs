@@ -435,12 +435,25 @@ def quick_test_list(request):
         # Search filter (searches experiment number, feature config name, model config name)
         search = request.GET.get('search', '').strip()
         if search:
+            import re
             from django.db.models import Q
-            queryset = queryset.filter(
+
+            # Normalize search term: "Exp #62", "#62", "exp #62", "exp62" → "62"
+            # This allows users to search using display format patterns
+            normalized = re.sub(r'^(exp\s*)?#?\s*', '', search.lower()).strip()
+
+            # Build search conditions for text fields
+            search_q = (
                 Q(feature_config__name__icontains=search) |
                 Q(model_config__name__icontains=search) |
-                Q(experiment_number__icontains=search)
+                Q(experiment_name__icontains=search)
             )
+
+            # If normalized form is numeric, search by experiment_number (exact match)
+            if normalized.isdigit():
+                search_q |= Q(experiment_number=int(normalized))
+
+            queryset = queryset.filter(search_q)
 
         # Order by most recent first
         queryset = queryset.order_by('-created_at')
@@ -3074,6 +3087,8 @@ def top_configurations(request):
                     'epochs': qt.epochs,
                     'data_sample_percent': qt.data_sample_percent,
                     'split_strategy': qt.split_strategy,
+                    'holdout_days': qt.holdout_days,
+                    'date_column': qt.date_column,
                     'test_rmse': round(item['test_rmse'], 4) if item['test_rmse'] else None,
                     'test_mae': round(item['test_mae'], 4) if item['test_mae'] else None,
                     'rmse': round(item['rmse'], 4) if item['rmse'] else None,
@@ -3128,6 +3143,8 @@ def top_configurations(request):
                     'epochs': qt.epochs,
                     'data_sample_percent': qt.data_sample_percent,
                     'split_strategy': qt.split_strategy,
+                    'holdout_days': qt.holdout_days,
+                    'date_column': qt.date_column,
                     # Retrieval metrics
                     'recall_at_100': round(item['recall_100'], 4) if item['recall_100'] else None,
                     'recall_at_50': round(item['recall_50'], 4) if item['recall_50'] else None,
@@ -3172,6 +3189,8 @@ def top_configurations(request):
                     'epochs': qt.epochs,
                     'data_sample_percent': qt.data_sample_percent,
                     'split_strategy': qt.split_strategy,
+                    'holdout_days': qt.holdout_days,
+                    'date_column': qt.date_column,
                     'recall_at_100': round(exp_metrics['recall_at_100'], 4) if exp_metrics['recall_at_100'] else None,
                     'recall_at_50': round(exp_metrics['recall_at_50'], 4) if exp_metrics['recall_at_50'] else None,
                     'recall_at_10': round(exp_metrics['recall_at_10'], 4) if exp_metrics['recall_at_10'] else None,

@@ -355,8 +355,8 @@ const TrainingWizard = (function() {
         } else if (name.length < 3 || name.length > 63) {
             showFieldError(nameInput, nameError, 'Name must be 3-63 characters');
             isValid = false;
-        } else if (!/^[a-z0-9-]+$/.test(name)) {
-            showFieldError(nameInput, nameError, 'Only lowercase letters, numbers, and hyphens allowed');
+        } else if (!/^[a-z0-9_-]+$/.test(name)) {
+            showFieldError(nameInput, nameError, 'Only lowercase letters, numbers, hyphens, and underscores allowed');
             isValid = false;
         } else {
             hideFieldError(nameInput, nameError);

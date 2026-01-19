@@ -525,47 +525,48 @@
 
 /* ============================================================================
    MODEL TYPE SELECTOR CARDS
+   ============================================================================
+   Updated to match Experiments wizard horizontal layout
    ============================================================================ */
 
 .model-type-cards {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 10px;
+    gap: 8px;
     margin-bottom: 16px;
 }
 
 .model-type-card {
-    padding: 14px 12px;
-    border: 1px solid #e5e7eb;
-    border-radius: 8px;
+    padding: 8px 10px;
+    border: 1.5px solid #e5e7eb;
+    border-radius: 10px;
     cursor: pointer;
     transition: all 0.15s ease;
-    background-color: #ffffff;
-    text-align: center;
+    background-color: #fafafa;
+    /* Horizontal layout: icon left, text right */
+    display: flex;
+    align-items: center;
+    gap: 10px;
 }
 
 .model-type-card:hover {
-    background-color: #f9fafb;
-    border-color: #d1d5db;
-}
-
-.model-type-card.selected {
-    border-width: 2px;
-}
-
-.model-type-card.selected.retrieval {
-    background-color: #eff6ff;
-    border-color: #2563eb;
-}
-
-.model-type-card.selected.ranking {
     background-color: #fffbeb;
     border-color: #f59e0b;
 }
 
+/* Unified orange selection state (matches Experiments wizard) */
+.model-type-card.selected {
+    border-color: #f59e0b;
+    background-color: #fef3c7;
+    box-shadow: 0 0 0 1px #f59e0b inset;
+}
+
+/* Remove color-coded selection - use unified orange for all types */
+.model-type-card.selected.retrieval,
+.model-type-card.selected.ranking,
 .model-type-card.selected.hybrid {
-    background-color: #faf5ff;
-    border-color: #8b5cf6;
+    border-color: #f59e0b;
+    background-color: #fef3c7;
 }
 
 .model-type-card input[type="radio"] {
@@ -573,41 +574,52 @@
 }
 
 .model-type-icon {
-    width: 40px;
-    height: 40px;
-    border-radius: 10px;
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    border-radius: 8px;
     display: flex;
     align-items: center;
     justify-content: center;
-    margin: 0 auto 8px;
-    font-size: 18px;
+    font-size: 14px;
+    flex-shrink: 0;
 }
 
+/* Dark gradient backgrounds with white text (matches Experiments wizard) */
 .model-type-card.retrieval .model-type-icon {
-    background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
-    color: #1d4ed8;
+    background: linear-gradient(135deg, #8b5cf6 0%, #a78bfa 100%);
+    color: white;
 }
 
 .model-type-card.ranking .model-type-icon {
-    background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
-    color: #b45309;
+    background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%);
+    color: white;
 }
 
 .model-type-card.hybrid .model-type-icon {
-    background: linear-gradient(135deg, #f3e8ff 0%, #e9d5ff 100%);
-    color: #7c3aed;
+    background: linear-gradient(135deg, #ec4899 0%, #f472b6 100%);
+    color: white;
+}
+
+/* Text content wrapper for horizontal layout */
+.model-type-content {
+    flex: 1;
+    text-align: left;
+    min-width: 0;
 }
 
 .model-type-name {
     font-size: 13px;
     font-weight: 600;
     color: #111827;
+    line-height: 1.2;
 }
 
 .model-type-desc {
-    font-size: 11px;
+    font-size: 10px;
     color: #6b7280;
-    margin-top: 2px;
+    line-height: 1.2;
+    margin-top: 1px;
 }
 
 /* ============================================================================

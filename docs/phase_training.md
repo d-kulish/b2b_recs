@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides detailed specifications for implementing the **Training** domain in the ML Platform. The Training domain executes full TFX pipelines for production model training.
 
-**Last Updated**: 2026-01-15
+**Last Updated**: 2026-01-19
 
 ---
 
@@ -1613,6 +1613,213 @@ gcloud ai custom-jobs create \
 - [Compute Engine GPU Regions](https://docs.cloud.google.com/compute/docs/gpus/gpu-regions-zones)
 - [Configure Compute for Training](https://cloud.google.com/vertex-ai/docs/training/configure-compute)
 - [GPU Pricing](https://cloud.google.com/compute/gpus-pricing)
+
+---
+
+## Critical Bug Fix: GPUs Allocated But Not Used (2026-01-19)
+
+### Problem Description
+
+The first full training run (`tr-1-20260119-144450`) took ~2 hours despite having 2x T4 GPUs allocated, which is comparable to CPU-only training time. Investigation revealed that **GPUs were being provisioned but never actually utilized** by the training code.
+
+### Root Cause Analysis
+
+The issue had **two layers**:
+
+#### Layer 1: Vertex AI GPU Allocation Missing
+
+The TFX `Trainer` component was configured without Vertex AI GPU resource allocation:
+
+```python
+# BEFORE (broken) - ml_platform/training/services.py
+trainer = Trainer(
+    module_file=trainer_module_path,
+    examples=transform.outputs["transformed_examples"],
+    ...
+    custom_config=custom_config,
+    # ❌ No custom_executor_spec = No GPU allocation in Vertex AI
+)
+```
+
+Even though the pipeline used a GPU-enabled Docker image (`tfx-trainer-gpu:latest`), Vertex AI was not instructed to attach GPUs to the Trainer component. The job ran on CPU-only VMs.
+
+#### Layer 2: Training Code Ignored GPU Settings
+
+Even if GPUs were allocated, the generated training code in `ml_platform/configs/services.py` did not:
+
+1. **Extract GPU parameters** from `custom_config`
+2. **Detect available GPUs** using TensorFlow
+3. **Use `tf.distribute.MirroredStrategy`** for multi-GPU training
+4. **Log GPU utilization** for debugging
+
+```python
+# BEFORE (broken) - Generated run_fn() in configs/services.py
+custom_config = fn_args.custom_config or {}
+epochs = custom_config.get('epochs', EPOCHS)
+learning_rate = custom_config.get('learning_rate', LEARNING_RATE)
+batch_size = custom_config.get('batch_size', BATCH_SIZE)
+# ❌ gpu_enabled and gpu_count were NEVER extracted
+
+# Model built without strategy scope
+model = RetrievalModel(tf_transform_output=tf_transform_output)
+model.compile(optimizer=optimizer)  # ❌ Single-device training only
+```
+
+### The Fix
+
+#### Fix 1: Vertex AI GPU Resource Allocation
+
+Added proper GPU configuration to the Trainer component using AI Platform executor:
+
+```python
+# AFTER (fixed) - ml_platform/training/services.py
+
+# Import Vertex AI types
+from tfx.dsl.components.base import executor_spec
+from tfx.extensions.google_cloud_ai_platform.trainer import executor as ai_platform_trainer_executor
+from google.cloud.aiplatform_v1.types import custom_job as custom_job_spec_pb2
+from google.cloud.aiplatform_v1.types import machine_resources as machine_resources_pb2
+from google.cloud.aiplatform_v1.types import accelerator_type as accelerator_type_pb2
+
+# Configure GPU worker pool
+worker_pool_spec = custom_job_spec_pb2.WorkerPoolSpec(
+    machine_spec=machine_resources_pb2.MachineSpec(
+        machine_type=machine_type,           # n1-standard-16
+        accelerator_type=accelerator_type,   # NVIDIA_TESLA_T4
+        accelerator_count=gpu_count,         # 2
+    ),
+    replica_count=1,
+    container_spec=custom_job_spec_pb2.ContainerSpec(
+        image_uri=gpu_trainer_image,
+    ),
+)
+
+# Create custom job spec
+vertex_job_spec = custom_job_spec_pb2.CustomJobSpec(
+    worker_pool_specs=[worker_pool_spec],
+)
+
+# Add to custom_config
+custom_config["ai_platform_training_args"] = {
+    "project": project_id,
+    "region": region,
+    "job_spec": vertex_job_spec,
+}
+
+# Trainer with AI Platform executor
+trainer = Trainer(
+    module_file=trainer_module_path,
+    ...
+    custom_config=custom_config,
+    custom_executor_spec=executor_spec.ExecutorClassSpec(
+        ai_platform_trainer_executor.GenericExecutor  # ✅ GPU-aware executor
+    ),
+)
+```
+
+#### Fix 2: Training Code GPU Support
+
+Updated all three model types (retrieval, ranking, multitask) in `ml_platform/configs/services.py`:
+
+**2a. GPU Parameter Extraction:**
+
+```python
+# AFTER (fixed)
+custom_config = fn_args.custom_config or {}
+epochs = custom_config.get('epochs', EPOCHS)
+learning_rate = custom_config.get('learning_rate', LEARNING_RATE)
+batch_size = custom_config.get('batch_size', BATCH_SIZE)
+gcs_output_path = custom_config.get('gcs_output_path', '')
+
+# ✅ GPU configuration now extracted
+gpu_enabled = custom_config.get('gpu_enabled', False)
+gpu_count = custom_config.get('gpu_count', 0)
+```
+
+**2b. GPU Detection and Logging:**
+
+```python
+# ✅ Comprehensive GPU logging
+physical_gpus = tf.config.list_physical_devices('GPU')
+logging.info(f"GPU config from custom_config: gpu_enabled={gpu_enabled}, gpu_count={gpu_count}")
+logging.info(f"Physical GPUs detected: {len(physical_gpus)}")
+for i, gpu in enumerate(physical_gpus):
+    logging.info(f"  GPU {i}: {gpu.name}")
+```
+
+**2c. Distribution Strategy Setup:**
+
+```python
+# ✅ MirroredStrategy for multi-GPU training
+strategy = None
+if gpu_enabled and len(physical_gpus) > 0:
+    if len(physical_gpus) > 1:
+        strategy = tf.distribute.MirroredStrategy()
+        logging.info(f"Using MirroredStrategy with {strategy.num_replicas_in_sync} replicas")
+    else:
+        strategy = tf.distribute.get_strategy()
+        logging.info("Using single GPU (default strategy)")
+else:
+    strategy = tf.distribute.get_strategy()
+    logging.info("No GPU enabled or detected - using CPU (default strategy)")
+```
+
+**2d. Model Built Within Strategy Scope:**
+
+```python
+# ✅ Model and optimizer created within strategy scope
+with strategy.scope():
+    model = RetrievalModel(tf_transform_output=tf_transform_output)
+    optimizer = Adagrad(learning_rate=learning_rate, clipnorm=1.0)
+    model.compile(optimizer=optimizer)
+
+logging.info(f"Model built with strategy: {type(strategy).__name__}")
+```
+
+### Files Modified
+
+| File | Changes |
+|------|---------|
+| `ml_platform/training/services.py` | Added Vertex AI GPU allocation to Trainer component |
+| `ml_platform/configs/services.py` | Added GPU extraction, detection, logging, and MirroredStrategy to all 3 model types |
+
+### Expected Behavior After Fix
+
+When running a training job with GPUs enabled, logs should show:
+
+```
+GPU config from custom_config: gpu_enabled=True, gpu_count=2
+Physical GPUs detected: 2
+  GPU 0: /physical_device:GPU:0
+  GPU 1: /physical_device:GPU:1
+Using MirroredStrategy with 2 replicas
+Building RetrievalModel...
+Model built with strategy: MirroredStrategy
+Using optimizer: Adagrad with lr=0.01, clipnorm=1.0
+```
+
+### Why This Bug Wasn't Caught Earlier
+
+1. **GPU image worked** - The Docker image built successfully with GPU support
+2. **Pipeline compiled** - TFX compilation succeeded without errors
+3. **Jobs ran** - Training completed (just slower than expected)
+4. **No explicit errors** - TensorFlow silently falls back to CPU when no GPUs detected
+5. **String-embedded code** - The `run_fn()` is generated as a string, so Python doesn't validate imports at dev time
+6. **Different test environments** - Quick tests use CPU by design, so GPU path was never exercised
+
+### Verification Steps
+
+1. **Check logs** for GPU detection messages
+2. **Verify strategy** shows "MirroredStrategy with 2 replicas"
+3. **Compare training time** - Should be 30-50% faster with 2x T4 vs CPU
+4. **Monitor GPU utilization** in Cloud Console during training
+
+### Related Documentation
+
+- [TensorFlow Distributed Training](https://www.tensorflow.org/guide/distributed_training)
+- [MirroredStrategy](https://www.tensorflow.org/api_docs/python/tf/distribute/MirroredStrategy)
+- [Vertex AI Custom Training](https://cloud.google.com/vertex-ai/docs/training/create-custom-job)
+- [TFX AI Platform Trainer](https://www.tensorflow.org/tfx/guide/trainer#training_on_google_cloud_ai_platform)
 
 ---
 

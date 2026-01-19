@@ -1456,10 +1456,11 @@ def create_training_pipeline(
     from tfx.components import StatisticsGen, SchemaGen, Transform, Trainer, Evaluator, Pusher
     from tfx.proto import example_gen_pb2, trainer_pb2, transform_pb2, pusher_pb2
     from tfx.orchestration import pipeline as tfx_pipeline
-    from tfx.dsl.components.common import resolver
-    from tfx.dsl.input_resolution.strategies import latest_blessed_model_strategy
-    from tfx.types import standard_artifacts
-    from tfx.types.standard_component_specs import ResolverNodeSpec
+    from tfx.dsl.components.base import executor_spec
+    from tfx.extensions.google_cloud_ai_platform.trainer import executor as ai_platform_trainer_executor
+    from google.cloud.aiplatform_v1.types import custom_job as custom_job_spec_pb2
+    from google.cloud.aiplatform_v1.types import machine_resources as machine_resources_pb2
+    from google.cloud.aiplatform_v1.types import accelerator_type as accelerator_type_pb2
     import tensorflow_model_analysis as tfma
 
     logger.info(f"Creating TFX training pipeline: {pipeline_name}")
@@ -1531,6 +1532,48 @@ def create_training_pipeline(
         "gpu_count": gpu_count,
     }
 
+    # Configure GPU accelerator for Vertex AI custom training job
+    # Map GPU type string to accelerator_type_pb2 enum
+    gpu_type_map = {
+        'NVIDIA_TESLA_T4': accelerator_type_pb2.AcceleratorType.NVIDIA_TESLA_T4,
+        'NVIDIA_TESLA_V100': accelerator_type_pb2.AcceleratorType.NVIDIA_TESLA_V100,
+        'NVIDIA_TESLA_P100': accelerator_type_pb2.AcceleratorType.NVIDIA_TESLA_P100,
+        'NVIDIA_TESLA_A100': accelerator_type_pb2.AcceleratorType.NVIDIA_TESLA_A100,
+        'NVIDIA_L4': accelerator_type_pb2.AcceleratorType.NVIDIA_L4,
+    }
+    accelerator_type = gpu_type_map.get(gpu_type, accelerator_type_pb2.AcceleratorType.NVIDIA_TESLA_T4)
+
+    # GPU-enabled TFX trainer image
+    gpu_trainer_image = f'europe-central2-docker.pkg.dev/{project_id}/tfx-builder/tfx-trainer-gpu:latest'
+    logger.info(f"Using GPU trainer image: {gpu_trainer_image}")
+
+    # Configure worker pool with GPU
+    worker_pool_spec = custom_job_spec_pb2.WorkerPoolSpec(
+        machine_spec=machine_resources_pb2.MachineSpec(
+            machine_type=machine_type,
+            accelerator_type=accelerator_type,
+            accelerator_count=gpu_count,
+        ),
+        replica_count=1,
+        container_spec=custom_job_spec_pb2.ContainerSpec(
+            image_uri=gpu_trainer_image,
+        ),
+    )
+
+    # Create custom job spec for GPU training
+    vertex_job_spec = custom_job_spec_pb2.CustomJobSpec(
+        worker_pool_specs=[worker_pool_spec],
+    )
+
+    # Add Vertex AI config to custom_config for the executor
+    custom_config["ai_platform_training_args"] = {
+        "project": project_id,
+        "region": region,
+        "job_spec": vertex_job_spec,
+    }
+
+    logger.info(f"Configured Vertex AI GPU training: {gpu_count}x {gpu_type} on {machine_type}")
+
     trainer = Trainer(
         module_file=trainer_module_path,
         examples=transform.outputs["transformed_examples"],
@@ -1539,6 +1582,9 @@ def create_training_pipeline(
         train_args=train_args,
         eval_args=eval_args,
         custom_config=custom_config,
+        custom_executor_spec=executor_spec.ExecutorClassSpec(
+            ai_platform_trainer_executor.GenericExecutor
+        ),
     )
 
     components = [example_gen, statistics_gen, schema_gen, transform, trainer]

@@ -3505,8 +3505,35 @@ def run_fn(fn_args: tfx.components.FnArgs):
     batch_size = custom_config.get('batch_size', BATCH_SIZE)
     gcs_output_path = custom_config.get('gcs_output_path', '')
 
+    # GPU configuration
+    gpu_enabled = custom_config.get('gpu_enabled', False)
+    gpu_count = custom_config.get('gpu_count', 0)
+
     logging.info(f"Training config: epochs={{epochs}}, lr={{learning_rate}}, batch={{batch_size}}")
     logging.info(f"Output embedding dim: {{OUTPUT_EMBEDDING_DIM}}")
+
+    # =========================================================================
+    # GPU DETECTION AND DISTRIBUTION STRATEGY
+    # =========================================================================
+    physical_gpus = tf.config.list_physical_devices('GPU')
+    logging.info(f"GPU config from custom_config: gpu_enabled={{gpu_enabled}}, gpu_count={{gpu_count}}")
+    logging.info(f"Physical GPUs detected: {{len(physical_gpus)}}")
+    for i, gpu in enumerate(physical_gpus):
+        logging.info(f"  GPU {{i}}: {{gpu.name}}")
+
+    # Set up distribution strategy
+    strategy = None
+    if gpu_enabled and len(physical_gpus) > 0:
+        if len(physical_gpus) > 1:
+            strategy = tf.distribute.MirroredStrategy()
+            logging.info(f"Using MirroredStrategy with {{strategy.num_replicas_in_sync}} replicas")
+        else:
+            # Single GPU - use default strategy for clarity
+            strategy = tf.distribute.get_strategy()
+            logging.info("Using single GPU (default strategy)")
+    else:
+        strategy = tf.distribute.get_strategy()
+        logging.info("No GPU enabled or detected - using CPU (default strategy)")
 
     # Load datasets
     train_dataset = _input_fn(
@@ -3551,17 +3578,19 @@ def run_fn(fn_args: tfx.components.FnArgs):
     }})
 
     try:
-        # Build model
+        # Build model within distribution strategy scope
         logging.info("Building RetrievalModel...")
-        model = RetrievalModel(
-            tf_transform_output=tf_transform_output
-        )
+        with strategy.scope():
+            model = RetrievalModel(
+                tf_transform_output=tf_transform_output
+            )
 
-        # Compile with configured optimizer: {self.optimizer}
-        # clipnorm=1.0 prevents gradient explosion with high learning rates
-        optimizer = {optimizer_class}(learning_rate=learning_rate, clipnorm=1.0)
-        model.compile(optimizer=optimizer)
+            # Compile with configured optimizer: {self.optimizer}
+            # clipnorm=1.0 prevents gradient explosion with high learning rates
+            optimizer = {optimizer_class}(learning_rate=learning_rate, clipnorm=1.0)
+            model.compile(optimizer=optimizer)
         logging.info(f"Using optimizer: {self.optimizer} with lr={{learning_rate}}, clipnorm=1.0")
+        logging.info(f"Model built with strategy: {{type(strategy).__name__}}")
 
         # Calculate steps
         train_steps = custom_config.get('train_steps', fn_args.train_steps)
@@ -4461,8 +4490,35 @@ def run_fn(fn_args: tfx.components.FnArgs):
     batch_size = custom_config.get('batch_size', BATCH_SIZE)
     gcs_output_path = custom_config.get('gcs_output_path', '')
 
+    # GPU configuration
+    gpu_enabled = custom_config.get('gpu_enabled', False)
+    gpu_count = custom_config.get('gpu_count', 0)
+
     logging.info(f"Training config: epochs={{epochs}}, lr={{learning_rate}}, batch={{batch_size}}")
     logging.info(f"Label key: {{LABEL_KEY}}")
+
+    # =========================================================================
+    # GPU DETECTION AND DISTRIBUTION STRATEGY
+    # =========================================================================
+    physical_gpus = tf.config.list_physical_devices('GPU')
+    logging.info(f"GPU config from custom_config: gpu_enabled={{gpu_enabled}}, gpu_count={{gpu_count}}")
+    logging.info(f"Physical GPUs detected: {{len(physical_gpus)}}")
+    for i, gpu in enumerate(physical_gpus):
+        logging.info(f"  GPU {{i}}: {{gpu.name}}")
+
+    # Set up distribution strategy
+    strategy = None
+    if gpu_enabled and len(physical_gpus) > 0:
+        if len(physical_gpus) > 1:
+            strategy = tf.distribute.MirroredStrategy()
+            logging.info(f"Using MirroredStrategy with {{strategy.num_replicas_in_sync}} replicas")
+        else:
+            # Single GPU - use default strategy for clarity
+            strategy = tf.distribute.get_strategy()
+            logging.info("Using single GPU (default strategy)")
+    else:
+        strategy = tf.distribute.get_strategy()
+        logging.info("No GPU enabled or detected - using CPU (default strategy)")
 
     # Load datasets (with labels)
     train_dataset = _input_fn(
@@ -4536,14 +4592,16 @@ def run_fn(fn_args: tfx.components.FnArgs):
     }})
 
     try:
-        # Build model
+        # Build model within distribution strategy scope
         logging.info("Building RankingModel...")
-        model = RankingModel(tf_transform_output=tf_transform_output)
+        with strategy.scope():
+            model = RankingModel(tf_transform_output=tf_transform_output)
 
-        # Compile with configured optimizer
-        optimizer = {optimizer_class}(learning_rate=learning_rate, clipnorm=1.0)
-        model.compile(optimizer=optimizer)
+            # Compile with configured optimizer
+            optimizer = {optimizer_class}(learning_rate=learning_rate, clipnorm=1.0)
+            model.compile(optimizer=optimizer)
         logging.info(f"Using optimizer: {self.optimizer} with lr={{learning_rate}}, clipnorm=1.0")
+        logging.info(f"Model built with strategy: {{type(strategy).__name__}}")
 
         # Calculate steps
         train_steps = custom_config.get('train_steps', fn_args.train_steps)
@@ -5583,7 +5641,34 @@ def run_fn(fn_args: tfx.components.FnArgs):
     learning_rate = custom_config.get('learning_rate', LEARNING_RATE)
     gcs_output_path = custom_config.get('gcs_output_path', '')
 
+    # GPU configuration
+    gpu_enabled = custom_config.get('gpu_enabled', False)
+    gpu_count = custom_config.get('gpu_count', 0)
+
     logging.info(f"Training config: epochs={{epochs}}, lr={{learning_rate}}, batch={{batch_size}}")
+
+    # =========================================================================
+    # GPU DETECTION AND DISTRIBUTION STRATEGY
+    # =========================================================================
+    physical_gpus = tf.config.list_physical_devices('GPU')
+    logging.info(f"GPU config from custom_config: gpu_enabled={{gpu_enabled}}, gpu_count={{gpu_count}}")
+    logging.info(f"Physical GPUs detected: {{len(physical_gpus)}}")
+    for i, gpu in enumerate(physical_gpus):
+        logging.info(f"  GPU {{i}}: {{gpu.name}}")
+
+    # Set up distribution strategy
+    strategy = None
+    if gpu_enabled and len(physical_gpus) > 0:
+        if len(physical_gpus) > 1:
+            strategy = tf.distribute.MirroredStrategy()
+            logging.info(f"Using MirroredStrategy with {{strategy.num_replicas_in_sync}} replicas")
+        else:
+            # Single GPU - use default strategy for clarity
+            strategy = tf.distribute.get_strategy()
+            logging.info("Using single GPU (default strategy)")
+    else:
+        strategy = tf.distribute.get_strategy()
+        logging.info("No GPU enabled or detected - using CPU (default strategy)")
 
     # Initialize MetricsCollector
     global _metrics_collector
@@ -5623,14 +5708,16 @@ def run_fn(fn_args: tfx.components.FnArgs):
         train_dataset = _input_fn(train_files, fn_args.data_accessor, tf_transform_output, batch_size)
         eval_dataset = _input_fn(eval_files, fn_args.data_accessor, tf_transform_output, batch_size)
 
-        # Create model
+        # Create model within distribution strategy scope
         logging.info("Creating MultitaskModel...")
-        model = MultitaskModel(tf_transform_output)
+        with strategy.scope():
+            model = MultitaskModel(tf_transform_output)
 
-        # Compile
-        model.compile(optimizer={optimizer_class}(learning_rate=learning_rate))
+            # Compile
+            model.compile(optimizer={optimizer_class}(learning_rate=learning_rate))
         logging.info(f"Model compiled with {{'{self.optimizer}'}} optimizer, lr={{learning_rate}}")
         logging.info(f"Loss weights: retrieval={{RETRIEVAL_WEIGHT}}, ranking={{RANKING_WEIGHT}}")
+        logging.info(f"Model built with strategy: {{type(strategy).__name__}}")
 
         # Train
         logging.info("=" * 60)

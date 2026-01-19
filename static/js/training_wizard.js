@@ -53,14 +53,21 @@ const TrainingWizard = (function() {
                 epochs: 150,
                 batchSize: 8192,
                 learningRate: 0.1,
-                splitStrategy: 'time_holdout',
-                holdoutDays: 1,
-                dateColumn: '',
-                earlyStoppingEnabled: true,
+                earlyStoppingEnabled: false,
                 earlyStoppingPatience: 10,
                 // Store original experiment values for reference
                 expBatchSize: null,
                 expLearningRate: null
+            },
+            // Inherited experiment settings (read-only display)
+            experimentSettings: {
+                splitStrategy: '',
+                holdoutDays: null,
+                dateColumn: '',
+                optimizer: '',
+                algorithm: '',
+                topK: null,
+                retrievalAlgorithm: ''
             },
             gpuConfig: {
                 acceleratorType: 'NVIDIA_L4',
@@ -91,7 +98,8 @@ const TrainingWizard = (function() {
         },
         isLoading: false,
         searchQuery: '',
-        searchTimeout: null
+        searchTimeout: null,
+        bestExperimentId: null  // Track the actual best experiment ID for the current model type
     };
 
     // =============================================================================
@@ -223,13 +231,19 @@ const TrainingWizard = (function() {
                 epochs: 150,
                 batchSize: 8192,
                 learningRate: 0.1,
-                splitStrategy: 'time_holdout',
-                holdoutDays: 1,
-                dateColumn: '',
-                earlyStoppingEnabled: true,
+                earlyStoppingEnabled: false,
                 earlyStoppingPatience: 10,
                 expBatchSize: null,
                 expLearningRate: null
+            },
+            experimentSettings: {
+                splitStrategy: '',
+                holdoutDays: null,
+                dateColumn: '',
+                optimizer: '',
+                algorithm: '',
+                topK: null,
+                retrievalAlgorithm: ''
             },
             gpuConfig: {
                 acceleratorType: 'NVIDIA_L4',
@@ -253,6 +267,7 @@ const TrainingWizard = (function() {
         state.validation = { step1: false, step2: true, step3: true };
         state.isLoading = false;
         state.searchQuery = '';
+        state.bestExperimentId = null;
     }
 
     // =============================================================================
@@ -427,6 +442,8 @@ const TrainingWizard = (function() {
 
             if (data.success && data.configurations && data.configurations.length > 0) {
                 state.experiments = data.configurations;
+                // Store the best experiment ID (first one, since API returns sorted by best metrics)
+                state.bestExperimentId = data.configurations[0].experiment_id;
                 renderExperimentList();
             } else {
                 listEl.innerHTML = `
@@ -449,6 +466,7 @@ const TrainingWizard = (function() {
 
         const html = state.experiments.map((exp, index) => {
             const isSelected = state.formData.selectedExperiment?.experiment_id === exp.experiment_id;
+            const isBest = exp.experiment_id === state.bestExperimentId;
             const metricLabel = state.formData.modelType === 'ranking' ? 'RMSE' : 'R@100';
             const metricValue = state.formData.modelType === 'ranking'
                 ? (exp.test_rmse != null ? exp.test_rmse.toFixed(4) : '-')
@@ -461,7 +479,7 @@ const TrainingWizard = (function() {
                     <div class="wizard-experiment-info">
                         <div class="wizard-experiment-name">
                             ${exp.display_name || 'Exp #' + exp.experiment_number}
-                            ${index === 0 ? '<span class="badge-recommended"><i class="fas fa-star"></i> Best</span>' : ''}
+                            ${isBest ? '<span class="badge-recommended"><i class="fas fa-star"></i> Best</span>' : ''}
                         </div>
                         <div class="wizard-experiment-details">
                             <span><i class="fas fa-database"></i> ${exp.dataset || 'Dataset'}</span>
@@ -505,18 +523,28 @@ const TrainingWizard = (function() {
             // Keep default 8192 for GPU training, but store original for reference
         }
 
-        // Split strategy: copy from experiment, default to time_holdout
-        if (exp.split_strategy) {
-            state.formData.trainingParams.splitStrategy = exp.split_strategy;
+        // Store experiment settings (read-only display)
+        state.formData.experimentSettings.splitStrategy = exp.split_strategy || 'time_holdout';
+        state.formData.experimentSettings.holdoutDays = exp.holdout_days || null;
+        state.formData.experimentSettings.dateColumn = exp.date_column || '';
+        state.formData.experimentSettings.optimizer = exp.optimizer || 'adagrad';
+        state.formData.experimentSettings.topK = exp.top_k || 100;
+        state.formData.experimentSettings.retrievalAlgorithm = exp.retrieval_algorithm || 'scann';
+
+        // Determine algorithm display based on retrieval_algorithm and model type
+        const algoMap = {
+            'scann': 'ScaNN',
+            'brute_force': 'Brute Force',
+            'annoy': 'Annoy'
+        };
+        if (state.formData.modelType === 'ranking') {
+            state.formData.experimentSettings.algorithm = 'DCN Ranking';
+        } else if (state.formData.modelType === 'hybrid') {
+            state.formData.experimentSettings.algorithm = 'Multitask (Retrieval + Ranking)';
         } else {
-            state.formData.trainingParams.splitStrategy = 'time_holdout';
+            // Retrieval - use actual algorithm
+            state.formData.experimentSettings.algorithm = algoMap[exp.retrieval_algorithm] || 'Two-Tower';
         }
-
-        // Holdout days: copy from experiment or default to 1
-        state.formData.trainingParams.holdoutDays = exp.holdout_days || 1;
-
-        // Date column: copy from experiment (required for temporal splits)
-        state.formData.trainingParams.dateColumn = exp.date_column || '';
 
         // Update blessing threshold based on model type
         if (state.formData.modelType === 'ranking') {
@@ -625,9 +653,13 @@ const TrainingWizard = (function() {
                         // Training parameters
                         learning_rate: exp.learning_rate,
                         batch_size: exp.batch_size,
+                        // Experiment settings (read-only)
                         split_strategy: exp.split_strategy,
                         holdout_days: exp.holdout_days,
-                        date_column: exp.date_column
+                        date_column: exp.date_column,
+                        optimizer: exp.optimizer,
+                        top_k: exp.top_k,
+                        retrieval_algorithm: exp.retrieval_algorithm
                     }));
                     renderExperimentList();
                 } else {
@@ -671,9 +703,13 @@ const TrainingWizard = (function() {
                     // Training parameters
                     learning_rate: exp.learning_rate,
                     batch_size: exp.batch_size,
+                    // Experiment settings (read-only)
                     split_strategy: exp.split_strategy,
                     holdout_days: exp.holdout_days,
-                    date_column: exp.date_column
+                    date_column: exp.date_column,
+                    optimizer: exp.optimizer,
+                    top_k: exp.top_k,
+                    retrieval_algorithm: exp.retrieval_algorithm
                 }];
 
                 // Set model type from experiment
@@ -749,10 +785,8 @@ const TrainingWizard = (function() {
         setInputValue('wizardEpochs', params.epochs);
         setInputValue('wizardBatchSize', params.batchSize);
         setInputValue('wizardLearningRate', params.learningRate);
-        setInputValue('wizardSplitStrategy', params.splitStrategy);
-        setInputValue('wizardHoldoutDays', params.holdoutDays);
 
-        // Set early stopping toggle
+        // Set early stopping toggle (default is off)
         const earlyStopToggle = document.getElementById('wizardEarlyStopping');
         if (earlyStopToggle) {
             earlyStopToggle.checked = params.earlyStoppingEnabled;
@@ -760,9 +794,6 @@ const TrainingWizard = (function() {
 
         // Set patience
         setInputValue('wizardPatience', params.earlyStoppingPatience);
-
-        // Update holdout days visibility based on split strategy
-        updateHoldoutDaysVisibility();
 
         // Show experiment reference values (Exp used: X)
         const batchSizeRef = document.getElementById('wizardBatchSizeRef');
@@ -774,6 +805,48 @@ const TrainingWizard = (function() {
                 batchSizeRef.style.display = 'none';
             }
         }
+
+        // Populate experiment settings chips (read-only)
+        populateExperimentSettings();
+    }
+
+    function populateExperimentSettings() {
+        const settings = state.formData.experimentSettings;
+
+        // Format split strategy display
+        let splitStrategyText = '-';
+        if (settings.splitStrategy === 'time_holdout') {
+            splitStrategyText = settings.holdoutDays
+                ? `Time Holdout (${settings.holdoutDays}d)`
+                : 'Time Holdout';
+        } else if (settings.splitStrategy === 'strict_time') {
+            splitStrategyText = 'Strict Temporal';
+        } else if (settings.splitStrategy === 'random') {
+            splitStrategyText = 'Random (80/15/5)';
+        }
+
+        // Format optimizer display (capitalize)
+        const optimizerMap = {
+            'adam': 'Adam',
+            'adagrad': 'AdaGrad',
+            'sgd': 'SGD',
+            'rmsprop': 'RMSprop',
+            'ftrl': 'FTRL'
+        };
+        const optimizerText = optimizerMap[settings.optimizer?.toLowerCase()] || settings.optimizer || 'AdaGrad';
+
+        // Update chip values
+        const splitStrategyDisplay = document.getElementById('wizardSplitStrategyDisplay');
+        if (splitStrategyDisplay) splitStrategyDisplay.textContent = splitStrategyText;
+
+        const optimizerDisplay = document.getElementById('wizardOptimizerDisplay');
+        if (optimizerDisplay) optimizerDisplay.textContent = optimizerText;
+
+        const algorithmDisplay = document.getElementById('wizardAlgorithmDisplay');
+        if (algorithmDisplay) algorithmDisplay.textContent = settings.algorithm || '-';
+
+        const topKDisplay = document.getElementById('wizardTopKDisplay');
+        if (topKDisplay) topKDisplay.textContent = settings.topK || '100';
     }
 
     function setInputValue(elementId, value) {
@@ -788,29 +861,10 @@ const TrainingWizard = (function() {
             state.formData.trainingParams.batchSize = parseInt(value);
         } else if (param === 'learningRate') {
             state.formData.trainingParams.learningRate = parseFloat(value);
-        } else if (param === 'splitStrategy') {
-            state.formData.trainingParams.splitStrategy = value;
-            // Show/hide holdout days based on split strategy
-            updateHoldoutDaysVisibility();
-        } else if (param === 'holdoutDays') {
-            state.formData.trainingParams.holdoutDays = parseInt(value);
         } else if (param === 'earlyStoppingEnabled') {
             state.formData.trainingParams.earlyStoppingEnabled = value;
         } else if (param === 'earlyStoppingPatience') {
             state.formData.trainingParams.earlyStoppingPatience = parseInt(value);
-        }
-    }
-
-    function updateHoldoutDaysVisibility() {
-        const holdoutDaysGroup = document.getElementById('wizardHoldoutDaysGroup');
-        if (!holdoutDaysGroup) return;
-
-        const strategy = state.formData.trainingParams.splitStrategy;
-        // Show holdout days for time_holdout, hide for random and strict_time
-        if (strategy === 'time_holdout') {
-            holdoutDaysGroup.style.display = 'block';
-        } else {
-            holdoutDaysGroup.style.display = 'none';
         }
     }
 
@@ -822,12 +876,6 @@ const TrainingWizard = (function() {
             const isExpanded = toggle.classList.toggle('expanded');
             content.classList.toggle('show', isExpanded);
         }
-    }
-
-    function openConfigChangeModal(configType) {
-        // For MVP, show a simple message
-        // In full implementation, would open a modal to select different config
-        showToast(`Config change not available in MVP - using experiment config`, 'info');
     }
 
     // =============================================================================
@@ -1118,6 +1166,7 @@ const TrainingWizard = (function() {
     function buildPayload() {
         const exp = state.formData.selectedExperiment;
         const params = state.formData.trainingParams;
+        const expSettings = state.formData.experimentSettings;
         const gpu = state.formData.gpuConfig;
         const evaluator = state.formData.evaluatorConfig;
         const schedule = state.formData.scheduleConfig;
@@ -1133,9 +1182,10 @@ const TrainingWizard = (function() {
                 epochs: params.epochs,
                 batch_size: params.batchSize,
                 learning_rate: params.learningRate,
-                split_strategy: params.splitStrategy,
-                holdout_days: params.holdoutDays,
-                date_column: params.dateColumn,
+                // Split strategy inherited from experiment (read-only)
+                split_strategy: expSettings.splitStrategy,
+                holdout_days: expSettings.holdoutDays,
+                date_column: expSettings.dateColumn,
                 early_stopping: {
                     enabled: params.earlyStoppingEnabled,
                     patience: params.earlyStoppingPatience
@@ -1187,7 +1237,6 @@ const TrainingWizard = (function() {
         selectModelType: selectModelType,
         searchExperiments: searchExperiments,
         openExpViewModal: openExpViewModal,
-        openConfigChangeModal: openConfigChangeModal,
         toggleAdvanced: toggleAdvanced,
         updateTrainingParam: updateTrainingParam,
         selectGPU: selectGPU,

@@ -1304,13 +1304,12 @@
 
             <!-- Step 2: Configuration & Parameters -->
             <div id="wizardStep2" class="wizard-step">
-                <!-- Inherited Config Cards -->
+                <!-- Inherited Config Cards (Read-only) -->
                 <div class="wizard-section-title">Inherited Configuration</div>
                 <div class="config-cards-row">
                     <div id="wizardDatasetCard" class="config-card">
                         <div class="config-card-header">
                             <span class="config-card-title">Dataset</span>
-                            <button class="config-card-change" onclick="TrainingWizard.openConfigChangeModal('dataset')">Change</button>
                         </div>
                         <div class="config-card-body">
                             <div class="config-card-icon dataset"><i class="fas fa-database"></i></div>
@@ -1323,7 +1322,6 @@
                     <div id="wizardFeatureCard" class="config-card">
                         <div class="config-card-header">
                             <span class="config-card-title">Feature Config</span>
-                            <button class="config-card-change" onclick="TrainingWizard.openConfigChangeModal('feature')">Change</button>
                         </div>
                         <div class="config-card-body">
                             <div class="config-card-icon feature"><i class="fas fa-layer-group"></i></div>
@@ -1336,7 +1334,6 @@
                     <div id="wizardModelCard" class="config-card">
                         <div class="config-card-header">
                             <span class="config-card-title">Model Config</span>
-                            <button class="config-card-change" onclick="TrainingWizard.openConfigChangeModal('model')">Change</button>
                         </div>
                         <div class="config-card-body">
                             <div class="config-card-icon model"><i class="fas fa-project-diagram"></i></div>
@@ -1348,7 +1345,28 @@
                     </div>
                 </div>
 
-                <!-- Training Parameters -->
+                <!-- Experiment Settings (Read-only chips) -->
+                <div class="wizard-section-title" style="margin-top: 16px;">Experiment Settings</div>
+                <div id="wizardExpSettings" style="display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px;">
+                    <div style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; background: #f3f4f6; border-radius: 8px; border: 1px solid #e5e7eb;">
+                        <span style="font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px;">Split Strategy</span>
+                        <span style="font-size: 13px; font-weight: 600; color: #374151;" id="wizardSplitStrategyDisplay">-</span>
+                    </div>
+                    <div style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; background: #f3f4f6; border-radius: 8px; border: 1px solid #e5e7eb;">
+                        <span style="font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px;">Optimizer</span>
+                        <span style="font-size: 13px; font-weight: 600; color: #374151;" id="wizardOptimizerDisplay">AdaGrad</span>
+                    </div>
+                    <div style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; background: #f3f4f6; border-radius: 8px; border: 1px solid #e5e7eb;">
+                        <span style="font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px;">Algorithm</span>
+                        <span style="font-size: 13px; font-weight: 600; color: #374151;" id="wizardAlgorithmDisplay">-</span>
+                    </div>
+                    <div style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; background: #f3f4f6; border-radius: 8px; border: 1px solid #e5e7eb;">
+                        <span style="font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px;">Top-K</span>
+                        <span style="font-size: 13px; font-weight: 600; color: #374151;" id="wizardTopKDisplay">100</span>
+                    </div>
+                </div>
+
+                <!-- Training Parameters (Editable) -->
                 <div class="training-params-section">
                     <div class="training-params-section-title">
                         <i class="fas fa-sliders-h"></i> Training Parameters
@@ -1381,60 +1399,39 @@
                                    value="0.1" placeholder="e.g., 0.001"
                                    onchange="TrainingWizard.updateTrainingParam('learningRate', this.value)">
                         </div>
-                        <div class="training-param-field">
-                            <label class="training-param-label">Split Strategy</label>
-                            <select id="wizardSplitStrategy" class="training-param-select"
-                                    onchange="TrainingWizard.updateTrainingParam('splitStrategy', this.value)">
-                                <option value="time_holdout" selected>Time Holdout</option>
-                                <option value="strict_time">Strict Time</option>
-                                <option value="random">Random</option>
-                            </select>
-                        </div>
-                        <div class="training-param-field" id="wizardHoldoutDaysGroup">
-                            <label class="training-param-label">Holdout Days</label>
-                            <select id="wizardHoldoutDays" class="training-param-select"
-                                    onchange="TrainingWizard.updateTrainingParam('holdoutDays', this.value)">
-                                <option value="1" selected>1 day</option>
-                                <option value="3">3 days</option>
-                                <option value="7">7 days</option>
-                                <option value="14">14 days</option>
-                                <option value="30">30 days</option>
-                            </select>
-                        </div>
                     </div>
                 </div>
 
-                <!-- Early Stopping -->
-                <div class="toggle-row">
-                    <label class="toggle-switch">
-                        <input type="checkbox" id="wizardEarlyStopping" checked
-                               onchange="TrainingWizard.updateTrainingParam('earlyStoppingEnabled', this.checked)">
-                        <span class="toggle-slider"></span>
-                    </label>
-                    <div class="toggle-label">
-                        Early Stopping
-                        <span class="toggle-hint">Stop training when validation metric stops improving</span>
-                    </div>
-                    <select id="wizardPatience" class="training-param-select" style="width: 80px; margin-left: auto;"
-                            onchange="TrainingWizard.updateTrainingParam('earlyStoppingPatience', this.value)">
-                        <option value="5">5</option>
-                        <option value="10" selected>10</option>
-                        <option value="15">15</option>
-                        <option value="20">20</option>
-                    </select>
-                    <span style="font-size: 11px; color: #6b7280;">patience</span>
-                </div>
-
-                <!-- Advanced Parameters (collapsed) -->
+                <!-- Advanced Parameters (collapsed, contains Early Stopping) -->
                 <div class="advanced-section">
                     <button id="wizardAdvancedToggle" class="advanced-toggle" onclick="TrainingWizard.toggleAdvanced()">
                         <i class="fas fa-chevron-right"></i>
                         Advanced Parameters
                     </button>
                     <div id="wizardAdvancedContent" class="advanced-content">
+                        <!-- Early Stopping -->
+                        <div class="toggle-row" style="margin-bottom: 12px;">
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="wizardEarlyStopping"
+                                       onchange="TrainingWizard.updateTrainingParam('earlyStoppingEnabled', this.checked)">
+                                <span class="toggle-slider"></span>
+                            </label>
+                            <div class="toggle-label">
+                                Early Stopping
+                                <span class="toggle-hint">Stop training when validation metric stops improving</span>
+                            </div>
+                            <select id="wizardPatience" class="training-param-select" style="width: 80px; margin-left: auto;"
+                                    onchange="TrainingWizard.updateTrainingParam('earlyStoppingPatience', this.value)">
+                                <option value="5">5</option>
+                                <option value="10" selected>10</option>
+                                <option value="15">15</option>
+                                <option value="20">20</option>
+                            </select>
+                            <span style="font-size: 11px; color: #6b7280;">patience</span>
+                        </div>
                         <div class="wizard-info-box info">
                             <i class="fas fa-info-circle"></i>
-                            <span>Advanced parameters like learning rate schedule and mixed precision are configured automatically for production training.</span>
+                            <span>Learning rate schedule and mixed precision are configured automatically for production training.</span>
                         </div>
                     </div>
                 </div>

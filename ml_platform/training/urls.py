@@ -19,6 +19,11 @@ urlpatterns = [
         name='training_run_list'
     ),
     path(
+        'api/training-runs/check-name/',
+        api.training_run_check_name,
+        name='training_run_check_name'
+    ),
+    path(
         'api/training-runs/<int:training_run_id>/',
         api.training_run_detail,
         name='training_run_detail'

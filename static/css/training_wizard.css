@@ -304,12 +304,14 @@
 
 .training-param-select,
 .training-param-input {
+    width: 100%;
     padding: 8px 10px;
     border: 1px solid #d1d5db;
     border-radius: 6px;
     font-size: 13px;
     background-color: #ffffff;
     transition: all 0.15s ease;
+    box-sizing: border-box;
 }
 
 .training-param-select:focus,
@@ -513,8 +515,8 @@
    ============================================================================ */
 
 .wizard-summary-panel {
-    background-color: #f9fafb;
-    border: 1px solid #e5e7eb;
+    background-color: #ffffff;
+    border: 1px solid #000;
     border-radius: 8px;
     padding: 16px;
     margin-top: 20px;
@@ -943,18 +945,21 @@
 }
 
 /* ============================================================================
-   SCHEDULE TYPE TABS
+   SCHEDULE SECTION (Radio Button Style - Matching ETL)
    ============================================================================ */
 
-.schedule-type-tabs {
+.schedule-tab-group {
     display: flex;
     gap: 8px;
-    margin-top: 12px;
-    margin-bottom: 16px;
+    width: 100%;
 }
 
-.schedule-type-option {
+.schedule-option {
     flex: 1;
+    cursor: pointer;
+}
+
+.schedule-option .wizard-tab {
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -962,73 +967,43 @@
     padding: 12px 8px;
     border: 1px solid #e5e7eb;
     border-radius: 8px;
-    cursor: pointer;
-    transition: all 0.15s ease;
     background-color: #ffffff;
     text-align: center;
     gap: 6px;
+    transition: all 0.15s ease;
 }
 
-.schedule-type-option i {
+.schedule-option .wizard-tab i {
     font-size: 18px;
     color: #6b7280;
     transition: color 0.15s ease;
 }
 
-.schedule-type-option span {
+.schedule-option .wizard-tab span {
     font-size: 12px;
     font-weight: 500;
     color: #374151;
 }
 
-.schedule-type-option:hover {
+.schedule-option:hover .wizard-tab {
     background-color: #f9fafb;
     border-color: #d1d5db;
 }
 
-.schedule-type-option.selected {
+/* Selected state via peer selector (radio checked) */
+.schedule-option .peer:checked ~ .wizard-tab {
     background-color: #eff6ff;
     border-color: #2563eb;
     border-width: 2px;
 }
 
-.schedule-type-option.selected i {
+.schedule-option .peer:checked ~ .wizard-tab i {
     color: #2563eb;
 }
 
-.schedule-type-option.selected span {
+.schedule-option .peer:checked ~ .wizard-tab span {
     color: #1d4ed8;
     font-weight: 600;
-}
-
-/* ============================================================================
-   SCHEDULE FIELDS
-   ============================================================================ */
-
-.schedule-fields {
-    margin-top: 12px;
-    padding: 16px;
-    background-color: #f9fafb;
-    border-radius: 8px;
-    border: 1px solid #e5e7eb;
-}
-
-.schedule-fields.hidden {
-    display: none;
-}
-
-.schedule-fields .training-params-grid {
-    grid-template-columns: repeat(2, 1fr);
-}
-
-/* Override for weekly day field visibility */
-#weeklyDayField.hidden {
-    display: none;
-}
-
-/* Flatpickr custom styling */
-.flatpickr-input {
-    cursor: pointer;
 }
 
 .flatpickr-input::placeholder {

@@ -1242,7 +1242,7 @@
                     </label>
                     <input type="text" id="wizardRunName" class="form-input" style="width: 100%;"
                            placeholder="e.g., product_recommender_v3"
-                           oninput="this.value = this.value.toLowerCase().replace(/[^a-z0-9_-]/g, '')">
+                           oninput="this.value = this.value.toLowerCase().replace(/[^a-z0-9_-]/g, ''); TrainingWizard.checkNameAvailability(this.value)">
                     <div id="wizardRunNameError" class="wizard-field-error"></div>
                     <div class="wizard-field-hint">Lowercase letters, numbers, hyphens, and underscores (3-63 chars)</div>
                 </div>
@@ -1348,19 +1348,19 @@
                 <!-- Experiment Settings (Read-only chips) -->
                 <div class="wizard-section-title" style="margin-top: 16px;">Experiment Settings</div>
                 <div id="wizardExpSettings" style="display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px;">
-                    <div style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; background: #f3f4f6; border-radius: 8px; border: 1px solid #e5e7eb;">
+                    <div style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; background: #ffffff; border-radius: 8px; border: 1px solid #e5e7eb;">
                         <span style="font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px;">Split Strategy</span>
                         <span style="font-size: 13px; font-weight: 600; color: #374151;" id="wizardSplitStrategyDisplay">-</span>
                     </div>
-                    <div style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; background: #f3f4f6; border-radius: 8px; border: 1px solid #e5e7eb;">
+                    <div style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; background: #ffffff; border-radius: 8px; border: 1px solid #e5e7eb;">
                         <span style="font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px;">Optimizer</span>
                         <span style="font-size: 13px; font-weight: 600; color: #374151;" id="wizardOptimizerDisplay">AdaGrad</span>
                     </div>
-                    <div style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; background: #f3f4f6; border-radius: 8px; border: 1px solid #e5e7eb;">
+                    <div style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; background: #ffffff; border-radius: 8px; border: 1px solid #e5e7eb;">
                         <span style="font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px;">Algorithm</span>
                         <span style="font-size: 13px; font-weight: 600; color: #374151;" id="wizardAlgorithmDisplay">-</span>
                     </div>
-                    <div style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; background: #f3f4f6; border-radius: 8px; border: 1px solid #e5e7eb;">
+                    <div style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; background: #ffffff; border-radius: 8px; border: 1px solid #e5e7eb;">
                         <span style="font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px;">Top-K</span>
                         <span style="font-size: 13px; font-weight: 600; color: #374151;" id="wizardTopKDisplay">100</span>
                     </div>
@@ -1371,7 +1371,7 @@
                     <div class="training-params-section-title">
                         <i class="fas fa-sliders-h"></i> Training Parameters
                     </div>
-                    <div class="training-params-grid">
+                    <div class="training-params-grid" style="grid-template-columns: repeat(3, 1fr);">
                         <div class="training-param-field">
                             <label class="training-param-label">Epochs</label>
                             <select id="wizardEpochs" class="training-param-select"
@@ -1403,12 +1403,13 @@
                 </div>
 
                 <!-- Advanced Parameters (collapsed, contains Early Stopping) -->
-                <div class="advanced-section">
-                    <button id="wizardAdvancedToggle" class="advanced-toggle" onclick="TrainingWizard.toggleAdvanced()">
-                        <i class="fas fa-chevron-right"></i>
-                        Advanced Parameters
-                    </button>
-                    <div id="wizardAdvancedContent" class="advanced-content">
+                <div class="filter-subchapter" style="margin-top: 16px;">
+                    <div class="subchapter-header-tablet" id="wizardAdvancedToggle" onclick="TrainingWizard.toggleAdvanced()">
+                        <i class="fas fa-cog" style="color: #8b5cf6; margin-right: 10px;"></i>
+                        <span class="subchapter-title" style="flex-grow: 1; text-align: left;">Advanced Parameters</span>
+                        <i id="wizardAdvancedChevron" class="fas fa-chevron-right subchapter-chevron"></i>
+                    </div>
+                    <div id="wizardAdvancedContent" class="subchapter-content-outside hidden">
                         <!-- Early Stopping -->
                         <div class="toggle-row" style="margin-bottom: 12px;">
                             <label class="toggle-switch">
@@ -1429,9 +1430,29 @@
                             </select>
                             <span style="font-size: 11px; color: #6b7280;">patience</span>
                         </div>
-                        <div class="wizard-info-box info">
-                            <i class="fas fa-info-circle"></i>
-                            <span>Learning rate schedule and mixed precision are configured automatically for production training.</span>
+
+                        <!-- Learning Rate Schedule (disabled - auto-configured) -->
+                        <div class="toggle-row" style="margin-bottom: 12px; opacity: 0.5; pointer-events: none;">
+                            <label class="toggle-switch">
+                                <input type="checkbox" disabled>
+                                <span class="toggle-slider"></span>
+                            </label>
+                            <div class="toggle-label">
+                                Learning Rate Schedule
+                                <span class="toggle-hint">Configured automatically for production training</span>
+                            </div>
+                        </div>
+
+                        <!-- Mixed Precision (disabled - auto-configured) -->
+                        <div class="toggle-row" style="margin-bottom: 12px; opacity: 0.5; pointer-events: none;">
+                            <label class="toggle-switch">
+                                <input type="checkbox" disabled>
+                                <span class="toggle-slider"></span>
+                            </label>
+                            <div class="toggle-label">
+                                Mixed Precision
+                                <span class="toggle-hint">Configured automatically for production training</span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1478,89 +1499,139 @@
                     </div>
                 </div>
 
-                <!-- Schedule Options -->
-                <div class="wizard-section-title" style="margin-top: 20px;">Schedule</div>
-                <div class="schedule-type-tabs">
-                    <div class="schedule-type-option selected" data-type="now" onclick="TrainingWizard.selectScheduleType('now')">
-                        <i class="fas fa-play-circle"></i><span>Run Now</span>
+                <!-- Schedule Section -->
+                <div class="filter-subchapter" style="margin-top: 20px;">
+                    <div class="subchapter-header-tablet" id="wizardScheduleToggle" onclick="TrainingWizard.toggleSchedule()">
+                        <i class="fas fa-clock" style="color: #10b981; margin-right: 10px;"></i>
+                        <span class="subchapter-title" style="flex-grow: 1; text-align: left;">Schedule</span>
+                        <i id="wizardScheduleChevron" class="fas fa-chevron-down subchapter-chevron expanded"></i>
                     </div>
-                    <div class="schedule-type-option" data-type="once" onclick="TrainingWizard.selectScheduleType('once')">
-                        <i class="fas fa-calendar-day"></i><span>Schedule Once</span>
-                    </div>
-                    <div class="schedule-type-option" data-type="daily" onclick="TrainingWizard.selectScheduleType('daily')">
-                        <i class="fas fa-calendar-alt"></i><span>Daily</span>
-                    </div>
-                    <div class="schedule-type-option" data-type="weekly" onclick="TrainingWizard.selectScheduleType('weekly')">
-                        <i class="fas fa-calendar-week"></i><span>Weekly</span>
-                    </div>
-                </div>
+                    <div id="wizardScheduleContent" class="subchapter-content-outside">
+                        <!-- Schedule Type Tabs -->
+                        <div class="schedule-tab-group" style="display: flex; gap: 8px; width: 100%; margin-bottom: 16px;">
+                            <label class="schedule-option" style="flex: 1;">
+                                <input type="radio" name="wizardScheduleType" value="now" class="hidden peer" checked onchange="TrainingWizard.onScheduleTypeChange()">
+                                <span class="wizard-tab" style="display: flex; flex-direction: column; align-items: center; gap: 4px; width: 100%; padding: 12px 8px;">
+                                    <i class="fas fa-play-circle"></i>
+                                    <span>Run Now</span>
+                                </span>
+                            </label>
+                            <label class="schedule-option" style="flex: 1;">
+                                <input type="radio" name="wizardScheduleType" value="once" class="hidden peer" onchange="TrainingWizard.onScheduleTypeChange()">
+                                <span class="wizard-tab" style="display: flex; flex-direction: column; align-items: center; gap: 4px; width: 100%; padding: 12px 8px;">
+                                    <i class="fas fa-calendar-day"></i>
+                                    <span>Schedule Once</span>
+                                </span>
+                            </label>
+                            <label class="schedule-option" style="flex: 1;">
+                                <input type="radio" name="wizardScheduleType" value="daily" class="hidden peer" onchange="TrainingWizard.onScheduleTypeChange()">
+                                <span class="wizard-tab" style="display: flex; flex-direction: column; align-items: center; gap: 4px; width: 100%; padding: 12px 8px;">
+                                    <i class="fas fa-calendar-alt"></i>
+                                    <span>Daily</span>
+                                </span>
+                            </label>
+                            <label class="schedule-option" style="flex: 1;">
+                                <input type="radio" name="wizardScheduleType" value="weekly" class="hidden peer" onchange="TrainingWizard.onScheduleTypeChange()">
+                                <span class="wizard-tab" style="display: flex; flex-direction: column; align-items: center; gap: 4px; width: 100%; padding: 12px 8px;">
+                                    <i class="fas fa-calendar-week"></i>
+                                    <span>Weekly</span>
+                                </span>
+                            </label>
+                        </div>
 
-                <!-- One-time scheduling fields -->
-                <div id="scheduleOnceFields" class="schedule-fields hidden">
-                    <div class="training-params-grid">
-                        <div class="training-param-field">
-                            <label class="training-param-label">Date & Time</label>
-                            <input type="text" id="wizardScheduleDatetime" class="training-param-input flatpickr-datetime" placeholder="Select date and time">
+                        <!-- Schedule Once Options -->
+                        <div id="wizardScheduleOnceOptions" class="hidden" style="margin-top: 12px;">
+                            <div style="display: flex; gap: 16px; align-items: flex-end;">
+                                <div style="flex: 1;">
+                                    <label class="training-param-label">Date</label>
+                                    <input type="date" id="wizardScheduleDate" class="training-param-select" style="width: 100%;" onchange="TrainingWizard.updateScheduleConfig('date', this.value)">
+                                </div>
+                                <div style="width: 120px;">
+                                    <label class="training-param-label">Time</label>
+                                    <input type="time" id="wizardScheduleTimeOnce" class="training-param-select" style="width: 100%;" value="09:00" onchange="TrainingWizard.updateScheduleConfig('time', this.value)">
+                                </div>
+                                <div style="width: 180px;">
+                                    <label class="training-param-label">Timezone</label>
+                                    <select id="wizardScheduleTimezone" class="training-param-select" style="width: 100%;" onchange="TrainingWizard.updateScheduleConfig('timezone', this.value)">
+                                        <option value="UTC">UTC</option>
+                                        <option value="Europe/Kyiv">Kyiv (UTC+2/+3)</option>
+                                        <option value="Europe/London">London (UTC+0/+1)</option>
+                                        <option value="America/New_York">New York (UTC-5/-4)</option>
+                                        <option value="America/Los_Angeles">Los Angeles (UTC-8/-7)</option>
+                                        <option value="Asia/Tokyo">Tokyo (UTC+9)</option>
+                                    </select>
+                                </div>
+                            </div>
                         </div>
-                        <div class="training-param-field">
-                            <label class="training-param-label">Timezone</label>
-                            <select id="wizardScheduleTimezone" class="training-param-select" onchange="TrainingWizard.updateScheduleConfig('timezone', this.value)">
-                                <option value="UTC">UTC</option>
-                                <option value="Europe/Kyiv">Kyiv (UTC+2/+3)</option>
-                                <option value="Europe/London">London (UTC+0/+1)</option>
-                                <option value="America/New_York">New York (UTC-5/-4)</option>
-                                <option value="America/Los_Angeles">Los Angeles (UTC-8/-7)</option>
-                                <option value="Asia/Tokyo">Tokyo (UTC+9)</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
 
-                <!-- Recurring scheduling fields -->
-                <div id="scheduleRecurringFields" class="schedule-fields hidden">
-                    <div class="training-params-grid">
-                        <div id="weeklyDayField" class="training-param-field hidden">
-                            <label class="training-param-label">Day of Week</label>
-                            <select id="wizardScheduleDayOfWeek" class="training-param-select" onchange="TrainingWizard.updateScheduleConfig('dayOfWeek', this.value)">
-                                <option value="0">Monday</option>
-                                <option value="1">Tuesday</option>
-                                <option value="2">Wednesday</option>
-                                <option value="3">Thursday</option>
-                                <option value="4">Friday</option>
-                                <option value="5">Saturday</option>
-                                <option value="6">Sunday</option>
-                            </select>
+                        <!-- Daily Options -->
+                        <div id="wizardScheduleDailyOptions" class="hidden" style="margin-top: 12px;">
+                            <div style="display: flex; gap: 16px; align-items: flex-end;">
+                                <div style="width: 120px;">
+                                    <label class="training-param-label">Time</label>
+                                    <input type="time" id="wizardScheduleTimeDaily" class="training-param-select" style="width: 100%;" value="09:00" onchange="TrainingWizard.updateScheduleConfig('time', this.value)">
+                                </div>
+                                <div style="width: 180px;">
+                                    <label class="training-param-label">Timezone</label>
+                                    <select id="wizardScheduleTimezoneDaily" class="training-param-select" style="width: 100%;" onchange="TrainingWizard.updateScheduleConfig('timezone', this.value)">
+                                        <option value="UTC">UTC</option>
+                                        <option value="Europe/Kyiv">Kyiv (UTC+2/+3)</option>
+                                        <option value="Europe/London">London (UTC+0/+1)</option>
+                                        <option value="America/New_York">New York (UTC-5/-4)</option>
+                                        <option value="America/Los_Angeles">Los Angeles (UTC-8/-7)</option>
+                                        <option value="Asia/Tokyo">Tokyo (UTC+9)</option>
+                                    </select>
+                                </div>
+                            </div>
                         </div>
-                        <div class="training-param-field">
-                            <label class="training-param-label">Time</label>
-                            <input type="text" id="wizardScheduleTime" class="training-param-input flatpickr-time" value="09:00" placeholder="HH:MM">
-                        </div>
-                        <div class="training-param-field">
-                            <label class="training-param-label">Timezone</label>
-                            <select id="wizardScheduleTimezoneRecurring" class="training-param-select" onchange="TrainingWizard.updateScheduleConfig('timezone', this.value)">
-                                <option value="UTC">UTC</option>
-                                <option value="Europe/Kyiv">Kyiv (UTC+2/+3)</option>
-                                <option value="Europe/London">London (UTC+0/+1)</option>
-                                <option value="America/New_York">New York (UTC-5/-4)</option>
-                                <option value="America/Los_Angeles">Los Angeles (UTC-8/-7)</option>
-                                <option value="Asia/Tokyo">Tokyo (UTC+9)</option>
-                            </select>
+
+                        <!-- Weekly Options -->
+                        <div id="wizardScheduleWeeklyOptions" class="hidden" style="margin-top: 12px;">
+                            <div style="display: flex; gap: 16px; align-items: flex-end;">
+                                <div style="width: 150px;">
+                                    <label class="training-param-label">Day of Week</label>
+                                    <select id="wizardScheduleDayOfWeek" class="training-param-select" style="width: 100%;" onchange="TrainingWizard.updateScheduleConfig('dayOfWeek', this.value)">
+                                        <option value="0">Monday</option>
+                                        <option value="1">Tuesday</option>
+                                        <option value="2">Wednesday</option>
+                                        <option value="3">Thursday</option>
+                                        <option value="4">Friday</option>
+                                        <option value="5">Saturday</option>
+                                        <option value="6">Sunday</option>
+                                    </select>
+                                </div>
+                                <div style="width: 120px;">
+                                    <label class="training-param-label">Time</label>
+                                    <input type="time" id="wizardScheduleTimeWeekly" class="training-param-select" style="width: 100%;" value="09:00" onchange="TrainingWizard.updateScheduleConfig('time', this.value)">
+                                </div>
+                                <div style="width: 180px;">
+                                    <label class="training-param-label">Timezone</label>
+                                    <select id="wizardScheduleTimezoneWeekly" class="training-param-select" style="width: 100%;" onchange="TrainingWizard.updateScheduleConfig('timezone', this.value)">
+                                        <option value="UTC">UTC</option>
+                                        <option value="Europe/Kyiv">Kyiv (UTC+2/+3)</option>
+                                        <option value="Europe/London">London (UTC+0/+1)</option>
+                                        <option value="America/New_York">New York (UTC-5/-4)</option>
+                                        <option value="America/Los_Angeles">Los Angeles (UTC-8/-7)</option>
+                                        <option value="Asia/Tokyo">Tokyo (UTC+9)</option>
+                                    </select>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
 
                 <!-- Advanced Section (collapsed by default) -->
-                <div class="advanced-section" style="margin-top: 20px;">
-                    <button id="wizardStep3AdvancedToggle" class="advanced-toggle" onclick="TrainingWizard.toggleStep3Advanced()">
-                        <i class="fas fa-chevron-right"></i>
-                        Advanced
-                    </button>
-                    <div id="wizardStep3AdvancedContent" class="advanced-content">
-                        <!-- Preemptible VMs -->
-                        <div class="toggle-row" style="margin-bottom: 16px;">
+                <div class="filter-subchapter" style="margin-top: 20px;">
+                    <div class="subchapter-header-tablet" id="wizardStep3AdvancedToggle" onclick="TrainingWizard.toggleStep3Advanced()">
+                        <i class="fas fa-cog" style="color: #8b5cf6; margin-right: 10px;"></i>
+                        <span class="subchapter-title" style="flex-grow: 1; text-align: left;">Advanced</span>
+                        <i id="wizardStep3AdvancedChevron" class="fas fa-chevron-right subchapter-chevron"></i>
+                    </div>
+                    <div id="wizardStep3AdvancedContent" class="subchapter-content-outside hidden">
+                        <!-- Preemptible VMs (disabled - not yet tested) -->
+                        <div class="toggle-row" style="margin-bottom: 16px; opacity: 0.5; pointer-events: none;">
                             <label class="toggle-switch">
-                                <input type="checkbox" id="wizardPreemptible"
-                                       onchange="TrainingWizard.updatePreemptible(this.checked)">
+                                <input type="checkbox" id="wizardPreemptible" disabled>
                                 <span class="toggle-slider"></span>
                             </label>
                             <div class="toggle-label">
@@ -1569,11 +1640,10 @@
                             </div>
                         </div>
 
-                        <!-- Evaluator Settings -->
-                        <div class="toggle-row" style="margin-bottom: 12px;">
+                        <!-- Evaluator Settings (disabled - not yet tested) -->
+                        <div class="toggle-row" style="margin-bottom: 12px; opacity: 0.5; pointer-events: none;">
                             <label class="toggle-switch">
-                                <input type="checkbox" id="wizardEvaluatorEnabled"
-                                       onchange="TrainingWizard.updateEvaluator('enabled', this.checked)">
+                                <input type="checkbox" id="wizardEvaluatorEnabled" disabled>
                                 <span class="toggle-slider"></span>
                             </label>
                             <div class="toggle-label">
@@ -1581,14 +1651,28 @@
                                 <span class="toggle-hint">Automatically evaluate model after training</span>
                             </div>
                         </div>
-                        <div class="training-params-grid" style="grid-template-columns: 1fr;">
+                        <div class="training-params-grid" style="grid-template-columns: 1fr; opacity: 0.5; pointer-events: none;">
                             <div class="training-param-field">
                                 <label class="training-param-label">Blessing Threshold</label>
                                 <input type="number" id="wizardBlessingThreshold" class="training-param-input"
-                                       value="0.40" step="0.01" min="0" max="1"
-                                       onchange="TrainingWizard.updateEvaluator('threshold', this.value)">
+                                       value="0.40" step="0.01" min="0" max="1" disabled>
                                 <div class="wizard-field-hint">Minimum metric value to bless model for deployment</div>
                             </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Deploy Section (placeholder for future functionality) -->
+                <div class="filter-subchapter" style="margin-top: 16px;">
+                    <div class="subchapter-header-tablet" id="wizardDeployToggle" onclick="TrainingWizard.toggleDeploy()">
+                        <i class="fas fa-rocket" style="color: #f97316; margin-right: 10px;"></i>
+                        <span class="subchapter-title" style="flex-grow: 1; text-align: left;">Deploy</span>
+                        <i id="wizardDeployChevron" class="fas fa-chevron-right subchapter-chevron"></i>
+                    </div>
+                    <div id="wizardDeployContent" class="subchapter-content-outside hidden">
+                        <div class="wizard-info-box info" style="margin-top: 0;">
+                            <i class="fas fa-info-circle"></i>
+                            <span>Deployment options will be configured here in a future update.</span>
                         </div>
                     </div>
                 </div>
@@ -1596,7 +1680,7 @@
                 <!-- Summary Panel -->
                 <div class="wizard-summary-panel">
                     <div class="wizard-summary-title">
-                        <i class="fas fa-clipboard-list"></i> Training Summary
+                        <i class="fas fa-clipboard-list" style="color: #f97316;"></i> Training Summary
                     </div>
                     <div id="wizardSummaryGrid" class="wizard-summary-grid">
                         <!-- Populated by JS -->

@@ -411,6 +411,56 @@ def _training_run_create(request, model_endpoint):
 
 @csrf_exempt
 @require_http_methods(["GET"])
+def training_run_check_name(request):
+    """
+    Check if a training run name is available (unique).
+
+    GET /api/training-runs/check-name/?name=my-model-v1
+
+    Returns:
+    {
+        "success": true,
+        "available": true/false,
+        "message": "Name is available" / "Name already exists"
+    }
+    """
+    try:
+        model_endpoint = _get_model_endpoint(request)
+        if not model_endpoint:
+            return JsonResponse({
+                'success': False,
+                'error': 'No model endpoint selected'
+            }, status=400)
+
+        name = request.GET.get('name', '').strip()
+        if not name:
+            return JsonResponse({
+                'success': False,
+                'error': 'Name parameter is required'
+            }, status=400)
+
+        # Check if name exists for this model endpoint
+        exists = TrainingRun.objects.filter(
+            ml_model=model_endpoint,
+            name=name
+        ).exists()
+
+        return JsonResponse({
+            'success': True,
+            'available': not exists,
+            'message': 'Name is available' if not exists else 'Name already exists'
+        })
+
+    except Exception as e:
+        logger.exception(f"Error checking training run name: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
 def training_run_detail(request, training_run_id):
     """
     Get detailed status and results for a Training Run.

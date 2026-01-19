@@ -81,8 +81,8 @@ const TrainingWizard = (function() {
             deploymentOption: 'register_only',
             scheduleConfig: {
                 type: 'now',              // 'now', 'once', 'daily', 'weekly'
-                datetime: null,           // ISO string for 'once'
-                time: '09:00',            // HH:MM for recurring
+                date: null,               // YYYY-MM-DD for 'once'
+                time: '09:00',            // HH:MM for all schedule types
                 dayOfWeek: 0,             // 0=Monday for weekly
                 timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
             }
@@ -99,7 +99,9 @@ const TrainingWizard = (function() {
         isLoading: false,
         searchQuery: '',
         searchTimeout: null,
-        bestExperimentId: null  // Track the actual best experiment ID for the current model type
+        bestExperimentId: null,  // Track the actual best experiment ID for the current model type
+        nameCheckTimeout: null,  // Debounce timeout for name uniqueness check
+        nameAvailable: null      // null = not checked, true = available, false = taken
     };
 
     // =============================================================================
@@ -160,6 +162,51 @@ const TrainingWizard = (function() {
             toast.style.animation = 'slideOut 0.3s ease';
             setTimeout(() => toast.remove(), 300);
         }, 3000);
+    }
+
+    /**
+     * Check if a training run name is available (unique).
+     * Shows visual feedback on the input field.
+     */
+    async function checkNameAvailability(name) {
+        const nameInput = document.getElementById('wizardRunName');
+        const nameError = document.getElementById('wizardRunNameError');
+
+        // Reset state
+        state.nameAvailable = null;
+
+        // Clear previous timeout
+        if (state.nameCheckTimeout) {
+            clearTimeout(state.nameCheckTimeout);
+        }
+
+        // Basic validation first
+        if (!name || name.length < 3) {
+            return;
+        }
+
+        // Debounce API call
+        state.nameCheckTimeout = setTimeout(async () => {
+            try {
+                const response = await fetch(`/api/training-runs/check-name/?name=${encodeURIComponent(name)}`);
+                const data = await response.json();
+
+                if (data.success) {
+                    state.nameAvailable = data.available;
+
+                    if (!data.available) {
+                        showFieldError(nameInput, nameError, 'This name already exists. Please choose a unique name.');
+                    } else {
+                        // Only hide error if it was showing the "already exists" message
+                        if (nameError && nameError.textContent.includes('already exists')) {
+                            hideFieldError(nameInput, nameError);
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Error checking name availability:', error);
+            }
+        }, 400);  // 400ms debounce
     }
 
     // =============================================================================
@@ -268,6 +315,8 @@ const TrainingWizard = (function() {
         state.isLoading = false;
         state.searchQuery = '';
         state.bestExperimentId = null;
+        state.nameCheckTimeout = null;
+        state.nameAvailable = null;
     }
 
     // =============================================================================
@@ -381,6 +430,10 @@ const TrainingWizard = (function() {
             isValid = false;
         } else if (!/^[a-z0-9_-]+$/.test(name)) {
             showFieldError(nameInput, nameError, 'Only lowercase letters, numbers, hyphens, and underscores allowed');
+            isValid = false;
+        } else if (state.nameAvailable === false) {
+            // Name exists - show error
+            showFieldError(nameInput, nameError, 'This name already exists. Please choose a unique name.');
             isValid = false;
         } else {
             hideFieldError(nameInput, nameError);
@@ -869,22 +922,32 @@ const TrainingWizard = (function() {
     }
 
     function toggleAdvanced() {
-        const toggle = document.getElementById('wizardAdvancedToggle');
+        const chevron = document.getElementById('wizardAdvancedChevron');
         const content = document.getElementById('wizardAdvancedContent');
 
-        if (toggle && content) {
-            const isExpanded = toggle.classList.toggle('expanded');
-            content.classList.toggle('show', isExpanded);
+        if (chevron && content) {
+            const isExpanded = chevron.classList.toggle('expanded');
+            content.classList.toggle('hidden', !isExpanded);
         }
     }
 
     function toggleStep3Advanced() {
-        const toggle = document.getElementById('wizardStep3AdvancedToggle');
+        const chevron = document.getElementById('wizardStep3AdvancedChevron');
         const content = document.getElementById('wizardStep3AdvancedContent');
 
-        if (toggle && content) {
-            const isExpanded = toggle.classList.toggle('expanded');
-            content.classList.toggle('show', isExpanded);
+        if (chevron && content) {
+            const isExpanded = chevron.classList.toggle('expanded');
+            content.classList.toggle('hidden', !isExpanded);
+        }
+    }
+
+    function toggleDeploy() {
+        const chevron = document.getElementById('wizardDeployChevron');
+        const content = document.getElementById('wizardDeployContent');
+
+        if (chevron && content) {
+            const isExpanded = chevron.classList.toggle('expanded');
+            content.classList.toggle('hidden', !isExpanded);
         }
     }
 
@@ -980,40 +1043,66 @@ const TrainingWizard = (function() {
         });
     }
 
-    function selectScheduleType(type) {
-        state.formData.scheduleConfig.type = type;
+    function toggleSchedule() {
+        const chevron = document.getElementById('wizardScheduleChevron');
+        const content = document.getElementById('wizardScheduleContent');
 
-        // Update tab selection
-        document.querySelectorAll('.schedule-type-option').forEach(opt => {
-            opt.classList.toggle('selected', opt.dataset.type === type);
-        });
+        if (chevron && content) {
+            const isExpanded = !chevron.classList.contains('expanded');
+            chevron.classList.toggle('expanded', isExpanded);
+            content.classList.toggle('hidden', !isExpanded);
+        }
+    }
 
-        // Show/hide appropriate fields
-        const onceFields = document.getElementById('scheduleOnceFields');
-        const recurringFields = document.getElementById('scheduleRecurringFields');
-        const weeklyDayField = document.getElementById('weeklyDayField');
+    function onScheduleTypeChange() {
+        // Get selected radio button value
+        const selectedRadio = document.querySelector('input[name="wizardScheduleType"]:checked');
+        const scheduleType = selectedRadio ? selectedRadio.value : 'now';
 
-        if (onceFields) onceFields.classList.toggle('hidden', type !== 'once');
-        if (recurringFields) recurringFields.classList.toggle('hidden', type !== 'daily' && type !== 'weekly');
-        if (weeklyDayField) weeklyDayField.classList.toggle('hidden', type !== 'weekly');
+        state.formData.scheduleConfig.type = scheduleType;
+
+        // Get all option containers
+        const onceOptions = document.getElementById('wizardScheduleOnceOptions');
+        const dailyOptions = document.getElementById('wizardScheduleDailyOptions');
+        const weeklyOptions = document.getElementById('wizardScheduleWeeklyOptions');
+
+        // Hide all by default
+        if (onceOptions) onceOptions.classList.add('hidden');
+        if (dailyOptions) dailyOptions.classList.add('hidden');
+        if (weeklyOptions) weeklyOptions.classList.add('hidden');
+
+        // Show relevant options
+        if (scheduleType === 'once') {
+            if (onceOptions) onceOptions.classList.remove('hidden');
+        } else if (scheduleType === 'daily') {
+            if (dailyOptions) dailyOptions.classList.remove('hidden');
+        } else if (scheduleType === 'weekly') {
+            if (weeklyOptions) weeklyOptions.classList.remove('hidden');
+        }
 
         // Update submit button text
         const submitBtn = document.getElementById('wizardSubmitBtn');
         if (submitBtn) {
             const btnInner = submitBtn.querySelector('.btn-neu-inner');
             if (btnInner) {
-                if (type === 'now') {
-                    btnInner.innerHTML = 'Run';
-                } else {
-                    btnInner.innerHTML = 'Schedule';
-                }
+                btnInner.innerHTML = scheduleType === 'now' ? 'Run' : 'Schedule';
             }
         }
     }
 
+    // Keep old function name for backwards compatibility
+    function selectScheduleType(type) {
+        // Find and check the corresponding radio button
+        const radio = document.querySelector(`input[name="wizardScheduleType"][value="${type}"]`);
+        if (radio) {
+            radio.checked = true;
+            onScheduleTypeChange();
+        }
+    }
+
     function updateScheduleConfig(param, value) {
-        if (param === 'datetime') {
-            state.formData.scheduleConfig.datetime = value;
+        if (param === 'date') {
+            state.formData.scheduleConfig.date = value;
         } else if (param === 'time') {
             state.formData.scheduleConfig.time = value;
         } else if (param === 'dayOfWeek') {
@@ -1024,37 +1113,8 @@ const TrainingWizard = (function() {
     }
 
     function initializeDatetimePickers() {
-        // Initialize flatpickr for datetime picker if available
-        if (typeof flatpickr !== 'undefined') {
-            const datetimeInput = document.getElementById('wizardScheduleDatetime');
-            if (datetimeInput) {
-                flatpickr(datetimeInput, {
-                    enableTime: true,
-                    dateFormat: 'Y-m-d H:i',
-                    minDate: 'today',
-                    time_24hr: true,
-                    onChange: function(selectedDates, dateStr) {
-                        if (selectedDates[0]) {
-                            state.formData.scheduleConfig.datetime = selectedDates[0].toISOString();
-                        }
-                    }
-                });
-            }
-
-            const timeInput = document.getElementById('wizardScheduleTime');
-            if (timeInput) {
-                flatpickr(timeInput, {
-                    enableTime: true,
-                    noCalendar: true,
-                    dateFormat: 'H:i',
-                    time_24hr: true,
-                    defaultDate: '09:00',
-                    onChange: function(selectedDates, dateStr) {
-                        state.formData.scheduleConfig.time = dateStr;
-                    }
-                });
-            }
-        }
+        // No longer using flatpickr - using native HTML5 date/time inputs
+        // This function is kept for backwards compatibility but does nothing
     }
 
     function renderSummaryPanel() {
@@ -1264,6 +1324,10 @@ const TrainingWizard = (function() {
         updateEvaluator: updateEvaluator,
         selectDeploymentOption: selectDeploymentOption,
         selectScheduleType: selectScheduleType,
-        updateScheduleConfig: updateScheduleConfig
+        updateScheduleConfig: updateScheduleConfig,
+        checkNameAvailability: checkNameAvailability,
+        toggleDeploy: toggleDeploy,
+        toggleSchedule: toggleSchedule,
+        onScheduleTypeChange: onScheduleTypeChange
     };
 })();

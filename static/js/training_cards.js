@@ -202,6 +202,123 @@ const TrainingCards = (function() {
         }, 3000);
     }
 
+    /**
+     * Show a styled confirmation modal (matches experiments page)
+     * @param {Object} options - Modal options
+     * @param {string} options.title - Modal title
+     * @param {string} options.message - Modal message (can include HTML)
+     * @param {string} options.confirmText - Confirm button text
+     * @param {string} options.cancelText - Cancel button text
+     * @param {string} options.type - Modal type: 'warning', 'danger', 'info', 'success'
+     * @param {string} options.confirmButtonClass - Custom class for confirm button
+     * @param {string} options.cancelButtonClass - Custom class for cancel button
+     * @param {Function} options.onConfirm - Callback when confirmed
+     * @param {Function} options.onCancel - Callback when cancelled (optional)
+     */
+    function showConfirmModal(options) {
+        const modal = document.getElementById('confirmModal');
+        const icon = document.getElementById('confirmModalIcon');
+        const title = document.getElementById('confirmModalTitle');
+        const message = document.getElementById('confirmModalMessage');
+        const confirmBtn = document.getElementById('confirmModalConfirmBtn');
+        const cancelBtn = document.getElementById('confirmModalCancelBtn');
+
+        // Set content
+        title.textContent = options.title || 'Confirm Action';
+        message.innerHTML = options.message || 'Are you sure you want to proceed?';
+
+        // Update inner span text for neumorphic buttons
+        const confirmInner = confirmBtn.querySelector('.btn-neu-inner');
+        const cancelInner = cancelBtn.querySelector('.btn-neu-inner');
+        if (confirmInner) confirmInner.textContent = options.confirmText || 'Confirm';
+        if (cancelInner) cancelInner.textContent = options.cancelText || 'Cancel';
+
+        // Set icon and button type
+        const type = options.type || 'warning';
+        icon.className = `modal-header-icon ${type}`;
+
+        // Update icon based on type
+        const iconElement = icon.querySelector('i');
+        const baseClasses = 'btn-neu btn-neu-action';
+
+        // Determine confirm button class (custom class takes precedence)
+        let confirmButtonClass = options.confirmButtonClass;
+        if (!confirmButtonClass) {
+            if (type === 'danger') {
+                iconElement.className = 'fas fa-exclamation-triangle text-xl';
+                confirmButtonClass = 'btn-neu-cancel';
+            } else if (type === 'warning') {
+                iconElement.className = 'fas fa-exclamation-circle text-xl';
+                confirmButtonClass = 'btn-neu-warning';
+            } else if (type === 'info') {
+                iconElement.className = 'fas fa-info-circle text-xl';
+                confirmButtonClass = 'btn-neu-nav-wide';
+            } else if (type === 'success') {
+                iconElement.className = 'fas fa-check-circle text-xl';
+                confirmButtonClass = 'btn-neu-save';
+            }
+        } else {
+            // Set icon based on type even when custom button class is provided
+            if (type === 'danger') {
+                iconElement.className = 'fas fa-exclamation-triangle text-xl';
+            } else if (type === 'warning') {
+                iconElement.className = 'fas fa-exclamation-circle text-xl';
+            } else if (type === 'info') {
+                iconElement.className = 'fas fa-info-circle text-xl';
+            } else if (type === 'success') {
+                iconElement.className = 'fas fa-check-circle text-xl';
+            }
+        }
+        confirmBtn.className = `${baseClasses} ${confirmButtonClass}`;
+
+        // Set cancel button class (default: btn-neu-secondary for grey)
+        cancelBtn.className = `${baseClasses} ${options.cancelButtonClass || 'btn-neu-secondary'}`;
+
+        // Remove old event listeners by cloning
+        const newConfirmBtn = confirmBtn.cloneNode(true);
+        const newCancelBtn = cancelBtn.cloneNode(true);
+        confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+        cancelBtn.parentNode.replaceChild(newCancelBtn, cancelBtn);
+
+        // Add new event listeners
+        newConfirmBtn.addEventListener('click', () => {
+            hideConfirmModal();
+            if (options.onConfirm) options.onConfirm();
+        });
+
+        newCancelBtn.addEventListener('click', () => {
+            hideConfirmModal();
+            if (options.onCancel) options.onCancel();
+        });
+
+        // Show modal
+        modal.classList.remove('hidden');
+
+        // Close on overlay click
+        modal.addEventListener('click', function overlayClick(e) {
+            if (e.target === modal) {
+                hideConfirmModal();
+                if (options.onCancel) options.onCancel();
+                modal.removeEventListener('click', overlayClick);
+            }
+        });
+
+        // Close on ESC key
+        function escapeHandler(e) {
+            if (e.key === 'Escape') {
+                hideConfirmModal();
+                if (options.onCancel) options.onCancel();
+                document.removeEventListener('keydown', escapeHandler);
+            }
+        }
+        document.addEventListener('keydown', escapeHandler);
+    }
+
+    function hideConfirmModal() {
+        const modal = document.getElementById('confirmModal');
+        modal.classList.add('hidden');
+    }
+
     // =============================================================================
     // CONFIGURATION
     // =============================================================================
@@ -699,12 +816,24 @@ const TrainingCards = (function() {
         // Model type badge
         const modelTypeBadge = renderModelTypeBadge(run.model_type);
 
+        // Deployment status badge (only for completed blessed runs)
+        let deployBadge = '';
+        if (run.status === 'completed' && run.is_blessed) {
+            const deployIcon = run.is_deployed ? 'fa-check-circle' : 'fa-times-circle';
+            const deployText = run.is_deployed ? 'Deployed' : 'Not Deployed';
+            deployBadge = `
+                <span class="deploy-status-badge ${run.is_deployed ? 'deployed' : 'not-deployed'}">
+                    <i class="fas ${deployIcon}"></i> ${deployText}
+                </span>
+            `;
+        }
+
         return `
             <div class="ml-card-col-config">
                 <div class="ml-card-config-item"><span class="ml-card-config-label">Dataset:</span> ${escapeHtml(run.dataset_name || '-')}</div>
                 <div class="ml-card-config-item"><span class="ml-card-config-label">Features:</span> ${escapeHtml(run.feature_config_name || '-')}</div>
                 <div class="ml-card-config-item"><span class="ml-card-config-label">Model:</span> ${escapeHtml(run.model_config_name || '-')}</div>
-                <div class="ml-card-config-item">${modelTypeBadge}</div>
+                <div class="ml-card-config-item ml-card-badges-row">${modelTypeBadge}${deployBadge}</div>
                 ${gpuChip}
             </div>
         `;
@@ -714,22 +843,13 @@ const TrainingCards = (function() {
         const primaryButtons = [];
         const secondaryButtons = [];
 
-        // View button - always available (primary)
-        primaryButtons.push(`
-            <button class="card-action-btn view" onclick="event.stopPropagation(); TrainingCards.viewRun(${run.id})" title="View Details">View</button>
-        `);
+        // Determine if run is cancellable (running or submitting)
+        const isCancellable = run.status === 'running' || run.status === 'submitting';
 
-        // Cancel button (for pending/scheduled/submitting/running)
-        if (allowedActions.includes('cancel')) {
-            primaryButtons.push(`
-                <button class="card-action-btn cancel" onclick="event.stopPropagation(); TrainingCards.cancelRun(${run.id})" title="Cancel Training">Cancel</button>
-            `);
-        }
-
-        // Deploy button (for completed) - allow deploying to another endpoint even if already deployed
+        // Deploy button (for completed blessed runs)
         if (allowedActions.includes('deploy') && run.status === 'completed' && run.is_blessed) {
             primaryButtons.push(`
-                <button class="card-action-btn view" onclick="event.stopPropagation(); TrainingCards.deployRun(${run.id})" title="Deploy to Endpoint">Deploy</button>
+                <button class="card-action-btn deploy" onclick="event.stopPropagation(); TrainingCards.deployRun(${run.id})" title="Deploy to Endpoint">Deploy</button>
             `);
         }
 
@@ -746,6 +866,16 @@ const TrainingCards = (function() {
                 <button class="card-action-btn cancel" onclick="event.stopPropagation(); TrainingCards.pushAnyway(${run.id})" title="Push to Registry Anyway">Push</button>
             `);
         }
+
+        // View button - always available (primary)
+        primaryButtons.push(`
+            <button class="card-action-btn view" onclick="event.stopPropagation(); TrainingCards.viewRun(${run.id})" title="View Details">View</button>
+        `);
+
+        // Cancel button - always visible, disabled when not cancellable (matches experiments page)
+        primaryButtons.push(`
+            <button class="card-action-btn cancel" onclick="event.stopPropagation(); TrainingCards.cancelRun(event, ${run.id})" title="Cancel Training" ${isCancellable ? '' : 'disabled'}>Cancel</button>
+        `);
 
         // Delete button (for terminal states)
         if (allowedActions.includes('delete')) {
@@ -984,33 +1114,50 @@ const TrainingCards = (function() {
         }
     }
 
-    async function cancelRun(runId) {
-        if (!confirm('Are you sure you want to cancel this training run?')) {
-            return;
-        }
+    function cancelRun(event, runId) {
+        const btn = event.target.closest('button');
+        const originalHtml = btn.innerHTML;
 
-        try {
-            const url = buildUrl(config.endpoints.cancel, { id: runId });
-            const response = await fetch(url, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': getCookie('csrftoken')
+        showConfirmModal({
+            title: 'Cancel Training Run',
+            message: 'Are you sure you want to cancel this training run?<br><span class="text-sm text-gray-500 mt-2 block">This will stop the Vertex AI pipeline.</span>',
+            confirmText: 'Confirm',
+            cancelText: 'Cancel',
+            type: 'warning',
+            confirmButtonClass: 'btn-neu-save',
+            cancelButtonClass: 'btn-neu-cancel',
+            onConfirm: async () => {
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+                try {
+                    const url = buildUrl(config.endpoints.cancel, { id: runId });
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': getCookie('csrftoken')
+                        }
+                    });
+
+                    const data = await response.json();
+
+                    if (data.success) {
+                        await loadTrainingRuns();
+                        showToast('Training run cancelled', 'success');
+                    } else {
+                        showToast(data.error || 'Failed to cancel training run', 'error');
+                        btn.disabled = false;
+                        btn.innerHTML = originalHtml;
+                    }
+                } catch (error) {
+                    console.error('Error cancelling training run:', error);
+                    showToast('Failed to cancel training run', 'error');
+                    btn.disabled = false;
+                    btn.innerHTML = originalHtml;
                 }
-            });
-
-            const data = await response.json();
-
-            if (data.success) {
-                showToast('Training run cancelled', 'success');
-                loadTrainingRuns();
-            } else {
-                showToast(data.error || 'Failed to cancel training run', 'error');
             }
-        } catch (error) {
-            console.error('Error cancelling training run:', error);
-            showToast('Failed to cancel training run', 'error');
-        }
+        });
     }
 
     async function deleteRun(runId) {

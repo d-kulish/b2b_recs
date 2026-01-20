@@ -672,6 +672,58 @@
     background-color: #059669;
 }
 
+/* Deploy Action Button (orange/amber like fire icon) */
+.card-action-btn.deploy {
+    width: 64px;
+    height: 32px;
+    background-color: #c9a227;
+    color: #ffffff;
+    font-weight: 600;
+    font-size: 12px;
+}
+
+.card-action-btn.deploy:hover {
+    background-color: #b8922a;
+}
+
+/* Badges Row (model type + deployment status side by side) */
+.ml-card-badges-row {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+/* Deployment Status Badge (matches .ml-card-type-badge styling) */
+.deploy-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 500;
+    white-space: nowrap;
+    margin-top: 4px;
+}
+
+.deploy-status-badge i {
+    font-size: 9px;
+}
+
+.deploy-status-badge.deployed {
+    background: #dcfce7;
+    color: #166534;
+    border: 1px solid #bbf7d0;
+}
+
+.deploy-status-badge.not-deployed {
+    background: #fef2f2;
+    color: #dc2626;
+    border: 1px solid #fecaca;
+}
+
 /* Cancel Action Button - solid red when active, outline when disabled */
 .card-action-btn.cancel {
     width: 64px;

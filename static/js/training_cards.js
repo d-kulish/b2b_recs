@@ -817,9 +817,27 @@ const TrainingCards = (function() {
         // Model type badge
         const modelTypeBadge = renderModelTypeBadge(run.model_type);
 
-        // Deployment status badge (only for completed blessed runs)
+        // Blessed status badge (for completed/not_blessed runs)
+        let blessedBadge = '';
+        if (run.status === 'completed' || run.status === 'not_blessed') {
+            if (run.is_blessed === true) {
+                blessedBadge = `
+                    <span class="blessed-status-badge blessed">
+                        <i class="fas fa-check-circle"></i> Blessed
+                    </span>
+                `;
+            } else {
+                blessedBadge = `
+                    <span class="blessed-status-badge not-blessed">
+                        <i class="fas fa-times-circle"></i> Not Blessed
+                    </span>
+                `;
+            }
+        }
+
+        // Deployment status badge (for completed runs)
         let deployBadge = '';
-        if (run.status === 'completed' && run.is_blessed) {
+        if (run.status === 'completed') {
             const deployIcon = run.is_deployed ? 'fa-check-circle' : 'fa-times-circle';
             const deployText = run.is_deployed ? 'Deployed' : 'Not Deployed';
             deployBadge = `
@@ -834,7 +852,7 @@ const TrainingCards = (function() {
                 <div class="ml-card-config-item"><span class="ml-card-config-label">Dataset:</span> ${escapeHtml(run.dataset_name || '-')}</div>
                 <div class="ml-card-config-item"><span class="ml-card-config-label">Features:</span> ${escapeHtml(run.feature_config_name || '-')}</div>
                 <div class="ml-card-config-item"><span class="ml-card-config-label">Model:</span> ${escapeHtml(run.model_config_name || '-')}</div>
-                <div class="ml-card-config-item ml-card-badges-row">${modelTypeBadge}${deployBadge}</div>
+                <div class="ml-card-config-item ml-card-badges-row">${modelTypeBadge}${blessedBadge}${deployBadge}</div>
                 ${gpuChip}
             </div>
         `;
@@ -847,8 +865,8 @@ const TrainingCards = (function() {
         // Determine if run is cancellable (running or submitting)
         const isCancellable = run.status === 'running' || run.status === 'submitting';
 
-        // Deploy button (for completed blessed runs)
-        if (allowedActions.includes('deploy') && run.status === 'completed' && run.is_blessed) {
+        // Deploy button (for completed runs)
+        if (allowedActions.includes('deploy') && run.status === 'completed') {
             primaryButtons.push(`
                 <button class="card-action-btn deploy" onclick="event.stopPropagation(); TrainingCards.deployRun(${run.id})" title="Deploy to Endpoint">Deploy</button>
             `);

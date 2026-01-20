@@ -402,6 +402,54 @@ Caches training history for fast UI:
 - `get_cached_history()` - Return cached data
 - Samples every 5th epoch to reduce cache size
 
+#### Training History Data Flow (Experiments vs Training Runs)
+
+**For Experiments (QuickTest):**
+```
+Trainer Component → training_metrics.json (GCS) → TrainingCacheService → training_history_json (DB) → API → UI
+```
+
+The TrainingCacheService reads `training_metrics.json` from GCS and caches it in the `training_history_json` JSONField for instant UI loading.
+
+**For Training Runs (TrainingRun):**
+```
+Trainer Component → training_metrics.json (GCS) → ??? (NOT IMPLEMENTED) → training_history_json (DB, EMPTY) → No API endpoint → UI shows "Loading..."
+```
+
+**Current Gap (as of 2026-01-20):**
+
+| Component | Experiments | Training Runs |
+|-----------|-------------|---------------|
+| GCS `training_metrics.json` | ✅ Written by Trainer | ✅ Written by Trainer |
+| DB `training_history_json` | ✅ Cached via TrainingCacheService | ❌ Empty (no cache service) |
+| API endpoint | ✅ `/api/quick-tests/{id}/training-history/` | ❌ Missing |
+| Frontend preload | ✅ `preloadTrainingHistory()` | ❌ Not called in training_run mode |
+| UI Training tab | ✅ Charts displayed | ❌ Shows "Loading training data..." forever |
+
+**GCS File Structure (training_metrics.json):**
+```json
+{
+    "epochs": [0, 1, 2, ...],           // Epoch indices
+    "loss": {"train": [...], "val": [...]},
+    "gradient": {...},
+    "weight_stats": {...},
+    "gradient_stats": {...},
+    "final_metrics": {
+        "test_recall_at_5": 0.047,
+        "test_recall_at_10": 0.076,
+        ...
+    },
+    "params": {"epochs": 150, "batch_size": 4096, ...},
+    "available": true,
+    "saved_at": "2026-01-19T19:17:00Z"
+}
+```
+
+**To Fix Training Runs:**
+1. Add API endpoint: `/api/training-runs/{id}/training-history/`
+2. Either cache from GCS (like experiments) or fetch directly
+3. Update `exp_view_modal.js` to call training history endpoint in `training_run` mode
+
 ### HyperparameterAnalyzer
 
 TPE-based analysis of what configurations work best:

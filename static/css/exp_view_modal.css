@@ -1511,28 +1511,30 @@
 .exp-view-stats-summary {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
-    gap: 12px;
+    gap: 16px;
     margin-bottom: 16px;
 }
 
 .exp-view-stat-box {
-    background: #f9fafb;
+    background: #ffffff;
+    border: 1px solid #1f2937;
     border-radius: 8px;
-    padding: 12px;
+    padding: 12px 8px;
     text-align: center;
     min-width: 0;
 }
 
 .exp-view-stat-box-value {
-    font-size: 20px;
+    font-size: 18px;
     font-weight: 600;
-    color: #111827;
+    color: #1f2937;
 }
 
 .exp-view-stat-box-label {
     font-size: 11px;
-    color: #6b7280;
-    margin-top: 2px;
+    color: #1f2937;
+    font-weight: 500;
+    margin-top: 4px;
 }
 
 /* Features Table (legacy) */

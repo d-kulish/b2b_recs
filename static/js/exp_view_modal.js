@@ -472,18 +472,7 @@ const ExpViewModal = (function() {
         resultsSummary.classList.remove('hidden');
 
         let metricsHtml = '';
-
-        // Add blessing status banner
-        if (run.is_blessed !== null && run.is_blessed !== undefined) {
-            const blessingClass = run.is_blessed ? 'blessed' : 'not-blessed';
-            const blessingIcon = run.is_blessed ? 'fa-check-circle' : 'fa-exclamation-triangle';
-            const blessingText = run.is_blessed ? 'Model passed evaluation (blessed)' : 'Model did not pass evaluation threshold';
-            metricsHtml += `
-                <div class="exp-view-blessing-status ${blessingClass}" style="grid-column: span 4; margin-bottom: 12px;">
-                    <i class="fas ${blessingIcon}"></i> ${blessingText}
-                </div>
-            `;
-        }
+        const formatRecall = v => v != null ? (v * 100).toFixed(0) + '%' : 'N/A';
 
         // Metrics based on model type
         if (run.model_type === 'multitask') {
@@ -491,11 +480,11 @@ const ExpViewModal = (function() {
             metricsHtml += `
                 <div class="exp-view-metric-card">
                     <div class="exp-view-metric-card-label">R@5</div>
-                    <div class="exp-view-metric-card-value">${formatNumber(run.recall_at_5)}</div>
+                    <div class="exp-view-metric-card-value">${formatRecall(run.recall_at_5)}</div>
                 </div>
                 <div class="exp-view-metric-card">
                     <div class="exp-view-metric-card-label">R@10</div>
-                    <div class="exp-view-metric-card-value">${formatNumber(run.recall_at_10)}</div>
+                    <div class="exp-view-metric-card-value">${formatRecall(run.recall_at_10)}</div>
                 </div>
                 <div class="exp-view-metric-card">
                     <div class="exp-view-metric-card-label">RMSE</div>
@@ -530,19 +519,19 @@ const ExpViewModal = (function() {
             metricsHtml += `
                 <div class="exp-view-metric-card">
                     <div class="exp-view-metric-card-label">R@5</div>
-                    <div class="exp-view-metric-card-value">${formatNumber(run.recall_at_5)}</div>
+                    <div class="exp-view-metric-card-value">${formatRecall(run.recall_at_5)}</div>
                 </div>
                 <div class="exp-view-metric-card">
                     <div class="exp-view-metric-card-label">R@10</div>
-                    <div class="exp-view-metric-card-value">${formatNumber(run.recall_at_10)}</div>
+                    <div class="exp-view-metric-card-value">${formatRecall(run.recall_at_10)}</div>
                 </div>
                 <div class="exp-view-metric-card">
                     <div class="exp-view-metric-card-label">R@50</div>
-                    <div class="exp-view-metric-card-value">${formatNumber(run.recall_at_50)}</div>
+                    <div class="exp-view-metric-card-value">${formatRecall(run.recall_at_50)}</div>
                 </div>
                 <div class="exp-view-metric-card">
                     <div class="exp-view-metric-card-label">R@100</div>
-                    <div class="exp-view-metric-card-value">${formatNumber(run.recall_at_100)}</div>
+                    <div class="exp-view-metric-card-value">${formatRecall(run.recall_at_100)}</div>
                 </div>
             `;
         }

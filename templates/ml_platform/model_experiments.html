@@ -2222,7 +2222,7 @@
             </div>
             <h2 class="chapter-title">Quick Test</h2>
             <div class="ml-auto" style="display: flex; gap: 8px;">
-                <button onclick="openCompareSelectModal()" class="btn btn-secondary btn-sm" id="compareBtn" style="width: 150px;">
+                <button onclick="exp_openCompareModal()" class="btn btn-secondary btn-sm" id="compareBtn" style="width: 150px;">
                     <i class="fas fa-columns mr-1"></i>Compare
                 </button>
                 <button onclick="openNewExpWizard()" class="btn btn-primary btn-sm" style="width: 150px;">
@@ -3074,119 +3074,161 @@
 </div>
 
 <!-- ============================================================================
-     COMPARE SELECTION MODAL (Select experiments to compare)
+     EXPERIMENT COMPARE MODAL (Accordion-style dropdown comparison)
      ============================================================================ -->
-<div id="compareSelectModal" class="modal-overlay hidden" onclick="closeCompareSelectModal(event)">
-    <div class="modal-container" style="max-width: 900px;" onclick="event.stopPropagation()">
-        <div class="modal-header">
-            <div class="modal-header-icon info">
-                <i class="fas fa-check-square"></i>
-            </div>
-            <h3 class="modal-header-title">Select Experiments to Compare</h3>
-        </div>
-        <div class="modal-body" style="padding: 16px 24px;">
-            <!-- Selection info -->
-            <div class="compare-select-info" style="margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center;">
-                <span class="text-sm text-gray-500">Select 2-4 experiments to compare</span>
-                <span id="compareSelectCount" class="text-sm font-medium" style="color: #f59e0b;">0 selected</span>
-            </div>
-
-            <!-- Loading State -->
-            <div id="compareSelectLoading" class="exp-view-loading">
-                <i class="fas fa-spinner fa-spin"></i>
-                <span>Loading experiments...</span>
-            </div>
-
-            <!-- Empty State -->
-            <div id="compareSelectEmpty" class="chapter-empty-state hidden" style="padding: 32px;">
-                <i class="fas fa-flask chapter-empty-icon"></i>
-                <p class="chapter-empty-text">No experiments available for comparison</p>
-                <p class="text-sm text-gray-400 mt-2">Run some experiments first, then come back to compare them.</p>
-            </div>
-
-            <!-- Experiment List (2-column grid) -->
-            <div id="compareSelectList" class="compare-select-list hidden" style="max-height: 324px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 8px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 0;">
-                <!-- Rows added dynamically -->
-            </div>
-
-            <!-- Pagination Controls -->
-            <div id="compareSelectPagination" class="hidden" style="display: flex; flex-direction: column; gap: 12px; margin-top: 16px; padding-top: 16px; border-top: 1px solid #e5e7eb;">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <div id="compareSelectPageInfo" class="text-sm text-gray-600">
-                        Showing 1-20 of 0 experiments
-                    </div>
-                    <div id="compareSelectPageControls" style="display: flex; align-items: center; gap: 8px;">
-                        <!-- Pagination buttons added dynamically -->
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="modal-footer-wizard-neu">
-            <div class="footer-left"></div>
-            <div class="footer-right">
-                <button type="button" class="btn-neu btn-neu-action btn-neu-secondary" onclick="clearCompareSelection()" style="min-width: 100px;">
-                    <span class="btn-neu-inner">Clear All</span>
-                </button>
-                <button type="button" id="compareSelectBtn" class="btn-neu btn-neu-action btn-neu-save" onclick="proceedToCompare()" disabled style="min-width: 100px;">
-                    <span class="btn-neu-inner">Compare</span>
-                </button>
-                <button type="button" class="btn-neu btn-neu-action btn-neu-cancel" onclick="closeCompareSelectModal()" style="min-width: 100px;">
-                    <span class="btn-neu-inner">Cancel</span>
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- ============================================================================
-     COMPARE MODAL (Experiment Comparison)
-     ============================================================================ -->
-<div id="compareModal" class="modal-overlay hidden" onclick="closeCompareModal(event)">
-    <div class="modal-container" style="max-width: 900px;" onclick="event.stopPropagation()">
+<div id="expCompareModal" class="modal-overlay hidden" onclick="exp_closeCompareModal(event)">
+    <div class="modal-container" style="max-width: 1000px;" onclick="event.stopPropagation()">
+        <!-- Header -->
         <div class="modal-header">
             <div class="modal-header-icon info">
                 <i class="fas fa-columns"></i>
             </div>
             <h3 class="modal-header-title">Compare Experiments</h3>
         </div>
+
+        <!-- Body -->
         <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
-            <!-- Loading State -->
-            <div id="compareLoading" class="exp-view-loading hidden">
-                <i class="fas fa-spinner fa-spin"></i>
-                <span>Loading comparison data...</span>
+            <!-- Dropdown Row -->
+            <div class="grid grid-cols-2 gap-4 mb-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Left Experiment</label>
+                    <select id="expCompareLeftSelect" onchange="exp_onCompareSelectChange('left')"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <option value="">Select experiment...</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Right Experiment</label>
+                    <select id="expCompareRightSelect" onchange="exp_onCompareSelectChange('right')"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <option value="">Select experiment...</option>
+                    </select>
+                </div>
             </div>
 
-            <!-- Empty State (no experiments selected) -->
-            <div id="compareEmpty" class="chapter-empty-state">
-                <i class="fas fa-check-square chapter-empty-icon"></i>
-                <p class="chapter-empty-text">Select experiments to compare</p>
-                <p class="text-sm text-gray-400 mt-2">Use the checkboxes on experiment cards to select 2-4 experiments for comparison</p>
-            </div>
+            <!-- Accordion Sections -->
+            <div id="expCompareAccordions" class="ds-compare-accordions">
+                <!-- Section 1: Results & Metrics -->
+                <div class="filter-subchapter ds-compare-section" id="expCompareResultsSection">
+                    <div class="subchapter-header-tablet" onclick="exp_toggleCompareSection('results')">
+                        <span class="subchapter-title"><i class="fas fa-chart-bar mr-2 text-green-500"></i>Results & Metrics</span>
+                        <span class="subchapter-filter-status" id="expCompareResultsStatus"></span>
+                        <i id="expCompareResultsChevron" class="fas fa-chevron-right subchapter-chevron"></i>
+                    </div>
+                    <div id="expCompareResultsContent" class="subchapter-content-outside hidden">
+                        <div class="ds-compare-grid">
+                            <div id="expCompareLeftResults" class="ds-compare-cell">
+                                <div class="ds-compare-placeholder">Select an experiment</div>
+                            </div>
+                            <div id="expCompareRightResults" class="ds-compare-cell">
+                                <div class="ds-compare-placeholder">Select an experiment</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
-            <!-- Comparison Content -->
-            <div id="compareContent" class="hidden">
-                <!-- Unified Comparison Table -->
-                <div class="compare-table-wrapper">
-                    <table id="compareUnifiedTable" class="compare-table compare-table-unified">
-                        <thead>
-                            <tr id="compareUnifiedHeader">
-                                <th></th>
-                                <!-- Experiment columns added dynamically -->
-                            </tr>
-                        </thead>
-                        <tbody id="compareUnifiedBody">
-                            <!-- All rows added dynamically -->
-                        </tbody>
-                    </table>
+                <!-- Section 2: Dataset Configuration -->
+                <div class="filter-subchapter ds-compare-section" id="expCompareDatasetSection">
+                    <div class="subchapter-header-tablet" onclick="exp_toggleCompareSection('dataset')">
+                        <span class="subchapter-title"><i class="fas fa-database mr-2 text-purple-500"></i>Dataset Configuration</span>
+                        <span class="subchapter-filter-status" id="expCompareDatasetStatus"></span>
+                        <i id="expCompareDatasetChevron" class="fas fa-chevron-right subchapter-chevron"></i>
+                    </div>
+                    <div id="expCompareDatasetContent" class="subchapter-content-outside hidden">
+                        <div class="ds-compare-grid">
+                            <div id="expCompareLeftDataset" class="ds-compare-cell">
+                                <div class="ds-compare-placeholder">Select an experiment</div>
+                            </div>
+                            <div id="expCompareRightDataset" class="ds-compare-cell">
+                                <div class="ds-compare-placeholder">Select an experiment</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section 3: Feature Configuration -->
+                <div class="filter-subchapter ds-compare-section" id="expCompareFeaturesSection">
+                    <div class="subchapter-header-tablet" onclick="exp_toggleCompareSection('features')">
+                        <span class="subchapter-title"><i class="fas fa-cogs mr-2 text-blue-500"></i>Feature Configuration</span>
+                        <span class="subchapter-filter-status" id="expCompareFeaturesStatus"></span>
+                        <i id="expCompareFeaturesChevron" class="fas fa-chevron-right subchapter-chevron"></i>
+                    </div>
+                    <div id="expCompareFeaturesContent" class="subchapter-content-outside hidden">
+                        <div class="ds-compare-grid">
+                            <div id="expCompareLeftFeatures" class="ds-compare-cell">
+                                <div class="ds-compare-placeholder">Select an experiment</div>
+                            </div>
+                            <div id="expCompareRightFeatures" class="ds-compare-cell">
+                                <div class="ds-compare-placeholder">Select an experiment</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section 4: Model Configuration -->
+                <div class="filter-subchapter ds-compare-section" id="expCompareModelSection">
+                    <div class="subchapter-header-tablet" onclick="exp_toggleCompareSection('model')">
+                        <span class="subchapter-title"><i class="fas fa-brain mr-2 text-pink-500"></i>Model Configuration</span>
+                        <span class="subchapter-filter-status" id="expCompareModelStatus"></span>
+                        <i id="expCompareModelChevron" class="fas fa-chevron-right subchapter-chevron"></i>
+                    </div>
+                    <div id="expCompareModelContent" class="subchapter-content-outside hidden">
+                        <div class="ds-compare-grid">
+                            <div id="expCompareLeftModel" class="ds-compare-cell">
+                                <div class="ds-compare-placeholder">Select an experiment</div>
+                            </div>
+                            <div id="expCompareRightModel" class="ds-compare-cell">
+                                <div class="ds-compare-placeholder">Select an experiment</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section 5: Training Parameters -->
+                <div class="filter-subchapter ds-compare-section" id="expCompareTrainingSection">
+                    <div class="subchapter-header-tablet" onclick="exp_toggleCompareSection('training')">
+                        <span class="subchapter-title"><i class="fas fa-running mr-2 text-orange-500"></i>Training Parameters</span>
+                        <span class="subchapter-filter-status" id="expCompareTrainingStatus"></span>
+                        <i id="expCompareTrainingChevron" class="fas fa-chevron-right subchapter-chevron"></i>
+                    </div>
+                    <div id="expCompareTrainingContent" class="subchapter-content-outside hidden">
+                        <div class="ds-compare-grid">
+                            <div id="expCompareLeftTraining" class="ds-compare-cell">
+                                <div class="ds-compare-placeholder">Select an experiment</div>
+                            </div>
+                            <div id="expCompareRightTraining" class="ds-compare-cell">
+                                <div class="ds-compare-placeholder">Select an experiment</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section 6: Sampling Configuration -->
+                <div class="filter-subchapter ds-compare-section" id="expCompareSamplingSection">
+                    <div class="subchapter-header-tablet" onclick="exp_toggleCompareSection('sampling')">
+                        <span class="subchapter-title"><i class="fas fa-filter mr-2 text-teal-500"></i>Sampling Configuration</span>
+                        <span class="subchapter-filter-status" id="expCompareSamplingStatus"></span>
+                        <i id="expCompareSamplingChevron" class="fas fa-chevron-right subchapter-chevron"></i>
+                    </div>
+                    <div id="expCompareSamplingContent" class="subchapter-content-outside hidden">
+                        <div class="ds-compare-grid">
+                            <div id="expCompareLeftSampling" class="ds-compare-cell">
+                                <div class="ds-compare-placeholder">Select an experiment</div>
+                            </div>
+                            <div id="expCompareRightSampling" class="ds-compare-cell">
+                                <div class="ds-compare-placeholder">Select an experiment</div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
+
+        <!-- Footer -->
         <div class="modal-footer-wizard-neu">
-            <div class="footer-left">
-                <span id="compareSelectedCount" class="text-sm text-gray-500">0 experiments selected</span>
-            </div>
+            <div class="footer-left"></div>
             <div class="footer-right">
-                <button type="button" class="btn-neu btn-neu-action btn-neu-cancel" onclick="closeCompareModal()">
+                <button type="button" class="btn-neu btn-neu-action btn-neu-cancel" onclick="exp_closeCompareModal()">
                     <span class="btn-neu-inner">Close</span>
                 </button>
             </div>
@@ -5220,586 +5262,586 @@ function deleteExpFromCard(event, expId) {
 }
 
 // =============================================================================
-// COMPARE SELECTION MODAL (Select experiments to compare)
+// EXPERIMENT COMPARE MODAL (Accordion-style dropdown comparison)
 // =============================================================================
-let compareSelectIds = new Set();
-let selectableExperiments = [];
-let compareSelectCurrentPage = 1;
-const COMPARE_SELECT_PER_PAGE = 20;
+let exp_compareLeftExp = null;
+let exp_compareRightExp = null;
+let exp_compareExpandedSections = {
+    results: false,
+    dataset: false,
+    features: false,
+    model: false,
+    training: false,
+    sampling: false
+};
+let exp_selectableExperiments = [];
 
-async function openCompareSelectModal() {
-    const modal = document.getElementById('compareSelectModal');
-    const loadingEl = document.getElementById('compareSelectLoading');
-    const emptyEl = document.getElementById('compareSelectEmpty');
-    const listEl = document.getElementById('compareSelectList');
-    const paginationEl = document.getElementById('compareSelectPagination');
+// Open the compare modal
+async function exp_openCompareModal() {
+    const modal = document.getElementById('expCompareModal');
+    const leftSelect = document.getElementById('expCompareLeftSelect');
+    const rightSelect = document.getElementById('expCompareRightSelect');
 
-    // Reset selection and pagination
-    compareSelectIds.clear();
-    compareSelectCurrentPage = 1;
-    updateCompareSelectUI();
+    // Reset state
+    exp_compareLeftExp = null;
+    exp_compareRightExp = null;
 
-    // Show modal with loading state
+    // Collapse all accordions
+    Object.keys(exp_compareExpandedSections).forEach(k => {
+        exp_compareExpandedSections[k] = false;
+    });
+    exp_syncCompareAccordionStates();
+
+    // Reset dropdowns
+    leftSelect.innerHTML = '<option value="">Select experiment...</option>';
+    rightSelect.innerHTML = '<option value="">Select experiment...</option>';
+
+    // Reset all columns to placeholder
+    exp_resetCompareColumn('left');
+    exp_resetCompareColumn('right');
+
+    // Clear status badges
+    exp_updateCompareStatuses();
+
+    // Show modal
     modal.classList.remove('hidden');
-    loadingEl.classList.remove('hidden');
-    emptyEl.classList.add('hidden');
-    listEl.classList.add('hidden');
 
+    // Fetch selectable experiments
     try {
         const response = await fetch('/api/experiments/selectable/');
         const data = await response.json();
 
-        loadingEl.classList.add('hidden');
-
-        if (!data.success) {
-            showError(data.error || 'Failed to load experiments');
-            emptyEl.classList.remove('hidden');
-            return;
-        }
-
-        selectableExperiments = data.experiments || [];
-
-        if (selectableExperiments.length === 0) {
-            emptyEl.classList.remove('hidden');
-            paginationEl.classList.add('hidden');
-            return;
-        }
-
-        // Render experiment list with pagination
-        renderSelectableExperiments();
-        listEl.classList.remove('hidden');
-
-        // Show pagination if more than one page
-        if (selectableExperiments.length > COMPARE_SELECT_PER_PAGE) {
-            paginationEl.classList.remove('hidden');
-            paginationEl.style.display = 'flex';
-            renderCompareSelectPagination();
+        if (data.success) {
+            exp_selectableExperiments = data.experiments || [];
+            exp_populateDropdowns();
         } else {
-            paginationEl.classList.add('hidden');
+            showError(data.error || 'Failed to load experiments');
         }
-
     } catch (error) {
         console.error('Error loading selectable experiments:', error);
-        loadingEl.classList.add('hidden');
-        emptyEl.classList.remove('hidden');
         showError('Error loading experiments');
     }
 }
 
-function closeCompareSelectModal(event) {
+// Close the compare modal
+function exp_closeCompareModal(event) {
     if (event && event.target !== event.currentTarget) return;
-    document.getElementById('compareSelectModal').classList.add('hidden');
+    document.getElementById('expCompareModal').classList.add('hidden');
+    exp_compareLeftExp = null;
+    exp_compareRightExp = null;
 }
 
-function renderSelectableExperiments() {
-    const listEl = document.getElementById('compareSelectList');
-    listEl.innerHTML = '';
+// Populate dropdowns with selectable experiments
+function exp_populateDropdowns() {
+    const leftSelect = document.getElementById('expCompareLeftSelect');
+    const rightSelect = document.getElementById('expCompareRightSelect');
 
-    // Calculate pagination
-    const startIdx = (compareSelectCurrentPage - 1) * COMPARE_SELECT_PER_PAGE;
-    const endIdx = Math.min(startIdx + COMPARE_SELECT_PER_PAGE, selectableExperiments.length);
-    const pageExperiments = selectableExperiments.slice(startIdx, endIdx);
+    // Clear and add default option
+    leftSelect.innerHTML = '<option value="">Select experiment...</option>';
+    rightSelect.innerHTML = '<option value="">Select experiment...</option>';
 
-    pageExperiments.forEach(exp => {
-        const row = document.createElement('div');
-        row.className = `compare-select-row status-${exp.status || 'running'}`;
-        row.dataset.expId = exp.id;
-        row.dataset.status = exp.status || 'running';
-        row.onclick = () => toggleCompareSelect(exp.id);
+    // Add experiment options
+    exp_selectableExperiments.forEach(exp => {
+        const displayText = exp.experiment_name
+            ? `${exp.display_name} - ${exp.experiment_name}`
+            : exp.display_name;
 
-        const checkbox = document.createElement('input');
-        checkbox.type = 'checkbox';
-        checkbox.className = 'compare-select-checkbox';
-        checkbox.checked = compareSelectIds.has(exp.id);
-        checkbox.onclick = (e) => e.stopPropagation();
-        checkbox.onchange = () => toggleCompareSelect(exp.id);
+        const leftOpt = document.createElement('option');
+        leftOpt.value = exp.id;
+        leftOpt.textContent = displayText;
+        leftSelect.appendChild(leftOpt);
 
-        const infoCol = document.createElement('div');
-        infoCol.className = 'compare-select-info-col';
-
-        const topLine = document.createElement('div');
-        const expNum = document.createElement('span');
-        expNum.className = 'compare-select-exp-num';
-        expNum.textContent = exp.display_name || `Exp #${exp.experiment_number}`;
-        topLine.appendChild(expNum);
-
-        if (exp.experiment_name) {
-            const expName = document.createElement('span');
-            expName.className = 'compare-select-exp-name';
-            expName.textContent = '• ' + exp.experiment_name;
-            topLine.appendChild(expName);
-        }
-
-        infoCol.appendChild(topLine);
-
-        if (exp.experiment_description_short) {
-            const desc = document.createElement('div');
-            desc.className = 'compare-select-desc';
-            desc.textContent = exp.experiment_description_short;
-            infoCol.appendChild(desc);
-        }
-
-        const status = document.createElement('span');
-        status.className = `compare-select-status ${exp.status}`;
-        status.textContent = exp.status;
-
-        row.appendChild(checkbox);
-        row.appendChild(infoCol);
-        row.appendChild(status);
-
-        listEl.appendChild(row);
+        const rightOpt = document.createElement('option');
+        rightOpt.value = exp.id;
+        rightOpt.textContent = displayText;
+        rightSelect.appendChild(rightOpt);
     });
 }
 
-function toggleCompareSelect(expId) {
-    if (compareSelectIds.has(expId)) {
-        compareSelectIds.delete(expId);
-    } else if (compareSelectIds.size < 4) {
-        compareSelectIds.add(expId);
-    } else {
-        showError('Maximum 4 experiments can be compared');
-        return;
-    }
-    updateCompareSelectUI();
-}
+// Handle dropdown selection change
+function exp_onCompareSelectChange(side) {
+    const selectId = side === 'left' ? 'expCompareLeftSelect' : 'expCompareRightSelect';
+    const expId = document.getElementById(selectId).value;
 
-function updateCompareSelectUI() {
-    const count = compareSelectIds.size;
-
-    // Update count display
-    const countEl = document.getElementById('compareSelectCount');
-    countEl.textContent = `${count} selected`;
-    countEl.style.color = count >= 2 ? '#10b981' : '#f59e0b';
-
-    // Update button state
-    const btn = document.getElementById('compareSelectBtn');
-    btn.disabled = count < 2;
-
-    // Update row highlighting and checkboxes
-    document.querySelectorAll('.compare-select-row').forEach(row => {
-        const expId = parseInt(row.dataset.expId);
-        const isSelected = compareSelectIds.has(expId);
-        row.classList.toggle('selected', isSelected);
-        const checkbox = row.querySelector('.compare-select-checkbox');
-        if (checkbox) checkbox.checked = isSelected;
-
-        // Disable row if at limit and not selected
-        const atLimit = compareSelectIds.size >= 4 && !isSelected;
-        row.classList.toggle('disabled', atLimit);
-    });
-}
-
-function clearCompareSelection() {
-    compareSelectIds.clear();
-    updateCompareSelectUI();
-}
-
-function renderCompareSelectPagination() {
-    const totalPages = Math.ceil(selectableExperiments.length / COMPARE_SELECT_PER_PAGE);
-    const startIdx = (compareSelectCurrentPage - 1) * COMPARE_SELECT_PER_PAGE + 1;
-    const endIdx = Math.min(compareSelectCurrentPage * COMPARE_SELECT_PER_PAGE, selectableExperiments.length);
-
-    // Update page info text
-    const pageInfoEl = document.getElementById('compareSelectPageInfo');
-    pageInfoEl.innerHTML = `Showing <span class="font-semibold">${startIdx}</span>-<span class="font-semibold">${endIdx}</span> of <span class="font-semibold">${selectableExperiments.length}</span> experiments`;
-
-    // Render pagination controls
-    const controlsEl = document.getElementById('compareSelectPageControls');
-    controlsEl.innerHTML = '';
-
-    // Previous button
-    const prevBtn = document.createElement('button');
-    prevBtn.className = 'px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold bg-white hover:bg-gray-50';
-    prevBtn.textContent = 'Previous';
-    prevBtn.disabled = compareSelectCurrentPage === 1;
-    if (compareSelectCurrentPage === 1) {
-        prevBtn.className = 'px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold opacity-50 cursor-not-allowed bg-gray-100';
-    }
-    prevBtn.onclick = () => goToCompareSelectPage(compareSelectCurrentPage - 1);
-    controlsEl.appendChild(prevBtn);
-
-    // Page number buttons
-    const maxVisiblePages = 5;
-    let startPage = 1;
-    let endPage = totalPages;
-
-    if (totalPages > maxVisiblePages) {
-        // Show first 5 pages, then ..., then last page
-        startPage = 1;
-        endPage = Math.min(5, totalPages);
-    }
-
-    for (let i = startPage; i <= endPage; i++) {
-        const pageBtn = document.createElement('button');
-        pageBtn.textContent = i;
-        if (i === compareSelectCurrentPage) {
-            pageBtn.className = 'w-10 h-10 flex items-center justify-center rounded-md text-sm font-semibold bg-blue-600 text-white';
-        } else {
-            pageBtn.className = 'w-10 h-10 flex items-center justify-center rounded-md text-sm font-semibold border border-gray-300 text-gray-700 hover:bg-blue-50 hover:border-blue-500';
-        }
-        pageBtn.onclick = () => goToCompareSelectPage(i);
-        controlsEl.appendChild(pageBtn);
-    }
-
-    // Ellipsis and last page if needed
-    if (totalPages > maxVisiblePages) {
-        const ellipsis = document.createElement('span');
-        ellipsis.className = 'px-2 text-gray-500';
-        ellipsis.textContent = '...';
-        controlsEl.appendChild(ellipsis);
-
-        const lastPageBtn = document.createElement('button');
-        lastPageBtn.textContent = totalPages;
-        if (totalPages === compareSelectCurrentPage) {
-            lastPageBtn.className = 'w-10 h-10 flex items-center justify-center rounded-md text-sm font-semibold bg-blue-600 text-white';
-        } else {
-            lastPageBtn.className = 'w-10 h-10 flex items-center justify-center rounded-md text-sm font-semibold border border-gray-300 text-gray-700 hover:bg-blue-50 hover:border-blue-500';
-        }
-        lastPageBtn.onclick = () => goToCompareSelectPage(totalPages);
-        controlsEl.appendChild(lastPageBtn);
-    }
-
-    // Next button
-    const nextBtn = document.createElement('button');
-    nextBtn.className = 'px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold bg-white hover:bg-gray-50';
-    nextBtn.textContent = 'Next';
-    nextBtn.disabled = compareSelectCurrentPage === totalPages;
-    if (compareSelectCurrentPage === totalPages) {
-        nextBtn.className = 'px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold opacity-50 cursor-not-allowed bg-gray-100';
-    }
-    nextBtn.onclick = () => goToCompareSelectPage(compareSelectCurrentPage + 1);
-    controlsEl.appendChild(nextBtn);
-}
-
-function goToCompareSelectPage(page) {
-    const totalPages = Math.ceil(selectableExperiments.length / COMPARE_SELECT_PER_PAGE);
-    if (page < 1 || page > totalPages) return;
-
-    compareSelectCurrentPage = page;
-    renderSelectableExperiments();
-    renderCompareSelectPagination();
-    updateCompareSelectUI();
-
-    // Scroll to top of list
-    const listEl = document.getElementById('compareSelectList');
-    listEl.scrollTop = 0;
-}
-
-async function proceedToCompare() {
-    if (compareSelectIds.size < 2) {
-        showError('Select at least 2 experiments to compare');
+    if (!expId) {
+        // Reset this side
+        exp_resetCompareColumn(side);
+        if (side === 'left') exp_compareLeftExp = null;
+        else exp_compareRightExp = null;
+        exp_updateCompareStatuses();
         return;
     }
 
-    // Close selection modal and open comparison modal
-    closeCompareSelectModal();
-    await openCompareModal();
-}
+    // Get both selected IDs
+    const leftId = document.getElementById('expCompareLeftSelect').value;
+    const rightId = document.getElementById('expCompareRightSelect').value;
 
-// =============================================================================
-// COMPARE MODAL (Experiment Comparison Results)
-// =============================================================================
-
-async function openCompareModal() {
-    const modal = document.getElementById('compareModal');
-    const loadingEl = document.getElementById('compareLoading');
-    const emptyEl = document.getElementById('compareEmpty');
-    const contentEl = document.getElementById('compareContent');
-    const countEl = document.getElementById('compareSelectedCount');
-
-    modal.classList.remove('hidden');
-    countEl.textContent = `${compareSelectIds.size} experiments selected`;
-
-    // Show loading
-    emptyEl.classList.add('hidden');
-    contentEl.classList.add('hidden');
-    loadingEl.classList.remove('hidden');
-
-    try {
-        const response = await fetch('/api/experiments/compare/', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': getCookie('csrftoken')
-            },
-            body: JSON.stringify({
-                quick_test_ids: Array.from(compareSelectIds)
-            })
-        });
-
-        const data = await response.json();
-        loadingEl.classList.add('hidden');
-
-        if (!data.success) {
-            showError(data.error || 'Failed to load comparison data');
-            emptyEl.classList.remove('hidden');
-            return;
-        }
-
-        // Render comparison tables with new grouped structure
-        renderComparisonTables(data.comparison);
-        contentEl.classList.remove('hidden');
-
-    } catch (error) {
-        console.error('Error loading comparison:', error);
-        loadingEl.classList.add('hidden');
-        emptyEl.classList.remove('hidden');
-        showError('Error loading comparison data');
-    }
-}
-
-function closeCompareModal(event) {
-    if (event && event.target !== event.currentTarget) return;
-    document.getElementById('compareModal').classList.add('hidden');
-}
-
-function renderComparisonTables(comparison) {
-    const experiments = comparison.experiments || [];
-    if (experiments.length === 0) return;
-
-    // Render unified table
-    renderUnifiedCompareTable(experiments);
-}
-
-function renderUnifiedCompareTable(experiments) {
-    // Render header
-    const headerRow = document.getElementById('compareUnifiedHeader');
-    while (headerRow.children.length > 1) {
-        headerRow.removeChild(headerRow.lastChild);
+    // Only fetch comparison data when both experiments are selected
+    if (!leftId || !rightId) {
+        // Show waiting state for the selected side
+        const prefix = side === 'left' ? 'expCompareLeft' : 'expCompareRight';
+        const waitingHtml = '<div class="ds-compare-placeholder">Select another experiment to compare</div>';
+        document.getElementById(`${prefix}Results`).innerHTML = waitingHtml;
+        document.getElementById(`${prefix}Dataset`).innerHTML = waitingHtml;
+        document.getElementById(`${prefix}Features`).innerHTML = waitingHtml;
+        document.getElementById(`${prefix}Model`).innerHTML = waitingHtml;
+        document.getElementById(`${prefix}Training`).innerHTML = waitingHtml;
+        document.getElementById(`${prefix}Sampling`).innerHTML = waitingHtml;
+        return;
     }
 
-    experiments.forEach(exp => {
-        const th = document.createElement('th');
-        th.className = 'compare-exp-header';
-        th.innerHTML = `
-            <div class="compare-exp-name">${exp.display_name}</div>
-            <div class="compare-exp-subtext">${exp.feature_config?.name || ''}</div>
-        `;
-        headerRow.appendChild(th);
-    });
+    // Show loading state for both columns
+    exp_showColumnLoading('left');
+    exp_showColumnLoading('right');
 
-    // Render body with all sections
-    const tbody = document.getElementById('compareUnifiedBody');
-    tbody.innerHTML = '';
-
-    // METRICS COMPARISON section
-    addSectionHeader(tbody, 'Metrics Comparison', experiments.length);
-
-    // Results subsection
-    addSectionHeader(tbody, 'Results', experiments.length);
-
-    const resultRows = [
-        { key: 'recall_at_100', label: 'Recall@100', getter: exp => exp.results?.recall_at_100, format: v => (v * 100).toFixed(2) + '%', higherBetter: true },
-        { key: 'recall_at_50', label: 'Recall@50', getter: exp => exp.results?.recall_at_50, format: v => (v * 100).toFixed(2) + '%', higherBetter: true },
-        { key: 'recall_at_10', label: 'Recall@10', getter: exp => exp.results?.recall_at_10, format: v => (v * 100).toFixed(2) + '%', higherBetter: true },
-        { key: 'loss', label: 'Loss', getter: exp => exp.results?.loss, format: v => v.toFixed(4), higherBetter: false },
-        { key: 'duration', label: 'Duration', getter: exp => exp.results?.duration_seconds, format: v => formatDuration(v), higherBetter: false },
-    ];
-
-    resultRows.forEach(rowDef => {
-        const values = experiments.map(rowDef.getter);
-        if (!values.some(v => v !== null && v !== undefined)) return;
-        addCompareRow(tbody, rowDef.label, experiments, rowDef.getter, rowDef.format, rowDef.higherBetter);
-    });
-
-    // Status row
-    addCompareRow(tbody, 'Status', experiments, exp => exp.status, v => v, null, true);
-
-    // PARAMETERS COMPARISON section
-    addSectionHeader(tbody, 'Parameters Comparison', experiments.length);
-
-    // Training Parameters subsection
-    addSectionHeader(tbody, 'Training Parameters', experiments.length);
-
-    const trainingRows = [
-        { label: 'Epochs', getter: exp => exp.training?.epochs },
-        { label: 'Batch Size', getter: exp => exp.training?.batch_size },
-        { label: 'Learning Rate', getter: exp => exp.training?.learning_rate, format: v => v?.toExponential ? v.toExponential(2) : v },
-        { label: 'Machine Type', getter: exp => exp.training?.machine_type },
-    ];
-
-    trainingRows.forEach(rowDef => {
-        addCompareRow(tbody, rowDef.label, experiments, rowDef.getter, rowDef.format);
-    });
-
-    // Sampling subsection
-    addSectionHeader(tbody, 'Sampling', experiments.length);
-
-    const samplingRows = [
-        { label: 'Sample %', getter: exp => exp.sampling?.data_sample_percent, format: v => v + '%' },
-        { label: 'Split Strategy', getter: exp => exp.sampling?.split_strategy, format: v => v?.replace('_', ' ') },
-        { label: 'Holdout Days', getter: exp => exp.sampling?.holdout_days },
-        { label: 'Date Column', getter: exp => exp.sampling?.date_column },
-    ];
-
-    samplingRows.forEach(rowDef => {
-        addCompareRow(tbody, rowDef.label, experiments, rowDef.getter, rowDef.format);
-    });
-
-    // CONFIGURATION section
-    addSectionHeader(tbody, 'Configuration', experiments.length);
-
-    // Dataset subsection
-    addSectionHeader(tbody, 'Dataset', experiments.length);
-
-    const datasetRows = [
-        { label: 'Name', getter: exp => exp.dataset?.name },
-        { label: 'Rows', getter: exp => exp.dataset?.row_count, format: v => v?.toLocaleString() },
-        { label: 'Unique Users', getter: exp => exp.dataset?.unique_users, format: v => v?.toLocaleString() },
-        { label: 'Unique Products', getter: exp => exp.dataset?.unique_products, format: v => v?.toLocaleString() },
-    ];
-
-    datasetRows.forEach(rowDef => {
-        addCompareRow(tbody, rowDef.label, experiments, rowDef.getter, rowDef.format);
-    });
-
-    // Feature Config subsection
-    addSectionHeader(tbody, 'Feature Config', experiments.length);
-
-    const featureRows = [
-        { label: 'Name', getter: exp => exp.feature_config?.name },
-        { label: 'Version', getter: exp => exp.feature_config?.version },
-        { label: 'Buyer Features', getter: exp => exp.feature_config?.buyer_features || `${exp.feature_config?.buyer_features_count || 0} features` },
-        { label: 'Buyer Tensor Dim', getter: exp => exp.feature_config?.buyer_tensor_dim },
-        { label: 'Buyer Crosses', getter: exp => exp.feature_config?.buyer_crosses || '—' },
-        { label: 'Product Features', getter: exp => exp.feature_config?.product_features || `${exp.feature_config?.product_features_count || 0} features` },
-        { label: 'Product Tensor Dim', getter: exp => exp.feature_config?.product_tensor_dim },
-        { label: 'Product Crosses', getter: exp => exp.feature_config?.product_crosses || '—' },
-    ];
-
-    featureRows.forEach(rowDef => {
-        addCompareRow(tbody, rowDef.label, experiments, rowDef.getter, rowDef.format);
-    });
-
-    // Model Config subsection
-    addSectionHeader(tbody, 'Model Config', experiments.length);
-
-    const modelRows = [
-        { label: 'Name', getter: exp => exp.model_config?.name },
-        { label: 'Type', getter: exp => exp.model_config?.model_type },
-        { label: 'Optimizer', getter: exp => exp.model_config?.optimizer },
-        { label: 'Output', getter: exp => exp.model_config?.model_type === 'ranking'
-            ? '1D (scalar)'
-            : `${exp.model_config?.output_embedding_dim || 32}D` },
-        { label: 'Tower Layers', getter: exp => exp.model_config?.tower_layers || '—' },
-    ];
-
-    modelRows.forEach(rowDef => {
-        addCompareRow(tbody, rowDef.label, experiments, rowDef.getter, rowDef.format);
-    });
-}
-
-function addSectionHeader(tbody, title, colSpan, isMainSection = false) {
-    // Main sections: Metrics Comparison, Parameters Comparison, Configuration
-    const mainSections = ['Metrics Comparison', 'Parameters Comparison', 'Configuration'];
-    const isMain = mainSections.includes(title);
-
-    const row = document.createElement('tr');
-    row.className = isMain ? 'compare-main-section-header' : 'compare-section-header';
-    const cell = document.createElement('td');
-    cell.colSpan = colSpan + 1;
-    cell.textContent = title;
-    row.appendChild(cell);
-    tbody.appendChild(row);
-}
-
-function addCompareRow(tbody, label, experiments, getter, format, higherBetter = null, isStatus = false) {
-    const row = document.createElement('tr');
-    const values = experiments.map(getter);
-
-    // Check if all values are identical
-    const validValues = values.filter(v => v !== null && v !== undefined && v !== '' && v !== '—');
-    const allIdentical = validValues.length > 1 && validValues.every(v => String(v) === String(validValues[0]));
-    const hasDifferences = validValues.length > 1 && !allIdentical;
-
-    // Apply row class based on identical/different
-    if (allIdentical) {
-        row.className = 'compare-row-identical';
-    } else if (hasDifferences) {
-        row.className = 'compare-row-different';
-    }
-
-    // Label cell with indicator
-    const nameCell = document.createElement('td');
-    nameCell.textContent = label;
-    if (allIdentical && validValues.length > 0) {
-        const indicator = document.createElement('span');
-        indicator.className = 'compare-indicator identical';
-        indicator.textContent = ' ≡';
-        indicator.title = 'Identical across all experiments';
-        nameCell.appendChild(indicator);
-    } else if (hasDifferences) {
-        const indicator = document.createElement('span');
-        indicator.className = 'compare-indicator different';
-        indicator.textContent = ' ≠';
-        indicator.title = 'Values differ between experiments';
-        nameCell.appendChild(indicator);
-    }
-    row.appendChild(nameCell);
-
-    // Find best value for metrics
-    let bestValue = null;
-    if (higherBetter !== null && validValues.length > 1) {
-        const numericValues = validValues.filter(v => typeof v === 'number');
-        if (numericValues.length > 1) {
-            bestValue = higherBetter ? Math.max(...numericValues) : Math.min(...numericValues);
-        }
-    }
-
-    // Value cells
-    values.forEach(val => {
-        const cell = document.createElement('td');
-        cell.style.textAlign = 'center';
-
-        if (val === null || val === undefined || val === '') {
-            cell.textContent = '—';
-            cell.className = 'compare-value-na';
-        } else {
-            const formatted = format ? format(val) : val;
-            cell.textContent = formatted;
-
-            // Apply best value highlighting
-            if (bestValue !== null && val === bestValue) {
-                cell.className = 'compare-value-best';
-            }
-
-            // Status-specific coloring
-            if (isStatus) {
-                if (val === 'completed') {
-                    cell.style.color = '#10b981';
-                } else if (val === 'failed') {
-                    cell.style.color = '#ef4444';
-                } else if (val === 'cancelled') {
-                    cell.style.color = '#6b7280';
+    // Fetch comparison data for both experiments
+    fetch('/api/experiments/compare/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: JSON.stringify({ quick_test_ids: [leftId, rightId].map(Number) })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            // Find and store the experiment data
+            data.comparison.experiments.forEach(exp => {
+                if (String(exp.id) === leftId) {
+                    exp_compareLeftExp = exp;
+                    exp_renderCompareColumn(exp, 'left');
                 }
+                if (String(exp.id) === rightId) {
+                    exp_compareRightExp = exp;
+                    exp_renderCompareColumn(exp, 'right');
+                }
+            });
+            exp_updateCompareStatuses();
+        } else {
+            showError(data.error || 'Failed to load comparison data');
+            exp_resetCompareColumn('left');
+            exp_resetCompareColumn('right');
+        }
+    })
+    .catch(err => {
+        console.error('Error loading comparison:', err);
+        showError('Error loading comparison data');
+        exp_resetCompareColumn('left');
+        exp_resetCompareColumn('right');
+    });
+}
+
+// Toggle accordion section
+function exp_toggleCompareSection(sectionName) {
+    exp_compareExpandedSections[sectionName] = !exp_compareExpandedSections[sectionName];
+    exp_syncCompareAccordionStates();
+}
+
+// Sync accordion visual states with tracked state
+function exp_syncCompareAccordionStates() {
+    const sections = ['results', 'dataset', 'features', 'model', 'training', 'sampling'];
+    const sectionIdMap = {
+        results: 'Results',
+        dataset: 'Dataset',
+        features: 'Features',
+        model: 'Model',
+        training: 'Training',
+        sampling: 'Sampling'
+    };
+
+    sections.forEach(section => {
+        const contentId = `expCompare${sectionIdMap[section]}Content`;
+        const chevronId = `expCompare${sectionIdMap[section]}Chevron`;
+
+        const content = document.getElementById(contentId);
+        const chevron = document.getElementById(chevronId);
+
+        if (content && chevron) {
+            if (exp_compareExpandedSections[section]) {
+                content.classList.remove('hidden');
+                chevron.classList.add('expanded');
+            } else {
+                content.classList.add('hidden');
+                chevron.classList.remove('expanded');
             }
         }
-
-        row.appendChild(cell);
     });
-
-    tbody.appendChild(row);
 }
 
-// Keep the old variable for backwards compatibility with card checkboxes
-// (will be removed when we clean up the card checkboxes)
-let selectedExperimentIds = new Set();
+// Reset a compare column to placeholder state
+function exp_resetCompareColumn(side) {
+    const prefix = side === 'left' ? 'expCompareLeft' : 'expCompareRight';
+    const placeholder = '<div class="ds-compare-placeholder">Select an experiment</div>';
 
-function toggleExperimentSelection(expId) {
-    // Deprecated: kept for backwards compatibility
-    if (selectedExperimentIds.has(expId)) {
-        selectedExperimentIds.delete(expId);
-    } else if (selectedExperimentIds.size < 4) {
-        selectedExperimentIds.add(expId);
+    document.getElementById(`${prefix}Results`).innerHTML = placeholder;
+    document.getElementById(`${prefix}Dataset`).innerHTML = placeholder;
+    document.getElementById(`${prefix}Features`).innerHTML = placeholder;
+    document.getElementById(`${prefix}Model`).innerHTML = placeholder;
+    document.getElementById(`${prefix}Training`).innerHTML = placeholder;
+    document.getElementById(`${prefix}Sampling`).innerHTML = placeholder;
+}
+
+// Show loading state in a column
+function exp_showColumnLoading(side) {
+    const prefix = side === 'left' ? 'expCompareLeft' : 'expCompareRight';
+    const loading = '<div class="ds-compare-placeholder"><i class="fas fa-spinner fa-spin mr-2"></i>Loading...</div>';
+
+    document.getElementById(`${prefix}Results`).innerHTML = loading;
+    document.getElementById(`${prefix}Dataset`).innerHTML = loading;
+    document.getElementById(`${prefix}Features`).innerHTML = loading;
+    document.getElementById(`${prefix}Model`).innerHTML = loading;
+    document.getElementById(`${prefix}Training`).innerHTML = loading;
+    document.getElementById(`${prefix}Sampling`).innerHTML = loading;
+}
+
+// Render an experiment's data into a column
+function exp_renderCompareColumn(exp, side) {
+    const prefix = side === 'left' ? 'expCompareLeft' : 'expCompareRight';
+
+    document.getElementById(`${prefix}Results`).innerHTML = exp_renderResultsCell(exp);
+    document.getElementById(`${prefix}Dataset`).innerHTML = exp_renderDatasetCell(exp);
+    document.getElementById(`${prefix}Features`).innerHTML = exp_renderFeaturesCell(exp);
+    document.getElementById(`${prefix}Model`).innerHTML = exp_renderModelCell(exp);
+    document.getElementById(`${prefix}Training`).innerHTML = exp_renderTrainingCell(exp);
+    document.getElementById(`${prefix}Sampling`).innerHTML = exp_renderSamplingCell(exp);
+}
+
+// Helper: Create a compare row
+function exp_createCompareRow(label, value) {
+    return `
+        <div class="ds-compare-row">
+            <span class="ds-compare-label">${label}</span>
+            <span class="ds-compare-value">${value}</span>
+        </div>
+    `;
+}
+
+// Helper: Format metric value
+function exp_formatMetric(value, decimals = 2) {
+    if (value === null || value === undefined) return '—';
+    if (typeof value === 'number') {
+        // If it's a recall value (0-1), convert to percentage
+        if (value <= 1 && value >= 0) {
+            return (value * 100).toFixed(decimals) + '%';
+        }
+        return value.toFixed(decimals);
     }
+    return value;
 }
 
-function updateCompareButton() {
-    // No-op: Compare button is now always visible
+// Helper: Format duration
+function exp_formatDuration(seconds) {
+    if (!seconds && seconds !== 0) return '—';
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
-function clearExperimentSelection() {
-    selectedExperimentIds.clear();
+// Helper: Create status badge
+function exp_createStatusBadge(status) {
+    const colors = {
+        completed: 'background: #d1fae5; color: #065f46;',
+        failed: 'background: #fee2e2; color: #991b1b;',
+        running: 'background: #dbeafe; color: #1e40af;',
+        cancelled: 'background: #e5e7eb; color: #6b7280;',
+        pending: 'background: #fef3c7; color: #92400e;'
+    };
+    const style = colors[status] || colors.pending;
+    return `<span style="display: inline-block; padding: 2px 8px; border-radius: 9999px; font-size: 11px; font-weight: 500; ${style}">${status}</span>`;
+}
+
+// Render Results & Metrics cell
+function exp_renderResultsCell(exp) {
+    if (!exp) {
+        return '<div class="ds-compare-placeholder">No data available</div>';
+    }
+
+    const rows = [];
+    const r = exp.results || {};
+
+    // Header with experiment name
+    let html = `<h4>${escapeHtml(exp.display_name)}</h4>`;
+    if (exp.experiment_name) {
+        html += `<div class="ds-compare-description">${escapeHtml(exp.experiment_name)}</div>`;
+    }
+
+    // Status
+    rows.push(exp_createCompareRow('Status', exp_createStatusBadge(exp.status)));
+
+    // Recall metrics
+    if (r.recall_at_100 !== null && r.recall_at_100 !== undefined) {
+        rows.push(exp_createCompareRow('Recall@100', exp_formatMetric(r.recall_at_100)));
+    }
+    if (r.recall_at_50 !== null && r.recall_at_50 !== undefined) {
+        rows.push(exp_createCompareRow('Recall@50', exp_formatMetric(r.recall_at_50)));
+    }
+    if (r.recall_at_10 !== null && r.recall_at_10 !== undefined) {
+        rows.push(exp_createCompareRow('Recall@10', exp_formatMetric(r.recall_at_10)));
+    }
+
+    // Loss
+    if (r.loss !== null && r.loss !== undefined) {
+        rows.push(exp_createCompareRow('Loss', typeof r.loss === 'number' ? r.loss.toFixed(4) : r.loss));
+    }
+
+    // Duration
+    if (r.duration_seconds) {
+        rows.push(exp_createCompareRow('Duration', exp_formatDuration(r.duration_seconds)));
+    }
+
+    return html + rows.join('');
+}
+
+// Render Dataset Configuration cell
+function exp_renderDatasetCell(exp) {
+    if (!exp || !exp.dataset) {
+        return '<div class="ds-compare-placeholder">No dataset info</div>';
+    }
+
+    const d = exp.dataset;
+    const rows = [];
+
+    let html = `<h4>${escapeHtml(d.name || 'Dataset')}</h4>`;
+
+    if (d.primary_table) {
+        rows.push(exp_createCompareRow('Primary Table', escapeHtml(d.primary_table)));
+    }
+    if (d.row_count !== null && d.row_count !== undefined) {
+        rows.push(exp_createCompareRow('Rows', d.row_count.toLocaleString()));
+    }
+    if (d.unique_users !== null && d.unique_users !== undefined) {
+        rows.push(exp_createCompareRow('Unique Users', d.unique_users.toLocaleString()));
+    }
+    if (d.unique_products !== null && d.unique_products !== undefined) {
+        rows.push(exp_createCompareRow('Unique Products', d.unique_products.toLocaleString()));
+    }
+
+    return html + (rows.length > 0 ? rows.join('') : '<div class="ds-compare-meta">No additional details</div>');
+}
+
+// Render Feature Configuration cell
+function exp_renderFeaturesCell(exp) {
+    if (!exp || !exp.feature_config) {
+        return '<div class="ds-compare-placeholder">No feature config</div>';
+    }
+
+    const f = exp.feature_config;
+    const rows = [];
+
+    let html = `<h4>${escapeHtml(f.name || 'Feature Config')}</h4>`;
+
+    if (f.version) {
+        rows.push(exp_createCompareRow('Version', f.version));
+    }
+
+    // Buyer features
+    const buyerFeatures = f.buyer_features || `${f.buyer_features_count || 0} features`;
+    rows.push(exp_createCompareRow('Buyer Features', escapeHtml(String(buyerFeatures))));
+
+    if (f.buyer_tensor_dim !== null && f.buyer_tensor_dim !== undefined) {
+        rows.push(exp_createCompareRow('Buyer Tensor Dim', f.buyer_tensor_dim));
+    }
+
+    if (f.buyer_crosses) {
+        rows.push(exp_createCompareRow('Buyer Crosses', escapeHtml(String(f.buyer_crosses))));
+    }
+
+    // Product features
+    const productFeatures = f.product_features || `${f.product_features_count || 0} features`;
+    rows.push(exp_createCompareRow('Product Features', escapeHtml(String(productFeatures))));
+
+    if (f.product_tensor_dim !== null && f.product_tensor_dim !== undefined) {
+        rows.push(exp_createCompareRow('Product Tensor Dim', f.product_tensor_dim));
+    }
+
+    if (f.product_crosses) {
+        rows.push(exp_createCompareRow('Product Crosses', escapeHtml(String(f.product_crosses))));
+    }
+
+    return html + rows.join('');
+}
+
+// Render Model Configuration cell
+function exp_renderModelCell(exp) {
+    if (!exp || !exp.model_config) {
+        return '<div class="ds-compare-placeholder">No model config</div>';
+    }
+
+    const m = exp.model_config;
+    const rows = [];
+
+    let html = `<h4>${escapeHtml(m.name || 'Model Config')}</h4>`;
+
+    if (m.model_type) {
+        rows.push(exp_createCompareRow('Model Type', m.model_type));
+    }
+    if (m.optimizer) {
+        rows.push(exp_createCompareRow('Optimizer', m.optimizer));
+    }
+
+    // Output dimension
+    const outputDim = m.model_type === 'ranking'
+        ? '1D (scalar)'
+        : `${m.output_embedding_dim || 32}D`;
+    rows.push(exp_createCompareRow('Output Dim', outputDim));
+
+    if (m.tower_layers) {
+        rows.push(exp_createCompareRow('Tower Layers', escapeHtml(String(m.tower_layers))));
+    }
+
+    return html + rows.join('');
+}
+
+// Render Training Parameters cell
+function exp_renderTrainingCell(exp) {
+    if (!exp || !exp.training) {
+        return '<div class="ds-compare-placeholder">No training params</div>';
+    }
+
+    const t = exp.training;
+    const rows = [];
+
+    let html = '<h4>Training Parameters</h4>';
+
+    if (t.epochs !== null && t.epochs !== undefined) {
+        rows.push(exp_createCompareRow('Epochs', t.epochs));
+    }
+    if (t.batch_size !== null && t.batch_size !== undefined) {
+        rows.push(exp_createCompareRow('Batch Size', t.batch_size.toLocaleString()));
+    }
+    if (t.learning_rate !== null && t.learning_rate !== undefined) {
+        const lr = typeof t.learning_rate === 'number' ? t.learning_rate.toExponential(2) : t.learning_rate;
+        rows.push(exp_createCompareRow('Learning Rate', lr));
+    }
+    if (t.machine_type) {
+        rows.push(exp_createCompareRow('Machine Type', t.machine_type));
+    }
+
+    return html + (rows.length > 0 ? rows.join('') : '<div class="ds-compare-meta">No training details</div>');
+}
+
+// Render Sampling Configuration cell
+function exp_renderSamplingCell(exp) {
+    if (!exp || !exp.sampling) {
+        return '<div class="ds-compare-placeholder">No sampling config</div>';
+    }
+
+    const s = exp.sampling;
+    const rows = [];
+
+    let html = '<h4>Sampling Configuration</h4>';
+
+    if (s.data_sample_percent !== null && s.data_sample_percent !== undefined) {
+        rows.push(exp_createCompareRow('Sample %', s.data_sample_percent + '%'));
+    }
+    if (s.split_strategy) {
+        rows.push(exp_createCompareRow('Split Strategy', s.split_strategy.replace(/_/g, ' ')));
+    }
+    if (s.holdout_days !== null && s.holdout_days !== undefined) {
+        rows.push(exp_createCompareRow('Holdout Days', s.holdout_days));
+    }
+    if (s.date_column) {
+        rows.push(exp_createCompareRow('Date Column', escapeHtml(s.date_column)));
+    }
+
+    return html + (rows.length > 0 ? rows.join('') : '<div class="ds-compare-meta">No sampling details</div>');
+}
+
+// Update status badges in accordion headers
+function exp_updateCompareStatuses() {
+    const left = exp_compareLeftExp;
+    const right = exp_compareRightExp;
+
+    // Results status
+    const resultsStatus = document.getElementById('expCompareResultsStatus');
+    if (left && right) {
+        let diffs = 0;
+        const lr = left.results || {};
+        const rr = right.results || {};
+        if (lr.recall_at_100 !== rr.recall_at_100) diffs++;
+        if (lr.recall_at_50 !== rr.recall_at_50) diffs++;
+        if (lr.recall_at_10 !== rr.recall_at_10) diffs++;
+        if (lr.loss !== rr.loss) diffs++;
+        if (left.status !== right.status) diffs++;
+        resultsStatus.textContent = diffs > 0 ? `${diffs} diff${diffs > 1 ? 's' : ''}` : '';
+    } else {
+        resultsStatus.textContent = '';
+    }
+
+    // Dataset status
+    const datasetStatus = document.getElementById('expCompareDatasetStatus');
+    if (left && right && left.dataset && right.dataset) {
+        const ld = left.dataset;
+        const rd = right.dataset;
+        let diffs = 0;
+        if (ld.name !== rd.name) diffs++;
+        if (ld.row_count !== rd.row_count) diffs++;
+        if (ld.unique_users !== rd.unique_users) diffs++;
+        if (ld.unique_products !== rd.unique_products) diffs++;
+        datasetStatus.textContent = diffs > 0 ? `${diffs} diff${diffs > 1 ? 's' : ''}` : '';
+    } else {
+        datasetStatus.textContent = '';
+    }
+
+    // Features status
+    const featuresStatus = document.getElementById('expCompareFeaturesStatus');
+    if (left && right && left.feature_config && right.feature_config) {
+        const lf = left.feature_config;
+        const rf = right.feature_config;
+        let diffs = 0;
+        if (lf.name !== rf.name) diffs++;
+        if (lf.buyer_tensor_dim !== rf.buyer_tensor_dim) diffs++;
+        if (lf.product_tensor_dim !== rf.product_tensor_dim) diffs++;
+        featuresStatus.textContent = diffs > 0 ? `${diffs} diff${diffs > 1 ? 's' : ''}` : '';
+    } else {
+        featuresStatus.textContent = '';
+    }
+
+    // Model status
+    const modelStatus = document.getElementById('expCompareModelStatus');
+    if (left && right && left.model_config && right.model_config) {
+        const lm = left.model_config;
+        const rm = right.model_config;
+        let diffs = 0;
+        if (lm.name !== rm.name) diffs++;
+        if (lm.model_type !== rm.model_type) diffs++;
+        if (lm.optimizer !== rm.optimizer) diffs++;
+        if (lm.output_embedding_dim !== rm.output_embedding_dim) diffs++;
+        modelStatus.textContent = diffs > 0 ? `${diffs} diff${diffs > 1 ? 's' : ''}` : '';
+    } else {
+        modelStatus.textContent = '';
+    }
+
+    // Training status
+    const trainingStatus = document.getElementById('expCompareTrainingStatus');
+    if (left && right && left.training && right.training) {
+        const lt = left.training;
+        const rt = right.training;
+        let diffs = 0;
+        if (lt.epochs !== rt.epochs) diffs++;
+        if (lt.batch_size !== rt.batch_size) diffs++;
+        if (lt.learning_rate !== rt.learning_rate) diffs++;
+        if (lt.machine_type !== rt.machine_type) diffs++;
+        trainingStatus.textContent = diffs > 0 ? `${diffs} diff${diffs > 1 ? 's' : ''}` : '';
+    } else {
+        trainingStatus.textContent = '';
+    }
+
+    // Sampling status
+    const samplingStatus = document.getElementById('expCompareSamplingStatus');
+    if (left && right && left.sampling && right.sampling) {
+        const ls = left.sampling;
+        const rs = right.sampling;
+        let diffs = 0;
+        if (ls.data_sample_percent !== rs.data_sample_percent) diffs++;
+        if (ls.split_strategy !== rs.split_strategy) diffs++;
+        if (ls.holdout_days !== rs.holdout_days) diffs++;
+        if (ls.date_column !== rs.date_column) diffs++;
+        samplingStatus.textContent = diffs > 0 ? `${diffs} diff${diffs > 1 ? 's' : ''}` : '';
+    } else {
+        samplingStatus.textContent = '';
+    }
 }
 
 // =============================================================================
@@ -5810,6 +5852,12 @@ function formatDuration(seconds) {
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
     return `${mins}:${secs.toString().padStart(2, '0')}`;
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
 }
 
 function formatTimeAgo(date) {

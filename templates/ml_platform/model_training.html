@@ -11,7 +11,6 @@
 <link rel="stylesheet" href="{% static 'css/training_wizard.css' %}?v=2">
 <link rel="stylesheet" href="{% static 'css/cards.css' %}?v=6">
 <link rel="stylesheet" href="{% static 'css/training_cards.css' %}?v=2">
-<link rel="stylesheet" href="{% static 'css/training_view_modal.css' %}?v=1">
 <!-- Flatpickr for datetime pickers -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 <style>
@@ -1839,8 +1838,7 @@
 <script src="{% static 'js/pipeline_dag.js' %}?v=1"></script>
 <script src="{% static 'js/exp_view_modal.js' %}?v=1"></script>
 <script src="{% static 'js/training_wizard.js' %}?v=2"></script>
-<script src="{% static 'js/training_cards.js' %}?v=6"></script>
-<script src="{% static 'js/training_view_modal.js' %}?v=1"></script>
+<script src="{% static 'js/training_cards.js' %}?v=7"></script>
 <script>
 // =============================================================================
 // BEST EXPERIMENTS - STATE & INITIALIZATION
@@ -1856,23 +1854,11 @@ let trainingCardsInitialized = false;
 
 async function loadTrainingRuns() {
     if (!trainingCardsInitialized) {
-        // Configure TrainingViewModal
-        TrainingViewModal.configure({
-            onClose: function() {
-                // Refresh cards when modal closes in case status changed
-                TrainingCards.refresh();
-            },
-            onUpdate: function(run) {
-                // Refresh cards when run status updates
-                TrainingCards.refresh();
-            }
-        });
-
-        // Configure TrainingCards
+        // Configure TrainingCards with ExpViewModal integration
         TrainingCards.configure({
             modelId: {{ model.id }},
             onViewRun: function(runId) {
-                TrainingViewModal.open(runId);
+                ExpViewModal.open(runId, { mode: 'training_run' });
             }
         });
         TrainingCards.init();
@@ -1893,9 +1879,19 @@ document.addEventListener('DOMContentLoaded', function() {
     // Configure ExpViewModal with endpoints and callbacks
     ExpViewModal.configure({
         showTabs: ['overview', 'pipeline', 'data', 'training'],
-        onUpdate: function(exp) {
+        onClose: function() {
+            // Refresh training cards when modal closes in case status changed
+            if (trainingCardsInitialized) {
+                TrainingCards.refresh();
+            }
+        },
+        onUpdate: function(data) {
             // Refresh the table if experiment status changes
             loadBestExpConfigurations();
+            // Refresh training cards when run status updates
+            if (trainingCardsInitialized) {
+                TrainingCards.refresh();
+            }
         }
     });
 

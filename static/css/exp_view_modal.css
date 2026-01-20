@@ -1689,3 +1689,60 @@
 .hidden {
     display: none !important;
 }
+
+/* ==========================================================================
+   Training Run Status Gradients (for training_run mode)
+   ========================================================================== */
+.exp-view-header.scheduled {
+    background: linear-gradient(to right,
+        rgba(255,255,255,1) 0%,
+        rgba(254,243,199,0.3) 30%,
+        rgba(254,243,199,0.7) 60%,
+        rgba(253,230,138,1) 100%);
+}
+
+.exp-view-header.not_blessed {
+    background: linear-gradient(to right,
+        rgba(255,255,255,1) 0%,
+        rgba(255,237,213,0.3) 30%,
+        rgba(255,237,213,0.7) 60%,
+        rgba(254,215,170,1) 100%);
+}
+
+/* Status Icons for training-specific states */
+.exp-view-status-icon.scheduled {
+    background: #f59e0b;
+}
+
+.exp-view-status-icon.not_blessed {
+    background: #f97316;
+}
+
+/* ==========================================================================
+   Blessing Status Banner (for training run metrics)
+   ========================================================================== */
+.exp-view-blessing-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.exp-view-blessing-status i {
+    font-size: 14px;
+}
+
+.exp-view-blessing-status.blessed {
+    background: #dcfce7;
+    color: #166534;
+    border: 1px solid #86efac;
+}
+
+.exp-view-blessing-status.not-blessed {
+    background: #ffedd5;
+    color: #c2410c;
+    border: 1px solid #fdba74;
+}

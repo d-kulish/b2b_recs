@@ -80,6 +80,12 @@
             <button class="exp-view-tab" data-tab="training" onclick="ExpViewModal.switchTab('training')">
                 Training
             </button>
+            <button class="exp-view-tab" data-tab="repository" onclick="ExpViewModal.switchTab('repository')" style="display: none;">
+                Repository
+            </button>
+            <button class="exp-view-tab" data-tab="deployment" onclick="ExpViewModal.switchTab('deployment')" style="display: none;">
+                Deployment
+            </button>
         </div>
 
         <!-- Tab Content -->
@@ -320,6 +326,16 @@
                         <!-- Populated by JavaScript -->
                     </div>
                 </div>
+            </div>
+
+            <!-- Repository Tab (for training_run mode) -->
+            <div id="expViewTabRepository" class="exp-view-tab-content">
+                <!-- Populated by JavaScript -->
+            </div>
+
+            <!-- Deployment Tab (for training_run mode) -->
+            <div id="expViewTabDeployment" class="exp-view-tab-content">
+                <!-- Populated by JavaScript -->
             </div>
         </div>
 

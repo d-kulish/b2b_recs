@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides detailed specifications for implementing the **Training** domain in the ML Platform. The Training domain executes full TFX pipelines for production model training.
 
-**Last Updated**: 2026-01-19
+**Last Updated**: 2026-01-20
 
 ---
 
@@ -404,6 +404,174 @@ When migrating from page-specific modal code to the reusable module:
 3. Update `openExpDetails()` to call `ExpViewModal.open(expId)`
 4. Add `ExpViewModal.configure()` call in `DOMContentLoaded`
 5. Ensure all required CSS/JS files are included
+
+---
+
+### Unified View Modal for Training Runs (2026-01-20)
+
+The `ExpViewModal` has been extended to support a "training_run" mode, eliminating the need for a separate `TrainingViewModal` component. This consolidation reduces code duplication and ensures consistent UX across Experiments and Training pages.
+
+#### Mode-Based Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    UNIFIED VIEW MODAL ARCHITECTURE                           │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│   ExpViewModal.open(id, options)                                            │
+│           │                                                                  │
+│           ├─── mode: 'experiment' (default)                                  │
+│           │         │                                                        │
+│           │         ├── Tabs: Overview, Pipeline, Data Insights, Training   │
+│           │         ├── Fetches from: /api/quick-tests/{id}/                │
+│           │         └── Shows: Experiment configurations, TFDV stats        │
+│           │                                                                  │
+│           └─── mode: 'training_run'                                          │
+│                     │                                                        │
+│                     ├── Tabs: Overview, Pipeline, Training, Repository,     │
+│                     │         Deployment                                     │
+│                     ├── Fetches from: /api/training-runs/{id}/              │
+│                     └── Shows: Training run status, 8-stage pipeline,       │
+│                                GPU config, blessing status                   │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+#### JavaScript API Updates
+
+```javascript
+// Open modal for an experiment (default behavior)
+ExpViewModal.open(experimentId);
+ExpViewModal.open(experimentId, { mode: 'experiment' });
+
+// Open modal for a training run
+ExpViewModal.open(trainingRunId, { mode: 'training_run' });
+
+// Open with pre-loaded training run data
+ExpViewModal.openWithTrainingRunData(trainingRunData);
+
+// Get current mode and run data
+ExpViewModal.getMode();           // Returns 'experiment' or 'training_run'
+ExpViewModal.getCurrentRun();     // Returns training run data (training_run mode only)
+ExpViewModal.getCurrentExp();     // Returns experiment data (experiment mode only)
+```
+
+#### Training Run Mode Features
+
+1. **8-Stage Pipeline DAG**: Shows all TFX stages for production training
+   - Compile → Examples → Stats → Schema → Transform → Train → Evaluate → Push
+   - Status indicators: pending, running (with spinner), completed, failed
+
+2. **Training-Specific Status Badges**: Extended status support
+   - `pending`, `scheduled`, `submitting`, `running`, `completed`, `failed`, `cancelled`, `not_blessed`
+   - Each status has unique header gradient and icon
+
+3. **GPU Configuration Display**: Shows allocated GPU resources
+   - GPU type (T4, L4, V100, etc.)
+   - GPU count
+   - Preemptible status
+
+4. **Blessing Status Banner**: For completed/not_blessed runs
+   - Green banner: "Model passed evaluation (blessed)"
+   - Orange banner: "Model did not pass evaluation threshold"
+
+5. **Placeholder Tabs**: Ready for future features
+   - Repository tab: Git commit, branch info
+   - Deployment tab: Deployment status, endpoint URLs
+
+#### Tab Visibility by Mode
+
+| Tab | Experiment Mode | Training Run Mode |
+|-----|----------------|-------------------|
+| Overview | ✅ | ✅ |
+| Pipeline | ✅ | ✅ |
+| Data Insights | ✅ | ❌ |
+| Training | ✅ | ✅ |
+| Repository | ❌ | ✅ (placeholder) |
+| Deployment | ❌ | ✅ (placeholder) |
+
+#### CSS Additions
+
+New status styles added to `exp_view_modal.css`:
+
+```css
+/* Scheduled status (yellow gradient) */
+.exp-view-header.scheduled { ... }
+.exp-view-status-icon.scheduled { background: #f59e0b; }
+
+/* Not blessed status (orange gradient) */
+.exp-view-header.not_blessed { ... }
+.exp-view-status-icon.not_blessed { background: #f97316; }
+
+/* Blessing status banner */
+.exp-view-blessing-status { ... }
+.exp-view-blessing-status.blessed { background: #dcfce7; color: #166534; }
+.exp-view-blessing-status.not-blessed { background: #ffedd5; color: #c2410c; }
+```
+
+#### Integration Example (Training Page)
+
+```javascript
+// In model_training.html
+
+// Configure TrainingCards to use ExpViewModal
+TrainingCards.configure({
+    modelId: {{ model.id }},
+    onViewRun: function(runId) {
+        ExpViewModal.open(runId, { mode: 'training_run' });
+    }
+});
+
+// Configure ExpViewModal with callbacks
+ExpViewModal.configure({
+    showTabs: ['overview', 'pipeline', 'data', 'training'],
+    onClose: function() {
+        TrainingCards.refresh();
+    },
+    onUpdate: function(data) {
+        TrainingCards.refresh();
+    }
+});
+```
+
+#### Deleted Files
+
+The following redundant files were removed after consolidation:
+
+| File | Lines | Reason |
+|------|-------|--------|
+| `static/js/training_view_modal.js` | 1,121 | Functionality merged into `exp_view_modal.js` |
+| `static/css/training_view_modal.css` | 736 | Styles merged into `exp_view_modal.css` |
+
+#### Configuration Constants
+
+Training-specific constants added to `exp_view_modal.js`:
+
+```javascript
+// Training run status configuration
+const TRAINING_STATUS_CONFIG = {
+    pending: { icon: 'fa-hourglass-start', color: '#9ca3af', label: 'Pending' },
+    scheduled: { icon: 'fa-clock', color: '#f59e0b', label: 'Scheduled' },
+    submitting: { icon: 'fa-upload', color: '#3b82f6', label: 'Submitting' },
+    running: { icon: 'fa-sync', color: '#3b82f6', label: 'Running' },
+    completed: { icon: 'fa-check-circle', color: '#10b981', label: 'Completed' },
+    failed: { icon: 'fa-times-circle', color: '#ef4444', label: 'Failed' },
+    cancelled: { icon: 'fa-ban', color: '#6b7280', label: 'Cancelled' },
+    not_blessed: { icon: 'fa-exclamation-triangle', color: '#f97316', label: 'Not Blessed' }
+};
+
+// 8-stage pipeline for training runs
+const TRAINING_PIPELINE_STAGES = [
+    { id: 'compile', name: 'Compile', icon: 'fa-cog' },
+    { id: 'examples', name: 'Examples', icon: 'fa-database' },
+    { id: 'stats', name: 'Stats', icon: 'fa-chart-bar' },
+    { id: 'schema', name: 'Schema', icon: 'fa-sitemap' },
+    { id: 'transform', name: 'Transform', icon: 'fa-exchange-alt' },
+    { id: 'train', name: 'Train', icon: 'fa-graduation-cap' },
+    { id: 'evaluate', name: 'Evaluate', icon: 'fa-check-double' },
+    { id: 'push', name: 'Push', icon: 'fa-upload' }
+];
+```
 
 ---
 

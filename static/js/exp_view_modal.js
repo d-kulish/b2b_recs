@@ -43,8 +43,10 @@ const ExpViewModal = (function() {
     // =============================================================================
 
     let config = {
+        mode: 'experiment',  // 'experiment' or 'training_run'
         endpoints: {
             experimentDetails: '/api/quick-tests/{id}/',
+            trainingRunDetails: '/api/training-runs/{id}/',
             datasetSummary: '/api/datasets/{id}/summary/',
             featureConfig: '/api/feature-configs/{id}/',
             modelConfig: '/api/model-configs/{id}/',
@@ -61,8 +63,11 @@ const ExpViewModal = (function() {
     };
 
     let state = {
+        mode: 'experiment',  // 'experiment' or 'training_run'
         expId: null,
         currentExp: null,
+        runId: null,
+        currentRun: null,
         currentTab: 'overview',
         pollInterval: null,
         dataCache: {
@@ -125,6 +130,30 @@ const ExpViewModal = (function() {
         }
     };
 
+    // Training run status configuration (for training_run mode)
+    const TRAINING_STATUS_CONFIG = {
+        pending: { icon: 'fa-hourglass-start', color: '#9ca3af', label: 'Pending' },
+        scheduled: { icon: 'fa-clock', color: '#f59e0b', label: 'Scheduled' },
+        submitting: { icon: 'fa-upload', color: '#3b82f6', label: 'Submitting' },
+        running: { icon: 'fa-sync', color: '#3b82f6', label: 'Running' },
+        completed: { icon: 'fa-check-circle', color: '#10b981', label: 'Completed' },
+        failed: { icon: 'fa-times-circle', color: '#ef4444', label: 'Failed' },
+        cancelled: { icon: 'fa-ban', color: '#6b7280', label: 'Cancelled' },
+        not_blessed: { icon: 'fa-exclamation-triangle', color: '#f97316', label: 'Not Blessed' }
+    };
+
+    // Pipeline stages for training runs (8 stages)
+    const TRAINING_PIPELINE_STAGES = [
+        { id: 'compile', name: 'Compile', icon: 'fa-cog' },
+        { id: 'examples', name: 'Examples', icon: 'fa-database' },
+        { id: 'stats', name: 'Stats', icon: 'fa-chart-bar' },
+        { id: 'schema', name: 'Schema', icon: 'fa-sitemap' },
+        { id: 'transform', name: 'Transform', icon: 'fa-exchange-alt' },
+        { id: 'train', name: 'Train', icon: 'fa-graduation-cap' },
+        { id: 'evaluate', name: 'Evaluate', icon: 'fa-check-double' },
+        { id: 'push', name: 'Push', icon: 'fa-upload' }
+    ];
+
     // =============================================================================
     // UTILITY FUNCTIONS
     // =============================================================================
@@ -172,6 +201,26 @@ const ExpViewModal = (function() {
         return val.toFixed(1) + '%';
     }
 
+    function formatDuration(seconds) {
+        if (!seconds && seconds !== 0) return '-';
+        if (seconds < 60) return `${seconds}s`;
+        if (seconds < 3600) {
+            const mins = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            return `${mins}m ${secs}s`;
+        }
+        const hours = Math.floor(seconds / 3600);
+        const mins = Math.floor((seconds % 3600) / 60);
+        return `${hours}h ${mins}m`;
+    }
+
+    function escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
     // =============================================================================
     // MODAL OPEN/CLOSE
     // =============================================================================
@@ -183,20 +232,36 @@ const ExpViewModal = (function() {
         }
     }
 
-    async function open(expId) {
+    async function open(id, options = {}) {
+        // Set mode from options (defaults to 'experiment')
+        state.mode = options.mode || 'experiment';
+
         try {
-            const url = buildUrl(config.endpoints.experimentDetails, { id: expId });
+            let url, dataKey;
+
+            if (state.mode === 'training_run') {
+                url = buildUrl(config.endpoints.trainingRunDetails, { id: id });
+                dataKey = 'training_run';
+            } else {
+                url = buildUrl(config.endpoints.experimentDetails, { id: id });
+                dataKey = 'quick_test';
+            }
+
             const response = await fetch(url);
             const data = await response.json();
 
             if (!data.success) {
-                console.error('Failed to load experiment:', data.error);
+                console.error(`Failed to load ${state.mode}:`, data.error);
                 return;
             }
 
-            openWithData(data.quick_test);
+            if (state.mode === 'training_run') {
+                openWithTrainingRunData(data[dataKey]);
+            } else {
+                openWithData(data[dataKey]);
+            }
         } catch (error) {
-            console.error('Error loading experiment details:', error);
+            console.error(`Error loading ${state.mode} details:`, error);
         }
     }
 
@@ -246,14 +311,413 @@ const ExpViewModal = (function() {
         }
     }
 
+    // =============================================================================
+    // TRAINING RUN MODE FUNCTIONS
+    // =============================================================================
+
+    function openWithTrainingRunData(run) {
+        state.mode = 'training_run';
+        state.runId = run.id;
+        state.currentRun = run;
+
+        // Reset state
+        state.dataCache = {
+            statistics: null,
+            schema: null,
+            errorDetails: null,
+            trainingHistory: null,
+            _loadingInsights: false,
+            _statsData: null,
+            _schemaData: null
+        };
+        state.currentTab = 'overview';
+
+        // Reset tabs to default
+        document.querySelectorAll('.exp-view-tab').forEach(t => t.classList.remove('active'));
+        const overviewTab = document.querySelector('.exp-view-tab[data-tab="overview"]');
+        if (overviewTab) overviewTab.classList.add('active');
+
+        document.querySelectorAll('.exp-view-tab-content').forEach(c => c.classList.remove('active'));
+        const overviewContent = document.getElementById('expViewTabOverview');
+        if (overviewContent) overviewContent.classList.add('active');
+
+        // Update visible tabs for training run mode
+        updateVisibleTabs();
+
+        // Populate modal with training run data
+        populateTrainingRunModal(run);
+        document.getElementById('expViewModal').classList.remove('hidden');
+
+        // Start polling if running/submitting
+        if (run.status === 'running' || run.status === 'submitting') {
+            startTrainingRunPolling(run.id);
+        }
+    }
+
+    function populateTrainingRunModal(run) {
+        // Store current run for tab data loading
+        window.currentViewRun = run;
+
+        // Status gradient on header
+        const header = document.getElementById('expViewHeader');
+        header.className = `modal-header exp-view-header ${run.status}`;
+
+        // Status panel
+        const statusPanel = document.getElementById('expViewStatusPanel');
+        statusPanel.className = `exp-view-status-panel ${run.status}`;
+
+        // Status icon
+        const statusIcon = document.getElementById('expViewStatusIcon');
+        const statusCfg = TRAINING_STATUS_CONFIG[run.status] || TRAINING_STATUS_CONFIG.pending;
+        const isSpinning = run.status === 'running' || run.status === 'submitting';
+        statusIcon.className = `exp-view-status-icon ${run.status}`;
+        statusIcon.innerHTML = `<i class="fas ${statusCfg.icon}${isSpinning ? ' fa-spin' : ''}"></i>`;
+
+        // Title (Run #N)
+        document.getElementById('expViewTitle').textContent = `Run #${run.run_number}`;
+
+        // Run name
+        const expNameEl = document.getElementById('expViewExpName');
+        expNameEl.textContent = run.name || '';
+        expNameEl.style.display = run.name ? '' : 'none';
+
+        // Model type badge in header
+        const typeBadgeEl = document.getElementById('expViewTypeBadge');
+        const modelType = (run.model_type || 'retrieval').toLowerCase();
+        const badgeContents = {
+            'retrieval': '<i class="fas fa-search"></i> Retrieval',
+            'ranking': '<i class="fas fa-sort-amount-down"></i> Ranking',
+            'multitask': '<i class="fas fa-layer-group"></i> Retrieval / Ranking'
+        };
+        typeBadgeEl.className = `exp-view-header-type-badge ${modelType}`;
+        typeBadgeEl.innerHTML = badgeContents[modelType] || badgeContents['retrieval'];
+
+        // Description (empty for training runs or use run notes if available)
+        const descEl = document.getElementById('expViewDescription');
+        descEl.textContent = run.notes || '';
+        descEl.style.display = run.notes ? '' : 'none';
+
+        // Start/End times
+        document.getElementById('expViewStartTime').textContent = formatDateTime(run.started_at || run.created_at);
+        document.getElementById('expViewEndTime').textContent = run.completed_at ? formatDateTime(run.completed_at) : '-';
+
+        // Overview Tab - render training run specific content
+        renderTrainingRunOverview(run);
+
+        // Pipeline Tab - render 8-stage pipeline
+        renderTrainingRunPipeline(run);
+    }
+
+    function renderTrainingRunOverview(run) {
+        // Dataset section
+        const datasetName = run.dataset_name || '-';
+        document.getElementById('expViewDatasetName').textContent = datasetName;
+
+        // Dataset details - simplified for training runs
+        const datasetDetails = document.getElementById('expViewDatasetDetails');
+        datasetDetails.innerHTML = `
+            <div class="exp-view-ds-grid">
+                <span class="label">Dataset</span>
+                <span class="value">${escapeHtml(datasetName)}</span>
+            </div>
+        `;
+
+        // Features config
+        const featureConfigName = run.feature_config_name || '-';
+        document.getElementById('expViewFeaturesConfigName').textContent = featureConfigName;
+        document.getElementById('expViewFeaturesConfigContent').innerHTML = `
+            <div class="exp-view-no-filters">Using configuration from source experiment</div>
+        `;
+
+        // Model config
+        const modelConfigName = run.model_config_name || '-';
+        document.getElementById('expViewModelConfigName').textContent = modelConfigName;
+        document.getElementById('expViewModelConfigContent').innerHTML = `
+            <div class="exp-view-no-filters">Using configuration from source experiment</div>
+        `;
+
+        // Sampling chips
+        renderTrainingRunSamplingChips(run);
+
+        // Training parameters chips
+        renderTrainingRunParamsChips(run);
+
+        // Results Summary (metrics)
+        renderTrainingRunMetrics(run);
+    }
+
+    function renderTrainingRunMetrics(run) {
+        const resultsSummary = document.getElementById('expViewResultsSummary');
+        const metricsContainer = document.getElementById('expViewMetricsSummary');
+
+        // Only show for completed or not_blessed runs
+        if (run.status !== 'completed' && run.status !== 'not_blessed') {
+            resultsSummary.classList.add('hidden');
+            return;
+        }
+
+        resultsSummary.classList.remove('hidden');
+
+        let metricsHtml = '';
+
+        // Add blessing status banner
+        if (run.is_blessed !== null && run.is_blessed !== undefined) {
+            const blessingClass = run.is_blessed ? 'blessed' : 'not-blessed';
+            const blessingIcon = run.is_blessed ? 'fa-check-circle' : 'fa-exclamation-triangle';
+            const blessingText = run.is_blessed ? 'Model passed evaluation (blessed)' : 'Model did not pass evaluation threshold';
+            metricsHtml += `
+                <div class="exp-view-blessing-status ${blessingClass}" style="grid-column: span 4; margin-bottom: 12px;">
+                    <i class="fas ${blessingIcon}"></i> ${blessingText}
+                </div>
+            `;
+        }
+
+        // Metrics based on model type
+        if (run.model_type === 'multitask') {
+            // Retrieval metrics
+            metricsHtml += `
+                <div class="exp-view-metric-card">
+                    <div class="exp-view-metric-card-label">R@5</div>
+                    <div class="exp-view-metric-card-value">${formatNumber(run.recall_at_5)}</div>
+                </div>
+                <div class="exp-view-metric-card">
+                    <div class="exp-view-metric-card-label">R@10</div>
+                    <div class="exp-view-metric-card-value">${formatNumber(run.recall_at_10)}</div>
+                </div>
+                <div class="exp-view-metric-card">
+                    <div class="exp-view-metric-card-label">RMSE</div>
+                    <div class="exp-view-metric-card-value">${formatNumber(run.rmse)}</div>
+                </div>
+                <div class="exp-view-metric-card">
+                    <div class="exp-view-metric-card-label">Loss</div>
+                    <div class="exp-view-metric-card-value">${formatNumber(run.loss)}</div>
+                </div>
+            `;
+        } else if (run.model_type === 'ranking') {
+            metricsHtml += `
+                <div class="exp-view-metric-card">
+                    <div class="exp-view-metric-card-label">RMSE</div>
+                    <div class="exp-view-metric-card-value">${formatNumber(run.rmse)}</div>
+                </div>
+                <div class="exp-view-metric-card">
+                    <div class="exp-view-metric-card-label">Test RMSE</div>
+                    <div class="exp-view-metric-card-value">${formatNumber(run.test_rmse)}</div>
+                </div>
+                <div class="exp-view-metric-card">
+                    <div class="exp-view-metric-card-label">MAE</div>
+                    <div class="exp-view-metric-card-value">${formatNumber(run.mae)}</div>
+                </div>
+                <div class="exp-view-metric-card">
+                    <div class="exp-view-metric-card-label">Loss</div>
+                    <div class="exp-view-metric-card-value">${formatNumber(run.loss)}</div>
+                </div>
+            `;
+        } else {
+            // Retrieval
+            metricsHtml += `
+                <div class="exp-view-metric-card">
+                    <div class="exp-view-metric-card-label">R@5</div>
+                    <div class="exp-view-metric-card-value">${formatNumber(run.recall_at_5)}</div>
+                </div>
+                <div class="exp-view-metric-card">
+                    <div class="exp-view-metric-card-label">R@10</div>
+                    <div class="exp-view-metric-card-value">${formatNumber(run.recall_at_10)}</div>
+                </div>
+                <div class="exp-view-metric-card">
+                    <div class="exp-view-metric-card-label">R@50</div>
+                    <div class="exp-view-metric-card-value">${formatNumber(run.recall_at_50)}</div>
+                </div>
+                <div class="exp-view-metric-card">
+                    <div class="exp-view-metric-card-label">R@100</div>
+                    <div class="exp-view-metric-card-value">${formatNumber(run.recall_at_100)}</div>
+                </div>
+            `;
+        }
+
+        metricsContainer.innerHTML = metricsHtml;
+    }
+
+    function renderTrainingRunSamplingChips(run) {
+        const container = document.getElementById('expViewSamplingChips');
+        if (!container) return;
+
+        const params = run.training_params || {};
+        const chips = [];
+
+        if (params.split_strategy) {
+            chips.push({ label: 'Split Strategy', value: params.split_strategy });
+        }
+        if (params.train_fraction) {
+            chips.push({ label: 'Train', value: `${(params.train_fraction * 100).toFixed(0)}%` });
+        }
+        if (params.val_fraction) {
+            chips.push({ label: 'Val', value: `${(params.val_fraction * 100).toFixed(0)}%` });
+        }
+        if (params.test_fraction) {
+            chips.push({ label: 'Test', value: `${(params.test_fraction * 100).toFixed(0)}%` });
+        }
+
+        if (chips.length === 0) {
+            container.innerHTML = '<span class="exp-view-no-filters">No sampling parameters</span>';
+            return;
+        }
+
+        container.innerHTML = chips.map(chip => `
+            <div class="exp-view-param-chip">
+                <span class="exp-view-param-chip-label">${chip.label}:</span>
+                <span class="exp-view-param-chip-value">${chip.value}</span>
+            </div>
+        `).join('');
+    }
+
+    function renderTrainingRunParamsChips(run) {
+        const container = document.getElementById('expViewTrainingParamsChips');
+        if (!container) return;
+
+        const params = run.training_params || {};
+        const gpuConfig = run.gpu_config || {};
+        const chips = [];
+
+        if (params.epochs) chips.push({ label: 'Epochs', value: params.epochs });
+        if (params.batch_size) chips.push({ label: 'Batch Size', value: formatNumber(params.batch_size) });
+        if (params.learning_rate) chips.push({ label: 'Learning Rate', value: params.learning_rate });
+
+        // GPU config
+        if (gpuConfig.accelerator_type) {
+            chips.push({ label: 'GPU', value: gpuConfig.accelerator_type.replace('NVIDIA_', '') });
+        }
+        if (gpuConfig.accelerator_count) {
+            chips.push({ label: 'GPU Count', value: gpuConfig.accelerator_count });
+        }
+        if (gpuConfig.use_preemptible !== undefined) {
+            chips.push({ label: 'Preemptible', value: gpuConfig.use_preemptible ? 'Yes' : 'No' });
+        }
+
+        if (chips.length === 0) {
+            container.innerHTML = '<span class="exp-view-no-filters">No training parameters</span>';
+            return;
+        }
+
+        container.innerHTML = chips.map(chip => `
+            <div class="exp-view-param-chip">
+                <span class="exp-view-param-chip-label">${chip.label}:</span>
+                <span class="exp-view-param-chip-value">${chip.value}</span>
+            </div>
+        `).join('');
+    }
+
+    function renderTrainingRunPipeline(run) {
+        const pipelineContent = document.getElementById('expViewTabPipeline');
+        if (!pipelineContent) return;
+
+        const stageDetails = run.stage_details || [];
+
+        // Create stage status map
+        const stageStatusMap = {};
+        stageDetails.forEach(stage => {
+            stageStatusMap[stage.name?.toLowerCase()] = stage.status;
+        });
+
+        // Progress section for running runs
+        const isRunning = run.status === 'running' || run.status === 'submitting';
+        const progressSection = document.getElementById('expViewProgressSection');
+        if (progressSection) {
+            progressSection.style.display = isRunning ? 'flex' : 'none';
+            if (isRunning) {
+                const percent = run.progress_percent || 0;
+                document.getElementById('expViewProgressBar').style.width = `${percent}%`;
+                document.getElementById('expViewProgressText').textContent = `${percent}%`;
+            }
+        }
+
+        // Render 8-stage DAG using pipeline_dag.js if available
+        if (typeof renderPipelineStages === 'function') {
+            const stages = TRAINING_PIPELINE_STAGES.map(stage => {
+                const status = stageStatusMap[stage.id] || 'pending';
+                const stageDetail = stageDetails.find(s => s.name?.toLowerCase() === stage.id);
+                return {
+                    name: stage.name,
+                    status: status,
+                    duration_seconds: stageDetail?.duration_seconds || null
+                };
+            });
+            renderPipelineStages(stages);
+        }
+    }
+
+    function startTrainingRunPolling(runId) {
+        stopPolling();
+
+        state.pollInterval = setInterval(async () => {
+            try {
+                const url = buildUrl(config.endpoints.trainingRunDetails, { id: runId });
+                const response = await fetch(url);
+                const data = await response.json();
+
+                if (data.success) {
+                    const run = data.training_run;
+                    populateTrainingRunModal(run);
+                    state.currentRun = run;
+
+                    if (config.onUpdate) {
+                        config.onUpdate(run);
+                    }
+
+                    if (['completed', 'failed', 'cancelled', 'not_blessed'].includes(run.status)) {
+                        stopPolling();
+                    }
+                }
+            } catch (error) {
+                console.error('Training run polling error:', error);
+            }
+        }, 10000);
+    }
+
+    function renderRepositoryTab() {
+        const container = document.getElementById('expViewTabRepository');
+        if (!container) return;
+
+        container.innerHTML = `
+            <div class="exp-view-section-group">
+                <h4 class="exp-view-group-title">Repository Information</h4>
+                <div class="exp-view-chart-placeholder">
+                    <i class="fas fa-code-branch"></i>
+                    <p>Repository information will be available in a future update</p>
+                </div>
+            </div>
+        `;
+    }
+
+    function renderDeploymentTab() {
+        const container = document.getElementById('expViewTabDeployment');
+        if (!container) return;
+
+        container.innerHTML = `
+            <div class="exp-view-section-group">
+                <h4 class="exp-view-group-title">Deployment Status</h4>
+                <div class="exp-view-chart-placeholder">
+                    <i class="fas fa-rocket"></i>
+                    <p>Deployment information will be available in a future update</p>
+                </div>
+            </div>
+        `;
+    }
+
     function close(event) {
         if (event && event.target !== event.currentTarget) return;
 
         document.getElementById('expViewModal').classList.add('hidden');
         stopPolling();
 
+        // Reset experiment state
         state.expId = null;
         state.currentExp = null;
+
+        // Reset training run state
+        state.runId = null;
+        state.currentRun = null;
+        state.mode = 'experiment';
+
         state.dataCache = {
             statistics: null,
             schema: null,
@@ -288,10 +752,18 @@ const ExpViewModal = (function() {
         const tabContainer = document.getElementById('expViewTabs');
         if (!tabContainer) return;
 
+        // Determine which tabs to show based on mode
+        let visibleTabs;
+        if (state.mode === 'training_run') {
+            visibleTabs = ['overview', 'pipeline', 'training', 'repository', 'deployment'];
+        } else {
+            visibleTabs = config.showTabs;
+        }
+
         const allTabs = tabContainer.querySelectorAll('.exp-view-tab');
         allTabs.forEach(tab => {
             const tabName = tab.getAttribute('data-tab');
-            if (config.showTabs.includes(tabName)) {
+            if (visibleTabs.includes(tabName)) {
                 tab.style.display = '';
             } else {
                 tab.style.display = 'none';
@@ -467,15 +939,26 @@ const ExpViewModal = (function() {
         const tabContent = document.getElementById(`expViewTab${tabName.charAt(0).toUpperCase() + tabName.slice(1)}`);
         if (tabContent) tabContent.classList.add('active');
 
-        // Load lazy data for specific tabs
-        if (tabName === 'data') {
-            loadDataInsights();
-        }
-        if (tabName === 'training') {
-            if (state.dataCache.trainingHistory) {
-                renderCachedTrainingHistory();
-            } else {
-                loadTrainingHistory();
+        // Handle mode-specific tab loading
+        if (state.mode === 'training_run') {
+            // Training run mode tabs
+            if (tabName === 'repository') {
+                renderRepositoryTab();
+            }
+            if (tabName === 'deployment') {
+                renderDeploymentTab();
+            }
+        } else {
+            // Experiment mode tabs
+            if (tabName === 'data') {
+                loadDataInsights();
+            }
+            if (tabName === 'training') {
+                if (state.dataCache.trainingHistory) {
+                    renderCachedTrainingHistory();
+                } else {
+                    loadTrainingHistory();
+                }
             }
         }
     }
@@ -2528,6 +3011,7 @@ const ExpViewModal = (function() {
         // Modal operations
         open: open,
         openWithData: openWithData,
+        openWithTrainingRunData: openWithTrainingRunData,
         close: close,
         handleOverlayClick: handleOverlayClick,
 
@@ -2543,7 +3027,9 @@ const ExpViewModal = (function() {
 
         // State access (for debugging)
         getState: () => state,
-        getCurrentExp: () => state.currentExp
+        getCurrentExp: () => state.currentExp,
+        getCurrentRun: () => state.currentRun,
+        getMode: () => state.mode
     };
 })();
 

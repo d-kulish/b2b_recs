@@ -614,7 +614,8 @@ const TrainingCards = (function() {
                             <i class="fas ${statusConfig.icon}"></i>
                         </div>
                         <div class="ml-card-info-text">
-                            <div class="ml-card-name">${escapeHtml(run.name)} #${run.run_number}</div>
+                            <div class="ml-card-name">Run #${run.run_number}</div>
+                            <div class="ml-card-secondary-name">${escapeHtml(run.name)}</div>
                             ${run.description ? `<div class="ml-card-description" title="${escapeHtml(run.description)}">${escapeHtml(run.description)}</div>` : ''}
                             <div class="ml-card-times">
                                 <div>Start: <span>${startTime}</span></div>

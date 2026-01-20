@@ -9,7 +9,8 @@
 <link rel="stylesheet" href="{% static 'css/pipeline_dag.css' %}?v=1">
 <link rel="stylesheet" href="{% static 'css/exp_view_modal.css' %}?v=1">
 <link rel="stylesheet" href="{% static 'css/training_wizard.css' %}?v=2">
-<link rel="stylesheet" href="{% static 'css/training_cards.css' %}?v=1">
+<link rel="stylesheet" href="{% static 'css/cards.css' %}?v=2">
+<link rel="stylesheet" href="{% static 'css/training_cards.css' %}?v=2">
 <link rel="stylesheet" href="{% static 'css/training_view_modal.css' %}?v=1">
 <!-- Flatpickr for datetime pickers -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
@@ -1722,14 +1723,9 @@
             </div>
             <h2 class="text-lg font-bold text-gray-900">Training</h2>
         </div>
-        <div class="btn-group">
-            <button onclick="TrainingCards.refresh()" class="btn btn-secondary btn-sm" style="width: 140px;">
-                <i class="fas fa-sync"></i> Refresh
-            </button>
-            <button onclick="TrainingWizard.open()" class="btn btn-primary btn-sm" style="width: 140px;">
-                <i class="fas fa-plus"></i> Training
-            </button>
-        </div>
+        <button onclick="TrainingWizard.open()" class="btn btn-primary btn-sm" style="width: 140px;">
+            <i class="fas fa-plus"></i> Training
+        </button>
     </div>
 
     <!-- Filter Bar (below header) -->

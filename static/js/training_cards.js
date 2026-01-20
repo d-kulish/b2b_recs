@@ -28,7 +28,6 @@ const TrainingCards = (function() {
             cancel: '/api/training-runs/{id}/cancel/',
             delete: '/api/training-runs/{id}/delete/',
             submit: '/api/training-runs/{id}/submit/',
-            retry: '/api/training-runs/{id}/retry/',
             deploy: '/api/training-runs/{id}/deploy/',
             push: '/api/training-runs/{id}/push/'
         },
@@ -100,7 +99,7 @@ const TrainingCards = (function() {
             icon: 'fa-times-circle',
             label: 'Failed',
             spin: false,
-            actions: ['view', 'retry', 'delete']
+            actions: ['view', 'delete']
         },
         cancelled: {
             icon: 'fa-ban',
@@ -170,20 +169,10 @@ const TrainingCards = (function() {
     function formatDate(dateString) {
         if (!dateString) return '-';
         const date = new Date(dateString);
-        const now = new Date();
-        const diff = now - date;
-
-        // If less than 24 hours, show relative time
-        if (diff < 86400000) {
-            if (diff < 60000) return 'Just now';
-            if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
-            return `${Math.floor(diff / 3600000)}h ago`;
-        }
-
-        // Otherwise show date
         return date.toLocaleDateString('en-US', {
             month: 'short',
-            day: 'numeric',
+            day: 'numeric'
+        }) + ' ' + date.toLocaleTimeString('en-US', {
             hour: '2-digit',
             minute: '2-digit'
         });
@@ -479,10 +468,10 @@ const TrainingCards = (function() {
 
     function renderCard(run) {
         const statusConfig = STATUS_CONFIG[run.status] || STATUS_CONFIG.pending;
-        const iconClass = statusConfig.spin ? 'fa-spin' : '';
 
-        // Model type badge
-        const modelTypeBadge = renderModelTypeBadge(run.model_type);
+        // Format times
+        const startTime = formatDate(run.created_at);
+        const endTime = run.completed_at ? formatDate(run.completed_at) : '-';
 
         // Metrics section
         const metricsHtml = renderMetrics(run);
@@ -493,49 +482,40 @@ const TrainingCards = (function() {
         // Actions
         const actionsHtml = renderActions(run, statusConfig.actions);
 
-        // Progress section (for running/submitting)
-        const progressHtml = renderProgress(run);
-
         // Error section (for failed)
         const errorHtml = run.status === 'failed' ? renderError(run) : '';
 
-        // Badges (deployed, blessed)
-        const badgesHtml = renderBadges(run);
+        // Stage bar (always shown at bottom)
+        const stagesHtml = renderStageBar(run.stage_details || getDefaultStages());
 
         return `
-            <div class="training-card status-${run.status}" data-run-id="${run.id}" onclick="TrainingCards.viewRun(${run.id})">
-                <div class="training-card-header">
-                    <div class="training-card-status-icon ${run.status}">
-                        <i class="fas ${statusConfig.icon} ${iconClass}"></i>
-                    </div>
-                    <div class="training-card-info">
-                        <div class="training-card-name">
-                            ${escapeHtml(run.name)}
-                            <span class="training-card-run-number">#${run.run_number}</span>
-                            ${modelTypeBadge}
-                            ${badgesHtml}
+            <div class="ml-card" data-run-id="${run.id}" onclick="TrainingCards.viewRun(${run.id})">
+                <div class="ml-card-columns">
+                    <!-- Column 1: Status Icon + Info (30%) -->
+                    <div class="ml-card-col-info">
+                        <div class="ml-card-status ${run.status}">
+                            <i class="fas ${statusConfig.icon}"></i>
                         </div>
-                        ${run.description ? `<div class="training-card-description">${escapeHtml(run.description)}</div>` : ''}
-                        <div class="training-card-meta">
-                            <span><i class="fas fa-calendar"></i> ${formatDate(run.created_at)}</span>
-                            ${run.elapsed_seconds ? `<span><i class="fas fa-clock"></i> ${formatDuration(run.elapsed_seconds)}</span>` : ''}
-                            ${run.created_by ? `<span><i class="fas fa-user"></i> ${escapeHtml(run.created_by)}</span>` : ''}
+                        <div class="ml-card-info-text">
+                            <div class="ml-card-name">${escapeHtml(run.name)} #${run.run_number}</div>
+                            ${run.description ? `<div class="ml-card-description" title="${escapeHtml(run.description)}">${escapeHtml(run.description)}</div>` : ''}
+                            <div class="ml-card-times">
+                                <div>Start: <span>${startTime}</span></div>
+                                <div>End: <span>${endTime}</span></div>
+                            </div>
                         </div>
                     </div>
-                    <div class="training-card-badge ${run.status}">
-                        <i class="fas ${statusConfig.icon} ${iconClass}"></i>
-                        ${statusConfig.label}
-                    </div>
-                </div>
-
-                <div class="training-card-body">
+                    <!-- Column 2: Config Info (20%) -->
                     ${configHtml}
-                    ${metricsHtml}
+                    <!-- Column 3: Metrics (30%) -->
+                    <div class="ml-card-col-metrics">
+                        ${metricsHtml}
+                    </div>
+                    <!-- Column 4: Actions (20%) -->
                     ${actionsHtml}
                 </div>
-
-                ${progressHtml}
                 ${errorHtml}
+                ${stagesHtml}
             </div>
         `;
     }
@@ -546,11 +526,16 @@ const TrainingCards = (function() {
             ranking: 'fa-sort-amount-down',
             multitask: 'fa-layer-group'
         };
+        const labels = {
+            retrieval: 'Retrieval',
+            ranking: 'Ranking',
+            multitask: 'Retrieval / Ranking'
+        };
         const icon = icons[modelType] || icons.retrieval;
+        const label = labels[modelType] || labels.retrieval;
         return `
-            <span class="training-card-type-badge ${modelType}">
-                <i class="fas ${icon}"></i>
-                ${modelType}
+            <span class="ml-card-type-badge ${modelType}">
+                <i class="fas ${icon}"></i> ${label}
             </span>
         `;
     }
@@ -558,14 +543,24 @@ const TrainingCards = (function() {
     function renderBadges(run) {
         let badges = '';
 
-        if (run.is_deployed) {
-            badges += `
-                <span class="training-card-deployed-badge">
-                    <i class="fas fa-rocket"></i> Deployed
-                </span>
-            `;
+        // Always show deployment status for completed runs
+        if (run.status === 'completed' || run.status === 'not_blessed') {
+            if (run.is_deployed) {
+                badges += `
+                    <span class="training-card-deployed-badge">
+                        <i class="fas fa-rocket"></i> Deployed
+                    </span>
+                `;
+            } else {
+                badges += `
+                    <span class="training-card-deployed-badge not-deployed">
+                        <i class="fas fa-rocket"></i> Not Deployed
+                    </span>
+                `;
+            }
         }
 
+        // Blessed badge
         if (run.is_blessed === true) {
             badges += `
                 <span class="training-card-blessed-badge">
@@ -586,39 +581,55 @@ const TrainingCards = (function() {
     function renderMetrics(run) {
         // Different metrics for different model types
         if (run.status !== 'completed' && run.status !== 'not_blessed') {
-            return '<div class="training-card-metrics"><span class="training-card-metric-value empty">Metrics available after completion</span></div>';
+            return '<span class="ml-card-metric-value empty">Metrics available after completion</span>';
         }
 
         if (run.model_type === 'multitask') {
             return `
-                <div class="training-card-metrics-multitask">
-                    <div class="training-card-metrics-section">
-                        <div class="training-card-metrics-section-label">
+                <div class="ml-card-metrics-multitask">
+                    <div class="ml-card-metrics-section">
+                        <div class="ml-card-metrics-section-label">
                             <i class="fas fa-search"></i> Retrieval
                         </div>
-                        <div class="training-card-metrics">
-                            <div class="training-card-metric">
-                                <div class="training-card-metric-label">R@50</div>
-                                <div class="training-card-metric-value ${run.recall_at_50 == null ? 'empty' : ''}">${formatNumber(run.recall_at_50)}</div>
+                        <div class="ml-card-metrics-row">
+                            <div class="ml-card-metric">
+                                <div class="ml-card-metric-label">R@5</div>
+                                <div class="ml-card-metric-value ${run.recall_at_5 == null ? 'empty' : ''}">${formatNumber(run.recall_at_5)}</div>
                             </div>
-                            <div class="training-card-metric">
-                                <div class="training-card-metric-label">R@100</div>
-                                <div class="training-card-metric-value ${run.recall_at_100 == null ? 'empty' : ''}">${formatNumber(run.recall_at_100)}</div>
+                            <div class="ml-card-metric">
+                                <div class="ml-card-metric-label">R@10</div>
+                                <div class="ml-card-metric-value ${run.recall_at_10 == null ? 'empty' : ''}">${formatNumber(run.recall_at_10)}</div>
+                            </div>
+                            <div class="ml-card-metric">
+                                <div class="ml-card-metric-label">R@50</div>
+                                <div class="ml-card-metric-value ${run.recall_at_50 == null ? 'empty' : ''}">${formatNumber(run.recall_at_50)}</div>
+                            </div>
+                            <div class="ml-card-metric">
+                                <div class="ml-card-metric-label">R@100</div>
+                                <div class="ml-card-metric-value ${run.recall_at_100 == null ? 'empty' : ''}">${formatNumber(run.recall_at_100)}</div>
                             </div>
                         </div>
                     </div>
-                    <div class="training-card-metrics-section">
-                        <div class="training-card-metrics-section-label">
-                            <i class="fas fa-sort-amount-down"></i> Ranking
+                    <div class="ml-card-metrics-section">
+                        <div class="ml-card-metrics-section-label">
+                            <i class="fas fa-star"></i> Ranking
                         </div>
-                        <div class="training-card-metrics">
-                            <div class="training-card-metric">
-                                <div class="training-card-metric-label">RMSE</div>
-                                <div class="training-card-metric-value ${run.rmse == null ? 'empty' : ''}">${formatNumber(run.rmse, 4)}</div>
+                        <div class="ml-card-metrics-row">
+                            <div class="ml-card-metric">
+                                <div class="ml-card-metric-label">RMSE</div>
+                                <div class="ml-card-metric-value ${run.rmse == null ? 'empty' : ''}">${formatNumber(run.rmse, 4)}</div>
                             </div>
-                            <div class="training-card-metric">
-                                <div class="training-card-metric-label">MAE</div>
-                                <div class="training-card-metric-value ${run.mae == null ? 'empty' : ''}">${formatNumber(run.mae, 4)}</div>
+                            <div class="ml-card-metric">
+                                <div class="ml-card-metric-label">TEST RMSE</div>
+                                <div class="ml-card-metric-value ${run.test_rmse == null ? 'empty' : ''}">${formatNumber(run.test_rmse, 4)}</div>
+                            </div>
+                            <div class="ml-card-metric">
+                                <div class="ml-card-metric-label">MAE</div>
+                                <div class="ml-card-metric-value ${run.mae == null ? 'empty' : ''}">${formatNumber(run.mae, 4)}</div>
+                            </div>
+                            <div class="ml-card-metric">
+                                <div class="ml-card-metric-label">TEST MAE</div>
+                                <div class="ml-card-metric-value ${run.test_mae == null ? 'empty' : ''}">${formatNumber(run.test_mae, 4)}</div>
                             </div>
                         </div>
                     </div>
@@ -626,40 +637,44 @@ const TrainingCards = (function() {
             `;
         } else if (run.model_type === 'ranking') {
             return `
-                <div class="training-card-metrics">
-                    <div class="training-card-metric">
-                        <div class="training-card-metric-label">RMSE</div>
-                        <div class="training-card-metric-value ${run.rmse == null ? 'empty' : ''}">${formatNumber(run.rmse, 4)}</div>
+                <div class="ml-card-metrics-row">
+                    <div class="ml-card-metric">
+                        <div class="ml-card-metric-label">RMSE</div>
+                        <div class="ml-card-metric-value ${run.rmse == null ? 'empty' : ''}">${formatNumber(run.rmse, 4)}</div>
                     </div>
-                    <div class="training-card-metric">
-                        <div class="training-card-metric-label">Test RMSE</div>
-                        <div class="training-card-metric-value ${run.test_rmse == null ? 'empty' : ''}">${formatNumber(run.test_rmse, 4)}</div>
+                    <div class="ml-card-metric">
+                        <div class="ml-card-metric-label">TEST RMSE</div>
+                        <div class="ml-card-metric-value ${run.test_rmse == null ? 'empty' : ''}">${formatNumber(run.test_rmse, 4)}</div>
                     </div>
-                    <div class="training-card-metric">
-                        <div class="training-card-metric-label">MAE</div>
-                        <div class="training-card-metric-value ${run.mae == null ? 'empty' : ''}">${formatNumber(run.mae, 4)}</div>
+                    <div class="ml-card-metric">
+                        <div class="ml-card-metric-label">MAE</div>
+                        <div class="ml-card-metric-value ${run.mae == null ? 'empty' : ''}">${formatNumber(run.mae, 4)}</div>
+                    </div>
+                    <div class="ml-card-metric">
+                        <div class="ml-card-metric-label">TEST MAE</div>
+                        <div class="ml-card-metric-value ${run.test_mae == null ? 'empty' : ''}">${formatNumber(run.test_mae, 4)}</div>
                     </div>
                 </div>
             `;
         } else {
             // Retrieval
             return `
-                <div class="training-card-metrics">
-                    <div class="training-card-metric">
-                        <div class="training-card-metric-label">R@5</div>
-                        <div class="training-card-metric-value ${run.recall_at_5 == null ? 'empty' : ''}">${formatNumber(run.recall_at_5)}</div>
+                <div class="ml-card-metrics-row">
+                    <div class="ml-card-metric">
+                        <div class="ml-card-metric-label">R@5</div>
+                        <div class="ml-card-metric-value ${run.recall_at_5 == null ? 'empty' : ''}">${formatNumber(run.recall_at_5)}</div>
                     </div>
-                    <div class="training-card-metric">
-                        <div class="training-card-metric-label">R@10</div>
-                        <div class="training-card-metric-value ${run.recall_at_10 == null ? 'empty' : ''}">${formatNumber(run.recall_at_10)}</div>
+                    <div class="ml-card-metric">
+                        <div class="ml-card-metric-label">R@10</div>
+                        <div class="ml-card-metric-value ${run.recall_at_10 == null ? 'empty' : ''}">${formatNumber(run.recall_at_10)}</div>
                     </div>
-                    <div class="training-card-metric">
-                        <div class="training-card-metric-label">R@50</div>
-                        <div class="training-card-metric-value ${run.recall_at_50 == null ? 'empty' : ''}">${formatNumber(run.recall_at_50)}</div>
+                    <div class="ml-card-metric">
+                        <div class="ml-card-metric-label">R@50</div>
+                        <div class="ml-card-metric-value ${run.recall_at_50 == null ? 'empty' : ''}">${formatNumber(run.recall_at_50)}</div>
                     </div>
-                    <div class="training-card-metric">
-                        <div class="training-card-metric-label">R@100</div>
-                        <div class="training-card-metric-value ${run.recall_at_100 == null ? 'empty' : ''}">${formatNumber(run.recall_at_100)}</div>
+                    <div class="ml-card-metric">
+                        <div class="ml-card-metric-label">R@100</div>
+                        <div class="ml-card-metric-value ${run.recall_at_100 == null ? 'empty' : ''}">${formatNumber(run.recall_at_100)}</div>
                     </div>
                 </div>
             `;
@@ -667,90 +682,84 @@ const TrainingCards = (function() {
     }
 
     function renderConfigInfo(run) {
+        // Format GPU config
+        let gpuChip = '';
+        if (run.gpu_config && run.gpu_config.accelerator_type) {
+            const gpuType = run.gpu_config.accelerator_type
+                .replace('NVIDIA_TESLA_', '')
+                .replace('NVIDIA_', '');
+            const gpuCount = run.gpu_config.accelerator_count || 1;
+            gpuChip = `
+                <div class="ml-card-gpu-chip">
+                    <i class="fas fa-microchip"></i> ${gpuCount}x ${gpuType}
+                </div>
+            `;
+        }
+
+        // Model type badge
+        const modelTypeBadge = renderModelTypeBadge(run.model_type);
+
         return `
-            <div class="training-card-config">
-                <div class="training-card-config-item">
-                    <span class="training-card-config-label">Dataset:</span> ${escapeHtml(run.dataset_name || '-')}
-                </div>
-                <div class="training-card-config-item">
-                    <span class="training-card-config-label">Features:</span> ${escapeHtml(run.feature_config_name || '-')}
-                </div>
-                <div class="training-card-config-item">
-                    <span class="training-card-config-label">Model:</span> ${escapeHtml(run.model_config_name || '-')}
-                </div>
+            <div class="ml-card-col-config">
+                <div class="ml-card-config-item"><span class="ml-card-config-label">Dataset:</span> ${escapeHtml(run.dataset_name || '-')}</div>
+                <div class="ml-card-config-item"><span class="ml-card-config-label">Features:</span> ${escapeHtml(run.feature_config_name || '-')}</div>
+                <div class="ml-card-config-item"><span class="ml-card-config-label">Model:</span> ${escapeHtml(run.model_config_name || '-')}</div>
+                <div class="ml-card-config-item">${modelTypeBadge}</div>
+                ${gpuChip}
             </div>
         `;
     }
 
     function renderActions(run, allowedActions) {
-        const buttons = [];
+        const primaryButtons = [];
+        const secondaryButtons = [];
 
-        // View button - always available
-        buttons.push(`
-            <button class="training-card-btn" onclick="event.stopPropagation(); TrainingCards.viewRun(${run.id})" title="View Details">
-                <i class="fas fa-eye"></i> View
-            </button>
+        // View button - always available (primary)
+        primaryButtons.push(`
+            <button class="card-action-btn view" onclick="event.stopPropagation(); TrainingCards.viewRun(${run.id})" title="View Details">View</button>
         `);
-
-        // Submit button (for pending/scheduled)
-        if (allowedActions.includes('submit') && (run.status === 'pending' || run.status === 'scheduled')) {
-            buttons.push(`
-                <button class="training-card-btn btn-primary" onclick="event.stopPropagation(); TrainingCards.submitRun(${run.id})" title="Submit to Vertex AI">
-                    <i class="fas fa-play"></i> Run Now
-                </button>
-            `);
-        }
 
         // Cancel button (for pending/scheduled/submitting/running)
         if (allowedActions.includes('cancel')) {
-            buttons.push(`
-                <button class="training-card-btn btn-danger" onclick="event.stopPropagation(); TrainingCards.cancelRun(${run.id})" title="Cancel Training">
-                    <i class="fas fa-stop"></i> Cancel
-                </button>
+            primaryButtons.push(`
+                <button class="card-action-btn cancel" onclick="event.stopPropagation(); TrainingCards.cancelRun(${run.id})" title="Cancel Training">Cancel</button>
             `);
         }
 
-        // Deploy button (for completed)
-        if (allowedActions.includes('deploy') && run.status === 'completed' && run.is_blessed && !run.is_deployed) {
-            buttons.push(`
-                <button class="training-card-btn btn-success" onclick="event.stopPropagation(); TrainingCards.deployRun(${run.id})" title="Deploy to Endpoint">
-                    <i class="fas fa-rocket"></i> Deploy
-                </button>
+        // Deploy button (for completed) - allow deploying to another endpoint even if already deployed
+        if (allowedActions.includes('deploy') && run.status === 'completed' && run.is_blessed) {
+            primaryButtons.push(`
+                <button class="card-action-btn view" onclick="event.stopPropagation(); TrainingCards.deployRun(${run.id})" title="Deploy to Endpoint">Deploy</button>
+            `);
+        }
+
+        // Submit button (for pending/scheduled)
+        if (allowedActions.includes('submit') && (run.status === 'pending' || run.status === 'scheduled')) {
+            primaryButtons.push(`
+                <button class="card-action-btn view" onclick="event.stopPropagation(); TrainingCards.submitRun(${run.id})" title="Submit to Vertex AI">Run</button>
             `);
         }
 
         // Push button (for not_blessed)
         if (allowedActions.includes('push') && run.status === 'not_blessed') {
-            buttons.push(`
-                <button class="training-card-btn btn-warning" onclick="event.stopPropagation(); TrainingCards.pushAnyway(${run.id})" title="Push to Registry Anyway">
-                    <i class="fas fa-upload"></i> Push Anyway
-                </button>
-            `);
-        }
-
-        // Retry button (for failed)
-        if (allowedActions.includes('retry') && run.status === 'failed') {
-            buttons.push(`
-                <button class="training-card-btn btn-warning" onclick="event.stopPropagation(); TrainingCards.retryRun(${run.id})" title="Retry Training">
-                    <i class="fas fa-redo"></i> Retry
-                </button>
+            primaryButtons.push(`
+                <button class="card-action-btn cancel" onclick="event.stopPropagation(); TrainingCards.pushAnyway(${run.id})" title="Push to Registry Anyway">Push</button>
             `);
         }
 
         // Delete button (for terminal states)
         if (allowedActions.includes('delete')) {
-            buttons.push(`
-                <button class="training-card-btn btn-danger" onclick="event.stopPropagation(); TrainingCards.deleteRun(${run.id})" title="Delete Training Run">
-                    <i class="fas fa-trash"></i>
-                </button>
+            secondaryButtons.push(`
+                <button class="card-action-btn delete" onclick="event.stopPropagation(); TrainingCards.deleteRun(${run.id})" title="Delete Training Run"><i class="fas fa-trash"></i></button>
             `);
         }
 
         return `
-            <div class="training-card-actions">
-                <div class="training-card-actions-row">
-                    ${buttons.join('')}
+            <div class="ml-card-col-actions">
+                <div class="ml-card-actions-row">
+                    ${primaryButtons.join('')}
                 </div>
+                ${secondaryButtons.length > 0 ? `<div class="ml-card-actions-row">${secondaryButtons.join('')}</div>` : ''}
             </div>
         `;
     }
@@ -793,18 +802,38 @@ const TrainingCards = (function() {
     }
 
     function renderStageBar(stageDetails) {
-        const segments = stageDetails.map(stage => {
+        // Gradient green colors for 8 stages (matching experiments style)
+        const completedColors = ['#059669', '#10b981', '#22c55e', '#34d399', '#4ade80', '#6ee7b7', '#a7f3d0', '#d1fae5'];
+
+        const segments = stageDetails.map((stage, idx) => {
             const statusClass = stage.status || 'pending';
-            return `<div class="training-stage-segment ${statusClass}">${stage.name || ''}</div>`;
+            // Apply gradient color for completed stages
+            const style = statusClass === 'completed'
+                ? `style="background: ${completedColors[idx % completedColors.length]}"`
+                : '';
+            return `<div class="ml-stage-segment ${statusClass}" ${style} title="${stage.name}">${stage.name || ''}</div>`;
         }).join('');
 
         return `
-            <div class="training-card-stages">
-                <div class="training-stages-bar">
+            <div class="ml-card-stages">
+                <div class="ml-stages-bar">
                     ${segments}
                 </div>
             </div>
         `;
+    }
+
+    function getDefaultStages() {
+        return [
+            { name: 'COMPILE', status: 'pending' },
+            { name: 'EXAMPLES', status: 'pending' },
+            { name: 'STATS', status: 'pending' },
+            { name: 'SCHEMA', status: 'pending' },
+            { name: 'TRANSFORM', status: 'pending' },
+            { name: 'TRAIN', status: 'pending' },
+            { name: 'EVALUATOR', status: 'pending' },
+            { name: 'PUSHER', status: 'pending' }
+        ];
     }
 
     function renderError(run) {
@@ -1038,35 +1067,6 @@ const TrainingCards = (function() {
         }
     }
 
-    async function retryRun(runId) {
-        if (!confirm('Are you sure you want to retry this failed training run? This will create a new training run with the same configuration.')) {
-            return;
-        }
-
-        try {
-            const url = buildUrl(config.endpoints.retry, { id: runId });
-            const response = await fetch(url, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': getCookie('csrftoken')
-                }
-            });
-
-            const data = await response.json();
-
-            if (data.success) {
-                showToast(data.message || 'Retry created and submitted', 'success');
-                loadTrainingRuns();
-            } else {
-                showToast(data.error || 'Failed to retry training run', 'error');
-            }
-        } catch (error) {
-            console.error('Error retrying training run:', error);
-            showToast('Failed to retry training run', 'error');
-        }
-    }
-
     async function deployRun(runId) {
         if (!confirm('Are you sure you want to deploy this model to a Vertex AI Endpoint? This will make the model available for serving predictions.')) {
             return;
@@ -1157,7 +1157,6 @@ const TrainingCards = (function() {
         cancelRun: cancelRun,
         deleteRun: deleteRun,
         submitRun: submitRun,
-        retryRun: retryRun,
         deployRun: deployRun,
         pushAnyway: pushAnyway,
         stopPolling: stopPolling,

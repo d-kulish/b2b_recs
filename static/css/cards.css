@@ -120,6 +120,378 @@
     align-items: center;
 }
 
+/* ============================================================================
+   UNIFIED CARD COLUMN LAYOUT (Experiments/Training Style)
+   ============================================================================
+   4-column horizontal layout for ML cards (experiments, training runs)
+   Column widths: 30% / 20% / 30% / 20%
+   ============================================================================ */
+
+/* Base card for column layout */
+.ml-card {
+    display: flex;
+    flex-direction: column;
+    padding: 16px;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    margin-bottom: 8px;
+    transition: all 0.15s ease;
+    cursor: pointer;
+}
+.ml-card:hover {
+    border-color: #d1d5db;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+.ml-card:last-child {
+    margin-bottom: 0;
+}
+
+/* 4-column container */
+.ml-card-columns {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    margin-bottom: 8px;
+}
+
+/* Column 1: Status Icon + Info (30%) */
+.ml-card-col-info {
+    width: 30%;
+    min-width: 0;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+/* Status icon (40x40 rounded square) */
+.ml-card-status {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0;
+}
+.ml-card-status.running,
+.ml-card-status.submitting {
+    background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+    color: #2563eb;
+}
+.ml-card-status.completed {
+    background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
+    color: #16a34a;
+}
+.ml-card-status.failed {
+    background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+    color: #dc2626;
+}
+.ml-card-status.cancelled,
+.ml-card-status.pending {
+    background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+    color: #6b7280;
+}
+.ml-card-status.scheduled {
+    background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+    color: #d97706;
+}
+.ml-card-status.not_blessed {
+    background: linear-gradient(135deg, #ffedd5 0%, #fed7aa 100%);
+    color: #ea580c;
+}
+/* Spinning animation for running/submitting */
+.ml-card-status.running i,
+.ml-card-status.submitting i {
+    animation: ml-card-spin 1.5s linear infinite;
+}
+@keyframes ml-card-spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* Info text block */
+.ml-card-info-text {
+    flex: 1;
+    min-width: 0;
+}
+.ml-card-name {
+    font-weight: 600;
+    font-size: 15px;
+    color: #111827;
+    margin-bottom: 2px;
+}
+.ml-card-secondary-name {
+    font-size: 13px;
+    color: #374151;
+    margin-bottom: 2px;
+}
+.ml-card-description {
+    font-size: 12px;
+    color: #9ca3af;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.ml-card-times {
+    display: flex;
+    gap: 12px;
+    font-size: 11px;
+    color: #9ca3af;
+    margin-top: 4px;
+}
+.ml-card-times span {
+    color: #6b7280;
+}
+
+/* Column 2: Config Info (20%) */
+.ml-card-col-config {
+    width: 20%;
+    min-width: 0;
+}
+.ml-card-config-item {
+    font-size: 12px;
+    font-weight: 400;
+    color: #374151;
+    margin-bottom: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.ml-card-config-label {
+    font-weight: 600;
+    color: #6b7280;
+}
+
+/* Model type badge */
+.ml-card-type-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 500;
+    white-space: nowrap;
+    margin-top: 4px;
+}
+.ml-card-type-badge i {
+    font-size: 9px;
+}
+.ml-card-type-badge.retrieval {
+    background: #dbeafe;
+    color: #1e40af;
+    border: 1px solid #bfdbfe;
+}
+.ml-card-type-badge.ranking {
+    background: #fef3c7;
+    color: #92400e;
+    border: 1px solid #fde68a;
+}
+.ml-card-type-badge.multitask {
+    background: linear-gradient(135deg, #dbeafe 0%, #f3e8ff 100%);
+    color: #6b21a8;
+    border: 1px solid #e9d5ff;
+}
+
+/* Column 3: Metrics (30%) */
+.ml-card-col-metrics {
+    width: 30%;
+    min-width: 0;
+    font-size: 12px;
+    color: #9ca3af;
+    display: flex;
+    align-items: center;
+}
+.ml-card-metrics-row {
+    display: flex;
+    gap: 8px;
+    width: 100%;
+}
+.ml-card-metric {
+    text-align: center;
+    flex: 1;
+    padding: 6px 4px;
+    background: #ffffff;
+    border: 1px solid #1f2937;
+    border-radius: 6px;
+}
+.ml-card-metric-label {
+    font-size: 10px;
+    color: #1f2937;
+    font-weight: 500;
+    margin-bottom: 2px;
+}
+.ml-card-metric-value {
+    font-size: 13px;
+    font-weight: 600;
+    color: #1f2937;
+}
+.ml-card-metric-value.empty {
+    color: #9ca3af;
+}
+
+/* Multitask metrics display - two rows of metrics */
+.ml-card-metrics-multitask {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: 100%;
+}
+.ml-card-metrics-section {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.ml-card-metrics-section-label {
+    font-size: 9px;
+    color: #6b7280;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+.ml-card-metrics-section-label i {
+    font-size: 8px;
+}
+.ml-card-metrics-multitask .ml-card-metrics-row {
+    gap: 4px;
+}
+.ml-card-metrics-multitask .ml-card-metric {
+    padding: 4px 2px;
+}
+.ml-card-metrics-multitask .ml-card-metric-label {
+    font-size: 9px;
+}
+.ml-card-metrics-multitask .ml-card-metric-value {
+    font-size: 11px;
+}
+
+/* Column 4: Actions (20%) */
+.ml-card-col-actions {
+    width: 20%;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: flex-end;
+    gap: 6px;
+}
+.ml-card-actions-row {
+    display: flex;
+    flex-direction: row;
+    gap: 6px;
+    justify-content: flex-end;
+}
+
+/* Stage Progress Bar (at bottom of card, always visible) */
+.ml-card-stages {
+    width: 100%;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid #f3f4f6;
+}
+.ml-stages-bar {
+    display: flex;
+    height: 24px;
+    border-radius: 6px;
+    overflow: hidden;
+    background: #e5e7eb;
+}
+.ml-stage-segment {
+    flex: 1;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 500;
+    color: white;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+    overflow: hidden;
+    transition: background-color 0.3s ease;
+}
+/* Completed segments get gradient colors via inline styles */
+.ml-stage-segment.running {
+    background: linear-gradient(90deg, #3b82f6 0%, #60a5fa 50%, #3b82f6 100%);
+    background-size: 200% 100%;
+    animation: ml-stage-pulse 1.5s ease-in-out infinite;
+}
+.ml-stage-segment.failed {
+    background: #ef4444;
+}
+.ml-stage-segment.pending {
+    background: #d1d5db;
+    color: #6b7280;
+}
+@keyframes ml-stage-pulse {
+    0%, 100% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+}
+
+/* GPU Configuration Chip */
+.ml-card-gpu-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    background: #f3f4f6;
+    border: 1px solid #e5e7eb;
+    border-radius: 4px;
+    font-size: 10px;
+    color: #6b7280;
+    margin-top: 4px;
+}
+.ml-card-gpu-chip i {
+    font-size: 9px;
+}
+
+/* Responsive adjustments for ML cards */
+@media (max-width: 1200px) {
+    .ml-card-columns {
+        flex-wrap: wrap;
+    }
+    .ml-card-col-info {
+        width: 50%;
+    }
+    .ml-card-col-config {
+        width: 45%;
+    }
+    .ml-card-col-metrics {
+        width: 60%;
+        margin-top: 12px;
+    }
+    .ml-card-col-actions {
+        width: 35%;
+        margin-top: 12px;
+    }
+}
+@media (max-width: 768px) {
+    .ml-card-columns {
+        flex-direction: column;
+    }
+    .ml-card-col-info,
+    .ml-card-col-config,
+    .ml-card-col-metrics,
+    .ml-card-col-actions {
+        width: 100%;
+    }
+    .ml-card-col-actions {
+        align-items: stretch;
+    }
+    .ml-card-actions-row {
+        justify-content: flex-end;
+    }
+}
+
+/* ============================================================================
+   END UNIFIED CARD COLUMN LAYOUT
+   ============================================================================ */
+
 .card-content {
     min-width: 0;
     overflow: hidden;

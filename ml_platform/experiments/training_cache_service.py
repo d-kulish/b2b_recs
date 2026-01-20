@@ -7,13 +7,18 @@ This reduces Training tab load time from minutes to <1 second.
 The trainer saves metrics to GCS as training_metrics.json at training completion.
 This service reads that file and caches it in Django DB.
 
+Supports both QuickTest (experiments) and TrainingRun (full training) objects.
+
 Usage:
     from ml_platform.experiments.training_cache_service import TrainingCacheService
 
     cache_service = TrainingCacheService()
 
-    # Cache at training completion
+    # Cache at training completion (QuickTest)
     cache_service.cache_training_history(quick_test)
+
+    # Cache at training completion (TrainingRun)
+    cache_service.cache_training_history_for_run(training_run)
 
     # Get cached or fetch fresh
     history = cache_service.get_training_history(quick_test)
@@ -64,6 +69,190 @@ class TrainingCacheService:
             f"no GCS artifacts path"
         )
         return False
+
+    def cache_training_history_for_run(self, training_run) -> bool:
+        """
+        Fetch training history from GCS and store in training_run.training_history_json.
+
+        This method is for TrainingRun objects (full-scale training runs).
+        Reads training_metrics.json from the training_run's GCS artifacts path.
+
+        Args:
+            training_run: TrainingRun model instance
+
+        Returns:
+            True if caching succeeded, False otherwise
+        """
+        if training_run.gcs_artifacts_path:
+            success = self._cache_from_gcs_for_run(training_run)
+            if success:
+                return True
+
+        logger.warning(
+            f"TrainingRun {training_run.id}: Cannot cache training history - "
+            f"no GCS artifacts path"
+        )
+        return False
+
+    def _cache_from_gcs_for_run(self, training_run) -> bool:
+        """
+        Read training_metrics.json from GCS and cache it for a TrainingRun.
+
+        Args:
+            training_run: TrainingRun model instance
+
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            from google.cloud import storage
+
+            gcs_path = training_run.gcs_artifacts_path
+            if not gcs_path or not gcs_path.startswith('gs://'):
+                return False
+
+            # Parse GCS path
+            path = gcs_path[5:]  # Remove 'gs://'
+            bucket_name = path.split('/')[0]
+            blob_path = '/'.join(path.split('/')[1:]) + '/training_metrics.json'
+
+            # Read from GCS
+            client = storage.Client()
+            bucket = client.bucket(bucket_name)
+            blob = bucket.blob(blob_path)
+
+            if not blob.exists():
+                logger.debug(
+                    f"TrainingRun {training_run.id}: training_metrics.json not found at "
+                    f"gs://{bucket_name}/{blob_path}"
+                )
+                return False
+
+            content = blob.download_as_string().decode('utf-8')
+            full_history = json.loads(content)
+
+            if not full_history.get('available', False):
+                logger.warning(
+                    f"TrainingRun {training_run.id}: GCS metrics not available"
+                )
+                return False
+
+            # Extract and cache essential data
+            cached_data = self._extract_cacheable_data_for_run(full_history, training_run)
+
+            # Store in database
+            training_run.training_history_json = cached_data
+            training_run.save(update_fields=['training_history_json', 'updated_at'])
+
+            logger.info(
+                f"TrainingRun {training_run.id}: Cached training history from GCS "
+                f"({len(cached_data.get('epochs', []))} epochs)"
+            )
+            return True
+
+        except Exception as e:
+            logger.debug(
+                f"TrainingRun {training_run.id}: Could not read from GCS: {e}"
+            )
+            return False
+
+    def _extract_cacheable_data_for_run(self, full_history: Dict, training_run) -> Dict:
+        """
+        Extract essential data from full training history for caching (TrainingRun version).
+
+        Similar to _extract_cacheable_data but handles TrainingRun's different field structure.
+
+        Args:
+            full_history: Full training history from GCS (training_metrics.json)
+            training_run: TrainingRun instance for additional metadata
+
+        Returns:
+            Cacheable training history dict
+        """
+        epochs = full_history.get('epochs', [])
+        sampled_indices = self._get_sample_indices(epochs)
+        sampled_epochs = [epochs[i] for i in sampled_indices] if epochs else []
+
+        # Extract training params from TrainingRun's JSONField
+        training_params = training_run.training_params or {}
+
+        cached = {
+            'cached_at': timezone.now().isoformat(),
+            'mlflow_run_id': None,  # TrainingRun doesn't have mlflow_run_id
+            'available': True,
+
+            # Sampled epochs
+            'epochs': sampled_epochs,
+
+            # Loss curves (sampled) - remap keys for UI compatibility
+            'loss': self._remap_and_sample_loss(full_history.get('loss', {}), sampled_indices),
+
+            # Gradient/weight norms (sampled) - keep same key as MLflow service
+            'gradient': self._sample_dict_values(
+                full_history.get('gradient', {}),
+                sampled_indices
+            ),
+
+            # Weight stats without histograms (sampled)
+            'weight_stats': self._extract_weight_stats(
+                full_history.get('weight_stats', {}),
+                sampled_indices
+            ),
+
+            # Gradient stats without histograms (sampled)
+            'gradient_stats': self._extract_gradient_stats(
+                full_history.get('gradient_stats', {}),
+                sampled_indices
+            ),
+
+            # Final metrics (not sampled - single values)
+            'final_metrics': full_history.get('final_metrics', {}),
+
+            # Recall metrics (sampled)
+            'metrics': self._sample_dict_values(full_history.get('metrics', {}), sampled_indices),
+
+            # Training params from TrainingRun's training_params JSONField
+            'params': {
+                'epochs': training_params.get('epochs'),
+                'batch_size': training_params.get('batch_size'),
+                'learning_rate': float(training_params.get('learning_rate')) if training_params.get('learning_rate') else None,
+                'optimizer': training_run.model_config.optimizer if training_run.model_config else None,
+                'embedding_dim': training_run.model_config.output_embedding_dim if training_run.model_config else None,
+            },
+
+            # Flag indicating histogram data available via on-demand endpoint
+            'histogram_available': self._has_histogram_data(full_history),
+        }
+
+        return cached
+
+    def get_training_history_for_run(self, training_run) -> Dict:
+        """
+        Get training history for a TrainingRun, using cache if available.
+
+        If cache exists, returns cached data immediately.
+        If cache is missing, fetches from GCS, caches it, and returns.
+
+        Args:
+            training_run: TrainingRun model instance
+
+        Returns:
+            Training history dict suitable for UI rendering
+        """
+        # Try cache first
+        if training_run.training_history_json:
+            logger.debug(f"TrainingRun {training_run.id}: Returning cached training history")
+            return training_run.training_history_json
+
+        # Cache miss - fetch and cache
+        logger.info(f"TrainingRun {training_run.id}: Cache miss, fetching from GCS")
+
+        if self.cache_training_history_for_run(training_run):
+            # Refresh from DB to get cached data
+            training_run.refresh_from_db(fields=['training_history_json'])
+            return training_run.training_history_json or self._empty_history()
+
+        return self._empty_history()
 
     def _cache_from_gcs(self, quick_test) -> bool:
         """

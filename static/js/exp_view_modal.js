@@ -59,7 +59,9 @@ const ExpViewModal = (function() {
             // Training run endpoints (used when mode === 'training_run')
             trainingRunStatistics: '/api/training-runs/{id}/statistics/',
             trainingRunSchema: '/api/training-runs/{id}/schema/',
-            trainingRunTfdvReport: '/training/runs/{id}/tfdv/'
+            trainingRunTfdvReport: '/training/runs/{id}/tfdv/',
+            trainingRunTrainingHistory: '/api/training-runs/{id}/training-history/',
+            trainingRunHistogramData: '/api/training-runs/{id}/histogram-data/'
         },
         showTabs: ['overview', 'pipeline', 'data', 'training'],
         onClose: null,
@@ -946,6 +948,13 @@ const ExpViewModal = (function() {
             // Training run mode tabs
             if (tabName === 'data') {
                 loadDataInsights();
+            }
+            if (tabName === 'training') {
+                if (state.dataCache.trainingHistory) {
+                    renderCachedTrainingHistory();
+                } else {
+                    loadTrainingHistory();
+                }
             }
             if (tabName === 'repository') {
                 renderRepositoryTab();
@@ -2178,7 +2187,9 @@ const ExpViewModal = (function() {
     }
 
     async function loadTrainingHistory() {
-        if (!state.expId) return;
+        // Get the appropriate ID based on mode
+        const id = state.mode === 'training_run' ? state.runId : state.expId;
+        if (!id) return;
 
         const loadingEl = document.getElementById('expViewTrainingLoading');
         const placeholderEl = document.getElementById('expViewTrainingPlaceholder');
@@ -2192,7 +2203,11 @@ const ExpViewModal = (function() {
         destroyCharts();
 
         try {
-            const url = buildUrl(config.endpoints.trainingHistory, { id: state.expId });
+            // Use appropriate endpoint based on mode
+            const endpoint = state.mode === 'training_run'
+                ? config.endpoints.trainingRunTrainingHistory
+                : config.endpoints.trainingHistory;
+            const url = buildUrl(endpoint, { id: id });
             const response = await fetch(url);
             const data = await response.json();
 
@@ -2645,11 +2660,16 @@ const ExpViewModal = (function() {
         });
     }
 
-    // Fetch histogram data on-demand from MLflow (not cached due to size)
+    // Fetch histogram data on-demand from GCS (not cached due to size)
     async function fetchHistogramData(history, tower, isGradients) {
         try {
-            console.log('[Histogram] Fetching on-demand from MLflow...');
-            const url = buildUrl(config.endpoints.histogramData || '/api/quick-tests/{id}/histogram-data/', { id: state.expId });
+            console.log('[Histogram] Fetching on-demand from GCS...');
+            // Use appropriate endpoint and ID based on mode
+            const id = state.mode === 'training_run' ? state.runId : state.expId;
+            const endpoint = state.mode === 'training_run'
+                ? config.endpoints.trainingRunHistogramData
+                : (config.endpoints.histogramData || '/api/quick-tests/{id}/histogram-data/');
+            const url = buildUrl(endpoint, { id: id });
             const response = await fetch(url);
             const data = await response.json();
 
@@ -2730,12 +2750,13 @@ const ExpViewModal = (function() {
         // Check if histogram data is available
         if (!histogram || !histogram.bin_edges || !histogram.counts || histogram.counts.length === 0) {
             // Check if histogram data is available via on-demand fetch
-            if (history.histogram_available && state.expId && !history._histogramFetchAttempted) {
+            const currentId = state.mode === 'training_run' ? state.runId : state.expId;
+            if (history.histogram_available && currentId && !history._histogramFetchAttempted) {
                 // Show loading state
                 container.innerHTML = `
                     <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: #9ca3af; text-align: center;">
                         <i class="fas fa-spinner fa-spin" style="font-size: 32px; margin-bottom: 12px; opacity: 0.5;"></i>
-                        <span style="font-size: 14px;">Loading histogram data from MLflow...</span>
+                        <span style="font-size: 14px;">Loading histogram data from GCS...</span>
                         <span style="font-size: 12px; margin-top: 6px;">This may take a moment</span>
                     </div>
                 `;
@@ -2896,9 +2917,14 @@ const ExpViewModal = (function() {
             .text(xAxisLabel);
 
         // Epoch labels on right side
+        // Note: histogram counts may have all epochs (e.g., 150) while history.epochs
+        // may only have sampled epochs (e.g., 31). We need to handle both cases.
+        const histogramHasAllEpochs = numEpochs !== epochs.length;
         const epochStep = Math.max(1, Math.ceil(numEpochs / 15));
         const epochLabels = d3.range(0, numEpochs, epochStep);
         if ((numEpochs - 1) % epochStep !== 0) epochLabels.push(numEpochs - 1);
+        // Sort to ensure proper order
+        epochLabels.sort((a, b) => a - b);
 
         // Horizontal grid lines for major epochs
         svg.selectAll('.epoch-grid-line')
@@ -2922,7 +2948,15 @@ const ExpViewModal = (function() {
             .attr('dy', '0.35em')
             .style('font-size', '10px')
             .style('fill', '#9ca3af')
-            .text(d => epochs[d] !== undefined ? epochs[d] + 1 : d + 1);
+            .text(d => {
+                // If histogram has all epochs (counts.length != epochs.length),
+                // use the index directly as the epoch number
+                if (histogramHasAllEpochs) {
+                    return d + 1;  // 1-indexed epoch number
+                }
+                // Otherwise use the sampled epochs array
+                return epochs[d] !== undefined ? epochs[d] + 1 : d + 1;
+            });
     }
 
     function renderFinalMetricsTable(history) {

@@ -73,6 +73,16 @@ urlpatterns = [
         name='training_run_schema'
     ),
     path(
+        'api/training-runs/<int:training_run_id>/training-history/',
+        api.training_run_training_history,
+        name='training_run_training_history'
+    ),
+    path(
+        'api/training-runs/<int:training_run_id>/histogram-data/',
+        api.training_run_histogram_data,
+        name='training_run_histogram_data'
+    ),
+    path(
         'training/runs/<int:training_run_id>/tfdv/',
         api.training_run_tfdv_page,
         name='training_run_tfdv_page'

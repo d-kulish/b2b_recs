@@ -285,6 +285,8 @@ class TrainingService:
                     logger.info(f"{training_run.display_name}: Pipeline completed, extracting results")
                     # Extract results from GCS
                     self._extract_results(training_run)
+                    # Cache training history from GCS for fast loading
+                    self._cache_training_history(training_run)
 
                 elif new_status == TrainingRun.STATUS_FAILED:
                     training_run.completed_at = timezone.now()
@@ -714,6 +716,47 @@ class TrainingService:
             # Default to blessed on error
             training_run.is_blessed = True
             training_run.save(update_fields=['is_blessed'])
+
+    def _cache_training_history(self, training_run: TrainingRun):
+        """
+        Cache training history from GCS into Django DB for fast loading.
+
+        This is called after training completion. Caching happens asynchronously
+        and errors are logged but don't fail the completion process.
+
+        Args:
+            training_run: TrainingRun instance with gcs_artifacts_path set
+        """
+        if not training_run.gcs_artifacts_path:
+            logger.info(
+                f"{training_run.display_name}: "
+                f"Skipping training history cache - no GCS artifacts path"
+            )
+            return
+
+        try:
+            from ml_platform.experiments.training_cache_service import TrainingCacheService
+
+            cache_service = TrainingCacheService()
+            success = cache_service.cache_training_history_for_run(training_run)
+
+            if success:
+                logger.info(
+                    f"{training_run.display_name}: "
+                    f"Training history cached successfully"
+                )
+            else:
+                logger.warning(
+                    f"{training_run.display_name}: "
+                    f"Training history caching failed (non-fatal)"
+                )
+
+        except Exception as e:
+            # Log but don't fail - caching is a nice-to-have
+            logger.warning(
+                f"{training_run.display_name}: "
+                f"Error caching training history (non-fatal): {e}"
+            )
 
     def cancel_training_run(self, training_run: TrainingRun) -> TrainingRun:
         """

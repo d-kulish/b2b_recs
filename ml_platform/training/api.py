@@ -1151,6 +1151,190 @@ def training_run_schema(request, training_run_id):
         }, status=500)
 
 
+@csrf_exempt
+@require_http_methods(["GET"])
+def training_run_training_history(request, training_run_id):
+    """
+    Get training history (per-epoch metrics) with caching.
+
+    Uses cached training history from Django DB for fast loading (<1 second).
+    Falls back to GCS if cache is empty, and caches the result.
+
+    GET /api/training-runs/<id>/training-history/
+
+    Returns:
+    {
+        "success": true,
+        "training_history": {
+            "available": true,
+            "cached_at": "2024-12-30T10:30:00Z",
+            "epochs": [0, 5, 10, ...],
+            "loss": {"train": [...], "val": [...]},
+            "final_metrics": {...},
+            ...
+        },
+        "source": "cache" | "gcs"
+    }
+    """
+    try:
+        model_endpoint = _get_model_endpoint(request)
+        if not model_endpoint:
+            return JsonResponse({
+                'success': False,
+                'error': 'No model endpoint selected'
+            }, status=400)
+
+        try:
+            training_run = TrainingRun.objects.get(
+                id=training_run_id,
+                ml_model=model_endpoint
+            )
+        except TrainingRun.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': f'TrainingRun {training_run_id} not found'
+            }, status=404)
+
+        # Use cache for fast loading
+        from ml_platform.experiments.training_cache_service import TrainingCacheService
+
+        cache_service = TrainingCacheService()
+
+        # Check if cache exists
+        if training_run.training_history_json:
+            return JsonResponse({
+                'success': True,
+                'training_history': training_run.training_history_json,
+                'source': 'cache'
+            })
+
+        # Cache miss - fetch from GCS and cache
+        training_history = cache_service.get_training_history_for_run(training_run)
+
+        return JsonResponse({
+            'success': True,
+            'training_history': training_history,
+            'source': 'gcs'
+        })
+
+    except Exception as e:
+        logger.exception(f"Error getting training history: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def training_run_histogram_data(request, training_run_id):
+    """
+    Get histogram data (weight/gradient distributions) on demand.
+
+    This endpoint fetches histogram data from GCS (training_metrics.json).
+    It's called only when the user expands the Weight Analysis section.
+
+    GET /api/training-runs/<id>/histogram-data/
+
+    Returns:
+    {
+        "success": true,
+        "histogram_data": {
+            "weight_stats": {
+                "query": {"histogram": {"bin_edges": [...], "counts": [[...], ...]}},
+                "candidate": {...}
+            },
+            "gradient_stats": {
+                "query": {"histogram": {...}},
+                "candidate": {...}
+            }
+        }
+    }
+    """
+    try:
+        model_endpoint = _get_model_endpoint(request)
+        if not model_endpoint:
+            return JsonResponse({
+                'success': False,
+                'error': 'No model endpoint selected'
+            }, status=400)
+
+        try:
+            training_run = TrainingRun.objects.get(
+                id=training_run_id,
+                ml_model=model_endpoint
+            )
+        except TrainingRun.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': f'TrainingRun {training_run_id} not found'
+            }, status=404)
+
+        if not training_run.gcs_artifacts_path:
+            return JsonResponse({
+                'success': False,
+                'error': 'No GCS artifacts path - histogram data not available'
+            }, status=404)
+
+        # Fetch histogram data from GCS (training_metrics.json)
+        try:
+            from google.cloud import storage
+
+            gcs_path = training_run.gcs_artifacts_path
+            path = gcs_path[5:]  # Remove 'gs://'
+            bucket_name = path.split('/')[0]
+            blob_path = '/'.join(path.split('/')[1:]) + '/training_metrics.json'
+
+            client = storage.Client()
+            bucket = client.bucket(bucket_name)
+            blob = bucket.blob(blob_path)
+
+            if not blob.exists():
+                return JsonResponse({
+                    'success': False,
+                    'error': 'training_metrics.json not found in GCS'
+                }, status=404)
+
+            content = blob.download_as_string().decode('utf-8')
+            metrics = json.loads(content)
+
+            # Extract histogram data
+            histogram_data = {
+                'weight_stats': {},
+                'gradient_stats': {}
+            }
+
+            for tower in ['query', 'candidate', 'rating_head']:
+                if tower in metrics.get('weight_stats', {}):
+                    tower_data = metrics['weight_stats'][tower]
+                    if 'histogram' in tower_data:
+                        histogram_data['weight_stats'][tower] = {'histogram': tower_data['histogram']}
+
+                if tower in metrics.get('gradient_stats', {}):
+                    tower_data = metrics['gradient_stats'][tower]
+                    if 'histogram' in tower_data:
+                        histogram_data['gradient_stats'][tower] = {'histogram': tower_data['histogram']}
+
+            return JsonResponse({
+                'success': True,
+                'histogram_data': histogram_data
+            })
+
+        except Exception as e:
+            logger.warning(f"Could not read histogram data from GCS: {e}")
+            return JsonResponse({
+                'success': False,
+                'error': 'Could not read histogram data from GCS'
+            }, status=500)
+
+    except Exception as e:
+        logger.exception(f"Error getting histogram data: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
 @require_http_methods(["GET"])
 def training_run_tfdv_page(request, training_run_id):
     """

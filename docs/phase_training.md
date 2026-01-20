@@ -573,6 +573,125 @@ const TRAINING_PIPELINE_STAGES = [
 ];
 ```
 
+### Data Insights Tab for Training Runs (2026-01-20)
+
+The Training Run view modal now includes a **Data Insights** tab, providing the same dataset statistics and schema visualization available in the Experiments view modal.
+
+#### Feature Overview
+
+The Data Insights tab displays:
+1. **Dataset Statistics Summary**
+   - Total examples count
+   - Total features count
+   - Numeric/Categorical feature ratio
+   - Average missing percentage
+
+2. **Numeric Features Table**
+   - Feature name, count, missing %, mean, std dev, zeros %, min, median, max
+   - Mini histogram visualization for each feature's distribution
+
+3. **Categorical Features Table**
+   - Feature name, count, missing %, unique values
+   - Top values with frequencies
+   - Distribution bar charts
+
+4. **Schema Information**
+   - Feature types and constraints
+   - Presence requirements
+
+5. **Full TFDV Report Link**
+   - "Open Full Report" button opens the complete TFDV visualization in a new tab
+
+#### Implementation Details
+
+**Backend API Endpoints** (`ml_platform/training/api.py`):
+
+```python
+# GET /api/training-runs/<id>/statistics/
+def training_run_statistics(request, training_run_id):
+    """Returns TFDV statistics summary for a training run."""
+
+# GET /api/training-runs/<id>/schema/
+def training_run_schema(request, training_run_id):
+    """Returns schema summary for a training run."""
+
+# GET /training/runs/<id>/tfdv/
+def training_run_tfdv_page(request, training_run_id):
+    """Serves full TFDV HTML visualization as standalone page."""
+```
+
+**URL Routes** (`ml_platform/training/urls.py`):
+
+```python
+path('api/training-runs/<int:training_run_id>/statistics/', ...),
+path('api/training-runs/<int:training_run_id>/schema/', ...),
+path('training/runs/<int:training_run_id>/tfdv/', ...),
+```
+
+**JavaScript Updates** (`static/js/exp_view_modal.js`):
+
+1. **New Endpoint Configuration**:
+   ```javascript
+   endpoints: {
+       // ... existing endpoints ...
+       trainingRunStatistics: '/api/training-runs/{id}/statistics/',
+       trainingRunSchema: '/api/training-runs/{id}/schema/',
+       trainingRunTfdvReport: '/training/runs/{id}/tfdv/'
+   }
+   ```
+
+2. **Tab Visibility**: Added 'data' to visible tabs for training run mode:
+   ```javascript
+   if (state.mode === 'training_run') {
+       visibleTabs = ['overview', 'pipeline', 'data', 'training', 'repository', 'deployment'];
+   }
+   ```
+
+3. **Mode-Aware Data Loading**: `preloadDataInsights()` and `loadDataInsights()` now detect the mode and use appropriate endpoints.
+
+4. **Preloading**: Data insights are preloaded in background when the training run modal opens.
+
+#### Data Flow
+
+```
+Training Run Modal Opens
+        │
+        ▼
+preloadDataInsights() called (background)
+        │
+        ├── mode === 'training_run'
+        │         │
+        │         ▼
+        │   /api/training-runs/{id}/statistics/
+        │   /api/training-runs/{id}/schema/
+        │         │
+        │         ▼
+        │   ArtifactService._call_tfdv_parser()
+        │         │
+        │         ▼
+        │   tfdv-parser Cloud Run service
+        │         │
+        │         ▼
+        │   GCS: gs://b2b-recs-pipeline-staging/pipeline_root/{run_id}
+        │
+        ▼
+Data cached in state.dataCache
+        │
+        ▼
+User clicks "Data Insights" tab
+        │
+        ▼
+loadDataInsights() renders cached data instantly
+```
+
+#### Reuse of Existing Infrastructure
+
+The implementation reuses:
+- **ArtifactService**: Same service that handles experiment statistics
+- **tfdv-parser microservice**: Cloud Run service for parsing TFDV artifacts
+- **Pipeline root pattern**: Same GCS bucket structure (`gs://b2b-recs-pipeline-staging/pipeline_root/{run_id}`)
+- **UI components**: Same statistics cards, feature tables, and histogram visualizations
+
 ---
 
 ### Training Runs List View

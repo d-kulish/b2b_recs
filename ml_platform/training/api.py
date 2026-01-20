@@ -946,6 +946,350 @@ def training_run_push(request, training_run_id):
 
 
 # =============================================================================
+# Training Run Data Insights API Endpoints
+# =============================================================================
+
+def _get_training_run_pipeline_root(training_run) -> str:
+    """
+    Get pipeline root GCS path for a training run.
+
+    Uses the same bucket pattern as experiments.
+
+    Args:
+        training_run: TrainingRun instance
+
+    Returns:
+        GCS path to pipeline root, or None if not available
+    """
+    run_id = training_run.cloud_build_run_id
+    if not run_id:
+        return None
+    return f"gs://b2b-recs-pipeline-staging/pipeline_root/{run_id}"
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def training_run_statistics(request, training_run_id):
+    """
+    Get dataset statistics from TFDV artifacts for a training run.
+
+    GET /api/training-runs/<id>/statistics/
+
+    Returns:
+    {
+        "success": true,
+        "statistics": {
+            "available": true,
+            "num_examples": 1234567,
+            "num_features": 45,
+            "avg_missing_ratio": 2.3,
+            ...
+        }
+    }
+    """
+    from django.http import HttpResponse
+    from ml_platform.experiments.artifact_service import ArtifactService
+
+    try:
+        model_endpoint = _get_model_endpoint(request)
+        if not model_endpoint:
+            return JsonResponse({
+                'success': False,
+                'error': 'No model endpoint selected'
+            }, status=400)
+
+        try:
+            training_run = TrainingRun.objects.get(
+                id=training_run_id,
+                ml_model=model_endpoint
+            )
+        except TrainingRun.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': f'TrainingRun {training_run_id} not found'
+            }, status=404)
+
+        # Get pipeline root for this training run
+        pipeline_root = _get_training_run_pipeline_root(training_run)
+        if not pipeline_root:
+            return JsonResponse({
+                'success': True,
+                'statistics': {
+                    'available': False,
+                    'message': 'Pipeline artifacts not available'
+                }
+            })
+
+        # Use ArtifactService to get statistics via tfdv-parser
+        artifact_service = ArtifactService(project_id=model_endpoint.gcp_project_id)
+
+        # Call tfdv-parser service directly with pipeline_root
+        response = artifact_service._call_tfdv_parser('/parse/statistics', {
+            'pipeline_root': pipeline_root,
+            'include_html': False
+        })
+
+        if not response:
+            return JsonResponse({
+                'success': True,
+                'statistics': {
+                    'available': False,
+                    'message': 'Failed to connect to statistics parser service'
+                }
+            })
+
+        if not response.get('success'):
+            return JsonResponse({
+                'success': True,
+                'statistics': {
+                    'available': False,
+                    'message': response.get('error', 'Unknown error from parser service')
+                }
+            })
+
+        statistics = response.get('statistics', {})
+        return JsonResponse({
+            'success': True,
+            'statistics': statistics
+        })
+
+    except Exception as e:
+        logger.exception(f"Error getting training run statistics: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def training_run_schema(request, training_run_id):
+    """
+    Get schema information from TensorFlow Metadata artifacts for a training run.
+
+    GET /api/training-runs/<id>/schema/
+
+    Returns:
+    {
+        "success": true,
+        "schema": {
+            "available": true,
+            "num_features": 45,
+            "features": [...]
+        }
+    }
+    """
+    from ml_platform.experiments.artifact_service import ArtifactService
+
+    try:
+        model_endpoint = _get_model_endpoint(request)
+        if not model_endpoint:
+            return JsonResponse({
+                'success': False,
+                'error': 'No model endpoint selected'
+            }, status=400)
+
+        try:
+            training_run = TrainingRun.objects.get(
+                id=training_run_id,
+                ml_model=model_endpoint
+            )
+        except TrainingRun.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': f'TrainingRun {training_run_id} not found'
+            }, status=404)
+
+        # Get pipeline root for this training run
+        pipeline_root = _get_training_run_pipeline_root(training_run)
+        if not pipeline_root:
+            return JsonResponse({
+                'success': True,
+                'schema': {
+                    'available': False,
+                    'message': 'Pipeline artifacts not available'
+                }
+            })
+
+        # Use ArtifactService to get schema via tfdv-parser
+        artifact_service = ArtifactService(project_id=model_endpoint.gcp_project_id)
+
+        # Call tfdv-parser service directly with pipeline_root
+        response = artifact_service._call_tfdv_parser('/parse/schema', {
+            'pipeline_root': pipeline_root
+        })
+
+        if not response:
+            return JsonResponse({
+                'success': True,
+                'schema': {
+                    'available': False,
+                    'message': 'Failed to connect to schema parser service'
+                }
+            })
+
+        if not response.get('success'):
+            return JsonResponse({
+                'success': True,
+                'schema': {
+                    'available': False,
+                    'message': response.get('error', 'Unknown error from parser service')
+                }
+            })
+
+        schema = response.get('schema', {})
+        return JsonResponse({
+            'success': True,
+            'schema': schema
+        })
+
+    except Exception as e:
+        logger.exception(f"Error getting training run schema: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@require_http_methods(["GET"])
+def training_run_tfdv_page(request, training_run_id):
+    """
+    Serve TFDV HTML visualization as a standalone page for a training run.
+
+    Opens in a new browser tab with proper rendering.
+
+    GET /training/runs/<id>/tfdv/
+
+    Returns: HTML page (Content-Type: text/html)
+    """
+    from django.http import HttpResponse
+    from ml_platform.experiments.artifact_service import ArtifactService
+
+    try:
+        model_endpoint = _get_model_endpoint(request)
+        if not model_endpoint:
+            return HttpResponse(
+                '<html><body><h1>Error</h1><p>No model endpoint selected. '
+                'Please select a model endpoint first.</p></body></html>',
+                content_type='text/html',
+                status=400
+            )
+
+        try:
+            training_run = TrainingRun.objects.get(
+                id=training_run_id,
+                ml_model=model_endpoint
+            )
+        except TrainingRun.DoesNotExist:
+            return HttpResponse(
+                f'<html><body><h1>Error</h1><p>TrainingRun {training_run_id} not found.</p></body></html>',
+                content_type='text/html',
+                status=404
+            )
+
+        # Get pipeline root for this training run
+        pipeline_root = _get_training_run_pipeline_root(training_run)
+        if not pipeline_root:
+            return HttpResponse(
+                '<html><body><h1>Error</h1><p>Pipeline artifacts not available for this training run.</p></body></html>',
+                content_type='text/html',
+                status=404
+            )
+
+        # Get TFDV HTML visualization
+        artifact_service = ArtifactService(project_id=model_endpoint.gcp_project_id)
+        response = artifact_service._call_tfdv_parser('/parse/statistics/html', {
+            'pipeline_root': pipeline_root
+        })
+
+        if response and response.get('success'):
+            html = response.get('html')
+            if html:
+                # Wrap in a proper HTML page with title and basic styling
+                page_html = f'''<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>TFDV Statistics - Run #{training_run.run_number}</title>
+    <style>
+        body {{
+            margin: 0;
+            padding: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f5;
+        }}
+        .header {{
+            background: white;
+            padding: 16px 24px;
+            margin: -20px -20px 20px -20px;
+            border-bottom: 1px solid #e0e0e0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }}
+        .header h1 {{
+            margin: 0;
+            font-size: 20px;
+            color: #333;
+        }}
+        .header .subtitle {{
+            color: #666;
+            font-size: 14px;
+            margin-top: 4px;
+        }}
+        .header .back-btn {{
+            color: #1a73e8;
+            text-decoration: none;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }}
+        .header .back-btn:hover {{
+            text-decoration: underline;
+        }}
+        .tfdv-container {{
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }}
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div>
+            <h1>TFDV Statistics</h1>
+            <div class="subtitle">Training Run #{training_run.run_number} - {training_run.name or 'Unnamed'}</div>
+        </div>
+        <a href="javascript:window.close()" class="back-btn">
+            <span>&larr;</span> Close
+        </a>
+    </div>
+    <div class="tfdv-container">
+        {html}
+    </div>
+</body>
+</html>'''
+                return HttpResponse(page_html, content_type='text/html')
+
+        return HttpResponse(
+            '<html><body><h1>Error</h1><p>TFDV visualization not available for this training run.</p></body></html>',
+            content_type='text/html',
+            status=404
+        )
+
+    except Exception as e:
+        logger.exception(f"Error getting training run TFDV page: {e}")
+        return HttpResponse(
+            f'<html><body><h1>Error</h1><p>Failed to load TFDV visualization: {str(e)}</p></body></html>',
+            content_type='text/html',
+            status=500
+        )
+
+
+# =============================================================================
 # Training Schedule API Endpoints
 # =============================================================================
 

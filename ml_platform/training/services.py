@@ -72,17 +72,19 @@ class TrainingService:
 
     # 8 stages for Training (vs 6 for Experiments)
     # Includes Evaluator and Pusher components
-    STAGE_ORDER = ['Compile', 'Examples', 'Stats', 'Schema', 'Transform', 'Train', 'Evaluate', 'Push']
+    # NOTE: Stage names must match TFX_PIPELINE.components 'id' in pipeline_dag.js
+    STAGE_ORDER = ['Compile', 'Examples', 'Stats', 'Schema', 'Transform', 'Train', 'Evaluator', 'Pusher']
 
-    # Mapping from TFX component names to short display names
+    # Mapping from TFX component names to display names
+    # NOTE: Display names must match TFX_PIPELINE.components 'id' in pipeline_dag.js
     STAGE_NAME_MAP = {
         'bigqueryexamplegen': 'Examples',
         'statisticsgen': 'Stats',
         'schemagen': 'Schema',
         'transform': 'Transform',
         'trainer': 'Train',
-        'evaluator': 'Evaluate',
-        'pusher': 'Push',
+        'evaluator': 'Evaluator',
+        'pusher': 'Pusher',
     }
 
     def __init__(self, ml_model):
@@ -348,8 +350,8 @@ class TrainingService:
                     {'name': 'Schema', 'status': 'pending', 'duration_seconds': None},
                     {'name': 'Transform', 'status': 'pending', 'duration_seconds': None},
                     {'name': 'Train', 'status': 'pending', 'duration_seconds': None},
-                    {'name': 'Evaluate', 'status': 'pending', 'duration_seconds': None},
-                    {'name': 'Push', 'status': 'pending', 'duration_seconds': None},
+                    {'name': 'Evaluator', 'status': 'pending', 'duration_seconds': None},
+                    {'name': 'Pusher', 'status': 'pending', 'duration_seconds': None},
                 ]
                 training_run.current_stage = 'examples'
                 training_run.progress_percent = 12  # ~1/8 stages complete
@@ -382,8 +384,8 @@ class TrainingService:
                     {'name': 'Schema', 'status': 'pending', 'duration_seconds': None},
                     {'name': 'Transform', 'status': 'pending', 'duration_seconds': None},
                     {'name': 'Train', 'status': 'pending', 'duration_seconds': None},
-                    {'name': 'Evaluate', 'status': 'pending', 'duration_seconds': None},
-                    {'name': 'Push', 'status': 'pending', 'duration_seconds': None},
+                    {'name': 'Evaluator', 'status': 'pending', 'duration_seconds': None},
+                    {'name': 'Pusher', 'status': 'pending', 'duration_seconds': None},
                 ]
                 training_run.current_stage = 'failed'
 
@@ -418,11 +420,25 @@ class TrainingService:
 
             # Handle terminal pipeline states first
             if pipeline_state == 'PIPELINE_STATE_SUCCEEDED':
-                # Pipeline completed - mark all stages as completed
+                # Pipeline completed - check actual task statuses to handle skipped stages
+                task_statuses = self._get_task_statuses(pipeline_job)
+
                 stage_details = [
-                    {'name': stage, 'status': 'completed', 'duration_seconds': None}
-                    for stage in self.STAGE_ORDER
+                    {'name': 'Compile', 'status': 'completed', 'duration_seconds': None}
                 ]
+
+                for stage_name in self.STAGE_ORDER[1:]:  # Skip 'Compile'
+                    task_info = task_statuses.get(stage_name, {})
+                    # Default to 'skipped' if task not found (wasn't triggered)
+                    status = task_info.get('status', 'skipped')
+                    duration = task_info.get('duration_seconds')
+
+                    stage_details.append({
+                        'name': stage_name,
+                        'status': status,
+                        'duration_seconds': duration
+                    })
+
                 current_stage = 'completed'
                 progress_percent = 100
                 logger.info(f"{training_run.display_name}: Pipeline SUCCEEDED")
@@ -561,11 +577,11 @@ class TrainingService:
                     'PENDING': 'pending',
                     'RUNNING': 'running',
                     'SUCCEEDED': 'completed',
-                    'SKIPPED': 'completed',
+                    'SKIPPED': 'skipped',
                     'FAILED': 'failed',
                     'CANCELLED': 'failed',
                     'CANCELLING': 'running',
-                    'NOT_TRIGGERED': 'pending',
+                    'NOT_TRIGGERED': 'skipped',
                 }
                 status = state_mapping.get(task_state, 'pending')
 
@@ -1205,8 +1221,8 @@ class TrainingService:
                 {'name': 'Schema', 'status': 'pending', 'duration_seconds': None},
                 {'name': 'Transform', 'status': 'pending', 'duration_seconds': None},
                 {'name': 'Train', 'status': 'pending', 'duration_seconds': None},
-                {'name': 'Evaluate', 'status': 'pending', 'duration_seconds': None},
-                {'name': 'Push', 'status': 'pending', 'duration_seconds': None},
+                {'name': 'Evaluator', 'status': 'pending', 'duration_seconds': None},
+                {'name': 'Pusher', 'status': 'pending', 'duration_seconds': None},
             ]
             training_run.current_stage = 'compile'
             training_run.save(update_fields=[

@@ -55,7 +55,11 @@ const ExpViewModal = (function() {
             trainingHistory: '/api/quick-tests/{id}/training-history/',
             errors: '/api/quick-tests/{id}/errors/',
             componentLogs: '/api/quick-tests/{id}/component-logs/{componentId}/',
-            tfdvReport: '/experiments/quick-tests/{id}/tfdv/'
+            tfdvReport: '/experiments/quick-tests/{id}/tfdv/',
+            // Training run endpoints (used when mode === 'training_run')
+            trainingRunStatistics: '/api/training-runs/{id}/statistics/',
+            trainingRunSchema: '/api/training-runs/{id}/schema/',
+            trainingRunTfdvReport: '/training/runs/{id}/tfdv/'
         },
         showTabs: ['overview', 'pipeline', 'data', 'training'],
         onClose: null,
@@ -132,17 +136,18 @@ const ExpViewModal = (function() {
 
     // Training run status configuration (for training_run mode)
     const TRAINING_STATUS_CONFIG = {
-        pending: { icon: 'fa-hourglass-start', color: '#9ca3af', label: 'Pending' },
+        pending: { icon: 'fa-clock', color: '#9ca3af', label: 'Pending' },
         scheduled: { icon: 'fa-clock', color: '#f59e0b', label: 'Scheduled' },
-        submitting: { icon: 'fa-upload', color: '#3b82f6', label: 'Submitting' },
-        running: { icon: 'fa-sync', color: '#3b82f6', label: 'Running' },
-        completed: { icon: 'fa-check-circle', color: '#10b981', label: 'Completed' },
-        failed: { icon: 'fa-times-circle', color: '#ef4444', label: 'Failed' },
+        submitting: { icon: 'fa-spinner', color: '#3b82f6', label: 'Submitting' },
+        running: { icon: 'fa-spinner', color: '#3b82f6', label: 'Running' },
+        completed: { icon: 'fa-check', color: '#10b981', label: 'Completed' },
+        failed: { icon: 'fa-exclamation', color: '#ef4444', label: 'Failed' },
         cancelled: { icon: 'fa-ban', color: '#6b7280', label: 'Cancelled' },
-        not_blessed: { icon: 'fa-exclamation-triangle', color: '#f97316', label: 'Not Blessed' }
+        not_blessed: { icon: 'fa-exclamation', color: '#f97316', label: 'Not Blessed' }
     };
 
     // Pipeline stages for training runs (8 stages)
+    // NOTE: 'name' must match TFX_PIPELINE.components 'id' in pipeline_dag.js for status mapping
     const TRAINING_PIPELINE_STAGES = [
         { id: 'compile', name: 'Compile', icon: 'fa-cog' },
         { id: 'examples', name: 'Examples', icon: 'fa-database' },
@@ -150,8 +155,8 @@ const ExpViewModal = (function() {
         { id: 'schema', name: 'Schema', icon: 'fa-sitemap' },
         { id: 'transform', name: 'Transform', icon: 'fa-exchange-alt' },
         { id: 'train', name: 'Train', icon: 'fa-graduation-cap' },
-        { id: 'evaluate', name: 'Evaluate', icon: 'fa-check-double' },
-        { id: 'push', name: 'Push', icon: 'fa-upload' }
+        { id: 'evaluator', name: 'Evaluator', icon: 'fa-check-double' },
+        { id: 'pusher', name: 'Pusher', icon: 'fa-upload' }
     ];
 
     // =============================================================================
@@ -348,6 +353,9 @@ const ExpViewModal = (function() {
         populateTrainingRunModal(run);
         document.getElementById('expViewModal').classList.remove('hidden');
 
+        // Preload Data Insights in background
+        preloadDataInsights();
+
         // Start polling if running/submitting
         if (run.status === 'running' || run.status === 'submitting') {
             startTrainingRunPolling(run.id);
@@ -413,28 +421,33 @@ const ExpViewModal = (function() {
         const datasetName = run.dataset_name || '-';
         document.getElementById('expViewDatasetName').textContent = datasetName;
 
-        // Dataset details - simplified for training runs
-        const datasetDetails = document.getElementById('expViewDatasetDetails');
-        datasetDetails.innerHTML = `
-            <div class="exp-view-ds-grid">
-                <span class="label">Dataset</span>
-                <span class="value">${escapeHtml(datasetName)}</span>
-            </div>
-        `;
+        // Dataset details - load full details using existing function
+        if (run.dataset_id) {
+            loadDatasetDetails(run.dataset_id);
+        } else {
+            document.getElementById('expViewDatasetDetails').innerHTML =
+                '<div class="exp-view-no-filters">No dataset configured</div>';
+        }
 
-        // Features config
+        // Features config - load full details
         const featureConfigName = run.feature_config_name || '-';
         document.getElementById('expViewFeaturesConfigName').textContent = featureConfigName;
-        document.getElementById('expViewFeaturesConfigContent').innerHTML = `
-            <div class="exp-view-no-filters">Using configuration from source experiment</div>
-        `;
+        if (run.feature_config_id) {
+            loadFeaturesConfig(run.feature_config_id);
+        } else {
+            document.getElementById('expViewFeaturesConfigContent').innerHTML =
+                '<div class="exp-view-no-filters">No features config</div>';
+        }
 
-        // Model config
+        // Model config - load full details
         const modelConfigName = run.model_config_name || '-';
         document.getElementById('expViewModelConfigName').textContent = modelConfigName;
-        document.getElementById('expViewModelConfigContent').innerHTML = `
-            <div class="exp-view-no-filters">Using configuration from source experiment</div>
-        `;
+        if (run.model_config_id) {
+            loadModelConfig(run.model_config_id);
+        } else {
+            document.getElementById('expViewModelConfigContent').innerHTML =
+                '<div class="exp-view-no-filters">No model config</div>';
+        }
 
         // Sampling chips
         renderTrainingRunSamplingChips(run);
@@ -755,7 +768,7 @@ const ExpViewModal = (function() {
         // Determine which tabs to show based on mode
         let visibleTabs;
         if (state.mode === 'training_run') {
-            visibleTabs = ['overview', 'pipeline', 'training', 'repository', 'deployment'];
+            visibleTabs = ['overview', 'pipeline', 'data', 'training', 'repository', 'deployment'];
         } else {
             visibleTabs = config.showTabs;
         }
@@ -942,6 +955,9 @@ const ExpViewModal = (function() {
         // Handle mode-specific tab loading
         if (state.mode === 'training_run') {
             // Training run mode tabs
+            if (tabName === 'data') {
+                loadDataInsights();
+            }
             if (tabName === 'repository') {
                 renderRepositoryTab();
             }
@@ -1695,16 +1711,27 @@ const ExpViewModal = (function() {
     // =============================================================================
 
     async function preloadDataInsights() {
-        if (!state.expId) return;
+        // Support both experiment and training run modes
+        const id = state.mode === 'training_run' ? state.runId : state.expId;
+        if (!id) return;
         if (state.dataCache.statistics !== null || state.dataCache._loadingInsights) return;
 
         state.dataCache._loadingInsights = true;
-        console.log('[DataInsights] Preload STARTED for experiment', state.expId);
+        const entityType = state.mode === 'training_run' ? 'training run' : 'experiment';
+        console.log(`[DataInsights] Preload STARTED for ${entityType}`, id);
         const startTime = performance.now();
 
         try {
-            const statsUrl = buildUrl(config.endpoints.statistics, { id: state.expId });
-            const schemaUrl = buildUrl(config.endpoints.schema, { id: state.expId });
+            // Use appropriate endpoints based on mode
+            const statsEndpoint = state.mode === 'training_run'
+                ? config.endpoints.trainingRunStatistics
+                : config.endpoints.statistics;
+            const schemaEndpoint = state.mode === 'training_run'
+                ? config.endpoints.trainingRunSchema
+                : config.endpoints.schema;
+
+            const statsUrl = buildUrl(statsEndpoint, { id });
+            const schemaUrl = buildUrl(schemaEndpoint, { id });
 
             const [statsRes, schemaRes] = await Promise.all([
                 fetch(statsUrl),
@@ -1717,7 +1744,9 @@ const ExpViewModal = (function() {
             const elapsed = ((performance.now() - startTime) / 1000).toFixed(1);
             console.log(`[DataInsights] Preload COMPLETED in ${elapsed}s - data cached`);
 
-            if (state.expId) {
+            // Cache data if the entity is still the same
+            const currentId = state.mode === 'training_run' ? state.runId : state.expId;
+            if (currentId === id) {
                 state.dataCache.statistics = statsData.statistics;
                 state.dataCache.schema = schemaData.schema;
                 state.dataCache._statsData = statsData;
@@ -1731,7 +1760,9 @@ const ExpViewModal = (function() {
     }
 
     async function loadDataInsights() {
-        if (!state.expId) return;
+        // Support both experiment and training run modes
+        const id = state.mode === 'training_run' ? state.runId : state.expId;
+        if (!id) return;
 
         const loadingEl = document.getElementById('expViewDataLoading');
         const contentEl = document.getElementById('expViewDataContent');
@@ -1797,8 +1828,16 @@ const ExpViewModal = (function() {
         errorEl.classList.add('hidden');
 
         try {
-            const statsUrl = buildUrl(config.endpoints.statistics, { id: state.expId });
-            const schemaUrl = buildUrl(config.endpoints.schema, { id: state.expId });
+            // Use appropriate endpoints based on mode
+            const statsEndpoint = state.mode === 'training_run'
+                ? config.endpoints.trainingRunStatistics
+                : config.endpoints.statistics;
+            const schemaEndpoint = state.mode === 'training_run'
+                ? config.endpoints.trainingRunSchema
+                : config.endpoints.schema;
+
+            const statsUrl = buildUrl(statsEndpoint, { id });
+            const schemaUrl = buildUrl(schemaEndpoint, { id });
 
             const [statsRes, schemaRes] = await Promise.all([
                 fetch(statsUrl),
@@ -1884,7 +1923,12 @@ const ExpViewModal = (function() {
         container.innerHTML = html;
 
         if (stats.available && tfdvBtn) {
-            tfdvBtn.href = buildUrl(config.endpoints.tfdvReport, { id: state.expId });
+            // Use appropriate TFDV report URL based on mode
+            const tfdvEndpoint = state.mode === 'training_run'
+                ? config.endpoints.trainingRunTfdvReport
+                : config.endpoints.tfdvReport;
+            const tfdvId = state.mode === 'training_run' ? state.runId : state.expId;
+            tfdvBtn.href = buildUrl(tfdvEndpoint, { id: tfdvId });
             tfdvBtn.classList.remove('hidden');
         }
 

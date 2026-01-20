@@ -60,6 +60,25 @@ urlpatterns = [
     ),
 
     # ==========================================================================
+    # Training Run Data Insights endpoints
+    # ==========================================================================
+    path(
+        'api/training-runs/<int:training_run_id>/statistics/',
+        api.training_run_statistics,
+        name='training_run_statistics'
+    ),
+    path(
+        'api/training-runs/<int:training_run_id>/schema/',
+        api.training_run_schema,
+        name='training_run_schema'
+    ),
+    path(
+        'training/runs/<int:training_run_id>/tfdv/',
+        api.training_run_tfdv_page,
+        name='training_run_tfdv_page'
+    ),
+
+    # ==========================================================================
     # Training Schedule CRUD endpoints
     # ==========================================================================
     path(

@@ -763,14 +763,304 @@ gcloud builds submit --config=deploy/tf_serving/cloudbuild.yaml --substitutions=
 
 ---
 
+## ScaNN Model Serving (Retrieval Models)
+
+> **Important:** Retrieval models using ScaNN (Scalable Nearest Neighbors) for approximate nearest neighbor search require a **Python-based serving solution** instead of standard TensorFlow Serving. This section documents the issue, the solution, and known limitations.
+
+### The Problem: ScaNN Custom Ops
+
+When deploying retrieval models that use ScaNN for efficient similarity search, standard TensorFlow Serving fails with:
+
+```
+Op type not registered 'Scann>ScannSearchBatched' in binary running on...
+```
+
+**Root Cause:** ScaNN uses custom TensorFlow operations (`Scann>ScannSearchBatched`, `Scann>ScannToTensors`, etc.) that are not included in the standard TensorFlow Serving binary. These ops are compiled into the ScaNN Python package.
+
+**Approaches Tried (and failed):**
+
+1. **Adding ScaNN to TF Serving container**: ScaNN 1.3.x requires Python 3.10+, but TF Serving image uses Python 3.8
+2. **Using `--custom_op_paths` flag**: Not supported in the apt-installed TF Serving version
+3. **LD_PRELOAD with ScaNN .so files**: Breaks TF Serving due to libtensorflow_framework.so version conflicts
+
+### The Solution: Python-Based Model Server
+
+We implemented a Python-based serving solution using Flask/Gunicorn that:
+- Uses TensorFlow directly (not TF Serving binary)
+- Imports ScaNN to register custom ops before model loading
+- Provides TF Serving-compatible REST API for drop-in replacement
+- Based on Google Deep Learning Container (`gcr.io/deeplearning-platform-release/tf2-cpu.2-15.py310`)
+
+**Updated Architecture:**
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  Cloud Run Service (ScaNN Models)                                           │
+│   ┌─────────────────────────────────────────────────────────────────────┐   │
+│   │ Python Model Server (europe-central2-docker.pkg.dev/...)            │   │
+│   │                                                                      │   │
+│   │ Base: gcr.io/deeplearning-platform-release/tf2-cpu.2-15.py310       │   │
+│   │                                                                      │   │
+│   │ startup.sh:                                                          │   │
+│   │   1. Downloads model from GCS (MODEL_PATH env var)                  │   │
+│   │   2. Starts gunicorn with Flask server.py                           │   │
+│   │                                                                      │   │
+│   │ server.py:                                                           │   │
+│   │   - Imports scann (registers custom ops)                            │   │
+│   │   - Loads model with tf.saved_model.load()                          │   │
+│   │   - TF Serving-compatible REST API                                  │   │
+│   │                                                                      │   │
+│   │ Endpoints (TF Serving compatible):                                   │   │
+│   │   - GET  /v1/models/{name}          → Model status                  │   │
+│   │   - GET  /v1/models/{name}/metadata → Model metadata                │   │
+│   │   - POST /v1/models/{name}:predict  → Inference                     │   │
+│   │   - GET  /health                    → Health check                  │   │
+│   └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                              │
+│   Configuration:                                                             │
+│   - Memory: 4Gi (configurable)                                              │
+│   - CPU: 2 (configurable)                                                   │
+│   - Workers: 1 (TF models are not fork-safe)                                │
+│   - Threads: 4 per worker                                                   │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Updated Container Files
+
+**Dockerfile** (`deploy/tf_serving/Dockerfile`):
+
+```dockerfile
+# Python-based model serving container for Cloud Run deployment
+# Uses TensorFlow directly (not TF Serving) to properly load ScaNN models
+FROM gcr.io/deeplearning-platform-release/tf2-cpu.2-15.py310
+
+LABEL maintainer="B2B Recs Platform"
+LABEL description="Python model server with ScaNN support for TFRS models"
+
+# Install gsutil for GCS model download
+RUN apt-get update && apt-get install -y \
+    curl gnupg \
+    && echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] http://packages.cloud.google.com/apt cloud-sdk main" | \
+    tee -a /etc/apt/sources.list.d/google-cloud-sdk.list \
+    && curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | \
+    apt-key --keyring /usr/share/keyrings/cloud.google.gpg add - \
+    && apt-get update && apt-get install -y google-cloud-cli \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Install ScaNN and Flask for serving
+RUN pip install --no-cache-dir --no-deps scann==1.3.0
+RUN pip install --no-cache-dir flask gunicorn
+
+# Verify ScaNN installation
+RUN python -c "import scann; print('ScaNN: installed')"
+RUN python -c "import tensorflow as tf; import scann; print('TF + ScaNN: OK')"
+
+# Copy server files
+COPY server.py /app/server.py
+COPY startup.sh /startup.sh
+RUN chmod +x /startup.sh
+
+ENV MODEL_BASE_PATH=/models
+ENV MODEL_NAME=recommender
+ENV PORT=8501
+
+EXPOSE 8501
+WORKDIR /app
+ENTRYPOINT ["/startup.sh"]
+```
+
+**Server** (`deploy/tf_serving/server.py`):
+
+```python
+"""
+Python-based model serving for TFRS models with ScaNN support.
+Compatible with TF Serving REST API format for drop-in replacement.
+"""
+import os
+import json
+import base64
+import logging
+from flask import Flask, request, jsonify
+import tensorflow as tf
+import scann  # Import to register custom ops
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+app = Flask(__name__)
+model = None
+MODEL_NAME = os.environ.get('MODEL_NAME', 'recommender')
+
+def load_model():
+    global model
+    model_path = f"/models/{MODEL_NAME}/1"
+    logger.info(f"Loading model from {model_path}")
+    model = tf.saved_model.load(model_path)
+    signatures = list(model.signatures.keys())
+    logger.info(f"Available signatures: {signatures}")
+    return model
+
+@app.route('/v1/models/<model_name>:predict', methods=['POST'])
+def predict(model_name):
+    """Handle prediction requests (TF Serving REST API compatible)."""
+    if model is None:
+        return jsonify({"error": "Model not loaded"}), 503
+
+    data = request.get_json()
+    instances = data.get('instances', [])
+    serve_fn = model.signatures['serving_default']
+
+    # Process base64-encoded tf.Example instances
+    serialized_examples = []
+    for instance in instances:
+        if isinstance(instance, dict) and 'b64' in instance:
+            serialized = base64.b64decode(instance['b64'])
+            serialized_examples.append(serialized)
+        else:
+            return jsonify({"error": "Expected base64-encoded tf.Example instances"}), 400
+
+    examples_tensor = tf.constant(serialized_examples, dtype=tf.string)
+    result = serve_fn(examples=examples_tensor)
+
+    # Convert to JSON-serializable format
+    predictions = []
+    for i in range(len(instances)):
+        pred = {}
+        for key, tensor in result.items():
+            value = tensor[i].numpy()
+            pred[key] = value.tolist() if hasattr(value, 'tolist') else value
+        predictions.append(pred)
+
+    return jsonify({"predictions": predictions})
+
+# Load model at startup
+load_model()
+```
+
+### Current Inference Format (ScaNN Models)
+
+**⚠️ Known Limitation:** ScaNN serving currently uses `tf.Example` serialization format, NOT raw JSON tensors. This is a known code generation bug that needs to be fixed.
+
+**Current Request Format:**
+
+```python
+import tensorflow as tf
+import base64
+import requests
+
+# Build tf.Example with ALL schema features (not just buyer features)
+feature_dict = {
+    'customer_id': tf.train.Feature(int64_list=tf.train.Int64List(value=[12345])),
+    'product_id': tf.train.Feature(int64_list=tf.train.Int64List(value=[0])),
+    'sales': tf.train.Feature(float_list=tf.train.FloatList(value=[0.0])),
+    'date': tf.train.Feature(bytes_list=tf.train.BytesList(value=[b'2025-01-01'])),
+    'city': tf.train.Feature(bytes_list=tf.train.BytesList(value=[b'Warsaw'])),
+    'category': tf.train.Feature(bytes_list=tf.train.BytesList(value=[b''])),
+    'sub_category': tf.train.Feature(bytes_list=tf.train.BytesList(value=[b''])),
+    'cust_value': tf.train.Feature(bytes_list=tf.train.BytesList(value=[b'medium'])),
+}
+example = tf.train.Example(features=tf.train.Features(feature=feature_dict))
+serialized = example.SerializeToString()
+encoded = base64.b64encode(serialized).decode('utf-8')
+
+response = requests.post(
+    "https://{service}.run.app/v1/models/recommender:predict",
+    json={"instances": [{"b64": encoded}]}
+)
+# Returns: {"predictions": [{"output_1": [prod_id1, prod_id2, ...], "output_2": [score1, score2, ...]}]}
+```
+
+### Deployment Test Results (Training Run #2)
+
+Successfully tested deployment flow on 2026-01-21:
+
+| Step | Status | Details |
+|------|--------|---------|
+| Model Registration | ✅ Success | `projects/555035914949/locations/europe-central2/models/5241525861236080640` |
+| Container Build | ✅ Success | Python-based server with ScaNN 1.3.0 |
+| Cloud Run Deploy | ✅ Success | `https://test-v1-serving-555035914949.europe-central2.run.app` |
+| Inference Test | ✅ Success | Returns 87 product recommendations |
+
+**Model Path Structure:**
+```
+gs://b2b-recs-training-artifacts/tr-2-20260119-150613/
+└── pushed_model/
+    └── 1768842986/           # Versioned model directory
+        ├── saved_model.pb
+        ├── variables/
+        └── assets/
+```
+
+**Important:** When setting `MODEL_PATH` env var, point to the versioned subdirectory:
+```
+MODEL_PATH=gs://bucket/training-runs/{id}/pushed_model/{version_number}
+```
+
+---
+
+## Known Issues & Next Steps
+
+### Issue 1: ScaNN Serving Uses tf.Example (Not Raw JSON)
+
+**Problem:** The ScaNN serving signature (`_generate_scann_serve_fn()`) was generated to use `tf.Example` input format, unlike the brute-force version which uses raw tensors.
+
+**Impact:** Clients must serialize inputs as tf.Example + base64 encode, which is cumbersome.
+
+**Fix Required:** Update `ml_platform/configs/services.py` to generate a raw tensor signature for ScaNN models, similar to `_generate_brute_force_serve_fn()`.
+
+### Issue 2: Serving Requires All Schema Features
+
+**Problem:** The current ScaNN serving function requires ALL features from the schema (buyer + item features), not just buyer features.
+
+**Root Cause:** The serving signature uses `raw_feature_spec()` which includes all features.
+
+**Impact:** Clients must send placeholder values for item features (product_id, category, etc.) even though they're not needed for query embedding.
+
+**Fix Required:** Update serving signature to only require buyer features.
+
+### Issue 3: Model Registry Container Image
+
+**Problem:** Model registration uses `serving_container_image_uri="tensorflow/serving:2.19.0"` which doesn't work for ScaNN models.
+
+**Fix Required:** Update registration to use the Python-based container:
+```python
+serving_container_image_uri="europe-central2-docker.pkg.dev/b2b-recs/ml-serving/tf-serving:latest"
+```
+
+### Recommended Next Steps
+
+1. **Update Code Generation for ScaNN Models:**
+   - File: `ml_platform/configs/services.py`
+   - Method: `_generate_scann_serve_fn()`
+   - Change to use raw tensor input signature (like brute-force)
+   - Only require buyer features in input signature
+
+2. **Update Model Registration:**
+   - File: `ml_platform/training/services.py`
+   - Method: `_register_to_model_registry()`
+   - Use Python-based container for ScaNN models
+
+3. **Add Model Type Detection:**
+   - Detect if model uses ScaNN vs brute-force
+   - Route to appropriate container/serving approach
+
+4. **Test Raw JSON Interface:**
+   - Retrain a model with updated code generation
+   - Deploy and verify raw JSON works without tf.Example
+
+---
+
 ## Summary
 
 | Component | Technology | Status |
 |-----------|------------|--------|
 | Training Pipeline | TFX on Vertex AI | Implemented |
-| ServingModel (Raw Tensors) | Dynamic code generation | Implemented |
+| ServingModel (Raw Tensors) | Dynamic code generation | Implemented (brute-force only) |
+| ServingModel (ScaNN) | tf.Example format | **Needs update to raw tensors** |
 | Model Registry | Vertex AI Model Registry | Implemented |
-| TF Serving Container | Cloud Run + TF Serving 2.19.0 | Implemented |
+| TF Serving Container | Cloud Run + TF Serving 2.19.0 | Implemented (brute-force only) |
+| Python Serving Container | Cloud Run + Flask/Gunicorn | Implemented (ScaNN models) |
 | Deployment API | Django REST | Implemented |
 | Deployment UI | Training page integration | Implemented |
 

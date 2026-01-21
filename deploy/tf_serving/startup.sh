@@ -9,7 +9,7 @@ if [ -z "$MODEL_PATH" ]; then
 fi
 
 echo "==================================================="
-echo "TF Serving Container Startup"
+echo "Python Model Server Startup (with ScaNN support)"
 echo "==================================================="
 echo "MODEL_PATH: $MODEL_PATH"
 echo "MODEL_NAME: ${MODEL_NAME:-recommender}"
@@ -17,7 +17,7 @@ echo "PORT: ${PORT:-8501}"
 echo ""
 
 # Create model directory structure
-# TF Serving expects: /models/{model_name}/{version}/
+# Server expects: /models/{model_name}/{version}/
 MODEL_DIR="/models/${MODEL_NAME:-recommender}/1"
 mkdir -p "$MODEL_DIR"
 
@@ -37,19 +37,17 @@ echo "Contents:"
 ls -la "$MODEL_DIR"
 echo ""
 
-echo "Starting TensorFlow Serving..."
+echo "Starting Python model server..."
 echo "  - Model: ${MODEL_NAME:-recommender}"
 echo "  - REST API port: ${PORT:-8501}"
-echo "  - gRPC port: 8500"
-echo "  - Batching: enabled"
 echo ""
 
-# Start TF Serving with batching enabled
-# Cloud Run sets PORT env var for the container to listen on
-tensorflow_model_server \
-    --port=8500 \
-    --rest_api_port=${PORT:-8501} \
-    --model_name=${MODEL_NAME:-recommender} \
-    --model_base_path=/models/${MODEL_NAME:-recommender} \
-    --enable_batching=true \
-    --batching_parameters_file=/etc/tf_serving/batching_config.txt
+# Start the Python server with gunicorn for production
+cd /app
+exec gunicorn --bind 0.0.0.0:${PORT:-8501} \
+    --workers 1 \
+    --threads 4 \
+    --timeout 300 \
+    --access-logfile - \
+    --error-logfile - \
+    "server:app"

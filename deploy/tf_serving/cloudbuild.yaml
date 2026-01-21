@@ -40,5 +40,5 @@ options:
   logging: CLOUD_LOGGING_ONLY
   machineType: 'E2_HIGHCPU_8'
 
-# Timeout for the entire build (10 minutes should be plenty)
-timeout: '600s'
+# Timeout for the entire build (20 minutes for large base images)
+timeout: '1200s'

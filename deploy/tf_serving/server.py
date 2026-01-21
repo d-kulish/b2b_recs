@@ -114,7 +114,7 @@ def get_model_metadata(model_name):
 
 @app.route('/v1/models/<model_name>:predict', methods=['POST'])
 def predict(model_name):
-    """Handle prediction requests (TF Serving REST API compatible)."""
+    """Handle prediction requests. Supports raw JSON and base64 tf.Example."""
     if model is None:
         return jsonify({"error": "Model not loaded"}), 503
 
@@ -125,33 +125,51 @@ def predict(model_name):
         if not instances:
             return jsonify({"error": "No instances provided"}), 400
 
-        # Get the serving function
+        # Get the serving function and its input signature
         serve_fn = model.signatures['serving_default']
+        input_specs = serve_fn.structured_input_signature[1]
+        input_names = list(input_specs.keys())
 
-        # Process instances - handle base64 encoded tf.Example format
-        serialized_examples = []
-        for instance in instances:
-            if isinstance(instance, dict) and 'b64' in instance:
-                # Base64 encoded tf.Example
-                serialized = base64.b64decode(instance['b64'])
-                serialized_examples.append(serialized)
-            else:
-                return jsonify({"error": "Expected base64-encoded tf.Example instances"}), 400
+        # Auto-detect input format based on first instance
+        first_instance = instances[0]
+        is_raw_json = isinstance(first_instance, dict) and 'b64' not in first_instance
 
-        # Convert to tensor
-        examples_tensor = tf.constant(serialized_examples, dtype=tf.string)
+        if is_raw_json:
+            # Raw JSON format - build tensors from feature values
+            input_tensors = {}
+            for input_name in input_names:
+                values = [inst.get(input_name) for inst in instances]
+                dtype = input_specs[input_name].dtype
+                input_tensors[input_name] = tf.constant(values, dtype=dtype)
+            result = serve_fn(**input_tensors)
+        else:
+            # Base64 tf.Example format (legacy)
+            serialized_examples = []
+            for instance in instances:
+                if isinstance(instance, dict) and 'b64' in instance:
+                    serialized = base64.b64decode(instance['b64'])
+                    serialized_examples.append(serialized)
+                else:
+                    return jsonify({"error": "Expected base64-encoded tf.Example"}), 400
+            examples_tensor = tf.constant(serialized_examples, dtype=tf.string)
+            result = serve_fn(examples=examples_tensor)
 
-        # Run inference
-        result = serve_fn(examples=examples_tensor)
-
-        # Convert result to JSON-serializable format
+        # Convert result to JSON-serializable format (handle bytes for string product IDs)
         predictions = []
         for i in range(len(instances)):
             pred = {}
             for key, tensor in result.items():
                 value = tensor[i].numpy()
                 if hasattr(value, 'tolist'):
-                    pred[key] = value.tolist()
+                    if isinstance(value, bytes):
+                        # Single byte string value
+                        pred[key] = value.decode('utf-8')
+                    elif hasattr(value, 'dtype') and value.dtype.kind == 'S':
+                        # Array of byte strings
+                        pred[key] = [v.decode('utf-8') if isinstance(v, bytes) else v
+                                     for v in value.tolist()]
+                    else:
+                        pred[key] = value.tolist()
                 else:
                     pred[key] = value
             predictions.append(pred)

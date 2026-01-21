@@ -2,7 +2,7 @@
 
 This document describes the model deployment architecture for TFRS (TensorFlow Recommenders) models trained via TFX pipelines. It covers the implementation details, configuration options, and usage instructions.
 
-**Last Updated:** 2026-01-21
+**Last Updated:** 2026-01-21 (ScaNN serving fix)
 
 **Status:** Implemented
 
@@ -938,27 +938,40 @@ def predict(model_name):
 load_model()
 ```
 
-### Current Inference Format (ScaNN Models)
+### Inference Format (ScaNN Models)
 
-**⚠️ Known Limitation:** ScaNN serving currently uses `tf.Example` serialization format, NOT raw JSON tensors. This is a known code generation bug that needs to be fixed.
+**✅ Updated (2026-01-21):** ScaNN serving now supports raw JSON inputs (buyer features only). Models trained after this fix will accept simple JSON requests.
 
-**Current Request Format:**
+**New Request Format (Recommended):**
+
+```python
+import requests
+
+# Simple JSON with buyer features only
+response = requests.post(
+    "https://{service}.run.app/v1/models/recommender:predict",
+    json={
+        "instances": [
+            {"customer_id": 12345, "cust_value": "medium", "date": "2025-01-01"}
+        ]
+    }
+)
+# Returns: {"predictions": [{"product_ids": [12345, 67890, ...], "scores": [0.95, 0.87, ...]}]}
+```
+
+**Legacy Format (Still Supported):**
+
+For backward compatibility with models trained before the fix, the server still accepts base64-encoded tf.Example:
 
 ```python
 import tensorflow as tf
 import base64
 import requests
 
-# Build tf.Example with ALL schema features (not just buyer features)
+# Build tf.Example (legacy format for older models)
 feature_dict = {
     'customer_id': tf.train.Feature(int64_list=tf.train.Int64List(value=[12345])),
-    'product_id': tf.train.Feature(int64_list=tf.train.Int64List(value=[0])),
-    'sales': tf.train.Feature(float_list=tf.train.FloatList(value=[0.0])),
-    'date': tf.train.Feature(bytes_list=tf.train.BytesList(value=[b'2025-01-01'])),
-    'city': tf.train.Feature(bytes_list=tf.train.BytesList(value=[b'Warsaw'])),
-    'category': tf.train.Feature(bytes_list=tf.train.BytesList(value=[b''])),
-    'sub_category': tf.train.Feature(bytes_list=tf.train.BytesList(value=[b''])),
-    'cust_value': tf.train.Feature(bytes_list=tf.train.BytesList(value=[b'medium'])),
+    # ... all schema features required for older models
 }
 example = tf.train.Example(features=tf.train.Features(feature=feature_dict))
 serialized = example.SerializeToString()
@@ -968,7 +981,6 @@ response = requests.post(
     "https://{service}.run.app/v1/models/recommender:predict",
     json={"instances": [{"b64": encoded}]}
 )
-# Returns: {"predictions": [{"output_1": [prod_id1, prod_id2, ...], "output_2": [score1, score2, ...]}]}
 ```
 
 ### Deployment Test Results (Training Run #2)
@@ -999,55 +1011,181 @@ MODEL_PATH=gs://bucket/training-runs/{id}/pushed_model/{version_number}
 
 ---
 
-## Known Issues & Next Steps
+## ScaNN Serving Fix (2026-01-21)
 
-### Issue 1: ScaNN Serving Uses tf.Example (Not Raw JSON)
+This section documents the fix applied to resolve three critical issues with ScaNN model serving.
 
-**Problem:** The ScaNN serving signature (`_generate_scann_serve_fn()`) was generated to use `tf.Example` input format, unlike the brute-force version which uses raw tensors.
+### Problems Identified
 
-**Impact:** Clients must serialize inputs as tf.Example + base64 encode, which is cumbersome.
+| Issue | Problem | Impact |
+|-------|---------|--------|
+| **1. tf.Example Input Format** | ScaNN serving used `tf.Example` serialization instead of raw JSON | Clients had to serialize inputs as tf.Example + base64 encode |
+| **2. All Schema Features Required** | Serving signature used `raw_feature_spec()` which includes ALL features | Clients had to send placeholder values for product features |
+| **3. Vocabulary Indices Returned** | Model returned ScaNN vocabulary indices (e.g., `880`) | Clients received internal indices instead of original product IDs |
 
-**Fix Required:** Update `ml_platform/configs/services.py` to generate a raw tensor signature for ScaNN models, similar to `_generate_brute_force_serve_fn()`.
+### Root Cause Analysis
 
-### Issue 2: Serving Requires All Schema Features
+The ScaNN serving implementation (`_generate_scann_serve_fn()`) was not updated when the brute-force version was migrated to raw tensor inputs. Key differences:
 
-**Problem:** The current ScaNN serving function requires ALL features from the schema (buyer + item features), not just buyer features.
-
-**Root Cause:** The serving signature uses `raw_feature_spec()` which includes all features.
-
-**Impact:** Clients must send placeholder values for item features (product_id, category, etc.) even though they're not needed for query embedding.
-
-**Fix Required:** Update serving signature to only require buyer features.
-
-### Issue 3: Model Registry Container Image
-
-**Problem:** Model registration uses `serving_container_image_uri="tensorflow/serving:2.19.0"` which doesn't work for ScaNN models.
-
-**Fix Required:** Update registration to use the Python-based container:
 ```python
-serving_container_image_uri="europe-central2-docker.pkg.dev/b2b-recs/ml-serving/tf-serving:latest"
+# OLD ScaNN (problematic)
+@tf.function(input_signature=[tf.TensorSpec(shape=[None], dtype=tf.string, name='examples')])
+def serve(self, serialized_examples):
+    parsed_features = tf.io.parse_example(serialized_examples, self._raw_feature_spec)
+    # ... ScaNN returns vocab indices directly
+
+# NEW ScaNN (fixed)
+@tf.function(input_signature=[
+    tf.TensorSpec(shape=[None], dtype=tf.int64, name='customer_id'),
+    tf.TensorSpec(shape=[None], dtype=tf.float32, name='revenue'),
+    # ... only buyer features
+])
+def serve(self, customer_id, revenue, ...):
+    raw_features = {'customer_id': customer_id, 'revenue': revenue, ...}
+    # ... maps vocab indices to original product IDs
 ```
 
-### Recommended Next Steps
+### Applied Fix
 
-1. **Update Code Generation for ScaNN Models:**
-   - File: `ml_platform/configs/services.py`
-   - Method: `_generate_scann_serve_fn()`
-   - Change to use raw tensor input signature (like brute-force)
-   - Only require buyer features in input signature
+**Files Modified:**
 
-2. **Update Model Registration:**
-   - File: `ml_platform/training/services.py`
-   - Method: `_register_to_model_registry()`
-   - Use Python-based container for ScaNN models
+| File | Change |
+|------|--------|
+| `ml_platform/configs/services.py` | Updated `_generate_scann_serve_fn()` code generation |
+| `deploy/tf_serving/server.py` | Added raw JSON input support |
 
-3. **Add Model Type Detection:**
-   - Detect if model uses ScaNN vs brute-force
-   - Route to appropriate container/serving approach
+**1. Capture Product ID Type** (`configs/services.py` ~line 2925)
 
-4. **Test Raw JSON Interface:**
-   - Retrain a model with updated code generation
-   - Deploy and verify raw JSON works without tf.Example
+Added extraction of `product_id_bq_type` to handle both string and integer product IDs:
+
+```python
+product_id_col = None
+product_id_bq_type = 'STRING'  # Default type for later conversion
+for feature in self.product_features:
+    if feature.get('is_primary_id'):
+        product_id_col = feature.get('display_name') or feature.get('column')
+        product_id_bq_type = (feature.get('bq_type') or 'STRING').upper()
+        break
+```
+
+**2. Generate Raw Tensor Signature** (`configs/services.py` ~line 2951)
+
+Reuses existing `_generate_raw_tensor_signature()` method (same as brute-force):
+
+```python
+signature_specs, param_names, raw_features_lines = self._generate_raw_tensor_signature()
+params_str = ', '.join(param_names)
+signature_str = '\n'.join(signature_specs)
+raw_features_str = '\n'.join(raw_features_lines)
+```
+
+**3. Updated ScaNNServingModel Class** (`configs/services.py` lines 2962-3011)
+
+New implementation accepts raw JSON and maps vocab indices to original IDs:
+
+```python
+class ScaNNServingModel(tf.keras.Model):
+    def __init__(self, scann_index, tf_transform_output, original_product_ids):
+        super().__init__()
+        self.scann_index = scann_index
+        self.tft_layer = tf_transform_output.transform_features_layer()
+        self.original_product_ids = tf.Variable(
+            original_product_ids, trainable=False, name='original_product_ids'
+        )
+
+    @tf.function(input_signature=[...])  # Dynamic based on buyer features
+    def serve(self, customer_id, revenue, ...):
+        raw_features = {'customer_id': customer_id, ...}
+        transformed_features = self.tft_layer(raw_features)
+        top_scores, top_vocab_indices = self.scann_index(transformed_features)
+
+        # Map vocabulary indices to original product IDs
+        recommended_products = tf.gather(self.original_product_ids, top_vocab_indices)
+
+        return {'product_ids': recommended_products, 'scores': top_scores}
+```
+
+**4. Added `_load_original_product_ids()` Helper** (`configs/services.py` ~line 3154)
+
+Loads original product IDs from TFT vocabulary file:
+
+```python
+def _load_original_product_ids(tf_transform_output, product_id_col, product_id_bq_type):
+    vocab_name = f'{product_id_col}_vocab'
+    vocab_bytes = tf_transform_output.vocabulary_by_name(vocab_name)
+
+    if product_id_bq_type in ['INTEGER', 'INT64']:
+        original_ids = [int(b.decode()) for b in vocab_bytes]
+    else:
+        original_ids = [b.decode() for b in vocab_bytes]
+
+    return original_ids
+```
+
+**5. Updated `run_fn` to Load Original IDs** (`configs/services.py` ~line 3762)
+
+```python
+original_product_ids = None
+if RETRIEVAL_ALGORITHM == 'scann':
+    original_product_ids = _load_original_product_ids(
+        tf_transform_output, '{product_id_col}', '{product_id_bq_type}'
+    )
+```
+
+**6. Updated Server for Raw JSON** (`deploy/tf_serving/server.py` lines 115-181)
+
+Auto-detects input format and handles both raw JSON and legacy base64 tf.Example:
+
+```python
+@app.route('/v1/models/<model_name>:predict', methods=['POST'])
+def predict(model_name):
+    serve_fn = model.signatures['serving_default']
+    input_specs = serve_fn.structured_input_signature[1]
+    input_names = list(input_specs.keys())
+
+    first_instance = instances[0]
+    is_raw_json = isinstance(first_instance, dict) and 'b64' not in first_instance
+
+    if is_raw_json:
+        # Build tensors from feature values
+        input_tensors = {}
+        for input_name in input_names:
+            values = [inst.get(input_name) for inst in instances]
+            dtype = input_specs[input_name].dtype
+            input_tensors[input_name] = tf.constant(values, dtype=dtype)
+        result = serve_fn(**input_tensors)
+    else:
+        # Legacy base64 tf.Example format
+        ...
+```
+
+### Expected Result
+
+After retraining a model with the updated code generation:
+
+**Request (Simple JSON):**
+```bash
+curl -X POST https://{service}.run.app/v1/models/recommender:predict \
+  -H "Content-Type: application/json" \
+  -d '{"instances": [{"customer_id": 12345, "cust_value": 0.5, "date": 1705849200}]}'
+```
+
+**Response (Original Product IDs):**
+```json
+{
+  "predictions": [{
+    "product_ids": [12345, 67890, 11111, 22222, ...],
+    "scores": [0.95, 0.87, 0.82, 0.79, ...]
+  }]
+}
+```
+
+### Verification Steps
+
+1. **Retrain a model** with `retrieval_algorithm='scann'` to generate updated code
+2. **Deploy to Cloud Run** using the existing deployment flow
+3. **Test with raw JSON** - should work without tf.Example serialization
+4. **Verify product IDs** - should return original IDs (e.g., `12345`) not vocab indices (e.g., `880`)
 
 ---
 
@@ -1055,14 +1193,14 @@ serving_container_image_uri="europe-central2-docker.pkg.dev/b2b-recs/ml-serving/
 
 | Component | Technology | Status |
 |-----------|------------|--------|
-| Training Pipeline | TFX on Vertex AI | Implemented |
-| ServingModel (Raw Tensors) | Dynamic code generation | Implemented (brute-force only) |
-| ServingModel (ScaNN) | tf.Example format | **Needs update to raw tensors** |
-| Model Registry | Vertex AI Model Registry | Implemented |
-| TF Serving Container | Cloud Run + TF Serving 2.19.0 | Implemented (brute-force only) |
-| Python Serving Container | Cloud Run + Flask/Gunicorn | Implemented (ScaNN models) |
-| Deployment API | Django REST | Implemented |
-| Deployment UI | Training page integration | Implemented |
+| Training Pipeline | TFX on Vertex AI | ✅ Implemented |
+| ServingModel (Raw Tensors) | Dynamic code generation | ✅ Implemented |
+| ServingModel (ScaNN) | Raw tensor inputs + ID mapping | ✅ Fixed (2026-01-21) |
+| Model Registry | Vertex AI Model Registry | ✅ Implemented |
+| TF Serving Container | Cloud Run + TF Serving 2.19.0 | ✅ Implemented (brute-force) |
+| Python Serving Container | Cloud Run + Flask/Gunicorn | ✅ Implemented (ScaNN) |
+| Deployment API | Django REST | ✅ Implemented |
+| Deployment UI | Training page integration | ✅ Implemented |
 
 ### Files Modified/Created
 

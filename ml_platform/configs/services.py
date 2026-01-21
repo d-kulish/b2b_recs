@@ -2921,12 +2921,14 @@ def _evaluate_recall_on_test_set(model, test_dataset, product_ids, product_embed
 
     def _generate_scann_serve_fn(self) -> str:
         """Generate ScaNN-based serving function for fast approximate nearest neighbor search."""
-        # Get primary product ID column for candidate indexing
+        # Get primary product ID column and type for candidate indexing
         product_id_col = None
+        product_id_bq_type = 'STRING'  # Default type for later conversion
         for feature in self.product_features:
             if feature.get('is_primary_id'):
                 product_id_col = feature.get('display_name') or feature.get('column')
-                logger.info(f"Using product ID column from is_primary_id flag: {product_id_col}")
+                product_id_bq_type = (feature.get('bq_type') or 'STRING').upper()
+                logger.info(f"Using product ID column from is_primary_id flag: {product_id_col} (type: {product_id_bq_type})")
                 break
 
         # FALLBACK: Auto-detection for backward compatibility
@@ -2936,13 +2938,21 @@ def _evaluate_recall_on_test_set(model, test_dataset, product_ids, product_embed
                 col = feature.get('display_name') or feature.get('column', '')
                 if 'product' in col.lower() or 'item' in col.lower() or 'sku' in col.lower():
                     product_id_col = col
-                    logger.info(f"Auto-detected product ID column by name pattern: {product_id_col}")
+                    product_id_bq_type = (feature.get('bq_type') or 'STRING').upper()
+                    logger.info(f"Auto-detected product ID column by name pattern: {product_id_col} (type: {product_id_bq_type})")
                     break
 
         # LAST RESORT: Use first product feature
         if not product_id_col and self.product_features:
             product_id_col = self.product_features[0].get('display_name') or self.product_features[0].get('column', 'product_id')
-            logger.warning(f"Falling back to first product feature as ID: {product_id_col}")
+            product_id_bq_type = (self.product_features[0].get('bq_type') or 'STRING').upper()
+            logger.warning(f"Falling back to first product feature as ID: {product_id_col} (type: {product_id_bq_type})")
+
+        # Generate dynamic signature from buyer features (same as brute-force)
+        signature_specs, param_names, raw_features_lines = self._generate_raw_tensor_signature()
+        params_str = ', '.join(param_names)
+        signature_str = '\n'.join(signature_specs)
+        raw_features_str = '\n'.join(raw_features_lines)
 
         return f'''
 # =============================================================================
@@ -2952,12 +2962,13 @@ def _evaluate_recall_on_test_set(model, test_dataset, product_ids, product_embed
 class ScaNNServingModel(tf.keras.Model):
     """
     Serving model using ScaNN for fast approximate nearest neighbor search.
+    Accepts raw JSON inputs (buyer features only).
 
     ScaNN (Scalable Nearest Neighbors) provides 10-20x faster retrieval compared
     to brute-force for large candidate catalogs (10K+ products) with ~97% accuracy.
     """
 
-    def __init__(self, scann_index, tf_transform_output):
+    def __init__(self, scann_index, tf_transform_output, original_product_ids):
         super().__init__()
         # ScaNN index contains both the query model and candidate embeddings
         self.scann_index = scann_index
@@ -2965,32 +2976,39 @@ class ScaNNServingModel(tf.keras.Model):
         # Track the TFT layer (contains vocabulary hash tables)
         self.tft_layer = tf_transform_output.transform_features_layer()
 
-        # Store feature spec for parsing
-        self._raw_feature_spec = tf_transform_output.raw_feature_spec()
+        # Store original product IDs for mapping vocab indices back to real IDs
+        self.original_product_ids = tf.Variable(
+            original_product_ids, trainable=False, name='original_product_ids'
+        )
 
     @tf.function(input_signature=[
-        tf.TensorSpec(shape=[None], dtype=tf.string, name='examples')
+{signature_str}
     ])
-    def serve(self, serialized_examples):
+    def serve(self, {params_str}):
         """
-        Serving function that accepts serialized tf.Examples.
+        Serving function that accepts raw JSON inputs (buyer features only).
 
-        Returns top-K product recommendations with scores using ScaNN.
+        Returns top-K product recommendations with original product IDs and scores.
         """
-        # Parse raw features
-        parsed_features = tf.io.parse_example(serialized_examples, self._raw_feature_spec)
+        # Build raw features dict from inputs (buyer features only)
+        raw_features = {{{{
+{raw_features_str}
+        }}}}
 
-        # Apply transform preprocessing
-        transformed_features = self.tft_layer(parsed_features)
+        # Apply TFT preprocessing
+        transformed_features = self.tft_layer(raw_features)
 
-        # ScaNN index is callable - returns (scores, identifiers)
+        # ScaNN index is callable - returns (scores, vocab_indices)
         # The index was built with the query tower, so it handles embedding computation
-        top_scores, top_product_ids = self.scann_index(transformed_features)
+        top_scores, top_vocab_indices = self.scann_index(transformed_features)
 
-        return {{
-            'product_ids': top_product_ids,
+        # Map vocabulary indices to original product IDs
+        recommended_products = tf.gather(self.original_product_ids, top_vocab_indices)
+
+        return {{{{
+            'product_ids': recommended_products,
             'scores': top_scores
-        }}
+        }}}}
 
 
 class BruteForceServingModel(tf.keras.Model):
@@ -3131,6 +3149,36 @@ def _precompute_candidate_embeddings(model, candidates_dataset, batch_size=128):
     else:
         logging.warning("No candidate embeddings computed - returning empty tensors")
         return [], tf.zeros((0, OUTPUT_EMBEDDING_DIM))
+
+
+def _load_original_product_ids(tf_transform_output, product_id_col, product_id_bq_type):
+    """
+    Load original product IDs from TFT vocabulary file.
+
+    Vocabulary maps: vocab_index -> original_value
+
+    Args:
+        tf_transform_output: TFT output containing vocabulary files
+        product_id_col: Name of the product ID column
+        product_id_bq_type: BigQuery type of the product ID (STRING, INTEGER, INT64)
+
+    Returns:
+        List of original product IDs in vocabulary order
+    """
+    vocab_name = f'{{product_id_col}}_vocab'
+    try:
+        vocab_bytes = tf_transform_output.vocabulary_by_name(vocab_name)
+
+        if product_id_bq_type in ['INTEGER', 'INT64']:
+            original_ids = [int(b.decode()) for b in vocab_bytes]
+        else:
+            original_ids = [b.decode() for b in vocab_bytes]
+
+        logging.info(f"Loaded {{len(original_ids)}} original product IDs from {{vocab_name}}")
+        return original_ids
+    except Exception as e:
+        logging.error(f"Failed to load vocabulary {{vocab_name}}: {{e}}")
+        raise
 
 
 def _evaluate_recall_on_test_set(model, test_dataset, product_ids, product_embeddings, steps=50):
@@ -3711,6 +3759,13 @@ def run_fn(fn_args: tfx.components.FnArgs):
         )
         logging.info(f"Pre-computed embeddings for {{len(product_ids)}} products")
 
+        # Load original product IDs from vocabulary file for serving (ScaNN only)
+        original_product_ids = None
+        if RETRIEVAL_ALGORITHM == 'scann':
+            original_product_ids = _load_original_product_ids(
+                tf_transform_output, '{product_id_col}', '{product_id_bq_type}'
+            )
+
         # Build retrieval index based on configured algorithm
         use_scann = False
         scann_index = None
@@ -3788,7 +3843,8 @@ def run_fn(fn_args: tfx.components.FnArgs):
             logging.info("Building ScaNN serving model...")
             serving_model = ScaNNServingModel(
                 scann_index=scann_index,
-                tf_transform_output=tf_transform_output
+                tf_transform_output=tf_transform_output,
+                original_product_ids=original_product_ids
             )
         else:
             logging.info("Building brute-force serving model...")

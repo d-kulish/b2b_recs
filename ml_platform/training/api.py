@@ -55,6 +55,9 @@ def _serialize_training_run(training_run, include_details=False):
         'feature_config_name': training_run.feature_config.name if training_run.feature_config else None,
         'model_config_id': training_run.model_config_id,
         'model_config_name': training_run.model_config.name if training_run.model_config else None,
+        'retrieval_algorithm': training_run.model_config.retrieval_algorithm if training_run.model_config else None,
+        'base_experiment_number': training_run.base_experiment.experiment_number if training_run.base_experiment else None,
+        'is_scheduled': training_run.schedule_id is not None,
 
         # Type and status
         'model_type': training_run.model_type,

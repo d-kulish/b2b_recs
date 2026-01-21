@@ -79,7 +79,7 @@ const TrainingCards = (function() {
             actions: ['view', 'submit', 'cancel']
         },
         submitting: {
-            icon: 'fa-upload',
+            icon: 'fa-sync',
             label: 'Submitting',
             spin: true,
             actions: ['view', 'cancel']
@@ -243,11 +243,12 @@ const TrainingCards = (function() {
         const baseClasses = 'btn-neu btn-neu-action';
 
         // Determine confirm button class (custom class takes precedence)
+        // Note: btn-neu-cancel = RED (destructive), btn-neu-secondary = GREY (neutral)
         let confirmButtonClass = options.confirmButtonClass;
         if (!confirmButtonClass) {
             if (type === 'danger') {
-                iconElement.className = 'fas fa-exclamation-triangle text-xl';
-                confirmButtonClass = 'btn-neu-cancel';
+                iconElement.className = 'fas fa-trash-alt text-xl';
+                confirmButtonClass = 'btn-neu-cancel';  // RED button for destructive actions
             } else if (type === 'warning') {
                 iconElement.className = 'fas fa-exclamation-circle text-xl';
                 confirmButtonClass = 'btn-neu-warning';
@@ -261,7 +262,7 @@ const TrainingCards = (function() {
         } else {
             // Set icon based on type even when custom button class is provided
             if (type === 'danger') {
-                iconElement.className = 'fas fa-exclamation-triangle text-xl';
+                iconElement.className = 'fas fa-trash-alt text-xl';
             } else if (type === 'warning') {
                 iconElement.className = 'fas fa-exclamation-circle text-xl';
             } else if (type === 'info') {
@@ -272,7 +273,7 @@ const TrainingCards = (function() {
         }
         confirmBtn.className = `${baseClasses} ${confirmButtonClass}`;
 
-        // Set cancel button class (default: btn-neu-secondary for grey)
+        // Set cancel button class (default: btn-neu-secondary for grey neutral button)
         cancelBtn.className = `${baseClasses} ${options.cancelButtonClass || 'btn-neu-secondary'}`;
 
         // Remove old event listeners by cloning
@@ -352,7 +353,11 @@ const TrainingCards = (function() {
         if (state.isLoading) return;
         state.isLoading = true;
 
-        showLoading();
+        // Only show loading on initial load (no existing cards)
+        const container = document.getElementById(config.containers.cardsList);
+        if (!container || container.children.length === 0) {
+            showLoading();
+        }
 
         try {
             // Build query params
@@ -417,7 +422,6 @@ const TrainingCards = (function() {
         );
 
         if (hasActiveRuns && !state.pollInterval) {
-            // Start polling
             state.pollInterval = setInterval(() => {
                 loadTrainingRuns();
             }, config.pollIntervalMs);
@@ -1083,16 +1087,9 @@ const TrainingCards = (function() {
             loadingEl.classList.remove('hidden');
         }
 
-        // Show skeleton cards if the container is empty
         const container = document.getElementById(config.containers.cardsList);
         if (container && container.children.length === 0) {
             renderSkeletonCards(3);
-        }
-
-        // Add loading class to refresh button
-        const refreshBtn = document.querySelector('.training-refresh-btn');
-        if (refreshBtn) {
-            refreshBtn.classList.add('loading');
         }
     }
 
@@ -1100,12 +1097,6 @@ const TrainingCards = (function() {
         const loadingEl = document.getElementById(config.containers.loading);
         if (loadingEl) {
             loadingEl.classList.add('hidden');
-        }
-
-        // Remove loading class from refresh button
-        const refreshBtn = document.querySelector('.training-refresh-btn');
-        if (refreshBtn) {
-            refreshBtn.classList.remove('loading');
         }
     }
 
@@ -1188,33 +1179,37 @@ const TrainingCards = (function() {
         });
     }
 
-    async function deleteRun(runId) {
-        if (!confirm('Are you sure you want to delete this training run? This action cannot be undone.')) {
-            return;
-        }
+    function deleteRun(runId) {
+        showConfirmModal({
+            title: 'Delete Training Run',
+            message: 'Are you sure you want to delete this training run?<br><br><strong>This action cannot be undone.</strong>',
+            confirmText: 'Delete',
+            cancelText: 'Cancel',
+            type: 'danger',
+            onConfirm: async () => {
+                try {
+                    const url = buildUrl(config.endpoints.delete, { id: runId });
+                    const response = await fetch(url, {
+                        method: 'DELETE',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': getCookie('csrftoken')
+                        }
+                    });
 
-        try {
-            const url = buildUrl(config.endpoints.delete, { id: runId });
-            const response = await fetch(url, {
-                method: 'DELETE',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': getCookie('csrftoken')
+                    const data = await response.json();
+
+                    if (data.success) {
+                        loadTrainingRuns();
+                    } else {
+                        showToast(data.error || 'Failed to delete training run', 'error');
+                    }
+                } catch (error) {
+                    console.error('Error deleting training run:', error);
+                    showToast('Failed to delete training run', 'error');
                 }
-            });
-
-            const data = await response.json();
-
-            if (data.success) {
-                showToast('Training run deleted', 'success');
-                loadTrainingRuns();
-            } else {
-                showToast(data.error || 'Failed to delete training run', 'error');
             }
-        } catch (error) {
-            console.error('Error deleting training run:', error);
-            showToast('Failed to delete training run', 'error');
-        }
+        });
     }
 
     async function submitRun(runId) {
@@ -1665,61 +1660,71 @@ const TrainingSchedules = (function() {
         }
     }
 
-    async function cancelSchedule(scheduleId) {
-        if (!confirm('Are you sure you want to cancel this schedule? This will delete the Cloud Scheduler job.')) {
-            return;
-        }
-
-        try {
-            const url = buildUrl(config.endpoints.cancel, { id: scheduleId });
-            const response = await fetch(url, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': getCookie('csrftoken')
+    function cancelSchedule(scheduleId) {
+        showConfirmModal({
+            title: 'Cancel Schedule',
+            message: 'Are you sure you want to cancel this schedule?<br><br>This will delete the Cloud Scheduler job.',
+            confirmText: 'Cancel Schedule',
+            cancelText: 'Keep Schedule',
+            type: 'warning',
+            onConfirm: async () => {
+                try {
+                    const url = buildUrl(config.endpoints.cancel, { id: scheduleId });
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': getCookie('csrftoken')
+                        }
+                    });
+                    const data = await response.json();
+                    if (data.success) {
+                        loadAllSchedules();
+                    } else {
+                        showToast('Failed to cancel schedule: ' + (data.error || 'Unknown error'), 'error');
+                    }
+                } catch (error) {
+                    console.error('Failed to cancel schedule:', error);
+                    showToast('Failed to cancel schedule', 'error');
                 }
-            });
-            const data = await response.json();
-            if (data.success) {
-                loadAllSchedules();
-            } else {
-                showToast('Failed to cancel schedule: ' + (data.error || 'Unknown error'), 'error');
             }
-        } catch (error) {
-            console.error('Failed to cancel schedule:', error);
-            showToast('Failed to cancel schedule', 'error');
-        }
+        });
     }
 
-    async function triggerNow(scheduleId) {
-        if (!confirm('Are you sure you want to trigger this schedule now?')) {
-            return;
-        }
-
-        try {
-            const url = buildUrl(config.endpoints.trigger, { id: scheduleId });
-            const response = await fetch(url, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': getCookie('csrftoken')
+    function triggerNow(scheduleId) {
+        showConfirmModal({
+            title: 'Trigger Schedule Now',
+            message: 'Are you sure you want to trigger this schedule immediately?<br><br>A new training run will be started.',
+            confirmText: 'Trigger Now',
+            cancelText: 'Cancel',
+            type: 'info',
+            onConfirm: async () => {
+                try {
+                    const url = buildUrl(config.endpoints.trigger, { id: scheduleId });
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': getCookie('csrftoken')
+                        }
+                    });
+                    const data = await response.json();
+                    if (data.success) {
+                        showToast('Training run triggered successfully!', 'success');
+                        loadAllSchedules();
+                        // Also refresh training runs
+                        if (typeof TrainingCards !== 'undefined') {
+                            TrainingCards.refresh();
+                        }
+                    } else {
+                        showToast('Failed to trigger schedule: ' + (data.error || 'Unknown error'), 'error');
+                    }
+                } catch (error) {
+                    console.error('Failed to trigger schedule:', error);
+                    showToast('Failed to trigger schedule', 'error');
                 }
-            });
-            const data = await response.json();
-            if (data.success) {
-                showToast('Training run triggered successfully!', 'success');
-                loadAllSchedules();
-                // Also refresh training runs
-                if (typeof TrainingCards !== 'undefined') {
-                    TrainingCards.refresh();
-                }
-            } else {
-                showToast('Failed to trigger schedule: ' + (data.error || 'Unknown error'), 'error');
             }
-        } catch (error) {
-            console.error('Failed to trigger schedule:', error);
-            showToast('Failed to trigger schedule', 'error');
-        }
+        });
     }
 
     function toggleSection() {

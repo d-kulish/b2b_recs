@@ -803,11 +803,12 @@ const TrainingCards = (function() {
     function renderConfigInfo(run) {
         // Format GPU config
         let gpuChip = '';
-        if (run.gpu_config && run.gpu_config.accelerator_type) {
-            const gpuType = run.gpu_config.accelerator_type
+        // GPU config keys are gpu_type, gpu_count (not accelerator_*)
+        if (run.gpu_config && run.gpu_config.gpu_type) {
+            const gpuType = run.gpu_config.gpu_type
                 .replace('NVIDIA_TESLA_', '')
                 .replace('NVIDIA_', '');
-            const gpuCount = run.gpu_config.accelerator_count || 1;
+            const gpuCount = run.gpu_config.gpu_count || 1;
             gpuChip = `
                 <div class="ml-card-gpu-chip">
                     <i class="fas fa-microchip"></i> ${gpuCount}x ${gpuType}

@@ -586,15 +586,15 @@ const ExpViewModal = (function() {
         if (params.batch_size) chips.push({ label: 'Batch Size', value: formatNumber(params.batch_size) });
         if (params.learning_rate) chips.push({ label: 'Learning Rate', value: params.learning_rate });
 
-        // GPU config
-        if (gpuConfig.accelerator_type) {
-            chips.push({ label: 'GPU', value: gpuConfig.accelerator_type.replace('NVIDIA_', '') });
+        // GPU config (keys are gpu_type, gpu_count, preemptible - not accelerator_*)
+        if (gpuConfig.gpu_type) {
+            chips.push({ label: 'GPU', value: gpuConfig.gpu_type.replace('NVIDIA_TESLA_', '').replace('NVIDIA_', '') });
         }
-        if (gpuConfig.accelerator_count) {
-            chips.push({ label: 'GPU Count', value: gpuConfig.accelerator_count });
+        if (gpuConfig.gpu_count) {
+            chips.push({ label: 'GPU Count', value: gpuConfig.gpu_count });
         }
-        if (gpuConfig.use_preemptible !== undefined) {
-            chips.push({ label: 'Preemptible', value: gpuConfig.use_preemptible ? 'Yes' : 'No' });
+        if (gpuConfig.preemptible !== undefined) {
+            chips.push({ label: 'Preemptible', value: gpuConfig.preemptible ? 'Yes' : 'No' });
         }
 
         if (chips.length === 0) {

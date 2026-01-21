@@ -3629,6 +3629,14 @@ def run_fn(fn_args: tfx.components.FnArgs):
         logging.info(f"  GPU {{i}}: {{gpu.name}}")
 
     # Set up distribution strategy
+    # FAIL-FAST: If GPU training was requested but no GPUs available, raise error immediately
+    if gpu_enabled and len(physical_gpus) == 0:
+        raise RuntimeError(
+            f"GPU training requested (gpu_count={{gpu_count}}) but no GPUs detected. "
+            f"Check: 1) GPU quota in region, 2) Container image has CUDA drivers, "
+            f"3) Machine type supports GPUs. Will NOT fall back to CPU training."
+        )
+
     strategy = None
     if gpu_enabled and len(physical_gpus) > 0:
         if len(physical_gpus) > 1:
@@ -3640,7 +3648,7 @@ def run_fn(fn_args: tfx.components.FnArgs):
             logging.info("Using single GPU (default strategy)")
     else:
         strategy = tf.distribute.get_strategy()
-        logging.info("No GPU enabled or detected - using CPU (default strategy)")
+        logging.info("Using CPU (default strategy) - GPU not enabled")
 
     # Load datasets
     train_dataset = _input_fn(
@@ -4622,6 +4630,14 @@ def run_fn(fn_args: tfx.components.FnArgs):
         logging.info(f"  GPU {{i}}: {{gpu.name}}")
 
     # Set up distribution strategy
+    # FAIL-FAST: If GPU training was requested but no GPUs available, raise error immediately
+    if gpu_enabled and len(physical_gpus) == 0:
+        raise RuntimeError(
+            f"GPU training requested (gpu_count={{gpu_count}}) but no GPUs detected. "
+            f"Check: 1) GPU quota in region, 2) Container image has CUDA drivers, "
+            f"3) Machine type supports GPUs. Will NOT fall back to CPU training."
+        )
+
     strategy = None
     if gpu_enabled and len(physical_gpus) > 0:
         if len(physical_gpus) > 1:
@@ -4633,7 +4649,7 @@ def run_fn(fn_args: tfx.components.FnArgs):
             logging.info("Using single GPU (default strategy)")
     else:
         strategy = tf.distribute.get_strategy()
-        logging.info("No GPU enabled or detected - using CPU (default strategy)")
+        logging.info("Using CPU (default strategy) - GPU not enabled")
 
     # Load datasets (with labels)
     train_dataset = _input_fn(
@@ -5772,6 +5788,14 @@ def run_fn(fn_args: tfx.components.FnArgs):
         logging.info(f"  GPU {{i}}: {{gpu.name}}")
 
     # Set up distribution strategy
+    # FAIL-FAST: If GPU training was requested but no GPUs available, raise error immediately
+    if gpu_enabled and len(physical_gpus) == 0:
+        raise RuntimeError(
+            f"GPU training requested (gpu_count={{gpu_count}}) but no GPUs detected. "
+            f"Check: 1) GPU quota in region, 2) Container image has CUDA drivers, "
+            f"3) Machine type supports GPUs. Will NOT fall back to CPU training."
+        )
+
     strategy = None
     if gpu_enabled and len(physical_gpus) > 0:
         if len(physical_gpus) > 1:
@@ -5783,7 +5807,7 @@ def run_fn(fn_args: tfx.components.FnArgs):
             logging.info("Using single GPU (default strategy)")
     else:
         strategy = tf.distribute.get_strategy()
-        logging.info("No GPU enabled or detected - using CPU (default strategy)")
+        logging.info("Using CPU (default strategy) - GPU not enabled")
 
     # Initialize MetricsCollector
     global _metrics_collector

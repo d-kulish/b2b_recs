@@ -1441,3 +1441,190 @@ If issues arise:
 1. Revert `deploy_to_cloud_run()` to use hardcoded `tf-serving:latest`
 2. Existing ScaNN container (`tf-serving`) still works for all models
 3. No database changes required - fully backward compatible
+
+---
+
+## Pipeline Pre-Run Analysis & Fixes (2026-01-21)
+
+Comprehensive analysis of the training pipeline before running full-scale training runs. This analysis verified GPU configuration, product ID mapping, and deployment routing.
+
+### Analysis Scope
+
+| Area | Verified | Status |
+|------|----------|--------|
+| GPU configuration flow (UI → Backend → Vertex AI) | ✅ | Correct |
+| GPU strategy (MirroredStrategy for multi-GPU) | ✅ | Correct |
+| Product ID mapping (brute-force) | ✅ | Correct |
+| Product ID mapping (ScaNN) | ✅ | Correct |
+| Conditional deployment routing | ✅ | Correct |
+| GPU display in UI | ❌ | **Bug found & fixed** |
+| CPU fallback behavior | ⚠️ | **Changed to fail-fast** |
+
+### Bug #1: GPU Display Key Mismatch
+
+**Problem:** The UI display code was looking for wrong JSON keys, causing GPU chips not to render.
+
+| Location | Looking for | Actual keys stored |
+|----------|-------------|-------------------|
+| `exp_view_modal.js` | `accelerator_type`, `accelerator_count` | `gpu_type`, `gpu_count` |
+| `training_cards.js` | `accelerator_type`, `accelerator_count` | `gpu_type`, `gpu_count` |
+
+**Evidence from TrainingRun ID=2:**
+```json
+{
+  "gpu_type": "NVIDIA_TESLA_T4",
+  "gpu_count": 2,
+  "preemptible": false
+}
+```
+
+**Fix Applied:**
+
+`static/js/exp_view_modal.js` (lines 589-598):
+```javascript
+// Before (broken)
+if (gpuConfig.accelerator_type) { ... }
+if (gpuConfig.accelerator_count) { ... }
+if (gpuConfig.use_preemptible !== undefined) { ... }
+
+// After (fixed)
+if (gpuConfig.gpu_type) {
+    chips.push({ label: 'GPU', value: gpuConfig.gpu_type.replace('NVIDIA_TESLA_', '').replace('NVIDIA_', '') });
+}
+if (gpuConfig.gpu_count) {
+    chips.push({ label: 'GPU Count', value: gpuConfig.gpu_count });
+}
+if (gpuConfig.preemptible !== undefined) {
+    chips.push({ label: 'Preemptible', value: gpuConfig.preemptible ? 'Yes' : 'No' });
+}
+```
+
+`static/js/training_cards.js` (lines 806-811):
+```javascript
+// Before (broken)
+if (run.gpu_config && run.gpu_config.accelerator_type) {
+    const gpuType = run.gpu_config.accelerator_type...
+
+// After (fixed)
+if (run.gpu_config && run.gpu_config.gpu_type) {
+    const gpuType = run.gpu_config.gpu_type...
+    const gpuCount = run.gpu_config.gpu_count || 1;
+```
+
+### Bug #2: Silent CPU Fallback
+
+**Problem:** If GPU training was requested but no GPUs were available (misconfiguration, quota issues, container without CUDA), the trainer would silently fall back to CPU with only a warning log. This could result in:
+- Training taking days instead of hours
+- Higher compute costs
+- No user visibility into the problem
+
+**Previous behavior:**
+```python
+if gpu_enabled and len(physical_gpus) > 0:
+    # Use GPU
+else:
+    strategy = tf.distribute.get_strategy()
+    logging.warning("No GPU enabled or detected - using CPU (default strategy)")  # Silent!
+```
+
+**Fix Applied:** Added fail-fast error in `ml_platform/configs/services.py` for all trainer modules (retrieval, ranking, multitask):
+
+```python
+# Set up distribution strategy
+# FAIL-FAST: If GPU training was requested but no GPUs available, raise error immediately
+if gpu_enabled and len(physical_gpus) == 0:
+    raise RuntimeError(
+        f"GPU training requested (gpu_count={gpu_count}) but no GPUs detected. "
+        f"Check: 1) GPU quota in region, 2) Container image has CUDA drivers, "
+        f"3) Machine type supports GPUs. Will NOT fall back to CPU training."
+    )
+
+strategy = None
+if gpu_enabled and len(physical_gpus) > 0:
+    if len(physical_gpus) > 1:
+        strategy = tf.distribute.MirroredStrategy()
+        logging.info(f"Using MirroredStrategy with {strategy.num_replicas_in_sync} replicas")
+    else:
+        strategy = tf.distribute.get_strategy()
+        logging.info("Using single GPU (default strategy)")
+else:
+    strategy = tf.distribute.get_strategy()
+    logging.info("Using CPU (default strategy) - GPU not enabled")
+```
+
+**Impact:** Pipeline now fails immediately with actionable error message instead of running for days on CPU.
+
+### Product ID Mapping Verification
+
+Verified that both serving models correctly return original product IDs (not vocab indices).
+
+#### Brute-Force Model Flow
+
+```
+_precompute_candidate_embeddings()
+    ↓ extracts original IDs from batch data (handles bytes/strings/ints)
+    ↓
+ServingModel.__init__(product_ids=...)
+    ↓ stores as self.product_ids = tf.Variable(product_ids, ...)
+    ↓
+ServingModel.serve()
+    ↓ top_scores, top_indices = tf.nn.top_k(similarities, k=100)
+    ↓ recommended_products = tf.gather(self.product_ids, top_indices)
+    ↓
+Returns: {'product_ids': [actual IDs], 'scores': [...]}
+```
+
+#### ScaNN Model Flow
+
+```
+_load_original_product_ids(tf_transform_output, product_id_col, product_id_bq_type)
+    ↓ reads TFT vocabulary file
+    ↓ parses as int or string based on bq_type
+    ↓
+ScaNNServingModel.__init__(original_product_ids=...)
+    ↓ stores as self.original_product_ids = tf.Variable(...)
+    ↓
+ScaNNServingModel.serve()
+    ↓ top_scores, top_vocab_indices = self.scann_index(transformed_features)
+    ↓ recommended_products = tf.gather(self.original_product_ids, top_vocab_indices)
+    ↓
+Returns: {'product_ids': [actual IDs], 'scores': [...]}
+```
+
+**Key insight:** Product IDs are stored as `tf.Variable` inside the model, so they are serialized with `tf.saved_model.save()` and available at inference time.
+
+### Config Verification: cherng_v2 + chernigiv_9
+
+Verified specific configs planned for next training run:
+
+**FeatureConfig 'cherng_v2' (ID=8):**
+| Feature | is_primary_id | bq_type |
+|---------|---------------|---------|
+| `product_id` | **True** ✅ | **INTEGER** ✅ |
+| `division_desc` | - | STRING |
+| `mge_cat_desc` | - | STRING |
+| `customer_id` | True | INTEGER |
+
+**ModelConfig 'chernigiv_9' (ID=14):**
+- Model Type: `retrieval`
+- Retrieval Algorithm: `brute_force`
+- Epochs: 5
+- Batch Size: 1024
+- Learning Rate: 0.001
+
+Both configs are correctly set up for training.
+
+### Files Modified
+
+| File | Change |
+|------|--------|
+| `static/js/exp_view_modal.js` | Fixed GPU config key names (lines 589-598) |
+| `static/js/training_cards.js` | Fixed GPU config key names (lines 806-811) |
+| `ml_platform/configs/services.py` | Added fail-fast error for missing GPUs (3 locations: retrieval, ranking, multitask trainers) |
+
+### Rollback Plan
+
+If issues arise with the fail-fast behavior:
+1. Remove the `RuntimeError` block from the GPU detection section
+2. Restore the original warning-only behavior
+3. No data or model changes - purely runtime behavior

@@ -1741,6 +1741,7 @@ def create_training_pipeline(
     from google.cloud.aiplatform_v1.types import custom_job as custom_job_spec_pb2
     from google.cloud.aiplatform_v1.types import machine_resources as machine_resources_pb2
     from google.cloud.aiplatform_v1.types import accelerator_type as accelerator_type_pb2
+    from google.protobuf.json_format import MessageToDict
     import tensorflow_model_analysis as tfma
 
     logger.info(f"Creating TFX training pipeline: {pipeline_name}")
@@ -1846,10 +1847,11 @@ def create_training_pipeline(
     )
 
     # Add Vertex AI config to custom_config for the executor
+    # Convert protobuf to dict for JSON serialization (TFX requires JSON-serializable custom_config)
     custom_config["ai_platform_training_args"] = {
         "project": project_id,
         "region": region,
-        "job_spec": vertex_job_spec,
+        "job_spec": MessageToDict(vertex_job_spec._pb, preserving_proto_field_name=True),
     }
 
     logger.info(f"Configured Vertex AI GPU training: {gpu_count}x {gpu_type} on {machine_type}")

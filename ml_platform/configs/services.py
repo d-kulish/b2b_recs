@@ -2580,6 +2580,47 @@ class RetrievalModel(tfrs.Model):
 
         return '\n'.join(lines)
 
+    def _generate_raw_tensor_signature(self) -> tuple:
+        """
+        Generate raw tensor input signature based on buyer features.
+
+        Returns:
+            tuple: (signature_specs, param_names, raw_features_dict_lines)
+        """
+        signature_specs = []
+        param_names = []
+        raw_features_lines = []
+
+        # Type mapping: BigQuery type → TensorFlow dtype
+        type_mapping = {
+            'STRING': 'tf.string',
+            'BYTES': 'tf.string',
+            'INT64': 'tf.int64',
+            'INTEGER': 'tf.int64',
+            'FLOAT64': 'tf.float32',
+            'FLOAT': 'tf.float32',
+            'NUMERIC': 'tf.float32',
+            'TIMESTAMP': 'tf.int64',
+            'DATETIME': 'tf.int64',
+            'DATE': 'tf.string',
+        }
+
+        for feature in self.buyer_features:
+            col_name = feature.get('display_name') or feature.get('column')
+            bq_type = (feature.get('bq_type') or feature.get('data_type') or 'STRING').upper()
+
+            # Get TF dtype
+            tf_dtype = type_mapping.get(bq_type, 'tf.string')
+
+            # Generate signature spec
+            signature_specs.append(
+                f"        tf.TensorSpec(shape=[None], dtype={tf_dtype}, name='{col_name}'),"
+            )
+            param_names.append(col_name)
+            raw_features_lines.append(f"            '{col_name}': {col_name},")
+
+        return signature_specs, param_names, raw_features_lines
+
     def _generate_serve_fn(self) -> str:
         """Generate serving function for inference (dispatches to ScaNN or brute-force)."""
         # Dispatch to ScaNN or brute-force based on retrieval_algorithm
@@ -2590,7 +2631,7 @@ class RetrievalModel(tfrs.Model):
         return self._generate_brute_force_serve_fn()
 
     def _generate_brute_force_serve_fn(self) -> str:
-        """Generate brute-force serving function for inference."""
+        """Generate brute-force serving function with raw tensor inputs for simple JSON interface."""
         # Get primary product ID column for candidate indexing
         # PRIORITY: Use is_primary_id flag from FeatureConfig (set by UI wizard)
         product_id_col = None
@@ -2615,6 +2656,18 @@ class RetrievalModel(tfrs.Model):
             product_id_col = self.product_features[0].get('display_name') or self.product_features[0].get('column', 'product_id')
             logger.warning(f"Falling back to first product feature as ID: {product_id_col}")
 
+        # Generate dynamic signature from buyer features
+        signature_specs, param_names, raw_features_lines = self._generate_raw_tensor_signature()
+
+        # Build parameter list for serve method
+        params_str = ', '.join(param_names)
+
+        # Build input signature
+        signature_str = '\n'.join(signature_specs)
+
+        # Build raw_features dict
+        raw_features_str = '\n'.join(raw_features_lines)
+
         return f'''
 # =============================================================================
 # SERVING FUNCTION
@@ -2622,7 +2675,8 @@ class RetrievalModel(tfrs.Model):
 
 class ServingModel(tf.keras.Model):
     """
-    Wrapper model for serving that properly tracks all TFX Transform resources.
+    Wrapper model for serving with raw tensor inputs.
+    Accepts simple JSON: {{"customer_id": "X", "city": "Y", "revenue": 100.0, ...}}
 
     This class ensures that vocabulary hash tables and other TFT resources
     are tracked by the model and saved correctly.
@@ -2636,32 +2690,37 @@ class ServingModel(tf.keras.Model):
         # Track the TFT layer (contains vocabulary hash tables)
         self.tft_layer = tf_transform_output.transform_features_layer()
 
-        # Store feature spec for parsing
-        self._raw_feature_spec = tf_transform_output.raw_feature_spec()
-
         # Track product data as model variables
         self.product_ids = tf.Variable(product_ids, trainable=False, name='product_ids')
         self.product_embeddings = tf.Variable(product_embeddings, trainable=False, name='product_embeddings')
 
     @tf.function(input_signature=[
-        tf.TensorSpec(shape=[None], dtype=tf.string, name='examples')
+{signature_str}
     ])
-    def serve(self, serialized_examples):
+    def serve(self, {params_str}):
         """
-        Serving function that accepts serialized tf.Examples.
-
+        Serving function that accepts raw tensor inputs.
         Returns top-100 product recommendations with scores.
+
+        Example JSON request to TF Serving:
+        {{
+            "instances": [
+                {{{", ".join(f'"{p}": <value>' for p in param_names[:3])}...}}
+            ]
+        }}
         """
-        # Parse raw features
-        parsed_features = tf.io.parse_example(serialized_examples, self._raw_feature_spec)
+        # Build raw features dict from inputs
+        raw_features = {{
+{raw_features_str}
+        }}
 
-        # Apply transform preprocessing
-        transformed_features = self.tft_layer(parsed_features)
+        # Apply TFT preprocessing (vocabularies, normalization, etc.)
+        transformed_features = self.tft_layer(raw_features)
 
-        # Get query embeddings
+        # Get query embeddings from buyer tower
         query_embeddings = self.retrieval_model.query_tower(transformed_features)
 
-        # Compute similarities with all candidates
+        # Compute similarities with all product embeddings
         similarities = tf.linalg.matmul(
             query_embeddings,
             self.product_embeddings,

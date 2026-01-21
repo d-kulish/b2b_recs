@@ -29,6 +29,7 @@ const TrainingCards = (function() {
             delete: '/api/training-runs/{id}/delete/',
             submit: '/api/training-runs/{id}/submit/',
             deploy: '/api/training-runs/{id}/deploy/',
+            deployCloudRun: '/api/training-runs/{id}/deploy-cloud-run/',
             push: '/api/training-runs/{id}/push/'
         },
         pollIntervalMs: 30000,  // 30 seconds
@@ -93,7 +94,7 @@ const TrainingCards = (function() {
             icon: 'fa-check-circle',
             label: 'Completed',
             spin: false,
-            actions: ['view', 'deploy', 'delete']
+            actions: ['view', 'deploy', 'deployCloudRun', 'delete']
         },
         failed: {
             icon: 'fa-times-circle',
@@ -865,10 +866,17 @@ const TrainingCards = (function() {
         // Determine if run is cancellable (running or submitting)
         const isCancellable = run.status === 'running' || run.status === 'submitting';
 
-        // Deploy button (for completed runs)
+        // Deploy button (for completed runs) - Vertex AI Endpoint
         if (allowedActions.includes('deploy') && run.status === 'completed') {
             primaryButtons.push(`
-                <button class="card-action-btn deploy" onclick="event.stopPropagation(); TrainingCards.deployRun(${run.id})" title="Deploy to Endpoint">Deploy</button>
+                <button class="card-action-btn deploy" onclick="event.stopPropagation(); TrainingCards.deployRun(${run.id})" title="Deploy to Vertex AI Endpoint">Deploy</button>
+            `);
+        }
+
+        // Deploy to Cloud Run button (for completed runs with registered model)
+        if (allowedActions.includes('deployCloudRun') && run.status === 'completed' && !run.is_deployed) {
+            primaryButtons.push(`
+                <button class="card-action-btn deploy" onclick="event.stopPropagation(); TrainingCards.deployRunCloudRun(${run.id})" title="Deploy to Cloud Run">Cloud Run</button>
             `);
         }
 
@@ -1262,6 +1270,35 @@ const TrainingCards = (function() {
         }
     }
 
+    async function deployRunCloudRun(runId) {
+        if (!confirm('Are you sure you want to deploy this model to Cloud Run? This will create a serverless TF Serving endpoint.')) {
+            return;
+        }
+
+        try {
+            const url = buildUrl(config.endpoints.deployCloudRun, { id: runId });
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                }
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                showToast(data.message || 'Model deployed to Cloud Run', 'success');
+                loadTrainingRuns();
+            } else {
+                showToast(data.error || 'Failed to deploy model to Cloud Run', 'error');
+            }
+        } catch (error) {
+            console.error('Error deploying training run to Cloud Run:', error);
+            showToast('Failed to deploy model to Cloud Run', 'error');
+        }
+    }
+
     async function pushAnyway(runId) {
         if (!confirm('This model did not meet the blessing threshold. Are you sure you want to push it to the Model Registry anyway? This action cannot be undone.')) {
             return;
@@ -1324,6 +1361,7 @@ const TrainingCards = (function() {
         deleteRun: deleteRun,
         submitRun: submitRun,
         deployRun: deployRun,
+        deployRunCloudRun: deployRunCloudRun,
         pushAnyway: pushAnyway,
         stopPolling: stopPolling,
         // Expose state for debugging

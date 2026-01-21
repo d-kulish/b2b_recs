@@ -945,6 +945,90 @@ def training_run_push(request, training_run_id):
         }, status=500)
 
 
+@csrf_exempt
+@require_http_methods(["POST"])
+def training_run_deploy_cloud_run(request, training_run_id):
+    """
+    Deploy a trained model to Cloud Run with TF Serving.
+
+    POST /api/training-runs/<id>/deploy-cloud-run/
+
+    This deploys the model to a Cloud Run service for serverless inference.
+    The model must be registered in the Model Registry first.
+
+    Returns:
+    {
+        "success": true,
+        "training_run": {...},
+        "endpoint_url": "https://model-serving-xxx.run.app",
+        "message": "Model deployed to Cloud Run"
+    }
+    """
+    try:
+        model_endpoint = _get_model_endpoint(request)
+        if not model_endpoint:
+            return JsonResponse({
+                'success': False,
+                'error': 'No model endpoint selected'
+            }, status=400)
+
+        try:
+            training_run = TrainingRun.objects.get(
+                id=training_run_id,
+                ml_model=model_endpoint
+            )
+        except TrainingRun.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': f'TrainingRun {training_run_id} not found'
+            }, status=404)
+
+        # Validate state - allow both completed and not_blessed
+        if training_run.status not in [TrainingRun.STATUS_COMPLETED, TrainingRun.STATUS_NOT_BLESSED]:
+            return JsonResponse({
+                'success': False,
+                'error': f"Cannot deploy training run in '{training_run.status}' state. "
+                         f"Only completed or not-blessed training runs can be deployed."
+            }, status=400)
+
+        # Check if model is registered
+        if not training_run.vertex_model_resource_name:
+            return JsonResponse({
+                'success': False,
+                'error': "Model not registered in Model Registry. Wait for registration to complete."
+            }, status=400)
+
+        if training_run.is_deployed:
+            return JsonResponse({
+                'success': False,
+                'error': f"Training run is already deployed to: {training_run.endpoint_resource_name}"
+            }, status=400)
+
+        # Deploy to Cloud Run
+        service = TrainingService(model_endpoint)
+        try:
+            endpoint_url = service.deploy_to_cloud_run(training_run)
+        except TrainingServiceError as e:
+            return JsonResponse({
+                'success': False,
+                'error': str(e)
+            }, status=500)
+
+        return JsonResponse({
+            'success': True,
+            'training_run': _serialize_training_run(training_run, include_details=True),
+            'endpoint_url': endpoint_url,
+            'message': f"Model deployed to Cloud Run: {endpoint_url}"
+        })
+
+    except Exception as e:
+        logger.exception(f"Error deploying training run to Cloud Run: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
 # =============================================================================
 # Training Run Data Insights API Endpoints
 # =============================================================================

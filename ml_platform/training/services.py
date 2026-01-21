@@ -717,6 +717,65 @@ class TrainingService:
             training_run.is_blessed = True
             training_run.save(update_fields=['is_blessed'])
 
+        # Register to Model Registry (regardless of blessing status)
+        try:
+            self._register_to_model_registry(training_run)
+        except Exception as e:
+            logger.warning(f"Model registration failed (non-fatal): {e}")
+
+    def _register_to_model_registry(self, training_run: TrainingRun) -> None:
+        """
+        Register trained model to Vertex AI Model Registry.
+        Called automatically after pipeline completion.
+        """
+        self._init_aiplatform()
+
+        # Check if already registered
+        if training_run.vertex_model_resource_name:
+            logger.info(f"{training_run.display_name}: Already registered in Model Registry")
+            return
+
+        # Build display name with version
+        model_name = f"{self.ml_model.slug}-v{training_run.run_number}"
+        artifact_uri = f"{training_run.gcs_artifacts_path}/pushed_model"
+
+        # Labels for tracking (values must be strings, max 63 chars)
+        labels = {
+            'training_run_id': str(training_run.id),
+            'model_endpoint_id': str(self.ml_model.id),
+            'model_type': training_run.model_type,
+            'is_blessed': str(training_run.is_blessed).lower() if training_run.is_blessed is not None else 'unknown',
+        }
+
+        # Add metrics as labels (truncated to 63 chars)
+        if training_run.recall_at_100:
+            labels['recall_at_100'] = f"{training_run.recall_at_100:.4f}"
+        if training_run.loss:
+            labels['loss'] = f"{training_run.loss:.4f}"
+
+        try:
+            from google.cloud import aiplatform
+
+            model = aiplatform.Model.upload(
+                display_name=model_name,
+                artifact_uri=artifact_uri,
+                serving_container_image_uri="tensorflow/serving:2.19.0",
+                labels=labels,
+            )
+
+            training_run.vertex_model_resource_name = model.resource_name
+            training_run.vertex_model_name = model.display_name
+            training_run.registered_at = timezone.now()
+            training_run.save(update_fields=[
+                'vertex_model_resource_name', 'vertex_model_name', 'registered_at', 'updated_at'
+            ])
+
+            logger.info(f"{training_run.display_name}: Registered to Model Registry as {model.display_name}")
+
+        except Exception as e:
+            logger.exception(f"{training_run.display_name}: Failed to register to Model Registry: {e}")
+            # Don't raise - registration failure shouldn't fail the training run
+
     def _cache_training_history(self, training_run: TrainingRun):
         """
         Cache training history from GCS into Django DB for fast loading.
@@ -1136,6 +1195,134 @@ class TrainingService:
         except Exception as e:
             logger.exception(f"Error force-pushing model: {e}")
             raise TrainingServiceError(f"Failed to force-push model: {e}")
+
+    def deploy_to_cloud_run(self, training_run: TrainingRun) -> str:
+        """
+        Deploy trained model to Cloud Run with TF Serving.
+
+        Creates a new Cloud Run service running the tf-serving container,
+        configured to load the model from GCS at startup.
+
+        Args:
+            training_run: TrainingRun instance to deploy
+
+        Returns:
+            str: Cloud Run service URL
+
+        Raises:
+            TrainingServiceError: If deployment fails
+        """
+        import subprocess
+
+        # Validate prerequisites
+        if not training_run.vertex_model_resource_name:
+            raise TrainingServiceError("Model not registered in Model Registry")
+
+        if training_run.status not in [TrainingRun.STATUS_COMPLETED, TrainingRun.STATUS_NOT_BLESSED]:
+            raise TrainingServiceError(f"Cannot deploy model with status: {training_run.status}")
+
+        if not training_run.gcs_artifacts_path:
+            raise TrainingServiceError("No GCS artifacts path found for this training run")
+
+        # Build service name (must be lowercase, alphanumeric, and hyphens only)
+        service_name = f"{self.ml_model.slug}-serving".lower().replace('_', '-')
+        # Ensure name is valid (max 63 chars, starts with letter)
+        service_name = service_name[:63]
+        if not service_name[0].isalpha():
+            service_name = f"m-{service_name}"[:63]
+
+        # Get deployment config
+        deployment_config = training_run.deployment_config or {}
+        memory = deployment_config.get('memory', '4Gi')
+        cpu = deployment_config.get('cpu', '2')
+        min_instances = deployment_config.get('min_instances', 0)
+        max_instances = deployment_config.get('max_instances', 10)
+        timeout = deployment_config.get('timeout', '300')  # 5 minutes default
+
+        # Model path in GCS
+        model_path = f"{training_run.gcs_artifacts_path}/pushed_model"
+
+        # TF Serving container image
+        tf_serving_image = f"europe-central2-docker.pkg.dev/{self.project_id}/ml-serving/tf-serving:latest"
+
+        logger.info(
+            f"Deploying {training_run.display_name} to Cloud Run service: {service_name}"
+        )
+        logger.info(f"  Model path: {model_path}")
+        logger.info(f"  Image: {tf_serving_image}")
+        logger.info(f"  Config: {cpu} vCPU, {memory} memory, {min_instances}-{max_instances} instances")
+
+        try:
+            # Deploy using gcloud CLI
+            # Note: For production, consider using the Cloud Run Admin API directly
+            cmd = [
+                'gcloud', 'run', 'deploy', service_name,
+                f'--image={tf_serving_image}',
+                f'--region={self.REGION}',
+                f'--project={self.project_id}',
+                f'--memory={memory}',
+                f'--cpu={cpu}',
+                f'--min-instances={min_instances}',
+                f'--max-instances={max_instances}',
+                f'--timeout={timeout}',
+                f'--set-env-vars=MODEL_PATH={model_path},MODEL_NAME=recommender',
+                '--port=8501',
+                '--allow-unauthenticated',  # For testing; use IAM in production
+                '--format=value(status.url)',
+            ]
+
+            logger.info(f"Running: {' '.join(cmd)}")
+
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=300,  # 5 minute timeout for deployment
+            )
+
+            if result.returncode != 0:
+                error_msg = result.stderr or result.stdout or "Unknown error"
+                raise TrainingServiceError(f"Cloud Run deployment failed: {error_msg}")
+
+            service_url = result.stdout.strip()
+
+            if not service_url:
+                # Try to get the URL from describe
+                describe_cmd = [
+                    'gcloud', 'run', 'services', 'describe', service_name,
+                    f'--region={self.REGION}',
+                    f'--project={self.project_id}',
+                    '--format=value(status.url)',
+                ]
+                describe_result = subprocess.run(
+                    describe_cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                )
+                service_url = describe_result.stdout.strip()
+
+            logger.info(f"Cloud Run service deployed: {service_url}")
+
+            # Update TrainingRun
+            training_run.is_deployed = True
+            training_run.deployed_at = timezone.now()
+            training_run.endpoint_resource_name = service_url
+            training_run.save(update_fields=[
+                'is_deployed', 'deployed_at', 'endpoint_resource_name', 'updated_at'
+            ])
+
+            logger.info(
+                f"Deployed {training_run.display_name} to Cloud Run: {service_url}"
+            )
+
+            return service_url
+
+        except subprocess.TimeoutExpired:
+            raise TrainingServiceError("Cloud Run deployment timed out after 5 minutes")
+        except Exception as e:
+            logger.exception(f"Error deploying to Cloud Run: {e}")
+            raise TrainingServiceError(f"Failed to deploy to Cloud Run: {e}")
 
     def submit_training_pipeline(self, training_run: TrainingRun) -> TrainingRun:
         """

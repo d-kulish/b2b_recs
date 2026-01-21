@@ -561,6 +561,12 @@ class TrainingRun(models.Model):
         help_text="Full Vertex AI Model resource name"
     )
 
+    registered_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the model was registered to Model Registry"
+    )
+
     # =========================================================================
     # Deployment
     # =========================================================================

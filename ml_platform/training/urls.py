@@ -58,6 +58,11 @@ urlpatterns = [
         api.training_run_push,
         name='training_run_push'
     ),
+    path(
+        'api/training-runs/<int:training_run_id>/deploy-cloud-run/',
+        api.training_run_deploy_cloud_run,
+        name='training_run_deploy_cloud_run'
+    ),
 
     # ==========================================================================
     # Training Run Data Insights endpoints

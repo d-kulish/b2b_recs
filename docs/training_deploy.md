@@ -1,685 +1,765 @@
 # Model Deployment Guide
 
-This document describes the model deployment architecture for TFRS (TensorFlow Recommenders) models trained via TFX pipelines. It covers past solutions, technical considerations, and the recommended deployment approach.
+This document describes the model deployment architecture for TFRS (TensorFlow Recommenders) models trained via TFX pipelines. It covers the implementation details, configuration options, and usage instructions.
+
+**Last Updated:** 2026-01-21
+
+**Status:** Implemented
 
 ## Table of Contents
 
-1. [Background & Context](#background--context)
-2. [Past Solutions](#past-solutions)
-3. [Technical Deep Dive: Serving Architectures](#technical-deep-dive-serving-architectures)
-4. [TFRS Model Deployment Challenges](#tfrs-model-deployment-challenges)
-5. [Current TFX ServingModel Architecture](#current-tfx-servingmodel-architecture)
-6. [Deployment Options Comparison](#deployment-options-comparison)
-7. [Recommended Solution: Cloud Run + TF Serving](#recommended-solution-cloud-run--tf-serving)
-8. [Vertex AI Model Registry](#vertex-ai-model-registry)
-9. [Implementation Plan](#implementation-plan)
-10. [Reference Files](#reference-files)
+1. [Overview](#overview)
+2. [Architecture](#architecture)
+3. [Phase 1: Model Registry Integration](#phase-1-model-registry-integration)
+4. [Phase 2: Raw Tensor Serving Signature](#phase-2-raw-tensor-serving-signature)
+5. [Phase 3: TF Serving Container](#phase-3-tf-serving-container)
+6. [Phase 4: Deployment API & UI](#phase-4-deployment-api--ui)
+7. [Configuration Reference](#configuration-reference)
+8. [Usage Guide](#usage-guide)
+9. [Troubleshooting](#troubleshooting)
 
 ---
 
-## Background & Context
+## Overview
 
-### The Problem
+The deployment system enables one-click deployment of trained recommendation models to Cloud Run with TensorFlow Serving. Key features:
 
-After training TFRS models (Retrieval, Ranking, Multitask) via TFX pipelines on Vertex AI, we need to:
+- **Automatic Model Registration**: Models are registered to Vertex AI Model Registry after training completion
+- **Simple JSON Interface**: Raw tensor inputs for easy client integration (no protobuf serialization required)
+- **Serverless Deployment**: Cloud Run with scale-to-zero for cost efficiency
+- **Automatic Batching**: TF Serving handles request batching for GPU efficiency
 
-1. **Register** the trained model for versioning and tracking
-2. **Deploy** the model to a serving endpoint for inference
-3. Support **batch processing** for efficient GPU utilization
-4. Achieve **<20ms latency** for 5K-20K product catalogs
+### Architecture Decisions
 
-### Why This Is Non-Trivial
+| Decision | Choice | Rationale |
+|----------|--------|-----------|
+| **Serving Interface** | Raw Tensors (Simple JSON) | Simple client experience; same as past FastAPI solution |
+| **Deployment Target** | Cloud Run + TF Serving | Scale-to-zero minimizes costs during development |
+| **Model Types** | Retrieval first | Polish one type before expanding to Ranking/Multitask |
+| **Container Registry** | Artifact Registry | Regional (europe-central2), integrated with Cloud Build |
+| **TF Serving Version** | 2.19.0 | Latest stable version available |
 
-TFRS models have unique deployment challenges that standard TensorFlow models don't face:
+### Client Interface
 
-- Two-Tower architecture (Query + Candidate towers)
-- FactorizedTopK metric layer (training-only, doesn't serialize well)
-- Need to pre-compute candidate embeddings
-- Custom serving signatures for recommendation output format
+**Request:**
+```json
+POST https://{service-name}.run.app/v1/models/recommender:predict
+{
+  "instances": [
+    {
+      "customer_id": "CUST123",
+      "city": "Warsaw",
+      "revenue": 5000.0,
+      "segment": "enterprise"
+    }
+  ]
+}
+```
+
+**Response:**
+```json
+{
+  "predictions": [
+    {
+      "product_ids": ["PROD001", "PROD002", "PROD003", ...],
+      "scores": [0.95, 0.87, 0.82, ...]
+    }
+  ]
+}
+```
 
 ---
 
-## Past Solutions
+## Architecture
 
-### Custom Cloud Run + FastAPI Service
-
-**Location:** `past/recs/cloud_run_service/main.py`
-
-**What It Does:**
-```python
-# Loads SavedModel from GCS
-saved_model = tf.saved_model.load(saved_model_path)
-
-# Calls serving signature with RAW TENSORS
-result = saved_model.signatures['serving_default'](
-    customer_id=tf.constant(customer_id),
-    city=tf.constant(city),
-    revenue=tf.constant(revenue),
-    timestamp=tf.constant(timestamp, dtype=tf.int64)
-)
 ```
-
-**Why It Was Created:**
-1. Vertex AI Endpoints failed to deploy TFRS models (FactorizedTopK serialization issues)
-2. Needed custom response format (product_ids + scores)
-3. Wanted simple raw tensor inputs (not serialized tf.Examples)
-
-**Pros:**
-- Full control over serving logic
-- Simple client interface (raw values, not protobufs)
-- Easy to debug
-
-**Cons:**
-- ~300 lines of custom code to maintain
-- Manual batch processing implementation required
-- No automatic optimizations
-
-### Custom Trainer with Embedded Serving Function
-
-**Location:** `past/recs/trainer/main.py`
-
-**What It Does:**
-```python
-# Lines 405-474: Creates serving function
-def _get_simple_serve_fn(model, product_ids, ...):
-    # Pre-compute ALL product embeddings at model save time
-    all_candidate_embeddings = ...  # Computed once, embedded in graph
-
-    @tf.function
-    def serve_fn(customer_id, city, revenue, timestamp):
-        query_embeddings = model.query_model(...)
-        similarities = tf.linalg.matmul(query_embeddings, all_candidate_embeddings, transpose_b=True)
-        top_scores, top_indices = tf.nn.top_k(similarities, k=100)
-        return {'product_ids': ..., 'scores': top_scores}
-
-    return serve_fn
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         DEPLOYMENT ARCHITECTURE                              │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  TFX Pipeline (Vertex AI)                                                   │
+│       │                                                                      │
+│       ▼                                                                      │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │ Pusher Component                                                     │   │
+│  │   - Saves ServingModel to gs://bucket/training-runs/{id}/pushed_model│   │
+│  │   - Model has RAW TENSOR signature (simple JSON interface)          │   │
+│  │   - Self-contained (vocabs + embeddings embedded)                   │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│       │                                                                      │
+│       ▼ (automatic after pipeline completion)                               │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │ Vertex AI Model Registry                                             │   │
+│  │   - Auto-registered via _register_to_model_registry()               │   │
+│  │   - Labels: training_run_id, model_type, metrics, is_blessed        │   │
+│  │   - Enables version tracking and lineage                            │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│       │                                                                      │
+│       ▼ (one-click from UI)                                                 │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │ Cloud Run Service                                                    │   │
+│  │   ┌─────────────────────────────────────────────────────────────┐   │   │
+│  │   │ TF Serving Container (europe-central2-docker.pkg.dev/...)   │   │   │
+│  │   │                                                              │   │   │
+│  │   │ startup.sh:                                                  │   │   │
+│  │   │   1. Downloads model from GCS (MODEL_PATH env var)          │   │   │
+│  │   │   2. Starts tensorflow_model_server with batching           │   │   │
+│  │   │                                                              │   │   │
+│  │   │ Endpoints:                                                   │   │   │
+│  │   │   - REST: POST /v1/models/recommender:predict               │   │   │
+│  │   │   - gRPC: port 8500                                         │   │   │
+│  │   └─────────────────────────────────────────────────────────────┘   │   │
+│  │                                                                      │   │
+│  │   Configuration:                                                     │   │
+│  │   - Memory: 4Gi (configurable)                                      │   │
+│  │   - CPU: 2 (configurable)                                           │   │
+│  │   - Min instances: 0 (scale to zero)                                │   │
+│  │   - Max instances: 10                                               │   │
+│  │   - Batching: enabled (max 64 requests)                             │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
-
-**Key Design Decisions:**
-1. **Pre-computed embeddings**: All product embeddings computed at save time, stored in the graph
-2. **Brute-force top-k**: Simple matrix multiplication + top_k (efficient for <20K products)
-3. **Raw tensor signature**: Accepts individual tensor inputs, not serialized Examples
-4. **Self-contained model**: No external vocab files or embedding files needed at inference
-
-**Why This Pattern Works:**
-- Removes FactorizedTopK (the problematic training-only layer)
-- All vocabularies embedded via StringLookup layers
-- Single SavedModel contains everything needed for inference
 
 ---
 
-## Technical Deep Dive: Serving Architectures
+## Phase 1: Model Registry Integration
 
-### TensorFlow Serving
+### Implementation
 
-TensorFlow Serving is Google's production model server (C++ binary):
+Models are automatically registered to Vertex AI Model Registry after training pipeline completion.
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                    TENSORFLOW SERVING                                │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                      │
-│  Input: SavedModel directory                                        │
-│                                                                      │
-│  Provides automatically:                                            │
-│    - REST API: POST /v1/models/{name}:predict                      │
-│    - gRPC API: PredictionService.Predict()                         │
-│    - Automatic request batching                                     │
-│    - Model version management                                       │
-│    - Health checks                                                  │
-│                                                                      │
-│  You write: ZERO serving code                                       │
-│                                                                      │
-└─────────────────────────────────────────────────────────────────────┘
-```
+**File:** `ml_platform/training/services.py`
 
-**TF Serving is software, not a cloud service.** It must run on a compute platform:
-- Cloud Run (containerized)
-- GCE VM
-- GKE
-- Vertex AI Endpoints (managed TF Serving)
+**Method:** `_register_to_model_registry()`
 
-### Serialized tf.Examples vs Raw Tensors
-
-**Serialized tf.Examples** (TFX/TF Serving standard):
 ```python
-# Client must serialize inputs to protobuf
-example = tf.train.Example(features=tf.train.Features(feature={
-    'customer_id': tf.train.Feature(bytes_list=tf.train.BytesList(value=[b'CUST123'])),
-    'city': tf.train.Feature(bytes_list=tf.train.BytesList(value=[b'NYC'])),
-    'revenue': tf.train.Feature(float_list=tf.train.FloatList(value=[100.0])),
-}))
-serialized = example.SerializeToString()
+def _register_to_model_registry(self, training_run: TrainingRun) -> None:
+    """
+    Register trained model to Vertex AI Model Registry.
+    Called automatically after pipeline completion.
+    """
+    # Build display name with version
+    model_name = f"{self.ml_model.slug}-v{training_run.run_number}"
+    artifact_uri = f"{training_run.gcs_artifacts_path}/pushed_model"
 
-# Send binary blob to model
-result = model.signatures['serving_default'](examples=tf.constant([serialized]))
+    # Labels for tracking (values must be strings, max 63 chars)
+    labels = {
+        'training_run_id': str(training_run.id),
+        'model_endpoint_id': str(self.ml_model.id),
+        'model_type': training_run.model_type,
+        'is_blessed': str(training_run.is_blessed).lower(),
+    }
+
+    # Add metrics as labels
+    if training_run.recall_at_100:
+        labels['recall_at_100'] = f"{training_run.recall_at_100:.4f}"
+
+    model = aiplatform.Model.upload(
+        display_name=model_name,
+        artifact_uri=artifact_uri,
+        serving_container_image_uri="tensorflow/serving:2.19.0",
+        labels=labels,
+    )
+
+    # Update TrainingRun
+    training_run.vertex_model_resource_name = model.resource_name
+    training_run.vertex_model_name = model.display_name
+    training_run.registered_at = timezone.now()
+    training_run.save()
 ```
 
-**Raw Tensors** (simpler client code):
+### Trigger Point
+
+Registration is triggered in `_extract_results()` after blessing status is determined:
+
 ```python
-# Client sends values directly
-result = model.signatures['serving_default'](
-    customer_id=tf.constant(['CUST123']),
-    city=tf.constant(['NYC']),
-    revenue=tf.constant([100.0])
-)
+# After saving is_blessed status
+training_run.save(update_fields=['is_blessed'])
+
+# Register to Model Registry (regardless of blessing status)
+try:
+    self._register_to_model_registry(training_run)
+except Exception as e:
+    logger.warning(f"Model registration failed (non-fatal): {e}")
 ```
 
-**Current TFX ServingModel uses serialized tf.Examples** because:
-- Standard format for TF Serving
-- Same format as TFRecords (training data)
-- Enables automatic batching optimizations
+### Database Fields
 
-**Trade-off:**
-- Serialized: More complex client, but standard and optimized
-- Raw tensors: Simpler client, but non-standard
+**TrainingRun model** (`ml_platform/training/models.py`):
 
-### Automatic Batching in TF Serving
+| Field | Type | Description |
+|-------|------|-------------|
+| `vertex_model_resource_name` | CharField(500) | Full Vertex AI Model resource name |
+| `vertex_model_name` | CharField(255) | Display name in Model Registry |
+| `registered_at` | DateTimeField | When the model was registered |
 
-TF Serving can batch multiple requests for GPU efficiency:
+### Viewing in Console
 
-```
-Request 1 (t=0ms)  ──┐
-Request 2 (t=2ms)  ──┼──► TF Serving waits up to 10ms ──► Single GPU call ──► Split results
-Request 3 (t=5ms)  ──┘
-```
-
-Configuration (`batching_parameters.txt`):
-```
-max_batch_size { value: 128 }
-batch_timeout_micros { value: 10000 }
-num_batch_threads { value: 4 }
-pad_variable_length_inputs: true
-```
-
-This is **automatic** with TF Serving. With FastAPI, you must implement batching manually.
+Registered models appear in:
+- Google Cloud Console → Vertex AI → Model Registry
+- Filter by labels: `training_run_id`, `model_type`, `is_blessed`
 
 ---
 
-## TFRS Model Deployment Challenges
+## Phase 2: Raw Tensor Serving Signature
 
-### Why Raw TFRS Models Don't Deploy Well
+### Implementation
 
-A typical TFRS Retrieval model:
+The ServingModel is generated with a dynamic input signature based on buyer features, enabling simple JSON requests.
+
+**File:** `ml_platform/configs/services.py`
+
+### Helper Method: `_generate_raw_tensor_signature()`
+
+Generates TensorFlow input signature based on buyer features from FeatureConfig:
 
 ```python
-class RetrievalModel(tfrs.Model):
-    def __init__(self):
-        self.query_tower = QueryModel(...)
-        self.candidate_tower = CandidateModel(...)
+def _generate_raw_tensor_signature(self) -> tuple:
+    """
+    Generate raw tensor input signature based on buyer features.
 
-        # THIS IS THE PROBLEM
-        self.task = tfrs.tasks.Retrieval(
-            metrics=tfrs.metrics.FactorizedTopK(
-                candidates=candidate_dataset.batch(128).map(self.candidate_tower)
-            )
+    Returns:
+        tuple: (signature_specs, param_names, raw_features_dict_lines)
+    """
+    signature_specs = []
+    param_names = []
+    raw_features_lines = []
+
+    # Type mapping: BigQuery type → TensorFlow dtype
+    type_mapping = {
+        'STRING': 'tf.string',
+        'BYTES': 'tf.string',
+        'INT64': 'tf.int64',
+        'INTEGER': 'tf.int64',
+        'FLOAT64': 'tf.float32',
+        'FLOAT': 'tf.float32',
+        'NUMERIC': 'tf.float32',
+        'TIMESTAMP': 'tf.int64',
+        'DATETIME': 'tf.int64',
+        'DATE': 'tf.string',
+    }
+
+    for feature in self.buyer_features:
+        col_name = feature.get('display_name') or feature.get('column')
+        bq_type = (feature.get('bq_type') or feature.get('data_type') or 'STRING').upper()
+        tf_dtype = type_mapping.get(bq_type, 'tf.string')
+
+        signature_specs.append(
+            f"        tf.TensorSpec(shape=[None], dtype={tf_dtype}, name='{col_name}'),"
         )
+        param_names.append(col_name)
+        raw_features_lines.append(f"            '{col_name}': {col_name},")
+
+    return signature_specs, param_names, raw_features_lines
 ```
 
-**FactorizedTopK issues:**
-1. Loads entire candidate dataset into memory during model construction
-2. References external dataset (can't serialize)
-3. Designed for training metrics, not serving
+### Generated ServingModel
 
-### The Solution: ServingModel Wrapper
-
-Instead of deploying the raw TFRS model, we create a wrapper:
+The `_generate_brute_force_serve_fn()` method generates:
 
 ```python
 class ServingModel(tf.keras.Model):
-    def __init__(self, retrieval_model, product_ids, product_embeddings):
-        # Store pre-computed embeddings as model variables
-        self.product_ids = tf.Variable(product_ids, trainable=False)
-        self.product_embeddings = tf.Variable(product_embeddings, trainable=False)
-        self.query_tower = retrieval_model.query_tower
-
-    @tf.function
-    def serve(self, features):
-        query_emb = self.query_tower(features)
-        similarities = tf.matmul(query_emb, self.product_embeddings, transpose_b=True)
-        top_scores, top_indices = tf.nn.top_k(similarities, k=100)
-        return {'product_ids': tf.gather(self.product_ids, top_indices), 'scores': top_scores}
-```
-
-**This ServingModel:**
-- ✅ No FactorizedTopK
-- ✅ Pre-computed embeddings stored as tf.Variables
-- ✅ Standard TF operations only
-- ✅ Works with TF Serving and Vertex AI Endpoints
-
----
-
-## Current TFX ServingModel Architecture
-
-**Location:** `ml_platform/configs/services.py` (lines 2623-2680)
-
-### Retrieval ServingModel
-
-```python
-class ServingModel(tf.keras.Model):
-    """Wrapper model for serving that properly tracks all TFX Transform resources."""
+    """
+    Wrapper model for serving with raw tensor inputs.
+    Accepts simple JSON: {"customer_id": "X", "city": "Y", "revenue": 100.0, ...}
+    """
 
     def __init__(self, retrieval_model, tf_transform_output, product_ids, product_embeddings):
         super().__init__()
         self.retrieval_model = retrieval_model
-
-        # TFT layer contains all vocabularies (embedded in model)
         self.tft_layer = tf_transform_output.transform_features_layer()
-        self._raw_feature_spec = tf_transform_output.raw_feature_spec()
-
-        # Pre-computed embeddings (embedded in model)
-        self.product_ids = tf.Variable(product_ids, trainable=False, name='product_ids')
-        self.product_embeddings = tf.Variable(product_embeddings, trainable=False, name='product_embeddings')
+        self.product_ids = tf.Variable(product_ids, trainable=False)
+        self.product_embeddings = tf.Variable(product_embeddings, trainable=False)
 
     @tf.function(input_signature=[
-        tf.TensorSpec(shape=[None], dtype=tf.string, name='examples')
+        tf.TensorSpec(shape=[None], dtype=tf.string, name='customer_id'),
+        tf.TensorSpec(shape=[None], dtype=tf.string, name='city'),
+        tf.TensorSpec(shape=[None], dtype=tf.float32, name='revenue'),
+        # ... dynamically generated based on buyer features
     ])
-    def serve(self, serialized_examples):
-        # Parse serialized tf.Examples
-        parsed_features = tf.io.parse_example(serialized_examples, self._raw_feature_spec)
+    def serve(self, customer_id, city, revenue, ...):
+        # Build raw features dict from inputs
+        raw_features = {
+            'customer_id': customer_id,
+            'city': city,
+            'revenue': revenue,
+            # ...
+        }
 
-        # Apply TFT preprocessing (uses embedded vocabularies)
-        transformed_features = self.tft_layer(parsed_features)
+        # Apply TFT preprocessing (vocabularies, normalization, etc.)
+        transformed_features = self.tft_layer(raw_features)
 
-        # Get query embeddings
+        # Get query embeddings from buyer tower
         query_embeddings = self.retrieval_model.query_tower(transformed_features)
 
-        # Brute-force similarity search
-        similarities = tf.linalg.matmul(query_embeddings, self.product_embeddings, transpose_b=True)
+        # Compute similarities with all product embeddings
+        similarities = tf.linalg.matmul(
+            query_embeddings,
+            self.product_embeddings,
+            transpose_b=True
+        )
+
+        # Get top-100 recommendations
         top_scores, top_indices = tf.nn.top_k(similarities, k=100)
+        recommended_products = tf.gather(self.product_ids, top_indices)
 
         return {
-            'product_ids': tf.gather(self.product_ids, top_indices),
+            'product_ids': recommended_products,
             'scores': top_scores
         }
 ```
 
-### Key Points
+### Type Mapping
 
-1. **Self-contained**: All vocabularies embedded via TFT layer, all embeddings pre-computed
-2. **Serialized Examples input**: Standard TF Serving format
-3. **No external dependencies**: No vocab files, no embedding files needed at inference
-4. **ScaNN support**: Optional ScaNN index for faster ANN search (configured at training time)
-
-### Model Types Supported
-
-| Model Type | ServingModel Class | Signatures |
-|------------|-------------------|------------|
-| Retrieval | `ServingModel` | `serving_default` (top-K products) |
-| Ranking | `RankingServingModel` | `serving_default` (predicted scores) |
-| Multitask | `MultitaskServingModel` | `serving_default` (retrieval), `serve_ranking` (ranking) |
+| BigQuery Type | TensorFlow dtype | JSON Example |
+|---------------|------------------|--------------|
+| STRING, BYTES | tf.string | `"customer_id": "CUST123"` |
+| INT64, INTEGER | tf.int64 | `"timestamp": 1705849200` |
+| FLOAT64, FLOAT, NUMERIC | tf.float32 | `"revenue": 5000.0` |
+| TIMESTAMP, DATETIME | tf.int64 | `"created_at": 1705849200` |
+| DATE | tf.string | `"date": "2026-01-21"` |
 
 ---
 
-## Deployment Options Comparison
+## Phase 3: TF Serving Container
 
-| Option | Infrastructure | Batching | Cost Model | Complexity |
-|--------|---------------|----------|------------|------------|
-| **Vertex AI Endpoints** | Managed | Automatic | Node-hours + predictions | Lowest |
-| **Cloud Run + TF Serving** | Container | Automatic (TF Serving) | Per request, scale to zero | Low |
-| **Cloud Run + FastAPI** | Container | Manual | Per request, scale to zero | Medium |
-| **GKE + TF Serving** | Kubernetes | Automatic | Node-hours | High |
-
-### Vertex AI Endpoints
-
-**Pros:**
-- Zero infrastructure code
-- Auto-scaling, versioning, traffic splitting built-in
-- Monitoring and logging built-in
-- Managed TF Serving (Google handles everything)
-
-**Cons:**
-- Costs money even at low traffic (minimum node hours)
-- Less control over serving configuration
-- May have issues with custom model architectures (past experience)
-
-**Cost:** ~$0.10/node-hour + $0.00005/prediction (varies by machine type)
-
-### Cloud Run + TF Serving (RECOMMENDED)
-
-**Pros:**
-- Scale to zero (no cost when not in use)
-- Pay per request only
-- TF Serving handles batching automatically
-- Full control over container configuration
-- No custom serving code needed
-
-**Cons:**
-- Must build and manage container
-- Cold start latency (first request after scale-down)
-- Must configure batching parameters manually
-
-**Cost:** ~$0.00001 per request + compute time (scale to zero = $0 when idle)
-
-### Cloud Run + FastAPI
-
-**Pros:**
-- Full control over everything
-- Simple raw tensor API
-- Easy to debug
-
-**Cons:**
-- Must write and maintain serving code (~300 lines)
-- Must implement batching manually
-- No automatic optimizations
-
----
-
-## Recommended Solution: Cloud Run + TF Serving
-
-Given the requirements:
-- Development phase (minimize costs)
-- Scale to zero capability
-- Automatic batching
-- Minimal custom code
-
-**Recommendation: Cloud Run + TensorFlow Serving**
-
-### Architecture
+### Directory Structure
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                    DEPLOYMENT ARCHITECTURE                           │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                      │
-│  TFX Pipeline (Vertex AI)                                           │
-│       │                                                              │
-│       ▼                                                              │
-│  ┌─────────────────────────────────────────────────────────────┐   │
-│  │ Pusher Component                                             │   │
-│  │   - Saves ServingModel to gs://bucket/pushed_model/         │   │
-│  │   - Model is SELF-CONTAINED (vocabs + embeddings embedded)  │   │
-│  └─────────────────────────────────────────────────────────────┘   │
-│       │                                                              │
-│       ▼                                                              │
-│  ┌─────────────────────────────────────────────────────────────┐   │
-│  │ Vertex AI Model Registry (Optional but recommended)         │   │
-│  │   - Register model version                                   │   │
-│  │   - Track lineage (training run → model)                    │   │
-│  │   - Store metrics as labels                                  │   │
-│  └─────────────────────────────────────────────────────────────┘   │
-│       │                                                              │
-│       ▼                                                              │
-│  ┌─────────────────────────────────────────────────────────────┐   │
-│  │ Cloud Run Deployment                                         │   │
-│  │                                                              │   │
-│  │   Container: TensorFlow Serving                              │   │
-│  │   ┌─────────────────────────────────────────────────────┐   │   │
-│  │   │ FROM tensorflow/serving:latest                      │   │   │
-│  │   │ ENV MODEL_BASE_PATH=/models                         │   │   │
-│  │   │ ENV MODEL_NAME=recommender                          │   │   │
-│  │   │ # Model loaded from GCS at startup                  │   │   │
-│  │   └─────────────────────────────────────────────────────┘   │   │
-│  │                                                              │   │
-│  │   Endpoints:                                                 │   │
-│  │   - POST /v1/models/recommender:predict                     │   │
-│  │                                                              │   │
-│  │   Features:                                                  │   │
-│  │   - Automatic batching                                       │   │
-│  │   - Scale to zero                                           │   │
-│  │   - Auto-scaling on load                                    │   │
-│  │                                                              │   │
-│  └─────────────────────────────────────────────────────────────┘   │
-│                                                                      │
-└─────────────────────────────────────────────────────────────────────┘
+deploy/tf_serving/
+├── Dockerfile           # TF Serving container with GCS support
+├── startup.sh           # Model download and server startup
+├── batching_config.txt  # Request batching configuration
+└── cloudbuild.yaml      # Cloud Build configuration
 ```
 
 ### Dockerfile
 
-```dockerfile
-FROM tensorflow/serving:2.15.0
+**File:** `deploy/tf_serving/Dockerfile`
 
-# Environment variables for TF Serving
+```dockerfile
+FROM tensorflow/serving:2.19.0
+
+# Install gsutil for GCS model download
+RUN apt-get update && apt-get install -y curl gnupg && \
+    echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] http://packages.cloud.google.com/apt cloud-sdk main" | \
+    tee -a /etc/apt/sources.list.d/google-cloud-sdk.list && \
+    curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | \
+    apt-key --keyring /usr/share/keyrings/cloud.google.gpg add - && \
+    apt-get update && apt-get install -y google-cloud-cli && \
+    rm -rf /var/lib/apt/lists/*
+
+# Copy configuration files
+COPY batching_config.txt /etc/tf_serving/batching_config.txt
+COPY startup.sh /startup.sh
+RUN chmod +x /startup.sh
+
+# Environment variables (can be overridden at runtime)
 ENV MODEL_BASE_PATH=/models
 ENV MODEL_NAME=recommender
+ENV PORT=8501
 
-# Batching configuration (optional)
-COPY batching_config.txt /etc/tf_serving/batching_config.txt
-ENV TF_SERVING_BATCHING_PARAMETERS_FILE=/etc/tf_serving/batching_config.txt
+EXPOSE 8501
 
-# The model will be loaded from GCS via MODEL_PATH environment variable
-# Set at deployment time: --set-env-vars=MODEL_PATH=gs://bucket/pushed_model
+ENTRYPOINT ["/startup.sh"]
+```
 
-# TF Serving entrypoint (built into base image)
-# Serves on port 8501 (REST) and 8500 (gRPC)
+### Startup Script
+
+**File:** `deploy/tf_serving/startup.sh`
+
+```bash
+#!/bin/bash
+set -e
+
+# MODEL_PATH must be set to GCS path
+if [ -z "$MODEL_PATH" ]; then
+    echo "ERROR: MODEL_PATH environment variable not set"
+    exit 1
+fi
+
+# Create model directory structure (TF Serving expects /models/{name}/{version}/)
+MODEL_DIR="/models/${MODEL_NAME:-recommender}/1"
+mkdir -p "$MODEL_DIR"
+
+# Download model from GCS
+echo "Downloading model from $MODEL_PATH..."
+gsutil -m cp -r "$MODEL_PATH/*" "$MODEL_DIR/"
+
+# Verify model was downloaded
+if [ ! -f "$MODEL_DIR/saved_model.pb" ]; then
+    echo "ERROR: saved_model.pb not found"
+    exit 1
+fi
+
+# Start TF Serving with batching enabled
+tensorflow_model_server \
+    --port=8500 \
+    --rest_api_port=${PORT:-8501} \
+    --model_name=${MODEL_NAME:-recommender} \
+    --model_base_path=/models/${MODEL_NAME:-recommender} \
+    --enable_batching=true \
+    --batching_parameters_file=/etc/tf_serving/batching_config.txt
 ```
 
 ### Batching Configuration
 
-```text
-# batching_config.txt
+**File:** `deploy/tf_serving/batching_config.txt`
+
+```
+# Maximum batch size for inference
 max_batch_size { value: 64 }
+
+# Maximum time to wait for a batch to fill (microseconds)
+# 10ms = good balance between latency and throughput
 batch_timeout_micros { value: 10000 }
+
+# Maximum number of batches waiting in queue
 max_enqueued_batches { value: 100 }
+
+# Number of threads for processing batches
 num_batch_threads { value: 4 }
+
+# Allow variable-length inputs
 pad_variable_length_inputs: true
 ```
 
-### Deployment Commands
+### Cloud Build Configuration
 
-```bash
-# Build container
-gcloud builds submit --tag gcr.io/${PROJECT_ID}/recommender-serving
+**File:** `deploy/tf_serving/cloudbuild.yaml`
 
-# Deploy to Cloud Run
-gcloud run deploy recommender-prod \
-  --image=gcr.io/${PROJECT_ID}/recommender-serving \
-  --port=8501 \
-  --memory=4Gi \
-  --cpu=2 \
-  --min-instances=0 \
-  --max-instances=10 \
-  --set-env-vars="MODEL_PATH=gs://bucket/training-runs/47/pushed_model" \
-  --allow-unauthenticated
+```yaml
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'europe-central2-docker.pkg.dev/$PROJECT_ID/ml-serving/tf-serving:latest'
+      - '-t'
+      - 'europe-central2-docker.pkg.dev/$PROJECT_ID/ml-serving/tf-serving:$SHORT_SHA'
+      - '.'
+    dir: 'deploy/tf_serving'
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'europe-central2-docker.pkg.dev/$PROJECT_ID/ml-serving/tf-serving:latest']
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'europe-central2-docker.pkg.dev/$PROJECT_ID/ml-serving/tf-serving:$SHORT_SHA']
+
+images:
+  - 'europe-central2-docker.pkg.dev/$PROJECT_ID/ml-serving/tf-serving:latest'
+  - 'europe-central2-docker.pkg.dev/$PROJECT_ID/ml-serving/tf-serving:$SHORT_SHA'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: 'E2_HIGHCPU_8'
+
+timeout: '600s'
 ```
 
-### Client Code
+### Building the Container
+
+```bash
+# From project root
+SHORT_SHA=$(git rev-parse --short HEAD)
+gcloud builds submit --config=deploy/tf_serving/cloudbuild.yaml --substitutions=SHORT_SHA=$SHORT_SHA .
+```
+
+### Container Registry
+
+- **Location:** `europe-central2-docker.pkg.dev/b2b-recs/ml-serving/tf-serving`
+- **Tags:** `latest`, `{git-short-sha}`
+
+---
+
+## Phase 4: Deployment API & UI
+
+### TrainingService Method
+
+**File:** `ml_platform/training/services.py`
+
+**Method:** `deploy_to_cloud_run()`
+
+```python
+def deploy_to_cloud_run(self, training_run: TrainingRun) -> str:
+    """
+    Deploy trained model to Cloud Run with TF Serving.
+
+    Args:
+        training_run: TrainingRun instance to deploy
+
+    Returns:
+        str: Cloud Run service URL
+
+    Raises:
+        TrainingServiceError: If deployment fails
+    """
+    # Validate prerequisites
+    if not training_run.vertex_model_resource_name:
+        raise TrainingServiceError("Model not registered in Model Registry")
+
+    if training_run.status not in [TrainingRun.STATUS_COMPLETED, TrainingRun.STATUS_NOT_BLESSED]:
+        raise TrainingServiceError(f"Cannot deploy model with status: {training_run.status}")
+
+    # Build service name
+    service_name = f"{self.ml_model.slug}-serving".lower().replace('_', '-')
+
+    # Get deployment config
+    deployment_config = training_run.deployment_config or {}
+    memory = deployment_config.get('memory', '4Gi')
+    cpu = deployment_config.get('cpu', '2')
+    min_instances = deployment_config.get('min_instances', 0)
+    max_instances = deployment_config.get('max_instances', 10)
+
+    # Model path in GCS
+    model_path = f"{training_run.gcs_artifacts_path}/pushed_model"
+
+    # TF Serving container image
+    tf_serving_image = f"europe-central2-docker.pkg.dev/{self.project_id}/ml-serving/tf-serving:latest"
+
+    # Deploy using gcloud CLI
+    cmd = [
+        'gcloud', 'run', 'deploy', service_name,
+        f'--image={tf_serving_image}',
+        f'--region={self.REGION}',
+        f'--project={self.project_id}',
+        f'--memory={memory}',
+        f'--cpu={cpu}',
+        f'--min-instances={min_instances}',
+        f'--max-instances={max_instances}',
+        f'--set-env-vars=MODEL_PATH={model_path},MODEL_NAME=recommender',
+        '--port=8501',
+        '--allow-unauthenticated',
+        '--format=value(status.url)',
+    ]
+
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+    service_url = result.stdout.strip()
+
+    # Update TrainingRun
+    training_run.is_deployed = True
+    training_run.deployed_at = timezone.now()
+    training_run.endpoint_resource_name = service_url
+    training_run.save()
+
+    return service_url
+```
+
+### API Endpoint
+
+**File:** `ml_platform/training/api.py`
+
+**Endpoint:** `POST /api/training-runs/{id}/deploy-cloud-run/`
+
+```python
+@csrf_exempt
+@require_http_methods(["POST"])
+def training_run_deploy_cloud_run(request, training_run_id):
+    """Deploy a trained model to Cloud Run with TF Serving."""
+
+    training_run = TrainingRun.objects.get(id=training_run_id)
+
+    # Validate state
+    if training_run.status not in [TrainingRun.STATUS_COMPLETED, TrainingRun.STATUS_NOT_BLESSED]:
+        return JsonResponse({'error': 'Invalid status'}, status=400)
+
+    if not training_run.vertex_model_resource_name:
+        return JsonResponse({'error': 'Model not registered'}, status=400)
+
+    # Deploy
+    service = TrainingService(model_endpoint)
+    endpoint_url = service.deploy_to_cloud_run(training_run)
+
+    return JsonResponse({
+        'success': True,
+        'endpoint_url': endpoint_url,
+        'message': f"Model deployed to Cloud Run: {endpoint_url}"
+    })
+```
+
+### URL Route
+
+**File:** `ml_platform/training/urls.py`
+
+```python
+path(
+    'api/training-runs/<int:training_run_id>/deploy-cloud-run/',
+    api.training_run_deploy_cloud_run,
+    name='training_run_deploy_cloud_run'
+),
+```
+
+### UI Integration
+
+**File:** `static/js/training_cards.js`
+
+The "Cloud Run" button appears for completed training runs that are not yet deployed:
+
+```javascript
+// Deploy to Cloud Run button (for completed runs with registered model)
+if (allowedActions.includes('deployCloudRun') && run.status === 'completed' && !run.is_deployed) {
+    primaryButtons.push(`
+        <button class="card-action-btn deploy"
+                onclick="event.stopPropagation(); TrainingCards.deployRunCloudRun(${run.id})"
+                title="Deploy to Cloud Run">Cloud Run</button>
+    `);
+}
+```
+
+---
+
+## Configuration Reference
+
+### Deployment Configuration
+
+Default values can be overridden via `training_run.deployment_config`:
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `memory` | `4Gi` | Cloud Run instance memory |
+| `cpu` | `2` | Number of vCPUs |
+| `min_instances` | `0` | Minimum instances (0 = scale to zero) |
+| `max_instances` | `10` | Maximum instances |
+| `timeout` | `300` | Request timeout in seconds |
+
+### Batching Configuration
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `max_batch_size` | `64` | Maximum requests per batch |
+| `batch_timeout_micros` | `10000` | Wait time for batch (10ms) |
+| `max_enqueued_batches` | `100` | Maximum pending batches |
+| `num_batch_threads` | `4` | Batch processing threads |
+
+### Environment Variables
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `MODEL_PATH` | GCS path to model | `gs://bucket/training-runs/47/pushed_model` |
+| `MODEL_NAME` | TF Serving model name | `recommender` |
+| `PORT` | REST API port | `8501` |
+
+---
+
+## Usage Guide
+
+### Deploying a Model
+
+1. **Train a model** via the Training page
+2. Wait for pipeline completion (model is automatically registered)
+3. Click **"Cloud Run"** button on the training card
+4. Confirm deployment
+5. Copy the endpoint URL from the response
+
+### Making Predictions
 
 ```python
 import requests
-import tensorflow as tf
 
-def get_recommendations(customer_id: str, city: str, revenue: float, timestamp: int):
-    # Build tf.Example
-    example = tf.train.Example(features=tf.train.Features(feature={
-        'customer_id': tf.train.Feature(bytes_list=tf.train.BytesList(value=[customer_id.encode()])),
-        'city': tf.train.Feature(bytes_list=tf.train.BytesList(value=[city.encode()])),
-        'revenue': tf.train.Feature(float_list=tf.train.FloatList(value=[revenue])),
-        'timestamp': tf.train.Feature(int64_list=tf.train.Int64List(value=[timestamp])),
-    }))
+# Get recommendations
+response = requests.post(
+    "https://{service-name}.run.app/v1/models/recommender:predict",
+    json={
+        "instances": [
+            {
+                "customer_id": "CUST123",
+                "city": "Warsaw",
+                "revenue": 5000.0,
+                "segment": "enterprise"
+            }
+        ]
+    }
+)
 
-    # Serialize
-    serialized = example.SerializeToString()
-
-    # Send to TF Serving
-    response = requests.post(
-        "https://recommender-prod-xxx.run.app/v1/models/recommender:predict",
-        json={"instances": [{"b64": base64.b64encode(serialized).decode()}]}
-    )
-
-    return response.json()
+result = response.json()
+product_ids = result['predictions'][0]['product_ids']
+scores = result['predictions'][0]['scores']
 ```
 
----
-
-## Vertex AI Model Registry
-
-### What It Is
-
-Vertex AI Model Registry is a centralized catalog for ML models:
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                    VERTEX AI MODEL REGISTRY                          │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                      │
-│  Model: "metro-recommender"                                         │
-│  ├── Version 1 (2026-01-15)                                         │
-│  │   ├── Artifacts: gs://bucket/training-runs/42/pushed_model      │
-│  │   ├── Labels: {training_run_id: 42, recall_at_100: 0.47}        │
-│  │   └── Status: Archived                                           │
-│  │                                                                   │
-│  ├── Version 2 (2026-01-18) ← DEPLOYED to Cloud Run                │
-│  │   ├── Artifacts: gs://bucket/training-runs/45/pushed_model      │
-│  │   ├── Labels: {training_run_id: 45, recall_at_100: 0.52}        │
-│  │   └── Deployment: cloud-run/recommender-prod                     │
-│  │                                                                   │
-│  └── Version 3 (2026-01-20) ← BLESSED, pending deployment          │
-│      ├── Artifacts: gs://bucket/training-runs/47/pushed_model      │
-│      └── Labels: {training_run_id: 47, recall_at_100: 0.54}        │
-│                                                                      │
-└─────────────────────────────────────────────────────────────────────┘
-```
-
-### Benefits
-
-| Benefit | Description |
-|---------|-------------|
-| **Version Control** | Track all model versions in one place |
-| **Lineage Tracking** | Link models to training runs, datasets, experiments |
-| **Labels & Metadata** | Store metrics, hyperparameters as searchable labels |
-| **Deployment History** | See which version is deployed where |
-| **Model Comparison** | Compare metrics across versions via UI/API |
-| **Governance** | Audit trail, access control |
-
-### Cost
-
-**Model Registry itself is FREE.** You only pay for:
-- GCS storage for model artifacts (you already pay this)
-- API calls (free tier covers typical usage)
-
-### Registration Code
+### Batch Predictions
 
 ```python
-from google.cloud import aiplatform
+# Multiple customers in single request
+response = requests.post(
+    "https://{service-name}.run.app/v1/models/recommender:predict",
+    json={
+        "instances": [
+            {"customer_id": "CUST1", "city": "Warsaw", "revenue": 5000.0},
+            {"customer_id": "CUST2", "city": "Krakow", "revenue": 3000.0},
+            {"customer_id": "CUST3", "city": "Gdansk", "revenue": 7000.0}
+        ]
+    }
+)
+```
 
-def register_model(training_run):
-    """Register a trained model in Vertex AI Model Registry."""
+### Updating a Deployment
 
-    aiplatform.init(project=PROJECT_ID, location=REGION)
+To deploy a newer model version:
 
-    model = aiplatform.Model.upload(
-        display_name=f"recommender-{training_run.id}",
-        artifact_uri=f"gs://{BUCKET}/training-runs/{training_run.id}/pushed_model",
-        serving_container_image_uri="tensorflow/serving:2.15.0",
-        labels={
-            "training_run_id": str(training_run.id),
-            "model_type": training_run.model_type,
-            "recall_at_100": str(training_run.recall_at_100),
-            "is_blessed": str(training_run.is_blessed),
-        }
-    )
+1. Train a new model
+2. Click **"Cloud Run"** on the new training run
+3. The existing Cloud Run service is updated with the new model
 
-    # Update TrainingRun with registry info
-    training_run.vertex_model_resource_name = model.resource_name
-    training_run.vertex_model_name = model.display_name
-    training_run.save()
+### Health Check
 
-    return model
+```bash
+curl https://{service-name}.run.app/v1/models/recommender
 ```
 
 ---
 
-## Implementation Plan
+## Troubleshooting
 
-### Phase 1: Model Registry Integration
+### Model Registration Failed
 
-**Goal:** Register trained models in Vertex AI Model Registry after Pusher stage completes.
+**Symptoms:** `vertex_model_resource_name` is empty after training completion
 
-**Tasks:**
-1. Add `register_model()` function to `ml_platform/training/services.py`
-2. Call after successful pipeline completion (status=COMPLETED or NOT_BLESSED)
-3. Update `TrainingRun` model with registry resource name
-4. Add UI indicator showing model is registered
+**Solutions:**
+1. Check Vertex AI API is enabled
+2. Verify IAM permissions for Model Registry
+3. Check logs: `TrainingService._register_to_model_registry()`
 
-**Estimated effort:** 1-2 hours
+### Deployment Failed
 
-### Phase 2: TF Serving Container
+**Symptoms:** Error when clicking "Cloud Run" button
 
-**Goal:** Create reusable TF Serving container for Cloud Run deployment.
+**Common causes:**
+- Model not registered (wait for registration)
+- Cloud Run API not enabled
+- IAM permissions missing
+- Image not found in Artifact Registry
 
-**Tasks:**
-1. Create `deploy/tf_serving/Dockerfile`
-2. Create `deploy/tf_serving/batching_config.txt`
-3. Add Cloud Build configuration for container
-4. Test locally with a trained model
+**Debug:**
+```bash
+# Check service status
+gcloud run services describe {service-name} --region=europe-central2
 
-**Estimated effort:** 2-3 hours
+# Check logs
+gcloud run services logs read {service-name} --region=europe-central2
+```
 
-### Phase 3: Deployment API
+### Inference Errors
 
-**Goal:** Add deployment functionality to Training page.
+**404 Not Found:**
+- Model name mismatch (check `MODEL_NAME` env var)
+- Model not loaded (check startup logs)
 
-**Tasks:**
-1. Add `deploy_to_cloud_run()` function to `ml_platform/training/services.py`
-2. Create API endpoint `POST /api/training-runs/{id}/deploy/`
-3. Add "Deploy" button to Training page UI
-4. Support deployment to new or existing Cloud Run service
-5. Update `TrainingRun` with deployment info (endpoint URL, deployed_at)
+**Input validation errors:**
+- Feature name mismatch (check FeatureConfig)
+- Type mismatch (see Type Mapping table)
 
-**Estimated effort:** 4-6 hours
+**Cold start timeout:**
+- Increase `min_instances` to 1+
+- Increase Cloud Run timeout
 
-### Phase 4: Deployment Management
+### Container Build Failed
 
-**Goal:** Manage deployed models (undeploy, traffic management).
-
-**Tasks:**
-1. Add `undeploy()` function
-2. Add revision management (deploy new model to same service)
-3. Add deployment status tracking
-4. Add health check monitoring
-
-**Estimated effort:** 3-4 hours
-
----
-
-## Reference Files
-
-| File | Description |
-|------|-------------|
-| `past/recs/cloud_run_service/main.py` | Past FastAPI serving solution (reference) |
-| `past/recs/trainer/main.py` | Past trainer with serving signature (reference) |
-| `ml_platform/configs/services.py` | TFX module generator with ServingModel classes |
-| `ml_platform/training/services.py` | TrainingService with deployment methods |
-| `ml_platform/training/models.py` | TrainingRun model with deployment fields |
-
-### Key Code Locations
-
-**ServingModel classes:**
-- Retrieval: `configs/services.py:2623-2680`
-- Ranking: `configs/services.py:4108-4200`
-- Multitask: `configs/services.py:5064-5200`
-
-**Pre-computed embeddings:**
-- `configs/services.py:2683-2739` (`_precompute_candidate_embeddings`)
-
-**Model saving:**
-- Retrieval: `configs/services.py:3743-3757`
-- Ranking: `configs/services.py:4677-4691`
-- Multitask: `configs/services.py:5843-5852`
-
-**Existing deployment fields in TrainingRun:**
-- `vertex_model_name`: Model name in registry
-- `vertex_model_resource_name`: Full resource name
-- `is_deployed`: Whether currently deployed
-- `deployed_at`: Deployment timestamp
-- `endpoint_resource_name`: Cloud Run service URL
-
----
-
-## Open Questions
-
-1. **Serving signature format:** Keep serialized tf.Examples (TF Serving standard) or change to raw tensors (simpler client)?
-   - Recommendation: Keep serialized Examples for automatic batching support
-
-2. **Model loading:** Bake model into container or load from GCS at startup?
-   - Recommendation: Load from GCS (single container image for all models)
-
-3. **Authentication:** Public endpoints or require authentication?
-   - Recommendation: Start with authenticated (IAM), add public option later
-
-4. **Cold start mitigation:** Minimum instances > 0 for production?
-   - Recommendation: min-instances=0 for development, 1+ for production
+```bash
+# Rebuild container
+SHORT_SHA=$(git rev-parse --short HEAD)
+gcloud builds submit --config=deploy/tf_serving/cloudbuild.yaml --substitutions=SHORT_SHA=$SHORT_SHA .
+```
 
 ---
 
@@ -687,9 +767,24 @@ def register_model(training_run):
 
 | Component | Technology | Status |
 |-----------|------------|--------|
-| Training Pipeline | TFX on Vertex AI | ✅ Implemented |
-| ServingModel | TFX-generated wrapper | ✅ Implemented |
-| Model Registry | Vertex AI Model Registry | 🔲 To implement |
-| Serving Infrastructure | Cloud Run + TF Serving | 🔲 To implement |
-| Deployment API | Django REST | 🔲 To implement |
-| Deployment UI | React | 🔲 To implement |
+| Training Pipeline | TFX on Vertex AI | Implemented |
+| ServingModel (Raw Tensors) | Dynamic code generation | Implemented |
+| Model Registry | Vertex AI Model Registry | Implemented |
+| TF Serving Container | Cloud Run + TF Serving 2.19.0 | Implemented |
+| Deployment API | Django REST | Implemented |
+| Deployment UI | Training page integration | Implemented |
+
+### Files Modified/Created
+
+| File | Changes |
+|------|---------|
+| `ml_platform/training/services.py` | Added `_register_to_model_registry()`, `deploy_to_cloud_run()` |
+| `ml_platform/training/models.py` | Added `registered_at` field |
+| `ml_platform/training/api.py` | Added `training_run_deploy_cloud_run()` endpoint |
+| `ml_platform/training/urls.py` | Added Cloud Run deploy URL route |
+| `ml_platform/configs/services.py` | Added `_generate_raw_tensor_signature()`, updated `_generate_brute_force_serve_fn()` |
+| `static/js/training_cards.js` | Added Cloud Run deploy button and function |
+| `deploy/tf_serving/Dockerfile` | Created TF Serving container |
+| `deploy/tf_serving/startup.sh` | Created startup script |
+| `deploy/tf_serving/batching_config.txt` | Created batching config |
+| `deploy/tf_serving/cloudbuild.yaml` | Created Cloud Build config |

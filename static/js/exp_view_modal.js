@@ -140,8 +140,8 @@ const ExpViewModal = (function() {
     const TRAINING_STATUS_CONFIG = {
         pending: { icon: 'fa-clock', color: '#9ca3af', label: 'Pending' },
         scheduled: { icon: 'fa-clock', color: '#f59e0b', label: 'Scheduled' },
-        submitting: { icon: 'fa-spinner', color: '#3b82f6', label: 'Submitting' },
-        running: { icon: 'fa-spinner', color: '#3b82f6', label: 'Running' },
+        submitting: { icon: 'fa-sync', color: '#3b82f6', label: 'Submitting' },
+        running: { icon: 'fa-sync', color: '#3b82f6', label: 'Running' },
         completed: { icon: 'fa-check', color: '#10b981', label: 'Completed' },
         failed: { icon: 'fa-exclamation', color: '#ef4444', label: 'Failed' },
         cancelled: { icon: 'fa-ban', color: '#6b7280', label: 'Cancelled' },
@@ -794,8 +794,8 @@ const ExpViewModal = (function() {
         // Status icon
         const statusIcon = document.getElementById('expViewStatusIcon');
         const statusIcons = {
-            'submitting': 'fa-spinner fa-spin',
-            'running': 'fa-spinner fa-spin',
+            'submitting': 'fa-sync fa-spin',
+            'running': 'fa-sync fa-spin',
             'completed': 'fa-check',
             'failed': 'fa-exclamation',
             'cancelled': 'fa-ban',

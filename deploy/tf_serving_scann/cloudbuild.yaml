@@ -1,0 +1,47 @@
+# Cloud Build configuration for TF Serving container with ScaNN support
+#
+# This is the Python/Flask-based server that supports ScaNN custom ops.
+# Use tf-serving-native for non-ScaNN models (better latency).
+#
+# Trigger manually (from project root):
+#   gcloud builds submit --config=deploy/tf_serving_scann/cloudbuild.yaml .
+
+steps:
+  # Build the container image with both new and legacy tags
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      # New naming convention (tf-serving-scann)
+      - '-t'
+      - 'europe-central2-docker.pkg.dev/$PROJECT_ID/ml-serving/tf-serving-scann:latest'
+      # Backward compatibility (tf-serving)
+      - '-t'
+      - 'europe-central2-docker.pkg.dev/$PROJECT_ID/ml-serving/tf-serving:latest'
+      - '.'
+    dir: 'deploy/tf_serving_scann'
+
+  # Push new tf-serving-scann tag
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'europe-central2-docker.pkg.dev/$PROJECT_ID/ml-serving/tf-serving-scann:latest'
+
+  # Push legacy tf-serving tag (backward compatibility)
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'europe-central2-docker.pkg.dev/$PROJECT_ID/ml-serving/tf-serving:latest'
+
+# Images to store in Artifact Registry
+images:
+  # New naming convention
+  - 'europe-central2-docker.pkg.dev/$PROJECT_ID/ml-serving/tf-serving-scann:latest'
+  # Backward compatibility
+  - 'europe-central2-docker.pkg.dev/$PROJECT_ID/ml-serving/tf-serving:latest'
+
+# Build options
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+# Timeout for the entire build (20 minutes for large base images)
+timeout: '1200s'

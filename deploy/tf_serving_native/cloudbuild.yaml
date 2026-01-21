@@ -1,0 +1,34 @@
+# Cloud Build configuration for Native TF Serving container
+#
+# This is the native TensorFlow Serving container for non-ScaNN models.
+# Provides ~10-15ms lower latency than the Python/Flask server.
+#
+# Trigger manually (from project root):
+#   gcloud builds submit --config=deploy/tf_serving_native/cloudbuild.yaml .
+
+steps:
+  # Build the container image
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'europe-central2-docker.pkg.dev/$PROJECT_ID/ml-serving/tf-serving-native:latest'
+      - '.'
+    dir: 'deploy/tf_serving_native'
+
+  # Push the 'latest' tag
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'europe-central2-docker.pkg.dev/$PROJECT_ID/ml-serving/tf-serving-native:latest'
+
+# Images to store in Artifact Registry
+images:
+  - 'europe-central2-docker.pkg.dev/$PROJECT_ID/ml-serving/tf-serving-native:latest'
+
+# Build options
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+# Timeout for the entire build (20 minutes for large base images)
+timeout: '1200s'

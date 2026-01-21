@@ -1196,6 +1196,29 @@ class TrainingService:
             logger.exception(f"Error force-pushing model: {e}")
             raise TrainingServiceError(f"Failed to force-push model: {e}")
 
+    def _get_retrieval_algorithm(self, training_run: TrainingRun) -> str:
+        """
+        Get the retrieval algorithm for a training run.
+
+        Determines which serving container to use:
+        - 'scann': Requires Python/Flask server with ScaNN ops support
+        - 'brute_force': Can use native TF Serving for better latency
+
+        Args:
+            training_run: TrainingRun instance
+
+        Returns:
+            str: 'scann' or 'brute_force'
+        """
+        # Check if model_config exists and has retrieval_algorithm
+        if training_run.model_config:
+            algorithm = getattr(training_run.model_config, 'retrieval_algorithm', None)
+            if algorithm:
+                return algorithm
+
+        # Default to brute_force if not specified
+        return 'brute_force'
+
     def deploy_to_cloud_run(self, training_run: TrainingRun) -> str:
         """
         Deploy trained model to Cloud Run with TF Serving.
@@ -1242,12 +1265,23 @@ class TrainingService:
         # Model path in GCS
         model_path = f"{training_run.gcs_artifacts_path}/pushed_model"
 
-        # TF Serving container image
-        tf_serving_image = f"europe-central2-docker.pkg.dev/{self.project_id}/ml-serving/tf-serving:latest"
+        # Select container image based on retrieval algorithm
+        # ScaNN models require Python/Flask server with ScaNN ops support
+        # Non-ScaNN (brute_force) models use native TF Serving for better latency
+        retrieval_algorithm = self._get_retrieval_algorithm(training_run)
+
+        if retrieval_algorithm == 'scann':
+            tf_serving_image = f"europe-central2-docker.pkg.dev/{self.project_id}/ml-serving/tf-serving-scann:latest"
+            container_type = "Python/ScaNN"
+        else:
+            tf_serving_image = f"europe-central2-docker.pkg.dev/{self.project_id}/ml-serving/tf-serving-native:latest"
+            container_type = "Native TF Serving"
 
         logger.info(
             f"Deploying {training_run.display_name} to Cloud Run service: {service_name}"
         )
+        logger.info(f"  Retrieval algorithm: {retrieval_algorithm}")
+        logger.info(f"  Container type: {container_type}")
         logger.info(f"  Model path: {model_path}")
         logger.info(f"  Image: {tf_serving_image}")
         logger.info(f"  Config: {cpu} vCPU, {memory} memory, {min_instances}-{max_instances} instances")

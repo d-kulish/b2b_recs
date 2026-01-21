@@ -1250,7 +1250,6 @@ const TrainingCards = (function() {
             const data = await response.json();
 
             if (data.success) {
-                showToast('Training run submitted to Vertex AI', 'success');
                 loadTrainingRuns();
             } else {
                 showToast(data.error || 'Failed to submit training run', 'error');

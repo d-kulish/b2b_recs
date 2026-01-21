@@ -3579,6 +3579,27 @@ class GradientCollapseCallback(tf.keras.callbacks.Callback):
         dataset_name = self.feature_config.dataset.name
         model_type = self.model_config.model_type
 
+        # Get primary product ID column and type for ScaNN vocabulary loading
+        product_id_col = None
+        product_id_bq_type = 'STRING'
+        for feature in self.product_features:
+            if feature.get('is_primary_id'):
+                product_id_col = feature.get('display_name') or feature.get('column')
+                product_id_bq_type = (feature.get('bq_type') or 'STRING').upper()
+                break
+        # Fallback: auto-detection
+        if not product_id_col:
+            for feature in self.product_features:
+                col = feature.get('display_name') or feature.get('column', '')
+                if 'product' in col.lower() or 'item' in col.lower() or 'sku' in col.lower():
+                    product_id_col = col
+                    product_id_bq_type = (feature.get('bq_type') or 'STRING').upper()
+                    break
+        # Last resort: first product feature
+        if not product_id_col and self.product_features:
+            product_id_col = self.product_features[0].get('display_name') or self.product_features[0].get('column', 'product_id')
+            product_id_bq_type = (self.product_features[0].get('bq_type') or 'STRING').upper()
+
         return f'''
 # =============================================================================
 # TFX TRAINER ENTRY POINT

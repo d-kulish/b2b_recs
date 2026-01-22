@@ -473,6 +473,9 @@
         width: 35%;
         margin-top: 12px;
     }
+    .ml-card-badges-footer {
+        width: 95%;  /* Wider on tablet */
+    }
 }
 @media (max-width: 768px) {
     .ml-card-columns {
@@ -489,6 +492,9 @@
     }
     .ml-card-actions-row {
         justify-content: flex-end;
+    }
+    .ml-card-badges-footer {
+        width: 100%;  /* Full width on mobile */
     }
 }
 
@@ -697,6 +703,24 @@
     align-items: center;
     gap: 6px;
     flex-wrap: wrap;
+}
+
+/* Badges Footer Row - spans columns 1-2, positioned above stage bar */
+.ml-card-badges-footer {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    width: 50%;  /* Spans approximately columns 1-2 (25% + 25%) */
+    margin-top: 8px;
+}
+
+.ml-card-badges-footer .ml-card-type-badge,
+.ml-card-badges-footer .blessed-status-badge,
+.ml-card-badges-footer .deploy-status-badge,
+.ml-card-badges-footer .scheduled-status-badge {
+    margin-top: 0;  /* Remove the margin-top since we're in a flex row */
 }
 
 /* Deployment Status Badge (matches .ml-card-type-badge styling) */

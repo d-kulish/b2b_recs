@@ -607,6 +607,9 @@ const TrainingCards = (function() {
         // Error section (for failed)
         const errorHtml = run.status === 'failed' ? renderError(run) : '';
 
+        // Badges row (spans columns 1-2, above stage bar)
+        const badgesHtml = renderBadgesRow(run);
+
         // Stage bar (always shown at bottom)
         const stagesHtml = renderStageBar(run.stage_details || getDefaultStages());
 
@@ -637,6 +640,7 @@ const TrainingCards = (function() {
                     <!-- Column 4: Actions (20%) -->
                     ${actionsHtml}
                 </div>
+                ${badgesHtml}
                 ${errorHtml}
                 ${stagesHtml}
             </div>
@@ -820,6 +824,32 @@ const TrainingCards = (function() {
             `;
         }
 
+        // Algorithm line (only for retrieval and multitask models)
+        let algorithmLine = '';
+        if ((run.model_type === 'retrieval' || run.model_type === 'multitask') && run.retrieval_algorithm) {
+            const algorithmDisplay = run.retrieval_algorithm === 'scann' ? 'ScaNN' : 'Brute-Force';
+            algorithmLine = `<div class="ml-card-config-item"><span class="ml-card-config-label">Algorithm:</span> ${algorithmDisplay}</div>`;
+        }
+
+        // Experiment line
+        let experimentLine = '';
+        if (run.base_experiment_number) {
+            experimentLine = `<div class="ml-card-config-item"><span class="ml-card-config-label">Experiment:</span> Exp #${run.base_experiment_number}</div>`;
+        }
+
+        return `
+            <div class="ml-card-col-config">
+                <div class="ml-card-config-item"><span class="ml-card-config-label">Dataset:</span> ${escapeHtml(run.dataset_name || '-')}</div>
+                <div class="ml-card-config-item"><span class="ml-card-config-label">Features:</span> ${escapeHtml(run.feature_config_name || '-')}</div>
+                <div class="ml-card-config-item"><span class="ml-card-config-label">Model:</span> ${escapeHtml(run.model_config_name || '-')}</div>
+                ${algorithmLine}
+                ${experimentLine}
+                ${gpuChip}
+            </div>
+        `;
+    }
+
+    function renderBadgesRow(run) {
         // Model type badge
         const modelTypeBadge = renderModelTypeBadge(run.model_type);
 
@@ -862,28 +892,9 @@ const TrainingCards = (function() {
             </span>
         `;
 
-        // Algorithm line (only for retrieval and multitask models)
-        let algorithmLine = '';
-        if ((run.model_type === 'retrieval' || run.model_type === 'multitask') && run.retrieval_algorithm) {
-            const algorithmDisplay = run.retrieval_algorithm === 'scann' ? 'ScaNN' : 'Brute-Force';
-            algorithmLine = `<div class="ml-card-config-item"><span class="ml-card-config-label">Algorithm:</span> ${algorithmDisplay}</div>`;
-        }
-
-        // Experiment line
-        let experimentLine = '';
-        if (run.base_experiment_number) {
-            experimentLine = `<div class="ml-card-config-item"><span class="ml-card-config-label">Experiment:</span> Exp #${run.base_experiment_number}</div>`;
-        }
-
         return `
-            <div class="ml-card-col-config">
-                <div class="ml-card-config-item"><span class="ml-card-config-label">Dataset:</span> ${escapeHtml(run.dataset_name || '-')}</div>
-                <div class="ml-card-config-item"><span class="ml-card-config-label">Features:</span> ${escapeHtml(run.feature_config_name || '-')}</div>
-                <div class="ml-card-config-item"><span class="ml-card-config-label">Model:</span> ${escapeHtml(run.model_config_name || '-')}</div>
-                ${algorithmLine}
-                ${experimentLine}
-                <div class="ml-card-config-item ml-card-badges-row">${modelTypeBadge}${blessedBadge}${deployBadge}${scheduledBadge}</div>
-                ${gpuChip}
+            <div class="ml-card-badges-footer">
+                ${modelTypeBadge}${blessedBadge}${deployBadge}${scheduledBadge}
             </div>
         `;
     }

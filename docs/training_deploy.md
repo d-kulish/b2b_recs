@@ -1628,3 +1628,210 @@ If issues arise with the fail-fast behavior:
 1. Remove the `RuntimeError` block from the GPU detection section
 2. Restore the original warning-only behavior
 3. No data or model changes - purely runtime behavior
+
+---
+
+## Vertex AI Training API Fix (2026-01-22)
+
+This section documents the critical fix for training run failures caused by using the deprecated Cloud AI Platform Training API instead of Vertex AI Custom Jobs API.
+
+### Problem Statement
+
+**Training Run ID 7** failed at the 'train' phase with the following error:
+
+```
+ERROR: googleapiclient.errors.HttpError: <HttpError 400 when requesting
+https://ml.googleapis.com/v1/projects/b2b-recs/jobs?alt=json returned
+"Invalid JSON payload received. Unknown name "job_spec" at 'job.training_input': Cannot find field.">
+```
+
+Additional log entries showed:
+- `oauth2client` module deprecation warnings (benign)
+- CUDA factory registration errors (benign - expected on CPU containers)
+
+### Root Cause Analysis
+
+The training pipeline was using `ai_platform_trainer_executor.GenericExecutor` which calls the **deprecated Cloud AI Platform Training API** (`ml.googleapis.com/v1`) instead of the **Vertex AI Custom Jobs API** (`aiplatform.googleapis.com`).
+
+**The Problem in Code (`ml_platform/training/services.py` lines 1945-1950):**
+
+```python
+# OLD CODE - BROKEN
+from tfx.extensions.google_cloud_ai_platform.trainer import executor as ai_platform_trainer_executor
+
+trainer = Trainer(
+    ...
+    custom_executor_spec=executor_spec.ExecutorClassSpec(
+        ai_platform_trainer_executor.GenericExecutor  # Calls deprecated API!
+    ),
+)
+```
+
+**Why This Happened:**
+1. The `GenericExecutor` was designed for the legacy Cloud ML Engine / AI Platform Training service
+2. When we migrated to Vertex AI Pipelines, the Trainer component still used the old executor
+3. The old API endpoint (`ml.googleapis.com/v1`) doesn't recognize Vertex AI job spec fields
+
+### Applied Fix
+
+**Option B: Remove Custom Executor (In-Pipeline Training)**
+
+Instead of spawning a separate job, the Trainer component now runs in-pipeline on the same container that runs the TFX pipeline. This is actually the recommended approach for Vertex AI Pipelines.
+
+**Files Modified:**
+
+| File | Change |
+|------|--------|
+| `ml_platform/training/services.py` | Removed `custom_executor_spec`, added GPU resource post-processing |
+| `ml_platform/configs/services.py` | Added `tf.expand_dims` for TFT shape compatibility |
+| `scripts/test_services_trainer.py` | Region fix, staging bucket, GPU configuration |
+
+**1. Removed Custom Executor (`ml_platform/training/services.py`):**
+
+```python
+# NEW CODE - FIXED (lines 1937-1950)
+# NOTE: No custom_executor_spec - Trainer runs in-pipeline on the GPU container
+trainer = Trainer(
+    module_file=trainer_module_path,
+    examples=transform.outputs["transformed_examples"],
+    transform_graph=transform.outputs["transform_graph"],
+    schema=schema_gen.outputs["schema"],
+    train_args=train_args,
+    eval_args=eval_args,
+    custom_config=custom_config,
+)
+```
+
+**2. Added GPU Resources to Compiled Pipeline:**
+
+The `compile_pipeline()` function now post-processes the compiled pipeline JSON to add GPU resources to the Trainer executor:
+
+```python
+def compile_pipeline(
+    pipeline,
+    output_file: str,
+    project_id: str = 'b2b-recs',
+    gpu_type: str = 'NVIDIA_TESLA_T4',
+    gpu_count: int = 1,
+    machine_type: str = 'n1-standard-8',
+) -> str:
+    # ... compilation ...
+
+    # Post-process: Add GPU resources to Trainer component
+    if 'deploymentSpec' in pipeline_spec and 'executors' in pipeline_spec['deploymentSpec']:
+        for executor_name, executor_config in pipeline_spec['deploymentSpec']['executors'].items():
+            if 'trainer' in executor_name.lower():
+                executor_config['container']['resources'] = {
+                    'accelerator': {
+                        'type': gpu_type,
+                        'count': str(gpu_count),
+                    },
+                    'cpuLimit': 8.0,
+                    'memoryLimit': 32.0,
+                }
+```
+
+**3. Fixed TFT Shape Mismatch (`ml_platform/configs/services.py` line 2620):**
+
+The serve function was passing tensors with shape `[batch]` but TFT expects `[batch, 1]`:
+
+```python
+# OLD (broken)
+raw_features_lines.append(f"            '{col_name}': {col_name},")
+
+# NEW (fixed - line 2620-2621)
+# Expand dims to [batch, 1] as TFT expects 2D tensors
+raw_features_lines.append(f"            '{col_name}': tf.expand_dims({col_name}, -1),")
+```
+
+This fix applies to BOTH brute-force and ScaNN serve functions since both use `_generate_raw_tensor_signature()`.
+
+### GPU Custom Job Test
+
+To verify the fixes, a Custom Job test was run using artifacts from training run ID 7.
+
+**Test Configuration:**
+
+| Parameter | Value |
+|-----------|-------|
+| Region | `europe-west4` (GPU-enabled) |
+| Machine Type | `n1-standard-8` |
+| GPU | Tesla T4 × 1 |
+| Epochs | 3 |
+| Container | `tfx-trainer-gpu:latest` |
+| Staging Bucket | `gs://b2b-recs-gpu-staging` (europe-west4) |
+
+**Test Script Configuration (`scripts/test_services_trainer.py`):**
+
+```python
+# Region with GPU support
+REGION = 'europe-west4'
+
+# Separate staging bucket in same region as job
+JOB_STAGING_BUCKET = 'b2b-recs-gpu-staging'
+
+# GPU configuration in worker_pool_specs
+worker_pool_specs = [{
+    "machine_spec": {
+        "machine_type": "n1-standard-8",
+        "accelerator_type": "NVIDIA_TESLA_T4",
+        "accelerator_count": 1,
+    },
+    "replica_count": 1,
+    "container_spec": {...},
+}]
+
+# GPU enabled in custom_config
+custom_config = {
+    'gpu_enabled': True,
+    'gpu_count': 1,
+    ...
+}
+```
+
+**Test Results:**
+
+```
+============================================================
+                    GPU TRAINING TEST RESULTS
+============================================================
+
+GPU Configuration:
+  gpu_enabled: True
+  gpu_count: 1
+
+Physical GPUs detected: 1
+  GPU 0: Tesla T4
+
+Training completed successfully!
+  Epochs: 3
+  Test Recall@100: 0.1758
+
+============================================================
+```
+
+| Metric | Value |
+|--------|-------|
+| Test Recall@100 (2 epochs) | 0.1678 |
+| Test Recall@100 (3 epochs) | 0.1758 |
+| GPU Detected | Tesla T4 |
+| Status | ✅ Success |
+
+### Key Learnings
+
+1. **Region Matters**: `europe-central2` has no GPU quota - use `europe-west4` for GPU training
+2. **Staging Bucket Location**: Job staging bucket must be in same region as the job
+3. **GPU Config Propagation**: `gpu_enabled` and `gpu_count` must be passed in `custom_config`
+4. **TFT Shape Requirements**: TensorFlow Transform expects 2D tensors `[batch, 1]`, not 1D `[batch]`
+5. **In-Pipeline Training**: Remove `custom_executor_spec` - let Trainer run in-pipeline with GPU resources attached via pipeline compilation
+
+### Verification Checklist
+
+Before running a full-scale training pipeline:
+
+- [ ] Region is `europe-west4` (or other GPU-enabled region)
+- [ ] Pipeline compiled with GPU resources (`compile_pipeline(gpu_type=..., gpu_count=...)`)
+- [ ] Container image has CUDA drivers (`tfx-trainer-gpu:latest`)
+- [ ] `custom_config` includes `gpu_enabled: True` and `gpu_count`
+- [ ] Staging bucket is in same region as job
+- [ ] No `custom_executor_spec` on Trainer component

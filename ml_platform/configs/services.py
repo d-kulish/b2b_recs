@@ -2617,7 +2617,8 @@ class RetrievalModel(tfrs.Model):
                 f"        tf.TensorSpec(shape=[None], dtype={tf_dtype}, name='{col_name}'),"
             )
             param_names.append(col_name)
-            raw_features_lines.append(f"            '{col_name}': {col_name},")
+            # Expand dims to [batch, 1] as TFT expects 2D tensors
+            raw_features_lines.append(f"            '{col_name}': tf.expand_dims({col_name}, -1),")
 
         return signature_specs, param_names, raw_features_lines
 

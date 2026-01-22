@@ -35,10 +35,11 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 PROJECT_ID = 'b2b-recs'
-REGION = 'europe-central2'
-STAGING_BUCKET = 'b2b-recs-pipeline-staging'
+REGION = 'europe-west4'  # GPU training region (europe-central2 has no GPU support)
+STAGING_BUCKET = 'b2b-recs-pipeline-staging'  # For reading artifacts (europe-central2)
+JOB_STAGING_BUCKET = 'b2b-recs-gpu-staging'  # For job staging (must match REGION)
 ARTIFACTS_BUCKET = 'b2b-recs-quicktest-artifacts'
-TRAINER_IMAGE = 'europe-central2-docker.pkg.dev/b2b-recs/tfx-builder/tfx-trainer:latest'
+TRAINER_IMAGE = 'europe-central2-docker.pkg.dev/b2b-recs/tfx-builder/tfx-trainer-gpu:latest'
 
 
 def find_artifacts(source_exp: str) -> dict:
@@ -140,6 +141,8 @@ def main():
         'batch_size': 4096,
         'learning_rate': {learning_rate},
         'gcs_output_path': '{gcs_output_path}',  # For MetricsCollector to save training_metrics.json
+        'gpu_enabled': True,
+        'gpu_count': 1,
     }}
 
     # Create data accessor
@@ -162,7 +165,15 @@ def main():
             feature_spec = tf_transform_output.transformed_feature_spec()
 
             def parse_fn(example):
-                return tf.io.parse_single_example(example, feature_spec)
+                parsed = tf.io.parse_single_example(example, feature_spec)
+                # Expand dims for scalar features to match TFT expectations (batch, 1)
+                expanded = {{}}
+                for key, value in parsed.items():
+                    if len(value.shape) == 0:  # Scalar
+                        expanded[key] = tf.expand_dims(value, 0)
+                    else:
+                        expanded[key] = value
+                return expanded
 
             dataset = dataset.map(parse_fn, num_parallel_calls=tf.data.AUTOTUNE)
             dataset = dataset.batch(options.batch_size)
@@ -441,14 +452,18 @@ def main():
     job = aiplatform.CustomJob(
         display_name=f'services-test-{run_id}',
         worker_pool_specs=[{
-            'machine_spec': {'machine_type': 'n1-standard-4'},
+            'machine_spec': {
+                'machine_type': 'n1-standard-8',
+                'accelerator_type': 'NVIDIA_TESLA_T4',
+                'accelerator_count': 1,
+            },
             'replica_count': 1,
             'container_spec': {
                 'image_uri': TRAINER_IMAGE,
                 'command': ['bash', '-c', f'gsutil cp {runner_gcs_path} /tmp/runner.py && python /tmp/runner.py'],
             },
         }],
-        staging_bucket=f'gs://{STAGING_BUCKET}',
+        staging_bucket=f'gs://{JOB_STAGING_BUCKET}',
     )
 
     logger.info("Submitting CustomJob...")

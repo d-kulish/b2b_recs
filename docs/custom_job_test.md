@@ -164,3 +164,235 @@ Required artifacts for trainer testing:
 ### Graph Mode Errors
 - `SymbolicTensor has no attribute 'numpy'`: Code calling `.numpy()` inside `train_step`
 - Solution: Use `tf.Variable` accumulators and pure TF ops in `train_step`
+
+---
+
+## GPU-Based Testing (2026-01-22)
+
+This section describes how to run Custom Job tests with GPU acceleration. GPU testing is critical for verifying that training pipelines will use hardware acceleration correctly.
+
+### Why GPU Testing Matters
+
+1. **Fail-Fast Behavior**: The trainer now raises `RuntimeError` if GPU was requested but not detected
+2. **Region Constraints**: Not all GCP regions have GPU quota
+3. **Container Requirements**: Must use CUDA-enabled container images
+4. **Performance Validation**: Verify actual GPU utilization before full-scale runs
+
+### GPU Region Configuration
+
+**CRITICAL**: Not all regions support GPUs. Use regions with GPU quota.
+
+| Region | GPU Support | Notes |
+|--------|-------------|-------|
+| `europe-west4` | ✅ Yes | **Recommended for EU** - T4, V100, A100 available |
+| `europe-central2` | ❌ No | No GPU quota - will fail |
+| `us-central1` | ✅ Yes | T4, V100, A100 available |
+| `us-west1` | ✅ Yes | T4, V100 available |
+
+### Staging Bucket Configuration
+
+**CRITICAL**: The job staging bucket must be in the **same region** as the Custom Job.
+
+```python
+# In scripts/test_services_trainer.py
+
+# Job runs in europe-west4
+REGION = 'europe-west4'
+
+# Staging bucket MUST be in europe-west4
+JOB_STAGING_BUCKET = 'b2b-recs-gpu-staging'  # Created in europe-west4
+```
+
+**Create Staging Bucket (if needed):**
+```bash
+gsutil mb -l europe-west4 gs://b2b-recs-gpu-staging
+```
+
+### Container Image Requirements
+
+For GPU training, use a container with CUDA drivers pre-installed:
+
+| Image | Use Case |
+|-------|----------|
+| `tfx-trainer-gpu:latest` | GPU training with TensorFlow |
+| `tfx-trainer:latest` | CPU-only training |
+
+**Build GPU Container (if needed):**
+```bash
+# Dockerfile.gpu should extend TF GPU base image
+gcloud builds submit --config=deploy/tfx_builder/cloudbuild-gpu.yaml .
+```
+
+### Worker Pool Specs for GPU
+
+Configure the `worker_pool_specs` with GPU accelerators:
+
+```python
+worker_pool_specs = [{
+    "machine_spec": {
+        "machine_type": "n1-standard-8",       # 8 vCPUs, 30GB RAM
+        "accelerator_type": "NVIDIA_TESLA_T4", # GPU type
+        "accelerator_count": 1,                # Number of GPUs
+    },
+    "replica_count": 1,
+    "container_spec": {
+        "image_uri": f"{REGION}-docker.pkg.dev/{PROJECT_ID}/tfx-builder/tfx-trainer-gpu:latest",
+        "command": ["python", "-c", "..."],
+        "args": [],
+        "env": [
+            {"name": "GPU_ENABLED", "value": "true"},
+            {"name": "GPU_COUNT", "value": "1"},
+        ],
+    },
+}]
+```
+
+### Custom Config for GPU
+
+The `custom_config` passed to the trainer must include GPU settings:
+
+```python
+custom_config = {
+    # GPU configuration - REQUIRED for GPU training
+    'gpu_enabled': True,
+    'gpu_count': 1,
+
+    # Other training parameters
+    'epochs': 3,
+    'batch_size': 1024,
+    ...
+}
+```
+
+**Important**: If `gpu_enabled=True` but no GPUs are detected, the trainer will raise:
+```
+RuntimeError: GPU training requested (gpu_count=1) but no GPUs detected.
+Check: 1) GPU quota in region, 2) Container image has CUDA drivers,
+3) Machine type supports GPUs. Will NOT fall back to CPU training.
+```
+
+### Available GPU Types
+
+| GPU Type | Constant | Memory | Use Case |
+|----------|----------|--------|----------|
+| Tesla T4 | `NVIDIA_TESLA_T4` | 16 GB | Cost-effective training |
+| Tesla V100 | `NVIDIA_TESLA_V100` | 16 GB | High-performance training |
+| A100 40GB | `NVIDIA_TESLA_A100` | 40 GB | Large models |
+| A100 80GB | `NVIDIA_A100_80GB` | 80 GB | Very large models |
+
+### Running GPU Test
+
+**Full Command:**
+```bash
+./venv/bin/python scripts/test_services_trainer.py \
+    --feature-config-id 8 \
+    --model-config-id 14 \
+    --source-training-run 7 \
+    --epochs 3
+```
+
+**Expected Output:**
+```
+============================================================
+                    GPU TRAINING TEST RESULTS
+============================================================
+
+GPU Configuration:
+  gpu_enabled: True
+  gpu_count: 1
+
+Physical GPUs detected: 1
+  GPU 0: Tesla T4
+
+Training completed successfully!
+  Epochs: 3
+  Test Recall@100: 0.1758
+============================================================
+```
+
+### Verifying GPU Usage in Logs
+
+Check that GPUs were actually used:
+
+```bash
+# View job logs
+gcloud logging read 'resource.type="ml_job" AND resource.labels.job_id="JOB_ID"' \
+    --project=b2b-recs --limit=100 --format='value(textPayload)' | grep -i gpu
+
+# Expected output:
+# Physical GPUs detected: 1
+# GPU 0: Tesla T4
+# Using single GPU (default strategy)
+```
+
+### GPU Troubleshooting
+
+#### No GPUs Detected
+```
+RuntimeError: GPU training requested (gpu_count=1) but no GPUs detected.
+```
+
+**Solutions:**
+1. Verify region has GPU quota: `gcloud compute accelerator-types list --filter="zone:europe-west4-*"`
+2. Use GPU-enabled container: `tfx-trainer-gpu:latest`
+3. Check `accelerator_type` and `accelerator_count` in `worker_pool_specs`
+
+#### Cross-Region Bucket Error
+```
+Error: Staging bucket must be in same region as job
+```
+
+**Solution:**
+Create bucket in job region:
+```bash
+gsutil mb -l europe-west4 gs://b2b-recs-gpu-staging
+```
+
+#### GPU Quota Exceeded
+```
+Error: Quota 'NVIDIA_T4_GPUS' exceeded
+```
+
+**Solutions:**
+1. Request quota increase in GCP Console
+2. Use a different GPU type
+3. Use a different region
+
+#### CUDA Driver Mismatch
+```
+Could not load dynamic library 'libcuda.so.1'
+```
+
+**Solution:**
+Use GPU-enabled container with matching CUDA version:
+```bash
+# Rebuild container with correct CUDA
+docker build -f Dockerfile.gpu -t tfx-trainer-gpu:latest .
+```
+
+### Test Artifacts Location
+
+After a successful GPU test, artifacts are stored in:
+
+```
+gs://b2b-recs-quicktest-artifacts/services-test-TIMESTAMP/
+├── trainer_module.py    # Generated trainer code
+├── runner.py            # Job runner script
+└── model/               # Trained model (if successful)
+    └── pushed_model/
+        ├── saved_model.pb
+        └── variables/
+```
+
+### Quick Reference
+
+| Parameter | Value | Notes |
+|-----------|-------|-------|
+| Region | `europe-west4` | GPU-enabled |
+| Staging Bucket | `gs://b2b-recs-gpu-staging` | In europe-west4 |
+| Container | `tfx-trainer-gpu:latest` | CUDA-enabled |
+| Machine Type | `n1-standard-8` | 8 vCPUs, 30GB RAM |
+| GPU Type | `NVIDIA_TESLA_T4` | Cost-effective |
+| GPU Count | `1` | Single GPU |
+| `gpu_enabled` | `True` | In custom_config |
+| `gpu_count` | `1` | In custom_config |

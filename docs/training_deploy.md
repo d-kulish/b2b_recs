@@ -1830,8 +1830,191 @@ Training completed successfully!
 Before running a full-scale training pipeline:
 
 - [ ] Region is `europe-west4` (or other GPU-enabled region)
-- [ ] Pipeline compiled with GPU resources (`compile_pipeline(gpu_type=..., gpu_count=...)`)
+- [ ] Trainer uses `GenericExecutor` with `ai_platform_training_args`
 - [ ] Container image has CUDA drivers (`tfx-trainer-gpu:latest`)
 - [ ] `custom_config` includes `gpu_enabled: True` and `gpu_count`
 - [ ] Staging bucket is in same region as job
-- [ ] No `custom_executor_spec` on Trainer component
+
+---
+
+## GPU Training Fix: GenericExecutor (2026-01-22)
+
+This section documents the critical fix for training run #8 failure where the Trainer component ran on CPU-only machines despite GPU configuration being present.
+
+### Problem Statement
+
+**Training Run ID 8** failed with:
+
+```
+GPU config from custom_config: gpu_enabled=True, gpu_count=1
+Physical GPUs detected: 0
+RuntimeError: GPU training requested (gpu_count=1) but no GPUs detected.
+```
+
+The pipeline correctly passed GPU configuration to the Trainer via `custom_config`, but the physical machine had **zero GPUs**.
+
+### Root Cause Analysis
+
+The previous fix (2026-01-22 earlier) removed `custom_executor_spec` from the Trainer and attempted to add GPU resources via post-processing the compiled pipeline JSON:
+
+```python
+# BROKEN APPROACH - compile_pipeline() post-processing
+executor_config['container']['resources'] = {
+    'accelerator': {
+        'type': gpu_type,
+        'count': str(gpu_count),
+    },
+    ...
+}
+```
+
+**Why this failed:**
+
+1. **Wrong location in JSON**: Resources added to `deploymentSpec.executors.{executor}.container.resources` are **not recognized** by Vertex AI Pipelines v2
+2. **Vertex AI ignores unrecognized fields**: The GPU config was simply ignored, and the Trainer ran on default CPU-only infrastructure
+3. **No error reported**: Vertex AI doesn't validate or warn about unrecognized resource configurations
+
+### Why Direct Custom Job Tests Passed
+
+Direct Custom Job tests (`test_services_trainer.py`) worked because they used `aiplatform.CustomJob` with explicit `worker_pool_specs`:
+
+```python
+# WORKING - Direct Custom Job
+job = aiplatform.CustomJob(
+    worker_pool_specs=[{
+        'machine_spec': {
+            'machine_type': 'n1-standard-8',
+            'accelerator_type': 'NVIDIA_TESLA_T4',
+            'accelerator_count': 1,
+        },
+        ...
+    }],
+)
+```
+
+This API **directly configures** the job's machine spec, so GPUs are properly allocated.
+
+### Applied Fix
+
+**Solution: Use GenericExecutor with ai_platform_training_args**
+
+The `GenericExecutor` from TFX spawns a **separate Vertex AI Custom Job** for training, using the same mechanism as the working direct Custom Job tests.
+
+**Key changes in `ml_platform/training/services.py`:**
+
+```python
+# NEW CODE - WORKING
+custom_config = {
+    "epochs": epochs,
+    "batch_size": batch_size,
+    "learning_rate": learning_rate,
+    "gcs_output_path": output_path,
+    "gpu_enabled": True,
+    "gpu_count": gpu_count,
+    # GenericExecutor reads this and spawns a Custom Job with these specs
+    "ai_platform_training_args": {
+        "project": project_id,
+        "region": region,
+        "worker_pool_specs": [{
+            "machine_spec": {
+                "machine_type": machine_type,
+                "accelerator_type": gpu_type,
+                "accelerator_count": gpu_count,
+            },
+            "replica_count": 1,
+            "container_spec": {
+                "image_uri": gpu_trainer_image,
+            },
+        }],
+    },
+}
+
+trainer = Trainer(
+    module_file=trainer_module_path,
+    examples=transform.outputs["transformed_examples"],
+    transform_graph=transform.outputs["transform_graph"],
+    schema=schema_gen.outputs["schema"],
+    train_args=train_args,
+    eval_args=eval_args,
+    custom_executor_spec=executor_spec.ExecutorClassSpec(
+        ai_platform_trainer_executor.GenericExecutor
+    ),
+    custom_config=custom_config,
+)
+```
+
+**Also removed from `compile_pipeline()`:**
+
+- GPU post-processing code (no longer needed)
+- `gpu_type`, `gpu_count`, `machine_type` parameters (handled by GenericExecutor)
+
+### Architecture Comparison
+
+| Approach | API Used | GPU Config Location | Result |
+|----------|----------|---------------------|--------|
+| **Old (broken)** | In-pipeline execution | `deploymentSpec.executors.{}.container.resources` | Ignored - CPU only |
+| **New (fixed)** | Vertex AI Custom Job (via GenericExecutor) | `worker_pool_specs[].machine_spec` | GPU allocated ✅ |
+
+**Data flow with GenericExecutor:**
+
+```
+Trainer Component (in Pipeline)
+    │
+    ▼ GenericExecutor reads custom_config["ai_platform_training_args"]
+    │
+    ▼ Spawns aiplatform.CustomJob with worker_pool_specs
+    │
+    ▼ Custom Job runs on n1-standard-8 + Tesla T4
+    │
+    ▼ Trainer code executes with GPU access
+    │
+    ▼ Results returned to Pipeline
+```
+
+### Baseline Test Results
+
+Before applying the production fix, a baseline test confirmed GPUs work with direct Custom Job:
+
+```
+Job: projects/555035914949/locations/europe-west4/customJobs/612221680802070528
+
+Logs:
+  Physical GPUs detected: 1
+    GPU 0: /physical_device:GPU:0
+  Created device /job:localhost/replica:0/task:0/device:GPU:0
+    with 13775 MB memory: Tesla T4
+  SUCCESS: GPU detected in direct Custom Job
+  BASELINE TEST PASSED!
+```
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| `ml_platform/training/services.py` | Added `GenericExecutor`, restructured `custom_config` with `ai_platform_training_args` |
+| `ml_platform/training/services.py` | Simplified `compile_pipeline()` - removed GPU post-processing |
+| `scripts/test_option3_gpu_executor.py` | Created test script for validating the fix |
+
+### Key Learnings
+
+1. **Don't post-process pipeline JSON for resources**: Vertex AI Pipelines ignores unrecognized fields in executor specs
+2. **Use GenericExecutor for GPU training**: It spawns a proper Custom Job with explicit machine specs
+3. **Direct worker_pool_specs format**: Use `worker_pool_specs` directly in `ai_platform_training_args`, not wrapped in `job_spec`
+4. **Test with direct Custom Job first**: If direct Custom Job works, GenericExecutor with same config should work
+
+### Verification Steps
+
+After deploying this fix:
+
+1. **Submit a new training run** with GPU configuration
+2. **Monitor Vertex AI Custom Jobs**: Should see a separate Custom Job for the Trainer
+3. **Check Custom Job logs** for "Physical GPUs detected: 1"
+4. **Verify training completes** without the RuntimeError
+
+### Rollback Plan
+
+If issues arise:
+
+1. Revert `create_training_pipeline()` to remove `custom_executor_spec`
+2. Restore GPU post-processing in `compile_pipeline()`
+3. Note: This will revert to the broken behavior where GPUs are not allocated

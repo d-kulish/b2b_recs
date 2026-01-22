@@ -1816,10 +1816,6 @@ def create_training_pipeline(
     from tfx.orchestration import pipeline as tfx_pipeline
     from tfx.dsl.components.base import executor_spec
     from tfx.extensions.google_cloud_ai_platform.trainer import executor as ai_platform_trainer_executor
-    from google.cloud.aiplatform_v1.types import custom_job as custom_job_spec_pb2
-    from google.cloud.aiplatform_v1.types import machine_resources as machine_resources_pb2
-    from google.cloud.aiplatform_v1.types import accelerator_type as accelerator_type_pb2
-    from google.protobuf.json_format import MessageToDict
     import tensorflow_model_analysis as tfma
 
     logger.info(f"Creating TFX training pipeline: {pipeline_name}")
@@ -1882,6 +1878,10 @@ def create_training_pipeline(
     train_args = trainer_pb2.TrainArgs(num_steps=train_steps)
     eval_args = trainer_pb2.EvalArgs(num_steps=eval_steps)
 
+    # GPU-enabled TFX trainer image
+    gpu_trainer_image = f'europe-central2-docker.pkg.dev/{project_id}/tfx-builder/tfx-trainer-gpu:latest'
+    logger.info(f"Using GPU trainer image: {gpu_trainer_image}")
+
     custom_config = {
         "epochs": epochs,
         "batch_size": batch_size,
@@ -1889,56 +1889,30 @@ def create_training_pipeline(
         "gcs_output_path": output_path,
         "gpu_enabled": True,
         "gpu_count": gpu_count,
-    }
-
-    # Configure GPU accelerator for Vertex AI custom training job
-    # Map GPU type string to accelerator_type_pb2 enum
-    gpu_type_map = {
-        'NVIDIA_TESLA_T4': accelerator_type_pb2.AcceleratorType.NVIDIA_TESLA_T4,
-        'NVIDIA_TESLA_V100': accelerator_type_pb2.AcceleratorType.NVIDIA_TESLA_V100,
-        'NVIDIA_TESLA_P100': accelerator_type_pb2.AcceleratorType.NVIDIA_TESLA_P100,
-        'NVIDIA_TESLA_A100': accelerator_type_pb2.AcceleratorType.NVIDIA_TESLA_A100,
-        'NVIDIA_L4': accelerator_type_pb2.AcceleratorType.NVIDIA_L4,
-    }
-    accelerator_type = gpu_type_map.get(gpu_type, accelerator_type_pb2.AcceleratorType.NVIDIA_TESLA_T4)
-
-    # GPU-enabled TFX trainer image
-    gpu_trainer_image = f'europe-central2-docker.pkg.dev/{project_id}/tfx-builder/tfx-trainer-gpu:latest'
-    logger.info(f"Using GPU trainer image: {gpu_trainer_image}")
-
-    # Configure worker pool with GPU
-    worker_pool_spec = custom_job_spec_pb2.WorkerPoolSpec(
-        machine_spec=machine_resources_pb2.MachineSpec(
-            machine_type=machine_type,
-            accelerator_type=accelerator_type,
-            accelerator_count=gpu_count,
-        ),
-        replica_count=1,
-        container_spec=custom_job_spec_pb2.ContainerSpec(
-            image_uri=gpu_trainer_image,
-        ),
-    )
-
-    # Create custom job spec for GPU training
-    vertex_job_spec = custom_job_spec_pb2.CustomJobSpec(
-        worker_pool_specs=[worker_pool_spec],
-    )
-
-    # Add Vertex AI config to custom_config for the executor
-    # Convert protobuf to dict for JSON serialization (TFX requires JSON-serializable custom_config)
-    custom_config["ai_platform_training_args"] = {
-        "project": project_id,
-        "region": region,
-        "job_spec": MessageToDict(vertex_job_spec._pb, preserving_proto_field_name=True),
+        # ai_platform_training_args tells GenericExecutor to spawn a Vertex AI Custom Job
+        # with the specified GPU resources. Uses direct worker_pool_specs format.
+        "ai_platform_training_args": {
+            "project": project_id,
+            "region": region,
+            "worker_pool_specs": [{
+                "machine_spec": {
+                    "machine_type": machine_type,
+                    "accelerator_type": gpu_type,
+                    "accelerator_count": gpu_count,
+                },
+                "replica_count": 1,
+                "container_spec": {
+                    "image_uri": gpu_trainer_image,
+                },
+            }],
+        },
     }
 
     logger.info(f"Configured Vertex AI GPU training: {gpu_count}x {gpu_type} on {machine_type}")
 
-    # NOTE: No custom_executor_spec - Trainer runs in-pipeline on the GPU container
-    # The old ai_platform_trainer_executor.GenericExecutor used the deprecated
-    # Cloud AI Platform Training API (ml.googleapis.com) which doesn't support
-    # Vertex AI Custom Job specs. By running in-pipeline, the Trainer uses the
-    # GPU resources configured in KubeflowV2DagRunnerConfig.
+    # Use GenericExecutor to spawn a separate Vertex AI Custom Job for training.
+    # This ensures the Trainer runs on a machine with GPU resources allocated.
+    # The Custom Job uses worker_pool_specs from ai_platform_training_args above.
     trainer = Trainer(
         module_file=trainer_module_path,
         examples=transform.outputs["transformed_examples"],
@@ -1946,6 +1920,9 @@ def create_training_pipeline(
         schema=schema_gen.outputs["schema"],
         train_args=train_args,
         eval_args=eval_args,
+        custom_executor_spec=executor_spec.ExecutorClassSpec(
+            ai_platform_trainer_executor.GenericExecutor
+        ),
         custom_config=custom_config,
     )
 
@@ -2052,17 +2029,20 @@ def compile_pipeline(
     pipeline,
     output_file: str,
     project_id: str = 'b2b-recs',
-    gpu_type: str = 'NVIDIA_TESLA_T4',
-    gpu_count: int = 1,
-    machine_type: str = 'n1-standard-8',
 ) -> str:
+    """
+    Compile TFX pipeline to Vertex AI Pipelines format.
+
+    GPU resources for the Trainer are configured via GenericExecutor and
+    ai_platform_training_args in create_training_pipeline(), not here.
+    GenericExecutor spawns a separate Vertex AI Custom Job with the GPU config.
+    """
     from tfx.orchestration.kubeflow.v2 import kubeflow_v2_dag_runner
-    import json
     logger.info(f"Compiling pipeline to: {output_file}")
 
-    # Use GPU-enabled TFX image for training
+    # Use GPU-enabled TFX image as default for all components
     custom_image = f'europe-central2-docker.pkg.dev/{project_id}/tfx-builder/tfx-trainer-gpu:latest'
-    logger.info(f"Using GPU-enabled TFX image: {custom_image}")
+    logger.info(f"Using TFX image: {custom_image}")
 
     runner = kubeflow_v2_dag_runner.KubeflowV2DagRunner(
         config=kubeflow_v2_dag_runner.KubeflowV2DagRunnerConfig(
@@ -2071,38 +2051,10 @@ def compile_pipeline(
         output_filename=output_file
     )
     runner.run(pipeline)
-    logger.info("Pipeline compiled successfully")
+    logger.info(f"Pipeline compiled successfully: {output_file}")
 
-    # Post-process: Add GPU resources to Trainer component
-    logger.info(f"Adding GPU resources to Trainer: {gpu_count}x {gpu_type} on {machine_type}")
-    with open(output_file, 'r') as f:
-        pipeline_spec = json.load(f)
-
-    # Find and modify the Trainer executor
-    if 'deploymentSpec' in pipeline_spec and 'executors' in pipeline_spec['deploymentSpec']:
-        for executor_name, executor_config in pipeline_spec['deploymentSpec']['executors'].items():
-            # Look for Trainer executor (name contains 'trainer' or 'Trainer')
-            if 'trainer' in executor_name.lower():
-                logger.info(f"Found Trainer executor: {executor_name}")
-                if 'container' not in executor_config:
-                    executor_config['container'] = {}
-                # Add GPU resources
-                executor_config['container']['resources'] = {
-                    'accelerator': {
-                        'type': gpu_type,
-                        'count': str(gpu_count),
-                    },
-                    'cpuLimit': 8.0,
-                    'memoryLimit': 32.0,
-                }
-                # Set machine type via custom job spec
-                executor_config['container']['resources']['machineType'] = machine_type
-                logger.info(f"Added GPU config: {executor_config['container']['resources']}")
-
-    # Write modified pipeline spec
-    with open(output_file, 'w') as f:
-        json.dump(pipeline_spec, f, indent=2)
-    logger.info(f"Pipeline with GPU config saved to: {output_file}")
+    # NOTE: No post-processing needed. GPU resources are handled by GenericExecutor
+    # which spawns a Vertex AI Custom Job with worker_pool_specs from custom_config.
 
     return output_file
 
@@ -2213,9 +2165,6 @@ def main():
                 pipeline,
                 pipeline_file,
                 project_id=args.project_id,
-                gpu_type=args.gpu_type,
-                gpu_count=args.gpu_count,
-                machine_type=args.machine_type,
             )
             display_name = f"training-{args.run_id}"
             resource_name = submit_to_vertex_ai(pipeline_file, display_name, args.project_id, args.region)

@@ -1121,6 +1121,84 @@ class TrainingService:
             logger.exception(f"Error deploying model: {e}")
             raise TrainingServiceError(f"Failed to deploy model: {e}")
 
+    def undeploy_model(self, training_run: TrainingRun) -> TrainingRun:
+        """
+        Undeploy a model from its Vertex AI Endpoint.
+
+        Removes the model from the endpoint but keeps it in the Model Registry.
+
+        Args:
+            training_run: TrainingRun instance to undeploy
+
+        Returns:
+            Updated TrainingRun instance with cleared deployment info
+
+        Raises:
+            TrainingServiceError: If model cannot be undeployed
+        """
+        if not training_run.is_deployed:
+            raise TrainingServiceError(
+                "Training run is not currently deployed."
+            )
+
+        if not training_run.endpoint_resource_name:
+            # Model marked as deployed but no endpoint - just clear the flag
+            training_run.is_deployed = False
+            training_run.deployed_at = None
+            training_run.save(update_fields=['is_deployed', 'deployed_at'])
+            return training_run
+
+        self._init_aiplatform()
+
+        try:
+            from google.cloud import aiplatform
+
+            # Get the endpoint
+            endpoint = aiplatform.Endpoint(training_run.endpoint_resource_name)
+
+            # Find the deployed model ID on this endpoint
+            deployed_model_id = None
+            model_resource_name = training_run.vertex_model_resource_name
+
+            # List deployed models to find the one to undeploy
+            endpoint_obj = endpoint._gca_resource
+            for deployed_model in endpoint_obj.deployed_models:
+                if deployed_model.model == model_resource_name:
+                    deployed_model_id = deployed_model.id
+                    break
+
+            if deployed_model_id:
+                # Undeploy the model
+                endpoint.undeploy(
+                    deployed_model_id=deployed_model_id,
+                    traffic_split={}  # No traffic to redirect
+                )
+                logger.info(
+                    f"Undeployed model {model_resource_name} from endpoint "
+                    f"{training_run.endpoint_resource_name}"
+                )
+            else:
+                logger.warning(
+                    f"Model {model_resource_name} not found on endpoint "
+                    f"{training_run.endpoint_resource_name}, clearing deployment flag"
+                )
+
+            # Update training run
+            training_run.is_deployed = False
+            training_run.deployed_at = None
+            training_run.endpoint_resource_name = ''
+            training_run.save(update_fields=[
+                'is_deployed', 'deployed_at', 'endpoint_resource_name'
+            ])
+
+            logger.info(f"Cleared deployment info for {training_run.display_name}")
+
+            return training_run
+
+        except Exception as e:
+            logger.exception(f"Error undeploying model: {e}")
+            raise TrainingServiceError(f"Failed to undeploy model: {e}")
+
     def force_push_model(self, training_run: TrainingRun) -> TrainingRun:
         """
         Force-push a not-blessed model to Vertex AI Model Registry.

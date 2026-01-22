@@ -69,11 +69,13 @@ const ExpViewModal = (function() {
     };
 
     let state = {
-        mode: 'experiment',  // 'experiment' or 'training_run'
+        mode: 'experiment',  // 'experiment', 'training_run', or 'model'
         expId: null,
         currentExp: null,
         runId: null,
         currentRun: null,
+        modelId: null,
+        currentModel: null,
         currentTab: 'overview',
         pollInterval: null,
         dataCache: {
@@ -81,6 +83,8 @@ const ExpViewModal = (function() {
             schema: null,
             errorDetails: null,
             trainingHistory: null,
+            versions: null,
+            lineage: null,
             _loadingInsights: false,
             _statsData: null,
             _schemaData: null
@@ -696,6 +700,12 @@ const ExpViewModal = (function() {
         const container = document.getElementById('expViewTabDeployment');
         if (!container) return;
 
+        // Different rendering for model mode vs training_run mode
+        if (state.mode === 'model' && state.currentModel) {
+            renderModelDeploymentTab(state.currentModel);
+            return;
+        }
+
         container.innerHTML = `
             <div class="exp-view-section-group">
                 <h4 class="exp-view-group-title">Deployment Status</h4>
@@ -705,6 +715,646 @@ const ExpViewModal = (function() {
                 </div>
             </div>
         `;
+    }
+
+    // =============================================================================
+    // MODEL MODE FUNCTIONS
+    // =============================================================================
+
+    async function openForModel(modelId, options = {}) {
+        state.mode = 'model';
+
+        try {
+            const url = `/api/models/${modelId}/`;
+            const response = await fetch(url);
+            const data = await response.json();
+
+            if (!data.success) {
+                console.error('Failed to load model:', data.error);
+                return;
+            }
+
+            openWithModelData(data.model, options);
+        } catch (error) {
+            console.error('Error loading model details:', error);
+        }
+    }
+
+    function openWithModelData(model, options = {}) {
+        state.mode = 'model';
+        state.currentModel = model;
+
+        // Reset state
+        state.dataCache = {
+            statistics: null,
+            schema: null,
+            errorDetails: null,
+            trainingHistory: null,
+            versions: null,
+            lineage: null,
+            _loadingInsights: false,
+            _statsData: null,
+            _schemaData: null
+        };
+
+        // Set initial tab
+        const initialTab = options.tab || 'overview';
+        state.currentTab = initialTab;
+
+        // Reset tabs
+        document.querySelectorAll('.exp-view-tab').forEach(t => t.classList.remove('active'));
+        const targetTab = document.querySelector(`.exp-view-tab[data-tab="${initialTab}"]`);
+        if (targetTab) targetTab.classList.add('active');
+
+        document.querySelectorAll('.exp-view-tab-content').forEach(c => c.classList.remove('active'));
+        const targetContent = document.getElementById(`expViewTab${initialTab.charAt(0).toUpperCase() + initialTab.slice(1)}`);
+        if (targetContent) targetContent.classList.add('active');
+
+        // Update visible tabs for model mode
+        updateVisibleTabs();
+
+        // Populate modal with model data
+        populateModelModal(model);
+        document.getElementById('expViewModal').classList.remove('hidden');
+
+        // Load initial tab content
+        if (initialTab === 'versions') {
+            loadModelVersions(model.id);
+        } else if (initialTab === 'lineage') {
+            loadModelLineage(model.id);
+        }
+    }
+
+    function populateModelModal(model) {
+        // Store current model for tab data loading
+        window.currentViewModel = model;
+
+        // Status gradient on header based on model_status
+        const header = document.getElementById('expViewHeader');
+        header.className = `modal-header exp-view-header ${model.model_status}`;
+
+        // Status panel
+        const statusPanel = document.getElementById('expViewStatusPanel');
+        statusPanel.className = `exp-view-status-panel ${model.model_status}`;
+
+        // Status icon
+        const statusIcon = document.getElementById('expViewStatusIcon');
+        const statusIcons = {
+            'deployed': 'fa-rocket',
+            'idle': 'fa-pause-circle',
+            'not_blessed': 'fa-exclamation-circle',
+            'pending': 'fa-clock'
+        };
+        statusIcon.className = `exp-view-status-icon ${model.model_status}`;
+        statusIcon.innerHTML = `<i class="fas ${statusIcons[model.model_status] || 'fa-cube'}"></i>`;
+
+        // Title (Model name)
+        document.getElementById('expViewTitle').textContent = model.vertex_model_name || 'Model';
+
+        // Model version as subtitle
+        const expNameEl = document.getElementById('expViewExpName');
+        expNameEl.textContent = `v${model.vertex_model_version || '1'} - Run #${model.run_number}`;
+        expNameEl.style.display = '';
+
+        // Model type badge in header
+        const typeBadgeEl = document.getElementById('expViewTypeBadge');
+        const modelType = (model.model_type || 'retrieval').toLowerCase();
+        const badgeContents = {
+            'retrieval': '<i class="fas fa-search"></i> Retrieval',
+            'ranking': '<i class="fas fa-sort-amount-down"></i> Ranking',
+            'multitask': '<i class="fas fa-layer-group"></i> Multitask'
+        };
+        typeBadgeEl.className = `exp-view-header-type-badge ${modelType}`;
+        typeBadgeEl.innerHTML = badgeContents[modelType] || badgeContents['retrieval'];
+
+        // Description
+        const descEl = document.getElementById('expViewDescription');
+        descEl.textContent = '';
+        descEl.style.display = 'none';
+
+        // Start/End times (registered_at, deployed_at)
+        document.getElementById('expViewStartTime').textContent = model.registered_at ?
+            formatDateTime(model.registered_at) : '-';
+        document.getElementById('expViewEndTime').textContent = model.deployed_at ?
+            formatDateTime(model.deployed_at) : '-';
+
+        // Overview Tab - render model overview
+        renderModelOverview(model);
+    }
+
+    function renderModelOverview(model) {
+        // Dataset section
+        const datasetName = model.dataset_name || '-';
+        document.getElementById('expViewDatasetName').textContent = datasetName;
+        document.getElementById('expViewDatasetDetails').innerHTML =
+            `<div class="exp-view-config-chip">${datasetName}</div>`;
+
+        // Features config
+        const featureConfigName = model.feature_config_name || '-';
+        document.getElementById('expViewFeaturesConfigName').textContent = featureConfigName;
+        document.getElementById('expViewFeaturesConfigContent').innerHTML =
+            `<div class="exp-view-config-chip">${featureConfigName}</div>`;
+
+        // Model config
+        const modelConfigName = model.model_config_name || '-';
+        document.getElementById('expViewModelConfigName').textContent = modelConfigName;
+        document.getElementById('expViewModelConfigContent').innerHTML = `
+            <div class="exp-view-config-chips">
+                <div class="exp-view-config-chip">${modelConfigName}</div>
+                ${model.retrieval_algorithm ? `<div class="exp-view-config-chip">${model.retrieval_algorithm}</div>` : ''}
+            </div>
+        `;
+
+        // Hide sampling section for models
+        const samplingSection = document.getElementById('expViewSamplingChips')?.closest('.exp-view-section-group');
+        if (samplingSection) samplingSection.style.display = 'none';
+
+        // Training parameters - show GPU config if available
+        const paramsContainer = document.getElementById('expViewTrainingParamsChips');
+        if (paramsContainer) {
+            let paramsHtml = '';
+            if (model.training_params) {
+                const params = model.training_params;
+                if (params.epochs) paramsHtml += `<div class="exp-view-config-chip">Epochs: ${params.epochs}</div>`;
+                if (params.batch_size) paramsHtml += `<div class="exp-view-config-chip">Batch: ${params.batch_size}</div>`;
+                if (params.learning_rate) paramsHtml += `<div class="exp-view-config-chip">LR: ${params.learning_rate}</div>`;
+            }
+            if (model.gpu_config) {
+                const gpu = model.gpu_config;
+                if (gpu.machine_type) paramsHtml += `<div class="exp-view-config-chip">${gpu.machine_type}</div>`;
+                if (gpu.accelerator_type) paramsHtml += `<div class="exp-view-config-chip">${gpu.accelerator_type}</div>`;
+            }
+            paramsContainer.innerHTML = paramsHtml || '<span style="color:#9ca3af;">No parameters</span>';
+        }
+
+        // Results Summary (metrics)
+        renderModelMetrics(model);
+    }
+
+    function renderModelMetrics(model) {
+        const resultsSummary = document.getElementById('expViewResultsSummary');
+        const metricsContainer = document.getElementById('expViewMetricsSummary');
+
+        if (!model.metrics) {
+            resultsSummary.classList.add('hidden');
+            return;
+        }
+
+        resultsSummary.classList.remove('hidden');
+
+        let metricsHtml = '';
+        const formatMetric = v => v != null ? v.toFixed(4) : 'N/A';
+        const formatRecall = v => v != null ? (v * 100).toFixed(0) + '%' : 'N/A';
+
+        if (model.model_type === 'ranking') {
+            metricsHtml = `
+                <div class="exp-view-metric-card">
+                    <div class="exp-view-metric-card-label">RMSE</div>
+                    <div class="exp-view-metric-card-value">${formatMetric(model.metrics.rmse)}</div>
+                </div>
+                <div class="exp-view-metric-card">
+                    <div class="exp-view-metric-card-label">MAE</div>
+                    <div class="exp-view-metric-card-value">${formatMetric(model.metrics.mae)}</div>
+                </div>
+                <div class="exp-view-metric-card">
+                    <div class="exp-view-metric-card-label">Test RMSE</div>
+                    <div class="exp-view-metric-card-value">${formatMetric(model.metrics.test_rmse)}</div>
+                </div>
+                <div class="exp-view-metric-card">
+                    <div class="exp-view-metric-card-label">Test MAE</div>
+                    <div class="exp-view-metric-card-value">${formatMetric(model.metrics.test_mae)}</div>
+                </div>
+            `;
+        } else {
+            metricsHtml = `
+                <div class="exp-view-metric-card">
+                    <div class="exp-view-metric-card-label">R@5</div>
+                    <div class="exp-view-metric-card-value">${formatRecall(model.metrics.recall_at_5)}</div>
+                </div>
+                <div class="exp-view-metric-card">
+                    <div class="exp-view-metric-card-label">R@10</div>
+                    <div class="exp-view-metric-card-value">${formatRecall(model.metrics.recall_at_10)}</div>
+                </div>
+                <div class="exp-view-metric-card">
+                    <div class="exp-view-metric-card-label">R@50</div>
+                    <div class="exp-view-metric-card-value">${formatRecall(model.metrics.recall_at_50)}</div>
+                </div>
+                <div class="exp-view-metric-card">
+                    <div class="exp-view-metric-card-label">R@100</div>
+                    <div class="exp-view-metric-card-value">${formatRecall(model.metrics.recall_at_100)}</div>
+                </div>
+            `;
+        }
+
+        metricsContainer.innerHTML = metricsHtml;
+    }
+
+    async function loadModelVersions(modelId) {
+        const container = document.getElementById('expViewTabVersions');
+        if (!container) return;
+
+        container.innerHTML = `
+            <div class="exp-view-loading">
+                <i class="fas fa-spinner fa-spin"></i>
+                <span>Loading versions...</span>
+            </div>
+        `;
+
+        try {
+            const response = await fetch(`/api/models/${modelId}/versions/`);
+            const data = await response.json();
+
+            if (data.success) {
+                state.dataCache.versions = data.versions;
+                renderVersionsTab(data.model_name, data.versions);
+            } else {
+                container.innerHTML = `
+                    <div class="exp-view-data-message">
+                        <i class="fas fa-exclamation-circle"></i>
+                        <span>Failed to load versions: ${data.error}</span>
+                    </div>
+                `;
+            }
+        } catch (error) {
+            console.error('Error loading model versions:', error);
+            container.innerHTML = `
+                <div class="exp-view-data-message">
+                    <i class="fas fa-exclamation-circle"></i>
+                    <span>Error loading versions</span>
+                </div>
+            `;
+        }
+    }
+
+    function renderVersionsTab(modelName, versions) {
+        const container = document.getElementById('expViewTabVersions');
+        if (!container) return;
+
+        const formatDate = (isoStr) => {
+            if (!isoStr) return '-';
+            return new Date(isoStr).toLocaleDateString('en-US', {
+                month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit'
+            });
+        };
+
+        let tableRows = versions.map((v, idx) => `
+            <tr class="${v.id === state.currentModel?.id ? 'active' : ''}" onclick="ExpViewModal.selectModelVersion(${v.id})">
+                <td>v${v.vertex_model_version || (versions.length - idx)}</td>
+                <td>Run #${v.run_number}</td>
+                <td>
+                    <span class="models-status-badge ${v.model_status}">
+                        ${v.model_status === 'deployed' ? '<i class="fas fa-rocket"></i>' :
+                          v.model_status === 'idle' ? '<i class="fas fa-pause-circle"></i>' :
+                          '<i class="fas fa-exclamation-circle"></i>'}
+                        ${v.model_status}
+                    </span>
+                </td>
+                <td>${v.is_blessed ? '<i class="fas fa-check-circle" style="color:#10b981;"></i>' : '<i class="fas fa-times-circle" style="color:#f97316;"></i>'}</td>
+                <td>${formatDate(v.registered_at)}</td>
+            </tr>
+        `).join('');
+
+        container.innerHTML = `
+            <div class="exp-view-section-group">
+                <h4 class="exp-view-group-title">Version History - ${modelName}</h4>
+                <div style="border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
+                    <table class="models-table" style="margin: 0;">
+                        <thead>
+                            <tr>
+                                <th>Version</th>
+                                <th>Training Run</th>
+                                <th>Status</th>
+                                <th>Blessed</th>
+                                <th>Registered</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${tableRows}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+    }
+
+    function selectModelVersion(modelId) {
+        // Close and reopen with new model
+        close();
+        setTimeout(() => openForModel(modelId), 100);
+    }
+
+    function renderArtifactsTab(model) {
+        const container = document.getElementById('expViewTabArtifacts');
+        if (!container) return;
+
+        const artifacts = model.artifacts || {};
+        const gcsPath = model.gcs_artifacts_path || '';
+
+        let artifactsHtml = `
+            <div class="exp-view-section-group">
+                <h4 class="exp-view-group-title">Model Artifacts</h4>
+                <div class="exp-view-artifact-list">
+        `;
+
+        // GCS Artifacts Path
+        if (gcsPath) {
+            artifactsHtml += `
+                <div class="exp-view-artifact-item">
+                    <div class="exp-view-artifact-label">
+                        <i class="fas fa-folder"></i> GCS Artifacts Path
+                    </div>
+                    <div class="exp-view-artifact-value">
+                        <code>${gcsPath}</code>
+                        <button class="exp-view-copy-btn" onclick="ExpViewModal.copyToClipboard('${gcsPath}')">
+                            <i class="fas fa-copy"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Model Resource Name
+        if (model.vertex_model_resource_name) {
+            artifactsHtml += `
+                <div class="exp-view-artifact-item">
+                    <div class="exp-view-artifact-label">
+                        <i class="fas fa-cube"></i> Model Resource Name
+                    </div>
+                    <div class="exp-view-artifact-value">
+                        <code>${model.vertex_model_resource_name}</code>
+                        <button class="exp-view-copy-btn" onclick="ExpViewModal.copyToClipboard('${model.vertex_model_resource_name}')">
+                            <i class="fas fa-copy"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Endpoint Resource Name (if deployed)
+        if (model.endpoint_resource_name) {
+            artifactsHtml += `
+                <div class="exp-view-artifact-item">
+                    <div class="exp-view-artifact-label">
+                        <i class="fas fa-server"></i> Endpoint Resource Name
+                    </div>
+                    <div class="exp-view-artifact-value">
+                        <code>${model.endpoint_resource_name}</code>
+                        <button class="exp-view-copy-btn" onclick="ExpViewModal.copyToClipboard('${model.endpoint_resource_name}')">
+                            <i class="fas fa-copy"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Additional artifacts from the artifacts JSON
+        if (Object.keys(artifacts).length > 0) {
+            Object.entries(artifacts).forEach(([key, value]) => {
+                if (value) {
+                    artifactsHtml += `
+                        <div class="exp-view-artifact-item">
+                            <div class="exp-view-artifact-label">
+                                <i class="fas fa-file"></i> ${key.replace(/_/g, ' ')}
+                            </div>
+                            <div class="exp-view-artifact-value">
+                                <code>${value}</code>
+                                <button class="exp-view-copy-btn" onclick="ExpViewModal.copyToClipboard('${value}')">
+                                    <i class="fas fa-copy"></i>
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                }
+            });
+        }
+
+        artifactsHtml += `
+                </div>
+            </div>
+        `;
+
+        container.innerHTML = artifactsHtml;
+    }
+
+    function renderModelDeploymentTab(model) {
+        const container = document.getElementById('expViewTabDeployment');
+        if (!container) return;
+
+        const isDeployed = model.is_deployed;
+        const isBlessed = model.is_blessed;
+
+        let statusHtml;
+        if (isDeployed) {
+            statusHtml = `
+                <div class="exp-view-deployment-status deployed">
+                    <div class="exp-view-deployment-status-icon">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                    <div class="exp-view-deployment-status-text">
+                        <strong>Deployed</strong>
+                        <span>Model is currently serving predictions</span>
+                    </div>
+                </div>
+                <div class="exp-view-deployment-info">
+                    <div class="exp-view-info-row">
+                        <span class="exp-view-info-label">Endpoint</span>
+                        <span class="exp-view-info-value">${model.endpoint_resource_name || '-'}</span>
+                    </div>
+                    <div class="exp-view-info-row">
+                        <span class="exp-view-info-label">Deployed At</span>
+                        <span class="exp-view-info-value">${model.deployed_at ? formatDateTime(model.deployed_at) : '-'}</span>
+                    </div>
+                </div>
+                <div class="exp-view-deployment-actions">
+                    <button class="btn btn-danger" onclick="ExpViewModal.undeployModel(${model.id})">
+                        <i class="fas fa-stop-circle"></i> Undeploy Model
+                    </button>
+                </div>
+            `;
+        } else if (isBlessed) {
+            statusHtml = `
+                <div class="exp-view-deployment-status idle">
+                    <div class="exp-view-deployment-status-icon">
+                        <i class="fas fa-pause-circle"></i>
+                    </div>
+                    <div class="exp-view-deployment-status-text">
+                        <strong>Ready to Deploy</strong>
+                        <span>Model is blessed and can be deployed</span>
+                    </div>
+                </div>
+                <div class="exp-view-deployment-actions">
+                    <button class="btn btn-primary" onclick="ExpViewModal.deployModel(${model.id})">
+                        <i class="fas fa-rocket"></i> Deploy Model
+                    </button>
+                </div>
+            `;
+        } else {
+            statusHtml = `
+                <div class="exp-view-deployment-status not-blessed">
+                    <div class="exp-view-deployment-status-icon">
+                        <i class="fas fa-exclamation-circle"></i>
+                    </div>
+                    <div class="exp-view-deployment-status-text">
+                        <strong>Not Blessed</strong>
+                        <span>Model did not pass evaluation and cannot be deployed</span>
+                    </div>
+                </div>
+            `;
+        }
+
+        container.innerHTML = `
+            <div class="exp-view-section-group">
+                <h4 class="exp-view-group-title">Deployment Status</h4>
+                ${statusHtml}
+            </div>
+        `;
+    }
+
+    async function loadModelLineage(modelId) {
+        const container = document.getElementById('expViewTabLineage');
+        if (!container) return;
+
+        container.innerHTML = `
+            <div class="exp-view-loading">
+                <i class="fas fa-spinner fa-spin"></i>
+                <span>Loading lineage...</span>
+            </div>
+        `;
+
+        try {
+            const response = await fetch(`/api/models/${modelId}/lineage/`);
+            const data = await response.json();
+
+            if (data.success) {
+                state.dataCache.lineage = data.lineage;
+                renderLineageTab(data.lineage);
+            } else {
+                container.innerHTML = `
+                    <div class="exp-view-data-message">
+                        <i class="fas fa-exclamation-circle"></i>
+                        <span>Failed to load lineage: ${data.error}</span>
+                    </div>
+                `;
+            }
+        } catch (error) {
+            console.error('Error loading model lineage:', error);
+            container.innerHTML = `
+                <div class="exp-view-data-message">
+                    <i class="fas fa-exclamation-circle"></i>
+                    <span>Error loading lineage</span>
+                </div>
+            `;
+        }
+    }
+
+    function renderLineageTab(lineage) {
+        const container = document.getElementById('expViewTabLineage');
+        if (!container) return;
+
+        const nodeIcons = {
+            'dataset': 'fa-database',
+            'feature_config': 'fa-sliders-h',
+            'experiment': 'fa-flask',
+            'training_run': 'fa-cogs',
+            'model': 'fa-cube',
+            'endpoint': 'fa-server'
+        };
+
+        const nodeColors = {
+            'dataset': '#3b82f6',
+            'feature_config': '#8b5cf6',
+            'experiment': '#f59e0b',
+            'training_run': '#10b981',
+            'model': '#ec4899',
+            'endpoint': '#14b8a6'
+        };
+
+        let nodesHtml = lineage.nodes.map(node => `
+            <div class="exp-view-lineage-node" style="border-left: 4px solid ${nodeColors[node.type] || '#6b7280'};">
+                <div class="exp-view-lineage-node-icon" style="color: ${nodeColors[node.type] || '#6b7280'};">
+                    <i class="fas ${nodeIcons[node.type] || 'fa-circle'}"></i>
+                </div>
+                <div class="exp-view-lineage-node-info">
+                    <div class="exp-view-lineage-node-type">${node.type.replace('_', ' ')}</div>
+                    <div class="exp-view-lineage-node-label">${node.label}</div>
+                </div>
+            </div>
+        `).join('<div class="exp-view-lineage-arrow"><i class="fas fa-arrow-down"></i></div>');
+
+        container.innerHTML = `
+            <div class="exp-view-section-group">
+                <h4 class="exp-view-group-title">Model Lineage</h4>
+                <div class="exp-view-lineage-graph">
+                    ${nodesHtml}
+                </div>
+            </div>
+        `;
+    }
+
+    async function deployModel(modelId) {
+        if (!confirm('Are you sure you want to deploy this model?')) return;
+
+        try {
+            const response = await fetch(`/api/models/${modelId}/deploy/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                }
+            });
+            const data = await response.json();
+
+            if (data.success) {
+                alert('Model deployment started');
+                // Refresh the modal
+                openForModel(modelId);
+            } else {
+                alert('Failed to deploy: ' + (data.error || 'Unknown error'));
+            }
+        } catch (error) {
+            console.error('Error deploying model:', error);
+            alert('Error deploying model');
+        }
+    }
+
+    async function undeployModel(modelId) {
+        if (!confirm('Are you sure you want to undeploy this model? It will no longer serve predictions.')) return;
+
+        try {
+            const response = await fetch(`/api/models/${modelId}/undeploy/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                }
+            });
+            const data = await response.json();
+
+            if (data.success) {
+                alert('Model undeployed successfully');
+                // Refresh the modal
+                openForModel(modelId);
+            } else {
+                alert('Failed to undeploy: ' + (data.error || 'Unknown error'));
+            }
+        } catch (error) {
+            console.error('Error undeploying model:', error);
+            alert('Error undeploying model');
+        }
+    }
+
+    function copyToClipboard(text) {
+        navigator.clipboard.writeText(text).then(() => {
+            // Show brief visual feedback
+            const btn = event.target.closest('.exp-view-copy-btn');
+            if (btn) {
+                const icon = btn.querySelector('i');
+                icon.className = 'fas fa-check';
+                setTimeout(() => { icon.className = 'fas fa-copy'; }, 1500);
+            }
+        }).catch(err => {
+            console.error('Failed to copy:', err);
+        });
     }
 
     function close(event) {
@@ -720,6 +1370,11 @@ const ExpViewModal = (function() {
         // Reset training run state
         state.runId = null;
         state.currentRun = null;
+
+        // Reset model state
+        state.modelId = null;
+        state.currentModel = null;
+
         state.mode = 'experiment';
 
         state.dataCache = {
@@ -727,6 +1382,8 @@ const ExpViewModal = (function() {
             schema: null,
             errorDetails: null,
             trainingHistory: null,
+            versions: null,
+            lineage: null,
             _loadingInsights: false,
             _statsData: null,
             _schemaData: null
@@ -760,6 +1417,8 @@ const ExpViewModal = (function() {
         let visibleTabs;
         if (state.mode === 'training_run') {
             visibleTabs = ['overview', 'pipeline', 'data', 'training', 'repository', 'deployment'];
+        } else if (state.mode === 'model') {
+            visibleTabs = ['overview', 'versions', 'artifacts', 'deployment', 'lineage'];
         } else {
             visibleTabs = config.showTabs;
         }
@@ -944,7 +1603,30 @@ const ExpViewModal = (function() {
         if (tabContent) tabContent.classList.add('active');
 
         // Handle mode-specific tab loading
-        if (state.mode === 'training_run') {
+        if (state.mode === 'model') {
+            // Model mode tabs
+            const model = state.currentModel;
+            if (tabName === 'versions' && model) {
+                if (!state.dataCache.versions) {
+                    loadModelVersions(model.id);
+                } else {
+                    renderVersionsTab(model.vertex_model_name, state.dataCache.versions);
+                }
+            }
+            if (tabName === 'artifacts' && model) {
+                renderArtifactsTab(model);
+            }
+            if (tabName === 'deployment' && model) {
+                renderModelDeploymentTab(model);
+            }
+            if (tabName === 'lineage' && model) {
+                if (!state.dataCache.lineage) {
+                    loadModelLineage(model.id);
+                } else {
+                    renderLineageTab(state.dataCache.lineage);
+                }
+            }
+        } else if (state.mode === 'training_run') {
             // Training run mode tabs
             if (tabName === 'data') {
                 loadDataInsights();
@@ -3082,6 +3764,14 @@ const ExpViewModal = (function() {
         close: close,
         handleOverlayClick: handleOverlayClick,
 
+        // Model mode operations
+        openForModel: openForModel,
+        openWithModelData: openWithModelData,
+        selectModelVersion: selectModelVersion,
+        deployModel: deployModel,
+        undeployModel: undeployModel,
+        copyToClipboard: copyToClipboard,
+
         // Tab switching
         switchTab: switchTab,
 
@@ -3096,6 +3786,7 @@ const ExpViewModal = (function() {
         getState: () => state,
         getCurrentExp: () => state.currentExp,
         getCurrentRun: () => state.currentRun,
+        getCurrentModel: () => state.currentModel,
         getMode: () => state.mode
     };
 })();

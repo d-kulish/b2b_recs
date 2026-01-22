@@ -135,4 +135,43 @@ urlpatterns = [
         webhooks.training_scheduler_webhook,
         name='training_scheduler_webhook'
     ),
+
+    # ==========================================================================
+    # Models Registry API endpoints
+    # ==========================================================================
+    path(
+        'api/models/',
+        api.models_list,
+        name='models_list'
+    ),
+    path(
+        'api/models/<int:model_id>/',
+        api.model_detail,
+        name='model_detail'
+    ),
+    path(
+        'api/models/<int:model_id>/versions/',
+        api.model_versions,
+        name='model_versions'
+    ),
+    path(
+        'api/models/<int:model_id>/deploy/',
+        api.model_deploy,
+        name='model_deploy'
+    ),
+    path(
+        'api/models/<int:model_id>/undeploy/',
+        api.model_undeploy,
+        name='model_undeploy'
+    ),
+    path(
+        'api/models/<int:model_id>/lineage/',
+        api.model_lineage,
+        name='model_lineage'
+    ),
+    path(
+        'api/training-schedules/calendar/',
+        api.training_schedules_calendar,
+        name='training_schedules_calendar'
+    ),
 ]

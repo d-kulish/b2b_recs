@@ -1748,3 +1748,240 @@
     color: #c2410c;
     border: 1px solid #fdba74;
 }
+
+/* ==========================================================================
+   Model Mode Styles
+   ========================================================================== */
+
+/* Artifact List */
+.exp-view-artifact-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.exp-view-artifact-item {
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 12px 16px;
+}
+
+.exp-view-artifact-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.exp-view-artifact-label i {
+    color: #9ca3af;
+}
+
+.exp-view-artifact-value {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.exp-view-artifact-value code {
+    flex: 1;
+    background: white;
+    padding: 8px 12px;
+    border-radius: 6px;
+    border: 1px solid #e5e7eb;
+    font-family: 'Monaco', 'Menlo', monospace;
+    font-size: 12px;
+    color: #374151;
+    word-break: break-all;
+}
+
+.exp-view-copy-btn {
+    width: 32px;
+    height: 32px;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    background: white;
+    color: #6b7280;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
+    flex-shrink: 0;
+}
+
+.exp-view-copy-btn:hover {
+    background: #f3f4f6;
+    border-color: #d1d5db;
+    color: #374151;
+}
+
+/* Deployment Status */
+.exp-view-deployment-status {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 20px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+}
+
+.exp-view-deployment-status.deployed {
+    background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+    border: 1px solid #6ee7b7;
+}
+
+.exp-view-deployment-status.idle {
+    background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+    border: 1px solid #93c5fd;
+}
+
+.exp-view-deployment-status.not-blessed {
+    background: linear-gradient(135deg, #ffedd5 0%, #fed7aa 100%);
+    border: 1px solid #fdba74;
+}
+
+.exp-view-deployment-status-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    flex-shrink: 0;
+}
+
+.exp-view-deployment-status.deployed .exp-view-deployment-status-icon {
+    color: #059669;
+}
+
+.exp-view-deployment-status.idle .exp-view-deployment-status-icon {
+    color: #2563eb;
+}
+
+.exp-view-deployment-status.not-blessed .exp-view-deployment-status-icon {
+    color: #ea580c;
+}
+
+.exp-view-deployment-status-text {
+    flex: 1;
+}
+
+.exp-view-deployment-status-text strong {
+    display: block;
+    font-size: 16px;
+    color: #111827;
+    margin-bottom: 2px;
+}
+
+.exp-view-deployment-status-text span {
+    font-size: 13px;
+    color: #6b7280;
+}
+
+.exp-view-deployment-info {
+    background: #f9fafb;
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 20px;
+}
+
+.exp-view-info-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.exp-view-info-row:last-child {
+    border-bottom: none;
+}
+
+.exp-view-info-label {
+    font-size: 13px;
+    color: #6b7280;
+}
+
+.exp-view-info-value {
+    font-size: 13px;
+    font-weight: 500;
+    color: #111827;
+}
+
+.exp-view-deployment-actions {
+    display: flex;
+    gap: 12px;
+}
+
+/* Lineage Graph */
+.exp-view-lineage-graph {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+    padding: 20px;
+}
+
+.exp-view-lineage-node {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 12px 16px;
+    min-width: 200px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.exp-view-lineage-node-icon {
+    font-size: 18px;
+}
+
+.exp-view-lineage-node-info {
+    flex: 1;
+}
+
+.exp-view-lineage-node-type {
+    font-size: 10px;
+    font-weight: 600;
+    color: #9ca3af;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.exp-view-lineage-node-label {
+    font-size: 14px;
+    font-weight: 600;
+    color: #111827;
+}
+
+.exp-view-lineage-arrow {
+    color: #d1d5db;
+    padding: 8px 0;
+}
+
+/* Config Chips */
+.exp-view-config-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.exp-view-config-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 6px 12px;
+    background: #f3f4f6;
+    border-radius: 6px;
+    font-size: 12px;
+    color: #374151;
+}

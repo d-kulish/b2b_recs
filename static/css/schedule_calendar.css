@@ -1,0 +1,327 @@
+/**
+ * Schedule Calendar CSS
+ *
+ * GitHub-style contribution calendar for visualizing training schedule activity.
+ * Shows historical training runs (past) and projected schedules (future).
+ */
+
+/* =========================================================================
+   Calendar Container
+   ========================================================================= */
+.schedule-calendar {
+    width: 100%;
+    overflow-x: auto;
+    padding: 16px 0;
+}
+
+.schedule-calendar-inner {
+    display: inline-flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 100%;
+}
+
+/* =========================================================================
+   Calendar Header (Month Labels)
+   ========================================================================= */
+.schedule-calendar-header {
+    display: flex;
+    margin-left: 32px;
+    margin-bottom: 4px;
+}
+
+.schedule-calendar-month {
+    font-size: 10px;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+/* =========================================================================
+   Calendar Grid
+   ========================================================================= */
+.schedule-calendar-grid {
+    display: flex;
+    gap: 2px;
+}
+
+/* Day labels (Mon, Wed, Fri) */
+.schedule-calendar-labels {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding-right: 8px;
+    justify-content: space-around;
+    height: calc(7 * 12px + 6 * 2px);
+}
+
+.schedule-calendar-day-label {
+    font-size: 9px;
+    color: #9ca3af;
+    height: 12px;
+    line-height: 12px;
+    text-align: right;
+    width: 24px;
+}
+
+/* Week columns */
+.schedule-calendar-weeks {
+    display: flex;
+    gap: 2px;
+}
+
+.schedule-calendar-week {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+/* Individual day cells */
+.schedule-calendar-day {
+    width: 12px;
+    height: 12px;
+    border-radius: 2px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    position: relative;
+}
+
+.schedule-calendar-day:hover {
+    transform: scale(1.2);
+    z-index: 10;
+}
+
+/* Activity levels (GitHub-style green gradient) */
+.schedule-calendar-day.level-0 {
+    background: #ebedf0;
+}
+
+.schedule-calendar-day.level-1 {
+    background: #9be9a8;
+}
+
+.schedule-calendar-day.level-2 {
+    background: #40c463;
+}
+
+.schedule-calendar-day.level-3 {
+    background: #30a14e;
+}
+
+.schedule-calendar-day.level-4 {
+    background: #216e39;
+}
+
+/* Future scheduled days - blue tint */
+.schedule-calendar-day.scheduled {
+    background: #dbeafe;
+    border: 1px dashed #3b82f6;
+}
+
+.schedule-calendar-day.scheduled.level-1 {
+    background: #93c5fd;
+}
+
+.schedule-calendar-day.scheduled.level-2 {
+    background: #60a5fa;
+}
+
+.schedule-calendar-day.scheduled.level-3 {
+    background: #3b82f6;
+}
+
+/* Today marker */
+.schedule-calendar-day.today {
+    outline: 2px solid #3b82f6;
+    outline-offset: 1px;
+}
+
+/* Empty day (outside date range) */
+.schedule-calendar-day.empty {
+    background: transparent;
+    cursor: default;
+}
+
+.schedule-calendar-day.empty:hover {
+    transform: none;
+}
+
+/* =========================================================================
+   Tooltip
+   ========================================================================= */
+.schedule-calendar-tooltip {
+    position: fixed;
+    z-index: 1000;
+    background: #1f2937;
+    color: white;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    pointer-events: none;
+    white-space: nowrap;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    max-width: 280px;
+}
+
+.schedule-calendar-tooltip::before {
+    content: '';
+    position: absolute;
+    bottom: -6px;
+    left: 50%;
+    transform: translateX(-50%);
+    border-width: 6px 6px 0;
+    border-style: solid;
+    border-color: #1f2937 transparent transparent;
+}
+
+.schedule-calendar-tooltip-date {
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.schedule-calendar-tooltip-count {
+    color: #9ca3af;
+}
+
+.schedule-calendar-tooltip-items {
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px solid #374151;
+    white-space: normal;
+}
+
+.schedule-calendar-tooltip-item {
+    padding: 2px 0;
+    font-size: 11px;
+}
+
+/* =========================================================================
+   Legend
+   ========================================================================= */
+.schedule-calendar-legend {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 8px;
+    justify-content: flex-end;
+}
+
+.schedule-calendar-legend-label {
+    font-size: 10px;
+    color: #6b7280;
+}
+
+.schedule-calendar-legend-scale {
+    display: flex;
+    gap: 2px;
+}
+
+.schedule-calendar-legend-cell {
+    width: 12px;
+    height: 12px;
+    border-radius: 2px;
+}
+
+/* =========================================================================
+   Popover (on click)
+   ========================================================================= */
+.schedule-calendar-popover {
+    position: fixed;
+    z-index: 1001;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.05);
+    width: 280px;
+    max-height: 320px;
+    overflow: hidden;
+}
+
+.schedule-calendar-popover-header {
+    padding: 12px 16px;
+    background: #f9fafb;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.schedule-calendar-popover-date {
+    font-size: 14px;
+    font-weight: 600;
+    color: #111827;
+}
+
+.schedule-calendar-popover-count {
+    font-size: 12px;
+    color: #6b7280;
+    margin-top: 2px;
+}
+
+.schedule-calendar-popover-content {
+    max-height: 240px;
+    overflow-y: auto;
+}
+
+.schedule-calendar-popover-item {
+    padding: 10px 16px;
+    border-bottom: 1px solid #f3f4f6;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.schedule-calendar-popover-item:hover {
+    background: #f9fafb;
+}
+
+.schedule-calendar-popover-item:last-child {
+    border-bottom: none;
+}
+
+.schedule-calendar-popover-item-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: #111827;
+}
+
+.schedule-calendar-popover-item-meta {
+    font-size: 11px;
+    color: #6b7280;
+    margin-top: 2px;
+}
+
+.schedule-calendar-popover-close {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 24px;
+    height: 24px;
+    border: none;
+    background: none;
+    color: #9ca3af;
+    cursor: pointer;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.schedule-calendar-popover-close:hover {
+    background: #f3f4f6;
+    color: #374151;
+}
+
+/* =========================================================================
+   Empty State
+   ========================================================================= */
+.schedule-calendar-empty {
+    text-align: center;
+    padding: 40px 20px;
+    color: #6b7280;
+}
+
+.schedule-calendar-empty-icon {
+    font-size: 32px;
+    margin-bottom: 12px;
+    opacity: 0.5;
+}
+
+.schedule-calendar-empty-text {
+    font-size: 14px;
+}

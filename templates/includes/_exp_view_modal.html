@@ -86,6 +86,15 @@
             <button class="exp-view-tab" data-tab="deployment" onclick="ExpViewModal.switchTab('deployment')" style="display: none;">
                 Deployment
             </button>
+            <button class="exp-view-tab" data-tab="versions" onclick="ExpViewModal.switchTab('versions')" style="display: none;">
+                Versions
+            </button>
+            <button class="exp-view-tab" data-tab="artifacts" onclick="ExpViewModal.switchTab('artifacts')" style="display: none;">
+                Artifacts
+            </button>
+            <button class="exp-view-tab" data-tab="lineage" onclick="ExpViewModal.switchTab('lineage')" style="display: none;">
+                Lineage
+            </button>
         </div>
 
         <!-- Tab Content -->
@@ -333,8 +342,23 @@
                 <!-- Populated by JavaScript -->
             </div>
 
-            <!-- Deployment Tab (for training_run mode) -->
+            <!-- Deployment Tab (for training_run mode and model mode) -->
             <div id="expViewTabDeployment" class="exp-view-tab-content">
+                <!-- Populated by JavaScript -->
+            </div>
+
+            <!-- Versions Tab (for model mode) -->
+            <div id="expViewTabVersions" class="exp-view-tab-content">
+                <!-- Populated by JavaScript -->
+            </div>
+
+            <!-- Artifacts Tab (for model mode) -->
+            <div id="expViewTabArtifacts" class="exp-view-tab-content">
+                <!-- Populated by JavaScript -->
+            </div>
+
+            <!-- Lineage Tab (for model mode) -->
+            <div id="expViewTabLineage" class="exp-view-tab-content">
                 <!-- Populated by JavaScript -->
             </div>
         </div>

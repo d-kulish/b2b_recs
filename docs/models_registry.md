@@ -1080,3 +1080,120 @@ No new external dependencies required. Uses:
 - `docs/phase_training.md` - Training domain specifications
 - `ml_platform/training/models.py` - TrainingRun and TrainingSchedule models
 - `static/js/exp_view_modal.js` - Reusable view modal component
+
+---
+
+## Implementation Status
+
+**Implemented**: 2026-01-22
+
+### Summary
+
+All MVP features (Phases 1-4) have been implemented. The Models Registry chapter is now fully functional on the Training page.
+
+### Files Created
+
+| File | Lines | Purpose |
+|------|-------|---------|
+| `static/js/models_registry.js` | ~600 | Main module: table, filters, actions, KPI |
+| `static/js/schedule_calendar.js` | ~350 | GitHub-style calendar component |
+| `static/css/models_registry.css` | ~400 | KPI, table, filter bar, status badges |
+| `static/css/schedule_calendar.css` | ~250 | Calendar grid, tooltip, popover styles |
+
+### Files Modified
+
+| File | Changes |
+|------|---------|
+| `ml_platform/training/api.py` | Added 7 API endpoint functions for Models Registry |
+| `ml_platform/training/urls.py` | Added 7 URL routes |
+| `ml_platform/training/services.py` | Added `undeploy_model()` method |
+| `static/js/exp_view_modal.js` | Added 'model' mode with new tabs (Versions, Artifacts, Deployment, Lineage) |
+| `templates/includes/_exp_view_modal.html` | Added new tab buttons and content areas |
+| `static/css/exp_view_modal.css` | Added model-specific styles |
+| `templates/ml_platform/model_training.html` | Replaced placeholder with full implementation |
+
+### API Endpoints Implemented
+
+| Method | Endpoint | Status |
+|--------|----------|--------|
+| `GET` | `/api/models/` | ✅ Implemented |
+| `GET` | `/api/models/{id}/` | ✅ Implemented |
+| `GET` | `/api/models/{id}/versions/` | ✅ Implemented |
+| `POST` | `/api/models/{id}/deploy/` | ✅ Implemented |
+| `POST` | `/api/models/{id}/undeploy/` | ✅ Implemented |
+| `GET` | `/api/models/{id}/lineage/` | ✅ Implemented |
+| `GET` | `/api/training-schedules/calendar/` | ✅ Implemented |
+
+### Features Implemented
+
+#### KPI Summary Row
+- ✅ Total Models count
+- ✅ Blessed count
+- ✅ Deployed count
+- ✅ Idle count (blessed but not deployed)
+- ✅ Latest registration date
+
+#### Schedule Calendar Grid
+- ✅ GitHub-style contribution graph (40 weeks: 10 past + 30 future)
+- ✅ Color levels based on activity (0-4)
+- ✅ Today marker (blue border)
+- ✅ Tooltip on hover with date and model names
+- ✅ Click popover with detailed run/schedule info
+- ✅ Historical data from TrainingRun completions
+- ✅ Future projections from active TrainingSchedule records
+
+#### Filter Bar
+- ✅ Model Type filter (All, Retrieval, Ranking, Multitask)
+- ✅ Status filter (All, Blessed, Not Blessed, Deployed, Idle)
+- ✅ Sort options (Latest, Oldest, Best Metrics, Name A-Z)
+- ✅ Debounced search (300ms)
+- ✅ Refresh button
+
+#### Models Table
+- ✅ Row number, Model Name, Type badge, Version, Metrics, Status badge, Registered date
+- ✅ Clickable rows to open Model View Modal
+- ✅ Actions dropdown (View Details, Version History, Deploy, Undeploy, Copy Artifact URL, Open in Vertex AI)
+- ✅ Pagination
+
+#### Model View Modal (ExpViewModal in 'model' mode)
+- ✅ Overview tab with metrics and configuration summary
+- ✅ Versions tab with version history table
+- ✅ Artifacts tab with GCS paths and copy buttons
+- ✅ Deployment tab with status, endpoint info, deploy/undeploy buttons
+- ✅ Lineage tab with DAG visualization
+
+### Architecture Decisions Implemented
+
+| Decision | Approach |
+|----------|----------|
+| **Module Structure** | New `models_registry.js` separate from training cards |
+| **Data Source** | Query `TrainingRun` where `vertex_model_resource_name IS NOT NULL` |
+| **Modal Strategy** | Extended `ExpViewModal` with `'model'` mode |
+| **Schedule Grid** | Standalone `schedule_calendar.js` component |
+| **CSS Strategy** | New `models_registry.css` + `schedule_calendar.css` files |
+
+### Verification Steps
+
+1. **Backend Testing**:
+   - Start dev server: `python manage.py runserver`
+   - Test API endpoints:
+     - `GET /api/models/` - returns registered models
+     - `GET /api/models/?model_type=retrieval` - filters work
+     - `GET /api/training-schedules/calendar/` - returns date mapping
+
+2. **Frontend Testing**:
+   - Load Training page (`/models/{id}/training/`)
+   - Verify Models Registry chapter renders
+   - KPI row shows correct counts
+   - Calendar grid displays with correct colors
+   - Filter dropdowns work
+   - Table rows display models
+   - Click row → Modal opens with correct tabs
+   - Test Deploy/Undeploy actions
+
+### Future Enhancements (Phase 5)
+
+- [ ] Version comparison modal
+- [ ] Prediction playground
+- [ ] Model monitoring dashboard
+- [ ] A/B testing support

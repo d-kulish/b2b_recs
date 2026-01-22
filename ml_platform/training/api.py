@@ -9,8 +9,9 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.db import transaction
+from django.utils import timezone
 
-from .models import TrainingRun
+from .models import TrainingRun, TrainingSchedule
 from .services import TrainingService, TrainingServiceError
 
 logger = logging.getLogger(__name__)
@@ -1564,7 +1565,6 @@ def training_run_tfdv_page(request, training_run_id):
 # Training Schedule API Endpoints
 # =============================================================================
 
-from .models import TrainingSchedule
 from .schedule_service import TrainingScheduleService, TrainingScheduleServiceError
 
 
@@ -2261,6 +2261,770 @@ def training_schedule_trigger(request, schedule_id):
 
     except Exception as e:
         logger.exception(f"Error triggering training schedule: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+# =============================================================================
+# Models Registry API Endpoints
+# =============================================================================
+
+def _serialize_registered_model(training_run, include_details=False):
+    """
+    Serialize a TrainingRun that has a registered model to dict.
+
+    Args:
+        training_run: TrainingRun model instance with vertex_model_resource_name
+        include_details: If True, include full configuration and artifacts
+
+    Returns:
+        Dict representation of the registered model
+    """
+    # Determine model status
+    if training_run.is_deployed:
+        model_status = 'deployed'
+    elif training_run.is_blessed:
+        model_status = 'idle'
+    else:
+        model_status = 'not_blessed'
+
+    # Get primary metrics based on model type
+    metrics = {}
+    if training_run.model_type == TrainingRun.MODEL_TYPE_MULTITASK:
+        metrics = {
+            'recall_at_100': training_run.recall_at_100,
+            'recall_at_50': training_run.recall_at_50,
+            'rmse': training_run.rmse,
+            'mae': training_run.mae,
+        }
+    elif training_run.model_type == TrainingRun.MODEL_TYPE_RANKING:
+        metrics = {
+            'rmse': training_run.rmse,
+            'mae': training_run.mae,
+            'test_rmse': training_run.test_rmse,
+            'test_mae': training_run.test_mae,
+        }
+    else:  # Retrieval
+        metrics = {
+            'recall_at_100': training_run.recall_at_100,
+            'recall_at_50': training_run.recall_at_50,
+            'recall_at_10': training_run.recall_at_10,
+            'recall_at_5': training_run.recall_at_5,
+        }
+
+    data = {
+        'id': training_run.id,
+        'training_run_id': training_run.id,
+        'run_number': training_run.run_number,
+
+        # Model Registry info
+        'vertex_model_name': training_run.vertex_model_name,
+        'vertex_model_version': training_run.vertex_model_version,
+        'vertex_model_resource_name': training_run.vertex_model_resource_name,
+        'registered_at': training_run.registered_at.isoformat() if training_run.registered_at else None,
+
+        # Type and status
+        'model_type': training_run.model_type,
+        'model_status': model_status,
+        'is_blessed': training_run.is_blessed,
+        'is_deployed': training_run.is_deployed,
+
+        # Metrics
+        'metrics': metrics,
+
+        # Configuration names
+        'dataset_name': training_run.dataset.name if training_run.dataset else None,
+        'feature_config_name': training_run.feature_config.name if training_run.feature_config else None,
+        'model_config_name': training_run.model_config.name if training_run.model_config else None,
+        'retrieval_algorithm': training_run.model_config.retrieval_algorithm if training_run.model_config else None,
+
+        # Deployment info
+        'deployed_at': training_run.deployed_at.isoformat() if training_run.deployed_at else None,
+        'endpoint_resource_name': training_run.endpoint_resource_name,
+
+        # Training info
+        'base_experiment_number': training_run.base_experiment.experiment_number if training_run.base_experiment else None,
+        'created_by': training_run.created_by.username if training_run.created_by else None,
+    }
+
+    if include_details:
+        data['training_params'] = training_run.training_params
+        data['gpu_config'] = training_run.gpu_config
+        data['evaluator_config'] = training_run.evaluator_config
+        data['deployment_config'] = training_run.deployment_config
+        data['evaluation_results'] = training_run.evaluation_results
+        data['artifacts'] = training_run.artifacts
+        data['gcs_artifacts_path'] = training_run.gcs_artifacts_path
+
+    return data
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def models_list(request):
+    """
+    List registered models in Vertex AI Model Registry.
+
+    GET /api/models/
+    GET /api/models/?model_type=retrieval
+    GET /api/models/?status=deployed
+    GET /api/models/?sort=latest
+    GET /api/models/?search=product
+
+    Returns registered models with KPI summary.
+    """
+    try:
+        model_endpoint = _get_model_endpoint(request)
+        if not model_endpoint:
+            return JsonResponse({
+                'success': False,
+                'error': 'No model endpoint selected'
+            }, status=400)
+
+        # Base queryset: Only training runs with registered models
+        queryset = TrainingRun.objects.filter(
+            ml_model=model_endpoint,
+            vertex_model_resource_name__isnull=False
+        ).exclude(
+            vertex_model_resource_name=''
+        ).select_related('dataset', 'feature_config', 'model_config', 'created_by', 'base_experiment')
+
+        # Apply filters
+        model_type = request.GET.get('model_type')
+        if model_type and model_type != 'all':
+            queryset = queryset.filter(model_type=model_type)
+
+        status_filter = request.GET.get('status')
+        if status_filter and status_filter != 'all':
+            if status_filter == 'blessed':
+                queryset = queryset.filter(is_blessed=True)
+            elif status_filter == 'not_blessed':
+                queryset = queryset.filter(is_blessed=False)
+            elif status_filter == 'deployed':
+                queryset = queryset.filter(is_deployed=True)
+            elif status_filter == 'idle':
+                queryset = queryset.filter(is_blessed=True, is_deployed=False)
+
+        # Search filter
+        search = request.GET.get('search', '').strip()
+        if search:
+            from django.db.models import Q
+            queryset = queryset.filter(
+                Q(name__icontains=search) |
+                Q(vertex_model_name__icontains=search) |
+                Q(description__icontains=search)
+            )
+
+        # Sorting
+        sort = request.GET.get('sort', 'latest')
+        if sort == 'oldest':
+            queryset = queryset.order_by('registered_at')
+        elif sort == 'name':
+            queryset = queryset.order_by('vertex_model_name', '-registered_at')
+        elif sort == 'best_metrics':
+            # Sort by recall_at_100 descending for retrieval models
+            queryset = queryset.order_by('-recall_at_100', '-registered_at')
+        else:  # Default: latest
+            queryset = queryset.order_by('-registered_at')
+
+        # Calculate KPIs before pagination (on full queryset)
+        from django.db.models import Max
+        all_models = TrainingRun.objects.filter(
+            ml_model=model_endpoint,
+            vertex_model_resource_name__isnull=False
+        ).exclude(vertex_model_resource_name='')
+
+        kpi = {
+            'total': all_models.count(),
+            'blessed': all_models.filter(is_blessed=True).count(),
+            'deployed': all_models.filter(is_deployed=True).count(),
+            'idle': all_models.filter(is_blessed=True, is_deployed=False).count(),
+            'latest': None
+        }
+
+        latest = all_models.aggregate(latest=Max('registered_at'))['latest']
+        if latest:
+            kpi['latest'] = latest.isoformat()
+
+        # Pagination
+        try:
+            page = int(request.GET.get('page', 1))
+            page_size = int(request.GET.get('page_size', 10))
+        except ValueError:
+            page = 1
+            page_size = 10
+
+        page = max(1, page)
+        page_size = max(1, min(50, page_size))
+
+        total_count = queryset.count()
+        total_pages = (total_count + page_size - 1) // page_size if total_count > 0 else 1
+        page = min(page, total_pages)
+
+        start_idx = (page - 1) * page_size
+        end_idx = start_idx + page_size
+
+        models = list(queryset[start_idx:end_idx])
+
+        # Count versions for each model (by vertex_model_name)
+        for model in models:
+            version_count = TrainingRun.objects.filter(
+                ml_model=model_endpoint,
+                vertex_model_name=model.vertex_model_name,
+                vertex_model_resource_name__isnull=False
+            ).exclude(vertex_model_resource_name='').count()
+            model._version_count = version_count
+
+        return JsonResponse({
+            'success': True,
+            'models': [
+                {**_serialize_registered_model(m), 'version_count': getattr(m, '_version_count', 1)}
+                for m in models
+            ],
+            'pagination': {
+                'page': page,
+                'page_size': page_size,
+                'total_count': total_count,
+                'total_pages': total_pages,
+                'has_next': page < total_pages,
+                'has_prev': page > 1
+            },
+            'kpi': kpi
+        })
+
+    except Exception as e:
+        logger.exception(f"Error listing registered models: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def model_detail(request, model_id):
+    """
+    Get detailed information about a registered model.
+
+    GET /api/models/<id>/
+
+    Returns full model details including artifacts and configuration.
+    """
+    try:
+        model_endpoint = _get_model_endpoint(request)
+        if not model_endpoint:
+            return JsonResponse({
+                'success': False,
+                'error': 'No model endpoint selected'
+            }, status=400)
+
+        try:
+            training_run = TrainingRun.objects.select_related(
+                'dataset', 'feature_config', 'model_config', 'created_by', 'base_experiment'
+            ).get(
+                id=model_id,
+                ml_model=model_endpoint,
+                vertex_model_resource_name__isnull=False
+            )
+        except TrainingRun.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': f'Registered model {model_id} not found'
+            }, status=404)
+
+        return JsonResponse({
+            'success': True,
+            'model': _serialize_registered_model(training_run, include_details=True)
+        })
+
+    except Exception as e:
+        logger.exception(f"Error getting model detail: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def model_versions(request, model_id):
+    """
+    Get version history for a model (all versions with same vertex_model_name).
+
+    GET /api/models/<id>/versions/
+
+    Returns all versions of the same model name, sorted by version.
+    """
+    try:
+        model_endpoint = _get_model_endpoint(request)
+        if not model_endpoint:
+            return JsonResponse({
+                'success': False,
+                'error': 'No model endpoint selected'
+            }, status=400)
+
+        # Get the source model to find its name
+        try:
+            source_model = TrainingRun.objects.get(
+                id=model_id,
+                ml_model=model_endpoint,
+                vertex_model_resource_name__isnull=False
+            )
+        except TrainingRun.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': f'Registered model {model_id} not found'
+            }, status=404)
+
+        # Get all versions with the same model name
+        versions = TrainingRun.objects.filter(
+            ml_model=model_endpoint,
+            vertex_model_name=source_model.vertex_model_name,
+            vertex_model_resource_name__isnull=False
+        ).exclude(
+            vertex_model_resource_name=''
+        ).select_related(
+            'dataset', 'feature_config', 'model_config', 'created_by'
+        ).order_by('-registered_at')
+
+        return JsonResponse({
+            'success': True,
+            'model_name': source_model.vertex_model_name,
+            'versions': [_serialize_registered_model(v) for v in versions]
+        })
+
+    except Exception as e:
+        logger.exception(f"Error getting model versions: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def model_deploy(request, model_id):
+    """
+    Deploy a registered model to a Vertex AI Endpoint.
+
+    POST /api/models/<id>/deploy/
+
+    Uses TrainingService.deploy_model() for actual Vertex AI API integration.
+    """
+    try:
+        model_endpoint = _get_model_endpoint(request)
+        if not model_endpoint:
+            return JsonResponse({
+                'success': False,
+                'error': 'No model endpoint selected'
+            }, status=400)
+
+        try:
+            training_run = TrainingRun.objects.get(
+                id=model_id,
+                ml_model=model_endpoint,
+                vertex_model_resource_name__isnull=False
+            )
+        except TrainingRun.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': f'Registered model {model_id} not found'
+            }, status=404)
+
+        # Validate model can be deployed
+        if not training_run.is_blessed:
+            return JsonResponse({
+                'success': False,
+                'error': 'Cannot deploy unblessed model. Model must pass evaluation first.'
+            }, status=400)
+
+        if training_run.is_deployed:
+            return JsonResponse({
+                'success': False,
+                'error': f'Model is already deployed to: {training_run.endpoint_resource_name}'
+            }, status=400)
+
+        # Deploy using TrainingService
+        service = TrainingService(model_endpoint)
+        try:
+            training_run = service.deploy_model(training_run)
+        except TrainingServiceError as e:
+            return JsonResponse({
+                'success': False,
+                'error': str(e)
+            }, status=500)
+
+        return JsonResponse({
+            'success': True,
+            'model': _serialize_registered_model(training_run, include_details=True),
+            'message': f'Model deployed to {training_run.endpoint_resource_name}'
+        })
+
+    except Exception as e:
+        logger.exception(f"Error deploying model: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def model_undeploy(request, model_id):
+    """
+    Undeploy a model from its Vertex AI Endpoint.
+
+    POST /api/models/<id>/undeploy/
+
+    Removes the model from the endpoint but keeps it in the Model Registry.
+    """
+    try:
+        model_endpoint = _get_model_endpoint(request)
+        if not model_endpoint:
+            return JsonResponse({
+                'success': False,
+                'error': 'No model endpoint selected'
+            }, status=400)
+
+        try:
+            training_run = TrainingRun.objects.get(
+                id=model_id,
+                ml_model=model_endpoint,
+                vertex_model_resource_name__isnull=False
+            )
+        except TrainingRun.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': f'Registered model {model_id} not found'
+            }, status=404)
+
+        if not training_run.is_deployed:
+            return JsonResponse({
+                'success': False,
+                'error': 'Model is not currently deployed'
+            }, status=400)
+
+        # Undeploy using TrainingService
+        service = TrainingService(model_endpoint)
+        try:
+            training_run = service.undeploy_model(training_run)
+        except TrainingServiceError as e:
+            return JsonResponse({
+                'success': False,
+                'error': str(e)
+            }, status=500)
+
+        return JsonResponse({
+            'success': True,
+            'model': _serialize_registered_model(training_run, include_details=True),
+            'message': 'Model undeployed successfully'
+        })
+
+    except Exception as e:
+        logger.exception(f"Error undeploying model: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def model_lineage(request, model_id):
+    """
+    Get model lineage DAG data.
+
+    GET /api/models/<id>/lineage/
+
+    Returns lineage showing QuickTest -> TrainingRun -> Model relationships.
+    """
+    try:
+        model_endpoint = _get_model_endpoint(request)
+        if not model_endpoint:
+            return JsonResponse({
+                'success': False,
+                'error': 'No model endpoint selected'
+            }, status=400)
+
+        try:
+            training_run = TrainingRun.objects.select_related(
+                'dataset', 'feature_config', 'model_config', 'base_experiment'
+            ).get(
+                id=model_id,
+                ml_model=model_endpoint,
+                vertex_model_resource_name__isnull=False
+            )
+        except TrainingRun.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': f'Registered model {model_id} not found'
+            }, status=404)
+
+        # Build lineage DAG
+        nodes = []
+        edges = []
+
+        # Dataset node
+        if training_run.dataset:
+            nodes.append({
+                'id': f'dataset-{training_run.dataset.id}',
+                'type': 'dataset',
+                'label': training_run.dataset.name,
+                'data': {
+                    'id': training_run.dataset.id,
+                    'name': training_run.dataset.name
+                }
+            })
+
+        # Feature Config node
+        if training_run.feature_config:
+            nodes.append({
+                'id': f'feature-config-{training_run.feature_config.id}',
+                'type': 'feature_config',
+                'label': training_run.feature_config.name,
+                'data': {
+                    'id': training_run.feature_config.id,
+                    'name': training_run.feature_config.name
+                }
+            })
+            if training_run.dataset:
+                edges.append({
+                    'source': f'dataset-{training_run.dataset.id}',
+                    'target': f'feature-config-{training_run.feature_config.id}'
+                })
+
+        # Base Experiment node (if exists)
+        if training_run.base_experiment:
+            exp = training_run.base_experiment
+            nodes.append({
+                'id': f'experiment-{exp.id}',
+                'type': 'experiment',
+                'label': f'Exp #{exp.experiment_number}',
+                'data': {
+                    'id': exp.id,
+                    'experiment_number': exp.experiment_number,
+                    'status': exp.status
+                }
+            })
+            if training_run.feature_config:
+                edges.append({
+                    'source': f'feature-config-{training_run.feature_config.id}',
+                    'target': f'experiment-{exp.id}'
+                })
+
+        # Training Run node
+        nodes.append({
+            'id': f'training-run-{training_run.id}',
+            'type': 'training_run',
+            'label': f'Run #{training_run.run_number}',
+            'data': {
+                'id': training_run.id,
+                'run_number': training_run.run_number,
+                'status': training_run.status
+            }
+        })
+
+        # Edge from experiment or feature config to training run
+        if training_run.base_experiment:
+            edges.append({
+                'source': f'experiment-{training_run.base_experiment.id}',
+                'target': f'training-run-{training_run.id}'
+            })
+        elif training_run.feature_config:
+            edges.append({
+                'source': f'feature-config-{training_run.feature_config.id}',
+                'target': f'training-run-{training_run.id}'
+            })
+
+        # Registered Model node
+        nodes.append({
+            'id': f'model-{training_run.id}',
+            'type': 'model',
+            'label': training_run.vertex_model_name or 'Model',
+            'data': {
+                'id': training_run.id,
+                'vertex_model_name': training_run.vertex_model_name,
+                'vertex_model_version': training_run.vertex_model_version,
+                'is_blessed': training_run.is_blessed,
+                'is_deployed': training_run.is_deployed
+            }
+        })
+        edges.append({
+            'source': f'training-run-{training_run.id}',
+            'target': f'model-{training_run.id}'
+        })
+
+        # Endpoint node (if deployed)
+        if training_run.is_deployed and training_run.endpoint_resource_name:
+            nodes.append({
+                'id': f'endpoint-{training_run.id}',
+                'type': 'endpoint',
+                'label': 'Endpoint',
+                'data': {
+                    'endpoint_resource_name': training_run.endpoint_resource_name,
+                    'deployed_at': training_run.deployed_at.isoformat() if training_run.deployed_at else None
+                }
+            })
+            edges.append({
+                'source': f'model-{training_run.id}',
+                'target': f'endpoint-{training_run.id}'
+            })
+
+        return JsonResponse({
+            'success': True,
+            'lineage': {
+                'nodes': nodes,
+                'edges': edges
+            }
+        })
+
+    except Exception as e:
+        logger.exception(f"Error getting model lineage: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def training_schedules_calendar(request):
+    """
+    Get calendar grid data for schedule visualization.
+
+    GET /api/training-schedules/calendar/
+
+    Returns 10 weeks of past data (from TrainingRun completions) and
+    30 weeks of future projections (from active TrainingSchedule records).
+    """
+    from datetime import timedelta
+    from django.db.models import Count
+    from django.db.models.functions import TruncDate
+
+    try:
+        model_endpoint = _get_model_endpoint(request)
+        if not model_endpoint:
+            return JsonResponse({
+                'success': False,
+                'error': 'No model endpoint selected'
+            }, status=400)
+
+        today = timezone.now().date()
+
+        # Calculate date range: 10 weeks past, 30 weeks future
+        start_date = today - timedelta(weeks=10)
+        end_date = today + timedelta(weeks=30)
+
+        calendar_data = {}
+
+        # 1. Historical data: Completed TrainingRuns
+        historical_runs = TrainingRun.objects.filter(
+            ml_model=model_endpoint,
+            completed_at__date__gte=start_date,
+            completed_at__date__lte=today
+        ).annotate(
+            completion_date=TruncDate('completed_at')
+        ).values('completion_date').annotate(
+            count=Count('id')
+        ).order_by('completion_date')
+
+        for entry in historical_runs:
+            date_str = entry['completion_date'].isoformat()
+            calendar_data[date_str] = {
+                'count': entry['count'],
+                'type': 'historical',
+                'runs': []
+            }
+
+        # Get run details for historical dates
+        historical_details = TrainingRun.objects.filter(
+            ml_model=model_endpoint,
+            completed_at__date__gte=start_date,
+            completed_at__date__lte=today
+        ).values('id', 'run_number', 'name', 'status', 'completed_at')
+
+        for run in historical_details:
+            date_str = run['completed_at'].date().isoformat()
+            if date_str in calendar_data:
+                calendar_data[date_str]['runs'].append({
+                    'id': run['id'],
+                    'run_number': run['run_number'],
+                    'name': run['name'],
+                    'status': run['status']
+                })
+
+        # 2. Future data: Project from active TrainingSchedules
+        active_schedules = TrainingSchedule.objects.filter(
+            ml_model=model_endpoint,
+            status=TrainingSchedule.STATUS_ACTIVE
+        )
+
+        for schedule in active_schedules:
+            # Project future run dates based on schedule type
+            if schedule.schedule_type == TrainingSchedule.SCHEDULE_TYPE_ONCE:
+                if schedule.scheduled_datetime and schedule.scheduled_datetime.date() > today:
+                    date_str = schedule.scheduled_datetime.date().isoformat()
+                    if date_str not in calendar_data:
+                        calendar_data[date_str] = {'count': 0, 'type': 'scheduled', 'schedules': []}
+                    calendar_data[date_str]['count'] += 1
+                    calendar_data[date_str]['schedules'] = calendar_data[date_str].get('schedules', [])
+                    calendar_data[date_str]['schedules'].append({
+                        'id': schedule.id,
+                        'name': schedule.name,
+                        'schedule_type': schedule.schedule_type
+                    })
+
+            elif schedule.schedule_type == TrainingSchedule.SCHEDULE_TYPE_DAILY:
+                # Project daily runs for next 30 weeks
+                current_date = max(today + timedelta(days=1), start_date)
+                while current_date <= end_date:
+                    date_str = current_date.isoformat()
+                    if date_str not in calendar_data:
+                        calendar_data[date_str] = {'count': 0, 'type': 'scheduled', 'schedules': []}
+                    calendar_data[date_str]['count'] += 1
+                    calendar_data[date_str]['schedules'] = calendar_data[date_str].get('schedules', [])
+                    calendar_data[date_str]['schedules'].append({
+                        'id': schedule.id,
+                        'name': schedule.name,
+                        'schedule_type': schedule.schedule_type
+                    })
+                    current_date += timedelta(days=1)
+
+            elif schedule.schedule_type == TrainingSchedule.SCHEDULE_TYPE_WEEKLY:
+                # Project weekly runs
+                day_of_week = schedule.schedule_day_of_week or 0
+                current_date = today + timedelta(days=1)
+                # Find next occurrence of scheduled day
+                while current_date.weekday() != day_of_week:
+                    current_date += timedelta(days=1)
+
+                while current_date <= end_date:
+                    date_str = current_date.isoformat()
+                    if date_str not in calendar_data:
+                        calendar_data[date_str] = {'count': 0, 'type': 'scheduled', 'schedules': []}
+                    calendar_data[date_str]['count'] += 1
+                    calendar_data[date_str]['schedules'] = calendar_data[date_str].get('schedules', [])
+                    calendar_data[date_str]['schedules'].append({
+                        'id': schedule.id,
+                        'name': schedule.name,
+                        'schedule_type': schedule.schedule_type
+                    })
+                    current_date += timedelta(weeks=1)
+
+        return JsonResponse({
+            'success': True,
+            'calendar': calendar_data,
+            'range': {
+                'start': start_date.isoformat(),
+                'end': end_date.isoformat()
+            },
+            'today': today.isoformat()
+        })
+
+    except Exception as e:
+        logger.exception(f"Error getting training schedules calendar: {e}")
         return JsonResponse({
             'success': False,
             'error': str(e)

@@ -212,28 +212,28 @@ const ScheduleCalendar = (function() {
 
             if (monthKey !== currentMonth) {
                 if (currentMonth !== null && weekCount > 0) {
-                    months.push({ width: weekCount * 14 });
+                    months.push({ weekCount: weekCount, label: null });
                 }
                 currentMonth = monthKey;
                 months.push({
                     label: MONTH_NAMES[date.getMonth()],
-                    width: 0
+                    weekCount: 0
                 });
                 weekCount = 0;
             }
             weekCount++;
         });
 
-        // Add last month
+        // Add last month spacer
         if (weekCount > 0) {
-            months.push({ width: weekCount * 14 });
+            months.push({ weekCount: weekCount, label: null });
         }
 
         return `
             <div class="schedule-calendar-header">
                 ${months.map(m => m.label ?
-                    `<span class="schedule-calendar-month" style="min-width: 14px;">${m.label}</span>` :
-                    `<span style="width: ${m.width}px;"></span>`
+                    `<span class="schedule-calendar-month">${m.label}</span>` :
+                    `<span class="schedule-calendar-month-spacer" style="flex: ${m.weekCount};"></span>`
                 ).join('')}
             </div>
         `;

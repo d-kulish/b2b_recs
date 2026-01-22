@@ -15,10 +15,10 @@
 }
 
 .schedule-calendar-inner {
-    display: inline-flex;
+    display: flex;
     flex-direction: column;
     gap: 4px;
-    min-width: 100%;
+    width: 100%;
 }
 
 /* =========================================================================
@@ -35,6 +35,11 @@
     color: #6b7280;
     text-transform: uppercase;
     letter-spacing: 0.05em;
+    flex-shrink: 0;
+}
+
+.schedule-calendar-month-spacer {
+    min-width: 0;
 }
 
 /* =========================================================================
@@ -42,7 +47,7 @@
    ========================================================================= */
 .schedule-calendar-grid {
     display: flex;
-    gap: 2px;
+    width: 100%;
 }
 
 /* Day labels (Mon, Wed, Fri) */
@@ -67,13 +72,15 @@
 /* Week columns */
 .schedule-calendar-weeks {
     display: flex;
-    gap: 2px;
+    flex: 1;
 }
 
 .schedule-calendar-week {
     display: flex;
     flex-direction: column;
     gap: 2px;
+    flex: 1;
+    align-items: center;
 }
 
 /* Individual day cells */

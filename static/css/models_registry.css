@@ -11,15 +11,15 @@
 .models-kpi-row {
     display: grid;
     grid-template-columns: repeat(5, 1fr);
-    gap: 16px;
+    gap: 12px;
     margin-bottom: 20px;
 }
 
 .models-kpi-card {
     background: white;
     border: 1px solid #e5e7eb;
-    border-radius: 10px;
-    padding: 16px;
+    border-radius: 8px;
+    padding: 10px 8px;
     text-align: center;
     transition: all 0.2s ease;
 }
@@ -30,7 +30,7 @@
 }
 
 .models-kpi-value {
-    font-size: 28px;
+    font-size: 18px;
     font-weight: 700;
     color: #111827;
     line-height: 1.2;
@@ -46,6 +46,10 @@
 
 .models-kpi-value.highlight-orange {
     color: #f97316;
+}
+
+.models-kpi-value.highlight-red {
+    color: #ef4444;
 }
 
 .models-kpi-label {

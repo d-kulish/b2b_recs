@@ -33,8 +33,8 @@ const ScheduleCalendar = (function() {
         popover: null
     };
 
-    // Day of week labels (0 = Sunday in JS, but we want Monday-first)
-    const DAY_LABELS = ['Mon', '', 'Wed', '', 'Fri', '', ''];
+    // Day of week labels (Monday-first, with Sunday label for weekends)
+    const DAY_LABELS = ['Mon', '', 'Wed', '', 'Fri', '', 'Sun'];
     const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
     // =============================================================================
@@ -171,21 +171,12 @@ const ScheduleCalendar = (function() {
                         <div class="schedule-calendar-weeks">
                             ${weeks.map((week, weekIdx) => `
                                 <div class="schedule-calendar-week" data-week="${weekIdx}">
-                                    ${week.map(day => renderDay(day)).join('')}
+                                    ${week.slice(0, 5).map(day => renderDay(day)).join('')}
+                                    <div class="schedule-calendar-weekend-separator"></div>
+                                    ${week.slice(5).map(day => renderDay(day)).join('')}
                                 </div>
                             `).join('')}
                         </div>
-                    </div>
-                    <div class="schedule-calendar-legend">
-                        <span class="schedule-calendar-legend-label">Less</span>
-                        <div class="schedule-calendar-legend-scale">
-                            <div class="schedule-calendar-legend-cell level-0"></div>
-                            <div class="schedule-calendar-legend-cell level-1"></div>
-                            <div class="schedule-calendar-legend-cell level-2"></div>
-                            <div class="schedule-calendar-legend-cell level-3"></div>
-                            <div class="schedule-calendar-legend-cell level-4"></div>
-                        </div>
-                        <span class="schedule-calendar-legend-label">More</span>
                     </div>
                 </div>
             </div>

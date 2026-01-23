@@ -50,23 +50,27 @@
     width: 100%;
 }
 
-/* Day labels (Mon, Wed, Fri) */
+/* Day labels (Mon, Wed, Fri, Sun) */
 .schedule-calendar-labels {
     display: flex;
     flex-direction: column;
     gap: 2px;
     padding-right: 8px;
-    justify-content: space-around;
-    height: calc(7 * 12px + 6 * 2px);
+    height: calc(7 * 14px + 6 * 2px + 4px);  /* 7 days + gaps + weekend separator space */
 }
 
 .schedule-calendar-day-label {
     font-size: 9px;
     color: #9ca3af;
-    height: 12px;
-    line-height: 12px;
+    height: 14px;
+    line-height: 14px;
     text-align: right;
     width: 24px;
+}
+
+/* Add extra gap before weekend labels to align with separator */
+.schedule-calendar-day-label:nth-child(6) {
+    margin-top: 2px;
 }
 
 /* Week columns */
@@ -83,10 +87,18 @@
     align-items: center;
 }
 
+/* Weekend separator (after Friday row) */
+.schedule-calendar-weekend-separator {
+    width: 100%;
+    height: 2px;
+    border-top: 1px solid #fecaca;
+    margin: 1px 0;
+}
+
 /* Individual day cells */
 .schedule-calendar-day {
-    width: 12px;
-    height: 12px;
+    width: 14px;
+    height: 14px;
     border-radius: 2px;
     cursor: pointer;
     transition: all 0.15s ease;
@@ -224,8 +236,8 @@
 }
 
 .schedule-calendar-legend-cell {
-    width: 12px;
-    height: 12px;
+    width: 14px;
+    height: 14px;
     border-radius: 2px;
 }
 

@@ -39,7 +39,7 @@ const ModelsRegistry = (function() {
 
     let state = {
         models: [],
-        kpi: { total: 0, blessed: 0, deployed: 0, idle: 0, latest: null },
+        kpi: { total: 0, blessed: 0, deployed: 0, idle: 0, scheduled: 0 },
         pagination: { page: 1, pageSize: 10, totalCount: 0, totalPages: 1 },
         filters: {
             modelType: 'all',
@@ -230,8 +230,6 @@ const ModelsRegistry = (function() {
         const container = document.querySelector(config.kpiContainerId);
         if (!container) return;
 
-        const latestDate = state.kpi.latest ? formatDate(state.kpi.latest) : '-';
-
         container.innerHTML = `
             <div class="models-kpi-card">
                 <div class="models-kpi-value">${state.kpi.total}</div>
@@ -248,11 +246,10 @@ const ModelsRegistry = (function() {
             <div class="models-kpi-card">
                 <div class="models-kpi-value highlight-blue">${state.kpi.idle}</div>
                 <div class="models-kpi-label">Idle</div>
-                <div class="models-kpi-sublabel">Blessed but not deployed</div>
             </div>
             <div class="models-kpi-card">
-                <div class="models-kpi-value" style="font-size: 16px;">${latestDate}</div>
-                <div class="models-kpi-label">Latest</div>
+                <div class="models-kpi-value highlight-orange">${state.kpi.scheduled}</div>
+                <div class="models-kpi-label">Scheduled</div>
             </div>
         `;
     }

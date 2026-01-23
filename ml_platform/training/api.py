@@ -720,13 +720,14 @@ def training_run_submit(request, training_run_id):
 
 @csrf_exempt
 @require_http_methods(["POST"])
-def training_run_retry(request, training_run_id):
+def training_run_rerun(request, training_run_id):
     """
-    Retry a failed Training Run.
+    Re-run a Training Run with the same configuration.
 
-    POST /api/training-runs/<id>/retry/
+    POST /api/training-runs/<id>/rerun/
 
     Creates a new TrainingRun with the same configuration and submits it.
+    Works for any terminal state (completed, failed, not_blessed, cancelled).
 
     Returns:
     {
@@ -736,7 +737,7 @@ def training_run_retry(request, training_run_id):
             "status": "submitting",
             ...
         },
-        "message": "Retry created and submitted"
+        "message": "Re-run created and submitted"
     }
     """
     try:
@@ -760,18 +761,19 @@ def training_run_retry(request, training_run_id):
                 'error': f'TrainingRun {training_run_id} not found'
             }, status=404)
 
-        # Only allow retry for failed runs
-        if training_run.status != TrainingRun.STATUS_FAILED:
+        # Only allow rerun for terminal states
+        TERMINAL_STATUSES = ['completed', 'failed', 'not_blessed', 'cancelled']
+        if training_run.status not in TERMINAL_STATUSES:
             return JsonResponse({
                 'success': False,
-                'error': f"Cannot retry training run in '{training_run.status}' state. "
-                         f"Only failed training runs can be retried."
+                'error': f"Cannot re-run training in '{training_run.status}' state. "
+                         f"Only terminal states can be re-run."
             }, status=400)
 
-        # Retry the training run
+        # Re-run the training run
         service = TrainingService(model_endpoint)
         try:
-            new_run = service.retry_training_run(training_run)
+            new_run = service.rerun_training_run(training_run)
         except TrainingServiceError as e:
             return JsonResponse({
                 'success': False,
@@ -781,11 +783,11 @@ def training_run_retry(request, training_run_id):
         return JsonResponse({
             'success': True,
             'training_run': _serialize_training_run(new_run, include_details=True),
-            'message': f"Retry created as {new_run.display_name}"
+            'message': f"Re-run created as {new_run.display_name}"
         })
 
     except Exception as e:
-        logger.exception(f"Error retrying training run: {e}")
+        logger.exception(f"Error re-running training run: {e}")
         return JsonResponse({
             'success': False,
             'error': str(e)
@@ -2441,12 +2443,11 @@ def models_list(request):
             'blessed': all_models.filter(is_blessed=True).count(),
             'deployed': all_models.filter(is_deployed=True).count(),
             'idle': all_models.filter(is_blessed=True, is_deployed=False).count(),
-            'latest': None
+            'scheduled': TrainingSchedule.objects.filter(
+                ml_model=model_endpoint,
+                status='active'
+            ).count(),
         }
-
-        latest = all_models.aggregate(latest=Max('registered_at'))['latest']
-        if latest:
-            kpi['latest'] = latest.isoformat()
 
         # Pagination
         try:
@@ -2919,11 +2920,12 @@ def training_schedules_calendar(request):
 
         calendar_data = {}
 
-        # 1. Historical data: Completed TrainingRuns
+        # 1. Historical data: Successfully completed TrainingRuns
         historical_runs = TrainingRun.objects.filter(
             ml_model=model_endpoint,
             completed_at__date__gte=start_date,
-            completed_at__date__lte=today
+            completed_at__date__lte=today,
+            status='completed'
         ).annotate(
             completion_date=TruncDate('completed_at')
         ).values('completion_date').annotate(
@@ -2938,11 +2940,12 @@ def training_schedules_calendar(request):
                 'runs': []
             }
 
-        # Get run details for historical dates
+        # Get run details for historical dates (completed runs)
         historical_details = TrainingRun.objects.filter(
             ml_model=model_endpoint,
             completed_at__date__gte=start_date,
-            completed_at__date__lte=today
+            completed_at__date__lte=today,
+            status='completed'
         ).values('id', 'run_number', 'name', 'status', 'completed_at')
 
         for run in historical_details:

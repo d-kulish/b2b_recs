@@ -2125,3 +2125,262 @@
 .btn-outcome-action.btn-danger:hover {
     background: #dc2626;
 }
+
+/* ==========================================================================
+   Overview Tab - Accordion Sections
+   ========================================================================== */
+
+.exp-view-accordion {
+    margin-bottom: 12px;
+}
+
+.exp-view-accordion-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 20px;
+    background: #fff;
+    border: 1px solid #000;
+    border-radius: 8px;
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 0.15s ease;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.exp-view-accordion-header:hover {
+    background: #fafafa;
+}
+
+.exp-view-accordion-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #111827;
+    display: flex;
+    align-items: center;
+}
+
+.exp-view-accordion-title i {
+    font-size: 14px;
+}
+
+.exp-view-accordion-status {
+    margin-left: auto;
+    margin-right: 12px;
+    font-size: 12px;
+    font-weight: 500;
+    padding: 4px 10px;
+    border-radius: 12px;
+}
+
+.exp-view-accordion-status:empty {
+    display: none;
+}
+
+.exp-view-accordion-status.status-live {
+    background: #d1fae5;
+    color: #059669;
+}
+
+.exp-view-accordion-status.status-registered {
+    background: #dbeafe;
+    color: #2563eb;
+}
+
+.exp-view-accordion-status.status-ready {
+    background: #fef3c7;
+    color: #d97706;
+}
+
+.exp-view-accordion-status.status-failed {
+    background: #fee2e2;
+    color: #dc2626;
+}
+
+.exp-view-accordion-badge {
+    margin-left: auto;
+    margin-right: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 4px;
+    text-transform: uppercase;
+}
+
+.exp-view-accordion-badge:empty {
+    display: none;
+}
+
+.exp-view-accordion-badge.badge-retrieval {
+    background: #ede9fe;
+    color: #7c3aed;
+}
+
+.exp-view-accordion-badge.badge-ranking {
+    background: #ffedd5;
+    color: #ea580c;
+}
+
+.exp-view-accordion-badge.badge-multitask {
+    background: linear-gradient(135deg, #ede9fe 0%, #fce7f3 100%);
+    color: #9333ea;
+}
+
+.exp-view-accordion-chevron {
+    font-size: 14px;
+    color: #000;
+    transition: transform 0.2s ease;
+    width: 16px;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.exp-view-accordion-chevron.expanded {
+    transform: rotate(90deg);
+}
+
+.exp-view-accordion-content {
+    padding: 16px 20px;
+    background: #fff;
+}
+
+.exp-view-accordion-content.hidden {
+    display: none;
+}
+
+/* Registry & Deployment Grid Layout */
+.exp-view-registry-deployment-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
+.exp-view-registry-deployment-card {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 16px;
+}
+
+.exp-view-registry-deployment-card-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #f3f4f6;
+}
+
+.exp-view-registry-deployment-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    flex-shrink: 0;
+}
+
+.exp-view-registry-deployment-icon.icon-success {
+    background: #d1fae5;
+    color: #059669;
+}
+
+.exp-view-registry-deployment-icon.icon-pending {
+    background: #fef3c7;
+    color: #d97706;
+}
+
+.exp-view-registry-deployment-icon.icon-failed {
+    background: #fee2e2;
+    color: #dc2626;
+}
+
+.exp-view-registry-deployment-icon.icon-idle {
+    background: #f3f4f6;
+    color: #6b7280;
+}
+
+.exp-view-registry-deployment-info {
+    flex: 1;
+}
+
+.exp-view-registry-deployment-label {
+    font-weight: 600;
+    font-size: 14px;
+    color: #111827;
+}
+
+.exp-view-registry-deployment-detail {
+    font-size: 12px;
+    color: #6b7280;
+    margin-top: 2px;
+}
+
+.exp-view-registry-deployment-rows {
+    margin-top: 8px;
+}
+
+.exp-view-registry-deployment-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 0;
+    font-size: 13px;
+    border-bottom: 1px solid #f3f4f6;
+}
+
+.exp-view-registry-deployment-row:last-child {
+    border-bottom: none;
+}
+
+.exp-view-registry-deployment-key {
+    color: #6b7280;
+}
+
+.exp-view-registry-deployment-value {
+    color: #111827;
+    font-weight: 500;
+}
+
+.exp-view-registry-deployment-value.value-success {
+    color: #059669;
+}
+
+.exp-view-registry-deployment-actions {
+    margin-top: 12px;
+    display: flex;
+    gap: 8px;
+}
+
+/* Training Setup Grid Layout */
+.exp-view-training-setup-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+}
+
+.exp-view-training-setup-column {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 16px;
+}
+
+.exp-view-training-setup-subtitle {
+    font-size: 12px;
+    font-weight: 600;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin: 0 0 12px 0;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #f3f4f6;
+}
+
+/* Utility classes for icon colors */
+.text-purple-500 { color: #8b5cf6; }
+.text-blue-500 { color: #3b82f6; }
+.text-green-500 { color: #10b981; }
+.text-orange-500 { color: #f59e0b; }
+.mr-2 { margin-right: 8px; }

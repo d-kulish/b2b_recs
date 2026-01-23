@@ -88,6 +88,14 @@ const ExpViewModal = (function() {
             _loadingInsights: false,
             _statsData: null,
             _schemaData: null
+        },
+        // Accordion expanded states for Overview tab
+        accordionExpanded: {
+            registryDeployment: false,
+            dataset: false,
+            features: false,
+            model: false,
+            trainingSetup: false
         }
     };
 
@@ -423,6 +431,9 @@ const ExpViewModal = (function() {
     }
 
     function renderTrainingRunOverview(run) {
+        // Reset accordion states when populating new data
+        resetAccordionStates();
+
         // Dataset section
         const datasetName = run.dataset_name || '-';
         document.getElementById('expViewDatasetName').textContent = datasetName;
@@ -448,6 +459,20 @@ const ExpViewModal = (function() {
         // Model config - load full details
         const modelConfigName = run.model_config_name || '-';
         document.getElementById('expViewModelConfigName').textContent = modelConfigName;
+
+        // Model type badge in accordion header
+        const modelType = (run.model_type || 'retrieval').toLowerCase();
+        const badgeSmall = document.getElementById('expViewModelTypeBadgeSmall');
+        if (badgeSmall) {
+            const badgeLabels = {
+                'retrieval': 'Retrieval',
+                'ranking': 'Ranking',
+                'multitask': 'Multitask'
+            };
+            badgeSmall.textContent = badgeLabels[modelType] || 'Retrieval';
+            badgeSmall.className = 'exp-view-accordion-badge badge-' + modelType;
+        }
+
         if (run.model_config_id) {
             loadModelConfig(run.model_config_id);
         } else {
@@ -619,12 +644,13 @@ const ExpViewModal = (function() {
     }
 
     // =============================================================================
-    // REGISTRY & DEPLOYMENT SECTIONS (Training Run Mode)
+    // REGISTRY & DEPLOYMENT SECTIONS (Training Run Mode) - Consolidated Accordion
     // =============================================================================
 
-    function renderRegistrySection(data) {
-        const section = document.getElementById('expViewRegistrySection');
-        const container = document.getElementById('expViewRegistryContent');
+    function renderRegistryDeploymentSection(data) {
+        const section = document.getElementById('expViewRegistryDeploymentSection');
+        const container = document.getElementById('expViewRegistryDeploymentContent');
+        const statusBadge = document.getElementById('expViewRegistryDeploymentStatus');
 
         // Only show for training_run mode with terminal status
         if (state.mode !== 'training_run' || !data ||
@@ -634,126 +660,162 @@ const ExpViewModal = (function() {
         }
 
         section.style.display = 'block';
-        let html = '';
 
+        // Determine overall status for the badge
+        let badgeText = '';
+        let badgeClass = '';
+        if (data.is_deployed) {
+            badgeText = 'Live';
+            badgeClass = 'status-live';
+        } else if (data.vertex_model_name) {
+            badgeText = 'Registered';
+            badgeClass = 'status-registered';
+        } else if (data.is_blessed === false) {
+            badgeText = 'Failed';
+            badgeClass = 'status-failed';
+        } else {
+            badgeText = 'Ready';
+            badgeClass = 'status-ready';
+        }
+
+        // Update status badge
+        statusBadge.textContent = badgeText;
+        statusBadge.className = 'exp-view-accordion-status ' + badgeClass;
+
+        // Build Registry Card HTML
+        let registryHtml = '';
         if (data.is_blessed === false) {
-            // Not Blessed - evaluation failed
-            html = `
-                <div class="exp-view-outcome-status not-blessed">
-                    <div class="exp-view-outcome-icon">
-                        <i class="fas fa-times-circle"></i>
-                    </div>
-                    <div class="exp-view-outcome-info">
-                        <div class="exp-view-outcome-label">Evaluation Failed</div>
-                        <div class="exp-view-outcome-detail">Model did not meet blessing thresholds</div>
+            registryHtml = `
+                <div class="exp-view-registry-deployment-card">
+                    <div class="exp-view-registry-deployment-card-header">
+                        <div class="exp-view-registry-deployment-icon icon-failed">
+                            <i class="fas fa-times-circle"></i>
+                        </div>
+                        <div class="exp-view-registry-deployment-info">
+                            <div class="exp-view-registry-deployment-label">Evaluation Failed</div>
+                            <div class="exp-view-registry-deployment-detail">Model did not meet blessing thresholds</div>
+                        </div>
                     </div>
                 </div>
             `;
         } else if (!data.vertex_model_name) {
-            // Blessed but not registered
-            html = `
-                <div class="exp-view-outcome-status pending">
-                    <div class="exp-view-outcome-icon">
-                        <i class="fas fa-clock"></i>
+            registryHtml = `
+                <div class="exp-view-registry-deployment-card">
+                    <div class="exp-view-registry-deployment-card-header">
+                        <div class="exp-view-registry-deployment-icon icon-pending">
+                            <i class="fas fa-clock"></i>
+                        </div>
+                        <div class="exp-view-registry-deployment-info">
+                            <div class="exp-view-registry-deployment-label">Not Registered</div>
+                            <div class="exp-view-registry-deployment-detail">Model passed evaluation, ready for registry</div>
+                        </div>
                     </div>
-                    <div class="exp-view-outcome-info">
-                        <div class="exp-view-outcome-label">Not Registered</div>
-                        <div class="exp-view-outcome-detail">Model passed evaluation, ready for registry</div>
+                    <div class="exp-view-registry-deployment-actions">
+                        <button class="btn-outcome-action" onclick="ExpViewModal.pushToRegistry(${data.id})">
+                            <i class="fas fa-upload"></i> Push to Registry
+                        </button>
                     </div>
-                    <button class="btn-outcome-action" onclick="ExpViewModal.pushToRegistry(${data.id})">
-                        <i class="fas fa-upload"></i> Push to Registry
-                    </button>
                 </div>
             `;
         } else {
-            // Registered
-            html = `
-                <div class="exp-view-outcome-status registered">
-                    <div class="exp-view-outcome-icon">
-                        <i class="fas fa-check-circle"></i>
+            registryHtml = `
+                <div class="exp-view-registry-deployment-card">
+                    <div class="exp-view-registry-deployment-card-header">
+                        <div class="exp-view-registry-deployment-icon icon-success">
+                            <i class="fas fa-check-circle"></i>
+                        </div>
+                        <div class="exp-view-registry-deployment-info">
+                            <div class="exp-view-registry-deployment-label">Registered</div>
+                            <div class="exp-view-registry-deployment-detail">${escapeHtml(data.vertex_model_name)} (${data.vertex_model_version || 'v1'})</div>
+                        </div>
                     </div>
-                    <div class="exp-view-outcome-info">
-                        <div class="exp-view-outcome-label">Registered</div>
-                        <div class="exp-view-outcome-detail">${escapeHtml(data.vertex_model_name)} (${data.vertex_model_version || 'v1'})</div>
-                    </div>
-                </div>
-                <div class="exp-view-outcome-details">
-                    <div class="exp-view-outcome-row">
-                        <span class="exp-view-outcome-key">Registered:</span>
-                        <span class="exp-view-outcome-value">${formatDateTime(data.registered_at) || '-'}</span>
-                    </div>
-                    <div class="exp-view-outcome-row">
-                        <span class="exp-view-outcome-key">Blessing:</span>
-                        <span class="exp-view-outcome-value blessing-passed">
-                            <i class="fas fa-check"></i> Passed
-                        </span>
+                    <div class="exp-view-registry-deployment-rows">
+                        <div class="exp-view-registry-deployment-row">
+                            <span class="exp-view-registry-deployment-key">Registered:</span>
+                            <span class="exp-view-registry-deployment-value">${formatDateTime(data.registered_at) || '-'}</span>
+                        </div>
+                        <div class="exp-view-registry-deployment-row">
+                            <span class="exp-view-registry-deployment-key">Blessing:</span>
+                            <span class="exp-view-registry-deployment-value value-success">
+                                <i class="fas fa-check"></i> Passed
+                            </span>
+                        </div>
                     </div>
                 </div>
             `;
         }
+
+        // Build Deployment Card HTML (only if registered)
+        let deploymentHtml = '';
+        if (data.vertex_model_name) {
+            if (data.is_deployed) {
+                deploymentHtml = `
+                    <div class="exp-view-registry-deployment-card">
+                        <div class="exp-view-registry-deployment-card-header">
+                            <div class="exp-view-registry-deployment-icon icon-success">
+                                <i class="fas fa-rocket"></i>
+                            </div>
+                            <div class="exp-view-registry-deployment-info">
+                                <div class="exp-view-registry-deployment-label">Deployed</div>
+                                <div class="exp-view-registry-deployment-detail">Model is serving predictions</div>
+                            </div>
+                        </div>
+                        <div class="exp-view-registry-deployment-rows">
+                            <div class="exp-view-registry-deployment-row">
+                                <span class="exp-view-registry-deployment-key">Deployed:</span>
+                                <span class="exp-view-registry-deployment-value">${formatDateTime(data.deployed_at) || '-'}</span>
+                            </div>
+                        </div>
+                        <div class="exp-view-registry-deployment-actions">
+                            <button class="btn-outcome-action btn-danger" onclick="ExpViewModal.undeployTrainingRun(${data.id})">
+                                <i class="fas fa-stop"></i> Undeploy
+                            </button>
+                        </div>
+                    </div>
+                `;
+            } else {
+                deploymentHtml = `
+                    <div class="exp-view-registry-deployment-card">
+                        <div class="exp-view-registry-deployment-card-header">
+                            <div class="exp-view-registry-deployment-icon icon-idle">
+                                <i class="fas fa-pause-circle"></i>
+                            </div>
+                            <div class="exp-view-registry-deployment-info">
+                                <div class="exp-view-registry-deployment-label">Ready to Deploy</div>
+                                <div class="exp-view-registry-deployment-detail">Model is registered and ready</div>
+                            </div>
+                        </div>
+                        <div class="exp-view-registry-deployment-actions">
+                            <button class="btn-outcome-action" onclick="ExpViewModal.deployTrainingRun(${data.id})">
+                                <i class="fas fa-rocket"></i> Deploy to Vertex AI
+                            </button>
+                            <button class="btn-outcome-action btn-secondary" onclick="ExpViewModal.deployToCloudRun(${data.id})">
+                                <i class="fas fa-cloud"></i> Deploy to Cloud Run
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        // Combine into grid layout
+        let html = '<div class="exp-view-registry-deployment-grid">';
+        html += registryHtml;
+        if (deploymentHtml) {
+            html += deploymentHtml;
+        }
+        html += '</div>';
 
         container.innerHTML = html;
     }
 
-    function renderDeploymentSection(data) {
-        const section = document.getElementById('expViewDeploymentSection');
-        const container = document.getElementById('expViewDeploymentContent');
+    // Legacy function wrappers for backward compatibility
+    function renderRegistrySection(data) {
+        renderRegistryDeploymentSection(data);
+    }
 
-        // Only show for registered models
-        if (state.mode !== 'training_run' || !data || !data.vertex_model_name) {
-            section.style.display = 'none';
-            return;
-        }
-
-        section.style.display = 'block';
-        let html = '';
-
-        if (data.is_deployed) {
-            // Deployed
-            html = `
-                <div class="exp-view-outcome-status deployed">
-                    <div class="exp-view-outcome-icon">
-                        <i class="fas fa-rocket"></i>
-                    </div>
-                    <div class="exp-view-outcome-info">
-                        <div class="exp-view-outcome-label">Deployed</div>
-                        <div class="exp-view-outcome-detail">Model is serving predictions</div>
-                    </div>
-                    <button class="btn-outcome-action btn-danger" onclick="ExpViewModal.undeployTrainingRun(${data.id})">
-                        <i class="fas fa-stop"></i> Undeploy
-                    </button>
-                </div>
-                <div class="exp-view-outcome-details">
-                    <div class="exp-view-outcome-row">
-                        <span class="exp-view-outcome-key">Deployed:</span>
-                        <span class="exp-view-outcome-value">${formatDateTime(data.deployed_at) || '-'}</span>
-                    </div>
-                </div>
-            `;
-        } else {
-            // Ready to deploy
-            html = `
-                <div class="exp-view-outcome-status idle">
-                    <div class="exp-view-outcome-icon">
-                        <i class="fas fa-pause-circle"></i>
-                    </div>
-                    <div class="exp-view-outcome-info">
-                        <div class="exp-view-outcome-label">Ready to Deploy</div>
-                        <div class="exp-view-outcome-detail">Model is registered and ready</div>
-                    </div>
-                </div>
-                <div class="exp-view-outcome-actions">
-                    <button class="btn-outcome-action" onclick="ExpViewModal.deployTrainingRun(${data.id})">
-                        <i class="fas fa-rocket"></i> Deploy to Vertex AI
-                    </button>
-                    <button class="btn-outcome-action btn-secondary" onclick="ExpViewModal.deployToCloudRun(${data.id})">
-                        <i class="fas fa-cloud"></i> Deploy to Cloud Run
-                    </button>
-                </div>
-            `;
-        }
-
-        container.innerHTML = html;
+    function renderDeploymentSection(/* data */) {
+        // No-op - handled by renderRegistryDeploymentSection
     }
 
     // Action handlers for Registry & Deployment
@@ -1120,9 +1182,9 @@ const ExpViewModal = (function() {
             </div>
         `;
 
-        // Hide sampling section for models
-        const samplingSection = document.getElementById('expViewSamplingChips')?.closest('.exp-view-section-group');
-        if (samplingSection) samplingSection.style.display = 'none';
+        // For models, clear sampling chips (since models don't have sampling config)
+        const samplingContainer = document.getElementById('expViewSamplingChips');
+        if (samplingContainer) samplingContainer.innerHTML = '<span style="color:#9ca3af;">N/A</span>';
 
         // Training parameters - show GPU config if available
         const paramsContainer = document.getElementById('expViewTrainingParamsChips');
@@ -1746,6 +1808,13 @@ const ExpViewModal = (function() {
         document.getElementById('expViewStartTime').textContent = formatDateTime(exp.started_at || exp.created_at);
         document.getElementById('expViewEndTime').textContent = exp.completed_at ? formatDateTime(exp.completed_at) : '-';
 
+        // Reset accordion states for overview tab
+        resetAccordionStates();
+
+        // Hide Registry & Deployment section for experiment mode
+        const regDeploySection = document.getElementById('expViewRegistryDeploymentSection');
+        if (regDeploySection) regDeploySection.style.display = 'none';
+
         // Overview Tab - Dataset section
         const datasetName = exp.dataset_name || exp.dataset?.name || 'Dataset';
         document.getElementById('expViewDatasetName').textContent = datasetName;
@@ -1772,6 +1841,19 @@ const ExpViewModal = (function() {
         // Load model config details
         const modelConfigName = exp.model_config_name || exp.model_config?.name || '-';
         document.getElementById('expViewModelConfigName').textContent = modelConfigName;
+
+        // Model type badge in accordion header
+        const expModelType = (exp.model_type || exp.feature_config_type || 'retrieval').toLowerCase();
+        const badgeSmall = document.getElementById('expViewModelTypeBadgeSmall');
+        if (badgeSmall) {
+            const badgeLabels = {
+                'retrieval': 'Retrieval',
+                'ranking': 'Ranking',
+                'multitask': 'Multitask'
+            };
+            badgeSmall.textContent = badgeLabels[expModelType] || 'Retrieval';
+            badgeSmall.className = 'exp-view-accordion-badge badge-' + expModelType;
+        }
 
         const modelConfigId = exp.model_config_id || exp.model_config?.id;
         if (modelConfigId) {
@@ -4007,6 +4089,68 @@ const ExpViewModal = (function() {
     }
 
     // =============================================================================
+    // OVERVIEW TAB ACCORDION
+    // =============================================================================
+
+    function toggleAccordion(sectionName) {
+        // Toggle the expanded state
+        state.accordionExpanded[sectionName] = !state.accordionExpanded[sectionName];
+        const isExpanded = state.accordionExpanded[sectionName];
+
+        // Map section names to element IDs
+        const sectionMap = {
+            registryDeployment: 'expViewRegistryDeployment',
+            dataset: 'expViewDataset',
+            features: 'expViewFeatures',
+            model: 'expViewModel',
+            trainingSetup: 'expViewTrainingSetup'
+        };
+
+        const prefix = sectionMap[sectionName];
+        if (!prefix) return;
+
+        const content = document.getElementById(`${prefix}Content`);
+        const chevron = document.getElementById(`${prefix}Chevron`);
+
+        if (content) {
+            if (isExpanded) {
+                content.classList.remove('hidden');
+            } else {
+                content.classList.add('hidden');
+            }
+        }
+
+        if (chevron) {
+            if (isExpanded) {
+                chevron.classList.add('expanded');
+            } else {
+                chevron.classList.remove('expanded');
+            }
+        }
+    }
+
+    function resetAccordionStates() {
+        // Reset all accordions to collapsed state
+        state.accordionExpanded = {
+            registryDeployment: false,
+            dataset: false,
+            features: false,
+            model: false,
+            trainingSetup: false
+        };
+
+        // Collapse all accordion contents
+        const prefixes = ['expViewRegistryDeployment', 'expViewDataset', 'expViewFeatures', 'expViewModel', 'expViewTrainingSetup'];
+
+        prefixes.forEach(prefix => {
+            const content = document.getElementById(`${prefix}Content`);
+            const chevron = document.getElementById(`${prefix}Chevron`);
+            if (content) content.classList.add('hidden');
+            if (chevron) chevron.classList.remove('expanded');
+        });
+    }
+
+    // =============================================================================
     // PUBLIC API
     // =============================================================================
 
@@ -4037,6 +4181,9 @@ const ExpViewModal = (function() {
 
         // Tab switching
         switchTab: switchTab,
+
+        // Overview accordion
+        toggleAccordion: toggleAccordion,
 
         // Component logs
         refreshComponentLogs: refreshComponentLogs,

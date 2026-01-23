@@ -928,9 +928,9 @@ const TrainingCards = (function() {
         // Row 2: Rerun | Cancel
         let rerunBtn = '';
         if (canRerun) {
-            rerunBtn = `<button class="card-action-btn view" onclick="event.stopPropagation(); TrainingCards.rerunRun(${run.id})" title="Re-run with same configuration">Rerun</button>`;
+            rerunBtn = `<button class="card-action-btn rerun" onclick="event.stopPropagation(); TrainingCards.rerunRun(${run.id})" title="Re-run with same configuration">Rerun</button>`;
         } else {
-            rerunBtn = `<button class="card-action-btn view" disabled title="Rerun available after completion">Rerun</button>`;
+            rerunBtn = `<button class="card-action-btn rerun" disabled title="Rerun available after completion">Rerun</button>`;
         }
 
         const cancelBtn = `<button class="card-action-btn cancel" onclick="event.stopPropagation(); TrainingCards.cancelRun(event, ${run.id})" title="Cancel Training" ${isCancellable ? '' : 'disabled'}>Cancel</button>`;

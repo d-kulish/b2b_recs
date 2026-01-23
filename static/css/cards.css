@@ -674,26 +674,62 @@
     height: 32px;
     background-color: #10b981;
     color: #ffffff;
+    border: 2px solid #10b981;
     font-weight: 600;
     font-size: 12px;
 }
 
 .card-action-btn.view:hover {
     background-color: #059669;
+    border-color: #059669;
 }
 
-/* Deploy Action Button (orange/amber like fire icon) */
+/* Rerun Action Button (green like View, but separate class) - solid when active, outline when disabled */
+.card-action-btn.rerun {
+    width: 64px;
+    height: 32px;
+    background-color: #10b981;
+    color: #ffffff;
+    border: 2px solid #10b981;
+    font-weight: 600;
+    font-size: 12px;
+}
+
+.card-action-btn.rerun:hover:not(:disabled) {
+    background-color: #059669;
+    border-color: #059669;
+}
+
+.card-action-btn.rerun:disabled {
+    background-color: #ffffff;
+    color: #10b981;
+    border-color: #10b981;
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Deploy Action Button (orange/amber like fire icon) - solid when active, outline when disabled */
 .card-action-btn.deploy {
     width: 64px;
     height: 32px;
     background-color: #c9a227;
     color: #ffffff;
+    border: 2px solid #c9a227;
     font-weight: 600;
     font-size: 12px;
 }
 
-.card-action-btn.deploy:hover {
+.card-action-btn.deploy:hover:not(:disabled) {
     background-color: #b8922a;
+    border-color: #b8922a;
+}
+
+.card-action-btn.deploy:disabled {
+    background-color: #ffffff;
+    color: #c9a227;
+    border-color: #c9a227;
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 
 /* Badges Row (model type + deployment status side by side) */
@@ -805,22 +841,27 @@
     cursor: not-allowed;
 }
 
-/* Schedule Action Button (blue, same as view style) */
+/* Schedule Action Button (blue) - solid when active, outline when disabled */
 .card-action-btn.schedule {
     width: 64px;
     height: 32px;
     background-color: #3b82f6;
     color: #ffffff;
+    border: 2px solid #3b82f6;
     font-weight: 600;
     font-size: 12px;
 }
 
 .card-action-btn.schedule:hover:not(:disabled) {
     background-color: #2563eb;
+    border-color: #2563eb;
 }
 
 .card-action-btn.schedule:disabled {
-    background-color: #93c5fd;
+    background-color: #ffffff;
+    color: #3b82f6;
+    border-color: #3b82f6;
+    opacity: 0.5;
     cursor: not-allowed;
 }
 
@@ -878,9 +919,17 @@
     color: #6b7280;
 }
 
-.card-action-btn.icon-only.edit:hover {
+.card-action-btn.icon-only.edit:hover:not(:disabled) {
     color: #374151;
     background: #f3f4f6;
+}
+
+.card-action-btn.icon-only.edit:disabled {
+    color: #d1d5db;
+    background: #f9fafb;
+    border-color: #e5e7eb;
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 
 /* Delete icon button */
@@ -890,9 +939,17 @@
     border-color: #fecaca;
 }
 
-.card-action-btn.icon-only.delete:hover {
+.card-action-btn.icon-only.delete:hover:not(:disabled) {
     background: #fee2e2;
     border-color: #fca5a5;
+}
+
+.card-action-btn.icon-only.delete:disabled {
+    color: #fca5a5;
+    background: #ffffff;
+    border-color: #fecaca;
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 
 /* Pause Action Button (yellow, same size as Run) */

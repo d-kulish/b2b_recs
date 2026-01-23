@@ -2571,6 +2571,262 @@ def training_schedule_trigger(request, schedule_id):
         }, status=500)
 
 
+@csrf_exempt
+@require_http_methods(["GET"])
+def training_schedule_preview(request):
+    """
+    Preview the configuration that would be used for a schedule from a training run.
+
+    GET /api/training/schedules/preview/?source_run_id=123
+
+    Returns:
+    {
+        "success": true,
+        "preview": {
+            "source_run_id": 123,
+            "source_run_name": "my-model-v1",
+            "source_run_number": 5,
+            "dataset_id": 1,
+            "dataset_name": "Product Data",
+            "feature_config_id": 2,
+            "feature_config_name": "Standard Features",
+            "model_config_id": 3,
+            "model_config_name": "Retrieval Model",
+            "model_type": "retrieval",
+            "training_params": {...},
+            "gpu_config": {...},
+            "evaluator_config": {...}
+        }
+    }
+    """
+    try:
+        model_endpoint = _get_model_endpoint(request)
+        if not model_endpoint:
+            return JsonResponse({
+                'success': False,
+                'error': 'No model endpoint selected'
+            }, status=400)
+
+        source_run_id = request.GET.get('source_run_id')
+        if not source_run_id:
+            return JsonResponse({
+                'success': False,
+                'error': 'source_run_id parameter is required'
+            }, status=400)
+
+        try:
+            training_run = TrainingRun.objects.select_related(
+                'dataset', 'feature_config', 'model_config', 'base_experiment'
+            ).get(
+                id=source_run_id,
+                ml_model=model_endpoint
+            )
+        except TrainingRun.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': f'TrainingRun {source_run_id} not found'
+            }, status=404)
+
+        preview = {
+            'source_run_id': training_run.id,
+            'source_run_name': training_run.name,
+            'source_run_number': training_run.run_number,
+            'source_run_display_name': training_run.display_name,
+            'dataset_id': training_run.dataset_id,
+            'dataset_name': training_run.dataset.name if training_run.dataset else None,
+            'feature_config_id': training_run.feature_config_id,
+            'feature_config_name': training_run.feature_config.name if training_run.feature_config else None,
+            'model_config_id': training_run.model_config_id,
+            'model_config_name': training_run.model_config.name if training_run.model_config else None,
+            'model_type': training_run.model_type,
+            'base_experiment_id': training_run.base_experiment_id,
+            'base_experiment_number': training_run.base_experiment.experiment_number if training_run.base_experiment else None,
+            'training_params': training_run.training_params or {},
+            'gpu_config': training_run.gpu_config or {},
+            'evaluator_config': training_run.evaluator_config or {},
+            'deployment_config': training_run.deployment_config or {},
+        }
+
+        return JsonResponse({
+            'success': True,
+            'preview': preview
+        })
+
+    except Exception as e:
+        logger.exception(f"Error getting schedule preview: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def training_schedule_from_run(request):
+    """
+    Create a new training schedule from an existing training run's configuration.
+
+    POST /api/training/schedules/from-run/
+    {
+        "source_training_run_id": 123,
+        "name": "Weekly Retraining",
+        "description": "Optional description",
+        "schedule_type": "weekly",  // 'once', 'daily', 'weekly'
+        "schedule_time": "09:00",   // For daily/weekly
+        "schedule_day_of_week": 0,  // For weekly (0=Monday, 6=Sunday)
+        "schedule_timezone": "UTC",
+        "scheduled_datetime": "2024-01-15T10:30:00Z"  // For one-time only
+    }
+
+    Returns:
+    {
+        "success": true,
+        "schedule": {...}
+    }
+    """
+    try:
+        model_endpoint = _get_model_endpoint(request)
+        if not model_endpoint:
+            return JsonResponse({
+                'success': False,
+                'error': 'No model endpoint selected'
+            }, status=400)
+
+        data = json.loads(request.body)
+
+        # Required fields
+        required_fields = ['source_training_run_id', 'name', 'schedule_type']
+        missing = [f for f in required_fields if f not in data]
+        if missing:
+            return JsonResponse({
+                'success': False,
+                'error': f"Missing required fields: {', '.join(missing)}"
+            }, status=400)
+
+        # Get source training run
+        source_run_id = data['source_training_run_id']
+        try:
+            source_run = TrainingRun.objects.select_related(
+                'dataset', 'feature_config', 'model_config', 'base_experiment'
+            ).get(
+                id=source_run_id,
+                ml_model=model_endpoint
+            )
+        except TrainingRun.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': f'TrainingRun {source_run_id} not found'
+            }, status=404)
+
+        schedule_type = data['schedule_type']
+
+        # Validate schedule type
+        valid_types = [TrainingSchedule.SCHEDULE_TYPE_ONCE, TrainingSchedule.SCHEDULE_TYPE_DAILY, TrainingSchedule.SCHEDULE_TYPE_WEEKLY]
+        if schedule_type not in valid_types:
+            return JsonResponse({
+                'success': False,
+                'error': f"Invalid schedule_type. Must be one of: {', '.join(valid_types)}"
+            }, status=400)
+
+        # Parse schedule-specific fields
+        from datetime import datetime, time as dt_time
+
+        scheduled_datetime = None
+        schedule_time = None
+        schedule_day_of_week = None
+
+        if schedule_type == TrainingSchedule.SCHEDULE_TYPE_ONCE:
+            if not data.get('scheduled_datetime'):
+                return JsonResponse({
+                    'success': False,
+                    'error': 'scheduled_datetime is required for one-time schedules'
+                }, status=400)
+            try:
+                scheduled_datetime = datetime.fromisoformat(data['scheduled_datetime'].replace('Z', '+00:00'))
+            except ValueError as e:
+                return JsonResponse({
+                    'success': False,
+                    'error': f'Invalid scheduled_datetime format: {e}'
+                }, status=400)
+
+        elif schedule_type in (TrainingSchedule.SCHEDULE_TYPE_DAILY, TrainingSchedule.SCHEDULE_TYPE_WEEKLY):
+            if data.get('schedule_time'):
+                try:
+                    hour, minute = map(int, data['schedule_time'].split(':'))
+                    schedule_time = dt_time(hour, minute)
+                except (ValueError, AttributeError):
+                    return JsonResponse({
+                        'success': False,
+                        'error': 'Invalid schedule_time format. Use HH:MM'
+                    }, status=400)
+            else:
+                schedule_time = dt_time(9, 0)  # Default to 9 AM
+
+            if schedule_type == TrainingSchedule.SCHEDULE_TYPE_WEEKLY:
+                schedule_day_of_week = data.get('schedule_day_of_week', 0)
+                if not isinstance(schedule_day_of_week, int) or schedule_day_of_week < 0 or schedule_day_of_week > 6:
+                    return JsonResponse({
+                        'success': False,
+                        'error': 'schedule_day_of_week must be 0-6 (Monday-Sunday)'
+                    }, status=400)
+
+        # Create the schedule, inheriting config from source training run
+        schedule = TrainingSchedule.objects.create(
+            ml_model=model_endpoint,
+            name=data['name'],
+            description=data.get('description', ''),
+            schedule_type=schedule_type,
+            scheduled_datetime=scheduled_datetime,
+            schedule_time=schedule_time,
+            schedule_day_of_week=schedule_day_of_week,
+            schedule_timezone=data.get('schedule_timezone', 'UTC'),
+            # Inherit from source training run
+            dataset=source_run.dataset,
+            feature_config=source_run.feature_config,
+            model_config=source_run.model_config,
+            base_experiment=source_run.base_experiment,
+            training_params=source_run.training_params or {},
+            gpu_config=source_run.gpu_config or {},
+            evaluator_config=source_run.evaluator_config or {},
+            deployment_config=source_run.deployment_config or {},
+            created_by=request.user if request.user.is_authenticated else None,
+            status=TrainingSchedule.STATUS_ACTIVE,
+        )
+
+        # Create Cloud Scheduler job
+        service = TrainingScheduleService(model_endpoint)
+        webhook_base_url = request.build_absolute_uri('/').rstrip('/')
+        result = service.create_schedule(schedule, webhook_base_url)
+
+        if not result['success']:
+            # Rollback schedule creation if scheduler job fails
+            schedule.delete()
+            return JsonResponse({
+                'success': False,
+                'error': f"Failed to create Cloud Scheduler job: {result['message']}"
+            }, status=500)
+
+        logger.info(f"Created training schedule {schedule.id} from training run {source_run_id}: {schedule.name}")
+
+        return JsonResponse({
+            'success': True,
+            'schedule': _serialize_training_schedule(schedule),
+            'message': f"Schedule '{schedule.name}' created successfully"
+        }, status=201)
+
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'error': 'Invalid JSON'
+        }, status=400)
+    except Exception as e:
+        logger.exception(f"Error creating training schedule from run: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
 # =============================================================================
 # Models Registry API Endpoints
 # =============================================================================

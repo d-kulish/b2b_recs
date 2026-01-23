@@ -1404,20 +1404,32 @@ const TrainingCards = (function() {
     }
 
     function scheduleRun(runId) {
-        // TODO: Implement schedule functionality
-        // This will open a scheduling dialog/modal for recurring training
-        showConfirmModal({
-            title: 'Schedule Training Run',
-            message: 'Schedule functionality will allow you to set up recurring training runs based on this configuration.<br><br><span class="text-sm text-gray-500">This feature is coming soon.</span>',
-            confirmText: 'OK',
-            cancelText: 'Cancel',
-            type: 'info',
-            confirmButtonClass: 'btn-neu-nav-wide',
-            onConfirm: () => {
-                // Placeholder - will be implemented with scheduling wizard
-                console.log('Schedule run:', runId);
-            }
-        });
+        // Configure the schedule modal with success callback
+        if (typeof ScheduleModal !== 'undefined') {
+            ScheduleModal.configure({
+                onSuccess: function(schedule) {
+                    showToast(`Schedule "${schedule.name}" created successfully`, 'success');
+                    // Refresh training runs to show updated schedule status
+                    loadTrainingRuns();
+                    // Also refresh schedules list if available
+                    if (typeof TrainingSchedules !== 'undefined') {
+                        TrainingSchedules.loadSchedules();
+                    }
+                }
+            });
+            ScheduleModal.openForTrainingRun(runId);
+        } else {
+            // Fallback if ScheduleModal not loaded
+            showConfirmModal({
+                title: 'Schedule Training Run',
+                message: 'Schedule modal is not available. Please refresh the page.',
+                confirmText: 'OK',
+                cancelText: 'Cancel',
+                type: 'info',
+                confirmButtonClass: 'btn-neu-nav-wide',
+                onConfirm: () => {}
+            });
+        }
     }
 
     function editRun(runId) {

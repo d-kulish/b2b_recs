@@ -2126,6 +2126,15 @@
     background: #dc2626;
 }
 
+.btn-outcome-action.btn-schedule {
+    background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+    color: white;
+}
+
+.btn-outcome-action.btn-schedule:hover {
+    background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%);
+}
+
 /* ==========================================================================
    Overview Tab - Accordion Sections
    ========================================================================== */

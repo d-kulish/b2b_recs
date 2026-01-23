@@ -142,6 +142,18 @@ urlpatterns = [
         name='training_schedule_trigger'
     ),
 
+    # Schedule convenience endpoints (create from existing runs)
+    path(
+        'api/training/schedules/from-run/',
+        api.training_schedule_from_run,
+        name='training_schedule_from_run'
+    ),
+    path(
+        'api/training/schedules/preview/',
+        api.training_schedule_preview,
+        name='training_schedule_preview'
+    ),
+
     # ==========================================================================
     # Webhook endpoint for Cloud Scheduler
     # ==========================================================================

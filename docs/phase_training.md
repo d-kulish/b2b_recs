@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides detailed specifications for implementing the **Training** domain in the ML Platform. The Training domain executes full TFX pipelines for production model training.
 
-**Last Updated**: 2026-01-23 (Consolidated Registry & Deployment into Overview)
+**Last Updated**: 2026-01-23 (Added Schedule Feature with reusable modal component)
 
 ---
 
@@ -1122,6 +1122,400 @@ When a schedule is configured (daily/weekly), the system:
 | `static/js/training_wizard.js` | Added edit mode support |
 | `static/js/training_cards.js` | Updated `editRun()` function |
 | `static/css/modals.css` | Added `.progress-step-pill.hidden` style |
+
+### Schedule Feature (2026-01-23)
+
+The Schedule feature enables users to create recurring training schedules from existing training runs or registered models. Schedules are managed via Google Cloud Scheduler, which triggers webhook endpoints to execute training pipelines automatically.
+
+#### Architecture Overview
+
+The schedule system consists of:
+1. **TrainingSchedule Model** - Django model storing schedule configuration and statistics
+2. **TrainingScheduleService** - Service layer for Cloud Scheduler integration
+3. **Schedule Modal Component** - Reusable frontend modal for creating schedules
+4. **Webhook Endpoint** - Receives Cloud Scheduler triggers and executes training
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           SCHEDULE ARCHITECTURE                              │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│   User                    Frontend                    Backend                │
+│   ────                    ────────                    ───────                │
+│                                                                              │
+│   Click "Schedule"                                                           │
+│        │                                                                     │
+│        ▼                                                                     │
+│   ┌─────────────────┐                                                        │
+│   │ ScheduleModal   │────► POST /api/training/schedules/from-run/            │
+│   │                 │              │                                         │
+│   │ - Schedule Type │              ▼                                         │
+│   │ - Time/Day      │      ┌───────────────────┐                             │
+│   │ - Timezone      │      │ TrainingSchedule  │                             │
+│   └─────────────────┘      │ (Django Model)    │                             │
+│                            └─────────┬─────────┘                             │
+│                                      │                                       │
+│                                      ▼                                       │
+│                            ┌───────────────────┐                             │
+│                            │ TrainingSchedule  │                             │
+│                            │ Service           │                             │
+│                            └─────────┬─────────┘                             │
+│                                      │                                       │
+│                                      ▼                                       │
+│                            ┌───────────────────┐                             │
+│                            │ Google Cloud      │                             │
+│                            │ Scheduler         │                             │
+│                            └─────────┬─────────┘                             │
+│                                      │                                       │
+│                              (At scheduled time)                             │
+│                                      │                                       │
+│                                      ▼                                       │
+│                            POST /api/training/schedules/{id}/webhook/        │
+│                                      │                                       │
+│                                      ▼                                       │
+│                            ┌───────────────────┐                             │
+│                            │ TrainingRun       │                             │
+│                            │ Created & Started │                             │
+│                            └───────────────────┘                             │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+#### Schedule Types
+
+| Type | Cron Pattern | Description |
+|------|--------------|-------------|
+| `once` | `MM HH DD MM *` | One-time execution at specific datetime |
+| `daily` | `MM HH * * *` | Executes daily at specified time |
+| `weekly` | `MM HH * * D` | Executes weekly on specified day at specified time |
+
+#### TrainingSchedule Model
+
+```python
+class TrainingSchedule(models.Model):
+    # Schedule Types
+    SCHEDULE_TYPE_ONCE = 'once'
+    SCHEDULE_TYPE_DAILY = 'daily'
+    SCHEDULE_TYPE_WEEKLY = 'weekly'
+
+    # Status
+    STATUS_ACTIVE = 'active'
+    STATUS_PAUSED = 'paused'
+    STATUS_COMPLETED = 'completed'
+    STATUS_CANCELLED = 'cancelled'
+
+    # Core Fields
+    name = CharField(max_length=100)
+    description = TextField(blank=True)
+    ml_model = ForeignKey('ModelEndpoint', CASCADE)
+
+    # Schedule Configuration
+    schedule_type = CharField(choices=[...])
+    scheduled_datetime = DateTimeField(null=True)  # For 'once'
+    schedule_time = TimeField(null=True)           # For 'daily'/'weekly'
+    schedule_day_of_week = IntegerField(null=True) # 0=Monday, 6=Sunday
+    schedule_timezone = CharField(default='UTC')
+
+    # Training Configuration (frozen at creation)
+    dataset = ForeignKey('Dataset', PROTECT)
+    feature_config = ForeignKey('FeatureConfig', PROTECT)
+    model_config = ForeignKey('ModelConfig', PROTECT)
+    base_experiment = ForeignKey('QuickTest', SET_NULL, null=True)
+    training_params = JSONField(default=dict)
+    gpu_config = JSONField(default=dict)
+    evaluator_config = JSONField(default=dict)
+    deployment_config = JSONField(default=dict)
+
+    # Cloud Scheduler
+    cloud_scheduler_job_name = CharField(max_length=500, blank=True)
+
+    # Statistics
+    status = CharField(default=STATUS_ACTIVE)
+    last_run_at = DateTimeField(null=True)
+    next_run_at = DateTimeField(null=True)
+    total_runs = IntegerField(default=0)
+    successful_runs = IntegerField(default=0)
+    failed_runs = IntegerField(default=0)
+
+    @property
+    def is_active(self):
+        return self.status == self.STATUS_ACTIVE
+
+    @property
+    def is_recurring(self):
+        return self.schedule_type in (self.SCHEDULE_TYPE_DAILY, self.SCHEDULE_TYPE_WEEKLY)
+
+    @property
+    def success_rate(self):
+        if self.total_runs == 0:
+            return None
+        return (self.successful_runs / self.total_runs) * 100
+```
+
+#### API Endpoints
+
+##### Create Schedule from Training Run
+```
+POST /api/training/schedules/from-run/
+
+Request:
+{
+    "source_training_run_id": 123,
+    "name": "Weekly Product Model Retraining",
+    "description": "Retrain product recommender every Monday",
+    "schedule_type": "weekly",
+    "schedule_time": "09:00",
+    "schedule_day_of_week": 0,
+    "schedule_timezone": "Europe/Warsaw"
+}
+
+Response:
+{
+    "success": true,
+    "schedule": {
+        "id": 456,
+        "name": "Weekly Product Model Retraining",
+        "schedule_type": "weekly",
+        "next_run_at": "2026-01-27T09:00:00+01:00",
+        ...
+    },
+    "message": "Schedule 'Weekly Product Model Retraining' created successfully"
+}
+```
+
+##### Preview Schedule Configuration
+```
+GET /api/training/schedules/preview/?source_run_id=123
+
+Response:
+{
+    "success": true,
+    "preview": {
+        "source_run_id": 123,
+        "source_run_name": "product_model_v3",
+        "source_run_number": 5,
+        "dataset_id": 1,
+        "dataset_name": "Q4 Product Data",
+        "feature_config_id": 2,
+        "feature_config_name": "Standard Features",
+        "model_config_id": 3,
+        "model_config_name": "Retrieval Two-Tower",
+        "model_type": "retrieval",
+        "training_params": {...},
+        "gpu_config": {...}
+    }
+}
+```
+
+##### Other Schedule Endpoints
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/training/schedules/` | List all schedules |
+| POST | `/api/training/schedules/` | Create schedule (full config) |
+| GET | `/api/training/schedules/{id}/` | Get schedule details |
+| DELETE | `/api/training/schedules/{id}/` | Delete schedule |
+| POST | `/api/training/schedules/{id}/pause/` | Pause schedule |
+| POST | `/api/training/schedules/{id}/resume/` | Resume schedule |
+| POST | `/api/training/schedules/{id}/cancel/` | Cancel schedule |
+| POST | `/api/training/schedules/{id}/trigger/` | Trigger immediately |
+| POST | `/api/training/schedules/{id}/webhook/` | Webhook for Cloud Scheduler |
+
+#### TrainingScheduleService
+
+The service handles all Cloud Scheduler interactions:
+
+```python
+class TrainingScheduleService:
+    def __init__(self, ml_model):
+        self.ml_model = ml_model
+        self.project_id = ml_model.gcp_project_id
+        self.region = settings.CLOUD_SCHEDULER_REGION
+
+    def create_schedule(self, schedule, webhook_base_url) -> Dict:
+        """Creates Cloud Scheduler job with HTTP target"""
+        # Generates cron expression from schedule config
+        # Creates job with OIDC authentication
+        # Updates schedule with job name and next_run_at
+
+    def execute_scheduled_training(self, schedule) -> TrainingRun:
+        """Called by webhook to create and submit training run"""
+        # Creates TrainingRun with schedule's frozen config
+        # Submits pipeline via TrainingService
+        # Updates schedule statistics
+
+    def pause_schedule(self, schedule) -> Dict:
+        """Pauses Cloud Scheduler job"""
+
+    def resume_schedule(self, schedule) -> Dict:
+        """Resumes Cloud Scheduler job"""
+
+    def delete_schedule(self, schedule) -> Dict:
+        """Deletes Cloud Scheduler job"""
+
+    def trigger_now(self, schedule) -> Dict:
+        """Manually triggers schedule execution"""
+```
+
+#### Frontend Components
+
+##### Schedule Modal (schedule_modal.js)
+
+IIFE module pattern with public API:
+
+```javascript
+const ScheduleModal = (function() {
+    // Configuration
+    let config = {
+        endpoints: {
+            preview: '/api/training/schedules/preview/',
+            createFromRun: '/api/training/schedules/from-run/'
+        },
+        onSuccess: null
+    };
+
+    // State
+    let state = {
+        mode: null,              // 'training_run' or 'model'
+        sourceId: null,
+        sourceData: null,
+        scheduleConfig: {
+            name: '',
+            scheduleType: 'daily',
+            scheduleTime: '09:00',
+            scheduleDayOfWeek: 0,
+            scheduleTimezone: 'UTC'
+        }
+    };
+
+    // Public API
+    return {
+        configure: function(options) {...},
+        openForTrainingRun: function(runId) {...},
+        openForModel: function(modelId) {...},
+        close: function() {...},
+        onScheduleTypeChange: function(type) {...},
+        selectDay: function(day) {...},
+        create: function() {...}
+    };
+})();
+```
+
+##### Schedule Modal UI Layout
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 📅  Create Training Schedule                                           [X] │
+│     Creating schedule from Training Run #5                                  │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│ ┌─────────────────────────────────────────────────────────────────────────┐ │
+│ │ ℹ️ Configuration Source                                                   │ │
+│ │ Source:   Run #5 - product_model_v3                                      │ │
+│ │ Dataset:  Q4 Product Data                                                │ │
+│ │ Features: Standard Features                                              │ │
+│ │ Model:    Retrieval Two-Tower                                            │ │
+│ └─────────────────────────────────────────────────────────────────────────┘ │
+│                                                                              │
+│ Schedule Name *                                                              │
+│ ┌─────────────────────────────────────────────────────────────────────────┐ │
+│ │ Weekly Product Retraining                                                │ │
+│ └─────────────────────────────────────────────────────────────────────────┘ │
+│ A descriptive name for this schedule                                        │
+│                                                                              │
+│ Schedule Type *                                                              │
+│ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐                             │
+│ │  🕐 Once    │ │  🔄 Daily   │ │ 📅 Weekly   │                             │
+│ │             │ │  [ACTIVE]   │ │             │                             │
+│ └─────────────┘ └─────────────┘ └─────────────┘                             │
+│                                                                              │
+│ Time of Day *                                                                │
+│ ┌─────────────────────────────────────────────────────────────────────────┐ │
+│ │ 09:00                                                                    │ │
+│ └─────────────────────────────────────────────────────────────────────────┘ │
+│                                                                              │
+│ Timezone                                                                     │
+│ ┌─────────────────────────────────────────────────────────────────────────┐ │
+│ │ Europe/Warsaw                                                        [▼] │ │
+│ └─────────────────────────────────────────────────────────────────────────┘ │
+│                                                                              │
+│ ┌─────────────────────────────────────────────────────────────────────────┐ │
+│ │ ▶️ Next run: Daily at 09:00 (Europe/Warsaw)                              │ │
+│ └─────────────────────────────────────────────────────────────────────────┘ │
+│                                                                              │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                          [Cancel]  [📅 Create Schedule]     │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+#### Integration Points
+
+##### Training Cards ("Schedule" Button)
+
+```javascript
+// training_cards.js - scheduleRun()
+function scheduleRun(runId) {
+    ScheduleModal.configure({
+        onSuccess: function(schedule) {
+            showToast(`Schedule "${schedule.name}" created`, 'success');
+            loadTrainingRuns();
+        }
+    });
+    ScheduleModal.openForTrainingRun(runId);
+}
+```
+
+##### View Modal ("Schedule Retraining" Button)
+
+Added to Registry & Deployment section for registered models:
+
+```javascript
+// exp_view_modal.js - renderRegistryDeploymentSection()
+<button class="btn-outcome-action btn-schedule"
+        onclick="ExpViewModal.scheduleRetraining(${data.id})">
+    <i class="fas fa-calendar-alt"></i> Schedule Retraining
+</button>
+```
+
+#### Files Summary
+
+##### New Files
+| File | Purpose |
+|------|---------|
+| `templates/includes/_schedule_modal.html` | Reusable modal HTML template |
+| `static/js/schedule_modal.js` | Modal JavaScript module (IIFE) |
+| `static/css/schedule_modal.css` | Modal styling |
+
+##### Modified Files
+| File | Changes |
+|------|---------|
+| `ml_platform/training/api.py` | Added `training_schedule_from_run`, `training_schedule_preview` endpoints |
+| `ml_platform/training/urls.py` | Added URL patterns for new endpoints |
+| `static/js/training_cards.js` | Updated `scheduleRun()` to use ScheduleModal |
+| `static/js/exp_view_modal.js` | Added `scheduleRetraining()` function, "Schedule Retraining" button |
+| `static/css/exp_view_modal.css` | Added `.btn-schedule` button styling |
+| `templates/ml_platform/model_training.html` | Added modal include and script/CSS imports |
+
+#### Usage Flow
+
+1. **From Training Cards**:
+   - User clicks "Schedule" on a completed training run card
+   - Schedule modal opens with source run's configuration displayed
+   - User configures schedule name, type, time, timezone
+   - On submit, Cloud Scheduler job is created
+   - Success toast shown, training runs list refreshed
+
+2. **From Model Registry**:
+   - User opens completed training run in View Modal
+   - Goes to Overview tab → Registry & Deployment section
+   - Clicks "Schedule Retraining" button
+   - View modal closes, Schedule modal opens
+   - Same flow as above
+
+3. **Scheduled Execution**:
+   - Cloud Scheduler triggers webhook at scheduled time
+   - Webhook creates new TrainingRun with frozen configuration
+   - Training pipeline submitted to Vertex AI
+   - Schedule statistics updated (total_runs, last_run_at, next_run_at)
 
 ### New Training Dialog
 

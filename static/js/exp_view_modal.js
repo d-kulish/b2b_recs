@@ -792,6 +792,9 @@ const ExpViewModal = (function() {
                             <button class="btn-outcome-action btn-secondary" onclick="ExpViewModal.deployToCloudRun(${data.id})">
                                 <i class="fas fa-cloud"></i> Deploy to Cloud Run
                             </button>
+                            <button class="btn-outcome-action btn-schedule" onclick="ExpViewModal.scheduleRetraining(${data.id})">
+                                <i class="fas fa-calendar-alt"></i> Schedule Retraining
+                            </button>
                         </div>
                     </div>
                 `;
@@ -928,6 +931,52 @@ const ExpViewModal = (function() {
         } catch (error) {
             console.error('Error undeploying model:', error);
             alert('Error undeploying model');
+        }
+    }
+
+    function scheduleRetraining(runId) {
+        // Close the view modal to show the schedule modal
+        close();
+
+        // Open schedule modal for this training run
+        if (typeof ScheduleModal !== 'undefined') {
+            ScheduleModal.configure({
+                onSuccess: function(schedule) {
+                    // Show success toast
+                    const toast = document.createElement('div');
+                    toast.className = 'toast toast-success';
+                    toast.style.cssText = `
+                        position: fixed;
+                        bottom: 20px;
+                        right: 20px;
+                        padding: 12px 20px;
+                        border-radius: 8px;
+                        color: white;
+                        font-size: 14px;
+                        z-index: 10001;
+                        animation: slideIn 0.3s ease;
+                        background-color: #16a34a;
+                    `;
+                    toast.textContent = `Schedule "${schedule.name}" created successfully`;
+                    document.body.appendChild(toast);
+                    setTimeout(() => {
+                        toast.style.animation = 'slideOut 0.3s ease';
+                        setTimeout(() => toast.remove(), 300);
+                    }, 3000);
+
+                    // Refresh training runs if available
+                    if (typeof TrainingCards !== 'undefined') {
+                        TrainingCards.loadTrainingRuns();
+                    }
+                    // Also refresh schedules list if available
+                    if (typeof TrainingSchedules !== 'undefined') {
+                        TrainingSchedules.loadSchedules();
+                    }
+                }
+            });
+            ScheduleModal.openForTrainingRun(runId);
+        } else {
+            alert('Schedule modal is not available. Please refresh the page.');
         }
     }
 
@@ -4178,6 +4227,7 @@ const ExpViewModal = (function() {
         deployTrainingRun: deployTrainingRun,
         deployToCloudRun: deployToCloudRun,
         undeployTrainingRun: undeployTrainingRun,
+        scheduleRetraining: scheduleRetraining,
 
         // Tab switching
         switchTab: switchTab,

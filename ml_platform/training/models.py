@@ -395,6 +395,11 @@ class TrainingRun(models.Model):
         help_text="Deployment configuration (auto_deploy, endpoint settings)"
     )
 
+    schedule_config = models.JSONField(
+        default=dict,
+        help_text="Embedded schedule configuration (schedule_type, schedule_time, etc.)"
+    )
+
     # =========================================================================
     # Status Tracking
     # =========================================================================

@@ -49,6 +49,16 @@ urlpatterns = [
         name='training_run_rerun'
     ),
     path(
+        'api/training-runs/<int:training_run_id>/config/',
+        api.training_run_config,
+        name='training_run_config'
+    ),
+    path(
+        'api/training-runs/<int:training_run_id>/schedule-webhook/',
+        api.training_run_schedule_webhook,
+        name='training_run_schedule_webhook'
+    ),
+    path(
         'api/training-runs/<int:training_run_id>/deploy/',
         api.training_run_deploy,
         name='training_run_deploy'

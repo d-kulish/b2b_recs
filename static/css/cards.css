@@ -805,6 +805,96 @@
     cursor: not-allowed;
 }
 
+/* Schedule Action Button (blue, same as view style) */
+.card-action-btn.schedule {
+    width: 64px;
+    height: 32px;
+    background-color: #3b82f6;
+    color: #ffffff;
+    font-weight: 600;
+    font-size: 12px;
+}
+
+.card-action-btn.schedule:hover:not(:disabled) {
+    background-color: #2563eb;
+}
+
+.card-action-btn.schedule:disabled {
+    background-color: #93c5fd;
+    cursor: not-allowed;
+}
+
+/* ============================================================================
+   2-COLUMN ACTIONS GRID LAYOUT
+   ============================================================================
+   Used for training run cards to organize actions in a 2-column vertical layout
+   Column 1: Deploy, Rerun, Schedule
+   Column 2: View, Cancel, Edit+Delete
+   ============================================================================ */
+
+.ml-card-actions-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto auto auto;
+    gap: 6px;
+    width: 100%;
+}
+
+/* Ensure buttons fill their grid cells */
+.ml-card-actions-grid .card-action-btn {
+    width: 100%;
+    justify-content: center;
+}
+
+/* Icon button group for Edit + Delete side by side */
+.card-action-btn-group {
+    display: flex;
+    gap: 6px;
+    justify-content: flex-end;
+}
+
+/* Icon-only button style (for Edit/Delete in compact layout) */
+.card-action-btn.icon-only {
+    width: 36px;
+    height: 32px;
+    min-width: 36px;
+    padding: 0;
+    border: 1px solid #e5e7eb;
+    background: white;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
+}
+
+.card-action-btn.icon-only:hover {
+    border-color: #d1d5db;
+    background: #f9fafb;
+}
+
+/* Edit icon button */
+.card-action-btn.icon-only.edit {
+    color: #6b7280;
+}
+
+.card-action-btn.icon-only.edit:hover {
+    color: #374151;
+    background: #f3f4f6;
+}
+
+/* Delete icon button */
+.card-action-btn.icon-only.delete {
+    color: #dc2626;
+    background: #fef2f2;
+    border-color: #fecaca;
+}
+
+.card-action-btn.icon-only.delete:hover {
+    background: #fee2e2;
+    border-color: #fca5a5;
+}
+
 /* Pause Action Button (yellow, same size as Run) */
 .card-action-btn.pause-large {
     width: 64px;

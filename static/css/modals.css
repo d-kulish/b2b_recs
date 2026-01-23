@@ -297,6 +297,10 @@
     padding-left: 17px;
 }
 
+.progress-step-pill.hidden {
+    display: none;
+}
+
 /* Wizard Body - scrollable content area */
 .modal-body-wizard {
     padding: 16px 20px;

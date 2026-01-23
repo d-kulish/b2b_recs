@@ -901,70 +901,72 @@ const TrainingCards = (function() {
     }
 
     function renderActions(run, allowedActions) {
-        const primaryButtons = [];
-        const secondaryButtons = [];
-
-        // Determine if run is cancellable (running or submitting)
+        // Determine button states based on run status
         const isCancellable = run.status === 'running' || run.status === 'submitting';
+        const isTerminalState = ['completed', 'failed', 'cancelled', 'not_blessed'].includes(run.status);
+        const canDeploy = run.status === 'completed';
+        const canRerun = allowedActions.includes('rerun');
+        const canSchedule = isTerminalState; // Schedule available for completed/failed/cancelled runs
+        const canEdit = isTerminalState; // Edit available for terminal states
+        const canDelete = allowedActions.includes('delete');
 
-        // Deploy button (for completed runs) - Vertex AI Endpoint
-        if (allowedActions.includes('deploy') && run.status === 'completed') {
-            primaryButtons.push(`
-                <button class="card-action-btn deploy" onclick="event.stopPropagation(); TrainingCards.deployRun(${run.id})" title="Deploy to Vertex AI Endpoint">Deploy</button>
-            `);
+        // Build 2-column grid layout:
+        // Column 1: Deploy, Rerun, Schedule
+        // Column 2: View, Cancel, Edit+Delete
+
+        // Row 1: Deploy | View
+        let deployBtn = '';
+        if (canDeploy) {
+            deployBtn = `<button class="card-action-btn deploy" onclick="event.stopPropagation(); TrainingCards.deployRun(${run.id})" title="Deploy to Vertex AI Endpoint">Deploy</button>`;
+        } else {
+            // Placeholder for alignment when deploy not available
+            deployBtn = `<button class="card-action-btn deploy" disabled title="Deploy available after completion">Deploy</button>`;
         }
 
-        // Deploy to Cloud Run button (for completed runs with registered model)
-        if (allowedActions.includes('deployCloudRun') && run.status === 'completed' && !run.is_deployed) {
-            primaryButtons.push(`
-                <button class="card-action-btn deploy" onclick="event.stopPropagation(); TrainingCards.deployRunCloudRun(${run.id})" title="Deploy to Cloud Run">Cloud Run</button>
-            `);
+        const viewBtn = `<button class="card-action-btn view" onclick="event.stopPropagation(); TrainingCards.viewRun(${run.id})" title="View Details">View</button>`;
+
+        // Row 2: Rerun | Cancel
+        let rerunBtn = '';
+        if (canRerun) {
+            rerunBtn = `<button class="card-action-btn view" onclick="event.stopPropagation(); TrainingCards.rerunRun(${run.id})" title="Re-run with same configuration">Rerun</button>`;
+        } else {
+            rerunBtn = `<button class="card-action-btn view" disabled title="Rerun available after completion">Rerun</button>`;
         }
 
-        // Submit button (for pending/scheduled)
-        if (allowedActions.includes('submit') && (run.status === 'pending' || run.status === 'scheduled')) {
-            primaryButtons.push(`
-                <button class="card-action-btn view" onclick="event.stopPropagation(); TrainingCards.submitRun(${run.id})" title="Submit to Vertex AI">Run</button>
-            `);
+        const cancelBtn = `<button class="card-action-btn cancel" onclick="event.stopPropagation(); TrainingCards.cancelRun(event, ${run.id})" title="Cancel Training" ${isCancellable ? '' : 'disabled'}>Cancel</button>`;
+
+        // Row 3: Schedule | Edit + Delete
+        let scheduleBtn = '';
+        if (canSchedule) {
+            scheduleBtn = `<button class="card-action-btn schedule" onclick="event.stopPropagation(); TrainingCards.scheduleRun(${run.id})" title="Schedule recurring training">Schedule</button>`;
+        } else {
+            scheduleBtn = `<button class="card-action-btn schedule" disabled title="Schedule available after completion">Schedule</button>`;
         }
 
-        // Push button (for not_blessed)
-        if (allowedActions.includes('push') && run.status === 'not_blessed') {
-            primaryButtons.push(`
-                <button class="card-action-btn cancel" onclick="event.stopPropagation(); TrainingCards.pushAnyway(${run.id})" title="Push to Registry Anyway">Push</button>
-            `);
+        // Edit + Delete icon buttons
+        let editDeleteGroup = '<div class="card-action-btn-group">';
+        if (canEdit) {
+            editDeleteGroup += `<button class="card-action-btn icon-only edit" onclick="event.stopPropagation(); TrainingCards.editRun(${run.id})" title="Edit Training Run"><i class="fas fa-external-link-alt"></i></button>`;
+        } else {
+            editDeleteGroup += `<button class="card-action-btn icon-only edit" disabled title="Edit available after completion"><i class="fas fa-external-link-alt"></i></button>`;
         }
-
-        // Rerun button (for terminal states)
-        if (allowedActions.includes('rerun')) {
-            primaryButtons.push(`
-                <button class="card-action-btn view" onclick="event.stopPropagation(); TrainingCards.rerunRun(${run.id})" title="Re-run with same configuration">Rerun</button>
-            `);
+        if (canDelete) {
+            editDeleteGroup += `<button class="card-action-btn icon-only delete" onclick="event.stopPropagation(); TrainingCards.deleteRun(${run.id})" title="Delete Training Run"><i class="fas fa-trash"></i></button>`;
+        } else {
+            editDeleteGroup += `<button class="card-action-btn icon-only delete" disabled title="Delete available after completion"><i class="fas fa-trash"></i></button>`;
         }
-
-        // View button - always available (primary)
-        primaryButtons.push(`
-            <button class="card-action-btn view" onclick="event.stopPropagation(); TrainingCards.viewRun(${run.id})" title="View Details">View</button>
-        `);
-
-        // Cancel button - always visible, disabled when not cancellable (matches experiments page)
-        primaryButtons.push(`
-            <button class="card-action-btn cancel" onclick="event.stopPropagation(); TrainingCards.cancelRun(event, ${run.id})" title="Cancel Training" ${isCancellable ? '' : 'disabled'}>Cancel</button>
-        `);
-
-        // Delete button (for terminal states)
-        if (allowedActions.includes('delete')) {
-            secondaryButtons.push(`
-                <button class="card-action-btn delete" onclick="event.stopPropagation(); TrainingCards.deleteRun(${run.id})" title="Delete Training Run"><i class="fas fa-trash"></i></button>
-            `);
-        }
+        editDeleteGroup += '</div>';
 
         return `
             <div class="ml-card-col-actions">
-                <div class="ml-card-actions-row">
-                    ${primaryButtons.join('')}
+                <div class="ml-card-actions-grid">
+                    ${deployBtn}
+                    ${viewBtn}
+                    ${rerunBtn}
+                    ${cancelBtn}
+                    ${scheduleBtn}
+                    ${editDeleteGroup}
                 </div>
-                ${secondaryButtons.length > 0 ? `<div class="ml-card-actions-row">${secondaryButtons.join('')}</div>` : ''}
             </div>
         `;
     }
@@ -1401,6 +1403,32 @@ const TrainingCards = (function() {
         }
     }
 
+    function scheduleRun(runId) {
+        // TODO: Implement schedule functionality
+        // This will open a scheduling dialog/modal for recurring training
+        showConfirmModal({
+            title: 'Schedule Training Run',
+            message: 'Schedule functionality will allow you to set up recurring training runs based on this configuration.<br><br><span class="text-sm text-gray-500">This feature is coming soon.</span>',
+            confirmText: 'OK',
+            cancelText: 'Cancel',
+            type: 'info',
+            confirmButtonClass: 'btn-neu-nav-wide',
+            onConfirm: () => {
+                // Placeholder - will be implemented with scheduling wizard
+                console.log('Schedule run:', runId);
+            }
+        });
+    }
+
+    function editRun(runId) {
+        // Open the training wizard in edit mode
+        if (typeof TrainingWizard !== 'undefined' && TrainingWizard.openForEdit) {
+            TrainingWizard.openForEdit(runId);
+        } else {
+            showToast('Edit feature not available', 'error');
+        }
+    }
+
     // =============================================================================
     // UTILITY - HTML ESCAPING
     // =============================================================================
@@ -1437,6 +1465,8 @@ const TrainingCards = (function() {
         deployRun: deployRun,
         deployRunCloudRun: deployRunCloudRun,
         pushAnyway: pushAnyway,
+        scheduleRun: scheduleRun,
+        editRun: editRun,
         stopPolling: stopPolling,
         // Expose state for debugging
         getState: function() { return state; }

@@ -40,6 +40,8 @@ const TrainingWizard = (function() {
     };
 
     let state = {
+        editMode: false,       // Edit mode flag
+        editRunId: null,       // Training run ID being edited
         currentStep: 1,
         formData: {
             name: '',
@@ -264,7 +266,122 @@ const TrainingWizard = (function() {
         resetState();
     }
 
+    /**
+     * Open the wizard in edit mode for an existing training run.
+     * @param {number} runId - The training run ID to edit
+     */
+    async function openForEdit(runId) {
+        // Reset state
+        resetState();
+        state.editMode = true;
+        state.editRunId = runId;
+
+        // Show modal
+        const modal = document.getElementById('trainingWizardModal');
+        if (modal) {
+            modal.classList.remove('hidden');
+        }
+
+        // Update modal title for edit mode
+        const modalTitle = document.querySelector('#trainingWizardModal .modal-title');
+        if (modalTitle) {
+            modalTitle.textContent = 'Edit Training Run';
+        }
+
+        // Load config from API
+        await loadTrainingRunConfig(runId);
+
+        // Skip to step 2 (step 1 is locked in edit mode)
+        goToStep(2);
+    }
+
+    /**
+     * Load training run configuration from the API.
+     * @param {number} runId - The training run ID to load
+     */
+    async function loadTrainingRunConfig(runId) {
+        try {
+            const response = await fetch(`/api/training-runs/${runId}/config/`);
+            const data = await response.json();
+
+            if (data.success && data.config) {
+                const config = data.config;
+
+                // Populate form data from config
+                state.formData.name = config.name || '';
+                state.formData.datasetId = config.dataset_id;
+                state.formData.featureConfigId = config.feature_config_id;
+                state.formData.modelConfigId = config.model_config_id;
+
+                // Create a pseudo-experiment object for display
+                state.formData.selectedExperiment = {
+                    experiment_id: config.base_experiment_id,
+                    experiment_number: config.base_experiment_number,
+                    display_name: `Exp #${config.base_experiment_number || 'N/A'}`,
+                    dataset: config.dataset_name,
+                    dataset_id: config.dataset_id,
+                    feature_config: config.feature_config_name,
+                    feature_config_id: config.feature_config_id,
+                    model_config: config.model_config_name,
+                    model_config_id: config.model_config_id
+                };
+
+                // Populate training params
+                if (config.training_params) {
+                    state.formData.trainingParams.epochs = config.training_params.epochs || 150;
+                    state.formData.trainingParams.batchSize = config.training_params.batch_size || 8192;
+                    state.formData.trainingParams.learningRate = config.training_params.learning_rate || 0.1;
+                    if (config.training_params.early_stopping) {
+                        state.formData.trainingParams.earlyStoppingEnabled = config.training_params.early_stopping.enabled || false;
+                        state.formData.trainingParams.earlyStoppingPatience = config.training_params.early_stopping.patience || 10;
+                    }
+                    // Store experiment settings
+                    state.formData.experimentSettings.splitStrategy = config.training_params.split_strategy || '';
+                    state.formData.experimentSettings.holdoutDays = config.training_params.holdout_days || null;
+                }
+
+                // Populate GPU config
+                if (config.gpu_config) {
+                    const gpuType = (config.gpu_config.gpu_type || 'NVIDIA_TESLA_T4')
+                        .replace('NVIDIA_TESLA_', 'NVIDIA_');
+                    state.formData.gpuConfig.acceleratorType = gpuType;
+                    state.formData.gpuConfig.acceleratorCount = config.gpu_config.gpu_count || 2;
+                    state.formData.gpuConfig.usePreemptible = config.gpu_config.preemptible || false;
+                }
+
+                // Populate evaluator config
+                if (config.evaluator_config) {
+                    state.formData.evaluatorConfig.enabled = config.evaluator_config.enabled || false;
+                    if (config.evaluator_config.blessing_threshold) {
+                        state.formData.evaluatorConfig.blessingThreshold =
+                            config.evaluator_config.blessing_threshold.min_value || 0.40;
+                    }
+                }
+
+                // Populate schedule config
+                if (config.schedule_config && Object.keys(config.schedule_config).length > 0) {
+                    state.formData.scheduleConfig.type = config.schedule_config.schedule_type || 'now';
+                    state.formData.scheduleConfig.time = config.schedule_config.schedule_time || '09:00';
+                    state.formData.scheduleConfig.dayOfWeek = config.schedule_config.schedule_day_of_week || 0;
+                    state.formData.scheduleConfig.timezone = config.schedule_config.schedule_timezone ||
+                        Intl.DateTimeFormat().resolvedOptions().timeZone;
+                    state.formData.scheduleConfig.datetime = config.schedule_config.scheduled_datetime || null;
+                }
+
+                // Mark step 1 as valid since we're loading existing config
+                state.validation.step1 = true;
+            } else {
+                showToast(data.error || 'Failed to load training run config', 'error');
+            }
+        } catch (error) {
+            console.error('Failed to load training run config:', error);
+            showToast('Failed to load training run config', 'error');
+        }
+    }
+
     function resetState() {
+        state.editMode = false;
+        state.editRunId = null;
         state.currentStep = 1;
         state.formData = {
             name: '',
@@ -326,31 +443,48 @@ const TrainingWizard = (function() {
     function goToStep(stepNum) {
         state.currentStep = stepNum;
 
+        // In edit mode, adjust step numbers (steps 2,3 become 1,2)
+        const editModeOffset = state.editMode ? 1 : 0;
+        const displayStepNum = state.editMode ? stepNum - 1 : stepNum;
+        const totalSteps = state.editMode ? 2 : 3;
+
         // Update step visibility
         for (let i = 1; i <= 3; i++) {
             const stepEl = document.getElementById(`wizardStep${i}`);
             if (stepEl) {
-                stepEl.classList.toggle('active', i === stepNum);
+                if (state.editMode && i === 1) {
+                    // Hide step 1 in edit mode
+                    stepEl.classList.remove('active');
+                } else {
+                    stepEl.classList.toggle('active', i === stepNum);
+                }
             }
         }
 
         // Update progress pills
         const pills = document.querySelectorAll('.progress-step-pill');
         pills.forEach((pill, index) => {
-            pill.classList.remove('current', 'completed', 'future');
-            if (index + 1 < stepNum) {
-                pill.classList.add('completed');
-            } else if (index + 1 === stepNum) {
-                pill.classList.add('current');
+            pill.classList.remove('current', 'completed', 'future', 'hidden');
+            if (state.editMode && index === 0) {
+                // Hide first pill in edit mode
+                pill.classList.add('hidden');
             } else {
-                pill.classList.add('future');
+                const adjustedIndex = state.editMode ? index : index;
+                const adjustedStep = state.editMode ? stepNum - 1 : stepNum;
+                if (adjustedIndex + 1 < stepNum) {
+                    pill.classList.add('completed');
+                } else if (adjustedIndex + 1 === stepNum) {
+                    pill.classList.add('current');
+                } else {
+                    pill.classList.add('future');
+                }
             }
         });
 
         // Update step counter
         const counter = document.querySelector('.modal-step-counter');
         if (counter) {
-            counter.textContent = `Step ${stepNum} of 3`;
+            counter.textContent = `Step ${displayStepNum} of ${totalSteps}`;
         }
 
         // Update navigation buttons
@@ -376,6 +510,8 @@ const TrainingWizard = (function() {
     }
 
     function prevStep() {
+        // In edit mode, can't go back from step 2
+        if (state.editMode && state.currentStep <= 2) return;
         if (state.currentStep <= 1) return;
         goToStep(state.currentStep - 1);
     }
@@ -385,17 +521,44 @@ const TrainingWizard = (function() {
         const nextBtn = document.getElementById('wizardNextBtn');
         const submitBtn = document.getElementById('wizardSubmitBtn');
 
+        // In edit mode, step 2 is the first step
+        const isFirstStep = state.editMode ? state.currentStep === 2 : state.currentStep === 1;
+        const isLastStep = state.currentStep === 3;
+
         if (prevBtn) {
-            prevBtn.classList.toggle('hidden', state.currentStep === 1);
-            prevBtn.disabled = state.currentStep === 1;
+            prevBtn.classList.toggle('hidden', isFirstStep);
+            prevBtn.disabled = isFirstStep;
         }
 
         if (nextBtn) {
-            nextBtn.classList.toggle('hidden', state.currentStep === 3);
+            nextBtn.classList.toggle('hidden', isLastStep);
         }
 
         if (submitBtn) {
-            submitBtn.classList.toggle('hidden', state.currentStep !== 3);
+            submitBtn.classList.toggle('hidden', !isLastStep);
+            // Update submit button text for edit mode
+            updateSubmitButtonText();
+        }
+    }
+
+    function updateSubmitButtonText() {
+        const submitBtn = document.getElementById('wizardSubmitBtn');
+        if (!submitBtn) return;
+
+        const btnInner = submitBtn.querySelector('.btn-neu-inner');
+        if (!btnInner) return;
+
+        const scheduleType = state.formData.scheduleConfig.type;
+
+        if (state.editMode) {
+            // Edit mode always shows "Save" - user can rerun manually if desired
+            btnInner.innerHTML = 'Save';
+        } else {
+            if (scheduleType === 'now') {
+                btnInner.innerHTML = 'Run';
+            } else {
+                btnInner.innerHTML = 'Schedule';
+            }
         }
     }
 
@@ -1081,13 +1244,7 @@ const TrainingWizard = (function() {
         }
 
         // Update submit button text
-        const submitBtn = document.getElementById('wizardSubmitBtn');
-        if (submitBtn) {
-            const btnInner = submitBtn.querySelector('.btn-neu-inner');
-            if (btnInner) {
-                btnInner.innerHTML = scheduleType === 'now' ? 'Run' : 'Schedule';
-            }
-        }
+        updateSubmitButtonText();
     }
 
     // Keep old function name for backwards compatibility
@@ -1168,6 +1325,11 @@ const TrainingWizard = (function() {
     async function submit() {
         if (!validateStep(3)) return;
 
+        // Use edit mode submit if in edit mode
+        if (state.editMode) {
+            return submitEditMode();
+        }
+
         const submitBtn = document.getElementById('wizardSubmitBtn');
         const scheduleType = state.formData.scheduleConfig.type;
         const isScheduled = scheduleType !== 'now';
@@ -1236,6 +1398,118 @@ const TrainingWizard = (function() {
                 }
             }
         }
+    }
+
+    /**
+     * Submit in edit mode - updates the training run config via PATCH.
+     */
+    async function submitEditMode() {
+        const submitBtn = document.getElementById('wizardSubmitBtn');
+
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            const btnInner = submitBtn.querySelector('.btn-neu-inner');
+            if (btnInner) {
+                btnInner.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+            }
+        }
+
+        try {
+            const payload = buildEditPayload();
+
+            // PATCH to update the config
+            const response = await fetch(`/api/training-runs/${state.editRunId}/config/`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify(payload)
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                showToast('Configuration saved successfully!', 'success');
+                close();
+
+                // Call completion callback to refresh the training runs list
+                if (config.onComplete) {
+                    config.onComplete();
+                }
+            } else {
+                showToast(data.error || 'Failed to save configuration', 'error');
+            }
+        } catch (error) {
+            console.error('Edit submit failed:', error);
+            showToast('Failed to save configuration', 'error');
+        } finally {
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                updateSubmitButtonText();
+            }
+        }
+    }
+
+    /**
+     * Build the payload for edit mode PATCH request.
+     */
+    function buildEditPayload() {
+        const params = state.formData.trainingParams;
+        const expSettings = state.formData.experimentSettings;
+        const gpu = state.formData.gpuConfig;
+        const evaluator = state.formData.evaluatorConfig;
+        const schedule = state.formData.scheduleConfig;
+
+        const payload = {
+            training_params: {
+                epochs: params.epochs,
+                batch_size: params.batchSize,
+                learning_rate: params.learningRate,
+                split_strategy: expSettings.splitStrategy,
+                holdout_days: expSettings.holdoutDays,
+                date_column: expSettings.dateColumn,
+                early_stopping: {
+                    enabled: params.earlyStoppingEnabled,
+                    patience: params.earlyStoppingPatience
+                }
+            },
+            gpu_config: {
+                gpu_type: gpu.acceleratorType.replace('NVIDIA_', 'NVIDIA_TESLA_'),
+                gpu_count: gpu.acceleratorCount,
+                preemptible: gpu.usePreemptible
+            },
+            evaluator_config: {
+                enabled: evaluator.enabled,
+                blessing_threshold: {
+                    metric: 'recall_at_100',
+                    min_value: parseFloat(evaluator.blessingThreshold)
+                }
+            }
+        };
+
+        // Add schedule config
+        if (schedule.type !== 'now') {
+            payload.schedule_config = {
+                schedule_type: schedule.type,
+                schedule_timezone: schedule.timezone
+            };
+            if (schedule.type === 'once') {
+                payload.schedule_config.scheduled_datetime = schedule.datetime;
+            } else {
+                payload.schedule_config.schedule_time = schedule.time;
+                if (schedule.type === 'weekly') {
+                    payload.schedule_config.schedule_day_of_week = schedule.dayOfWeek;
+                }
+            }
+        } else {
+            // Clear schedule by setting type to 'now'
+            payload.schedule_config = {
+                schedule_type: 'now'
+            };
+        }
+
+        return payload;
     }
 
     function buildPayload() {
@@ -1311,6 +1585,7 @@ const TrainingWizard = (function() {
         prevStep: prevStep,
         submit: submit,
         openFromExperiment: openFromExperiment,
+        openForEdit: openForEdit,  // Edit mode
         selectExperiment: selectExperiment,
         selectModelType: selectModelType,
         searchExperiments: searchExperiments,

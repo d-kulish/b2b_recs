@@ -991,6 +991,14 @@ class TrainingService:
             created_by=training_run.created_by,
         )
 
+        # Copy schedule_config (without cloud_scheduler_job_name to avoid conflicts)
+        if training_run.schedule_config:
+            new_run.schedule_config = {
+                k: v for k, v in training_run.schedule_config.items()
+                if k != 'cloud_scheduler_job_name'
+            }
+            new_run.save(update_fields=['schedule_config'])
+
         logger.info(
             f"Created re-run {new_run.display_name} for {training_run.display_name}"
         )
@@ -1003,6 +1011,133 @@ class TrainingService:
             new_run.refresh_from_db()
 
         return new_run
+
+    def create_cloud_scheduler_job_for_training_run(
+        self, training_run: TrainingRun, schedule_config: dict
+    ) -> str:
+        """
+        Create a Cloud Scheduler job to trigger scheduled training runs.
+
+        Args:
+            training_run: TrainingRun instance to use as template
+            schedule_config: Schedule configuration dict with keys:
+                - schedule_type: 'once', 'daily', 'weekly'
+                - schedule_time: 'HH:MM' for daily/weekly
+                - schedule_day_of_week: 0-6 for weekly (0=Monday)
+                - schedule_timezone: timezone string (e.g., 'UTC')
+                - scheduled_datetime: ISO-8601 for one-time schedules
+
+        Returns:
+            Full Cloud Scheduler job resource name
+
+        Raises:
+            TrainingServiceError: If job creation fails
+        """
+        from google.cloud import scheduler_v1
+        from google.protobuf import duration_pb2
+
+        schedule_type = schedule_config.get('schedule_type', 'now')
+        if schedule_type == 'now':
+            raise TrainingServiceError("Cannot create scheduler job for 'now' schedule type")
+
+        # Build cron expression
+        schedule_time = schedule_config.get('schedule_time', '09:00')
+        hour, minute = schedule_time.split(':')
+
+        if schedule_type == 'once':
+            # One-time schedule - use at-style scheduling with specific datetime
+            scheduled_datetime = schedule_config.get('scheduled_datetime')
+            if not scheduled_datetime:
+                raise TrainingServiceError("scheduled_datetime required for 'once' schedule type")
+            # Cloud Scheduler doesn't support one-time directly, we'll pause after first run
+            # Use a cron that runs at the specified time
+            from datetime import datetime
+            dt = datetime.fromisoformat(scheduled_datetime.replace('Z', '+00:00'))
+            cron_schedule = f"{dt.minute} {dt.hour} {dt.day} {dt.month} *"
+        elif schedule_type == 'daily':
+            cron_schedule = f"{minute} {hour} * * *"
+        elif schedule_type == 'weekly':
+            day_of_week = schedule_config.get('schedule_day_of_week', 0)
+            # Cloud Scheduler uses 0=Sunday, but we use 0=Monday
+            # Convert: 0(Mon)->1, 1(Tue)->2, ... 6(Sun)->0
+            cron_day = (day_of_week + 1) % 7
+            cron_schedule = f"{minute} {hour} * * {cron_day}"
+        else:
+            raise TrainingServiceError(f"Unknown schedule type: {schedule_type}")
+
+        timezone = schedule_config.get('schedule_timezone', 'UTC')
+
+        # Create Cloud Scheduler client
+        client = scheduler_v1.CloudSchedulerClient()
+
+        # Build job name
+        job_id = f"training-run-{training_run.id}-schedule"
+        parent = f"projects/{self.project_id}/locations/{self.REGION}"
+        job_name = f"{parent}/jobs/{job_id}"
+
+        # Build webhook URL
+        webhook_url = (
+            f"https://{self.project_id}.appspot.com"
+            f"/api/training-runs/{training_run.id}/schedule-webhook/"
+        )
+
+        # Create HTTP target with OIDC token
+        http_target = scheduler_v1.HttpTarget(
+            uri=webhook_url,
+            http_method=scheduler_v1.HttpMethod.POST,
+            oidc_token=scheduler_v1.OidcToken(
+                service_account_email=f"{self.project_id}@appspot.gserviceaccount.com"
+            )
+        )
+
+        job = scheduler_v1.Job(
+            name=job_name,
+            http_target=http_target,
+            schedule=cron_schedule,
+            time_zone=timezone,
+            attempt_deadline=duration_pb2.Duration(seconds=600),
+        )
+
+        try:
+            # Try to create the job
+            created_job = client.create_job(
+                request={"parent": parent, "job": job}
+            )
+            logger.info(f"Created Cloud Scheduler job: {created_job.name}")
+            return created_job.name
+        except Exception as e:
+            if 'already exists' in str(e).lower():
+                # Job exists, update it instead
+                try:
+                    updated_job = client.update_job(request={"job": job})
+                    logger.info(f"Updated existing Cloud Scheduler job: {updated_job.name}")
+                    return updated_job.name
+                except Exception as update_error:
+                    raise TrainingServiceError(f"Failed to update scheduler job: {update_error}")
+            raise TrainingServiceError(f"Failed to create scheduler job: {e}")
+
+    def delete_cloud_scheduler_job(self, job_name: str) -> bool:
+        """
+        Delete a Cloud Scheduler job.
+
+        Args:
+            job_name: Full resource name of the job to delete
+
+        Returns:
+            True if deleted successfully, False otherwise
+        """
+        if not job_name:
+            return False
+
+        try:
+            from google.cloud import scheduler_v1
+            client = scheduler_v1.CloudSchedulerClient()
+            client.delete_job(name=job_name)
+            logger.info(f"Deleted Cloud Scheduler job: {job_name}")
+            return True
+        except Exception as e:
+            logger.warning(f"Failed to delete Cloud Scheduler job {job_name}: {e}")
+            return False
 
     def deploy_model(self, training_run: TrainingRun) -> TrainingRun:
         """

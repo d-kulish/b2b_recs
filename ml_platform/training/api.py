@@ -142,6 +142,7 @@ def _serialize_training_run(training_run, include_details=False):
         data['gpu_config'] = training_run.gpu_config
         data['evaluator_config'] = training_run.evaluator_config
         data['deployment_config'] = training_run.deployment_config
+        data['schedule_config'] = training_run.schedule_config
         data['evaluation_results'] = training_run.evaluation_results
         data['artifacts'] = training_run.artifacts
         data['training_history_json'] = training_run.training_history_json
@@ -788,6 +789,247 @@ def training_run_rerun(request, training_run_id):
 
     except Exception as e:
         logger.exception(f"Error re-running training run: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET", "PATCH"])
+def training_run_config(request, training_run_id):
+    """
+    Get or update training run configuration for editing.
+
+    GET /api/training-runs/<id>/config/
+    Returns the training run configuration for the edit wizard.
+
+    PATCH /api/training-runs/<id>/config/
+    Updates the training run configuration. Only allowed for terminal states.
+    """
+    model_endpoint = _get_model_endpoint(request)
+    if not model_endpoint:
+        return JsonResponse({
+            'success': False,
+            'error': 'No model endpoint selected'
+        }, status=400)
+
+    try:
+        training_run = TrainingRun.objects.select_related(
+            'dataset', 'feature_config', 'model_config', 'base_experiment'
+        ).get(
+            id=training_run_id,
+            ml_model=model_endpoint
+        )
+    except TrainingRun.DoesNotExist:
+        return JsonResponse({
+            'success': False,
+            'error': f'TrainingRun {training_run_id} not found'
+        }, status=404)
+
+    if request.method == 'GET':
+        return _training_run_config_get(training_run)
+    else:
+        return _training_run_config_patch(request, training_run, model_endpoint)
+
+
+def _training_run_config_get(training_run):
+    """Handle GET request for training run config."""
+    config_data = {
+        'id': training_run.id,
+        'name': training_run.name,
+        'dataset_id': training_run.dataset_id,
+        'dataset_name': training_run.dataset.name if training_run.dataset else None,
+        'feature_config_id': training_run.feature_config_id,
+        'feature_config_name': training_run.feature_config.name if training_run.feature_config else None,
+        'model_config_id': training_run.model_config_id,
+        'model_config_name': training_run.model_config.name if training_run.model_config else None,
+        'base_experiment_id': training_run.base_experiment_id,
+        'base_experiment_number': training_run.base_experiment.experiment_number if training_run.base_experiment else None,
+        'training_params': training_run.training_params,
+        'gpu_config': training_run.gpu_config,
+        'evaluator_config': training_run.evaluator_config,
+        'schedule_config': training_run.schedule_config,
+        'status': training_run.status,
+        'is_terminal': training_run.is_terminal,
+    }
+
+    return JsonResponse({
+        'success': True,
+        'config': config_data
+    })
+
+
+def _training_run_config_patch(request, training_run, model_endpoint):
+    """Handle PATCH request to update training run config."""
+    # Only allow editing for terminal states
+    if not training_run.is_terminal:
+        return JsonResponse({
+            'success': False,
+            'error': f"Cannot edit training run in '{training_run.status}' state. "
+                     f"Only terminal states (completed, failed, cancelled) can be edited."
+        }, status=400)
+
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'error': 'Invalid JSON'
+        }, status=400)
+
+    # Track what fields are updated
+    updated_fields = []
+
+    # Update training_params if provided
+    if 'training_params' in data:
+        training_run.training_params = {
+            **training_run.training_params,
+            **data['training_params']
+        }
+        updated_fields.append('training_params')
+
+    # Update gpu_config if provided
+    if 'gpu_config' in data:
+        training_run.gpu_config = {
+            **training_run.gpu_config,
+            **data['gpu_config']
+        }
+        updated_fields.append('gpu_config')
+
+    # Update evaluator_config if provided
+    if 'evaluator_config' in data:
+        training_run.evaluator_config = {
+            **training_run.evaluator_config,
+            **data['evaluator_config']
+        }
+        updated_fields.append('evaluator_config')
+
+    # Update schedule_config if provided
+    if 'schedule_config' in data:
+        old_schedule_config = training_run.schedule_config or {}
+        new_schedule_config = data['schedule_config']
+
+        # Handle Cloud Scheduler job updates
+        old_job_name = old_schedule_config.get('cloud_scheduler_job_name', '')
+        old_schedule_type = old_schedule_config.get('schedule_type', 'now')
+        new_schedule_type = new_schedule_config.get('schedule_type', 'now')
+
+        # If schedule type changed or schedule was removed, handle Cloud Scheduler
+        if old_schedule_type != 'now' and old_job_name:
+            # Need to delete old Cloud Scheduler job
+            try:
+                service = TrainingService(model_endpoint)
+                service.delete_cloud_scheduler_job(old_job_name)
+                logger.info(f"Deleted old Cloud Scheduler job: {old_job_name}")
+            except Exception as e:
+                logger.warning(f"Failed to delete old Cloud Scheduler job: {e}")
+
+        # Create new Cloud Scheduler job if needed
+        if new_schedule_type != 'now':
+            try:
+                service = TrainingService(model_endpoint)
+                job_name = service.create_cloud_scheduler_job_for_training_run(
+                    training_run=training_run,
+                    schedule_config=new_schedule_config
+                )
+                new_schedule_config['cloud_scheduler_job_name'] = job_name
+                logger.info(f"Created new Cloud Scheduler job: {job_name}")
+            except Exception as e:
+                logger.error(f"Failed to create Cloud Scheduler job: {e}")
+                return JsonResponse({
+                    'success': False,
+                    'error': f"Failed to create schedule: {str(e)}"
+                }, status=500)
+
+        training_run.schedule_config = new_schedule_config
+        updated_fields.append('schedule_config')
+
+    # Save if any fields were updated
+    if updated_fields:
+        training_run.save(update_fields=updated_fields)
+        logger.info(f"Updated training run {training_run.id} fields: {updated_fields}")
+
+    return JsonResponse({
+        'success': True,
+        'config': {
+            'id': training_run.id,
+            'training_params': training_run.training_params,
+            'gpu_config': training_run.gpu_config,
+            'evaluator_config': training_run.evaluator_config,
+            'schedule_config': training_run.schedule_config,
+        },
+        'updated_fields': updated_fields
+    })
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def training_run_schedule_webhook(request, training_run_id):
+    """
+    Webhook endpoint for Cloud Scheduler to trigger training runs.
+
+    POST /api/training-runs/<id>/schedule-webhook/
+
+    This endpoint is called by Cloud Scheduler when a scheduled training
+    should be triggered. It reads the template training run's CURRENT
+    configuration and creates a new training run.
+    """
+    # Authenticate webhook request (OIDC token validation)
+    # In production, this should verify the Cloud Scheduler OIDC token
+    auth_header = request.headers.get('Authorization', '')
+
+    try:
+        training_run = TrainingRun.objects.select_related(
+            'dataset', 'feature_config', 'model_config', 'base_experiment', 'ml_model'
+        ).get(id=training_run_id)
+    except TrainingRun.DoesNotExist:
+        return JsonResponse({
+            'success': False,
+            'error': f'TrainingRun {training_run_id} not found'
+        }, status=404)
+
+    # Verify the training run has a schedule config
+    schedule_config = training_run.schedule_config or {}
+    if not schedule_config.get('schedule_type') or schedule_config.get('schedule_type') == 'now':
+        return JsonResponse({
+            'success': False,
+            'error': 'Training run does not have an active schedule'
+        }, status=400)
+
+    try:
+        # Create a new training run with the template's current config
+        service = TrainingService(training_run.ml_model)
+        new_run = service.create_training_run(
+            name=training_run.name,
+            description=f"Scheduled run from template {training_run.display_name}",
+            dataset=training_run.dataset,
+            feature_config=training_run.feature_config,
+            model_config=training_run.model_config,
+            base_experiment=training_run.base_experiment,
+            training_params=training_run.training_params,
+            gpu_config=training_run.gpu_config,
+            evaluator_config=training_run.evaluator_config,
+            deployment_config=training_run.deployment_config,
+            created_by=training_run.created_by,
+        )
+
+        # Submit the new run
+        service.submit_training_pipeline(new_run)
+
+        logger.info(
+            f"Scheduled webhook triggered new training run {new_run.id} "
+            f"from template {training_run.id}"
+        )
+
+        return JsonResponse({
+            'success': True,
+            'training_run_id': new_run.id,
+            'message': f"Created and submitted training run {new_run.display_name}"
+        })
+
+    except Exception as e:
+        logger.exception(f"Error in schedule webhook for training run {training_run_id}: {e}")
         return JsonResponse({
             'success': False,
             'error': str(e)

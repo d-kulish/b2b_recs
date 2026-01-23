@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides detailed specifications for implementing the **Training** domain in the ML Platform. The Training domain executes full TFX pipelines for production model training.
 
-**Last Updated**: 2026-01-20
+**Last Updated**: 2026-01-23
 
 ---
 
@@ -769,6 +769,235 @@ The Training cards use a unified 4-column horizontal layout shared with the Expe
 - `.ml-card-col-info`, `.ml-card-col-config`, `.ml-card-col-metrics`, `.ml-card-col-actions`
 - `.ml-card-stages` - Stage progress bar container
 - `.ml-stage-segment` - Individual stage segment with status colors
+
+### Rerun Feature (2026-01-23)
+
+The Rerun feature allows users to create a new training run with the same configuration as an existing completed run.
+
+#### How It Works
+
+1. **Trigger**: Click the "Rerun" button on any training run card in a terminal state (completed, failed, cancelled, not_blessed)
+
+2. **Process**:
+   - Creates a new TrainingRun with identical configuration (dataset, feature config, model config, training params, GPU config, evaluator config)
+   - Copies `schedule_config` from the source run (without the `cloud_scheduler_job_name` to avoid conflicts)
+   - Auto-submits the new pipeline to Vertex AI
+   - Assigns a new `run_number` while keeping the same `name`
+
+3. **Confirmation**: Shows a confirmation modal before proceeding
+
+#### Backend Implementation
+
+```python
+# services.py - rerun_training_run method
+def rerun_training_run(self, training_run: TrainingRun) -> TrainingRun:
+    # Only allow rerun for terminal states
+    TERMINAL_STATUSES = [STATUS_COMPLETED, STATUS_FAILED, STATUS_NOT_BLESSED, STATUS_CANCELLED]
+
+    # Create new run with same config
+    new_run = self.create_training_run(
+        name=training_run.name,
+        description=f"Re-run of {training_run.display_name}",
+        dataset=training_run.dataset,
+        feature_config=training_run.feature_config,
+        model_config=training_run.model_config,
+        training_params=training_run.training_params,
+        gpu_config=training_run.gpu_config,
+        evaluator_config=training_run.evaluator_config,
+        ...
+    )
+
+    # Copy schedule_config (without cloud_scheduler_job_name)
+    if training_run.schedule_config:
+        new_run.schedule_config = {
+            k: v for k, v in training_run.schedule_config.items()
+            if k != 'cloud_scheduler_job_name'
+        }
+        new_run.save(update_fields=['schedule_config'])
+
+    # Auto-submit the new run
+    self.submit_training_pipeline(new_run)
+    return new_run
+```
+
+#### API Endpoint
+
+```
+POST /api/training-runs/<id>/rerun/
+
+Response:
+{
+    "success": true,
+    "training_run": { ... new run details ... },
+    "message": "Re-run created as Training #48"
+}
+```
+
+### Edit Feature (2026-01-23)
+
+The Edit feature allows users to modify training run configuration (epochs, batch_size, GPU settings, schedule) directly on an existing TrainingRun. Any completed run can serve as a template for future scheduled runs.
+
+#### Key Design Decisions
+
+1. **Schedule config embedded in TrainingRun** - Uses a `schedule_config` JSONField, no separate entity
+2. **Show saved (current) config** - When editing, displays the latest saved configuration
+3. **Any completed run can be a template** - No special designation needed
+4. **No versioning** - Just keeps the latest config
+
+#### Schedule Config Schema
+
+```json
+{
+  "schedule_type": "now|once|daily|weekly",
+  "schedule_time": "HH:MM",
+  "schedule_day_of_week": 0-6,
+  "schedule_timezone": "UTC",
+  "scheduled_datetime": "ISO-8601",
+  "cloud_scheduler_job_name": "projects/.../jobs/..."
+}
+```
+
+#### User Flow
+
+1. **Trigger**: Click the "Edit" button (pencil icon) on any training run card in a terminal state
+
+2. **Wizard Opens in Edit Mode**:
+   - Skips Step 1 (experiment selection) - locked to existing config
+   - Opens directly at Step 2 (Training Parameters)
+   - Pre-fills all fields with current configuration
+   - Step counter shows "Step 1 of 2" / "Step 2 of 2"
+
+3. **Editable Fields**:
+   - Training parameters (epochs, batch size, learning rate, early stopping)
+   - GPU configuration (GPU type, count, preemptible)
+   - Evaluator settings (enabled, blessing threshold)
+   - Schedule configuration (now, once, daily, weekly)
+
+4. **Save**: Click "Save" button to persist changes
+
+#### Backend Implementation
+
+**Model Field** (`models.py`):
+```python
+class TrainingRun(models.Model):
+    # ... existing fields ...
+
+    schedule_config = models.JSONField(
+        default=dict,
+        help_text="Embedded schedule configuration"
+    )
+```
+
+**API Endpoints** (`api.py`):
+
+```
+GET /api/training-runs/<id>/config/
+
+Response:
+{
+    "success": true,
+    "config": {
+        "id": 123,
+        "name": "model-v1",
+        "dataset_id": 1,
+        "dataset_name": "...",
+        "feature_config_id": 2,
+        "model_config_id": 3,
+        "training_params": { "epochs": 150, "batch_size": 8192, ... },
+        "gpu_config": { "gpu_type": "NVIDIA_TESLA_T4", "gpu_count": 2, ... },
+        "evaluator_config": { ... },
+        "schedule_config": { "schedule_type": "weekly", "schedule_time": "09:00", ... }
+    }
+}
+```
+
+```
+PATCH /api/training-runs/<id>/config/
+
+Request:
+{
+    "training_params": { "epochs": 300, "batch_size": 16384, ... },
+    "gpu_config": { "gpu_type": "NVIDIA_TESLA_T4", "gpu_count": 4 },
+    "evaluator_config": { ... },
+    "schedule_config": { "schedule_type": "daily", "schedule_time": "02:00", ... }
+}
+
+Response:
+{
+    "success": true,
+    "config": { ... updated config ... },
+    "updated_fields": ["training_params", "gpu_config", "schedule_config"]
+}
+```
+
+**Schedule Webhook** (for Cloud Scheduler):
+```
+POST /api/training-runs/<id>/schedule-webhook/
+
+- Called by Cloud Scheduler when a scheduled training should trigger
+- Reads the template training run's CURRENT config
+- Creates a new TrainingRun with copied config
+- Submits the pipeline
+```
+
+#### Frontend Implementation
+
+**State Changes** (`training_wizard.js`):
+```javascript
+let state = {
+    editMode: false,      // Edit mode flag
+    editRunId: null,      // Training run ID being edited
+    // ... existing state
+};
+```
+
+**Key Functions**:
+- `openForEdit(runId)` - Opens wizard in edit mode, loads config from API
+- `loadTrainingRunConfig(runId)` - Fetches config via GET `/api/training-runs/{id}/config/`
+- `submitEditMode()` - Saves config via PATCH
+- `buildEditPayload()` - Constructs the PATCH request body
+- `updateSubmitButtonText()` - Shows "Save" in edit mode
+
+**Training Cards Integration** (`training_cards.js`):
+```javascript
+function editRun(runId) {
+    if (typeof TrainingWizard !== 'undefined' && TrainingWizard.openForEdit) {
+        TrainingWizard.openForEdit(runId);
+    } else {
+        showToast('Edit feature not available', 'error');
+    }
+}
+```
+
+#### Cloud Scheduler Integration
+
+When a schedule is configured (daily/weekly), the system:
+
+1. **Creates Cloud Scheduler Job**:
+   - Builds cron expression from schedule config
+   - Creates HTTP target pointing to the webhook endpoint
+   - Uses OIDC authentication
+
+2. **Updates Schedule**:
+   - Deletes old Cloud Scheduler job if schedule type changed
+   - Creates new job with updated schedule
+
+3. **Webhook Trigger**:
+   - Cloud Scheduler calls the webhook at scheduled time
+   - Webhook creates new TrainingRun with template's current config
+   - Submits pipeline automatically
+
+#### Files Modified
+
+| File | Changes |
+|------|---------|
+| `ml_platform/training/models.py` | Added `schedule_config` JSONField |
+| `ml_platform/training/api.py` | Added GET/PATCH config endpoints, webhook |
+| `ml_platform/training/urls.py` | Added URL routes for new endpoints |
+| `ml_platform/training/services.py` | Added Cloud Scheduler methods, updated rerun |
+| `static/js/training_wizard.js` | Added edit mode support |
+| `static/js/training_cards.js` | Updated `editRun()` function |
+| `static/css/modals.css` | Added `.progress-step-pill.hidden` style |
 
 ### New Training Dialog
 

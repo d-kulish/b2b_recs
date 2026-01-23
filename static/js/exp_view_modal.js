@@ -3744,8 +3744,10 @@ const ExpViewModal = (function() {
     // =============================================================================
 
     function refreshComponentLogs() {
-        if (typeof window.refreshComponentLogs === 'function' && state.expId) {
-            window.refreshComponentLogs(state.expId);
+        // Use correct ID based on mode (training runs use runId, experiments use expId)
+        const id = state.mode === 'training_run' ? state.runId : state.expId;
+        if (typeof window.refreshComponentLogs === 'function' && id) {
+            window.refreshComponentLogs(id);
         }
     }
 

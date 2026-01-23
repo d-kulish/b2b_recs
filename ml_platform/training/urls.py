@@ -98,6 +98,11 @@ urlpatterns = [
         name='training_run_histogram_data'
     ),
     path(
+        'api/training-runs/<int:training_run_id>/logs/<str:component>/',
+        api.training_run_component_logs,
+        name='training_run_component_logs'
+    ),
+    path(
         'training/runs/<int:training_run_id>/tfdv/',
         api.training_run_tfdv_page,
         name='training_run_tfdv_page'

@@ -1668,6 +1668,66 @@ def training_run_histogram_data(request, training_run_id):
 
 
 @require_http_methods(["GET"])
+def training_run_component_logs(request, training_run_id, component):
+    """
+    Get recent logs for a specific pipeline component of a training run.
+
+    GET /api/training-runs/<id>/logs/<component>/
+
+    Components: Examples, Stats, Schema, Transform, Train
+
+    Returns:
+    {
+        "success": true,
+        "logs": {
+            "available": true,
+            "component": "Transform",
+            "logs": [
+                {"timestamp": "14:32:05", "severity": "INFO", "message": "Starting..."},
+                ...
+            ],
+            "count": 10
+        }
+    }
+    """
+    try:
+        model_endpoint = _get_model_endpoint(request)
+        if not model_endpoint:
+            return JsonResponse({
+                'success': False,
+                'error': 'No model endpoint selected'
+            }, status=400)
+
+        try:
+            training_run = TrainingRun.objects.get(
+                id=training_run_id,
+                ml_model=model_endpoint
+            )
+        except TrainingRun.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': f'TrainingRun {training_run_id} not found'
+            }, status=404)
+
+        # Get component logs using dedicated logs service
+        from ml_platform.experiments.pipeline_logs_service import PipelineLogsService
+        logs_service = PipelineLogsService(project_id=model_endpoint.gcp_project_id)
+        logs = logs_service.get_component_logs(training_run, component)
+
+        return JsonResponse({
+            'success': True,
+            'logs': logs
+        })
+
+    except Exception as e:
+        logger.exception(f"Error getting component logs: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@require_http_methods(["GET"])
 def training_run_tfdv_page(request, training_run_id):
     """
     Serve TFDV HTML visualization as a standalone page for a training run.

@@ -478,13 +478,17 @@ function selectDagComponent(componentId) {
 /**
  * Load component logs from API
  * @param {string} componentId - Component ID
- * @param {number} experimentId - Experiment/Quick Test ID
+ * @param {number} experimentId - Experiment/Quick Test ID or Training Run ID
+ * @param {string} mode - Optional mode ('experiment' or 'training_run')
  */
-async function loadComponentLogs(componentId, experimentId) {
+async function loadComponentLogs(componentId, experimentId, mode) {
     if (!experimentId || !componentId) return;
 
     const logsContainer = document.getElementById('expViewLogsContainer');
     if (!logsContainer) return;
+
+    // Determine mode from parameter or ExpViewModal state
+    const currentMode = mode || ((typeof ExpViewModal !== 'undefined') ? ExpViewModal.getState().mode : 'experiment');
 
     // Show loading state
     const componentName = TFX_PIPELINE.components.find(c => c.id === componentId)?.name || componentId;
@@ -496,7 +500,11 @@ async function loadComponentLogs(componentId, experimentId) {
     `;
 
     try {
-        const response = await fetch(`/api/quick-tests/${experimentId}/logs/${componentId}/`);
+        // Use correct endpoint based on mode
+        const endpoint = currentMode === 'training_run'
+            ? `/api/training-runs/${experimentId}/logs/${componentId}/`
+            : `/api/quick-tests/${experimentId}/logs/${componentId}/`;
+        const response = await fetch(endpoint);
         const data = await response.json();
 
         if (data.success && data.logs?.available) {

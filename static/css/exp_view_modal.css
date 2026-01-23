@@ -1985,3 +1985,143 @@
     font-size: 12px;
     color: #374151;
 }
+
+/* ==========================================================================
+   Outcome Sections (Registry & Deployment)
+   ========================================================================== */
+.exp-view-outcome-section {
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+}
+
+.exp-view-outcome-status {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 0;
+}
+
+.exp-view-outcome-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0;
+}
+
+/* Status-specific icon colors */
+.exp-view-outcome-status.registered .exp-view-outcome-icon {
+    background: #d1fae5;
+    color: #059669;
+}
+
+.exp-view-outcome-status.deployed .exp-view-outcome-icon {
+    background: #dbeafe;
+    color: #2563eb;
+}
+
+.exp-view-outcome-status.idle .exp-view-outcome-icon {
+    background: #fef3c7;
+    color: #d97706;
+}
+
+.exp-view-outcome-status.pending .exp-view-outcome-icon {
+    background: #f3f4f6;
+    color: #6b7280;
+}
+
+.exp-view-outcome-status.not-blessed .exp-view-outcome-icon {
+    background: #fee2e2;
+    color: #dc2626;
+}
+
+.exp-view-outcome-info {
+    flex: 1;
+}
+
+.exp-view-outcome-label {
+    font-weight: 600;
+    color: #111827;
+    font-size: 14px;
+}
+
+.exp-view-outcome-detail {
+    font-size: 12px;
+    color: #6b7280;
+    margin-top: 2px;
+}
+
+.exp-view-outcome-details {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid #e5e7eb;
+}
+
+.exp-view-outcome-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 0;
+    font-size: 13px;
+}
+
+.exp-view-outcome-key {
+    color: #6b7280;
+}
+
+.exp-view-outcome-value {
+    color: #111827;
+    font-weight: 500;
+}
+
+.exp-view-outcome-value.blessing-passed {
+    color: #059669;
+}
+
+.exp-view-outcome-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.btn-outcome-action {
+    padding: 8px 16px;
+    border-radius: 6px;
+    border: none;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: #3b82f6;
+    color: white;
+    transition: background 0.2s;
+}
+
+.btn-outcome-action:hover {
+    background: #2563eb;
+}
+
+.btn-outcome-action.btn-secondary {
+    background: #f3f4f6;
+    color: #374151;
+    border: 1px solid #d1d5db;
+}
+
+.btn-outcome-action.btn-secondary:hover {
+    background: #e5e7eb;
+}
+
+.btn-outcome-action.btn-danger {
+    background: #ef4444;
+}
+
+.btn-outcome-action.btn-danger:hover {
+    background: #dc2626;
+}

@@ -463,6 +463,10 @@ const ExpViewModal = (function() {
 
         // Results Summary (metrics)
         renderTrainingRunMetrics(run);
+
+        // Registry and Deployment sections (for training_run mode)
+        renderRegistrySection(run);
+        renderDeploymentSection(run);
     }
 
     function renderTrainingRunMetrics(run) {
@@ -612,6 +616,257 @@ const ExpViewModal = (function() {
                 <span class="exp-view-param-chip-value">${chip.value}</span>
             </div>
         `).join('');
+    }
+
+    // =============================================================================
+    // REGISTRY & DEPLOYMENT SECTIONS (Training Run Mode)
+    // =============================================================================
+
+    function renderRegistrySection(data) {
+        const section = document.getElementById('expViewRegistrySection');
+        const container = document.getElementById('expViewRegistryContent');
+
+        // Only show for training_run mode with terminal status
+        if (state.mode !== 'training_run' || !data ||
+            !['completed', 'not_blessed', 'failed'].includes(data.status)) {
+            section.style.display = 'none';
+            return;
+        }
+
+        section.style.display = 'block';
+        let html = '';
+
+        if (data.is_blessed === false) {
+            // Not Blessed - evaluation failed
+            html = `
+                <div class="exp-view-outcome-status not-blessed">
+                    <div class="exp-view-outcome-icon">
+                        <i class="fas fa-times-circle"></i>
+                    </div>
+                    <div class="exp-view-outcome-info">
+                        <div class="exp-view-outcome-label">Evaluation Failed</div>
+                        <div class="exp-view-outcome-detail">Model did not meet blessing thresholds</div>
+                    </div>
+                </div>
+            `;
+        } else if (!data.vertex_model_name) {
+            // Blessed but not registered
+            html = `
+                <div class="exp-view-outcome-status pending">
+                    <div class="exp-view-outcome-icon">
+                        <i class="fas fa-clock"></i>
+                    </div>
+                    <div class="exp-view-outcome-info">
+                        <div class="exp-view-outcome-label">Not Registered</div>
+                        <div class="exp-view-outcome-detail">Model passed evaluation, ready for registry</div>
+                    </div>
+                    <button class="btn-outcome-action" onclick="ExpViewModal.pushToRegistry(${data.id})">
+                        <i class="fas fa-upload"></i> Push to Registry
+                    </button>
+                </div>
+            `;
+        } else {
+            // Registered
+            html = `
+                <div class="exp-view-outcome-status registered">
+                    <div class="exp-view-outcome-icon">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                    <div class="exp-view-outcome-info">
+                        <div class="exp-view-outcome-label">Registered</div>
+                        <div class="exp-view-outcome-detail">${escapeHtml(data.vertex_model_name)} (${data.vertex_model_version || 'v1'})</div>
+                    </div>
+                </div>
+                <div class="exp-view-outcome-details">
+                    <div class="exp-view-outcome-row">
+                        <span class="exp-view-outcome-key">Registered:</span>
+                        <span class="exp-view-outcome-value">${formatDateTime(data.registered_at) || '-'}</span>
+                    </div>
+                    <div class="exp-view-outcome-row">
+                        <span class="exp-view-outcome-key">Blessing:</span>
+                        <span class="exp-view-outcome-value blessing-passed">
+                            <i class="fas fa-check"></i> Passed
+                        </span>
+                    </div>
+                </div>
+            `;
+        }
+
+        container.innerHTML = html;
+    }
+
+    function renderDeploymentSection(data) {
+        const section = document.getElementById('expViewDeploymentSection');
+        const container = document.getElementById('expViewDeploymentContent');
+
+        // Only show for registered models
+        if (state.mode !== 'training_run' || !data || !data.vertex_model_name) {
+            section.style.display = 'none';
+            return;
+        }
+
+        section.style.display = 'block';
+        let html = '';
+
+        if (data.is_deployed) {
+            // Deployed
+            html = `
+                <div class="exp-view-outcome-status deployed">
+                    <div class="exp-view-outcome-icon">
+                        <i class="fas fa-rocket"></i>
+                    </div>
+                    <div class="exp-view-outcome-info">
+                        <div class="exp-view-outcome-label">Deployed</div>
+                        <div class="exp-view-outcome-detail">Model is serving predictions</div>
+                    </div>
+                    <button class="btn-outcome-action btn-danger" onclick="ExpViewModal.undeployTrainingRun(${data.id})">
+                        <i class="fas fa-stop"></i> Undeploy
+                    </button>
+                </div>
+                <div class="exp-view-outcome-details">
+                    <div class="exp-view-outcome-row">
+                        <span class="exp-view-outcome-key">Deployed:</span>
+                        <span class="exp-view-outcome-value">${formatDateTime(data.deployed_at) || '-'}</span>
+                    </div>
+                </div>
+            `;
+        } else {
+            // Ready to deploy
+            html = `
+                <div class="exp-view-outcome-status idle">
+                    <div class="exp-view-outcome-icon">
+                        <i class="fas fa-pause-circle"></i>
+                    </div>
+                    <div class="exp-view-outcome-info">
+                        <div class="exp-view-outcome-label">Ready to Deploy</div>
+                        <div class="exp-view-outcome-detail">Model is registered and ready</div>
+                    </div>
+                </div>
+                <div class="exp-view-outcome-actions">
+                    <button class="btn-outcome-action" onclick="ExpViewModal.deployTrainingRun(${data.id})">
+                        <i class="fas fa-rocket"></i> Deploy to Vertex AI
+                    </button>
+                    <button class="btn-outcome-action btn-secondary" onclick="ExpViewModal.deployToCloudRun(${data.id})">
+                        <i class="fas fa-cloud"></i> Deploy to Cloud Run
+                    </button>
+                </div>
+            `;
+        }
+
+        container.innerHTML = html;
+    }
+
+    // Action handlers for Registry & Deployment
+    async function pushToRegistry(runId) {
+        if (!confirm('Are you sure you want to push this model to the registry?')) return;
+
+        try {
+            const response = await fetch(`/api/training-runs/${runId}/push/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                }
+            });
+            const data = await response.json();
+
+            if (data.success) {
+                alert(data.message || 'Model pushed to registry');
+                // Refresh the modal
+                open(runId, { mode: 'training_run' });
+            } else {
+                alert('Failed to push: ' + (data.error || 'Unknown error'));
+            }
+        } catch (error) {
+            console.error('Error pushing to registry:', error);
+            alert('Error pushing to registry');
+        }
+    }
+
+    async function deployTrainingRun(runId) {
+        if (!confirm('Are you sure you want to deploy this model to a Vertex AI Endpoint?')) return;
+
+        try {
+            const response = await fetch(`/api/training-runs/${runId}/deploy/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                }
+            });
+            const data = await response.json();
+
+            if (data.success) {
+                alert(data.message || 'Model deployment started');
+                // Refresh the modal
+                open(runId, { mode: 'training_run' });
+            } else {
+                alert('Failed to deploy: ' + (data.error || 'Unknown error'));
+            }
+        } catch (error) {
+            console.error('Error deploying model:', error);
+            alert('Error deploying model');
+        }
+    }
+
+    async function deployToCloudRun(runId) {
+        if (!confirm('Are you sure you want to deploy this model to Cloud Run? This will create a serverless TF Serving endpoint.')) return;
+
+        try {
+            const response = await fetch(`/api/training-runs/${runId}/deploy-cloud-run/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                }
+            });
+            const data = await response.json();
+
+            if (data.success) {
+                alert(data.message || 'Model deployed to Cloud Run');
+                // Refresh the modal
+                open(runId, { mode: 'training_run' });
+            } else {
+                alert('Failed to deploy: ' + (data.error || 'Unknown error'));
+            }
+        } catch (error) {
+            console.error('Error deploying to Cloud Run:', error);
+            alert('Error deploying to Cloud Run');
+        }
+    }
+
+    async function undeployTrainingRun(runId) {
+        if (!confirm('Are you sure you want to undeploy this model? It will no longer serve predictions.')) return;
+
+        try {
+            // For training runs, we need to get the model ID first or use a training-run specific endpoint
+            // The undeploy endpoint is on the models API, so we'll use the model ID from the run data
+            const run = state.currentRun;
+            if (!run || !run.model_id) {
+                alert('Cannot undeploy: Model ID not found');
+                return;
+            }
+
+            const response = await fetch(`/api/models/${run.model_id}/undeploy/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                }
+            });
+            const data = await response.json();
+
+            if (data.success) {
+                alert('Model undeployed successfully');
+                // Refresh the modal
+                open(runId, { mode: 'training_run' });
+            } else {
+                alert('Failed to undeploy: ' + (data.error || 'Unknown error'));
+            }
+        } catch (error) {
+            console.error('Error undeploying model:', error);
+            alert('Error undeploying model');
+        }
     }
 
     function renderTrainingRunPipeline(run) {
@@ -1416,7 +1671,7 @@ const ExpViewModal = (function() {
         // Determine which tabs to show based on mode
         let visibleTabs;
         if (state.mode === 'training_run') {
-            visibleTabs = ['overview', 'pipeline', 'data', 'training', 'repository', 'deployment'];
+            visibleTabs = ['overview', 'pipeline', 'data', 'training'];
         } else if (state.mode === 'model') {
             visibleTabs = ['overview', 'versions', 'artifacts', 'deployment', 'lineage'];
         } else {
@@ -3773,6 +4028,12 @@ const ExpViewModal = (function() {
         deployModel: deployModel,
         undeployModel: undeployModel,
         copyToClipboard: copyToClipboard,
+
+        // Training run actions (Registry & Deployment)
+        pushToRegistry: pushToRegistry,
+        deployTrainingRun: deployTrainingRun,
+        deployToCloudRun: deployToCloudRun,
+        undeployTrainingRun: undeployTrainingRun,
 
         // Tab switching
         switchTab: switchTab,

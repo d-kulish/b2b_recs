@@ -80,12 +80,6 @@
             <button class="exp-view-tab" data-tab="training" onclick="ExpViewModal.switchTab('training')">
                 Training
             </button>
-            <button class="exp-view-tab" data-tab="repository" onclick="ExpViewModal.switchTab('repository')" style="display: none;">
-                Repository
-            </button>
-            <button class="exp-view-tab" data-tab="deployment" onclick="ExpViewModal.switchTab('deployment')" style="display: none;">
-                Deployment
-            </button>
             <button class="exp-view-tab" data-tab="versions" onclick="ExpViewModal.switchTab('versions')" style="display: none;">
                 Versions
             </button>
@@ -105,6 +99,26 @@
                 <div id="expViewResultsSummary" class="exp-view-results-summary hidden">
                     <h4 class="exp-view-group-title">Results</h4>
                     <div class="exp-view-metrics-row" id="expViewMetricsSummary">
+                        <!-- Populated by JavaScript -->
+                    </div>
+                </div>
+
+                <!-- Model Registry Section (training_run mode only, completed runs) -->
+                <div id="expViewRegistrySection" class="exp-view-section-group exp-view-outcome-section" style="display: none;">
+                    <h4 class="exp-view-group-title">
+                        <i class="fas fa-cube" style="margin-right:6px;"></i>Model Registry
+                    </h4>
+                    <div id="expViewRegistryContent">
+                        <!-- Populated by JavaScript -->
+                    </div>
+                </div>
+
+                <!-- Deployment Section (training_run mode only, registered models) -->
+                <div id="expViewDeploymentSection" class="exp-view-section-group exp-view-outcome-section" style="display: none;">
+                    <h4 class="exp-view-group-title">
+                        <i class="fas fa-rocket" style="margin-right:6px;"></i>Deployment
+                    </h4>
+                    <div id="expViewDeploymentContent">
                         <!-- Populated by JavaScript -->
                     </div>
                 </div>
@@ -337,15 +351,6 @@
                 </div>
             </div>
 
-            <!-- Repository Tab (for training_run mode) -->
-            <div id="expViewTabRepository" class="exp-view-tab-content">
-                <!-- Populated by JavaScript -->
-            </div>
-
-            <!-- Deployment Tab (for training_run mode and model mode) -->
-            <div id="expViewTabDeployment" class="exp-view-tab-content">
-                <!-- Populated by JavaScript -->
-            </div>
 
             <!-- Versions Tab (for model mode) -->
             <div id="expViewTabVersions" class="exp-view-tab-content">

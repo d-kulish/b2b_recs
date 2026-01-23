@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides detailed specifications for implementing the **Training** domain in the ML Platform. The Training domain executes full TFX pipelines for production model training.
 
-**Last Updated**: 2026-01-23
+**Last Updated**: 2026-01-23 (Consolidated Registry & Deployment into Overview)
 
 ---
 
@@ -428,11 +428,12 @@ The `ExpViewModal` has been extended to support a "training_run" mode, eliminati
 │           │                                                                  │
 │           └─── mode: 'training_run'                                          │
 │                     │                                                        │
-│                     ├── Tabs: Overview, Pipeline, Training, Repository,     │
-│                     │         Deployment                                     │
+│                     ├── Tabs: Overview, Pipeline, Data Insights, Training   │
 │                     ├── Fetches from: /api/training-runs/{id}/              │
-│                     └── Shows: Training run status, 8-stage pipeline,       │
-│                                GPU config, blessing status                   │
+│                     ├── Shows: Training run status, 8-stage pipeline,       │
+│                     │          GPU config, blessing status                   │
+│                     └── Overview includes: Model Registry & Deployment       │
+│                                sections with action buttons                  │
 │                                                                              │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -475,20 +476,25 @@ ExpViewModal.getCurrentExp();     // Returns experiment data (experiment mode on
    - Green banner: "Model passed evaluation (blessed)"
    - Orange banner: "Model did not pass evaluation threshold"
 
-5. **Placeholder Tabs**: Ready for future features
-   - Repository tab: Git commit, branch info
-   - Deployment tab: Deployment status, endpoint URLs
+5. **Model Registry Section** (in Overview tab): For completed training runs
+   - Shows registration status (Not Registered, Registered, or Evaluation Failed)
+   - "Push to Registry" button for blessed but unregistered models
+   - Displays model name, version, and registration timestamp when registered
+
+6. **Deployment Section** (in Overview tab): For registered models
+   - Shows deployment status (Ready to Deploy or Deployed)
+   - "Deploy to Vertex AI" and "Deploy to Cloud Run" buttons when not deployed
+   - "Undeploy" button when currently deployed
+   - Displays deployment timestamp when deployed
 
 #### Tab Visibility by Mode
 
 | Tab | Experiment Mode | Training Run Mode |
 |-----|----------------|-------------------|
-| Overview | ✅ | ✅ |
+| Overview | ✅ | ✅ (includes Registry & Deployment sections) |
 | Pipeline | ✅ | ✅ |
-| Data Insights | ✅ | ❌ |
+| Data Insights | ✅ | ✅ |
 | Training | ✅ | ✅ |
-| Repository | ❌ | ✅ (placeholder) |
-| Deployment | ❌ | ✅ (placeholder) |
 
 #### CSS Additions
 
@@ -640,12 +646,13 @@ path('training/runs/<int:training_run_id>/tfdv/', ...),
    }
    ```
 
-2. **Tab Visibility**: Added 'data' to visible tabs for training run mode:
+2. **Tab Visibility**: Training run mode now shows same tabs as experiment mode:
    ```javascript
    if (state.mode === 'training_run') {
-       visibleTabs = ['overview', 'pipeline', 'data', 'training', 'repository', 'deployment'];
+       visibleTabs = ['overview', 'pipeline', 'data', 'training'];
    }
    ```
+   Note: Repository and Deployment tabs have been removed; their functionality is now integrated into the Overview tab as dedicated sections.
 
 3. **Mode-Aware Data Loading**: `preloadDataInsights()` and `loadDataInsights()` now detect the mode and use appropriate endpoints.
 
@@ -691,6 +698,123 @@ The implementation reuses:
 - **tfdv-parser microservice**: Cloud Run service for parsing TFDV artifacts
 - **Pipeline root pattern**: Same GCS bucket structure (`gs://b2b-recs-pipeline-staging/pipeline_root/{run_id}`)
 - **UI components**: Same statistics cards, feature tables, and histogram visualizations
+
+---
+
+### Model Registry & Deployment Sections in Overview (2026-01-23)
+
+The Training Run view modal now includes **Model Registry** and **Deployment** sections directly in the Overview tab, replacing the previous separate Repository and Deployment tabs. This consolidation provides a more streamlined view of the model lifecycle.
+
+#### Visual Layout
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Overview Tab                                                                 │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│ ┌─────────────────────────────────────────────────────────────────────────┐ │
+│ │ Results                                                                  │ │
+│ │ ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐                         │ │
+│ │ │  R@5    │ │  R@10   │ │  R@50   │ │  R@100  │                         │ │
+│ │ │  23%    │ │  41%    │ │  68%    │ │  82%    │                         │ │
+│ │ └─────────┘ └─────────┘ └─────────┘ └─────────┘                         │ │
+│ └─────────────────────────────────────────────────────────────────────────┘ │
+│                                                                              │
+│ ┌─────────────────────────────────────────────────────────────────────────┐ │
+│ │ 📦 MODEL REGISTRY                                                        │ │
+│ │ ┌──────┐                                                                 │ │
+│ │ │  ⏳  │  Not Registered                    [Push to Registry]           │ │
+│ │ └──────┘  Model passed evaluation, ready for registry                    │ │
+│ └─────────────────────────────────────────────────────────────────────────┘ │
+│                                                                              │
+│ ┌─────────────────────────────────────────────────────────────────────────┐ │
+│ │ 🚀 DEPLOYMENT                                                            │ │
+│ │ ┌──────┐                                                                 │ │
+│ │ │  ⏸️  │  Ready to Deploy                                                │ │
+│ │ └──────┘  Model is registered and ready                                  │ │
+│ │                                                                           │ │
+│ │ [Deploy to Vertex AI]  [Deploy to Cloud Run]                             │ │
+│ └─────────────────────────────────────────────────────────────────────────┘ │
+│                                                                              │
+│ ═══════════════════════════════════════════════════════════════════════════ │
+│                                                                              │
+│ DATASET: OLD_EXAMPLES_CHERNIGIV                                             │
+│ ...                                                                         │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+#### Model Registry Section States
+
+| Training Run State | Registry Section Display | Action Available |
+|-------------------|--------------------------|------------------|
+| Running/Pending | Hidden | - |
+| Failed | Hidden | - |
+| Completed, `is_blessed=false` | "Evaluation Failed" with ❌ icon | None |
+| Completed, `is_blessed=true`, not registered | "Not Registered" with ⏳ icon | Push to Registry |
+| Completed, registered | "Registered" with ✅ icon, shows model name/version | None |
+
+#### Deployment Section States
+
+| Training Run State | Deployment Section Display | Actions Available |
+|-------------------|---------------------------|-------------------|
+| Not registered | Hidden | - |
+| Registered, not deployed | "Ready to Deploy" with ⏸️ icon | Deploy to Vertex AI, Deploy to Cloud Run |
+| Registered, deployed | "Deployed" with 🚀 icon | Undeploy |
+
+#### JavaScript API
+
+New public API methods for training run actions:
+
+```javascript
+// Push a blessed model to the Model Registry
+ExpViewModal.pushToRegistry(runId);
+// POST /api/training-runs/{id}/push/
+
+// Deploy model to Vertex AI Endpoint
+ExpViewModal.deployTrainingRun(runId);
+// POST /api/training-runs/{id}/deploy/
+
+// Deploy model to Cloud Run (serverless TF Serving)
+ExpViewModal.deployToCloudRun(runId);
+// POST /api/training-runs/{id}/deploy-cloud-run/
+
+// Undeploy a currently deployed model
+ExpViewModal.undeployTrainingRun(runId);
+// POST /api/models/{modelId}/undeploy/
+```
+
+#### CSS Classes
+
+New styles added to `exp_view_modal.css`:
+
+```css
+/* Outcome section container */
+.exp-view-outcome-section { ... }
+
+/* Status row with icon */
+.exp-view-outcome-status { ... }
+.exp-view-outcome-status.registered { ... }
+.exp-view-outcome-status.deployed { ... }
+.exp-view-outcome-status.idle { ... }
+.exp-view-outcome-status.pending { ... }
+.exp-view-outcome-status.not-blessed { ... }
+
+/* Status icon styling */
+.exp-view-outcome-icon { ... }
+
+/* Action buttons */
+.btn-outcome-action { ... }
+.btn-outcome-action.btn-secondary { ... }
+.btn-outcome-action.btn-danger { ... }
+```
+
+#### Files Modified
+
+| File | Changes |
+|------|---------|
+| `templates/includes/_exp_view_modal.html` | Removed Repository/Deployment tabs, added Registry/Deployment sections to Overview |
+| `static/js/exp_view_modal.js` | Added `renderRegistrySection()`, `renderDeploymentSection()`, action handlers |
+| `static/css/exp_view_modal.css` | Added outcome section styles (~80 lines) |
 
 ---
 

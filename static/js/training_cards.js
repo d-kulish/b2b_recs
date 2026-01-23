@@ -30,7 +30,8 @@ const TrainingCards = (function() {
             submit: '/api/training-runs/{id}/submit/',
             deploy: '/api/training-runs/{id}/deploy/',
             deployCloudRun: '/api/training-runs/{id}/deploy-cloud-run/',
-            push: '/api/training-runs/{id}/push/'
+            push: '/api/training-runs/{id}/push/',
+            rerun: '/api/training-runs/{id}/rerun/'
         },
         pollIntervalMs: 30000,  // 30 seconds
         modelId: null,
@@ -94,25 +95,25 @@ const TrainingCards = (function() {
             icon: 'fa-check-circle',
             label: 'Completed',
             spin: false,
-            actions: ['view', 'deploy', 'deployCloudRun', 'delete']
+            actions: ['view', 'rerun', 'deploy', 'deployCloudRun', 'delete']
         },
         failed: {
             icon: 'fa-times-circle',
             label: 'Failed',
             spin: false,
-            actions: ['view', 'delete']
+            actions: ['view', 'rerun', 'delete']
         },
         cancelled: {
             icon: 'fa-ban',
             label: 'Cancelled',
             spin: false,
-            actions: ['view', 'delete']
+            actions: ['view', 'rerun', 'delete']
         },
         not_blessed: {
             icon: 'fa-exclamation-triangle',
             label: 'Not Blessed',
             spin: false,
-            actions: ['view', 'push', 'delete']
+            actions: ['view', 'rerun', 'push', 'delete']
         }
     };
 
@@ -934,6 +935,13 @@ const TrainingCards = (function() {
             `);
         }
 
+        // Rerun button (for terminal states)
+        if (allowedActions.includes('rerun')) {
+            primaryButtons.push(`
+                <button class="card-action-btn view" onclick="event.stopPropagation(); TrainingCards.rerunRun(${run.id})" title="Re-run with same configuration">Rerun</button>
+            `);
+        }
+
         // View button - always available (primary)
         primaryButtons.push(`
             <button class="card-action-btn view" onclick="event.stopPropagation(); TrainingCards.viewRun(${run.id})" title="View Details">View</button>
@@ -1271,6 +1279,41 @@ const TrainingCards = (function() {
         }
     }
 
+    async function rerunRun(runId) {
+        showConfirmModal({
+            title: 'Re-run Training',
+            message: 'Create a new training run with the same configuration?',
+            confirmText: 'Rerun',
+            cancelText: 'Cancel',
+            type: 'info',
+            confirmButtonClass: 'btn-neu-save',
+            onConfirm: async () => {
+                try {
+                    const url = buildUrl(config.endpoints.rerun, { id: runId });
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': getCookie('csrftoken')
+                        }
+                    });
+
+                    const data = await response.json();
+
+                    if (data.success) {
+                        showToast(data.message || 'New training run created', 'success');
+                        loadTrainingRuns();
+                    } else {
+                        showToast(data.error || 'Failed to create re-run', 'error');
+                    }
+                } catch (error) {
+                    console.error('Error creating re-run:', error);
+                    showToast('Failed to create re-run', 'error');
+                }
+            }
+        });
+    }
+
     async function deployRun(runId) {
         if (!confirm('Are you sure you want to deploy this model to a Vertex AI Endpoint? This will make the model available for serving predictions.')) {
             return;
@@ -1390,6 +1433,7 @@ const TrainingCards = (function() {
         cancelRun: cancelRun,
         deleteRun: deleteRun,
         submitRun: submitRun,
+        rerunRun: rerunRun,
         deployRun: deployRun,
         deployRunCloudRun: deployRunCloudRun,
         pushAnyway: pushAnyway,

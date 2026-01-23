@@ -44,9 +44,9 @@ urlpatterns = [
         name='training_run_submit'
     ),
     path(
-        'api/training-runs/<int:training_run_id>/retry/',
-        api.training_run_retry,
-        name='training_run_retry'
+        'api/training-runs/<int:training_run_id>/rerun/',
+        api.training_run_rerun,
+        name='training_run_rerun'
     ),
     path(
         'api/training-runs/<int:training_run_id>/deploy/',

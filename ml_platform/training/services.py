@@ -948,36 +948,38 @@ class TrainingService:
             # Log but don't fail - artifacts may already be deleted
             logger.warning(f"Error deleting GCS artifacts for {display_name}: {e}")
 
-    def retry_training_run(self, training_run: TrainingRun) -> TrainingRun:
+    def rerun_training_run(self, training_run: TrainingRun) -> TrainingRun:
         """
-        Retry a failed training run by creating a new run with the same config.
+        Re-run a training run by creating a new run with the same config.
 
-        Creates a new TrainingRun with identical configuration and a "-retry" suffix,
-        then auto-submits it.
+        Works for any terminal state (completed, failed, not_blessed, cancelled).
 
         Args:
-            training_run: Failed TrainingRun instance to retry
+            training_run: TrainingRun instance to re-run
 
         Returns:
             New TrainingRun instance
 
         Raises:
-            TrainingServiceError: If training run is not in failed state
+            TrainingServiceError: If training run is not in terminal state
         """
-        if training_run.status != TrainingRun.STATUS_FAILED:
+        TERMINAL_STATUSES = [
+            TrainingRun.STATUS_COMPLETED,
+            TrainingRun.STATUS_FAILED,
+            TrainingRun.STATUS_NOT_BLESSED,
+            TrainingRun.STATUS_CANCELLED,
+        ]
+
+        if training_run.status not in TERMINAL_STATUSES:
             raise TrainingServiceError(
-                f"Cannot retry training run in '{training_run.status}' state. "
-                "Only failed training runs can be retried."
+                f"Cannot re-run training in '{training_run.status}' state. "
+                "Only terminal states can be re-run."
             )
 
-        # Create new training run with same config
-        retry_name = training_run.name
-        if not retry_name.endswith('-retry'):
-            retry_name = f"{training_run.name}-retry"
-
+        # Keep original name (no suffix for clean reruns)
         new_run = self.create_training_run(
-            name=retry_name,
-            description=f"Retry of {training_run.display_name}. Original error: {training_run.error_message or 'Unknown'}",
+            name=training_run.name,  # Same name, new run_number auto-assigned
+            description=f"Re-run of {training_run.display_name}",
             dataset=training_run.dataset,
             feature_config=training_run.feature_config,
             model_config=training_run.model_config,
@@ -990,14 +992,14 @@ class TrainingService:
         )
 
         logger.info(
-            f"Created retry run {new_run.display_name} for {training_run.display_name}"
+            f"Created re-run {new_run.display_name} for {training_run.display_name}"
         )
 
         # Auto-submit the new run
         try:
             self.submit_training_pipeline(new_run)
         except Exception as e:
-            logger.error(f"Failed to submit retry pipeline: {e}")
+            logger.error(f"Failed to submit re-run pipeline: {e}")
             new_run.refresh_from_db()
 
         return new_run
@@ -1816,6 +1818,12 @@ def create_training_pipeline(
     from tfx.orchestration import pipeline as tfx_pipeline
     from tfx.dsl.components.base import executor_spec
     from tfx.extensions.google_cloud_ai_platform.trainer import executor as ai_platform_trainer_executor
+    # Constants must be imported from tfx.v1 (not exported from tfx.extensions directly in TFX 1.15)
+    from tfx.v1.extensions.google_cloud_ai_platform import (
+        ENABLE_VERTEX_KEY,
+        VERTEX_REGION_KEY,
+        TRAINING_ARGS_KEY,
+    )
     import tensorflow_model_analysis as tfma
 
     logger.info(f"Creating TFX training pipeline: {pipeline_name}")
@@ -1889,11 +1897,14 @@ def create_training_pipeline(
         "gcs_output_path": output_path,
         "gpu_enabled": True,
         "gpu_count": gpu_count,
-        # ai_platform_training_args tells GenericExecutor to spawn a Vertex AI Custom Job
-        # with the specified GPU resources. Uses direct worker_pool_specs format.
-        "ai_platform_training_args": {
+        # CRITICAL: Enable Vertex AI mode (without this, GenericExecutor uses deprecated
+        # Cloud ML Engine API which doesn't support worker_pool_specs)
+        ENABLE_VERTEX_KEY: True,
+        VERTEX_REGION_KEY: region,
+        # Training args for Vertex AI CustomJob - GenericExecutor spawns a separate
+        # Custom Job with these GPU resources
+        TRAINING_ARGS_KEY: {
             "project": project_id,
-            "region": region,
             "worker_pool_specs": [{
                 "machine_spec": {
                     "machine_type": machine_type,

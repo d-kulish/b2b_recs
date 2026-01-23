@@ -5,14 +5,14 @@
     A reusable modal for creating training schedules from existing runs.
 
     Usage:
-        {% include 'includes/_schedule_modal.html' %}
+        { % include 'includes/_schedule_modal.html' % }
 
     Required CSS:
-        <link rel="stylesheet" href="{% static 'css/schedule_modal.css' %}?v=1">
-        <link rel="stylesheet" href="{% static 'css/modals.css' %}?v=1">
+        <link rel="stylesheet" href="{ % static 'css/schedule_modal.css' % }?v=1">
+        <link rel="stylesheet" href="{ % static 'css/modals.css' % }?v=1">
 
     Required JavaScript:
-        <script src="{% static 'js/schedule_modal.js' %}?v=1"></script>
+        <script src="{ % static 'js/schedule_modal.js' % }?v=1"></script>
 
     JavaScript API:
         - ScheduleModal.openForTrainingRun(runId) - Open modal to schedule from a training run

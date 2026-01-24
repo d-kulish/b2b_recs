@@ -2257,10 +2257,10 @@
     display: none;
 }
 
-/* Registry & Deployment Grid Layout */
+/* Registry & Deployment Grid Layout - Stacked vertically */
 .exp-view-registry-deployment-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
+    display: flex;
+    flex-direction: column;
     gap: 16px;
 }
 
@@ -2360,6 +2360,78 @@
     margin-top: 12px;
     display: flex;
     gap: 8px;
+}
+
+/* Compact Registry Card - horizontal layout with metadata on right */
+.exp-view-registry-card-compact .exp-view-registry-deployment-card-header {
+    margin-bottom: 0;
+    padding-bottom: 0;
+    border-bottom: none;
+}
+
+.exp-view-registry-metadata {
+    display: flex;
+    gap: 24px;
+    margin-left: auto;
+    padding-left: 16px;
+}
+
+.exp-view-registry-metadata-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    white-space: nowrap;
+}
+
+.exp-view-registry-metadata-key {
+    color: #6b7280;
+}
+
+.exp-view-registry-metadata-value {
+    color: #111827;
+    font-weight: 500;
+}
+
+.exp-view-registry-metadata-value.value-success {
+    color: #059669;
+}
+
+/* Compact Deployment Card - horizontal layout with button on right */
+.exp-view-deployment-card-compact .exp-view-registry-deployment-card-header {
+    margin-bottom: 0;
+    padding-bottom: 0;
+    border-bottom: none;
+}
+
+.exp-view-deployment-action-inline {
+    margin-left: auto;
+    padding-left: 16px;
+}
+
+.btn-deploy-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-width: 140px;
+    padding: 8px 16px;
+    background: #3b82f6;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.btn-deploy-primary:hover {
+    background: #2563eb;
+}
+
+.btn-deploy-primary i {
+    font-size: 12px;
 }
 
 /* Training Setup Grid Layout */

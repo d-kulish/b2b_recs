@@ -707,7 +707,7 @@ const ExpViewModal = (function() {
         } else if (!data.vertex_model_name && data.status === 'completed') {
             // Completed run without registration - show register button
             registryHtml = `
-                <div class="exp-view-registry-deployment-card">
+                <div class="exp-view-registry-deployment-card exp-view-registry-card-compact">
                     <div class="exp-view-registry-deployment-card-header">
                         <div class="exp-view-registry-deployment-icon icon-pending">
                             <i class="fas fa-clock"></i>
@@ -716,11 +716,11 @@ const ExpViewModal = (function() {
                             <div class="exp-view-registry-deployment-label">Not Registered</div>
                             <div class="exp-view-registry-deployment-detail">Training completed, registration pending</div>
                         </div>
-                    </div>
-                    <div class="exp-view-registry-deployment-actions">
-                        <button class="btn-outcome-action" onclick="ExpViewModal.registerModel(${data.id})">
-                            <i class="fas fa-upload"></i> Register Model
-                        </button>
+                        <div class="exp-view-deployment-action-inline">
+                            <button class="btn-deploy-primary" onclick="ExpViewModal.registerModel(${data.id})">
+                                <i class="fas fa-upload"></i> Register Model
+                            </button>
+                        </div>
                     </div>
                 </div>
             `;
@@ -741,7 +741,7 @@ const ExpViewModal = (function() {
             `;
         } else {
             registryHtml = `
-                <div class="exp-view-registry-deployment-card">
+                <div class="exp-view-registry-deployment-card exp-view-registry-card-compact">
                     <div class="exp-view-registry-deployment-card-header">
                         <div class="exp-view-registry-deployment-icon icon-success">
                             <i class="fas fa-check-circle"></i>
@@ -750,17 +750,17 @@ const ExpViewModal = (function() {
                             <div class="exp-view-registry-deployment-label">Registered</div>
                             <div class="exp-view-registry-deployment-detail">${escapeHtml(data.vertex_model_name)} (${data.vertex_model_version || 'v1'})</div>
                         </div>
-                    </div>
-                    <div class="exp-view-registry-deployment-rows">
-                        <div class="exp-view-registry-deployment-row">
-                            <span class="exp-view-registry-deployment-key">Registered:</span>
-                            <span class="exp-view-registry-deployment-value">${formatDateTime(data.registered_at) || '-'}</span>
-                        </div>
-                        <div class="exp-view-registry-deployment-row">
-                            <span class="exp-view-registry-deployment-key">Blessing:</span>
-                            <span class="exp-view-registry-deployment-value value-success">
-                                <i class="fas fa-check"></i> Passed
-                            </span>
+                        <div class="exp-view-registry-metadata">
+                            <div class="exp-view-registry-metadata-item">
+                                <span class="exp-view-registry-metadata-key">Registered:</span>
+                                <span class="exp-view-registry-metadata-value">${formatDateTime(data.registered_at) || '-'}</span>
+                            </div>
+                            <div class="exp-view-registry-metadata-item">
+                                <span class="exp-view-registry-metadata-key">Blessing:</span>
+                                <span class="exp-view-registry-metadata-value value-success">
+                                    <i class="fas fa-check"></i> Passed
+                                </span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -772,7 +772,7 @@ const ExpViewModal = (function() {
         if (data.vertex_model_name) {
             if (data.is_deployed) {
                 deploymentHtml = `
-                    <div class="exp-view-registry-deployment-card">
+                    <div class="exp-view-registry-deployment-card exp-view-deployment-card-compact">
                         <div class="exp-view-registry-deployment-card-header">
                             <div class="exp-view-registry-deployment-icon icon-success">
                                 <i class="fas fa-rocket"></i>
@@ -781,23 +781,18 @@ const ExpViewModal = (function() {
                                 <div class="exp-view-registry-deployment-label">Deployed</div>
                                 <div class="exp-view-registry-deployment-detail">Model is serving predictions</div>
                             </div>
-                        </div>
-                        <div class="exp-view-registry-deployment-rows">
-                            <div class="exp-view-registry-deployment-row">
-                                <span class="exp-view-registry-deployment-key">Deployed:</span>
-                                <span class="exp-view-registry-deployment-value">${formatDateTime(data.deployed_at) || '-'}</span>
+                            <div class="exp-view-registry-metadata">
+                                <div class="exp-view-registry-metadata-item">
+                                    <span class="exp-view-registry-metadata-key">Deployed:</span>
+                                    <span class="exp-view-registry-metadata-value">${formatDateTime(data.deployed_at) || '-'}</span>
+                                </div>
                             </div>
-                        </div>
-                        <div class="exp-view-registry-deployment-actions">
-                            <button class="btn-outcome-action btn-danger" onclick="ExpViewModal.undeployTrainingRun(${data.id})">
-                                <i class="fas fa-stop"></i> Undeploy
-                            </button>
                         </div>
                     </div>
                 `;
             } else {
                 deploymentHtml = `
-                    <div class="exp-view-registry-deployment-card">
+                    <div class="exp-view-registry-deployment-card exp-view-deployment-card-compact">
                         <div class="exp-view-registry-deployment-card-header">
                             <div class="exp-view-registry-deployment-icon icon-idle">
                                 <i class="fas fa-pause-circle"></i>
@@ -806,17 +801,11 @@ const ExpViewModal = (function() {
                                 <div class="exp-view-registry-deployment-label">Ready to Deploy</div>
                                 <div class="exp-view-registry-deployment-detail">Model is registered and ready</div>
                             </div>
-                        </div>
-                        <div class="exp-view-registry-deployment-actions">
-                            <button class="btn-outcome-action" onclick="ExpViewModal.deployTrainingRun(${data.id})">
-                                <i class="fas fa-rocket"></i> Deploy to Vertex AI
-                            </button>
-                            <button class="btn-outcome-action btn-secondary" onclick="ExpViewModal.deployToCloudRun(${data.id})">
-                                <i class="fas fa-cloud"></i> Deploy to Cloud Run
-                            </button>
-                            <button class="btn-outcome-action btn-schedule" onclick="ExpViewModal.scheduleRetraining(${data.id})">
-                                <i class="fas fa-calendar-alt"></i> Schedule Retraining
-                            </button>
+                            <div class="exp-view-deployment-action-inline">
+                                <button class="btn-deploy-primary" onclick="ExpViewModal.deployToCloudRun(${data.id})">
+                                    <i class="fas fa-rocket"></i> Deploy
+                                </button>
+                            </div>
                         </div>
                     </div>
                 `;

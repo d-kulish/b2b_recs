@@ -68,6 +68,13 @@ class TrainingService:
     # See: docs/training_full.md Section 11 for validation details
     GPU_TRAINING_REGION = 'europe-west4'
 
+    # Dataflow Region Configuration
+    # =============================
+    # Dataflow jobs (StatisticsGen, Transform) do NOT need GPUs and should run
+    # in the same region as the data to minimize latency and avoid resource
+    # exhaustion in GPU-heavy regions like europe-west4.
+    DATAFLOW_REGION = 'europe-central2'
+
     PIPELINE_DISPLAY_NAME_PREFIX = 'training'
 
     # 8 stages for Training (vs 6 for Experiments)
@@ -1860,10 +1867,11 @@ python /tmp/training_compile_and_submit.py \\
     --blessing-min-value="{blessing_min_value}" \\
     --model-name="{model_name}" \\
     --project-id="{self.project_id}" \\
-    --region="{self.GPU_TRAINING_REGION}"
+    --dataflow-region="{self.DATAFLOW_REGION}" \\
+    --gpu-training-region="{self.GPU_TRAINING_REGION}"
 '''
-# NOTE: Using GPU_TRAINING_REGION (europe-west4) instead of REGION (europe-central2)
-# because Vertex AI does not support GPU training in europe-central2
+# NOTE: Dataflow runs in DATAFLOW_REGION (europe-central2) where data lives
+# Trainer runs in GPU_TRAINING_REGION (europe-west4) where GPUs are available
                     ],
                 )
             ],
@@ -1916,7 +1924,10 @@ def create_training_pipeline(
     project_id: str,
     # GPU training must run in europe-west4 (not europe-central2) due to regional GPU limitations
     # See: https://docs.cloud.google.com/vertex-ai/docs/general/locations
-    region: str = 'europe-west4',
+    gpu_training_region: str = 'europe-west4',
+    # Dataflow region for StatisticsGen/Transform - should be where data lives
+    # to avoid resource exhaustion in GPU-heavy regions
+    dataflow_region: str = 'europe-central2',
     epochs: int = 100,
     batch_size: int = 8192,
     learning_rate: float = 0.01,
@@ -1962,7 +1973,9 @@ def create_training_pipeline(
     import tensorflow_model_analysis as tfma
 
     logger.info(f"Creating TFX training pipeline: {pipeline_name}")
-    logger.info(f"  GPU: {gpu_count}x {gpu_type} on {machine_type}")
+    logger.info(f"  Dataflow region: {dataflow_region} (StatisticsGen, Transform)")
+    logger.info(f"  GPU training region: {gpu_training_region} (Trainer with {gpu_count}x {gpu_type})")
+    logger.info(f"  Machine type: {machine_type}")
     logger.info(f"  Evaluator: enabled={evaluator_enabled}, threshold={blessing_metric}>={blessing_min_value}")
 
     # Configure split based on strategy
@@ -2035,7 +2048,7 @@ def create_training_pipeline(
         # CRITICAL: Enable Vertex AI mode (without this, GenericExecutor uses deprecated
         # Cloud ML Engine API which doesn't support worker_pool_specs)
         ENABLE_VERTEX_KEY: True,
-        VERTEX_REGION_KEY: region,
+        VERTEX_REGION_KEY: gpu_training_region,
         # Training args for Vertex AI CustomJob - GenericExecutor spawns a separate
         # Custom Job with these GPU resources
         TRAINING_ARGS_KEY: {
@@ -2146,11 +2159,13 @@ def create_training_pipeline(
     components.append(pusher)
 
     # Configure Dataflow for StatisticsGen and Transform
+    # Dataflow runs in europe-central2 (where data lives) to avoid resource exhaustion
+    # in GPU-heavy regions like europe-west4
     staging_bucket = f'{project_id}-pipeline-staging'
     beam_pipeline_args = [
         '--runner=DataflowRunner',
         f'--project={project_id}',
-        f'--region={region}',
+        f'--region={dataflow_region}',
         f'--temp_location=gs://{staging_bucket}/dataflow_temp',
         f'--staging_location=gs://{staging_bucket}/dataflow_staging',
         '--machine_type=n1-standard-4',
@@ -2259,8 +2274,13 @@ def main():
     # Model registry
     parser.add_argument("--model-name", default="recommender-model")
     parser.add_argument("--project-id", required=True)
-    # GPU training region - europe-west4 because europe-central2 doesn't support GPU training
-    parser.add_argument("--region", default="europe-west4")
+    # Region configuration
+    # - Dataflow region: where StatisticsGen/Transform run (same as data for efficiency)
+    # - GPU training region: where Trainer runs (must have GPU quota)
+    parser.add_argument("--dataflow-region", default="europe-central2",
+                        help="Region for Dataflow jobs (StatisticsGen, Transform)")
+    parser.add_argument("--gpu-training-region", default="europe-west4",
+                        help="Region for GPU training (Trainer component)")
     args = parser.parse_args()
 
     # Decode the base64 query
@@ -2293,7 +2313,8 @@ def main():
                 trainer_module_path=args.trainer_module_path,
                 output_path=args.output_path,
                 project_id=args.project_id,
-                region=args.region,
+                gpu_training_region=args.gpu_training_region,
+                dataflow_region=args.dataflow_region,
                 epochs=args.epochs,
                 batch_size=args.batch_size,
                 learning_rate=args.learning_rate,
@@ -2313,7 +2334,9 @@ def main():
                 project_id=args.project_id,
             )
             display_name = f"training-{args.run_id}"
-            resource_name = submit_to_vertex_ai(pipeline_file, display_name, args.project_id, args.region)
+            # Pipeline orchestration runs in dataflow_region (europe-central2)
+            # Trainer component spawns its own Custom Job in gpu_training_region (europe-west4)
+            resource_name = submit_to_vertex_ai(pipeline_file, display_name, args.project_id, args.dataflow_region)
             result = {
                 "success": True,
                 "run_id": args.run_id,

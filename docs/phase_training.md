@@ -2492,28 +2492,50 @@ This is an undocumented limitation. Always verify GPU availability before reques
 
 6. **Approval Time**: Usually 15 minutes to 48 hours
 
-### Cross-Region Training Setup
+### Split-Region Pipeline Architecture (2026-01-24)
 
-Your infrastructure can remain in `europe-central2` while training runs in `europe-west4`:
+The training pipeline uses a **split-region architecture** to avoid resource exhaustion in GPU-heavy regions:
+
+- **Pipeline orchestration** runs in `europe-central2` (where data lives)
+- **Dataflow jobs** (StatisticsGen, Transform) run in `europe-central2`
+- **Trainer component** spawns a Custom Job in `europe-west4` (where GPUs are available)
+
+This approach prevents Dataflow jobs from competing with GPU workloads in `europe-west4`.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                    CROSS-REGION TRAINING ARCHITECTURE                        │
+│                    SPLIT-REGION PIPELINE ARCHITECTURE                        │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                              │
-│   europe-central2 (Warsaw)              europe-west4 (Netherlands)          │
-│   ┌─────────────────────────┐           ┌─────────────────────────┐         │
-│   │ BigQuery (raw_data)     │ ────────► │ Vertex AI Training      │         │
-│   │ GCS Buckets             │           │ (2x T4 GPUs)            │         │
-│   │ Cloud SQL               │           │                         │         │
-│   │ Django App              │ ◄──────── │ Model artifacts (GCS)   │         │
-│   └─────────────────────────┘           └─────────────────────────┘         │
+│   europe-central2 (Warsaw)                                                   │
+│   ┌─────────────────────────────────────────────────────────────────────┐   │
+│   │ ✅ Pipeline Orchestration (Vertex AI Pipelines)                      │   │
+│   │ ✅ BigQueryExampleGen (reads from BigQuery)                          │   │
+│   │ ✅ StatisticsGen (Dataflow)                                          │   │
+│   │ ✅ SchemaGen                                                          │   │
+│   │ ✅ Transform (Dataflow)                                               │   │
+│   │ ✅ Evaluator                                                          │   │
+│   │ ✅ Pusher                                                             │   │
+│   └──────────────────────────────────┬──────────────────────────────────┘   │
+│                                      │                                       │
+│                                      │ Custom Job spawn                      │
+│                                      ▼                                       │
+│   europe-west4 (Netherlands)                                                 │
+│   ┌─────────────────────────────────────────────────────────────────────┐   │
+│   │ ✅ Trainer (Vertex AI Custom Job with 2x T4 GPUs)                    │   │
+│   └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                              │
-│   Data stays in EU. Training runs where GPUs are available.                 │
-│   Cross-region transfer: ~$0.01/GB (negligible for batch training)          │
+│   Data stays in EU. Only GPU training runs cross-region.                    │
+│   Cross-region transfer: ~$0.01/GB (negligible for model artifacts)         │
 │                                                                              │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
+
+**Why this architecture?**
+- `europe-west4` is a GPU-heavy region that frequently experiences resource exhaustion
+- Dataflow jobs don't need GPUs and were failing with "couldn't allocate workers"
+- Running Dataflow in `europe-central2` (where data lives) is more efficient
+- The Trainer's `GenericExecutor` spawns a separate Custom Job, allowing it to run in a different region
 
 ### Running GPU Training Jobs
 
@@ -2545,15 +2567,30 @@ FOUND 2 GPUs
 
 ### TrainingService Configuration
 
-The `TrainingService` must be configured to use the GPU-enabled region:
+The `TrainingService` uses two region constants for split-region execution:
 
 ```python
 # In ml_platform/training/services.py
-GPU_TRAINING_REGION = 'europe-west4'  # Where GPUs are available
-DATA_REGION = 'europe-central2'       # Where data lives
+class TrainingService:
+    REGION = 'europe-central2'           # Data infrastructure region
+    GPU_TRAINING_REGION = 'europe-west4' # GPU training region (Trainer only)
+    DATAFLOW_REGION = 'europe-central2'  # Dataflow region (StatisticsGen, Transform)
 ```
 
-Training jobs read data from `europe-central2` BigQuery/GCS but execute on `europe-west4` GPU VMs.
+The `create_training_pipeline()` function accepts both regions:
+
+```python
+def create_training_pipeline(
+    ...
+    gpu_training_region: str = 'europe-west4',   # For Trainer Custom Job
+    dataflow_region: str = 'europe-central2',    # For Dataflow jobs
+    ...
+):
+```
+
+- **Dataflow jobs** use `beam_pipeline_args` with `--region={dataflow_region}`
+- **Trainer** uses `VERTEX_REGION_KEY: gpu_training_region` in its custom config
+- **Pipeline orchestration** submits to `dataflow_region` (europe-central2)
 
 ---
 

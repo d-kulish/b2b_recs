@@ -1299,7 +1299,7 @@ For completed runs where automatic registration failed:
 - Blessing only affects the `status` field (`completed` vs `not_blessed`) and UI display
 - Registration failures are non-fatal and logged as warnings
 - The "Register Model" button is specifically for retry scenarios
-- Model names come from the Training Run Name field in the wizard
+- Model names come from the Model Name field in the wizard
 
 ---
 

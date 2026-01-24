@@ -602,17 +602,17 @@ const TrainingWizard = (function() {
         const name = nameInput?.value?.trim() || '';
 
         if (!name) {
-            showFieldError(nameInput, nameError, 'Name is required');
+            showFieldError(nameInput, nameError, 'Model name is required');
             isValid = false;
         } else if (name.length < 3 || name.length > 63) {
-            showFieldError(nameInput, nameError, 'Name must be 3-63 characters');
+            showFieldError(nameInput, nameError, 'Model name must be 3-63 characters');
             isValid = false;
         } else if (!/^[a-z0-9_-]+$/.test(name)) {
             showFieldError(nameInput, nameError, 'Only lowercase letters, numbers, hyphens, and underscores allowed');
             isValid = false;
         } else if (state.nameAvailable === false) {
             // Name exists - show error
-            showFieldError(nameInput, nameError, 'This name already exists. Please choose a unique name.');
+            showFieldError(nameInput, nameError, 'This model name already exists. Please choose a unique name.');
             isValid = false;
         } else {
             hideFieldError(nameInput, nameError);
@@ -1300,7 +1300,7 @@ const TrainingWizard = (function() {
 
         summaryEl.innerHTML = `
             <div class="wizard-summary-item">
-                <span class="summary-label">Run Name</span>
+                <span class="summary-label">Model Name</span>
                 <span class="summary-value">${state.formData.name || '-'}</span>
             </div>
             <div class="wizard-summary-item">

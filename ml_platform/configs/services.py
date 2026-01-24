@@ -3564,6 +3564,101 @@ class GradientCollapseCallback(tf.keras.callbacks.Callback):
             self.collapsed_towers.clear()
 
 
+class TrainingProgressCallback(tf.keras.callbacks.Callback):
+    """
+    Log training progress with detailed epoch-by-epoch metrics and ETA.
+
+    Provides visibility into training progress by logging:
+    - Epoch timing (seconds per epoch)
+    - Loss values and trends
+    - Estimated time remaining
+    - Training summary at completion
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.epoch_times = []
+        self.losses = []
+        self.val_losses = []
+        self.train_start_time = None
+
+    def on_train_begin(self, logs=None):
+        import time
+        self.train_start_time = time.time()
+        logging.info("=" * 70)
+        logging.info("TRAINING STARTED")
+        logging.info("=" * 70)
+
+    def on_epoch_begin(self, epoch, logs=None):
+        import time
+        self.epoch_start = time.time()
+
+    def on_epoch_end(self, epoch, logs=None):
+        import time
+        epoch_time = time.time() - self.epoch_start
+        self.epoch_times.append(epoch_time)
+
+        # Extract metrics
+        loss = logs.get('loss') if logs else None
+        val_loss = logs.get('val_loss') if logs else None
+        reg_loss = logs.get('regularization_loss') if logs else None
+
+        if loss is not None:
+            self.losses.append(loss)
+        if val_loss is not None:
+            self.val_losses.append(val_loss)
+
+        # Calculate ETA
+        total_epochs = self.params.get('epochs', 100)
+        remaining_epochs = total_epochs - epoch - 1
+        avg_epoch_time = np.mean(self.epoch_times[-10:]) if len(self.epoch_times) >= 10 else np.mean(self.epoch_times)
+        eta_seconds = remaining_epochs * avg_epoch_time
+        eta_minutes = eta_seconds / 60
+
+        # Log progress every epoch with clear formatting
+        loss_str = f"loss={loss:.6f}" if loss is not None else ""
+        val_loss_str = f", val_loss={val_loss:.6f}" if val_loss is not None else ""
+        reg_loss_str = f", reg_loss={reg_loss:.6f}" if reg_loss is not None else ""
+
+        logging.info(
+            f"Epoch {epoch + 1}/{total_epochs}: {loss_str}{val_loss_str}{reg_loss_str} "
+            f"| {epoch_time:.1f}s | ETA: {eta_minutes:.1f}min"
+        )
+
+        # Log loss trend every 10 epochs
+        if len(self.losses) >= 10 and (epoch + 1) % 10 == 0:
+            recent_trend = self.losses[-1] - self.losses[-10]
+            trend_str = "improving" if recent_trend < 0 else "worsening" if recent_trend > 0 else "stable"
+            logging.info(f"  Loss trend (last 10 epochs): {recent_trend:+.6f} ({trend_str})")
+
+        # Detect plateau
+        if len(self.losses) > 20:
+            recent_losses = self.losses[-10:]
+            loss_std = np.std(recent_losses)
+            if loss_std < 0.0001:
+                logging.warning(f"  Warning: Loss plateau detected (std={loss_std:.6f})")
+
+    def on_train_end(self, logs=None):
+        import time
+        total_time = time.time() - self.train_start_time if self.train_start_time else sum(self.epoch_times)
+        total_minutes = total_time / 60
+
+        logging.info("=" * 70)
+        logging.info("TRAINING COMPLETED")
+        logging.info("=" * 70)
+        logging.info(f"  Total time: {total_minutes:.1f} minutes ({total_time:.0f} seconds)")
+        logging.info(f"  Epochs completed: {len(self.epoch_times)}")
+        if self.epoch_times:
+            logging.info(f"  Average epoch time: {np.mean(self.epoch_times):.1f}s")
+        if self.losses:
+            logging.info(f"  Final loss: {self.losses[-1]:.6f}")
+            logging.info(f"  Best loss: {min(self.losses):.6f} (epoch {self.losses.index(min(self.losses)) + 1})")
+        if self.val_losses:
+            logging.info(f"  Final val_loss: {self.val_losses[-1]:.6f}")
+            logging.info(f"  Best val_loss: {min(self.val_losses):.6f} (epoch {self.val_losses.index(min(self.val_losses)) + 1})")
+        logging.info("=" * 70)
+
+
 '''
 
     def _generate_run_fn(self) -> str:
@@ -3644,11 +3739,42 @@ def run_fn(fn_args: tfx.components.FnArgs):
     # =========================================================================
     # GPU DETECTION AND DISTRIBUTION STRATEGY
     # =========================================================================
-    physical_gpus = tf.config.list_physical_devices('GPU')
+    logging.info("=" * 70)
+    logging.info("GPU DETECTION AND SETUP")
+    logging.info("=" * 70)
+
+    # Log TensorFlow version
+    logging.info(f"TensorFlow version: {{tf.__version__}}")
     logging.info(f"GPU config from custom_config: gpu_enabled={{gpu_enabled}}, gpu_count={{gpu_count}}")
+
+    # Detect physical GPUs
+    physical_gpus = tf.config.list_physical_devices('GPU')
     logging.info(f"Physical GPUs detected: {{len(physical_gpus)}}")
-    for i, gpu in enumerate(physical_gpus):
-        logging.info(f"  GPU {{i}}: {{gpu.name}}")
+
+    if len(physical_gpus) > 0:
+        logging.info("GPU DEVICES FOUND:")
+        for i, gpu in enumerate(physical_gpus):
+            logging.info(f"  GPU {{i}}: {{gpu.name}}")
+            # Try to get GPU details
+            try:
+                gpu_details = tf.config.experimental.get_device_details(gpu)
+                if gpu_details:
+                    device_name = gpu_details.get('device_name', 'Unknown')
+                    compute_capability = gpu_details.get('compute_capability', 'Unknown')
+                    logging.info(f"         Device: {{device_name}}")
+                    logging.info(f"         Compute Capability: {{compute_capability}}")
+            except Exception as e:
+                logging.info(f"         (Could not get device details: {{e}})")
+
+        # Set memory growth to avoid OOM
+        for gpu in physical_gpus:
+            try:
+                tf.config.experimental.set_memory_growth(gpu, True)
+                logging.info(f"  Memory growth enabled for {{gpu.name}}")
+            except RuntimeError as e:
+                logging.warning(f"  Could not set memory growth: {{e}}")
+    else:
+        logging.warning("NO GPU DEVICES FOUND")
 
     # Set up distribution strategy
     # FAIL-FAST: If GPU training was requested but no GPUs available, raise error immediately
@@ -3663,14 +3789,17 @@ def run_fn(fn_args: tfx.components.FnArgs):
     if gpu_enabled and len(physical_gpus) > 0:
         if len(physical_gpus) > 1:
             strategy = tf.distribute.MirroredStrategy()
-            logging.info(f"Using MirroredStrategy with {{strategy.num_replicas_in_sync}} replicas")
+            logging.info(f"DISTRIBUTION STRATEGY: MirroredStrategy with {{strategy.num_replicas_in_sync}} replicas")
         else:
             # Single GPU - use default strategy for clarity
             strategy = tf.distribute.get_strategy()
-            logging.info("Using single GPU (default strategy)")
+            logging.info("DISTRIBUTION STRATEGY: Single GPU (default strategy)")
+        logging.info("GPU TRAINING ENABLED")
     else:
         strategy = tf.distribute.get_strategy()
-        logging.info("Using CPU (default strategy) - GPU not enabled")
+        logging.warning("DISTRIBUTION STRATEGY: CPU only (default strategy) - GPU not enabled")
+
+    logging.info("=" * 70)
 
     # Load datasets
     train_dataset = _input_fn(
@@ -3735,6 +3864,9 @@ def run_fn(fn_args: tfx.components.FnArgs):
 
         # Training callbacks
         callbacks = []
+
+        # Training progress callback for detailed epoch logging with ETA
+        callbacks.append(TrainingProgressCallback())
 
         # Metrics callback for per-epoch logging to MetricsCollector
         callbacks.append(MetricsCallback())
@@ -4364,6 +4496,92 @@ class MetricsCallback(tf.keras.callbacks.Callback):
                 _metrics_collector.log_metric(metric_name, float(value), step=epoch)
 
 
+class TrainingProgressCallback(tf.keras.callbacks.Callback):
+    """
+    Log training progress with detailed epoch-by-epoch metrics and ETA.
+
+    Provides visibility into training progress by logging:
+    - Epoch timing (seconds per epoch)
+    - Loss values and trends
+    - Estimated time remaining
+    - Training summary at completion
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.epoch_times = []
+        self.losses = []
+        self.val_losses = []
+        self.train_start_time = None
+
+    def on_train_begin(self, logs=None):
+        import time
+        self.train_start_time = time.time()
+        logging.info("=" * 70)
+        logging.info("TRAINING STARTED")
+        logging.info("=" * 70)
+
+    def on_epoch_begin(self, epoch, logs=None):
+        import time
+        self.epoch_start = time.time()
+
+    def on_epoch_end(self, epoch, logs=None):
+        import time
+        epoch_time = time.time() - self.epoch_start
+        self.epoch_times.append(epoch_time)
+
+        # Extract metrics
+        loss = logs.get('loss') if logs else None
+        val_loss = logs.get('val_loss') if logs else None
+
+        if loss is not None:
+            self.losses.append(loss)
+        if val_loss is not None:
+            self.val_losses.append(val_loss)
+
+        # Calculate ETA
+        total_epochs = self.params.get('epochs', 100)
+        remaining_epochs = total_epochs - epoch - 1
+        avg_epoch_time = np.mean(self.epoch_times[-10:]) if len(self.epoch_times) >= 10 else np.mean(self.epoch_times)
+        eta_seconds = remaining_epochs * avg_epoch_time
+        eta_minutes = eta_seconds / 60
+
+        # Log progress every epoch with clear formatting
+        loss_str = f"loss={loss:.6f}" if loss is not None else ""
+        val_loss_str = f", val_loss={val_loss:.6f}" if val_loss is not None else ""
+
+        logging.info(
+            f"Epoch {epoch + 1}/{total_epochs}: {loss_str}{val_loss_str} "
+            f"| {epoch_time:.1f}s | ETA: {eta_minutes:.1f}min"
+        )
+
+        # Log loss trend every 10 epochs
+        if len(self.losses) >= 10 and (epoch + 1) % 10 == 0:
+            recent_trend = self.losses[-1] - self.losses[-10]
+            trend_str = "improving" if recent_trend < 0 else "worsening" if recent_trend > 0 else "stable"
+            logging.info(f"  Loss trend (last 10 epochs): {recent_trend:+.6f} ({trend_str})")
+
+    def on_train_end(self, logs=None):
+        import time
+        total_time = time.time() - self.train_start_time if self.train_start_time else sum(self.epoch_times)
+        total_minutes = total_time / 60
+
+        logging.info("=" * 70)
+        logging.info("TRAINING COMPLETED")
+        logging.info("=" * 70)
+        logging.info(f"  Total time: {total_minutes:.1f} minutes ({total_time:.0f} seconds)")
+        logging.info(f"  Epochs completed: {len(self.epoch_times)}")
+        if self.epoch_times:
+            logging.info(f"  Average epoch time: {np.mean(self.epoch_times):.1f}s")
+        if self.losses:
+            logging.info(f"  Final loss: {self.losses[-1]:.6f}")
+            logging.info(f"  Best loss: {min(self.losses):.6f} (epoch {self.losses.index(min(self.losses)) + 1})")
+        if self.val_losses:
+            logging.info(f"  Final val_loss: {self.val_losses[-1]:.6f}")
+            logging.info(f"  Best val_loss: {min(self.val_losses):.6f} (epoch {self.val_losses.index(min(self.val_losses)) + 1})")
+        logging.info("=" * 70)
+
+
 class WeightNormCallback(tf.keras.callbacks.Callback):
     """
     Log weight L2 norms for monitoring training dynamics.
@@ -4645,11 +4863,42 @@ def run_fn(fn_args: tfx.components.FnArgs):
     # =========================================================================
     # GPU DETECTION AND DISTRIBUTION STRATEGY
     # =========================================================================
-    physical_gpus = tf.config.list_physical_devices('GPU')
+    logging.info("=" * 70)
+    logging.info("GPU DETECTION AND SETUP")
+    logging.info("=" * 70)
+
+    # Log TensorFlow version
+    logging.info(f"TensorFlow version: {{tf.__version__}}")
     logging.info(f"GPU config from custom_config: gpu_enabled={{gpu_enabled}}, gpu_count={{gpu_count}}")
+
+    # Detect physical GPUs
+    physical_gpus = tf.config.list_physical_devices('GPU')
     logging.info(f"Physical GPUs detected: {{len(physical_gpus)}}")
-    for i, gpu in enumerate(physical_gpus):
-        logging.info(f"  GPU {{i}}: {{gpu.name}}")
+
+    if len(physical_gpus) > 0:
+        logging.info("GPU DEVICES FOUND:")
+        for i, gpu in enumerate(physical_gpus):
+            logging.info(f"  GPU {{i}}: {{gpu.name}}")
+            # Try to get GPU details
+            try:
+                gpu_details = tf.config.experimental.get_device_details(gpu)
+                if gpu_details:
+                    device_name = gpu_details.get('device_name', 'Unknown')
+                    compute_capability = gpu_details.get('compute_capability', 'Unknown')
+                    logging.info(f"         Device: {{device_name}}")
+                    logging.info(f"         Compute Capability: {{compute_capability}}")
+            except Exception as e:
+                logging.info(f"         (Could not get device details: {{e}})")
+
+        # Set memory growth to avoid OOM
+        for gpu in physical_gpus:
+            try:
+                tf.config.experimental.set_memory_growth(gpu, True)
+                logging.info(f"  Memory growth enabled for {{gpu.name}}")
+            except RuntimeError as e:
+                logging.warning(f"  Could not set memory growth: {{e}}")
+    else:
+        logging.warning("NO GPU DEVICES FOUND")
 
     # Set up distribution strategy
     # FAIL-FAST: If GPU training was requested but no GPUs available, raise error immediately
@@ -4664,14 +4913,17 @@ def run_fn(fn_args: tfx.components.FnArgs):
     if gpu_enabled and len(physical_gpus) > 0:
         if len(physical_gpus) > 1:
             strategy = tf.distribute.MirroredStrategy()
-            logging.info(f"Using MirroredStrategy with {{strategy.num_replicas_in_sync}} replicas")
+            logging.info(f"DISTRIBUTION STRATEGY: MirroredStrategy with {{strategy.num_replicas_in_sync}} replicas")
         else:
             # Single GPU - use default strategy for clarity
             strategy = tf.distribute.get_strategy()
-            logging.info("Using single GPU (default strategy)")
+            logging.info("DISTRIBUTION STRATEGY: Single GPU (default strategy)")
+        logging.info("GPU TRAINING ENABLED")
     else:
         strategy = tf.distribute.get_strategy()
-        logging.info("Using CPU (default strategy) - GPU not enabled")
+        logging.warning("DISTRIBUTION STRATEGY: CPU only (default strategy) - GPU not enabled")
+
+    logging.info("=" * 70)
 
     # Load datasets (with labels)
     train_dataset = _input_fn(
@@ -4762,6 +5014,9 @@ def run_fn(fn_args: tfx.components.FnArgs):
 
         # Training callbacks
         callbacks = []
+
+        # Training progress callback for detailed epoch logging with ETA
+        callbacks.append(TrainingProgressCallback())
 
         # Metrics callback for per-epoch logging to MetricsCollector
         callbacks.append(MetricsCallback())
@@ -5537,6 +5792,92 @@ class MetricsCallback(tf.keras.callbacks.Callback):
                 _metrics_collector.log_metric(metric_name, float(value), step=epoch)
 
 
+class TrainingProgressCallback(tf.keras.callbacks.Callback):
+    """
+    Log training progress with detailed epoch-by-epoch metrics and ETA.
+
+    Provides visibility into training progress by logging:
+    - Epoch timing (seconds per epoch)
+    - Loss values and trends
+    - Estimated time remaining
+    - Training summary at completion
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.epoch_times = []
+        self.losses = []
+        self.val_losses = []
+        self.train_start_time = None
+
+    def on_train_begin(self, logs=None):
+        import time
+        self.train_start_time = time.time()
+        logging.info("=" * 70)
+        logging.info("TRAINING STARTED")
+        logging.info("=" * 70)
+
+    def on_epoch_begin(self, epoch, logs=None):
+        import time
+        self.epoch_start = time.time()
+
+    def on_epoch_end(self, epoch, logs=None):
+        import time
+        epoch_time = time.time() - self.epoch_start
+        self.epoch_times.append(epoch_time)
+
+        # Extract metrics
+        loss = logs.get('loss') if logs else None
+        val_loss = logs.get('val_loss') if logs else None
+
+        if loss is not None:
+            self.losses.append(loss)
+        if val_loss is not None:
+            self.val_losses.append(val_loss)
+
+        # Calculate ETA
+        total_epochs = self.params.get('epochs', 100)
+        remaining_epochs = total_epochs - epoch - 1
+        avg_epoch_time = np.mean(self.epoch_times[-10:]) if len(self.epoch_times) >= 10 else np.mean(self.epoch_times)
+        eta_seconds = remaining_epochs * avg_epoch_time
+        eta_minutes = eta_seconds / 60
+
+        # Log progress every epoch with clear formatting
+        loss_str = f"loss={loss:.6f}" if loss is not None else ""
+        val_loss_str = f", val_loss={val_loss:.6f}" if val_loss is not None else ""
+
+        logging.info(
+            f"Epoch {epoch + 1}/{total_epochs}: {loss_str}{val_loss_str} "
+            f"| {epoch_time:.1f}s | ETA: {eta_minutes:.1f}min"
+        )
+
+        # Log loss trend every 10 epochs
+        if len(self.losses) >= 10 and (epoch + 1) % 10 == 0:
+            recent_trend = self.losses[-1] - self.losses[-10]
+            trend_str = "improving" if recent_trend < 0 else "worsening" if recent_trend > 0 else "stable"
+            logging.info(f"  Loss trend (last 10 epochs): {recent_trend:+.6f} ({trend_str})")
+
+    def on_train_end(self, logs=None):
+        import time
+        total_time = time.time() - self.train_start_time if self.train_start_time else sum(self.epoch_times)
+        total_minutes = total_time / 60
+
+        logging.info("=" * 70)
+        logging.info("TRAINING COMPLETED")
+        logging.info("=" * 70)
+        logging.info(f"  Total time: {total_minutes:.1f} minutes ({total_time:.0f} seconds)")
+        logging.info(f"  Epochs completed: {len(self.epoch_times)}")
+        if self.epoch_times:
+            logging.info(f"  Average epoch time: {np.mean(self.epoch_times):.1f}s")
+        if self.losses:
+            logging.info(f"  Final loss: {self.losses[-1]:.6f}")
+            logging.info(f"  Best loss: {min(self.losses):.6f} (epoch {self.losses.index(min(self.losses)) + 1})")
+        if self.val_losses:
+            logging.info(f"  Final val_loss: {self.val_losses[-1]:.6f}")
+            logging.info(f"  Best val_loss: {min(self.val_losses):.6f} (epoch {self.val_losses.index(min(self.val_losses)) + 1})")
+        logging.info("=" * 70)
+
+
 class WeightNormCallback(tf.keras.callbacks.Callback):
     """
     Log weight L2 norms for monitoring training dynamics.
@@ -5803,11 +6144,42 @@ def run_fn(fn_args: tfx.components.FnArgs):
     # =========================================================================
     # GPU DETECTION AND DISTRIBUTION STRATEGY
     # =========================================================================
-    physical_gpus = tf.config.list_physical_devices('GPU')
+    logging.info("=" * 70)
+    logging.info("GPU DETECTION AND SETUP")
+    logging.info("=" * 70)
+
+    # Log TensorFlow version
+    logging.info(f"TensorFlow version: {{tf.__version__}}")
     logging.info(f"GPU config from custom_config: gpu_enabled={{gpu_enabled}}, gpu_count={{gpu_count}}")
+
+    # Detect physical GPUs
+    physical_gpus = tf.config.list_physical_devices('GPU')
     logging.info(f"Physical GPUs detected: {{len(physical_gpus)}}")
-    for i, gpu in enumerate(physical_gpus):
-        logging.info(f"  GPU {{i}}: {{gpu.name}}")
+
+    if len(physical_gpus) > 0:
+        logging.info("GPU DEVICES FOUND:")
+        for i, gpu in enumerate(physical_gpus):
+            logging.info(f"  GPU {{i}}: {{gpu.name}}")
+            # Try to get GPU details
+            try:
+                gpu_details = tf.config.experimental.get_device_details(gpu)
+                if gpu_details:
+                    device_name = gpu_details.get('device_name', 'Unknown')
+                    compute_capability = gpu_details.get('compute_capability', 'Unknown')
+                    logging.info(f"         Device: {{device_name}}")
+                    logging.info(f"         Compute Capability: {{compute_capability}}")
+            except Exception as e:
+                logging.info(f"         (Could not get device details: {{e}})")
+
+        # Set memory growth to avoid OOM
+        for gpu in physical_gpus:
+            try:
+                tf.config.experimental.set_memory_growth(gpu, True)
+                logging.info(f"  Memory growth enabled for {{gpu.name}}")
+            except RuntimeError as e:
+                logging.warning(f"  Could not set memory growth: {{e}}")
+    else:
+        logging.warning("NO GPU DEVICES FOUND")
 
     # Set up distribution strategy
     # FAIL-FAST: If GPU training was requested but no GPUs available, raise error immediately
@@ -5822,14 +6194,17 @@ def run_fn(fn_args: tfx.components.FnArgs):
     if gpu_enabled and len(physical_gpus) > 0:
         if len(physical_gpus) > 1:
             strategy = tf.distribute.MirroredStrategy()
-            logging.info(f"Using MirroredStrategy with {{strategy.num_replicas_in_sync}} replicas")
+            logging.info(f"DISTRIBUTION STRATEGY: MirroredStrategy with {{strategy.num_replicas_in_sync}} replicas")
         else:
             # Single GPU - use default strategy for clarity
             strategy = tf.distribute.get_strategy()
-            logging.info("Using single GPU (default strategy)")
+            logging.info("DISTRIBUTION STRATEGY: Single GPU (default strategy)")
+        logging.info("GPU TRAINING ENABLED")
     else:
         strategy = tf.distribute.get_strategy()
-        logging.info("Using CPU (default strategy) - GPU not enabled")
+        logging.warning("DISTRIBUTION STRATEGY: CPU only (default strategy) - GPU not enabled")
+
+    logging.info("=" * 70)
 
     # Initialize MetricsCollector
     global _metrics_collector

@@ -766,7 +766,7 @@ class TrainingService:
             model = aiplatform.Model.upload(
                 display_name=model_name,
                 artifact_uri=artifact_uri,
-                serving_container_image_uri="tensorflow/serving:2.19.0",
+                serving_container_image_uri="us-docker.pkg.dev/vertex-ai/prediction/tf2-cpu.2-12:latest",
                 labels=labels,
             )
 

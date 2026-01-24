@@ -1083,6 +1083,51 @@ No new external dependencies required. Uses:
 
 ---
 
+## Automatic Model Registration
+
+### Overview
+
+When a TFX training pipeline completes successfully, the model is automatically registered in Vertex AI Model Registry. This happens in the `_register_to_model_registry()` method in `ml_platform/training/services.py`.
+
+### Registration Flow
+
+1. **Pipeline Completion**: When the pipeline status becomes `COMPLETED`, the `_extract_results()` method is called
+2. **Metrics Extraction**: Training metrics and blessing status are extracted from GCS artifacts
+3. **Model Registration**: `_register_to_model_registry()` uploads the model to Vertex AI Model Registry using the `aiplatform.Model.upload()` API
+
+### Serving Container Configuration
+
+The model is registered with a Vertex AI pre-built serving container:
+
+```python
+serving_container_image_uri="us-docker.pkg.dev/vertex-ai/prediction/tf2-cpu.2-12:latest"
+```
+
+This container is used for:
+- Automatic registration after pipeline completion
+- Force-push operations for not-blessed models
+- Deployment to Vertex AI Endpoints
+
+**Note**: All registration methods use the same Vertex AI pre-built container to ensure consistency across the platform.
+
+### Model Artifact Location
+
+The registered model's artifacts are stored at:
+```
+gs://b2b-recs-training-artifacts/{run_id}/pushed_model
+```
+
+Where `{run_id}` follows the format `tr-{training_run_id}-{timestamp}`.
+
+### Error Handling
+
+Registration failures are logged but do not fail the training run. If registration fails:
+- The training run status remains `COMPLETED`
+- The `vertex_model_resource_name` field remains empty
+- Users can manually trigger registration via the "Push Anyway" action
+
+---
+
 ## Implementation Status
 
 **Implemented**: 2026-01-22

@@ -20,6 +20,11 @@
     display: none;
 }
 
+/* Confirmation Modal - Higher z-index to appear above view modals */
+#confirmModal {
+    z-index: 200;
+}
+
 /* Modal Container */
 .modal-container {
     background-color: #ffffff;

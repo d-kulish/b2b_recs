@@ -1480,6 +1480,10 @@ const TrainingCards = (function() {
         scheduleRun: scheduleRun,
         editRun: editRun,
         stopPolling: stopPolling,
+        // Shared UI utilities
+        showConfirmModal: showConfirmModal,
+        hideConfirmModal: hideConfirmModal,
+        showToast: showToast,
         // Expose state for debugging
         getState: function() { return state; }
     };

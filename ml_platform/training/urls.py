@@ -69,6 +69,11 @@ urlpatterns = [
         name='training_run_push'
     ),
     path(
+        'api/training-runs/<int:training_run_id>/register/',
+        api.training_run_register,
+        name='training_run_register'
+    ),
+    path(
         'api/training-runs/<int:training_run_id>/deploy-cloud-run/',
         api.training_run_deploy_cloud_run,
         name='training_run_deploy_cloud_run'

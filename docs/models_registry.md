@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides detailed specifications for implementing the **Models Registry** chapter on the Training page. The Models Registry provides visibility into production-ready models registered in Vertex AI Model Registry, their deployment status, and scheduled training activities.
 
-**Last Updated**: 2026-01-22
+**Last Updated**: 2026-01-24
 
 ---
 
@@ -1124,7 +1124,182 @@ Where `{run_id}` follows the format `tr-{training_run_id}-{timestamp}`.
 Registration failures are logged but do not fail the training run. If registration fails:
 - The training run status remains `COMPLETED`
 - The `vertex_model_resource_name` field remains empty
-- Users can manually trigger registration via the "Push Anyway" action
+- Users can manually trigger registration via the "Register Model" button
+
+---
+
+## Bug Fixes: Model Registration Issues (2026-01-24)
+
+### Problem Summary
+
+Training runs #17 and #18 completed successfully but were never registered to Vertex AI Model Registry. Investigation revealed multiple issues in the registration pipeline.
+
+### Bug #1: Invalid Serving Container Image
+
+**Symptom**: Registration failed silently during automatic post-training registration.
+
+**Root Cause**: The original code in `_register_to_model_registry()` used an invalid container image path. The code referenced `self.ml_model.slug` which doesn't exist on the `ModelEndpoint` model (it has `name` instead).
+
+**Error**:
+```
+AttributeError: 'ModelEndpoint' object has no attribute 'slug'
+```
+
+**Fix**: Changed `self.ml_model.slug` to `self.ml_model.name` in two locations:
+- Line 746: Model display name construction
+- Line 1526: Cloud Run service name construction
+
+**Files Modified**: `ml_platform/training/services.py`
+
+### Bug #2: Invalid GCP Label Values
+
+**Symptom**: Registration failed with `400 INVALID_ARGUMENT` error about labels.
+
+**Root Cause**: GCP labels must only contain lowercase letters, numbers, dashes, and underscores. Values like `model_type` or boolean fields were being passed without sanitization.
+
+**Error**:
+```
+google.api_core.exceptions.InvalidArgument: 400 List of found errors:
+1.Field: model.labels; Message: Label keys and values can only contain
+lowercase letters, numbers, dashes and underscores...
+```
+
+**Fix**: Added a `sanitize_label()` helper function that:
+- Converts values to lowercase
+- Replaces invalid characters with underscores
+- Ensures values start with a letter/number
+- Truncates to 63 characters (GCP limit)
+
+**Files Modified**: `ml_platform/training/services.py`
+
+### Bug #3: Incorrect Model Artifact Path
+
+**Symptom**: Registration failed with `400 FailedPrecondition` error about missing `saved_model.pb`.
+
+**Root Cause**: TFX Pusher creates a versioned subdirectory structure:
+```
+pushed_model/
+  1769254066/          <- version number directory
+    saved_model.pb
+    variables/
+    assets/
+```
+
+The code pointed to `pushed_model/` but Vertex AI requires the path to the directory containing `saved_model.pb` directly.
+
+**Error**:
+```
+google.api_core.exceptions.FailedPrecondition: 400 Model directory
+gs://...pushed_model is expected to contain exactly one of:
+[saved_model.pb, saved_model.pbtxt]
+```
+
+**Fix**: Added logic to detect and use the versioned subdirectory:
+```python
+# List subdirectories to find versioned model directory
+iterator = bucket.list_blobs(prefix=prefix, delimiter='/')
+_ = list(iterator)  # Consume iterator to populate prefixes
+prefixes = list(iterator.prefixes)
+
+if prefixes:
+    version_dir = prefixes[0].rstrip('/')
+    artifact_uri = f"gs://{bucket_name}/{version_dir}"
+```
+
+**Files Modified**: `ml_platform/training/services.py`
+
+### Bug #4: No Retry Mechanism for Failed Registrations
+
+**Symptom**: Completed training runs with failed registration had no way to retry.
+
+**Root Cause**: The existing "Push to Registry" button only worked for `not_blessed` runs (calling `/push/` endpoint). There was no API endpoint or UI for retrying registration on `completed` runs.
+
+**Fix**: Added new registration retry capability:
+
+1. **New Service Method** (`services.py`):
+   ```python
+   def register_model(self, training_run: TrainingRun) -> TrainingRun:
+       """Register or re-register a completed training run's model."""
+   ```
+
+2. **New API Endpoint** (`api.py`):
+   ```python
+   POST /api/training-runs/<id>/register/
+   ```
+
+3. **New URL Pattern** (`urls.py`):
+   ```python
+   path('api/training-runs/<int:training_run_id>/register/',
+        api.training_run_register, name='training_run_register')
+   ```
+
+4. **Updated Frontend** (`exp_view_modal.js`):
+   - Added "Register Model" button for completed runs without registration
+   - Uses styled confirmation modal (not browser native)
+   - Shows toast notifications for success/error
+
+**Files Modified**:
+- `ml_platform/training/services.py`
+- `ml_platform/training/api.py`
+- `ml_platform/training/urls.py`
+- `static/js/exp_view_modal.js`
+- `static/js/training_cards.js` (exported `showConfirmModal`, `showToast`)
+- `static/css/modals.css` (z-index fix for confirmation modal)
+
+### Bug #5: Incorrect Model Display Names
+
+**Symptom**: Registered models had names like `test_v1-v11` instead of the training run's name like `chern_rank_v1`.
+
+**Root Cause**: The model name was constructed from `{model_endpoint.name}-v{run_number}` instead of using the training run's `name` field.
+
+**Fix**: Changed model name logic to prioritize training run name:
+```python
+# Before
+model_name = f"{self.ml_model.name}-v{training_run.run_number}"
+
+# After
+model_name = training_run.name or f"{self.ml_model.name}-v{training_run.run_number}"
+```
+
+Also updated existing registered models in both database and Vertex AI:
+- Run #11: `test_v1-v11` → `chern_rank_v1`
+- Run #10: `test_v1-v10` → `chern_retriv_v5`
+- Run #2: `test_v1-v2` → `chern_retriv_v2`
+
+**Files Modified**: `ml_platform/training/services.py`
+
+### How Registration Works Now
+
+#### Automatic Registration (Post-Training)
+
+1. Training pipeline completes successfully
+2. `_extract_results()` extracts metrics and blessing status from GCS
+3. `_register_to_model_registry()` is called **regardless of blessing status**
+4. Model is uploaded to Vertex AI Model Registry with:
+   - Display name: `{training_run.name}` (or fallback to `{endpoint.name}-v{run_number}`)
+   - Artifact URI: Versioned model directory from GCS
+   - Sanitized labels for tracking
+5. Training run record updated with `vertex_model_resource_name` and `vertex_model_name`
+
+#### Manual Registration (Retry)
+
+For completed runs where automatic registration failed:
+
+1. User opens Training Run in View Modal
+2. Registry & Deployment section shows "Not Registered" with "Register Model" button
+3. User clicks button → styled confirmation modal appears
+4. On confirm, `POST /api/training-runs/{id}/register/` is called
+5. Service validates run is `COMPLETED` and not already registered
+6. `_register_to_model_registry()` performs the upload
+7. Success toast notification shown, modal refreshes
+
+#### Key Points
+
+- **All completed models are registered**, regardless of blessing status (`is_blessed` True/False)
+- Blessing only affects the `status` field (`completed` vs `not_blessed`) and UI display
+- Registration failures are non-fatal and logged as warnings
+- The "Register Model" button is specifically for retry scenarios
+- Model names come from the Training Run Name field in the wizard
 
 ---
 

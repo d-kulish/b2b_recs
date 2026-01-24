@@ -1195,6 +1195,81 @@ def training_run_push(request, training_run_id):
 
 @csrf_exempt
 @require_http_methods(["POST"])
+def training_run_register(request, training_run_id):
+    """
+    Register a completed Training Run to Vertex AI Model Registry.
+
+    POST /api/training-runs/<id>/register/
+
+    For completed runs that failed initial automatic registration
+    (e.g., due to invalid container image or transient errors).
+
+    Returns:
+    {
+        "success": true,
+        "training_run": {...},
+        "message": "Model registered to Vertex AI Model Registry"
+    }
+    """
+    try:
+        model_endpoint = _get_model_endpoint(request)
+        if not model_endpoint:
+            return JsonResponse({
+                'success': False,
+                'error': 'No model endpoint selected'
+            }, status=400)
+
+        try:
+            training_run = TrainingRun.objects.get(
+                id=training_run_id,
+                ml_model=model_endpoint
+            )
+        except TrainingRun.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': f'TrainingRun {training_run_id} not found'
+            }, status=404)
+
+        # Only allow for completed runs that aren't registered yet
+        if training_run.status != TrainingRun.STATUS_COMPLETED:
+            return JsonResponse({
+                'success': False,
+                'error': f"Cannot register training run in '{training_run.status}' state. "
+                         f"Only completed training runs can be registered."
+            }, status=400)
+
+        if training_run.vertex_model_resource_name:
+            return JsonResponse({
+                'success': False,
+                'error': f"Training run is already registered as {training_run.vertex_model_name}."
+            }, status=400)
+
+        # Register the model
+        service = TrainingService(model_endpoint)
+        try:
+            training_run = service.register_model(training_run)
+        except TrainingServiceError as e:
+            return JsonResponse({
+                'success': False,
+                'error': str(e)
+            }, status=500)
+
+        return JsonResponse({
+            'success': True,
+            'training_run': _serialize_training_run(training_run, include_details=True),
+            'message': f"Model registered to Vertex AI Model Registry as {training_run.vertex_model_name}"
+        })
+
+    except Exception as e:
+        logger.exception(f"Error registering training run: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
 def training_run_deploy_cloud_run(request, training_run_id):
     """
     Deploy a trained model to Cloud Run with TF Serving.

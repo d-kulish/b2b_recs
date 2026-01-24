@@ -684,7 +684,8 @@ const ExpViewModal = (function() {
 
         // Build Registry Card HTML
         let registryHtml = '';
-        if (data.is_blessed === false) {
+        if (data.is_blessed === false && data.status === 'not_blessed') {
+            // Not blessed run - show option to force push anyway
             registryHtml = `
                 <div class="exp-view-registry-deployment-card">
                     <div class="exp-view-registry-deployment-card-header">
@@ -696,9 +697,15 @@ const ExpViewModal = (function() {
                             <div class="exp-view-registry-deployment-detail">Model did not meet blessing thresholds</div>
                         </div>
                     </div>
+                    <div class="exp-view-registry-deployment-actions">
+                        <button class="btn-outcome-action btn-warning" onclick="ExpViewModal.pushToRegistry(${data.id})">
+                            <i class="fas fa-exclamation-triangle"></i> Push Anyway
+                        </button>
+                    </div>
                 </div>
             `;
-        } else if (!data.vertex_model_name) {
+        } else if (!data.vertex_model_name && data.status === 'completed') {
+            // Completed run without registration - show register button
             registryHtml = `
                 <div class="exp-view-registry-deployment-card">
                     <div class="exp-view-registry-deployment-card-header">
@@ -707,13 +714,28 @@ const ExpViewModal = (function() {
                         </div>
                         <div class="exp-view-registry-deployment-info">
                             <div class="exp-view-registry-deployment-label">Not Registered</div>
-                            <div class="exp-view-registry-deployment-detail">Model passed evaluation, ready for registry</div>
+                            <div class="exp-view-registry-deployment-detail">Training completed, registration pending</div>
                         </div>
                     </div>
                     <div class="exp-view-registry-deployment-actions">
-                        <button class="btn-outcome-action" onclick="ExpViewModal.pushToRegistry(${data.id})">
-                            <i class="fas fa-upload"></i> Push to Registry
+                        <button class="btn-outcome-action" onclick="ExpViewModal.registerModel(${data.id})">
+                            <i class="fas fa-upload"></i> Register Model
                         </button>
+                    </div>
+                </div>
+            `;
+        } else if (!data.vertex_model_name) {
+            // Other non-registered states (e.g., still running)
+            registryHtml = `
+                <div class="exp-view-registry-deployment-card">
+                    <div class="exp-view-registry-deployment-card-header">
+                        <div class="exp-view-registry-deployment-icon icon-pending">
+                            <i class="fas fa-clock"></i>
+                        </div>
+                        <div class="exp-view-registry-deployment-info">
+                            <div class="exp-view-registry-deployment-label">Not Registered</div>
+                            <div class="exp-view-registry-deployment-detail">Waiting for training to complete</div>
+                        </div>
                     </div>
                 </div>
             `;
@@ -845,6 +867,58 @@ const ExpViewModal = (function() {
         } catch (error) {
             console.error('Error pushing to registry:', error);
             alert('Error pushing to registry');
+        }
+    }
+
+    async function registerModel(runId) {
+        // Use styled confirmation modal if available, otherwise fall back to native confirm
+        if (typeof TrainingCards !== 'undefined' && TrainingCards.showConfirmModal) {
+            TrainingCards.showConfirmModal({
+                title: 'Register Model',
+                message: 'Are you sure you want to register this model to Vertex AI Model Registry?',
+                confirmText: 'Register',
+                cancelText: 'Cancel',
+                type: 'success',
+                confirmButtonClass: 'btn-neu-save',      // Green for positive action
+                cancelButtonClass: 'btn-neu-cancel',     // Red for cancel
+                onConfirm: () => doRegisterModel(runId)
+            });
+        } else {
+            if (!confirm('Are you sure you want to register this model to Vertex AI Model Registry?')) return;
+            doRegisterModel(runId);
+        }
+    }
+
+    async function doRegisterModel(runId) {
+        // Helper to show toast notification
+        const showToast = (message, type) => {
+            if (typeof TrainingCards !== 'undefined' && TrainingCards.showToast) {
+                TrainingCards.showToast(message, type);
+            } else {
+                alert(message);
+            }
+        };
+
+        try {
+            const response = await fetch(`/api/training-runs/${runId}/register/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                }
+            });
+            const data = await response.json();
+
+            if (data.success) {
+                showToast(data.message || 'Model registered to registry', 'success');
+                // Refresh the modal
+                open(runId, { mode: 'training_run' });
+            } else {
+                showToast('Failed to register: ' + (data.error || 'Unknown error'), 'error');
+            }
+        } catch (error) {
+            console.error('Error registering model:', error);
+            showToast('Error registering model', 'error');
         }
     }
 
@@ -4224,6 +4298,7 @@ const ExpViewModal = (function() {
 
         // Training run actions (Registry & Deployment)
         pushToRegistry: pushToRegistry,
+        registerModel: registerModel,
         deployTrainingRun: deployTrainingRun,
         deployToCloudRun: deployToCloudRun,
         undeployTrainingRun: undeployTrainingRun,

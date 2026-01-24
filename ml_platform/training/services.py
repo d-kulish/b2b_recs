@@ -15,6 +15,7 @@ import base64
 import json
 import logging
 import os
+import re
 from datetime import datetime
 from typing import Optional
 
@@ -742,23 +743,61 @@ class TrainingService:
             logger.info(f"{training_run.display_name}: Already registered in Model Registry")
             return
 
-        # Build display name with version
-        model_name = f"{self.ml_model.slug}-v{training_run.run_number}"
-        artifact_uri = f"{training_run.gcs_artifacts_path}/pushed_model"
+        # Build display name from training run name (with fallback)
+        model_name = training_run.name or f"{self.ml_model.name}-v{training_run.run_number}"
 
-        # Labels for tracking (values must be strings, max 63 chars)
+        # Find the versioned model directory (TFX Pusher creates versioned subdirectories)
+        # Structure: pushed_model/<version_number>/saved_model.pb
+        base_pushed_model_path = f"{training_run.gcs_artifacts_path}/pushed_model"
+        artifact_uri = base_pushed_model_path
+
+        try:
+            from google.cloud import storage
+
+            # Parse GCS path
+            gcs_path = base_pushed_model_path.replace('gs://', '')
+            bucket_name = gcs_path.split('/')[0]
+            prefix = '/'.join(gcs_path.split('/')[1:]) + '/'
+
+            client = storage.Client(project=self.project_id)
+            bucket = client.bucket(bucket_name)
+
+            # List subdirectories to find versioned model directory
+            # Need to consume the iterator to populate prefixes
+            iterator = bucket.list_blobs(prefix=prefix, delimiter='/')
+            _ = list(iterator)  # Consume iterator to populate prefixes
+            prefixes = list(iterator.prefixes)
+
+            if prefixes:
+                # Use the first (or only) version directory
+                version_dir = prefixes[0].rstrip('/')
+                artifact_uri = f"gs://{bucket_name}/{version_dir}"
+                logger.info(f"{training_run.display_name}: Found versioned model at {artifact_uri}")
+        except Exception as e:
+            logger.warning(f"{training_run.display_name}: Could not find versioned model directory, using base path: {e}")
+
+        # Helper to sanitize label values for GCP (lowercase, alphanumeric, dashes, underscores only)
+        def sanitize_label(value: str) -> str:
+            # Convert to lowercase, replace invalid chars with underscores, truncate to 63 chars
+            sanitized = re.sub(r'[^a-z0-9_-]', '_', str(value).lower())
+            # Ensure it starts with a letter or number
+            if sanitized and not sanitized[0].isalnum():
+                sanitized = 'v' + sanitized
+            return sanitized[:63]
+
+        # Labels for tracking (values must be strings, max 63 chars, lowercase alphanumeric only)
         labels = {
-            'training_run_id': str(training_run.id),
-            'model_endpoint_id': str(self.ml_model.id),
-            'model_type': training_run.model_type,
-            'is_blessed': str(training_run.is_blessed).lower() if training_run.is_blessed is not None else 'unknown',
+            'training_run_id': sanitize_label(training_run.id),
+            'model_endpoint_id': sanitize_label(self.ml_model.id),
+            'model_type': sanitize_label(training_run.model_type) if training_run.model_type else 'unknown',
+            'is_blessed': sanitize_label(training_run.is_blessed) if training_run.is_blessed is not None else 'unknown',
         }
 
         # Add metrics as labels (truncated to 63 chars)
         if training_run.recall_at_100:
-            labels['recall_at_100'] = f"{training_run.recall_at_100:.4f}"
+            labels['recall_at_100'] = sanitize_label(f"{training_run.recall_at_100:.4f}")
         if training_run.loss:
-            labels['loss'] = f"{training_run.loss:.4f}"
+            labels['loss'] = sanitize_label(f"{training_run.loss:.4f}")
 
         try:
             from google.cloud import aiplatform
@@ -1418,6 +1457,59 @@ class TrainingService:
             logger.exception(f"Error force-pushing model: {e}")
             raise TrainingServiceError(f"Failed to force-push model: {e}")
 
+    def register_model(self, training_run: TrainingRun) -> TrainingRun:
+        """
+        Register or re-register a completed training run's model to Vertex AI Model Registry.
+
+        This is for completed runs that either failed initial automatic registration
+        (e.g., due to invalid container image) or need re-registration.
+
+        Args:
+            training_run: TrainingRun instance with STATUS_COMPLETED
+
+        Returns:
+            Updated TrainingRun instance
+
+        Raises:
+            TrainingServiceError: If training run is not in completed state or registration fails
+        """
+        if training_run.status != TrainingRun.STATUS_COMPLETED:
+            raise TrainingServiceError(
+                f"Cannot register model for training run in '{training_run.status}' state. "
+                "Only completed training runs can be registered."
+            )
+
+        # Check if already registered
+        if training_run.vertex_model_resource_name:
+            raise TrainingServiceError(
+                f"Training run is already registered as {training_run.vertex_model_name}. "
+                "Cannot re-register an already registered model."
+            )
+
+        try:
+            # Call the internal registration method
+            self._register_to_model_registry(training_run)
+
+            # Reload to get updated fields
+            training_run.refresh_from_db()
+
+            if not training_run.vertex_model_resource_name:
+                raise TrainingServiceError(
+                    "Registration failed - model was not registered to Vertex AI Model Registry"
+                )
+
+            logger.info(
+                f"Registered {training_run.display_name} to Model Registry as {training_run.vertex_model_name}"
+            )
+
+            return training_run
+
+        except TrainingServiceError:
+            raise
+        except Exception as e:
+            logger.exception(f"Error registering model: {e}")
+            raise TrainingServiceError(f"Failed to register model: {e}")
+
     def _get_retrieval_algorithm(self, training_run: TrainingRun) -> str:
         """
         Get the retrieval algorithm for a training run.
@@ -1470,7 +1562,7 @@ class TrainingService:
             raise TrainingServiceError("No GCS artifacts path found for this training run")
 
         # Build service name (must be lowercase, alphanumeric, and hyphens only)
-        service_name = f"{self.ml_model.slug}-serving".lower().replace('_', '-')
+        service_name = f"{self.ml_model.name}-serving".lower().replace('_', '-')
         # Ensure name is valid (max 63 chars, starts with letter)
         service_name = service_name[:63]
         if not service_name[0].isalpha():

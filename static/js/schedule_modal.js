@@ -84,28 +84,21 @@ const ScheduleModal = (function() {
         return div.innerHTML;
     }
 
+    // Use the TrainingCards modal for consistent UI
     function showToast(message, type = 'success') {
-        const toast = document.createElement('div');
-        toast.className = `toast toast-${type}`;
-        toast.style.cssText = `
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            padding: 12px 20px;
-            border-radius: 8px;
-            color: white;
-            font-size: 14px;
-            z-index: 10001;
-            animation: slideIn 0.3s ease;
-            background-color: ${type === 'success' ? '#16a34a' : type === 'error' ? '#dc2626' : '#3b82f6'};
-        `;
-        toast.textContent = message;
-        document.body.appendChild(toast);
-
-        setTimeout(() => {
-            toast.style.animation = 'slideOut 0.3s ease';
-            setTimeout(() => toast.remove(), 300);
-        }, 3000);
+        if (typeof TrainingCards !== 'undefined' && TrainingCards.showConfirmModal) {
+            TrainingCards.showConfirmModal({
+                title: type === 'success' ? 'Success' : 'Error',
+                message: message,
+                type: type === 'success' ? 'success' : 'danger',
+                confirmText: 'Close',
+                hideCancel: true,
+                autoClose: type === 'success' ? 4000 : 0,
+                onConfirm: () => {}
+            });
+        } else {
+            alert(message);
+        }
     }
 
     // =============================================================================

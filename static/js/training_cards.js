@@ -62,7 +62,8 @@ const TrainingCards = (function() {
             hasPrev: false
         },
         pollInterval: null,
-        isLoading: false
+        isLoading: false,
+        autoCloseTimer: null
     };
 
     // Status configuration
@@ -180,28 +181,42 @@ const TrainingCards = (function() {
         });
     }
 
-    function showToast(message, type = 'success') {
-        const toast = document.createElement('div');
-        toast.className = `toast toast-${type}`;
-        toast.style.cssText = `
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            padding: 12px 20px;
-            border-radius: 8px;
-            color: white;
-            font-size: 14px;
-            z-index: 10000;
-            animation: slideIn 0.3s ease;
-            background-color: ${type === 'success' ? '#16a34a' : '#dc2626'};
-        `;
-        toast.textContent = message;
-        document.body.appendChild(toast);
+    /**
+     * Show a success notification modal that auto-closes after 4 seconds.
+     */
+    function showSuccessModal(message) {
+        showConfirmModal({
+            title: 'Success',
+            message: message,
+            type: 'success',
+            confirmText: 'Close',
+            hideCancel: true,
+            autoClose: 4000,
+            onConfirm: () => {}
+        });
+    }
 
-        setTimeout(() => {
-            toast.style.animation = 'slideOut 0.3s ease';
-            setTimeout(() => toast.remove(), 300);
-        }, 3000);
+    /**
+     * Show an error notification modal.
+     */
+    function showErrorModal(message) {
+        showConfirmModal({
+            title: 'Error',
+            message: message,
+            type: 'danger',
+            confirmText: 'Close',
+            hideCancel: true,
+            onConfirm: () => {}
+        });
+    }
+
+    // Legacy showToast function - redirects to modal
+    function showToast(message, type = 'success') {
+        if (type === 'success') {
+            showSuccessModal(message);
+        } else {
+            showErrorModal(message);
+        }
     }
 
     /**
@@ -214,6 +229,8 @@ const TrainingCards = (function() {
      * @param {string} options.type - Modal type: 'warning', 'danger', 'info', 'success'
      * @param {string} options.confirmButtonClass - Custom class for confirm button
      * @param {string} options.cancelButtonClass - Custom class for cancel button
+     * @param {boolean} options.hideCancel - Hide the cancel button (for notifications)
+     * @param {number} options.autoClose - Auto-close modal after N milliseconds
      * @param {Function} options.onConfirm - Callback when confirmed
      * @param {Function} options.onCancel - Callback when cancelled (optional)
      */
@@ -277,6 +294,13 @@ const TrainingCards = (function() {
         // Set cancel button class (default: btn-neu-secondary for grey neutral button)
         cancelBtn.className = `${baseClasses} ${options.cancelButtonClass || 'btn-neu-secondary'}`;
 
+        // Hide cancel button if requested (for notification modals)
+        if (options.hideCancel) {
+            cancelBtn.style.display = 'none';
+        } else {
+            cancelBtn.style.display = '';
+        }
+
         // Remove old event listeners by cloning
         const newConfirmBtn = confirmBtn.cloneNode(true);
         const newCancelBtn = cancelBtn.cloneNode(true);
@@ -315,11 +339,28 @@ const TrainingCards = (function() {
             }
         }
         document.addEventListener('keydown', escapeHandler);
+
+        // Auto-close after specified time if requested
+        if (options.autoClose && options.autoClose > 0) {
+            // Clear any existing timer
+            if (state.autoCloseTimer) {
+                clearTimeout(state.autoCloseTimer);
+            }
+            state.autoCloseTimer = setTimeout(() => {
+                hideConfirmModal();
+                if (options.onConfirm) options.onConfirm();
+            }, options.autoClose);
+        }
     }
 
     function hideConfirmModal() {
         const modal = document.getElementById('confirmModal');
         modal.classList.add('hidden');
+        // Clear auto-close timer if any
+        if (state.autoCloseTimer) {
+            clearTimeout(state.autoCloseTimer);
+            state.autoCloseTimer = null;
+        }
     }
 
     // =============================================================================
@@ -1583,28 +1624,21 @@ const TrainingSchedules = (function() {
         return '';
     }
 
+    // Use the TrainingCards modal for consistent UI
     function showToast(message, type = 'success') {
-        const toast = document.createElement('div');
-        toast.className = `toast toast-${type}`;
-        toast.style.cssText = `
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            padding: 12px 20px;
-            border-radius: 8px;
-            color: white;
-            font-size: 14px;
-            z-index: 10000;
-            animation: slideIn 0.3s ease;
-            background-color: ${type === 'success' ? '#16a34a' : type === 'error' ? '#dc2626' : '#3b82f6'};
-        `;
-        toast.textContent = message;
-        document.body.appendChild(toast);
-
-        setTimeout(() => {
-            toast.style.animation = 'slideOut 0.3s ease';
-            setTimeout(() => toast.remove(), 300);
-        }, 3000);
+        if (typeof TrainingCards !== 'undefined' && TrainingCards.showConfirmModal) {
+            TrainingCards.showConfirmModal({
+                title: type === 'success' ? 'Success' : 'Error',
+                message: message,
+                type: type === 'success' ? 'success' : 'danger',
+                confirmText: 'Close',
+                hideCancel: true,
+                autoClose: type === 'success' ? 4000 : 0,
+                onConfirm: () => {}
+            });
+        } else {
+            alert(message);
+        }
     }
 
     // =============================================================================

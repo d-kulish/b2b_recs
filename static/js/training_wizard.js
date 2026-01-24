@@ -141,29 +141,45 @@ const TrainingWizard = (function() {
         return val.toFixed(3);
     }
 
-    function showToast(message, type = 'success') {
-        // Simple toast implementation - can be enhanced later
-        const toast = document.createElement('div');
-        toast.className = `toast toast-${type}`;
-        toast.style.cssText = `
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            padding: 12px 20px;
-            border-radius: 8px;
-            color: white;
-            font-size: 14px;
-            z-index: 1000;
-            animation: slideIn 0.3s ease;
-            background-color: ${type === 'success' ? '#16a34a' : '#dc2626'};
-        `;
-        toast.textContent = message;
-        document.body.appendChild(toast);
+    /**
+     * Show a success notification modal that auto-closes after 4 seconds.
+     * Uses the shared confirmation modal from TrainingCards.
+     */
+    function showSuccessModal(message) {
+        if (typeof TrainingCards !== 'undefined' && TrainingCards.showConfirmModal) {
+            TrainingCards.showConfirmModal({
+                title: 'Success',
+                message: message,
+                type: 'success',
+                confirmText: 'Close',
+                hideCancel: true,
+                autoClose: 4000,
+                onConfirm: () => {}
+            });
+        } else {
+            // Fallback to alert if TrainingCards not available
+            alert(message);
+        }
+    }
 
-        setTimeout(() => {
-            toast.style.animation = 'slideOut 0.3s ease';
-            setTimeout(() => toast.remove(), 300);
-        }, 3000);
+    /**
+     * Show an error notification modal.
+     * Uses the shared confirmation modal from TrainingCards.
+     */
+    function showErrorModal(message) {
+        if (typeof TrainingCards !== 'undefined' && TrainingCards.showConfirmModal) {
+            TrainingCards.showConfirmModal({
+                title: 'Error',
+                message: message,
+                type: 'danger',
+                confirmText: 'Close',
+                hideCancel: true,
+                onConfirm: () => {}
+            });
+        } else {
+            // Fallback to alert if TrainingCards not available
+            alert(message);
+        }
     }
 
     /**
@@ -371,11 +387,11 @@ const TrainingWizard = (function() {
                 // Mark step 1 as valid since we're loading existing config
                 state.validation.step1 = true;
             } else {
-                showToast(data.error || 'Failed to load training run config', 'error');
+                showErrorModal(data.error || 'Failed to load training run config');
             }
         } catch (error) {
             console.error('Failed to load training run config:', error);
-            showToast('Failed to load training run config', 'error');
+            showErrorModal('Failed to load training run config');
         }
     }
 
@@ -1338,7 +1354,7 @@ const TrainingWizard = (function() {
             submitBtn.disabled = true;
             const btnInner = submitBtn.querySelector('.btn-neu-inner');
             if (btnInner) {
-                btnInner.innerHTML = '<i class="fas fa-spinner fa-spin"></i> ' + (isScheduled ? 'Scheduling...' : 'Submitting...');
+                btnInner.innerHTML = '<i class="fas fa-spinner fa-spin"></i> ' + (isScheduled ? 'Schedule' : 'Run');
             }
         }
 
@@ -1364,9 +1380,9 @@ const TrainingWizard = (function() {
                 close();
 
                 if (isScheduled) {
-                    showToast('Training scheduled successfully!', 'success');
+                    showSuccessModal('Training scheduled successfully!');
                 } else {
-                    showToast('Training run created successfully!', 'success');
+                    showSuccessModal('Training run created successfully!');
                 }
 
                 // Call completion callback
@@ -1380,11 +1396,11 @@ const TrainingWizard = (function() {
                 }
             } else {
                 // Error
-                showToast(data.error || 'Failed to create training', 'error');
+                showErrorModal(data.error || 'Failed to create training');
             }
         } catch (error) {
             console.error('Submit failed:', error);
-            showToast('Failed to create training', 'error');
+            showErrorModal('Failed to create training');
         } finally {
             if (submitBtn) {
                 submitBtn.disabled = false;
@@ -1410,7 +1426,7 @@ const TrainingWizard = (function() {
             submitBtn.disabled = true;
             const btnInner = submitBtn.querySelector('.btn-neu-inner');
             if (btnInner) {
-                btnInner.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+                btnInner.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Save';
             }
         }
 
@@ -1430,7 +1446,7 @@ const TrainingWizard = (function() {
             const data = await response.json();
 
             if (data.success) {
-                showToast('Configuration saved successfully!', 'success');
+                showSuccessModal('Configuration saved successfully!');
                 close();
 
                 // Call completion callback to refresh the training runs list
@@ -1438,11 +1454,11 @@ const TrainingWizard = (function() {
                     config.onComplete();
                 }
             } else {
-                showToast(data.error || 'Failed to save configuration', 'error');
+                showErrorModal(data.error || 'Failed to save configuration');
             }
         } catch (error) {
             console.error('Edit submit failed:', error);
-            showToast('Failed to save configuration', 'error');
+            showErrorModal('Failed to save configuration');
         } finally {
             if (submitBtn) {
                 submitBtn.disabled = false;

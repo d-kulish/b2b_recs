@@ -670,37 +670,24 @@ const ModelsRegistry = (function() {
     }
 
     // =============================================================================
-    // TOAST NOTIFICATIONS
+    // NOTIFICATIONS
     // =============================================================================
 
+    // Use the TrainingCards modal for consistent UI
     function showToast(message, type = 'info') {
-        // Use existing toast if available, otherwise create simple one
-        if (typeof Toast !== 'undefined') {
-            Toast.show(message, type);
-            return;
+        if (typeof TrainingCards !== 'undefined' && TrainingCards.showConfirmModal) {
+            TrainingCards.showConfirmModal({
+                title: type === 'success' ? 'Success' : type === 'error' ? 'Error' : 'Info',
+                message: message,
+                type: type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info',
+                confirmText: 'Close',
+                hideCancel: true,
+                autoClose: type === 'success' || type === 'info' ? 4000 : 0,
+                onConfirm: () => {}
+            });
+        } else {
+            alert(message);
         }
-
-        const toast = document.createElement('div');
-        toast.style.cssText = `
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            padding: 12px 20px;
-            background: ${type === 'success' ? '#10b981' : type === 'error' ? '#ef4444' : '#3b82f6'};
-            color: white;
-            border-radius: 8px;
-            font-size: 14px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            z-index: 10000;
-            animation: slideIn 0.3s ease;
-        `;
-        toast.textContent = message;
-        document.body.appendChild(toast);
-
-        setTimeout(() => {
-            toast.style.animation = 'slideOut 0.3s ease';
-            setTimeout(() => toast.remove(), 300);
-        }, 3000);
     }
 
     // =============================================================================

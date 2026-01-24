@@ -1016,27 +1016,18 @@ const ExpViewModal = (function() {
         if (typeof ScheduleModal !== 'undefined') {
             ScheduleModal.configure({
                 onSuccess: function(schedule) {
-                    // Show success toast
-                    const toast = document.createElement('div');
-                    toast.className = 'toast toast-success';
-                    toast.style.cssText = `
-                        position: fixed;
-                        bottom: 20px;
-                        right: 20px;
-                        padding: 12px 20px;
-                        border-radius: 8px;
-                        color: white;
-                        font-size: 14px;
-                        z-index: 10001;
-                        animation: slideIn 0.3s ease;
-                        background-color: #16a34a;
-                    `;
-                    toast.textContent = `Schedule "${schedule.name}" created successfully`;
-                    document.body.appendChild(toast);
-                    setTimeout(() => {
-                        toast.style.animation = 'slideOut 0.3s ease';
-                        setTimeout(() => toast.remove(), 300);
-                    }, 3000);
+                    // Show success modal
+                    if (typeof TrainingCards !== 'undefined' && TrainingCards.showConfirmModal) {
+                        TrainingCards.showConfirmModal({
+                            title: 'Success',
+                            message: `Schedule "${schedule.name}" created successfully`,
+                            type: 'success',
+                            confirmText: 'Close',
+                            hideCancel: true,
+                            autoClose: 4000,
+                            onConfirm: () => {}
+                        });
+                    }
 
                     // Refresh training runs if available
                     if (typeof TrainingCards !== 'undefined') {

@@ -336,6 +336,7 @@ const ModelsRegistry = (function() {
                             <th>Version</th>
                             <th>Metrics</th>
                             <th>Status</th>
+                            <th>Schedule</th>
                             <th>Registered</th>
                             <th>Actions</th>
                         </tr>
@@ -417,6 +418,19 @@ const ModelsRegistry = (function() {
                         ${statusConfig.label}
                     </span>
                 </td>
+                <td>
+                    ${model.has_schedule ? `
+                        <span class="models-schedule-badge ${model.schedule_status === 'active' ? 'active' : 'paused'}">
+                            <i class="fas ${model.schedule_status === 'active' ? 'fa-clock' : 'fa-pause'}"></i>
+                            ${model.schedule_status === 'active' ? 'Scheduled' : 'Paused'}
+                        </span>
+                    ` : `
+                        <span class="models-schedule-badge none">
+                            <i class="fas fa-minus"></i>
+                            None
+                        </span>
+                    `}
+                </td>
                 <td>${formatDate(model.registered_at)}</td>
                 <td onclick="event.stopPropagation();">
                     ${renderActionsDropdown(model)}
@@ -443,6 +457,17 @@ const ModelsRegistry = (function() {
                         Version History
                     </button>
                     <div class="models-actions-menu-divider"></div>
+                    ${!model.has_schedule ? `
+                        <button class="models-actions-menu-item" onclick="ModelsRegistry.createSchedule(${model.id})">
+                            <i class="fas fa-calendar-plus"></i>
+                            Create Schedule
+                        </button>
+                    ` : `
+                        <button class="models-actions-menu-item" onclick="ModelsRegistry.viewSchedule(${model.schedule_id})">
+                            <i class="fas fa-calendar-alt"></i>
+                            View Schedule
+                        </button>
+                    `}
                     ${model.is_blessed && !model.is_deployed ? `
                         <button class="models-actions-menu-item" onclick="ModelsRegistry.deploy(${model.id})">
                             <i class="fas fa-rocket"></i>
@@ -624,6 +649,36 @@ const ModelsRegistry = (function() {
         closeAllDropdowns();
     }
 
+    function createSchedule(modelId) {
+        closeAllDropdowns();
+        // Use ScheduleModal to create a schedule for this model's training run
+        if (typeof ScheduleModal !== 'undefined') {
+            ScheduleModal.configure({
+                onSuccess: function(schedule) {
+                    showToast(`Schedule "${schedule.name}" created successfully`, 'success');
+                    fetchModels();
+                }
+            });
+            ScheduleModal.openForTrainingRun(modelId);
+        } else {
+            showToast('Schedule modal not available', 'error');
+        }
+    }
+
+    function viewSchedule(scheduleId) {
+        closeAllDropdowns();
+        // Navigate to training schedules chapter or open schedule detail modal
+        if (typeof TrainingSchedules !== 'undefined' && TrainingSchedules.viewSchedule) {
+            TrainingSchedules.viewSchedule(scheduleId);
+        } else {
+            // Fallback: scroll to schedules section
+            const schedulesSection = document.querySelector('#trainingSchedulesChapter');
+            if (schedulesSection) {
+                schedulesSection.scrollIntoView({ behavior: 'smooth' });
+            }
+        }
+    }
+
     function openInVertexAI(modelId) {
         const model = state.models.find(m => m.id === modelId);
         if (model && model.vertex_model_resource_name) {
@@ -741,6 +796,8 @@ const ModelsRegistry = (function() {
         undeploy,
         copyArtifactUrl,
         openInVertexAI,
+        createSchedule,
+        viewSchedule,
         nextPage,
         prevPage
     };

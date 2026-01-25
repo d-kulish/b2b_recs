@@ -2,11 +2,156 @@
 Training Domain Models
 
 Defines models for training runs and scheduling on Vertex AI.
+- RegisteredModel: Represents a named model in Vertex AI Model Registry
 - TrainingSchedule: Defines scheduled/recurring training configurations
 - TrainingRun: Tracks individual full-scale training runs
 """
 from django.db import models
 from django.contrib.auth.models import User
+
+
+class RegisteredModel(models.Model):
+    """
+    Represents a named model that can have multiple versions.
+    Each version is a TrainingRun. A schedule attaches to this model.
+
+    Created when:
+    - User creates a training run with a new model name
+    - Schedule triggers create runs linked to the same RegisteredModel
+
+    Updated when:
+    - Training run completes and registers to Vertex AI Model Registry
+    - New version is registered
+    - Model is deployed/undeployed
+    """
+
+    MODEL_TYPE_CHOICES = [
+        ('retrieval', 'Retrieval'),
+        ('ranking', 'Ranking'),
+        ('multitask', 'Multitask'),
+    ]
+
+    # =========================================================================
+    # Relationships
+    # =========================================================================
+    ml_model = models.ForeignKey(
+        'ml_platform.ModelEndpoint',
+        on_delete=models.CASCADE,
+        related_name='registered_models',
+        help_text="Parent model endpoint this registered model belongs to"
+    )
+
+    # =========================================================================
+    # Model Identity
+    # =========================================================================
+    model_name = models.CharField(
+        max_length=255,
+        help_text="Model name (becomes vertex_model_name when registered)"
+    )
+
+    model_type = models.CharField(
+        max_length=20,
+        choices=MODEL_TYPE_CHOICES,
+        default='retrieval',
+        help_text="Type of model (retrieval, ranking, multitask)"
+    )
+
+    description = models.TextField(
+        blank=True,
+        help_text="Optional description of the model"
+    )
+
+    # =========================================================================
+    # Vertex AI State (populated after first registration)
+    # =========================================================================
+    vertex_model_resource_name = models.CharField(
+        max_length=500,
+        blank=True,
+        help_text="Full Vertex AI Model resource name (after first registration)"
+    )
+
+    first_registered_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the first version was registered to Vertex AI"
+    )
+
+    # =========================================================================
+    # Latest Version Cache (for fast lookups)
+    # =========================================================================
+    latest_version_id = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="ID of the latest TrainingRun version"
+    )
+
+    latest_version_number = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Version string of the latest version"
+    )
+
+    total_versions = models.IntegerField(
+        default=0,
+        help_text="Total number of registered versions"
+    )
+
+    # =========================================================================
+    # Deployment Status
+    # =========================================================================
+    is_deployed = models.BooleanField(
+        default=False,
+        help_text="Whether any version of this model is currently deployed"
+    )
+
+    deployed_version_id = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="ID of the currently deployed TrainingRun version"
+    )
+
+    # =========================================================================
+    # Status
+    # =========================================================================
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Whether this model is active (not archived)"
+    )
+
+    # =========================================================================
+    # User & Timestamps
+    # =========================================================================
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_registered_models',
+        help_text="User who created this model entry"
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        app_label = 'training'
+        ordering = ['-created_at']
+        unique_together = ['ml_model', 'model_name']
+        verbose_name = 'Registered Model'
+        verbose_name_plural = 'Registered Models'
+
+    def __str__(self):
+        return f"RegisteredModel '{self.model_name}' ({self.model_type})"
+
+    @property
+    def has_schedule(self):
+        """Check if this model has an associated schedule."""
+        return hasattr(self, 'schedule') and self.schedule is not None
+
+    @property
+    def is_registered(self):
+        """Check if this model has been registered to Vertex AI."""
+        return bool(self.vertex_model_resource_name)
 
 
 class TrainingSchedule(models.Model):
@@ -90,6 +235,15 @@ class TrainingSchedule(models.Model):
         blank=True,
         related_name='training_schedules',
         help_text="Base experiment this schedule was created from"
+    )
+
+    registered_model = models.OneToOneField(
+        'RegisteredModel',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='schedule',
+        help_text="Registered model this schedule creates versions for"
     )
 
     created_by = models.ForeignKey(
@@ -359,6 +513,15 @@ class TrainingRun(models.Model):
         blank=True,
         related_name='training_runs',
         help_text="Schedule that triggered this run (null for manual runs)"
+    )
+
+    registered_model = models.ForeignKey(
+        'RegisteredModel',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='versions',
+        help_text="Registered model this run is a version of"
     )
 
     # =========================================================================

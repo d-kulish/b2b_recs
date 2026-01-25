@@ -167,11 +167,17 @@ class TrainingScheduleService:
 
         training_service = TrainingService(schedule.ml_model)
 
+        # Get model name from RegisteredModel if available, otherwise from schedule name
+        if schedule.registered_model:
+            model_name = schedule.registered_model.model_name
+        else:
+            model_name = schedule.name
+
         # Create training run from schedule config
         run_timestamp = timezone.now().strftime('%Y%m%d-%H%M')
         training_run = TrainingRun.objects.create(
             ml_model=schedule.ml_model,
-            name=f"{schedule.name}-{run_timestamp}",
+            name=model_name,
             description=f"Scheduled run from '{schedule.name}'",
             dataset=schedule.dataset,
             feature_config=schedule.feature_config,
@@ -183,6 +189,7 @@ class TrainingScheduleService:
             deployment_config=schedule.deployment_config,
             created_by=schedule.created_by,
             schedule=schedule,
+            registered_model=schedule.registered_model,
             status=TrainingRun.STATUS_PENDING,
         )
 

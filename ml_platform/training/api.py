@@ -11,8 +11,9 @@ from django.views.decorators.http import require_http_methods
 from django.db import transaction
 from django.utils import timezone
 
-from .models import TrainingRun, TrainingSchedule
+from .models import TrainingRun, TrainingSchedule, RegisteredModel
 from .services import TrainingService, TrainingServiceError
+from .registered_model_service import RegisteredModelService
 
 logger = logging.getLogger(__name__)
 
@@ -1996,6 +1997,10 @@ def _serialize_training_schedule(schedule, include_runs=False):
         'model_config_name': schedule.model_config.name if schedule.model_config else None,
         'base_experiment_id': schedule.base_experiment_id,
 
+        # RegisteredModel info
+        'registered_model_id': schedule.registered_model_id,
+        'registered_model_name': schedule.registered_model.model_name if schedule.registered_model else None,
+
         # Status
         'status': schedule.status,
         'status_display': schedule.get_status_display(),
@@ -2946,6 +2951,34 @@ def training_schedule_from_run(request):
             else:
                 schedule_time = dt_time(9, 0)  # Default to 9 AM
 
+        # Get or create RegisteredModel for the source run's model name
+        reg_model_service = RegisteredModelService(model_endpoint)
+
+        # Use source run's name (or vertex_model_name if registered)
+        model_name = source_run.vertex_model_name or source_run.name
+
+        # Check if model already has a schedule
+        name_check = reg_model_service.check_name_available(model_name)
+        if name_check['has_schedule']:
+            return JsonResponse({
+                'success': False,
+                'error': f"Model '{model_name}' already has a schedule (ID: {name_check['schedule_id']}). "
+                         "Each model can only have one schedule."
+            }, status=400)
+
+        # Get or create the RegisteredModel
+        registered_model = reg_model_service.get_or_create_for_training(
+            model_name=model_name,
+            model_type=source_run.model_type,
+            description=source_run.description or '',
+            created_by=request.user if request.user.is_authenticated else None,
+        )
+
+        # Link source run to RegisteredModel if not already linked
+        if not source_run.registered_model:
+            source_run.registered_model = registered_model
+            source_run.save(update_fields=['registered_model'])
+
         # Create the schedule, inheriting config from source training run
         schedule = TrainingSchedule.objects.create(
             ml_model=model_endpoint,
@@ -2968,6 +3001,8 @@ def training_schedule_from_run(request):
             deployment_config=source_run.deployment_config or {},
             created_by=request.user if request.user.is_authenticated else None,
             status=TrainingSchedule.STATUS_ACTIVE,
+            # Link to RegisteredModel
+            registered_model=registered_model,
         )
 
         # Create Cloud Scheduler job
@@ -3088,6 +3123,12 @@ def _serialize_registered_model(training_run, include_details=False):
         # Training info
         'base_experiment_number': training_run.base_experiment.experiment_number if training_run.base_experiment else None,
         'created_by': training_run.created_by.username if training_run.created_by else None,
+
+        # RegisteredModel and Schedule info
+        'registered_model_id': training_run.registered_model_id,
+        'has_schedule': training_run.registered_model.has_schedule if training_run.registered_model else False,
+        'schedule_id': training_run.registered_model.schedule.id if (training_run.registered_model and training_run.registered_model.has_schedule) else None,
+        'schedule_status': training_run.registered_model.schedule.status if (training_run.registered_model and training_run.registered_model.has_schedule) else None,
     }
 
     if include_details:
@@ -3100,6 +3141,331 @@ def _serialize_registered_model(training_run, include_details=False):
         data['gcs_artifacts_path'] = training_run.gcs_artifacts_path
 
     return data
+
+
+# =============================================================================
+# RegisteredModel API Endpoints
+# =============================================================================
+
+def _serialize_registered_model_entity(registered_model, include_details=False):
+    """
+    Serialize a RegisteredModel entity to dict.
+
+    Args:
+        registered_model: RegisteredModel model instance
+        include_details: If True, include schedule info and version list
+
+    Returns:
+        Dict representation of the registered model entity
+    """
+    # Determine model status
+    if registered_model.is_deployed:
+        model_status = 'deployed'
+    elif registered_model.is_registered:
+        model_status = 'registered'
+    else:
+        model_status = 'pending'
+
+    data = {
+        'id': registered_model.id,
+        'model_name': registered_model.model_name,
+        'model_type': registered_model.model_type,
+        'description': registered_model.description,
+        'status': model_status,
+
+        # Vertex AI state
+        'vertex_model_resource_name': registered_model.vertex_model_resource_name,
+        'is_registered': registered_model.is_registered,
+        'first_registered_at': registered_model.first_registered_at.isoformat() if registered_model.first_registered_at else None,
+
+        # Version info
+        'latest_version_id': registered_model.latest_version_id,
+        'latest_version_number': registered_model.latest_version_number,
+        'total_versions': registered_model.total_versions,
+
+        # Deployment
+        'is_deployed': registered_model.is_deployed,
+        'deployed_version_id': registered_model.deployed_version_id,
+
+        # Schedule info
+        'has_schedule': registered_model.has_schedule,
+        'schedule_id': registered_model.schedule.id if registered_model.has_schedule else None,
+        'schedule_status': registered_model.schedule.status if registered_model.has_schedule else None,
+
+        # Metadata
+        'is_active': registered_model.is_active,
+        'created_by': registered_model.created_by.username if registered_model.created_by else None,
+        'created_at': registered_model.created_at.isoformat() if registered_model.created_at else None,
+        'updated_at': registered_model.updated_at.isoformat() if registered_model.updated_at else None,
+    }
+
+    if include_details and registered_model.has_schedule:
+        schedule = registered_model.schedule
+        data['schedule'] = {
+            'id': schedule.id,
+            'name': schedule.name,
+            'schedule_type': schedule.schedule_type,
+            'status': schedule.status,
+            'next_run_at': schedule.next_run_at.isoformat() if schedule.next_run_at else None,
+            'last_run_at': schedule.last_run_at.isoformat() if schedule.last_run_at else None,
+            'total_runs': schedule.total_runs,
+            'successful_runs': schedule.successful_runs,
+        }
+
+    return data
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def registered_models_list(request):
+    """
+    List RegisteredModel entities.
+
+    GET /api/registered-models/
+    GET /api/registered-models/?model_type=retrieval
+    GET /api/registered-models/?has_schedule=true
+    GET /api/registered-models/?search=product
+
+    Returns RegisteredModel entities with schedule info.
+    """
+    try:
+        model_endpoint = _get_model_endpoint(request)
+        if not model_endpoint:
+            return JsonResponse({
+                'success': False,
+                'error': 'No model endpoint selected'
+            }, status=400)
+
+        from django.db.models import Q
+
+        queryset = RegisteredModel.objects.filter(
+            ml_model=model_endpoint,
+            is_active=True
+        ).select_related('created_by', 'schedule')
+
+        # Apply filters
+        model_type = request.GET.get('model_type')
+        if model_type and model_type != 'all':
+            queryset = queryset.filter(model_type=model_type)
+
+        has_schedule = request.GET.get('has_schedule')
+        if has_schedule == 'true':
+            queryset = queryset.filter(schedule__isnull=False)
+        elif has_schedule == 'false':
+            queryset = queryset.filter(schedule__isnull=True)
+
+        is_registered = request.GET.get('is_registered')
+        if is_registered == 'true':
+            queryset = queryset.exclude(vertex_model_resource_name='')
+        elif is_registered == 'false':
+            queryset = queryset.filter(vertex_model_resource_name='')
+
+        # Search filter
+        search = request.GET.get('search', '').strip()
+        if search:
+            queryset = queryset.filter(
+                Q(model_name__icontains=search) |
+                Q(description__icontains=search)
+            )
+
+        # Sorting
+        sort = request.GET.get('sort', 'latest')
+        if sort == 'oldest':
+            queryset = queryset.order_by('created_at')
+        elif sort == 'name':
+            queryset = queryset.order_by('model_name')
+        elif sort == 'versions':
+            queryset = queryset.order_by('-total_versions', '-created_at')
+        else:  # Default: latest
+            queryset = queryset.order_by('-created_at')
+
+        # Pagination
+        try:
+            page = int(request.GET.get('page', 1))
+            page_size = int(request.GET.get('page_size', 20))
+        except ValueError:
+            page = 1
+            page_size = 20
+
+        page = max(1, page)
+        page_size = max(1, min(50, page_size))
+
+        total_count = queryset.count()
+        total_pages = (total_count + page_size - 1) // page_size if total_count > 0 else 1
+        page = min(page, total_pages)
+
+        start_idx = (page - 1) * page_size
+        end_idx = start_idx + page_size
+
+        registered_models = list(queryset[start_idx:end_idx])
+
+        # Calculate KPIs
+        all_models = RegisteredModel.objects.filter(ml_model=model_endpoint, is_active=True)
+        kpi = {
+            'total': all_models.count(),
+            'registered': all_models.exclude(vertex_model_resource_name='').count(),
+            'with_schedule': all_models.filter(schedule__isnull=False).count(),
+            'deployed': all_models.filter(is_deployed=True).count(),
+        }
+
+        return JsonResponse({
+            'success': True,
+            'registered_models': [_serialize_registered_model_entity(rm) for rm in registered_models],
+            'kpi': kpi,
+            'pagination': {
+                'page': page,
+                'page_size': page_size,
+                'total_count': total_count,
+                'total_pages': total_pages,
+                'has_next': page < total_pages,
+                'has_prev': page > 1
+            }
+        })
+
+    except Exception as e:
+        logger.exception(f"Error listing registered models: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def registered_model_detail(request, registered_model_id):
+    """
+    Get RegisteredModel details.
+
+    GET /api/registered-models/<id>/
+    """
+    try:
+        model_endpoint = _get_model_endpoint(request)
+        if not model_endpoint:
+            return JsonResponse({
+                'success': False,
+                'error': 'No model endpoint selected'
+            }, status=400)
+
+        try:
+            registered_model = RegisteredModel.objects.select_related(
+                'created_by', 'schedule'
+            ).get(
+                id=registered_model_id,
+                ml_model=model_endpoint
+            )
+        except RegisteredModel.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': f'RegisteredModel {registered_model_id} not found'
+            }, status=404)
+
+        return JsonResponse({
+            'success': True,
+            'registered_model': _serialize_registered_model_entity(registered_model, include_details=True)
+        })
+
+    except Exception as e:
+        logger.exception(f"Error getting registered model detail: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def registered_model_versions(request, registered_model_id):
+    """
+    List all versions (TrainingRuns) for a RegisteredModel.
+
+    GET /api/registered-models/<id>/versions/
+    """
+    try:
+        model_endpoint = _get_model_endpoint(request)
+        if not model_endpoint:
+            return JsonResponse({
+                'success': False,
+                'error': 'No model endpoint selected'
+            }, status=400)
+
+        try:
+            registered_model = RegisteredModel.objects.get(
+                id=registered_model_id,
+                ml_model=model_endpoint
+            )
+        except RegisteredModel.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': f'RegisteredModel {registered_model_id} not found'
+            }, status=404)
+
+        # Get all versions (TrainingRuns linked to this RegisteredModel)
+        versions = TrainingRun.objects.filter(
+            registered_model=registered_model
+        ).select_related(
+            'dataset', 'feature_config', 'model_config', 'created_by'
+        ).order_by('-registered_at', '-created_at')
+
+        return JsonResponse({
+            'success': True,
+            'registered_model': _serialize_registered_model_entity(registered_model),
+            'versions': [_serialize_training_run(v) for v in versions]
+        })
+
+    except Exception as e:
+        logger.exception(f"Error getting registered model versions: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def registered_model_check_name(request):
+    """
+    Check if a model name is available or already exists.
+
+    GET /api/registered-models/check-name/?name=my-model
+
+    Returns:
+    {
+        "success": true,
+        "exists": true/false,
+        "registered_model_id": 123 or null,
+        "has_schedule": true/false,
+        "schedule_id": 456 or null
+    }
+    """
+    try:
+        model_endpoint = _get_model_endpoint(request)
+        if not model_endpoint:
+            return JsonResponse({
+                'success': False,
+                'error': 'No model endpoint selected'
+            }, status=400)
+
+        name = request.GET.get('name', '').strip()
+        if not name:
+            return JsonResponse({
+                'success': False,
+                'error': 'name parameter is required'
+            }, status=400)
+
+        service = RegisteredModelService(model_endpoint)
+        result = service.check_name_available(name)
+
+        return JsonResponse({
+            'success': True,
+            **result
+        })
+
+    except Exception as e:
+        logger.exception(f"Error checking registered model name: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
 
 
 @csrf_exempt
@@ -3173,7 +3539,7 @@ def models_list(request):
         # Step 2: Query those IDs with user's desired sort order
         queryset = TrainingRun.objects.filter(
             id__in=list(latest_ids)
-        ).select_related('dataset', 'feature_config', 'model_config', 'created_by', 'base_experiment')
+        ).select_related('dataset', 'feature_config', 'model_config', 'created_by', 'base_experiment', 'registered_model', 'registered_model__schedule')
 
         # Apply user sorting
         sort = request.GET.get('sort', 'latest')

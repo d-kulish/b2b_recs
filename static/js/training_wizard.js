@@ -103,7 +103,8 @@ const TrainingWizard = (function() {
         searchTimeout: null,
         bestExperimentId: null,  // Track the actual best experiment ID for the current model type
         nameCheckTimeout: null,  // Debounce timeout for name uniqueness check
-        nameAvailable: null      // null = not checked, true = available, false = taken
+        nameAvailable: null,     // null = not checked, true = available, false = taken
+        modelHasSchedule: false  // Whether the RegisteredModel already has a schedule
     };
 
     // =============================================================================
@@ -184,11 +185,13 @@ const TrainingWizard = (function() {
 
     /**
      * Check if a training run name is available (unique).
+     * Also checks if an existing RegisteredModel with this name already has a schedule.
      * Shows visual feedback on the input field.
      */
     async function checkNameAvailability(name) {
         const nameInput = document.getElementById('wizardRunName');
         const nameError = document.getElementById('wizardRunNameError');
+        const scheduleWarning = document.getElementById('wizardScheduleWarning');
 
         // Reset state
         state.nameAvailable = null;
@@ -206,18 +209,53 @@ const TrainingWizard = (function() {
         // Debounce API call
         state.nameCheckTimeout = setTimeout(async () => {
             try {
-                const response = await fetch(`/api/training-runs/check-name/?name=${encodeURIComponent(name)}`);
-                const data = await response.json();
+                // First check the RegisteredModel API for schedule info
+                const regModelResponse = await fetch(`/api/registered-models/check-name/?name=${encodeURIComponent(name)}`);
+                const regModelData = await regModelResponse.json();
 
-                if (data.success) {
-                    state.nameAvailable = data.available;
-
-                    if (!data.available) {
-                        showFieldError(nameInput, nameError, 'This name already exists. Please choose a unique name.');
-                    } else {
-                        // Only hide error if it was showing the "already exists" message
-                        if (nameError && nameError.textContent.includes('already exists')) {
+                if (regModelData.success) {
+                    if (regModelData.exists) {
+                        // Model exists - check if it has a schedule
+                        if (regModelData.has_schedule) {
+                            // Show warning that model already has a schedule
+                            state.nameAvailable = true;  // Name is valid for creating a new version
+                            state.modelHasSchedule = true;  // Track that model has schedule
+                            if (scheduleWarning) {
+                                scheduleWarning.innerHTML = `
+                                    <i class="fas fa-exclamation-triangle"></i>
+                                    This model already has a schedule. You cannot create a new schedule for it.
+                                `;
+                                scheduleWarning.classList.add('show');
+                            }
                             hideFieldError(nameInput, nameError);
+                            // Force schedule type to 'now' since model already has schedule
+                            state.formData.scheduleConfig.type = 'now';
+                        } else {
+                            // Model exists but no schedule - this is fine
+                            state.nameAvailable = true;
+                            state.modelHasSchedule = false;
+                            if (scheduleWarning) {
+                                scheduleWarning.classList.remove('show');
+                            }
+                            hideFieldError(nameInput, nameError);
+                        }
+                    } else {
+                        // New model name - check training runs as fallback
+                        state.modelHasSchedule = false;  // New model has no schedule
+                        const response = await fetch(`/api/training-runs/check-name/?name=${encodeURIComponent(name)}`);
+                        const data = await response.json();
+
+                        if (data.success) {
+                            state.nameAvailable = data.available;
+
+                            if (!data.available) {
+                                showFieldError(nameInput, nameError, 'This name already exists. Please choose a unique name.');
+                            } else {
+                                hideFieldError(nameInput, nameError);
+                            }
+                        }
+                        if (scheduleWarning) {
+                            scheduleWarning.classList.remove('show');
                         }
                     }
                 }
@@ -450,6 +488,7 @@ const TrainingWizard = (function() {
         state.bestExperimentId = null;
         state.nameCheckTimeout = null;
         state.nameAvailable = null;
+        state.modelHasSchedule = false;
     }
 
     // =============================================================================

@@ -164,9 +164,106 @@ const ScheduleModal = (function() {
         // Initialize pickers
         initializePickers();
 
-        // For model mode, we need to get the model's source training run
-        // For now, show a placeholder
-        document.getElementById('scheduleModelName').textContent = `Model ID: ${modelId}`;
+        // Load the registered model details and its latest training run
+        await loadRegisteredModelData(modelId);
+    }
+
+    /**
+     * Open modal for a RegisteredModel entity.
+     * This is the new way to create schedules for models that already exist.
+     */
+    async function openForRegisteredModel(registeredModelId) {
+        state.mode = 'registered_model';
+        state.sourceId = registeredModelId;
+
+        // Reset state
+        resetState();
+
+        // Show modal
+        const modal = document.getElementById('scheduleModal');
+        modal.classList.remove('hidden');
+
+        // Update subtitle
+        document.getElementById('scheduleModalSubtitle').textContent =
+            `Creating retraining schedule`;
+
+        // Initialize pickers
+        initializePickers();
+
+        // Load registered model details
+        await loadRegisteredModelDetails(registeredModelId);
+    }
+
+    async function loadRegisteredModelData(trainingRunId) {
+        // This is called when openForModel is used with a training run ID
+        // (for backward compatibility with ModelsRegistry)
+        try {
+            const response = await fetch(`${config.endpoints.preview}?source_run_id=${trainingRunId}`);
+            const data = await response.json();
+
+            if (!data.success) {
+                console.error('Failed to load preview:', data.error);
+                showToast(data.error || 'Failed to load configuration', 'error');
+                return;
+            }
+
+            state.sourceData = data.preview;
+            state.sourceId = trainingRunId;  // Use training run ID
+
+            // Populate model name
+            const modelName = data.preview.vertex_model_name || '-';
+            document.getElementById('scheduleModelName').textContent = modelName;
+
+            // Auto-generate schedule name suggestion
+            const suggestedName = `${data.preview.vertex_model_name || 'Model'} - Retraining`;
+            document.getElementById('scheduleNameInput').placeholder = suggestedName;
+
+            // Update preview
+            updateNextRunPreview();
+        } catch (error) {
+            console.error('Error loading model data:', error);
+            showToast('Failed to load model data', 'error');
+        }
+    }
+
+    async function loadRegisteredModelDetails(registeredModelId) {
+        try {
+            // Get registered model details
+            const response = await fetch(`/api/registered-models/${registeredModelId}/`);
+            const data = await response.json();
+
+            if (!data.success) {
+                console.error('Failed to load registered model:', data.error);
+                showToast(data.error || 'Failed to load model details', 'error');
+                return;
+            }
+
+            const regModel = data.registered_model;
+
+            // Check if model already has a schedule
+            if (regModel.has_schedule) {
+                showToast('This model already has a schedule', 'error');
+                close();
+                return;
+            }
+
+            // If there's a latest version, use it as the source for preview
+            if (regModel.latest_version_id) {
+                await loadPreviewData(regModel.latest_version_id);
+            } else {
+                // Model has no versions yet - show model name directly
+                document.getElementById('scheduleModelName').textContent = regModel.model_name;
+                document.getElementById('scheduleNameInput').placeholder = `${regModel.model_name} - Retraining`;
+            }
+
+            // Store registered model info for creating schedule
+            state.registeredModelId = registeredModelId;
+            state.registeredModelName = regModel.model_name;
+
+        } catch (error) {
+            console.error('Error loading registered model:', error);
+            showToast('Failed to load model details', 'error');
+        }
     }
 
     function close() {
@@ -607,6 +704,7 @@ const ScheduleModal = (function() {
         configure: configure,
         openForTrainingRun: openForTrainingRun,
         openForModel: openForModel,
+        openForRegisteredModel: openForRegisteredModel,
         close: close,
         handleOverlayClick: handleOverlayClick,
         onScheduleTypeChange: onScheduleTypeChange,

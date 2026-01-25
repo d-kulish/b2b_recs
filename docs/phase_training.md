@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides detailed specifications for implementing the **Training** domain in the ML Platform. The Training domain executes full TFX pipelines for production model training.
 
-**Last Updated**: 2026-01-23 (Added Schedule Feature with reusable modal component)
+**Last Updated**: 2026-01-25 (Added RegisteredModel entity for Schedule functionality)
 
 ---
 
@@ -1593,6 +1593,363 @@ Added to Registry & Deployment section for registered models:
    - Webhook creates new TrainingRun with frozen configuration
    - Training pipeline submitted to Vertex AI
    - Schedule statistics updated (total_runs, last_run_at, next_run_at)
+
+### RegisteredModel Entity (2026-01-25)
+
+The `RegisteredModel` entity restructures the Schedule functionality to properly relate to registered models instead of individual training runs. This creates a 1:1 relationship between a named model and its schedule, with all training run versions linked to the same RegisteredModel.
+
+#### Motivation
+
+**Problem with Previous Design:**
+- Schedules were created from individual TrainingRuns
+- No clear relationship between scheduled model versions
+- Difficult to track all versions of a model
+- Schedule could be created for any training run, leading to confusion
+
+**New Design Goals:**
+- One schedule per model name (1:1 relationship enforced)
+- All versions of a model link to the same RegisteredModel
+- Schedule attaches to RegisteredModel, not individual TrainingRuns
+- RegisteredModel created when first training run is set up (before Vertex AI registration)
+
+#### Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    REGISTEREDMODEL ARCHITECTURE                              │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│   ┌─────────────────────────────────────────────────────────────────────┐   │
+│   │                       RegisteredModel                                │   │
+│   │  model_name: "product-retrieval-v1"                                 │   │
+│   │  model_type: "retrieval"                                            │   │
+│   │  total_versions: 3                                                  │   │
+│   │  is_deployed: true                                                  │   │
+│   └───────────────────────┬─────────────────────────────────────────────┘   │
+│                           │                                                  │
+│           ┌───────────────┼───────────────┐                                 │
+│           │               │               │                                  │
+│           ▼               ▼               ▼                                  │
+│   ┌───────────────┐ ┌───────────────┐ ┌───────────────┐                     │
+│   │ TrainingRun   │ │ TrainingRun   │ │ TrainingRun   │                     │
+│   │ v1 (deployed) │ │ v2            │ │ v3 (latest)   │                     │
+│   └───────────────┘ └───────────────┘ └───────────────┘                     │
+│                                                                              │
+│                           │                                                  │
+│                           ▼                                                  │
+│                   ┌───────────────┐                                         │
+│                   │ TrainingSchedule│  ←── 1:1 relationship                 │
+│                   │ Weekly @ 9AM    │                                       │
+│                   └───────────────┘                                         │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+#### Workflow Supported
+
+```
+1. User creates training run with name "my-model" + schedule config
+   → RegisteredModel("my-model") created (not yet in Vertex AI)
+   → TrainingSchedule created, linked to RegisteredModel
+   → TrainingRun created and submitted
+
+2. First training run completes
+   → Pusher registers to Vertex AI as "my-model" v1
+   → RegisteredModel updated with Vertex resource info
+
+3. Schedule triggers (e.g., weekly)
+   → New TrainingRun created from schedule's frozen config
+   → Completes → Registers as "my-model" v2
+   → RegisteredModel version cache updated
+```
+
+#### RegisteredModel Model
+
+```python
+class RegisteredModel(models.Model):
+    """
+    Represents a named model that can have multiple versions.
+    Each version is a TrainingRun. A schedule attaches to this model.
+    """
+
+    MODEL_TYPE_CHOICES = [
+        ('retrieval', 'Retrieval'),
+        ('ranking', 'Ranking'),
+        ('multitask', 'Multitask'),
+    ]
+
+    # Relationships
+    ml_model = ForeignKey('ModelEndpoint', CASCADE, related_name='registered_models')
+
+    # Model Identity
+    model_name = CharField(max_length=255)  # becomes vertex_model_name
+    model_type = CharField(max_length=20, choices=MODEL_TYPE_CHOICES)
+    description = TextField(blank=True)
+
+    # Vertex AI State (populated after first registration)
+    vertex_model_resource_name = CharField(max_length=500, blank=True)
+    first_registered_at = DateTimeField(null=True, blank=True)
+
+    # Latest Version Cache (for fast lookups)
+    latest_version_id = IntegerField(null=True, blank=True)
+    latest_version_number = CharField(max_length=100, blank=True)
+    total_versions = IntegerField(default=0)
+
+    # Deployment Status
+    is_deployed = BooleanField(default=False)
+    deployed_version_id = IntegerField(null=True, blank=True)
+
+    # Status & Metadata
+    is_active = BooleanField(default=True)
+    created_by = ForeignKey(User, SET_NULL, null=True)
+    created_at = DateTimeField(auto_now_add=True)
+    updated_at = DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ['ml_model', 'model_name']  # Enforces uniqueness per endpoint
+
+    @property
+    def has_schedule(self):
+        """Check if this model has an associated schedule."""
+        return hasattr(self, 'schedule') and self.schedule is not None
+
+    @property
+    def is_registered(self):
+        """Check if this model has been registered to Vertex AI."""
+        return bool(self.vertex_model_resource_name)
+```
+
+#### Relationship Changes
+
+**TrainingSchedule - Added Field:**
+```python
+class TrainingSchedule(models.Model):
+    # ... existing fields ...
+
+    registered_model = OneToOneField(
+        'RegisteredModel',
+        on_delete=CASCADE,
+        null=True,  # Nullable for migration
+        related_name='schedule'  # Access via registered_model.schedule
+    )
+```
+
+**TrainingRun - Added Field:**
+```python
+class TrainingRun(models.Model):
+    # ... existing fields ...
+
+    registered_model = ForeignKey(
+        'RegisteredModel',
+        on_delete=SET_NULL,
+        null=True,
+        related_name='versions'  # Access all versions via registered_model.versions
+    )
+```
+
+#### RegisteredModelService
+
+New service class for managing RegisteredModel entities:
+
+```python
+class RegisteredModelService:
+    def __init__(self, ml_model):
+        self.ml_model = ml_model
+
+    def get_or_create_for_training(self, model_name, model_type='retrieval',
+                                    description='', created_by=None) -> RegisteredModel:
+        """
+        Get or create a RegisteredModel for a training run.
+        Called when creating new training runs.
+        """
+
+    def update_after_registration(self, registered_model, training_run):
+        """
+        Update RegisteredModel after Vertex AI registration.
+        Called when Pusher successfully registers a model version.
+        Updates: first_registered_at, vertex_model_resource_name,
+                 latest_version_id, latest_version_number, total_versions
+        """
+
+    def update_deployment_status(self, registered_model):
+        """
+        Update deployment status based on versions.
+        Syncs is_deployed and deployed_version_id from TrainingRuns.
+        """
+
+    def check_name_available(self, model_name) -> dict:
+        """
+        Check if a model name is available or already exists.
+        Returns: { exists, registered_model_id, has_schedule, schedule_id }
+        """
+```
+
+#### API Endpoints
+
+##### New RegisteredModel Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/registered-models/` | List RegisteredModels with schedule info |
+| GET | `/api/registered-models/<id>/` | Get RegisteredModel details |
+| GET | `/api/registered-models/<id>/versions/` | List all versions (TrainingRuns) |
+| GET | `/api/registered-models/check-name/?name=X` | Check if name exists, has schedule |
+
+##### List RegisteredModels
+```
+GET /api/registered-models/?model_type=retrieval&has_schedule=true
+
+Response:
+{
+    "success": true,
+    "registered_models": [
+        {
+            "id": 1,
+            "model_name": "product-retrieval-v1",
+            "model_type": "retrieval",
+            "status": "deployed",
+            "is_registered": true,
+            "total_versions": 3,
+            "has_schedule": true,
+            "schedule_id": 5,
+            "schedule_status": "active",
+            ...
+        }
+    ],
+    "kpi": {
+        "total": 10,
+        "registered": 8,
+        "with_schedule": 4,
+        "deployed": 2
+    },
+    "pagination": {...}
+}
+```
+
+##### Check Name Availability
+```
+GET /api/registered-models/check-name/?name=product-model
+
+Response:
+{
+    "success": true,
+    "exists": true,
+    "registered_model_id": 123,
+    "has_schedule": true,
+    "schedule_id": 456
+}
+```
+
+##### Updated Schedule Creation Endpoint
+
+The `/api/training/schedules/from-run/` endpoint now:
+1. Gets or creates RegisteredModel using source run's model name
+2. Validates that model doesn't already have a schedule (rejects with error)
+3. Links new schedule to RegisteredModel
+4. Links source TrainingRun to RegisteredModel if not already linked
+
+```
+POST /api/training/schedules/from-run/
+
+Error Response (if model has schedule):
+{
+    "success": false,
+    "error": "Model 'product-model' already has a schedule (ID: 456). Each model can only have one schedule."
+}
+```
+
+#### Frontend Changes
+
+##### Models Registry Table - Schedule Column
+
+Added new "Schedule" column showing schedule status:
+- **Scheduled** (green) - Model has active schedule
+- **Paused** (yellow) - Model has paused schedule
+- **None** (gray) - Model has no schedule
+
+##### Models Registry Actions
+
+New actions in dropdown menu:
+- **Create Schedule** - Opens ScheduleModal for models without schedule
+- **View Schedule** - Navigates to schedule for models with schedule
+
+##### Training Wizard - Name Validation
+
+Enhanced name validation to check RegisteredModel API:
+1. Checks if model name already exists
+2. If exists and has schedule, shows warning message
+3. Disables schedule creation in wizard if model already has schedule
+
+```javascript
+// training_wizard.js - checkNameAvailability()
+async function checkNameAvailability(name) {
+    // Check RegisteredModel API
+    const response = await fetch(`/api/registered-models/check-name/?name=${name}`);
+    const data = await response.json();
+
+    if (data.has_schedule) {
+        // Show warning: "This model already has a schedule..."
+        state.modelHasSchedule = true;
+        state.formData.scheduleConfig.type = 'now';  // Force immediate run
+    }
+}
+```
+
+##### Schedule Modal - RegisteredModel Support
+
+Added `openForRegisteredModel()` function:
+
+```javascript
+// schedule_modal.js
+ScheduleModal.openForRegisteredModel(registeredModelId);
+// - Loads RegisteredModel details
+// - Checks if already has schedule (shows error if so)
+// - Uses latest version's config as template
+```
+
+#### Migration
+
+Migration `0007_add_registered_model.py` includes:
+
+1. **Schema Changes:**
+   - Creates `RegisteredModel` table
+   - Adds `registered_model` FK to `TrainingRun` (nullable)
+   - Adds `registered_model` OneToOne to `TrainingSchedule` (nullable)
+   - Adds unique constraint on `(ml_model, model_name)`
+
+2. **Data Migration:**
+   - Creates RegisteredModels from existing TrainingRuns with `vertex_model_name`
+   - Groups TrainingRuns by model name
+   - Links all runs in group to same RegisteredModel
+   - Links existing TrainingSchedules to RegisteredModels based on their runs
+
+#### Files Summary
+
+##### New Files
+| File | Purpose |
+|------|---------|
+| `ml_platform/training/registered_model_service.py` | Service class for RegisteredModel operations |
+| `ml_platform/training/migrations/0007_add_registered_model.py` | Migration with data migration |
+
+##### Modified Files
+| File | Changes |
+|------|---------|
+| `ml_platform/training/models.py` | Added RegisteredModel class, FKs to TrainingSchedule & TrainingRun |
+| `ml_platform/training/services.py` | Updated create_training_run, _register_to_model_registry |
+| `ml_platform/training/schedule_service.py` | Updated execute_scheduled_training |
+| `ml_platform/training/api.py` | Added RegisteredModel endpoints, updated schedule validation |
+| `ml_platform/training/urls.py` | Added RegisteredModel URL patterns |
+| `static/js/models_registry.js` | Added Schedule column, Create/View Schedule actions |
+| `static/js/training_wizard.js` | Enhanced name validation with RegisteredModel check |
+| `static/js/schedule_modal.js` | Added openForRegisteredModel function |
+
+#### Expected Results
+
+1. **One Schedule Per Model**: Database and API enforce 1:1 relationship
+2. **Version Tracking**: All versions of a model accessible via `registered_model.versions`
+3. **Schedule Status in UI**: Models Registry shows schedule status for each model
+4. **Validation**: Cannot create duplicate schedules for same model name
+5. **Backward Compatibility**: Existing data migrated, existing schedules continue working
 
 ### New Training Dialog
 

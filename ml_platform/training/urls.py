@@ -169,6 +169,30 @@ urlpatterns = [
     ),
 
     # ==========================================================================
+    # RegisteredModel API endpoints
+    # ==========================================================================
+    path(
+        'api/registered-models/',
+        api.registered_models_list,
+        name='registered_models_list'
+    ),
+    path(
+        'api/registered-models/check-name/',
+        api.registered_model_check_name,
+        name='registered_model_check_name'
+    ),
+    path(
+        'api/registered-models/<int:registered_model_id>/',
+        api.registered_model_detail,
+        name='registered_model_detail'
+    ),
+    path(
+        'api/registered-models/<int:registered_model_id>/versions/',
+        api.registered_model_versions,
+        name='registered_model_versions'
+    ),
+
+    # ==========================================================================
     # Models Registry API endpoints
     # ==========================================================================
     path(

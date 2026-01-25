@@ -23,7 +23,8 @@ from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
-from .models import TrainingRun
+from .models import TrainingRun, RegisteredModel
+from .registered_model_service import RegisteredModelService
 
 logger = logging.getLogger(__name__)
 
@@ -151,6 +152,7 @@ class TrainingService:
         evaluator_config: dict = None,
         deployment_config: dict = None,
         created_by=None,
+        registered_model: RegisteredModel = None,
     ) -> TrainingRun:
         """
         Create a new training run record.
@@ -170,6 +172,7 @@ class TrainingService:
             evaluator_config: Evaluator configuration
             deployment_config: Deployment configuration
             created_by: User who created the training run
+            registered_model: Optional pre-existing RegisteredModel to link to
 
         Returns:
             Created TrainingRun instance
@@ -191,6 +194,16 @@ class TrainingService:
                 elif config_model_type == 'ranking':
                     model_type = TrainingRun.MODEL_TYPE_RANKING
 
+            # Get or create RegisteredModel for this training run
+            if not registered_model:
+                reg_model_service = RegisteredModelService(self.ml_model)
+                registered_model = reg_model_service.get_or_create_for_training(
+                    model_name=name,
+                    model_type=model_type,
+                    description=description,
+                    created_by=created_by,
+                )
+
             # Create training run
             training_run = TrainingRun.objects.create(
                 ml_model=self.ml_model,
@@ -208,11 +221,13 @@ class TrainingService:
                 deployment_config=deployment_config or {},
                 created_by=created_by,
                 status=TrainingRun.STATUS_PENDING,
+                registered_model=registered_model,
             )
 
             logger.info(
                 f"Created training run {training_run.display_name} "
-                f"(id={training_run.id}) for model {self.ml_model.name}"
+                f"(id={training_run.id}) for model {self.ml_model.name}, "
+                f"registered_model={registered_model.model_name}"
             )
 
             return training_run
@@ -842,6 +857,19 @@ class TrainingService:
                 f"{training_run.display_name}: Registered to Model Registry as {model.display_name} "
                 f"(version: {model.version_id})"
             )
+
+            # Update RegisteredModel with new version info
+            if training_run.registered_model:
+                try:
+                    reg_model_service = RegisteredModelService(self.ml_model)
+                    reg_model_service.update_after_registration(
+                        training_run.registered_model,
+                        training_run
+                    )
+                except Exception as reg_error:
+                    logger.warning(
+                        f"{training_run.display_name}: Failed to update RegisteredModel (non-fatal): {reg_error}"
+                    )
 
         except Exception as e:
             logger.exception(f"{training_run.display_name}: Failed to register to Model Registry: {e}")

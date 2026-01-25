@@ -802,21 +802,47 @@ class TrainingService:
         try:
             from google.cloud import aiplatform
 
+            # Find parent model (first registered model with same name) for versioning
+            parent_model_resource_name = None
+            parent_model = TrainingRun.objects.filter(
+                ml_model=self.ml_model,
+                name=training_run.name,
+                vertex_model_resource_name__isnull=False
+            ).exclude(
+                vertex_model_resource_name=''
+            ).exclude(
+                id=training_run.id
+            ).order_by('registered_at').first()  # Get FIRST (oldest) as parent
+
+            if parent_model:
+                parent_model_resource_name = parent_model.vertex_model_resource_name
+                logger.info(
+                    f"{training_run.display_name}: Found parent model {parent_model_resource_name}, "
+                    f"will create as version"
+                )
+
             model = aiplatform.Model.upload(
                 display_name=model_name,
                 artifact_uri=artifact_uri,
                 serving_container_image_uri="us-docker.pkg.dev/vertex-ai/prediction/tf2-cpu.2-12:latest",
                 labels=labels,
+                parent_model=parent_model_resource_name,
             )
 
             training_run.vertex_model_resource_name = model.resource_name
             training_run.vertex_model_name = model.display_name
+            training_run.vertex_model_version = model.version_id or ''
+            training_run.vertex_parent_model_resource_name = parent_model_resource_name or ''
             training_run.registered_at = timezone.now()
             training_run.save(update_fields=[
-                'vertex_model_resource_name', 'vertex_model_name', 'registered_at', 'updated_at'
+                'vertex_model_resource_name', 'vertex_model_name', 'vertex_model_version',
+                'vertex_parent_model_resource_name', 'registered_at', 'updated_at'
             ])
 
-            logger.info(f"{training_run.display_name}: Registered to Model Registry as {model.display_name}")
+            logger.info(
+                f"{training_run.display_name}: Registered to Model Registry as {model.display_name} "
+                f"(version: {model.version_id})"
+            )
 
         except Exception as e:
             logger.exception(f"{training_run.display_name}: Failed to register to Model Registry: {e}")
@@ -1252,6 +1278,25 @@ class TrainingService:
                 pushed_model_path = f"{training_run.gcs_artifacts_path}/pushed_model"
                 logger.info(f"Looking for model at: {pushed_model_path}")
 
+                # Find parent model (first registered model with same name) for versioning
+                parent_model_resource_name = None
+                parent_model = TrainingRun.objects.filter(
+                    ml_model=self.ml_model,
+                    name=training_run.name,
+                    vertex_model_resource_name__isnull=False
+                ).exclude(
+                    vertex_model_resource_name=''
+                ).exclude(
+                    id=training_run.id
+                ).order_by('registered_at').first()
+
+                if parent_model:
+                    parent_model_resource_name = parent_model.vertex_model_resource_name
+                    logger.info(
+                        f"{training_run.display_name}: Found parent model {parent_model_resource_name}, "
+                        f"will create as version"
+                    )
+
                 # Upload model to registry if not found
                 model = aiplatform.Model.upload(
                     display_name=model_display_name,
@@ -1262,9 +1307,18 @@ class TrainingService:
                     labels={
                         'training_run_id': str(training_run.id),
                         'model_endpoint_id': str(self.ml_model.id),
-                    }
+                    },
+                    parent_model=parent_model_resource_name,
                 )
-                logger.info(f"Uploaded model to registry: {model.resource_name}")
+                logger.info(
+                    f"Uploaded model to registry: {model.resource_name} "
+                    f"(version: {model.version_id})"
+                )
+
+                # Store version info
+                training_run.vertex_model_version = model.version_id or ''
+                training_run.vertex_parent_model_resource_name = parent_model_resource_name or ''
+                training_run.registered_at = timezone.now()
             else:
                 model = models[0]
                 logger.info(f"Using existing model: {model.resource_name}")
@@ -1289,10 +1343,17 @@ class TrainingService:
             training_run.deployed_at = timezone.now()
             training_run.endpoint_resource_name = endpoint.resource_name
             training_run.vertex_model_resource_name = model.resource_name
-            training_run.save(update_fields=[
+
+            # Include version fields in save if they were set (fallback upload path)
+            update_fields = [
                 'is_deployed', 'deployed_at', 'endpoint_resource_name',
                 'vertex_model_resource_name'
-            ])
+            ]
+            if training_run.vertex_model_version:
+                update_fields.extend([
+                    'vertex_model_version', 'vertex_parent_model_resource_name', 'registered_at'
+                ])
+            training_run.save(update_fields=update_fields)
 
             logger.info(
                 f"Deployed {training_run.display_name} to endpoint {endpoint.resource_name}"
@@ -1413,6 +1474,25 @@ class TrainingService:
             pushed_model_path = f"{training_run.gcs_artifacts_path}/pushed_model"
             model_display_name = f"{training_run.name or f'training-{training_run.id}'}-manual"
 
+            # Find parent model (first registered model with same name) for versioning
+            parent_model_resource_name = None
+            parent_model = TrainingRun.objects.filter(
+                ml_model=self.ml_model,
+                name=training_run.name,
+                vertex_model_resource_name__isnull=False
+            ).exclude(
+                vertex_model_resource_name=''
+            ).exclude(
+                id=training_run.id
+            ).order_by('registered_at').first()
+
+            if parent_model:
+                parent_model_resource_name = parent_model.vertex_model_resource_name
+                logger.info(
+                    f"{training_run.display_name}: Found parent model {parent_model_resource_name}, "
+                    f"will create as version"
+                )
+
             # Upload model to registry with manual_push label
             model = aiplatform.Model.upload(
                 display_name=model_display_name,
@@ -1425,16 +1505,23 @@ class TrainingService:
                     'model_endpoint_id': str(self.ml_model.id),
                     'manual_push': 'true',
                     'original_status': 'not_blessed',
-                }
+                },
+                parent_model=parent_model_resource_name,
             )
 
-            logger.info(f"Force-pushed model to registry: {model.resource_name}")
+            logger.info(
+                f"Force-pushed model to registry: {model.resource_name} "
+                f"(version: {model.version_id})"
+            )
 
             # Update training run - promote to completed
             training_run.status = TrainingRun.STATUS_COMPLETED
             training_run.is_blessed = True  # Mark as blessed after manual override
             training_run.vertex_model_resource_name = model.resource_name
             training_run.vertex_model_name = model_display_name
+            training_run.vertex_model_version = model.version_id or ''
+            training_run.vertex_parent_model_resource_name = parent_model_resource_name or ''
+            training_run.registered_at = timezone.now()
 
             # Add manual push note to evaluation_results
             eval_results = training_run.evaluation_results or {}
@@ -1444,7 +1531,8 @@ class TrainingService:
 
             training_run.save(update_fields=[
                 'status', 'is_blessed', 'vertex_model_resource_name',
-                'vertex_model_name', 'evaluation_results'
+                'vertex_model_name', 'vertex_model_version',
+                'vertex_parent_model_resource_name', 'registered_at', 'evaluation_results'
             ])
 
             logger.info(

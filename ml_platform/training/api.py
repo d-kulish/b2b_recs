@@ -151,6 +151,8 @@ def _serialize_training_run(training_run, include_details=False):
         data['vertex_model_name'] = training_run.vertex_model_name
         data['vertex_model_version'] = training_run.vertex_model_version
         data['vertex_model_resource_name'] = training_run.vertex_model_resource_name
+        data['vertex_parent_model_resource_name'] = training_run.vertex_parent_model_resource_name
+        data['is_version'] = bool(training_run.vertex_parent_model_resource_name)
         data['endpoint_resource_name'] = training_run.endpoint_resource_name
 
         # Error info
@@ -2978,6 +2980,10 @@ def _serialize_registered_model(training_run, include_details=False):
         # Deployment info
         'deployed_at': training_run.deployed_at.isoformat() if training_run.deployed_at else None,
         'endpoint_resource_name': training_run.endpoint_resource_name,
+
+        # Versioning info
+        'vertex_parent_model_resource_name': training_run.vertex_parent_model_resource_name,
+        'is_version': bool(training_run.vertex_parent_model_resource_name),
 
         # Training info
         'base_experiment_number': training_run.base_experiment.experiment_number if training_run.base_experiment else None,

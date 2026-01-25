@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides detailed specifications for implementing the **Models Registry** chapter on the Training page. The Models Registry provides visibility into production-ready models registered in Vertex AI Model Registry, their deployment status, and scheduled training activities.
 
-**Last Updated**: 2026-01-24
+**Last Updated**: 2026-01-25
 
 ---
 
@@ -959,6 +959,7 @@ vertex_model_name = models.CharField(max_length=500)
 vertex_model_version = models.CharField(max_length=100)
 vertex_model_resource_name = models.CharField(max_length=500)
 registered_at = models.DateTimeField(null=True)
+vertex_parent_model_resource_name = models.CharField(max_length=500)  # For versioning
 
 # Evaluation Fields
 is_blessed = models.BooleanField(null=True)
@@ -1125,6 +1126,103 @@ Registration failures are logged but do not fail the training run. If registrati
 - The training run status remains `COMPLETED`
 - The `vertex_model_resource_name` field remains empty
 - Users can manually trigger registration via the "Register Model" button
+
+---
+
+## Vertex AI Native Model Versioning (2026-01-25)
+
+### Overview
+
+The platform now uses Vertex AI's native model versioning feature. When models with the same `name` are registered, they are automatically created as versions of a single parent model in Vertex AI Model Registry, rather than as separate independent models.
+
+### How Versioning Works
+
+| Scenario | parent_model Parameter | Result in Vertex AI |
+|----------|----------------------|---------------------|
+| First registration of "my-model" | `None` | New model, `version_id = "1"` |
+| Second run of "my-model" | `projects/.../models/abc123` | New version of abc123, `version_id = "2"` |
+| Different name "other-model" | `None` | New model, `version_id = "1"` |
+
+### Implementation Details
+
+When registering a model to Vertex AI Model Registry:
+
+1. **Parent Model Lookup**: Before calling `aiplatform.Model.upload()`, the system looks for the first (oldest) registered model with the same `name` field:
+   ```python
+   parent_model = TrainingRun.objects.filter(
+       ml_model=self.ml_model,
+       name=training_run.name,
+       vertex_model_resource_name__isnull=False
+   ).exclude(
+       vertex_model_resource_name=''
+   ).exclude(
+       id=training_run.id
+   ).order_by('registered_at').first()
+   ```
+
+2. **Upload with Parent**: If a parent is found, its `vertex_model_resource_name` is passed as the `parent_model` parameter:
+   ```python
+   model = aiplatform.Model.upload(
+       display_name=model_name,
+       artifact_uri=artifact_uri,
+       serving_container_image_uri="...",
+       labels=labels,
+       parent_model=parent_model_resource_name,  # Enables versioning
+   )
+   ```
+
+3. **Store Version Info**: After upload, the version information is stored:
+   - `vertex_model_version`: The version ID from Vertex AI (e.g., "1", "2", "3")
+   - `vertex_parent_model_resource_name`: The parent model's resource name (empty for first versions)
+
+### Database Schema
+
+New field added to `TrainingRun` model:
+
+```python
+vertex_parent_model_resource_name = models.CharField(
+    max_length=500,
+    blank=True,
+    help_text="Parent model resource name for Vertex AI versioning"
+)
+```
+
+**Migration**: `0005_trainingrun_vertex_parent_model_resource_name`
+
+### API Response Changes
+
+The following fields are now included in API responses:
+
+| Field | Description |
+|-------|-------------|
+| `vertex_model_version` | Version ID from Vertex AI (e.g., "1", "2") |
+| `vertex_parent_model_resource_name` | Parent model resource name (empty for first versions) |
+| `is_version` | Boolean indicating if this is a version of an existing model |
+
+### Affected Registration Paths
+
+All three registration paths now support versioning:
+
+1. **Automatic Registration** (`_register_to_model_registry()`): Called after pipeline completion
+2. **Force Push** (`force_push_model()`): Manual override for not-blessed models
+3. **Deploy Fallback** (`deploy_model()`): Fallback upload when deploying unregistered models
+
+### Benefits
+
+- **Unified Model View**: All versions of a model are grouped together in Vertex AI Console
+- **Version Comparison**: Easy comparison of metrics across versions
+- **Rollback Support**: Deploy any previous version without re-registering
+- **Cleaner Registry**: No duplicate model entries with the same display name
+
+### Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| First registration | `parent_model=None` → Creates new model with version "1" |
+| Rerun/same name | `parent_model=resource_name` → Creates new version |
+| Different names | Each name creates its own version chain |
+| Deleted parent in Vertex AI | Vertex AI creates a new model if parent doesn't exist |
+| Legacy models (pre-versioning) | Will become parents for future versions with same name |
 
 ---
 

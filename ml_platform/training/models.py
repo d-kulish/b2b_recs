@@ -572,6 +572,12 @@ class TrainingRun(models.Model):
         help_text="When the model was registered to Model Registry"
     )
 
+    vertex_parent_model_resource_name = models.CharField(
+        max_length=500,
+        blank=True,
+        help_text="Parent model resource name for Vertex AI versioning"
+    )
+
     # =========================================================================
     # Deployment
     # =========================================================================

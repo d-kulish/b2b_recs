@@ -231,15 +231,28 @@ def _training_run_list_get(request, model_endpoint):
         if model_config_id:
             queryset = queryset.filter(model_config_id=model_config_id)
 
+        # Filter by registered model name (for Models Registry dropdown)
+        vertex_model_name = request.GET.get('vertex_model_name')
+        if vertex_model_name:
+            queryset = queryset.filter(vertex_model_name=vertex_model_name)
+
         # Search filter
         search = request.GET.get('search', '').strip()
         if search:
+            import re
             from django.db.models import Q
-            queryset = queryset.filter(
-                Q(name__icontains=search) |
-                Q(description__icontains=search) |
-                Q(run_number__icontains=search)
-            )
+
+            # Check for "Run #N" or "#N" or just "N" pattern
+            run_match = re.match(r'^(?:run\s*)?#?(\d+)$', search, re.IGNORECASE)
+            if run_match:
+                # Exact match on run_number
+                queryset = queryset.filter(run_number=int(run_match.group(1)))
+            else:
+                # Text search on name and description
+                queryset = queryset.filter(
+                    Q(name__icontains=search) |
+                    Q(description__icontains=search)
+                )
 
         # Order by most recent first
         queryset = queryset.order_by('-created_at')
@@ -3165,6 +3178,27 @@ def models_list(request):
             'success': False,
             'error': str(e)
         }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def registered_model_names(request):
+    """
+    GET /api/models/names/
+    Returns list of unique registered model names for filter dropdown.
+    """
+    model_endpoint = _get_model_endpoint(request)
+    if not model_endpoint:
+        return JsonResponse({'success': False, 'error': 'No model endpoint selected'}, status=400)
+
+    names = TrainingRun.objects.filter(
+        ml_model=model_endpoint,
+        vertex_model_resource_name__isnull=False
+    ).exclude(
+        vertex_model_resource_name=''
+    ).values_list('vertex_model_name', flat=True).distinct().order_by('vertex_model_name')
+
+    return JsonResponse({'success': True, 'model_names': list(names)})
 
 
 @csrf_exempt

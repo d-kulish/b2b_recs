@@ -25,6 +25,7 @@ const TrainingCards = (function() {
     let config = {
         endpoints: {
             list: '/api/training-runs/',
+            modelNames: '/api/models/names/',
             cancel: '/api/training-runs/{id}/cancel/',
             delete: '/api/training-runs/{id}/delete/',
             submit: '/api/training-runs/{id}/submit/',
@@ -51,6 +52,7 @@ const TrainingCards = (function() {
         filters: {
             status: null,        // null = all, or specific status
             modelType: null,     // null = all, or 'retrieval', 'ranking', 'multitask'
+            vertexModelName: null,  // null = all, or specific registered model name
             search: ''
         },
         pagination: {
@@ -413,6 +415,9 @@ const TrainingCards = (function() {
             if (state.filters.modelType) {
                 params.set('model_type', state.filters.modelType);
             }
+            if (state.filters.vertexModelName) {
+                params.set('vertex_model_name', state.filters.vertexModelName);
+            }
             if (state.filters.search) {
                 params.set('search', state.filters.search);
             }
@@ -498,6 +503,13 @@ const TrainingCards = (function() {
         loadTrainingRuns();
     }
 
+    function filterByModelName(modelName) {
+        state.filters.vertexModelName = modelName;
+        state.pagination.page = 1;
+        loadTrainingRuns();
+        updateFilterUI();
+    }
+
     function search(query) {
         state.filters.search = query;
         state.pagination.page = 1;
@@ -505,7 +517,7 @@ const TrainingCards = (function() {
     }
 
     function clearFilters() {
-        state.filters = { status: null, modelType: null, search: '' };
+        state.filters = { status: null, modelType: null, vertexModelName: null, search: '' };
         state.pagination.page = 1;
         loadTrainingRuns();
         updateFilterUI();
@@ -522,6 +534,12 @@ const TrainingCards = (function() {
         const modelTypeSelect = document.getElementById('trainingModelTypeFilter');
         if (modelTypeSelect) {
             modelTypeSelect.value = state.filters.modelType || '';
+        }
+
+        // Update model name dropdown
+        const modelNameSelect = document.getElementById('trainingModelNameFilter');
+        if (modelNameSelect) {
+            modelNameSelect.value = state.filters.vertexModelName || '';
         }
 
         // Update search input
@@ -587,10 +605,43 @@ const TrainingCards = (function() {
                     </select>
                 </div>
 
+                <div class="training-filter-group">
+                    <label class="training-filter-label">Registered Model</label>
+                    <select id="trainingModelNameFilter" class="training-filter-select" onchange="TrainingCards.filterByModelName(this.value || null)">
+                        <option value="">All</option>
+                        <!-- Options populated dynamically -->
+                    </select>
+                </div>
+
                 <input type="text" id="trainingSearchInput" class="training-search-input"
-                       placeholder="Search training runs..." oninput="TrainingCards.handleSearchInput(this.value)">
+                       placeholder="Search by Run #..." oninput="TrainingCards.handleSearchInput(this.value)">
             </div>
         `;
+
+        // Load model names for dropdown
+        loadModelNames();
+    }
+
+    async function loadModelNames() {
+        try {
+            const response = await fetch(config.endpoints.modelNames);
+            const data = await response.json();
+
+            if (data.success && data.model_names) {
+                const select = document.getElementById('trainingModelNameFilter');
+                if (select) {
+                    // Keep "All" option, add model names
+                    data.model_names.forEach(name => {
+                        const option = document.createElement('option');
+                        option.value = name;
+                        option.textContent = name;
+                        select.appendChild(option);
+                    });
+                }
+            }
+        } catch (error) {
+            console.error('Failed to load model names:', error);
+        }
     }
 
     // Debounced search handler
@@ -1504,6 +1555,7 @@ const TrainingCards = (function() {
         refresh: refresh,
         filterByStatus: filterByStatus,
         filterByModelType: filterByModelType,
+        filterByModelName: filterByModelName,
         search: search,
         clearFilters: clearFilters,
         handleSearchInput: handleSearchInput,

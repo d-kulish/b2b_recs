@@ -177,6 +177,11 @@ urlpatterns = [
         name='models_list'
     ),
     path(
+        'api/models/names/',
+        api.registered_model_names,
+        name='registered_model_names'
+    ),
+    path(
         'api/models/<int:model_id>/',
         api.model_detail,
         name='model_detail'

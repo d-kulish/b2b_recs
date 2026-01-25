@@ -66,6 +66,21 @@ class TrainingScheduleService:
                 - job_name: Cloud Scheduler job name (if successful)
                 - message: Status message
         """
+        # Check if Cloud Scheduler should be skipped (e.g., in development)
+        skip_scheduler = getattr(settings, 'SKIP_CLOUD_SCHEDULER', False)
+        if skip_scheduler:
+            logger.info(f"Skipping Cloud Scheduler job creation (SKIP_CLOUD_SCHEDULER=True) for schedule {schedule.id}")
+            # Still calculate next run time for display purposes
+            schedule.next_run_at = self._calculate_next_run(schedule)
+            schedule.save(update_fields=['next_run_at'])
+            cron_expr = self._get_cron_expression(schedule)
+            return {
+                'success': True,
+                'job_name': f'dev-mode-schedule-{schedule.id}',
+                'schedule': cron_expr,
+                'message': f'Schedule created (dev mode - no Cloud Scheduler job): {cron_expr}'
+            }
+
         from ml_platform.utils.cloud_scheduler import CloudSchedulerManager
 
         try:
@@ -255,6 +270,17 @@ class TrainingScheduleService:
         Returns:
             Dict with success status and message
         """
+        # Check if Cloud Scheduler is skipped (dev mode)
+        skip_scheduler = getattr(settings, 'SKIP_CLOUD_SCHEDULER', False)
+        if skip_scheduler:
+            logger.info(f"Pausing schedule {schedule.id} (dev mode - no Cloud Scheduler job)")
+            schedule.status = TrainingSchedule.STATUS_PAUSED
+            schedule.save(update_fields=['status', 'updated_at'])
+            return {
+                'success': True,
+                'message': 'Schedule paused (dev mode)'
+            }
+
         if not schedule.cloud_scheduler_job_name:
             return {
                 'success': False,
@@ -298,6 +324,18 @@ class TrainingScheduleService:
         Returns:
             Dict with success status and message
         """
+        # Check if Cloud Scheduler is skipped (dev mode)
+        skip_scheduler = getattr(settings, 'SKIP_CLOUD_SCHEDULER', False)
+        if skip_scheduler:
+            logger.info(f"Resuming schedule {schedule.id} (dev mode - no Cloud Scheduler job)")
+            schedule.status = TrainingSchedule.STATUS_ACTIVE
+            schedule.next_run_at = self._calculate_next_run(schedule)
+            schedule.save(update_fields=['status', 'next_run_at', 'updated_at'])
+            return {
+                'success': True,
+                'message': 'Schedule resumed (dev mode)'
+            }
+
         if not schedule.cloud_scheduler_job_name:
             return {
                 'success': False,
@@ -367,6 +405,18 @@ class TrainingScheduleService:
         Returns:
             Dict with success status and message
         """
+        # Check if Cloud Scheduler is skipped (dev mode)
+        skip_scheduler = getattr(settings, 'SKIP_CLOUD_SCHEDULER', False)
+        if skip_scheduler:
+            logger.info(f"Skipping Cloud Scheduler job deletion (dev mode) for schedule {schedule.id}")
+            schedule.cloud_scheduler_job_name = ''
+            schedule.save(update_fields=['cloud_scheduler_job_name'])
+            return {
+                'success': True,
+                'not_found': True,
+                'message': 'Dev mode - no Cloud Scheduler job to delete'
+            }
+
         if not schedule.cloud_scheduler_job_name:
             return {
                 'success': True,
@@ -614,6 +664,22 @@ class TrainingScheduleService:
         Returns:
             Dict with status information
         """
+        # Check if Cloud Scheduler is skipped (dev mode)
+        skip_scheduler = getattr(settings, 'SKIP_CLOUD_SCHEDULER', False)
+        if skip_scheduler:
+            cron_expr = self._get_cron_expression(schedule)
+            return {
+                'success': True,
+                'exists': False,
+                'dev_mode': True,
+                'schedule': cron_expr,
+                'state': 'DEV_MODE',
+                'time_zone': schedule.schedule_timezone,
+                'last_attempt_time': schedule.last_run_at,
+                'next_run_time': schedule.next_run_at,
+                'message': 'Dev mode - no Cloud Scheduler job'
+            }
+
         if not schedule.cloud_scheduler_job_name:
             return {
                 'success': False,

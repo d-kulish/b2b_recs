@@ -170,6 +170,12 @@ LOGOUT_REDIRECT_URL = 'login'
 GCP_PROJECT_ID = os.environ.get('GCP_PROJECT_ID', 'b2b-recs')
 GCP_LOCATION = os.environ.get('GCP_LOCATION', 'europe-central2')  # Warsaw, Poland
 
+# Cloud Scheduler Configuration
+# Skip Cloud Scheduler job creation in development (default: True if DEBUG is True)
+# Cloud Scheduler requires App Engine and can't reach localhost webhooks anyway
+CLOUD_SCHEDULER_REGION = os.environ.get('CLOUD_SCHEDULER_REGION', 'europe-central2')
+SKIP_CLOUD_SCHEDULER = os.environ.get('SKIP_CLOUD_SCHEDULER', str(DEBUG)).lower() == 'true'
+
 # =============================================================================
 # VERTEX AI PIPELINES CONFIGURATION
 # =============================================================================

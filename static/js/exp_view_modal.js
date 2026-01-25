@@ -3220,7 +3220,7 @@ const ExpViewModal = (function() {
                 state.dataCache.trainingHistory = data.training_history;
 
                 if (data.training_history.final_metrics) {
-                    const configType = window.currentViewExp?.feature_config_type || 'retrieval';
+                    const configType = window.currentViewRun?.model_type || window.currentViewExp?.feature_config_type || 'retrieval';
                     if (configType !== 'multitask') {
                         renderMetricsSummary(data.training_history.final_metrics, true, configType);
                     }
@@ -3302,7 +3302,7 @@ const ExpViewModal = (function() {
             chartsEl.classList.remove('hidden');
 
             if (history.final_metrics) {
-                const configType = window.currentViewExp?.feature_config_type || 'retrieval';
+                const configType = window.currentViewRun?.model_type || window.currentViewExp?.feature_config_type || 'retrieval';
                 if (configType !== 'multitask') {
                     renderMetricsSummary(history.final_metrics, true, configType);
                 }
@@ -3417,7 +3417,7 @@ const ExpViewModal = (function() {
         if (!ctx) return;
 
         const finalMetrics = history.final_metrics || {};
-        const configType = window.currentViewExp?.feature_config_type || 'retrieval';
+        const configType = window.currentViewRun?.model_type || window.currentViewExp?.feature_config_type || 'retrieval';
 
         let metricLabels = [];
         let metricValues = [];
@@ -3488,6 +3488,15 @@ const ExpViewModal = (function() {
         // Check if ChartDataLabels plugin is available
         const plugins = typeof ChartDataLabels !== 'undefined' ? [ChartDataLabels] : [];
 
+        // Calculate Y-axis max with padding for data labels
+        let yAxisMax;
+        if (isRanking) {
+            const maxValue = Math.max(...metricValues);
+            yAxisMax = maxValue * 1.2; // Add 20% padding for labels
+        } else {
+            yAxisMax = 1;
+        }
+
         charts.metricsChart = new Chart(ctx, {
             type: 'bar',
             plugins: plugins,
@@ -3533,7 +3542,7 @@ const ExpViewModal = (function() {
                 scales: {
                     y: {
                         beginAtZero: true,
-                        max: isRanking ? undefined : 1,
+                        max: yAxisMax,
                         title: { display: true, text: yAxisTitle, ...chartDefaults.scales.y.title },
                         ticks: {
                             ...chartDefaults.scales.y.ticks,

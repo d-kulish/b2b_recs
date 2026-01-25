@@ -404,7 +404,6 @@ const ModelsRegistry = (function() {
                     <span class="models-version-badge">
                         <i class="fas fa-code-branch"></i>
                         v${model.vertex_model_version || '1'}
-                        ${model.version_count > 1 ? `<span style="color:#9ca3af;margin-left:4px;">(${model.version_count})</span>` : ''}
                     </span>
                 </td>
                 <td>

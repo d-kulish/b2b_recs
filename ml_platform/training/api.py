@@ -3015,6 +3015,7 @@ def models_list(request):
     GET /api/models/?search=product
 
     Returns registered models with KPI summary.
+    Shows only the latest version of each unique model name.
     """
     try:
         model_endpoint = _get_model_endpoint(request)
@@ -3024,64 +3025,88 @@ def models_list(request):
                 'error': 'No model endpoint selected'
             }, status=400)
 
-        # Base queryset: Only training runs with registered models
-        queryset = TrainingRun.objects.filter(
-            ml_model=model_endpoint,
-            vertex_model_resource_name__isnull=False
-        ).exclude(
+        from django.db.models import Q
+
+        # Base filter for all registered models
+        base_filter = {
+            'ml_model': model_endpoint,
+            'vertex_model_resource_name__isnull': False,
+        }
+
+        # Build filter queryset (applied before deduplication)
+        filter_queryset = TrainingRun.objects.filter(**base_filter).exclude(
             vertex_model_resource_name=''
-        ).select_related('dataset', 'feature_config', 'model_config', 'created_by', 'base_experiment')
+        )
 
         # Apply filters
         model_type = request.GET.get('model_type')
         if model_type and model_type != 'all':
-            queryset = queryset.filter(model_type=model_type)
+            filter_queryset = filter_queryset.filter(model_type=model_type)
 
         status_filter = request.GET.get('status')
         if status_filter and status_filter != 'all':
             if status_filter == 'blessed':
-                queryset = queryset.filter(is_blessed=True)
+                filter_queryset = filter_queryset.filter(is_blessed=True)
             elif status_filter == 'not_blessed':
-                queryset = queryset.filter(is_blessed=False)
+                filter_queryset = filter_queryset.filter(is_blessed=False)
             elif status_filter == 'deployed':
-                queryset = queryset.filter(is_deployed=True)
+                filter_queryset = filter_queryset.filter(is_deployed=True)
             elif status_filter == 'idle':
-                queryset = queryset.filter(is_blessed=True, is_deployed=False)
+                filter_queryset = filter_queryset.filter(is_blessed=True, is_deployed=False)
 
         # Search filter
         search = request.GET.get('search', '').strip()
         if search:
-            from django.db.models import Q
-            queryset = queryset.filter(
+            filter_queryset = filter_queryset.filter(
                 Q(name__icontains=search) |
                 Q(vertex_model_name__icontains=search) |
                 Q(description__icontains=search)
             )
 
-        # Sorting
+        # Step 1: Get IDs of the latest version per unique model name
+        # Using PostgreSQL's DISTINCT ON via Django's distinct() with order_by
+        # The order_by must have the distinct field first, then the tiebreaker
+        latest_ids = filter_queryset.order_by(
+            'vertex_model_name', '-registered_at'
+        ).distinct('vertex_model_name').values_list('id', flat=True)
+
+        # Step 2: Query those IDs with user's desired sort order
+        queryset = TrainingRun.objects.filter(
+            id__in=list(latest_ids)
+        ).select_related('dataset', 'feature_config', 'model_config', 'created_by', 'base_experiment')
+
+        # Apply user sorting
         sort = request.GET.get('sort', 'latest')
         if sort == 'oldest':
             queryset = queryset.order_by('registered_at')
         elif sort == 'name':
-            queryset = queryset.order_by('vertex_model_name', '-registered_at')
+            queryset = queryset.order_by('vertex_model_name')
         elif sort == 'best_metrics':
             # Sort by recall_at_100 descending for retrieval models
             queryset = queryset.order_by('-recall_at_100', '-registered_at')
         else:  # Default: latest
             queryset = queryset.order_by('-registered_at')
 
-        # Calculate KPIs before pagination (on full queryset)
-        from django.db.models import Max
-        all_models = TrainingRun.objects.filter(
-            ml_model=model_endpoint,
-            vertex_model_resource_name__isnull=False
-        ).exclude(vertex_model_resource_name='')
+        # Calculate KPIs - count unique models, not all versions
+        # For each KPI, we get the latest version per model name, then count
+        all_models = TrainingRun.objects.filter(**base_filter).exclude(vertex_model_resource_name='')
+
+        # Get unique model count (total unique model names)
+        total_unique = all_models.values('vertex_model_name').distinct().count()
+
+        # For blessed/deployed/idle, we need to check the LATEST version of each model
+        # Get latest IDs for all models (unfiltered)
+        all_latest_ids = all_models.order_by(
+            'vertex_model_name', '-registered_at'
+        ).distinct('vertex_model_name').values_list('id', flat=True)
+
+        latest_models = TrainingRun.objects.filter(id__in=list(all_latest_ids))
 
         kpi = {
-            'total': all_models.count(),
-            'blessed': all_models.filter(is_blessed=True).count(),
-            'deployed': all_models.filter(is_deployed=True).count(),
-            'idle': all_models.filter(is_blessed=True, is_deployed=False).count(),
+            'total': total_unique,
+            'blessed': latest_models.filter(is_blessed=True).count(),
+            'deployed': latest_models.filter(is_deployed=True).count(),
+            'idle': latest_models.filter(is_blessed=True, is_deployed=False).count(),
             'scheduled': TrainingSchedule.objects.filter(
                 ml_model=model_endpoint,
                 status='active'

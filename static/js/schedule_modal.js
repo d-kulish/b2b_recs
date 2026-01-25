@@ -47,12 +47,15 @@ const ScheduleModal = (function() {
             scheduleType: 'daily',
             scheduledDatetime: null,
             scheduleTime: '09:00',
+            scheduleMinute: 0,           // For hourly (0, 15, 30, 45)
             scheduleDayOfWeek: 0,
+            scheduleDayOfMonth: 1,       // For monthly (1-28)
             scheduleTimezone: 'UTC'
         },
         isLoading: false,
         flatpickrDatetime: null,
-        flatpickrTime: null
+        flatpickrTime: null,
+        flatpickrMonthlyTime: null
     };
 
     // Day names for display
@@ -163,10 +166,7 @@ const ScheduleModal = (function() {
 
         // For model mode, we need to get the model's source training run
         // For now, show a placeholder
-        document.getElementById('scheduleSourceName').textContent = `Model ID: ${modelId}`;
-        document.getElementById('scheduleSourceDataset').textContent = '-';
-        document.getElementById('scheduleSourceFeatures').textContent = '-';
-        document.getElementById('scheduleSourceModel').textContent = '-';
+        document.getElementById('scheduleModelName').textContent = `Model ID: ${modelId}`;
     }
 
     function close() {
@@ -188,7 +188,9 @@ const ScheduleModal = (function() {
             scheduleType: 'daily',
             scheduledDatetime: null,
             scheduleTime: '09:00',
+            scheduleMinute: 0,
             scheduleDayOfWeek: 0,
+            scheduleDayOfMonth: 1,
             scheduleTimezone: 'UTC'
         };
         state.isLoading = false;
@@ -214,8 +216,26 @@ const ScheduleModal = (function() {
             }
         });
 
-        // Show recurring options, hide once options
+        // Reset minute selector
+        document.querySelectorAll('.schedule-minute-btn').forEach(btn => {
+            btn.classList.remove('active');
+            if (btn.dataset.minute === '0') {
+                btn.classList.add('active');
+            }
+        });
+
+        // Reset day of month selector (grid buttons)
+        document.querySelectorAll('.schedule-dom-btn').forEach(btn => {
+            btn.classList.remove('active');
+            if (btn.dataset.day === '1') {
+                btn.classList.add('active');
+            }
+        });
+
+        // Show recurring options, hide other options
         document.getElementById('scheduleOptionsOnce').style.display = 'none';
+        document.getElementById('scheduleOptionsHourly').style.display = 'none';
+        document.getElementById('scheduleOptionsMonthly').style.display = 'none';
         document.getElementById('scheduleOptionsRecurring').style.display = 'block';
         document.getElementById('scheduleDayOfWeekGroup').style.display = 'none';
 
@@ -249,18 +269,12 @@ const ScheduleModal = (function() {
 
             state.sourceData = data.preview;
 
-            // Populate source card
-            document.getElementById('scheduleSourceName').textContent =
-                data.preview.source_run_display_name || `Run #${data.preview.source_run_number}`;
-            document.getElementById('scheduleSourceDataset').textContent =
-                data.preview.dataset_name || '-';
-            document.getElementById('scheduleSourceFeatures').textContent =
-                data.preview.feature_config_name || '-';
-            document.getElementById('scheduleSourceModel').textContent =
-                data.preview.model_config_name || '-';
+            // Populate model name
+            const modelName = data.preview.vertex_model_name || '-';
+            document.getElementById('scheduleModelName').textContent = modelName;
 
             // Auto-generate schedule name suggestion
-            const suggestedName = `${data.preview.model_config_name || 'Model'} - Retraining`;
+            const suggestedName = `${data.preview.vertex_model_name || 'Model'} - Retraining`;
             document.getElementById('scheduleNameInput').placeholder = suggestedName;
 
             // Update preview
@@ -307,6 +321,19 @@ const ScheduleModal = (function() {
                 updateNextRunPreview();
             }
         });
+
+        // Time picker for monthly schedules
+        state.flatpickrMonthlyTime = flatpickr('#scheduleMonthlyTimeInput', {
+            enableTime: true,
+            noCalendar: true,
+            dateFormat: 'H:i',
+            time_24hr: true,
+            defaultDate: '09:00',
+            onChange: function(selectedDates, dateStr) {
+                state.scheduleConfig.scheduleTime = dateStr;
+                updateNextRunPreview();
+            }
+        });
     }
 
     function destroyPickers() {
@@ -317,6 +344,10 @@ const ScheduleModal = (function() {
         if (state.flatpickrTime) {
             state.flatpickrTime.destroy();
             state.flatpickrTime = null;
+        }
+        if (state.flatpickrMonthlyTime) {
+            state.flatpickrMonthlyTime.destroy();
+            state.flatpickrMonthlyTime = null;
         }
     }
 
@@ -334,16 +365,29 @@ const ScheduleModal = (function() {
 
         // Show/hide appropriate options
         const onceOptions = document.getElementById('scheduleOptionsOnce');
+        const hourlyOptions = document.getElementById('scheduleOptionsHourly');
         const recurringOptions = document.getElementById('scheduleOptionsRecurring');
+        const monthlyOptions = document.getElementById('scheduleOptionsMonthly');
         const dayOfWeekGroup = document.getElementById('scheduleDayOfWeekGroup');
+
+        // Hide all first
+        onceOptions.style.display = 'none';
+        hourlyOptions.style.display = 'none';
+        recurringOptions.style.display = 'none';
+        monthlyOptions.style.display = 'none';
 
         if (type === 'once') {
             onceOptions.style.display = 'block';
-            recurringOptions.style.display = 'none';
-        } else {
-            onceOptions.style.display = 'none';
+        } else if (type === 'hourly') {
+            hourlyOptions.style.display = 'block';
+        } else if (type === 'daily') {
             recurringOptions.style.display = 'block';
-            dayOfWeekGroup.style.display = type === 'weekly' ? 'block' : 'none';
+            dayOfWeekGroup.style.display = 'none';
+        } else if (type === 'weekly') {
+            recurringOptions.style.display = 'block';
+            dayOfWeekGroup.style.display = 'block';
+        } else if (type === 'monthly') {
+            monthlyOptions.style.display = 'block';
         }
 
         updateNextRunPreview();
@@ -355,6 +399,28 @@ const ScheduleModal = (function() {
         // Update day buttons
         document.querySelectorAll('.schedule-day-btn').forEach(btn => {
             btn.classList.toggle('active', parseInt(btn.dataset.day) === day);
+        });
+
+        updateNextRunPreview();
+    }
+
+    function selectMinute(minute) {
+        state.scheduleConfig.scheduleMinute = minute;
+
+        // Update minute buttons
+        document.querySelectorAll('.schedule-minute-btn').forEach(btn => {
+            btn.classList.toggle('active', parseInt(btn.dataset.minute) === minute);
+        });
+
+        updateNextRunPreview();
+    }
+
+    function selectDayOfMonth(day) {
+        state.scheduleConfig.scheduleDayOfMonth = parseInt(day);
+
+        // Update day of month buttons
+        document.querySelectorAll('.schedule-dom-btn').forEach(btn => {
+            btn.classList.toggle('active', parseInt(btn.dataset.day) === parseInt(day));
         });
 
         updateNextRunPreview();
@@ -379,6 +445,9 @@ const ScheduleModal = (function() {
             } else {
                 previewText = 'Select date and time';
             }
+        } else if (type === 'hourly') {
+            const minute = state.scheduleConfig.scheduleMinute || 0;
+            previewText = `Every hour at :${String(minute).padStart(2, '0')} (${timezone})`;
         } else if (type === 'daily') {
             const time = state.scheduleConfig.scheduleTime || '09:00';
             previewText = `Daily at ${time} (${timezone})`;
@@ -386,9 +455,24 @@ const ScheduleModal = (function() {
             const time = state.scheduleConfig.scheduleTime || '09:00';
             const day = DAY_NAMES[state.scheduleConfig.scheduleDayOfWeek];
             previewText = `Every ${day} at ${time} (${timezone})`;
+        } else if (type === 'monthly') {
+            const time = state.scheduleConfig.scheduleTime || '09:00';
+            const day = state.scheduleConfig.scheduleDayOfMonth || 1;
+            const suffix = getDaySuffix(day);
+            previewText = `Monthly on the ${day}${suffix} at ${time} (${timezone})`;
         }
 
         previewEl.textContent = previewText;
+    }
+
+    function getDaySuffix(day) {
+        if (day >= 11 && day <= 13) return 'th';
+        switch (day % 10) {
+            case 1: return 'st';
+            case 2: return 'nd';
+            case 3: return 'rd';
+            default: return 'th';
+        }
     }
 
     function formatDateTime(date) {
@@ -443,6 +527,12 @@ const ScheduleModal = (function() {
             // Convert local datetime to ISO format
             const dt = new Date(state.scheduleConfig.scheduledDatetime);
             requestData.scheduled_datetime = dt.toISOString();
+        } else if (type === 'hourly') {
+            // Store minute in schedule_time as "00:MM"
+            requestData.schedule_time = `00:${String(state.scheduleConfig.scheduleMinute).padStart(2, '0')}`;
+        } else if (type === 'monthly') {
+            requestData.schedule_time = state.scheduleConfig.scheduleTime || '09:00';
+            requestData.schedule_day_of_month = state.scheduleConfig.scheduleDayOfMonth;
         } else {
             requestData.schedule_time = state.scheduleConfig.scheduleTime || '09:00';
             if (type === 'weekly') {
@@ -521,6 +611,8 @@ const ScheduleModal = (function() {
         handleOverlayClick: handleOverlayClick,
         onScheduleTypeChange: onScheduleTypeChange,
         selectDay: selectDay,
+        selectMinute: selectMinute,
+        selectDayOfMonth: selectDayOfMonth,
         create: create,
         // Expose state for debugging
         getState: function() { return state; }

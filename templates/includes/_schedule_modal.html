@@ -40,30 +40,10 @@
 
         <!-- Body -->
         <div class="modal-body schedule-modal-body">
-            <!-- Source Info Card -->
-            <div class="schedule-source-card" id="scheduleSourceCard">
-                <div class="schedule-source-header">
-                    <i class="fas fa-info-circle"></i>
-                    <span>Configuration Source</span>
-                </div>
-                <div class="schedule-source-content">
-                    <div class="schedule-source-row">
-                        <span class="schedule-source-label">Source:</span>
-                        <span class="schedule-source-value" id="scheduleSourceName">-</span>
-                    </div>
-                    <div class="schedule-source-row">
-                        <span class="schedule-source-label">Dataset:</span>
-                        <span class="schedule-source-value" id="scheduleSourceDataset">-</span>
-                    </div>
-                    <div class="schedule-source-row">
-                        <span class="schedule-source-label">Features:</span>
-                        <span class="schedule-source-value" id="scheduleSourceFeatures">-</span>
-                    </div>
-                    <div class="schedule-source-row">
-                        <span class="schedule-source-label">Model:</span>
-                        <span class="schedule-source-value" id="scheduleSourceModel">-</span>
-                    </div>
-                </div>
+            <!-- Model Name Display -->
+            <div class="schedule-model-name-card" id="scheduleModelCard">
+                <div class="schedule-model-name-label">Model</div>
+                <div class="schedule-model-name-value" id="scheduleModelName">-</div>
             </div>
 
             <!-- Schedule Name Input -->
@@ -93,6 +73,10 @@
                         <i class="fas fa-clock"></i>
                         <span>Once</span>
                     </button>
+                    <button class="schedule-type-tab" data-type="hourly" onclick="ScheduleModal.onScheduleTypeChange('hourly')">
+                        <i class="fas fa-hourglass-half"></i>
+                        <span>Hourly</span>
+                    </button>
                     <button class="schedule-type-tab active" data-type="daily" onclick="ScheduleModal.onScheduleTypeChange('daily')">
                         <i class="fas fa-redo"></i>
                         <span>Daily</span>
@@ -100,6 +84,10 @@
                     <button class="schedule-type-tab" data-type="weekly" onclick="ScheduleModal.onScheduleTypeChange('weekly')">
                         <i class="fas fa-calendar-week"></i>
                         <span>Weekly</span>
+                    </button>
+                    <button class="schedule-type-tab" data-type="monthly" onclick="ScheduleModal.onScheduleTypeChange('monthly')">
+                        <i class="fas fa-calendar-alt"></i>
+                        <span>Monthly</span>
                     </button>
                 </div>
             </div>
@@ -112,6 +100,71 @@
                     </label>
                     <input type="text" id="scheduleDatetimeInput" class="schedule-form-input schedule-datetime-picker"
                            placeholder="Select date and time">
+                </div>
+            </div>
+
+            <!-- Schedule Options - Hourly -->
+            <div class="schedule-options" id="scheduleOptionsHourly" style="display: none;">
+                <div class="schedule-form-group">
+                    <label class="schedule-form-label">Run at minute <span class="required">*</span></label>
+                    <div class="schedule-minute-selector">
+                        <button type="button" class="schedule-minute-btn active" data-minute="0" onclick="ScheduleModal.selectMinute(0)">:00</button>
+                        <button type="button" class="schedule-minute-btn" data-minute="15" onclick="ScheduleModal.selectMinute(15)">:15</button>
+                        <button type="button" class="schedule-minute-btn" data-minute="30" onclick="ScheduleModal.selectMinute(30)">:30</button>
+                        <button type="button" class="schedule-minute-btn" data-minute="45" onclick="ScheduleModal.selectMinute(45)">:45</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Schedule Options - Monthly -->
+            <div class="schedule-options" id="scheduleOptionsMonthly" style="display: none;">
+                <div class="schedule-form-group">
+                    <label class="schedule-form-label">
+                        Day of Month <span class="required">*</span>
+                    </label>
+                    <div class="schedule-day-of-month-grid">
+                        <button type="button" class="schedule-dom-btn active" data-day="1" onclick="ScheduleModal.selectDayOfMonth(1)">1</button>
+                        <button type="button" class="schedule-dom-btn" data-day="2" onclick="ScheduleModal.selectDayOfMonth(2)">2</button>
+                        <button type="button" class="schedule-dom-btn" data-day="3" onclick="ScheduleModal.selectDayOfMonth(3)">3</button>
+                        <button type="button" class="schedule-dom-btn" data-day="4" onclick="ScheduleModal.selectDayOfMonth(4)">4</button>
+                        <button type="button" class="schedule-dom-btn" data-day="5" onclick="ScheduleModal.selectDayOfMonth(5)">5</button>
+                        <button type="button" class="schedule-dom-btn" data-day="6" onclick="ScheduleModal.selectDayOfMonth(6)">6</button>
+                        <button type="button" class="schedule-dom-btn" data-day="7" onclick="ScheduleModal.selectDayOfMonth(7)">7</button>
+                        <button type="button" class="schedule-dom-btn" data-day="8" onclick="ScheduleModal.selectDayOfMonth(8)">8</button>
+                        <button type="button" class="schedule-dom-btn" data-day="9" onclick="ScheduleModal.selectDayOfMonth(9)">9</button>
+                        <button type="button" class="schedule-dom-btn" data-day="10" onclick="ScheduleModal.selectDayOfMonth(10)">10</button>
+                        <button type="button" class="schedule-dom-btn" data-day="11" onclick="ScheduleModal.selectDayOfMonth(11)">11</button>
+                        <button type="button" class="schedule-dom-btn" data-day="12" onclick="ScheduleModal.selectDayOfMonth(12)">12</button>
+                        <button type="button" class="schedule-dom-btn" data-day="13" onclick="ScheduleModal.selectDayOfMonth(13)">13</button>
+                        <button type="button" class="schedule-dom-btn" data-day="14" onclick="ScheduleModal.selectDayOfMonth(14)">14</button>
+                        <button type="button" class="schedule-dom-btn" data-day="15" onclick="ScheduleModal.selectDayOfMonth(15)">15</button>
+                        <button type="button" class="schedule-dom-btn" data-day="16" onclick="ScheduleModal.selectDayOfMonth(16)">16</button>
+                        <button type="button" class="schedule-dom-btn" data-day="17" onclick="ScheduleModal.selectDayOfMonth(17)">17</button>
+                        <button type="button" class="schedule-dom-btn" data-day="18" onclick="ScheduleModal.selectDayOfMonth(18)">18</button>
+                        <button type="button" class="schedule-dom-btn" data-day="19" onclick="ScheduleModal.selectDayOfMonth(19)">19</button>
+                        <button type="button" class="schedule-dom-btn" data-day="20" onclick="ScheduleModal.selectDayOfMonth(20)">20</button>
+                        <button type="button" class="schedule-dom-btn" data-day="21" onclick="ScheduleModal.selectDayOfMonth(21)">21</button>
+                        <button type="button" class="schedule-dom-btn" data-day="22" onclick="ScheduleModal.selectDayOfMonth(22)">22</button>
+                        <button type="button" class="schedule-dom-btn" data-day="23" onclick="ScheduleModal.selectDayOfMonth(23)">23</button>
+                        <button type="button" class="schedule-dom-btn" data-day="24" onclick="ScheduleModal.selectDayOfMonth(24)">24</button>
+                        <button type="button" class="schedule-dom-btn" data-day="25" onclick="ScheduleModal.selectDayOfMonth(25)">25</button>
+                        <button type="button" class="schedule-dom-btn" data-day="26" onclick="ScheduleModal.selectDayOfMonth(26)">26</button>
+                        <button type="button" class="schedule-dom-btn" data-day="27" onclick="ScheduleModal.selectDayOfMonth(27)">27</button>
+                        <button type="button" class="schedule-dom-btn" data-day="28" onclick="ScheduleModal.selectDayOfMonth(28)">28</button>
+                        <button type="button" class="schedule-dom-btn schedule-dom-btn-warning" data-day="29" onclick="ScheduleModal.selectDayOfMonth(29)">29</button>
+                        <button type="button" class="schedule-dom-btn schedule-dom-btn-warning" data-day="30" onclick="ScheduleModal.selectDayOfMonth(30)">30</button>
+                        <button type="button" class="schedule-dom-btn schedule-dom-btn-warning" data-day="31" onclick="ScheduleModal.selectDayOfMonth(31)">31</button>
+                    </div>
+                    <p class="schedule-form-hint schedule-dom-hint">
+                        <i class="fas fa-info-circle"></i> Days 29-31 may be skipped in shorter months
+                    </p>
+                </div>
+                <div class="schedule-form-group">
+                    <label for="scheduleMonthlyTimeInput" class="schedule-form-label">
+                        Time of Day <span class="required">*</span>
+                    </label>
+                    <input type="text" id="scheduleMonthlyTimeInput" class="schedule-form-input schedule-time-picker"
+                           placeholder="Select time" value="09:00">
                 </div>
             </div>
 
@@ -174,15 +227,16 @@
         </div>
 
         <!-- Footer -->
-        <div class="modal-footer schedule-modal-footer">
-            <button class="btn-neu btn-neu-action btn-neu-secondary" onclick="ScheduleModal.close()">
-                <span class="btn-neu-inner">Cancel</span>
-            </button>
-            <button class="btn-neu btn-neu-action btn-neu-save" id="scheduleCreateBtn" onclick="ScheduleModal.create()">
-                <span class="btn-neu-inner">
-                    <i class="fas fa-calendar-plus"></i> Create Schedule
-                </span>
-            </button>
+        <div class="modal-footer-wizard-neu">
+            <div class="footer-left"></div>
+            <div class="footer-right">
+                <button class="btn-neu btn-neu-action btn-neu-save" id="scheduleCreateBtn" onclick="ScheduleModal.create()">
+                    <span class="btn-neu-inner">Create</span>
+                </button>
+                <button class="btn-neu btn-neu-action btn-neu-cancel" onclick="ScheduleModal.close()">
+                    <span class="btn-neu-inner">Cancel</span>
+                </button>
+            </div>
         </div>
 
         <!-- Loading Overlay -->

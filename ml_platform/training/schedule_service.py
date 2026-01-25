@@ -441,6 +441,23 @@ class TrainingScheduleService:
                 return f"{schedule.schedule_time.minute} {schedule.schedule_time.hour} * * {cron_day}"
             return f"0 2 * * {cron_day}"  # Default: 2 AM on specified day
 
+        elif schedule.schedule_type == TrainingSchedule.SCHEDULE_TYPE_HOURLY:
+            # Hourly: every hour at specified minute
+            # Format: "minute * * * *"
+            minute = schedule.schedule_time.minute if schedule.schedule_time else 0
+            return f"{minute} * * * *"
+
+        elif schedule.schedule_type == TrainingSchedule.SCHEDULE_TYPE_MONTHLY:
+            # Monthly: specific day of month and time
+            # Format: "minute hour day * *"
+            if schedule.schedule_time:
+                minute = schedule.schedule_time.minute
+                hour = schedule.schedule_time.hour
+            else:
+                minute, hour = 0, 2  # Default 2 AM
+            day = schedule.schedule_day_of_month or 1
+            return f"{minute} {hour} {day} * *"
+
         # Fallback
         logger.warning(f"Unknown schedule type: {schedule.schedule_type}")
         return "0 2 * * *"
@@ -545,6 +562,37 @@ class TrainingScheduleService:
                 )
             if next_run <= now:
                 next_run += timedelta(weeks=1)
+            return next_run
+
+        elif schedule.schedule_type == TrainingSchedule.SCHEDULE_TYPE_HOURLY:
+            minute = schedule.schedule_time.minute if schedule.schedule_time else 0
+            next_run = now.replace(minute=minute, second=0, microsecond=0)
+            if next_run <= now:
+                next_run += timedelta(hours=1)
+            return next_run
+
+        elif schedule.schedule_type == TrainingSchedule.SCHEDULE_TYPE_MONTHLY:
+            target_day = schedule.schedule_day_of_month or 1
+            if schedule.schedule_time:
+                hour = schedule.schedule_time.hour
+                minute = schedule.schedule_time.minute
+            else:
+                hour, minute = 2, 0  # Default 2 AM
+
+            # Start with current month
+            next_run = now.replace(
+                day=target_day,
+                hour=hour,
+                minute=minute,
+                second=0,
+                microsecond=0
+            )
+            if next_run <= now:
+                # Move to next month
+                if now.month == 12:
+                    next_run = next_run.replace(year=now.year + 1, month=1)
+                else:
+                    next_run = next_run.replace(month=now.month + 1)
             return next_run
 
         return None

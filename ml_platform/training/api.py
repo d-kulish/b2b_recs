@@ -2154,7 +2154,13 @@ def _training_schedule_create(request, model_endpoint):
             return _create_immediate_training_run(request, model_endpoint, data)
 
         # Validate schedule type
-        valid_types = [TrainingSchedule.SCHEDULE_TYPE_ONCE, TrainingSchedule.SCHEDULE_TYPE_DAILY, TrainingSchedule.SCHEDULE_TYPE_WEEKLY]
+        valid_types = [
+            TrainingSchedule.SCHEDULE_TYPE_ONCE,
+            TrainingSchedule.SCHEDULE_TYPE_HOURLY,
+            TrainingSchedule.SCHEDULE_TYPE_DAILY,
+            TrainingSchedule.SCHEDULE_TYPE_WEEKLY,
+            TrainingSchedule.SCHEDULE_TYPE_MONTHLY
+        ]
         if schedule_type not in valid_types:
             return JsonResponse({
                 'success': False,
@@ -2216,6 +2222,7 @@ def _training_schedule_create(request, model_endpoint):
         scheduled_datetime = None
         schedule_time = None
         schedule_day_of_week = None
+        schedule_day_of_month = None
 
         if schedule_type == TrainingSchedule.SCHEDULE_TYPE_ONCE:
             if not data.get('scheduled_datetime'):
@@ -2230,6 +2237,20 @@ def _training_schedule_create(request, model_endpoint):
                     'success': False,
                     'error': f'Invalid scheduled_datetime format: {e}'
                 }, status=400)
+
+        elif schedule_type == TrainingSchedule.SCHEDULE_TYPE_HOURLY:
+            # Hourly: uses schedule_time for the minute (e.g., "00:15" means run at :15 each hour)
+            if data.get('schedule_time'):
+                try:
+                    hour, minute = map(int, data['schedule_time'].split(':'))
+                    schedule_time = dt_time(0, minute)  # Only minute matters for hourly
+                except (ValueError, AttributeError):
+                    return JsonResponse({
+                        'success': False,
+                        'error': 'Invalid schedule_time format. Use HH:MM'
+                    }, status=400)
+            else:
+                schedule_time = dt_time(0, 0)  # Default to :00
 
         elif schedule_type in (TrainingSchedule.SCHEDULE_TYPE_DAILY, TrainingSchedule.SCHEDULE_TYPE_WEEKLY):
             if data.get('schedule_time'):
@@ -2252,6 +2273,27 @@ def _training_schedule_create(request, model_endpoint):
                         'error': 'schedule_day_of_week must be 0-6 (Monday-Sunday)'
                     }, status=400)
 
+        elif schedule_type == TrainingSchedule.SCHEDULE_TYPE_MONTHLY:
+            # Monthly: day of month (1-28) and time of day
+            schedule_day_of_month = data.get('schedule_day_of_month', 1)
+            if not isinstance(schedule_day_of_month, int) or schedule_day_of_month < 1 or schedule_day_of_month > 31:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'schedule_day_of_month must be 1-31'
+                }, status=400)
+
+            if data.get('schedule_time'):
+                try:
+                    hour, minute = map(int, data['schedule_time'].split(':'))
+                    schedule_time = dt_time(hour, minute)
+                except (ValueError, AttributeError):
+                    return JsonResponse({
+                        'success': False,
+                        'error': 'Invalid schedule_time format. Use HH:MM'
+                    }, status=400)
+            else:
+                schedule_time = dt_time(9, 0)  # Default to 9 AM
+
         # Create the schedule
         schedule = TrainingSchedule.objects.create(
             ml_model=model_endpoint,
@@ -2261,6 +2303,7 @@ def _training_schedule_create(request, model_endpoint):
             scheduled_datetime=scheduled_datetime,
             schedule_time=schedule_time,
             schedule_day_of_week=schedule_day_of_week,
+            schedule_day_of_month=schedule_day_of_month,
             schedule_timezone=data.get('schedule_timezone', 'UTC'),
             dataset=dataset,
             feature_config=feature_config,
@@ -2722,6 +2765,7 @@ def training_schedule_preview(request):
             'source_run_name': training_run.name,
             'source_run_number': training_run.run_number,
             'source_run_display_name': training_run.display_name,
+            'vertex_model_name': training_run.vertex_model_name,  # Trained model name (e.g., "chern_retriv_v5")
             'dataset_id': training_run.dataset_id,
             'dataset_name': training_run.dataset.name if training_run.dataset else None,
             'feature_config_id': training_run.feature_config_id,
@@ -2811,7 +2855,13 @@ def training_schedule_from_run(request):
         schedule_type = data['schedule_type']
 
         # Validate schedule type
-        valid_types = [TrainingSchedule.SCHEDULE_TYPE_ONCE, TrainingSchedule.SCHEDULE_TYPE_DAILY, TrainingSchedule.SCHEDULE_TYPE_WEEKLY]
+        valid_types = [
+            TrainingSchedule.SCHEDULE_TYPE_ONCE,
+            TrainingSchedule.SCHEDULE_TYPE_HOURLY,
+            TrainingSchedule.SCHEDULE_TYPE_DAILY,
+            TrainingSchedule.SCHEDULE_TYPE_WEEKLY,
+            TrainingSchedule.SCHEDULE_TYPE_MONTHLY
+        ]
         if schedule_type not in valid_types:
             return JsonResponse({
                 'success': False,
@@ -2824,6 +2874,7 @@ def training_schedule_from_run(request):
         scheduled_datetime = None
         schedule_time = None
         schedule_day_of_week = None
+        schedule_day_of_month = None
 
         if schedule_type == TrainingSchedule.SCHEDULE_TYPE_ONCE:
             if not data.get('scheduled_datetime'):
@@ -2838,6 +2889,20 @@ def training_schedule_from_run(request):
                     'success': False,
                     'error': f'Invalid scheduled_datetime format: {e}'
                 }, status=400)
+
+        elif schedule_type == TrainingSchedule.SCHEDULE_TYPE_HOURLY:
+            # Hourly: uses schedule_time for the minute (e.g., "00:15" means run at :15 each hour)
+            if data.get('schedule_time'):
+                try:
+                    hour, minute = map(int, data['schedule_time'].split(':'))
+                    schedule_time = dt_time(0, minute)  # Only minute matters for hourly
+                except (ValueError, AttributeError):
+                    return JsonResponse({
+                        'success': False,
+                        'error': 'Invalid schedule_time format. Use HH:MM'
+                    }, status=400)
+            else:
+                schedule_time = dt_time(0, 0)  # Default to :00
 
         elif schedule_type in (TrainingSchedule.SCHEDULE_TYPE_DAILY, TrainingSchedule.SCHEDULE_TYPE_WEEKLY):
             if data.get('schedule_time'):
@@ -2860,6 +2925,27 @@ def training_schedule_from_run(request):
                         'error': 'schedule_day_of_week must be 0-6 (Monday-Sunday)'
                     }, status=400)
 
+        elif schedule_type == TrainingSchedule.SCHEDULE_TYPE_MONTHLY:
+            # Monthly: day of month (1-28) and time of day
+            schedule_day_of_month = data.get('schedule_day_of_month', 1)
+            if not isinstance(schedule_day_of_month, int) or schedule_day_of_month < 1 or schedule_day_of_month > 31:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'schedule_day_of_month must be 1-31'
+                }, status=400)
+
+            if data.get('schedule_time'):
+                try:
+                    hour, minute = map(int, data['schedule_time'].split(':'))
+                    schedule_time = dt_time(hour, minute)
+                except (ValueError, AttributeError):
+                    return JsonResponse({
+                        'success': False,
+                        'error': 'Invalid schedule_time format. Use HH:MM'
+                    }, status=400)
+            else:
+                schedule_time = dt_time(9, 0)  # Default to 9 AM
+
         # Create the schedule, inheriting config from source training run
         schedule = TrainingSchedule.objects.create(
             ml_model=model_endpoint,
@@ -2869,6 +2955,7 @@ def training_schedule_from_run(request):
             scheduled_datetime=scheduled_datetime,
             schedule_time=schedule_time,
             schedule_day_of_week=schedule_day_of_week,
+            schedule_day_of_month=schedule_day_of_month,
             schedule_timezone=data.get('schedule_timezone', 'UTC'),
             # Inherit from source training run
             dataset=source_run.dataset,

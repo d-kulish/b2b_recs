@@ -24,13 +24,17 @@ class TrainingSchedule(models.Model):
     # Schedule Type Choices
     # =========================================================================
     SCHEDULE_TYPE_ONCE = 'once'
+    SCHEDULE_TYPE_HOURLY = 'hourly'
     SCHEDULE_TYPE_DAILY = 'daily'
     SCHEDULE_TYPE_WEEKLY = 'weekly'
+    SCHEDULE_TYPE_MONTHLY = 'monthly'
 
     SCHEDULE_TYPE_CHOICES = [
         (SCHEDULE_TYPE_ONCE, 'One-time'),
+        (SCHEDULE_TYPE_HOURLY, 'Hourly'),
         (SCHEDULE_TYPE_DAILY, 'Daily'),
         (SCHEDULE_TYPE_WEEKLY, 'Weekly'),
+        (SCHEDULE_TYPE_MONTHLY, 'Monthly'),
     ]
 
     # =========================================================================
@@ -136,6 +140,12 @@ class TrainingSchedule(models.Model):
         help_text="Day of week for weekly schedules (0=Monday, 6=Sunday)"
     )
 
+    schedule_day_of_month = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="Day of month for monthly schedules (1-31)"
+    )
+
     schedule_timezone = models.CharField(
         max_length=50,
         default='UTC',
@@ -235,7 +245,12 @@ class TrainingSchedule(models.Model):
     @property
     def is_recurring(self):
         """Check if this is a recurring schedule."""
-        return self.schedule_type in (self.SCHEDULE_TYPE_DAILY, self.SCHEDULE_TYPE_WEEKLY)
+        return self.schedule_type in (
+            self.SCHEDULE_TYPE_HOURLY,
+            self.SCHEDULE_TYPE_DAILY,
+            self.SCHEDULE_TYPE_WEEKLY,
+            self.SCHEDULE_TYPE_MONTHLY
+        )
 
     @property
     def success_rate(self):

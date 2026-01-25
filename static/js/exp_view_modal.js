@@ -496,7 +496,6 @@ const ExpViewModal = (function() {
 
     function renderTrainingRunMetrics(run) {
         const resultsSummary = document.getElementById('expViewResultsSummary');
-        const metricsContainer = document.getElementById('expViewMetricsSummary');
 
         // Only show for completed or not_blessed runs
         if (run.status !== 'completed' && run.status !== 'not_blessed') {
@@ -506,72 +505,21 @@ const ExpViewModal = (function() {
 
         resultsSummary.classList.remove('hidden');
 
-        let metricsHtml = '';
-        const formatRecall = v => v != null ? (v * 100).toFixed(0) + '%' : 'N/A';
+        // Build metrics object from training run properties
+        const metrics = {
+            recall_at_5: run.recall_at_5,
+            recall_at_10: run.recall_at_10,
+            recall_at_50: run.recall_at_50,
+            recall_at_100: run.recall_at_100,
+            rmse: run.rmse,
+            mae: run.mae,
+            test_rmse: run.test_rmse,
+            test_mae: run.test_mae,
+            loss: run.loss
+        };
 
-        // Metrics based on model type
-        if (run.model_type === 'multitask') {
-            // Retrieval metrics
-            metricsHtml += `
-                <div class="exp-view-metric-card">
-                    <div class="exp-view-metric-card-label">R@5</div>
-                    <div class="exp-view-metric-card-value">${formatRecall(run.recall_at_5)}</div>
-                </div>
-                <div class="exp-view-metric-card">
-                    <div class="exp-view-metric-card-label">R@10</div>
-                    <div class="exp-view-metric-card-value">${formatRecall(run.recall_at_10)}</div>
-                </div>
-                <div class="exp-view-metric-card">
-                    <div class="exp-view-metric-card-label">RMSE</div>
-                    <div class="exp-view-metric-card-value">${formatNumber(run.rmse)}</div>
-                </div>
-                <div class="exp-view-metric-card">
-                    <div class="exp-view-metric-card-label">Loss</div>
-                    <div class="exp-view-metric-card-value">${formatNumber(run.loss)}</div>
-                </div>
-            `;
-        } else if (run.model_type === 'ranking') {
-            metricsHtml += `
-                <div class="exp-view-metric-card">
-                    <div class="exp-view-metric-card-label">RMSE</div>
-                    <div class="exp-view-metric-card-value">${formatNumber(run.rmse)}</div>
-                </div>
-                <div class="exp-view-metric-card">
-                    <div class="exp-view-metric-card-label">Test RMSE</div>
-                    <div class="exp-view-metric-card-value">${formatNumber(run.test_rmse)}</div>
-                </div>
-                <div class="exp-view-metric-card">
-                    <div class="exp-view-metric-card-label">MAE</div>
-                    <div class="exp-view-metric-card-value">${formatNumber(run.mae)}</div>
-                </div>
-                <div class="exp-view-metric-card">
-                    <div class="exp-view-metric-card-label">Loss</div>
-                    <div class="exp-view-metric-card-value">${formatNumber(run.loss)}</div>
-                </div>
-            `;
-        } else {
-            // Retrieval
-            metricsHtml += `
-                <div class="exp-view-metric-card">
-                    <div class="exp-view-metric-card-label">R@5</div>
-                    <div class="exp-view-metric-card-value">${formatRecall(run.recall_at_5)}</div>
-                </div>
-                <div class="exp-view-metric-card">
-                    <div class="exp-view-metric-card-label">R@10</div>
-                    <div class="exp-view-metric-card-value">${formatRecall(run.recall_at_10)}</div>
-                </div>
-                <div class="exp-view-metric-card">
-                    <div class="exp-view-metric-card-label">R@50</div>
-                    <div class="exp-view-metric-card-value">${formatRecall(run.recall_at_50)}</div>
-                </div>
-                <div class="exp-view-metric-card">
-                    <div class="exp-view-metric-card-label">R@100</div>
-                    <div class="exp-view-metric-card-value">${formatRecall(run.recall_at_100)}</div>
-                </div>
-            `;
-        }
-
-        metricsContainer.innerHTML = metricsHtml;
+        // Delegate to renderMetricsSummary for consistent rendering
+        renderMetricsSummary(metrics, false, run.model_type || 'retrieval');
     }
 
     function renderTrainingRunSamplingChips(run) {

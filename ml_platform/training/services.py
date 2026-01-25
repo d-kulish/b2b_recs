@@ -663,9 +663,8 @@ class TrainingService:
                 # Extract RMSE/MAE (ranking models)
                 for metric in ['rmse', 'mae', 'test_rmse', 'test_mae']:
                     if metric in final_metrics:
-                        field_name = metric.replace('test_', '')
-                        setattr(training_run, field_name, final_metrics[metric])
-                        update_fields.append(field_name)
+                        setattr(training_run, metric, final_metrics[metric])
+                        update_fields.append(metric)
 
                 if update_fields:
                     training_run.save(update_fields=update_fields)

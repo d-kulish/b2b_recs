@@ -470,12 +470,37 @@ BIGQUERY_DATASET=raw_data
 
 ## 🐛 Troubleshooting
 
-### **Cloud Scheduler 401 Error**
-**Fix:** Grant OIDC token creation permission
+### **Cloud Scheduler 401 Error (ETL)**
+**Fix:** Grant OIDC token creation permission for ETL scheduler
 ```bash
 gcloud iam service-accounts add-iam-policy-binding etl-runner@b2b-recs.iam.gserviceaccount.com \
   --member="serviceAccount:service-555035914949@gcp-sa-cloudscheduler.iam.gserviceaccount.com" \
   --role="roles/iam.serviceAccountTokenCreator"
+```
+
+### **Training Schedule Not Executing (401 Error)**
+**Cause:** The `training-scheduler` service account doesn't exist or lacks permissions.
+
+**Fix:** Create and configure the training scheduler service account:
+```bash
+# 1. Create the service account
+gcloud iam service-accounts create training-scheduler \
+  --display-name="Training Scheduler Service Account" \
+  --project=b2b-recs
+
+# 2. Grant Cloud Scheduler agent permission to create OIDC tokens
+gcloud iam service-accounts add-iam-policy-binding \
+  training-scheduler@b2b-recs.iam.gserviceaccount.com \
+  --member="serviceAccount:service-555035914949@gcp-sa-cloudscheduler.iam.gserviceaccount.com" \
+  --role="roles/iam.serviceAccountTokenCreator" \
+  --project=b2b-recs
+
+# 3. Grant the service account permission to invoke Cloud Run
+gcloud run services add-iam-policy-binding django-app \
+  --member="serviceAccount:training-scheduler@b2b-recs.iam.gserviceaccount.com" \
+  --role="roles/run.invoker" \
+  --region=europe-central2 \
+  --project=b2b-recs
 ```
 
 ### **ETL Job Fails with "Cannot determine path"**
@@ -492,6 +517,13 @@ WHERE source_type='gcs';
 ---
 
 ## 📝 Recent Updates
+
+**January 26, 2026 - Training Scheduler IAM Fix**
+- ✅ **Bug fix** - Training schedules not executing due to missing service account
+- ✅ **Created `training-scheduler` service account** - Required for Cloud Scheduler OIDC authentication
+- ✅ **IAM permissions configured** - `roles/iam.serviceAccountTokenCreator` and `roles/run.invoker`
+- ✅ **Documentation updated** - Added troubleshooting section for training scheduler setup
+- See Troubleshooting section below for setup commands
 
 **January 18, 2026 - GPU Training Configuration & Quota**
 - ✅ **GPU quota approved** - 2x T4 GPUs in `europe-west4` region

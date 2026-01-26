@@ -188,6 +188,12 @@ class TrainingScheduleService:
         else:
             model_name = schedule.name
 
+        # Get next run number BEFORE creating (run_number has NOT NULL constraint)
+        last_run = TrainingRun.objects.filter(
+            ml_model=schedule.ml_model
+        ).order_by('-run_number').first()
+        next_run_number = (last_run.run_number + 1) if last_run else 1
+
         # Create training run from schedule config
         run_timestamp = timezone.now().strftime('%Y%m%d-%H%M')
         training_run = TrainingRun.objects.create(
@@ -206,14 +212,8 @@ class TrainingScheduleService:
             schedule=schedule,
             registered_model=schedule.registered_model,
             status=TrainingRun.STATUS_PENDING,
+            run_number=next_run_number,
         )
-
-        # Get next run number
-        last_run = TrainingRun.objects.filter(
-            ml_model=schedule.ml_model
-        ).exclude(id=training_run.id).order_by('-run_number').first()
-        training_run.run_number = (last_run.run_number + 1) if last_run else 1
-        training_run.save(update_fields=['run_number'])
 
         # Submit the pipeline
         try:

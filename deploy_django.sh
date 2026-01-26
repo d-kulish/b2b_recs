@@ -42,7 +42,7 @@ gcloud run deploy ${SERVICE_NAME} \
     --port 8080 \
     --set-env-vars "DJANGO_DEBUG=False" \
     --set-env-vars "DJANGO_ALLOWED_HOSTS=*" \
-    --set-env-vars "CSRF_TRUSTED_ORIGINS=https://django-app-3dmqemfmxq-lm.a.run.app" \
+    --set-env-vars "CSRF_TRUSTED_ORIGINS=https://django-app-555035914949.europe-central2.run.app" \
     --set-env-vars "GCP_PROJECT_ID=${PROJECT_ID}" \
     --set-env-vars "DB_ENGINE=postgresql" \
     --set-env-vars "DB_NAME=b2b_recs_dev" \

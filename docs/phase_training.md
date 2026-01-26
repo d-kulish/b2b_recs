@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides detailed specifications for implementing the **Training** domain in the ML Platform. The Training domain executes full TFX pipelines for production model training.
 
-**Last Updated**: 2026-01-25 (Added RegisteredModel entity for Schedule functionality)
+**Last Updated**: 2026-01-26 (Added Training Scheduler IAM setup documentation)
 
 ---
 
@@ -25,6 +25,77 @@ The Training domain allows users to:
 - TFX artifacts tracked in ML Metadata
 - Metrics logged to MLflow
 - Model ready for deployment
+
+---
+
+## Prerequisites
+
+### Training Scheduler IAM Setup
+
+For scheduled training to work, you must create and configure the `training-scheduler` service account. This service account is used by Cloud Scheduler to authenticate webhook calls via OIDC tokens.
+
+#### Why This Is Needed
+
+When Cloud Scheduler triggers a scheduled training:
+1. Cloud Scheduler generates an OIDC token using the `training-scheduler` service account
+2. The token is sent in the `Authorization` header to the webhook endpoint
+3. Django verifies the token and executes the training
+
+Without proper IAM setup, the webhook returns `401 Unauthorized` and schedules never execute.
+
+#### Setup Commands
+
+```bash
+# 1. Create the service account
+gcloud iam service-accounts create training-scheduler \
+  --display-name="Training Scheduler Service Account" \
+  --description="Service account for Cloud Scheduler to trigger training webhooks" \
+  --project=PROJECT_ID
+
+# 2. Grant Cloud Scheduler agent permission to create OIDC tokens
+# Replace PROJECT_NUMBER with your GCP project number (e.g., 555035914949)
+gcloud iam service-accounts add-iam-policy-binding \
+  training-scheduler@PROJECT_ID.iam.gserviceaccount.com \
+  --member="serviceAccount:service-PROJECT_NUMBER@gcp-sa-cloudscheduler.iam.gserviceaccount.com" \
+  --role="roles/iam.serviceAccountTokenCreator" \
+  --project=PROJECT_ID
+
+# 3. Grant the service account permission to invoke Cloud Run
+gcloud run services add-iam-policy-binding django-app \
+  --member="serviceAccount:training-scheduler@PROJECT_ID.iam.gserviceaccount.com" \
+  --role="roles/run.invoker" \
+  --region=europe-central2 \
+  --project=PROJECT_ID
+```
+
+#### Finding Your Project Number
+
+```bash
+gcloud projects describe PROJECT_ID --format="value(projectNumber)"
+```
+
+#### Verification
+
+After setup, verify the service account exists and has correct permissions:
+
+```bash
+# Check service account exists
+gcloud iam service-accounts list --project=PROJECT_ID --filter="email:training-scheduler@"
+
+# Check IAM policy on the service account
+gcloud iam service-accounts get-iam-policy \
+  training-scheduler@PROJECT_ID.iam.gserviceaccount.com \
+  --project=PROJECT_ID
+```
+
+#### Configuration
+
+The service account email can be customized via Django settings:
+
+```python
+# settings.py (optional - defaults to training-scheduler@{GCP_PROJECT_ID}.iam.gserviceaccount.com)
+TRAINING_SCHEDULER_SERVICE_ACCOUNT = "custom-scheduler@project.iam.gserviceaccount.com"
+```
 
 ---
 

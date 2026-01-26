@@ -1505,18 +1505,6 @@
                     </div>
                 </div>
 
-                <!-- Action Buttons Section -->
-                <div class="wizard-action-section" style="margin-top: 24px; display: flex; gap: 16px; justify-content: center;">
-                    <button type="button" class="wizard-action-btn wizard-action-btn-primary" onclick="TrainingWizard.submit()">
-                        <i class="fas fa-play"></i>
-                        <span>Run Now</span>
-                    </button>
-                    <button type="button" class="wizard-action-btn wizard-action-btn-secondary" onclick="TrainingWizard.openScheduleModal()">
-                        <i class="fas fa-calendar-alt"></i>
-                        <span>Schedule</span>
-                    </button>
-                </div>
-
                 <!-- Advanced Section (collapsed by default) -->
                 <div class="filter-subchapter" style="margin-top: 20px;">
                     <div class="subchapter-header-tablet" id="wizardStep3AdvancedToggle" onclick="TrainingWizard.toggleStep3Advanced()">
@@ -1597,8 +1585,14 @@
                 </button>
             </div>
             <div class="footer-right">
-                <button id="wizardSubmitBtn" class="btn-neu btn-neu-action btn-neu-save hidden" onclick="TrainingWizard.submit()">
+                <button id="wizardScheduleBtn" class="btn-neu btn-neu-action btn-neu-schedule hidden" onclick="TrainingWizard.openScheduleModal()">
+                    <span class="btn-neu-inner">Schedule</span>
+                </button>
+                <button id="wizardRunNowBtn" class="btn-neu btn-neu-action btn-neu-save hidden" onclick="TrainingWizard.submit()">
                     <span class="btn-neu-inner">Run</span>
+                </button>
+                <button id="wizardSubmitBtn" class="btn-neu btn-neu-action btn-neu-save hidden" onclick="TrainingWizard.submit()">
+                    <span class="btn-neu-inner">Update</span>
                 </button>
                 <button class="btn-neu btn-neu-action btn-neu-cancel" onclick="TrainingWizard.close()">
                     <span class="btn-neu-inner">Cancel</span>

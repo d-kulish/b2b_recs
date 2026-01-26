@@ -575,6 +575,8 @@ const TrainingWizard = (function() {
         const prevBtn = document.getElementById('wizardPrevBtn');
         const nextBtn = document.getElementById('wizardNextBtn');
         const submitBtn = document.getElementById('wizardSubmitBtn');
+        const runNowBtn = document.getElementById('wizardRunNowBtn');
+        const scheduleBtn = document.getElementById('wizardScheduleBtn');
 
         // In edit mode, step 2 is the first step
         const isFirstStep = state.editMode ? state.currentStep === 2 : state.currentStep === 1;
@@ -589,9 +591,16 @@ const TrainingWizard = (function() {
             nextBtn.classList.toggle('hidden', isLastStep);
         }
 
+        // Run Now and Schedule buttons - shown on step 3 in new mode only
+        if (runNowBtn) {
+            runNowBtn.classList.toggle('hidden', state.editMode || !isLastStep);
+        }
+        if (scheduleBtn) {
+            scheduleBtn.classList.toggle('hidden', state.editMode || !isLastStep);
+        }
+
+        // Submit (Update) button - shown on step 3 in edit mode only
         if (submitBtn) {
-            // In edit mode, show footer submit button on step 3
-            // In new mode, hide it (we use inline Run Now/Schedule buttons)
             if (state.editMode) {
                 submitBtn.classList.toggle('hidden', !isLastStep);
                 updateSubmitButtonText();
@@ -1382,12 +1391,15 @@ const TrainingWizard = (function() {
             return submitEditMode();
         }
 
-        // Find the Run Now button (inline button in step 3)
-        const runNowBtn = document.querySelector('.wizard-action-btn-primary');
+        // Find the Run Now button in footer
+        const runNowBtn = document.getElementById('wizardRunNowBtn');
+        const btnInner = runNowBtn ? runNowBtn.querySelector('.btn-neu-inner') : null;
 
         if (runNowBtn) {
             runNowBtn.disabled = true;
-            runNowBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> <span>Running...</span>';
+            if (btnInner) {
+                btnInner.textContent = 'Running...';
+            }
         }
 
         try {
@@ -1430,7 +1442,9 @@ const TrainingWizard = (function() {
         } finally {
             if (runNowBtn) {
                 runNowBtn.disabled = false;
-                runNowBtn.innerHTML = '<i class="fas fa-play"></i> <span>Run Now</span>';
+                if (btnInner) {
+                    btnInner.textContent = 'Run';
+                }
             }
         }
     }

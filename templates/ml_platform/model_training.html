@@ -1738,21 +1738,6 @@
         <!-- Filter bar rendered by TrainingCards.init() -->
     </div>
 
-    <!-- Active Schedules Section -->
-    <div id="trainingSchedulesSection" class="training-schedules-section hidden">
-        <div class="schedules-section-header">
-            <h3 class="schedules-section-title">
-                <i class="fas fa-calendar-alt"></i> Active Schedules
-            </h3>
-            <button class="btn-text schedules-toggle-btn" onclick="TrainingSchedules.toggleSection()">
-                <i class="fas fa-chevron-up"></i>
-            </button>
-        </div>
-        <div id="schedulesList" class="schedules-list">
-            <!-- Schedule cards will be populated here by TrainingSchedules -->
-        </div>
-    </div>
-
     <!-- Loading State -->
     <div id="trainingLoading" class="training-loading hidden">
         <i class="fas fa-spinner fa-spin"></i>
@@ -1833,6 +1818,18 @@
         <div class="empty-icon"><i class="fas fa-cube"></i></div>
         <h3>No Registered Models</h3>
         <p>Complete training runs with the Pusher component to register models in Vertex AI Model Registry.</p>
+    </div>
+
+    <!-- Active Schedules Section -->
+    <div id="trainingSchedulesSection" class="training-schedules-section hidden">
+        <div class="schedules-section-header">
+            <h3 class="schedules-section-title">
+                <i class="fas fa-clock"></i> Active Schedules
+            </h3>
+        </div>
+        <div id="schedulesList" class="schedules-list">
+            <!-- Schedule cards will be populated here by TrainingSchedules -->
+        </div>
     </div>
 </div>
 <!-- End Chapter 3: Models Registry -->

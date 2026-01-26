@@ -447,11 +447,9 @@
    Training Schedules Section
    ========================================================================= */
 .training-schedules-section {
+    margin-top: 24px;
     margin-bottom: 20px;
-    background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
-    border: 1px solid #bae6fd;
-    border-radius: 10px;
-    padding: 16px;
+    padding: 0;
 }
 
 .training-schedules-section.hidden {
@@ -468,7 +466,7 @@
 .schedules-section-title {
     font-size: 14px;
     font-weight: 600;
-    color: #0369a1;
+    color: #374151;
     margin: 0;
     display: flex;
     align-items: center;
@@ -477,43 +475,29 @@
 
 .schedules-section-title i {
     font-size: 16px;
+    color: #3b82f6;
 }
 
-.schedules-toggle-btn {
-    background: none;
-    border: none;
-    padding: 4px 8px;
-    color: #6b7280;
-    cursor: pointer;
-    border-radius: 4px;
-    transition: all 0.15s ease;
-}
-
-.schedules-toggle-btn:hover {
-    background: rgba(0, 0, 0, 0.05);
-    color: #374151;
-}
 
 .schedules-list {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 8px;
 }
 
-.schedules-list.collapsed {
-    display: none;
-}
 
-/* Schedule Card */
+/* Schedule Card - Compact horizontal row layout */
 .schedule-card {
     background: white;
     border: 1px solid #e5e7eb;
     border-radius: 8px;
-    padding: 14px;
+    padding: 10px 14px;
     display: flex;
-    flex-direction: column;
-    gap: 12px;
+    flex-direction: row;
+    align-items: center;
+    gap: 16px;
     transition: all 0.15s ease;
+    width: 100%;
 }
 
 .schedule-card:hover {
@@ -529,43 +513,46 @@
 .schedule-card-header {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
+    min-width: 200px;
 }
 
 .schedule-card-icon {
-    width: 36px;
-    height: 36px;
-    border-radius: 8px;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
     background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
     display: flex;
     align-items: center;
     justify-content: center;
     color: #2563eb;
-    font-size: 16px;
+    font-size: 12px;
     flex-shrink: 0;
 }
 
 .schedule-card-info {
-    flex: 1;
     min-width: 0;
 }
 
 .schedule-card-name {
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 600;
     color: #111827;
-    margin-bottom: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .schedule-card-desc {
-    font-size: 12px;
+    font-size: 11px;
     color: #6b7280;
+    white-space: nowrap;
 }
 
 .schedule-card-badge {
-    padding: 4px 10px;
-    border-radius: 12px;
-    font-size: 10px;
+    padding: 3px 8px;
+    border-radius: 10px;
+    font-size: 9px;
     font-weight: 600;
     text-transform: uppercase;
     flex-shrink: 0;
@@ -586,28 +573,38 @@
     color: #2563eb;
 }
 
+.schedule-card-badge.hourly {
+    background: #fef3c7;
+    color: #d97706;
+}
+
+.schedule-card-badge.monthly {
+    background: #fce7f3;
+    color: #db2777;
+}
+
 .schedule-card-stats {
     display: flex;
-    gap: 16px;
-    padding: 10px 0;
-    border-top: 1px solid #f3f4f6;
-    border-bottom: 1px solid #f3f4f6;
+    gap: 20px;
+    flex: 1;
+    padding: 0;
+    border: none;
 }
 
 .schedule-stat {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 1px;
 }
 
 .schedule-stat-label {
-    font-size: 10px;
+    font-size: 9px;
     color: #9ca3af;
     text-transform: uppercase;
 }
 
 .schedule-stat-value {
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 600;
     color: #374151;
 }
@@ -615,12 +612,13 @@
 .schedule-card-actions {
     display: flex;
     justify-content: flex-end;
-    gap: 8px;
+    gap: 6px;
+    flex-shrink: 0;
 }
 
 .schedule-action-btn {
-    width: 32px;
-    height: 32px;
+    width: 28px;
+    height: 28px;
     border: 1px solid #d1d5db;
     border-radius: 6px;
     background: white;
@@ -630,6 +628,7 @@
     align-items: center;
     justify-content: center;
     transition: all 0.15s ease;
+    font-size: 11px;
 }
 
 .schedule-action-btn:hover {

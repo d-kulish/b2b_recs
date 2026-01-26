@@ -90,6 +90,11 @@ const ModelsRegistry = (function() {
         return value.toFixed(decimals);
     }
 
+    function formatMetricAsPercent(value) {
+        if (value === null || value === undefined) return '-';
+        return Math.round(value * 100) + '%';
+    }
+
     function getCookie(name) {
         let cookieValue = null;
         if (document.cookie && document.cookie !== '') {
@@ -157,7 +162,8 @@ const ModelsRegistry = (function() {
                     hasNext: data.pagination?.has_next || false,
                     hasPrev: data.pagination?.has_prev || false
                 };
-                render();
+                // Don't re-render filter bar on refresh to preserve search input focus
+                render({ includeFilterBar: false });
             } else {
                 console.error('Failed to fetch models:', data.error);
                 renderError(data.error);
@@ -220,9 +226,13 @@ const ModelsRegistry = (function() {
     // RENDERING
     // =============================================================================
 
-    function render() {
+    function render(options = {}) {
         renderKPI();
-        renderFilterBar();
+        // Only render filter bar on initial load, not on every refresh
+        // This prevents the search input from losing focus while typing
+        if (options.includeFilterBar !== false) {
+            renderFilterBar();
+        }
         renderTable();
     }
 
@@ -296,10 +306,6 @@ const ModelsRegistry = (function() {
                        value="${state.filters.search}"
                        oninput="ModelsRegistry.handleSearch(this.value)">
             </div>
-            <button class="models-refresh-btn ${state.loading ? 'loading' : ''}" onclick="ModelsRegistry.refresh()">
-                <i class="fas fa-sync-alt"></i>
-                Refresh
-            </button>
         `;
     }
 
@@ -363,24 +369,24 @@ const ModelsRegistry = (function() {
         if (model.metrics) {
             if (model.model_type === 'ranking') {
                 metricsHtml = `
-                    <div class="models-metric-chip">
+                    <div class="models-metric-item">
                         <span class="models-metric-label">RMSE</span>
-                        <span class="models-metric-value">${formatMetric(model.metrics.rmse, 4)}</span>
+                        <span class="models-metric-value">${formatMetric(model.metrics.rmse, 2)}</span>
                     </div>
-                    <div class="models-metric-chip">
+                    <div class="models-metric-item">
                         <span class="models-metric-label">MAE</span>
-                        <span class="models-metric-value">${formatMetric(model.metrics.mae, 4)}</span>
+                        <span class="models-metric-value">${formatMetric(model.metrics.mae, 2)}</span>
                     </div>
                 `;
             } else {
                 metricsHtml = `
-                    <div class="models-metric-chip">
-                        <span class="models-metric-label">R@100</span>
-                        <span class="models-metric-value">${formatMetric(model.metrics.recall_at_100, 4)}</span>
-                    </div>
-                    <div class="models-metric-chip">
+                    <div class="models-metric-item">
                         <span class="models-metric-label">R@50</span>
-                        <span class="models-metric-value">${formatMetric(model.metrics.recall_at_50, 4)}</span>
+                        <span class="models-metric-value">${formatMetricAsPercent(model.metrics.recall_at_50)}</span>
+                    </div>
+                    <div class="models-metric-item">
+                        <span class="models-metric-label">R@100</span>
+                        <span class="models-metric-value">${formatMetricAsPercent(model.metrics.recall_at_100)}</span>
                     </div>
                 `;
             }
@@ -766,6 +772,8 @@ const ModelsRegistry = (function() {
     }
 
     function load() {
+        // Render filter bar once on initial load
+        renderFilterBar();
         fetchModels();
 
         // Initialize calendar if container exists

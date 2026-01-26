@@ -298,6 +298,12 @@
     min-width: 60px;
 }
 
+.models-metric-item {
+    display: flex;
+    flex-direction: column;
+    min-width: 50px;
+}
+
 .models-metric-label {
     font-size: 9px;
     color: #9ca3af;

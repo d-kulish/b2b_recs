@@ -1631,6 +1631,34 @@ const TrainingSchedules = (function() {
     };
 
     const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    const DAY_ABBREVS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+    // Timezone abbreviations for common timezones
+    const TIMEZONE_ABBREVS = {
+        'Europe/Warsaw': 'CET',
+        'Europe/London': 'GMT',
+        'Europe/Paris': 'CET',
+        'Europe/Berlin': 'CET',
+        'America/New_York': 'EST',
+        'America/Los_Angeles': 'PST',
+        'America/Chicago': 'CST',
+        'UTC': 'UTC',
+        'US/Eastern': 'EST',
+        'US/Pacific': 'PST',
+        'US/Central': 'CST'
+    };
+
+    function abbreviateTimezone(tz) {
+        if (!tz) return '';
+        if (TIMEZONE_ABBREVS[tz]) return TIMEZONE_ABBREVS[tz];
+        // For unknown timezones, try to extract a short form
+        const parts = tz.split('/');
+        if (parts.length === 2) {
+            // Return city name abbreviated (first 3 chars)
+            return parts[1].substring(0, 3).toUpperCase();
+        }
+        return tz.substring(0, 3).toUpperCase();
+    }
 
     // =============================================================================
     // UTILITY FUNCTIONS
@@ -1671,13 +1699,14 @@ const TrainingSchedules = (function() {
     }
 
     function formatScheduleDescription(schedule) {
+        const tzAbbrev = abbreviateTimezone(schedule.schedule_timezone);
         if (schedule.schedule_type === 'once') {
             return `Scheduled for ${formatDateTime(schedule.scheduled_datetime)}`;
         } else if (schedule.schedule_type === 'daily') {
-            return `Daily at ${schedule.schedule_time || '09:00'} ${schedule.schedule_timezone}`;
+            return `Daily at ${schedule.schedule_time || '09:00'} ${tzAbbrev}`;
         } else if (schedule.schedule_type === 'weekly') {
-            const day = DAY_NAMES[schedule.schedule_day_of_week] || 'Monday';
-            return `${day}s at ${schedule.schedule_time || '09:00'} ${schedule.schedule_timezone}`;
+            const day = DAY_ABBREVS[schedule.schedule_day_of_week] || 'Mon';
+            return `${day} at ${schedule.schedule_time || '09:00'} ${tzAbbrev}`;
         }
         return '';
     }
@@ -1801,10 +1830,6 @@ const TrainingSchedules = (function() {
                         <div class="schedule-stat">
                             <span class="schedule-stat-label">Total Runs</span>
                             <span class="schedule-stat-value">${schedule.total_runs}</span>
-                        </div>
-                        <div class="schedule-stat">
-                            <span class="schedule-stat-label">Success Rate</span>
-                            <span class="schedule-stat-value">${schedule.success_rate != null ? schedule.success_rate + '%' : '-'}</span>
                         </div>
                         <div class="schedule-stat">
                             <span class="schedule-stat-label">Status</span>

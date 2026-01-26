@@ -1320,9 +1320,11 @@ const TrainingCards = (function() {
         showConfirmModal({
             title: 'Delete Training Run',
             message: 'Are you sure you want to delete this training run?<br><br><strong>This action cannot be undone.</strong>',
-            confirmText: 'Delete',
+            confirmText: 'Confirm',
             cancelText: 'Cancel',
             type: 'danger',
+            confirmButtonClass: 'btn-neu-save',      // Green button
+            cancelButtonClass: 'btn-neu-cancel',     // Red button
             onConfirm: async () => {
                 try {
                     const url = buildUrl(config.endpoints.delete, { id: runId });
@@ -1380,7 +1382,8 @@ const TrainingCards = (function() {
             confirmText: 'Rerun',
             cancelText: 'Cancel',
             type: 'info',
-            confirmButtonClass: 'btn-neu-save',
+            confirmButtonClass: 'btn-neu-save',      // Green button
+            cancelButtonClass: 'btn-neu-cancel',     // Red button
             onConfirm: async () => {
                 try {
                     const url = buildUrl(config.endpoints.rerun, { id: runId });
@@ -1620,8 +1623,10 @@ const TrainingSchedules = (function() {
 
     const SCHEDULE_TYPE_LABELS = {
         once: 'One-time',
+        hourly: 'Hourly',
         daily: 'Daily',
-        weekly: 'Weekly'
+        weekly: 'Weekly',
+        monthly: 'Monthly'
     };
 
     const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -1762,6 +1767,7 @@ const TrainingSchedules = (function() {
         const html = state.schedules.map(schedule => {
             const statusConfig = STATUS_CONFIG[schedule.status] || STATUS_CONFIG.active;
             const typeLabel = SCHEDULE_TYPE_LABELS[schedule.schedule_type] || schedule.schedule_type;
+            const modelName = schedule.registered_model_name || '-';
 
             return `
                 <div class="schedule-card ${schedule.status}">
@@ -1773,11 +1779,20 @@ const TrainingSchedules = (function() {
                             <div class="schedule-card-name">${schedule.name}</div>
                             <div class="schedule-card-desc">${formatScheduleDescription(schedule)}</div>
                         </div>
-                        <div class="schedule-card-badge ${schedule.schedule_type}">
-                            ${typeLabel}
-                        </div>
                     </div>
                     <div class="schedule-card-stats">
+                        <div class="schedule-stat">
+                            <span class="schedule-stat-label">Model</span>
+                            <span class="schedule-stat-value schedule-model-name" title="${modelName}">${modelName}</span>
+                        </div>
+                        <div class="schedule-stat">
+                            <span class="schedule-stat-label">Type</span>
+                            <span class="schedule-stat-value schedule-type-value">${typeLabel}</span>
+                        </div>
+                        <div class="schedule-stat">
+                            <span class="schedule-stat-label">Last Run</span>
+                            <span class="schedule-stat-value">${schedule.last_run_at ? formatDateTime(schedule.last_run_at) : '-'}</span>
+                        </div>
                         <div class="schedule-stat">
                             <span class="schedule-stat-label">Next Run</span>
                             <span class="schedule-stat-value">${schedule.next_run_at ? formatDateTime(schedule.next_run_at) : '-'}</span>
@@ -1798,21 +1813,20 @@ const TrainingSchedules = (function() {
                         </div>
                     </div>
                     <div class="schedule-card-actions">
+                        <button class="card-action-btn run" onclick="TrainingSchedules.triggerNow(${schedule.id})" title="Run Now">
+                            <i class="fas fa-play"></i>
+                        </button>
                         ${schedule.status === 'active' ? `
-                            <button class="schedule-action-btn" onclick="TrainingSchedules.triggerNow(${schedule.id})" title="Run Now">
-                                <i class="fas fa-play"></i>
-                            </button>
-                            <button class="schedule-action-btn" onclick="TrainingSchedules.pauseSchedule(${schedule.id})" title="Pause">
+                            <button class="card-action-btn pause-large" onclick="TrainingSchedules.pauseSchedule(${schedule.id})" title="Pause Schedule">
                                 <i class="fas fa-pause"></i>
                             </button>
-                        ` : ''}
-                        ${schedule.status === 'paused' ? `
-                            <button class="schedule-action-btn" onclick="TrainingSchedules.resumeSchedule(${schedule.id})" title="Resume">
-                                <i class="fas fa-play"></i>
+                        ` : `
+                            <button class="card-action-btn resume-large" onclick="TrainingSchedules.resumeSchedule(${schedule.id})" title="Resume Schedule">
+                                <i class="fas fa-play-circle"></i>
                             </button>
-                        ` : ''}
-                        <button class="schedule-action-btn danger" onclick="TrainingSchedules.cancelSchedule(${schedule.id})" title="Cancel">
-                            <i class="fas fa-times"></i>
+                        `}
+                        <button class="card-action-btn delete" onclick="TrainingSchedules.cancelSchedule(${schedule.id})" title="Delete Schedule">
+                            <i class="fas fa-trash"></i>
                         </button>
                     </div>
                 </div>
@@ -1871,12 +1885,14 @@ const TrainingSchedules = (function() {
     }
 
     function cancelSchedule(scheduleId) {
-        showConfirmModal({
-            title: 'Cancel Schedule',
-            message: 'Are you sure you want to cancel this schedule?<br><br>This will delete the Cloud Scheduler job.',
-            confirmText: 'Cancel Schedule',
-            cancelText: 'Keep Schedule',
-            type: 'warning',
+        TrainingCards.showConfirmModal({
+            title: 'Delete Schedule',
+            message: 'Are you sure you want to delete this schedule?<br><br>This will permanently remove the Cloud Scheduler job.',
+            confirmText: 'Confirm',
+            cancelText: 'Cancel',
+            type: 'danger',
+            confirmButtonClass: 'btn-neu-save',      // Green button
+            cancelButtonClass: 'btn-neu-cancel',     // Red button
             onConfirm: async () => {
                 try {
                     const url = buildUrl(config.endpoints.cancel, { id: scheduleId });
@@ -1902,12 +1918,14 @@ const TrainingSchedules = (function() {
     }
 
     function triggerNow(scheduleId) {
-        showConfirmModal({
-            title: 'Trigger Schedule Now',
-            message: 'Are you sure you want to trigger this schedule immediately?<br><br>A new training run will be started.',
-            confirmText: 'Trigger Now',
+        TrainingCards.showConfirmModal({
+            title: 'Run Training Now',
+            message: 'Are you sure you want to run this training immediately?<br><br>A new training run will be started.',
+            confirmText: 'Run',
             cancelText: 'Cancel',
             type: 'info',
+            confirmButtonClass: 'btn-neu-save',      // Green button
+            cancelButtonClass: 'btn-neu-cancel',     // Red button
             onConfirm: async () => {
                 try {
                     const url = buildUrl(config.endpoints.trigger, { id: scheduleId });

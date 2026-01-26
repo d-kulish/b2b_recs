@@ -226,6 +226,11 @@ urlpatterns = [
         name='model_undeploy'
     ),
     path(
+        'api/models/<int:model_id>/delete/',
+        api.model_delete,
+        name='model_delete'
+    ),
+    path(
         'api/models/<int:model_id>/lineage/',
         api.model_lineage,
         name='model_lineage'

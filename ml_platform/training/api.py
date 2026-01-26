@@ -4075,6 +4075,85 @@ def model_undeploy(request, model_id):
 
 
 @csrf_exempt
+@require_http_methods(["DELETE"])
+def model_delete(request, model_id):
+    """
+    Delete a registered model from Vertex AI Model Registry.
+
+    DELETE /api/models/<id>/delete/
+
+    This removes the model from Vertex AI Model Registry and clears
+    the registration data from the TrainingRun.
+    """
+    try:
+        model_endpoint = _get_model_endpoint(request)
+        if not model_endpoint:
+            return JsonResponse({
+                'success': False,
+                'error': 'No model endpoint selected'
+            }, status=400)
+
+        try:
+            training_run = TrainingRun.objects.get(
+                id=model_id,
+                ml_model=model_endpoint,
+                vertex_model_resource_name__isnull=False
+            )
+        except TrainingRun.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': f'Registered model {model_id} not found'
+            }, status=404)
+
+        # Check if model is deployed - cannot delete deployed models
+        service = TrainingService(model_endpoint)
+        endpoint_info = service.get_deployed_model_resource_names()
+        deployed_models = endpoint_info['deployed_models']
+
+        if training_run.vertex_model_resource_name in deployed_models:
+            return JsonResponse({
+                'success': False,
+                'error': 'Cannot delete a deployed model. Undeploy it first.'
+            }, status=400)
+
+        # Store model name for response
+        model_name = training_run.vertex_model_name
+
+        # Delete from Vertex AI Model Registry
+        try:
+            service.delete_model_from_registry(training_run)
+        except TrainingServiceError as e:
+            return JsonResponse({
+                'success': False,
+                'error': str(e)
+            }, status=500)
+
+        # Clear registration data from training run
+        training_run.vertex_model_resource_name = None
+        training_run.vertex_model_name = None
+        training_run.vertex_model_version = None
+        training_run.registered_at = None
+        training_run.save(update_fields=[
+            'vertex_model_resource_name',
+            'vertex_model_name',
+            'vertex_model_version',
+            'registered_at'
+        ])
+
+        return JsonResponse({
+            'success': True,
+            'message': f'Model "{model_name}" deleted successfully'
+        })
+
+    except Exception as e:
+        logger.exception(f"Error deleting model: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@csrf_exempt
 @require_http_methods(["GET"])
 def model_lineage(request, model_id):
     """

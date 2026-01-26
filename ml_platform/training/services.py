@@ -1485,6 +1485,46 @@ class TrainingService:
             logger.exception(f"Error undeploying model: {e}")
             raise TrainingServiceError(f"Failed to undeploy model: {e}")
 
+    def delete_model_from_registry(self, training_run: TrainingRun) -> None:
+        """
+        Delete a model from Vertex AI Model Registry.
+
+        This permanently removes the model from Vertex AI Model Registry.
+        The training run record is preserved but registration data is cleared.
+
+        Args:
+            training_run: TrainingRun instance with registered model
+
+        Raises:
+            TrainingServiceError: If model cannot be deleted
+        """
+        self._init_aiplatform()
+
+        try:
+            from google.cloud import aiplatform
+
+            model_resource_name = training_run.vertex_model_resource_name
+            if not model_resource_name:
+                raise TrainingServiceError("No model resource name found")
+
+            # Get the model from Vertex AI
+            try:
+                model = aiplatform.Model(model_name=model_resource_name)
+            except Exception as e:
+                logger.warning(f"Model not found in Vertex AI: {model_resource_name}. Error: {e}")
+                # Model may already be deleted from Vertex AI, which is fine
+                return
+
+            # Delete the model from Vertex AI Model Registry
+            model.delete()
+            logger.info(f"Deleted model {model_resource_name} from Vertex AI Model Registry")
+
+        except TrainingServiceError:
+            raise
+        except Exception as e:
+            logger.exception(f"Error deleting model from registry: {e}")
+            raise TrainingServiceError(f"Failed to delete model from registry: {e}")
+
     def force_push_model(self, training_run: TrainingRun) -> TrainingRun:
         """
         Force-push a not-blessed model to Vertex AI Model Registry.

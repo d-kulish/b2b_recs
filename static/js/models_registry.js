@@ -32,6 +32,7 @@ const ModelsRegistry = (function() {
             detail: '/api/models/{id}/',
             deploy: '/api/models/{id}/deploy/',
             undeploy: '/api/models/{id}/undeploy/',
+            delete: '/api/models/{id}/delete/',
         },
         onModelClick: null,
         onViewDetails: null
@@ -48,7 +49,6 @@ const ModelsRegistry = (function() {
             search: ''
         },
         loading: false,
-        openDropdownId: null,
         searchDebounceTimer: null
     };
 
@@ -467,61 +467,36 @@ const ModelsRegistry = (function() {
                 <td>
                     <span class="models-age-badge ${age.class}">${age.text}</span>
                 </td>
-                <td onclick="event.stopPropagation();">
-                    ${renderActionsDropdown(model)}
+                <td class="models-actions-cell" onclick="event.stopPropagation();">
+                    ${renderActionButtons(model)}
                 </td>
             </tr>
         `;
     }
 
-    function renderActionsDropdown(model) {
-        const isOpen = state.openDropdownId === model.id;
+    function renderActionButtons(model) {
+        const isDeployed = model.model_status === 'deployed';
+        const hasSchedule = model.has_schedule;
 
         return `
-            <div class="models-actions-dropdown ${isOpen ? 'open' : ''}" data-dropdown-id="${model.id}">
-                <button class="models-actions-btn" onclick="ModelsRegistry.toggleDropdown(${model.id})">
-                    <i class="fas fa-ellipsis-v"></i>
-                </button>
-                <div class="models-actions-menu">
-                    <button class="models-actions-menu-item" onclick="ModelsRegistry.viewDetails(${model.id})">
-                        <i class="fas fa-eye"></i>
-                        View Details
+            <div class="ml-card-col-actions">
+                <div class="ml-card-actions-grid">
+                    <!-- Row 1: Deploy | View -->
+                    <button class="card-action-btn deploy"
+                            onclick="${isDeployed ? `ModelsRegistry.undeploy(${model.id})` : `ModelsRegistry.deploy(${model.id})`}">
+                        ${isDeployed ? 'Undeploy' : 'Deploy'}
                     </button>
-                    <button class="models-actions-menu-item" onclick="ModelsRegistry.viewVersions(${model.id})">
-                        <i class="fas fa-code-branch"></i>
-                        Version History
+                    <button class="card-action-btn view" onclick="ModelsRegistry.viewDetails(${model.id})">
+                        View
                     </button>
-                    <div class="models-actions-menu-divider"></div>
-                    ${!model.has_schedule ? `
-                        <button class="models-actions-menu-item" onclick="ModelsRegistry.createSchedule(${model.id})">
-                            <i class="fas fa-calendar-plus"></i>
-                            Create Schedule
-                        </button>
-                    ` : `
-                        <button class="models-actions-menu-item" onclick="ModelsRegistry.viewSchedule(${model.schedule_id})">
-                            <i class="fas fa-calendar-alt"></i>
-                            View Schedule
-                        </button>
-                    `}
-                    ${model.model_status !== 'deployed' ? `
-                        <button class="models-actions-menu-item" onclick="ModelsRegistry.deploy(${model.id})">
-                            <i class="fas fa-rocket"></i>
-                            Deploy
-                        </button>
-                    ` : ''}
-                    ${model.model_status === 'deployed' ? `
-                        <button class="models-actions-menu-item danger" onclick="ModelsRegistry.undeploy(${model.id})">
-                            <i class="fas fa-stop-circle"></i>
-                            Undeploy
-                        </button>
-                    ` : ''}
-                    <button class="models-actions-menu-item" onclick="ModelsRegistry.copyArtifactUrl(${model.id})">
-                        <i class="fas fa-copy"></i>
-                        Copy Artifact URL
+
+                    <!-- Row 2: Schedule | Delete -->
+                    <button class="card-action-btn schedule"
+                            onclick="${hasSchedule ? `ModelsRegistry.viewSchedule(${model.schedule_id})` : `ModelsRegistry.createSchedule(${model.id})`}">
+                        Schedule
                     </button>
-                    <button class="models-actions-menu-item" onclick="ModelsRegistry.openInVertexAI(${model.id})">
-                        <i class="fas fa-external-link-alt"></i>
-                        Open in Vertex AI
+                    <button class="card-action-btn icon-only delete" onclick="ModelsRegistry.confirmDelete(${model.id})" title="Delete">
+                        <i class="fas fa-trash-alt"></i>
                     </button>
                 </div>
             </div>
@@ -587,42 +562,18 @@ const ModelsRegistry = (function() {
     // =============================================================================
 
     function attachTableEventListeners() {
-        // Close dropdowns when clicking outside
-        document.addEventListener('click', handleDocumentClick);
-    }
-
-    function handleDocumentClick(e) {
-        if (!e.target.closest('.models-actions-dropdown')) {
-            closeAllDropdowns();
-        }
+        // No additional event listeners needed for inline buttons
     }
 
     function handleRowClick(e, modelId) {
-        if (e.target.closest('.models-actions-dropdown')) return;
+        // Don't trigger row click if clicking on action buttons
+        if (e.target.closest('.models-action-buttons')) return;
 
         if (config.onModelClick) {
             config.onModelClick(modelId);
         } else {
             viewDetails(modelId);
         }
-    }
-
-    function toggleDropdown(modelId) {
-        if (state.openDropdownId === modelId) {
-            closeAllDropdowns();
-        } else {
-            closeAllDropdowns();
-            state.openDropdownId = modelId;
-            const dropdown = document.querySelector(`[data-dropdown-id="${modelId}"]`);
-            if (dropdown) dropdown.classList.add('open');
-        }
-    }
-
-    function closeAllDropdowns() {
-        state.openDropdownId = null;
-        document.querySelectorAll('.models-actions-dropdown.open').forEach(el => {
-            el.classList.remove('open');
-        });
     }
 
     function handleSearch(value) {
@@ -646,7 +597,6 @@ const ModelsRegistry = (function() {
         } else if (typeof ExpViewModal !== 'undefined') {
             ExpViewModal.openForModel(modelId);
         }
-        closeAllDropdowns();
     }
 
     function viewVersions(modelId) {
@@ -655,21 +605,18 @@ const ModelsRegistry = (function() {
         } else if (typeof ExpViewModal !== 'undefined') {
             ExpViewModal.openForModel(modelId, { tab: 'versions' });
         }
-        closeAllDropdowns();
     }
 
     function deploy(modelId) {
         if (confirm('Are you sure you want to deploy this model?')) {
             deployModel(modelId);
         }
-        closeAllDropdowns();
     }
 
     function undeploy(modelId) {
         if (confirm('Are you sure you want to undeploy this model? It will no longer serve predictions.')) {
             undeployModel(modelId);
         }
-        closeAllDropdowns();
     }
 
     function copyArtifactUrl(modelId) {
@@ -681,11 +628,9 @@ const ModelsRegistry = (function() {
                 showToast('Failed to copy URL', 'error');
             });
         }
-        closeAllDropdowns();
     }
 
     function createSchedule(modelId) {
-        closeAllDropdowns();
         // Use ScheduleModal to create a schedule for this model's training run
         if (typeof ScheduleModal !== 'undefined') {
             ScheduleModal.configure({
@@ -701,7 +646,6 @@ const ModelsRegistry = (function() {
     }
 
     function viewSchedule(scheduleId) {
-        closeAllDropdowns();
         // Navigate to training schedules chapter or open schedule detail modal
         if (typeof TrainingSchedules !== 'undefined' && TrainingSchedules.viewSchedule) {
             TrainingSchedules.viewSchedule(scheduleId);
@@ -727,7 +671,39 @@ const ModelsRegistry = (function() {
                 window.open(url, '_blank');
             }
         }
-        closeAllDropdowns();
+    }
+
+    function confirmDelete(modelId) {
+        const model = state.models.find(m => m.id === modelId);
+        if (!model) return;
+
+        const modelName = model.vertex_model_name || 'Unnamed Model';
+        if (confirm(`Are you sure you want to delete "${modelName}"?\n\nThis will remove the model from Vertex AI Model Registry. This action cannot be undone.`)) {
+            deleteModel(modelId);
+        }
+    }
+
+    async function deleteModel(modelId) {
+        try {
+            const response = await fetch(buildUrl(config.endpoints.delete, { id: modelId }), {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                }
+            });
+            const data = await response.json();
+
+            if (data.success) {
+                showToast('Model deleted successfully', 'success');
+                fetchModels();
+            } else {
+                showToast(data.error || 'Failed to delete model', 'error');
+            }
+        } catch (error) {
+            console.error('Error deleting model:', error);
+            showToast('Failed to delete model', 'error');
+        }
     }
 
     // =============================================================================
@@ -826,11 +802,11 @@ const ModelsRegistry = (function() {
         setFilter,
         handleSearch,
         handleRowClick,
-        toggleDropdown,
         viewDetails,
         viewVersions,
         deploy,
         undeploy,
+        confirmDelete,
         copyArtifactUrl,
         openInVertexAI,
         createSchedule,

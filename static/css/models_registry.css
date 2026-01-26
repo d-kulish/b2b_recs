@@ -205,7 +205,7 @@
 }
 
 .models-table td {
-    padding: 14px 16px;
+    padding: 12px 16px;
     border-bottom: 1px solid #f3f4f6;
     vertical-align: middle;
 }
@@ -379,101 +379,26 @@
 }
 
 /* =========================================================================
-   Actions Dropdown
+   Action Buttons (2x2 Grid Layout)
+   Uses same classes as Training Runs cards (cards.css):
+   - .ml-card-col-actions
+   - .ml-card-actions-grid
+   - .card-action-btn.deploy, .view, .schedule
+   - .card-action-btn.icon-only.delete
    ========================================================================= */
-.models-actions-dropdown {
-    position: relative;
-    display: inline-block;
+.models-actions-cell {
+    padding: 12px 16px !important;
 }
 
-.models-actions-btn {
-    width: 32px;
-    height: 32px;
-    border: 1px solid #e5e7eb;
-    border-radius: 6px;
-    background: white;
-    color: #6b7280;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.15s ease;
+/* Set fixed width for the actions column container in the table */
+/* Width: 210px gives ~102px per button (2 cols with 6px gap), matching Training Runs */
+.models-actions-cell .ml-card-col-actions {
+    width: 210px;
 }
 
-.models-actions-btn:hover {
-    background: #f3f4f6;
-    border-color: #d1d5db;
-    color: #374151;
-}
-
-.models-actions-menu {
-    position: absolute;
-    top: 100%;
-    right: 0;
-    margin-top: 4px;
-    background: white;
-    border: 1px solid #e5e7eb;
-    border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-    min-width: 180px;
-    z-index: 100;
-    opacity: 0;
-    visibility: hidden;
-    transform: translateY(-8px);
-    transition: all 0.15s ease;
-}
-
-.models-actions-dropdown.open .models-actions-menu {
-    opacity: 1;
-    visibility: visible;
-    transform: translateY(0);
-}
-
-.models-actions-menu-item {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 14px;
-    font-size: 13px;
-    color: #374151;
-    cursor: pointer;
-    transition: background 0.15s ease;
-    border: none;
-    background: none;
-    width: 100%;
-    text-align: left;
-}
-
-.models-actions-menu-item:hover {
-    background: #f3f4f6;
-}
-
-.models-actions-menu-item:first-child {
-    border-radius: 7px 7px 0 0;
-}
-
-.models-actions-menu-item:last-child {
-    border-radius: 0 0 7px 7px;
-}
-
-.models-actions-menu-item i {
-    width: 16px;
-    text-align: center;
-    color: #6b7280;
-}
-
-.models-actions-menu-item.danger {
-    color: #dc2626;
-}
-
-.models-actions-menu-item.danger i {
-    color: #dc2626;
-}
-
-.models-actions-menu-divider {
-    height: 1px;
-    background: #e5e7eb;
-    margin: 4px 0;
+/* Override for 2x2 grid (Models Registry uses 2 rows, not 3) */
+.models-actions-cell .ml-card-actions-grid {
+    grid-template-rows: auto auto;
 }
 
 /* =========================================================================

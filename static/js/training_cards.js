@@ -1601,6 +1601,7 @@ const TrainingSchedules = (function() {
     let config = {
         endpoints: {
             list: '/api/training/schedules/',
+            detail: '/api/training/schedules/{id}/',
             pause: '/api/training/schedules/{id}/pause/',
             resume: '/api/training/schedules/{id}/resume/',
             cancel: '/api/training/schedules/{id}/cancel/',
@@ -1825,7 +1826,7 @@ const TrainingSchedules = (function() {
                                 <i class="fas fa-play-circle"></i>
                             </button>
                         `}
-                        <button class="card-action-btn delete" onclick="TrainingSchedules.cancelSchedule(${schedule.id})" title="Delete Schedule">
+                        <button class="card-action-btn delete" onclick="TrainingSchedules.deleteSchedule(${schedule.id})" title="Delete Schedule">
                             <i class="fas fa-trash"></i>
                         </button>
                     </div>
@@ -1884,20 +1885,20 @@ const TrainingSchedules = (function() {
         }
     }
 
-    function cancelSchedule(scheduleId) {
+    function deleteSchedule(scheduleId) {
         TrainingCards.showConfirmModal({
             title: 'Delete Schedule',
-            message: 'Are you sure you want to delete this schedule?<br><br>This will permanently remove the Cloud Scheduler job.',
-            confirmText: 'Confirm',
+            message: 'Are you sure you want to delete this schedule?<br><br>This will permanently remove the schedule and its Cloud Scheduler job.',
+            confirmText: 'Delete',
             cancelText: 'Cancel',
             type: 'danger',
             confirmButtonClass: 'btn-neu-save',      // Green button
             cancelButtonClass: 'btn-neu-cancel',     // Red button
             onConfirm: async () => {
                 try {
-                    const url = buildUrl(config.endpoints.cancel, { id: scheduleId });
+                    const url = buildUrl(config.endpoints.detail, { id: scheduleId });
                     const response = await fetch(url, {
-                        method: 'POST',
+                        method: 'DELETE',
                         headers: {
                             'Content-Type': 'application/json',
                             'X-CSRFToken': getCookie('csrftoken')
@@ -1905,13 +1906,14 @@ const TrainingSchedules = (function() {
                     });
                     const data = await response.json();
                     if (data.success) {
+                        showToast('Schedule deleted successfully', 'success');
                         loadAllSchedules();
                     } else {
-                        showToast('Failed to cancel schedule: ' + (data.error || 'Unknown error'), 'error');
+                        showToast('Failed to delete schedule: ' + (data.error || 'Unknown error'), 'error');
                     }
                 } catch (error) {
-                    console.error('Failed to cancel schedule:', error);
-                    showToast('Failed to cancel schedule', 'error');
+                    console.error('Failed to delete schedule:', error);
+                    showToast('Failed to delete schedule', 'error');
                 }
             }
         });
@@ -1985,7 +1987,7 @@ const TrainingSchedules = (function() {
         loadSchedules: loadAllSchedules,
         pauseSchedule: pauseSchedule,
         resumeSchedule: resumeSchedule,
-        cancelSchedule: cancelSchedule,
+        deleteSchedule: deleteSchedule,
         triggerNow: triggerNow,
         toggleSection: toggleSection
     };

@@ -637,7 +637,13 @@ class TrainingRun(models.Model):
     vertex_pipeline_job_name = models.CharField(
         max_length=500,
         blank=True,
-        help_text="Vertex AI Pipeline job name"
+        help_text="Full Vertex AI pipeline job resource name"
+    )
+
+    vertex_pipeline_job_id = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Short pipeline job ID for display"
     )
 
     gcs_artifacts_path = models.CharField(

@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides detailed specifications for implementing the **Training** domain in the ML Platform. The Training domain executes full TFX pipelines for production model training.
 
-**Last Updated**: 2026-01-26 (Unified scheduling in Training Wizard with Run Now/Schedule buttons)
+**Last Updated**: 2026-01-26 (Bug fixes: Schedule deletion, TrainingRun vertex_pipeline_job_id field)
 
 ---
 
@@ -2202,6 +2202,59 @@ function openForWizardConfig(wizardConfig) {
 2. **Consistent UX**: Same modal used everywhere for scheduling
 3. **Single Source of Truth**: Schedule UI maintained in one place
 4. **Proper Model Association**: Schedule always linked to RegisteredModel
+
+### Bug Fixes (2026-01-26)
+
+#### Fix: Schedule Deletion Now Properly Deletes Records
+
+**Problem**: The "Delete" button in the Schedules UI only cancelled schedules (marked status as "cancelled") but did not delete them from the database. This caused issues when trying to create a new schedule with the same model name, as the `RegisteredModel` was still linked to the old cancelled schedule via a `OneToOneField`.
+
+**Root Cause**: The UI's delete button called the `/cancel/` endpoint instead of using HTTP `DELETE` on the schedule detail endpoint.
+
+**Solution**: Updated the frontend to call the correct DELETE endpoint.
+
+**Changes**:
+
+| File | Change |
+|------|--------|
+| `static/js/training_cards.js` | Added `detail` endpoint to config |
+| `static/js/training_cards.js` | Renamed `cancelSchedule()` to `deleteSchedule()` |
+| `static/js/training_cards.js` | Changed from `POST /cancel/` to `DELETE /schedules/{id}/` |
+| `static/js/training_cards.js` | Updated public API export |
+
+**Behavior After Fix**:
+- Delete button now calls `DELETE /api/training/schedules/{id}/`
+- Cloud Scheduler job is deleted (if exists)
+- Schedule record is deleted from database
+- `RegisteredModel` link is removed (allowing new schedules for same model)
+
+#### Fix: Add Missing `vertex_pipeline_job_id` Field to TrainingRun
+
+**Problem**: The `TrainingRun` model was missing the `vertex_pipeline_job_id` field, causing warnings in logs:
+```
+Error checking Cloud Build result for Training #N: The following fields do not exist
+in this model... vertex_pipeline_job_id
+```
+
+**Root Cause**: The `TrainingRun` model only had `vertex_pipeline_job_name`, but the service code (`training/services.py`) attempted to update both `vertex_pipeline_job_name` and `vertex_pipeline_job_id`. The `QuickTest` model had both fields, but `TrainingRun` was missing the shorter ID field.
+
+**Solution**: Added the missing field to the model.
+
+**Changes**:
+
+| File | Change |
+|------|--------|
+| `ml_platform/training/models.py` | Added `vertex_pipeline_job_id` CharField |
+| `ml_platform/training/migrations/0008_...` | Migration to add the field |
+
+**Field Definition**:
+```python
+vertex_pipeline_job_id = models.CharField(
+    max_length=255,
+    blank=True,
+    help_text="Short pipeline job ID for display"
+)
+```
 
 ### New Training Dialog
 

@@ -143,41 +143,6 @@ class RegisteredModelService:
 
             return registered_model
 
-    def update_deployment_status(self, registered_model: RegisteredModel) -> RegisteredModel:
-        """
-        Update deployment status based on versions.
-
-        Checks all versions of this RegisteredModel and updates the
-        is_deployed flag and deployed_version_id.
-
-        Args:
-            registered_model: RegisteredModel to update
-
-        Returns:
-            Updated RegisteredModel instance
-        """
-        with transaction.atomic():
-            # Find deployed version
-            deployed_run = TrainingRun.objects.filter(
-                registered_model=registered_model,
-                is_deployed=True
-            ).first()
-
-            registered_model.is_deployed = deployed_run is not None
-            registered_model.deployed_version_id = deployed_run.id if deployed_run else None
-            registered_model.save(update_fields=[
-                'is_deployed',
-                'deployed_version_id',
-                'updated_at',
-            ])
-
-            logger.info(
-                f"Updated RegisteredModel '{registered_model.model_name}' deployment status: "
-                f"is_deployed={registered_model.is_deployed}"
-            )
-
-            return registered_model
-
     def sync_version_cache(self, registered_model: RegisteredModel) -> RegisteredModel:
         """
         Synchronize the version cache fields with actual data.

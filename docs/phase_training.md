@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides detailed specifications for implementing the **Training** domain in the ML Platform. The Training domain executes full TFX pipelines for production model training.
 
-**Last Updated**: 2026-01-26 (Bug fixes: Schedule deletion, TrainingRun vertex_pipeline_job_id field)
+**Last Updated**: 2026-01-26 (Dynamic deployment status from Vertex AI endpoint)
 
 ---
 
@@ -886,6 +886,105 @@ New styles added to `exp_view_modal.css`:
 | `templates/includes/_exp_view_modal.html` | Removed Repository/Deployment tabs, added Registry/Deployment sections to Overview |
 | `static/js/exp_view_modal.js` | Added `renderRegistrySection()`, `renderDeploymentSection()`, action handlers |
 | `static/css/exp_view_modal.css` | Added outcome section styles (~80 lines) |
+
+---
+
+### Dynamic Deployment Status (2026-01-26)
+
+Deployment status is now **dynamically queried from Vertex AI endpoint** rather than stored in the database. This ensures the endpoint is the single source of truth for deployment state.
+
+#### Architecture Change
+
+**Before (Database-driven):**
+```
+TrainingRun.is_deployed = True/False (database field)
+TrainingRun.deployed_at = timestamp (database field)
+TrainingRun.endpoint_resource_name = "projects/.../endpoints/..." (database field)
+RegisteredModel.is_deployed = True/False (database field)
+RegisteredModel.deployed_version_id = 123 (database field)
+```
+
+**After (Vertex AI-driven):**
+```
+# Deployment status queried dynamically from Vertex AI
+service = TrainingService(model_endpoint)
+endpoint_info = service.get_deployed_model_resource_names()
+# Returns: {'deployed_models': set(), 'endpoint_resource_name': str, 'error': str}
+
+is_deployed = training_run.vertex_model_resource_name in endpoint_info['deployed_models']
+```
+
+#### Key Changes
+
+| Component | Change |
+|-----------|--------|
+| `TrainingRun` model | Removed: `is_deployed`, `deployed_at`, `endpoint_resource_name` fields |
+| `RegisteredModel` model | Removed: `is_deployed`, `deployed_version_id` fields |
+| `TrainingService` | Added: `get_deployed_model_resource_names()` method |
+| `TrainingService.deploy_model()` | Removed database field updates, validation uses dynamic check |
+| `TrainingService.undeploy_model()` | Queries endpoint by display name instead of stored resource name |
+| API serializers | Accept `deployed_models` parameter, derive status dynamically |
+| API endpoints | Query endpoint once per request, pass to serializers |
+| KPI calculations | Computed in memory using dynamic deployment status |
+| `RegisteredModelService` | Removed: `update_deployment_status()` method |
+| Admin config | Removed `is_deployed` from list_filter and fieldsets |
+
+#### New TrainingService Method
+
+```python
+def get_deployed_model_resource_names(self) -> dict:
+    """
+    Query Vertex AI endpoint to get currently deployed model resource names.
+
+    Returns:
+        Dict with:
+            - deployed_models: Set of vertex_model_resource_name strings
+            - endpoint_resource_name: The endpoint resource name (or None)
+            - error: Error message if query failed (or None)
+    """
+```
+
+#### Status Derivation Logic
+
+```python
+# In _serialize_registered_model()
+if endpoint_error:
+    model_status = 'unknown'
+elif deployed_models is not None:
+    is_deployed = training_run.vertex_model_resource_name in deployed_models
+    if is_deployed:
+        model_status = 'deployed'
+    elif training_run.is_blessed:
+        model_status = 'idle'
+    else:
+        model_status = 'not_blessed'
+else:
+    model_status = 'idle' if training_run.is_blessed else 'not_blessed'
+```
+
+#### Error Handling
+
+| Scenario | Behavior |
+|----------|----------|
+| Vertex AI API fails | `model_status = 'unknown'`, `endpoint_error` included in response |
+| No endpoint exists | All models treated as not deployed |
+| Model not on endpoint | Treated as not deployed |
+
+#### Migration
+
+Migration `0009_remove_deployment_fields.py` removes:
+- `trainingrun.is_deployed`
+- `trainingrun.deployed_at`
+- `trainingrun.endpoint_resource_name`
+- `registeredmodel.is_deployed`
+- `registeredmodel.deployed_version_id`
+
+#### Benefits
+
+1. **Single source of truth**: Vertex AI endpoint state is authoritative
+2. **No stale data**: Status always reflects actual endpoint state
+3. **Simpler model**: Fewer fields to maintain and synchronize
+4. **Resilient**: Graceful degradation when API unavailable (shows "unknown")
 
 ---
 

@@ -97,20 +97,6 @@ class RegisteredModel(models.Model):
     )
 
     # =========================================================================
-    # Deployment Status
-    # =========================================================================
-    is_deployed = models.BooleanField(
-        default=False,
-        help_text="Whether any version of this model is currently deployed"
-    )
-
-    deployed_version_id = models.IntegerField(
-        null=True,
-        blank=True,
-        help_text="ID of the currently deployed TrainingRun version"
-    )
-
-    # =========================================================================
     # Status
     # =========================================================================
     is_active = models.BooleanField(
@@ -760,27 +746,6 @@ class TrainingRun(models.Model):
         max_length=500,
         blank=True,
         help_text="Parent model resource name for Vertex AI versioning"
-    )
-
-    # =========================================================================
-    # Deployment
-    # =========================================================================
-
-    is_deployed = models.BooleanField(
-        default=False,
-        help_text="Whether the model is currently deployed"
-    )
-
-    deployed_at = models.DateTimeField(
-        null=True,
-        blank=True,
-        help_text="When the model was deployed"
-    )
-
-    endpoint_resource_name = models.CharField(
-        max_length=500,
-        blank=True,
-        help_text="Vertex AI Endpoint resource name where model is deployed"
     )
 
     # =========================================================================

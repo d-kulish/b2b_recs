@@ -139,6 +139,43 @@ class TrainingService:
                     "google-cloud-aiplatform package not installed"
                 )
 
+    def get_deployed_model_resource_names(self) -> dict:
+        """
+        Query Vertex AI endpoint to get currently deployed model resource names.
+
+        Returns:
+            Dict with:
+                - deployed_models: Set of vertex_model_resource_name strings
+                - endpoint_resource_name: The endpoint resource name (or None)
+                - error: Error message if query failed (or None)
+        """
+        try:
+            self._init_aiplatform()
+            from google.cloud import aiplatform
+
+            endpoint_display_name = f"{self.ml_model.name}-endpoint"
+            endpoints = aiplatform.Endpoint.list(
+                filter=f'display_name="{endpoint_display_name}"',
+                order_by="create_time desc"
+            )
+
+            if not endpoints:
+                return {'deployed_models': set(), 'endpoint_resource_name': None, 'error': None}
+
+            endpoint = endpoints[0]
+            deployed_models = set()
+            for deployed_model in endpoint._gca_resource.deployed_models:
+                deployed_models.add(deployed_model.model)
+
+            return {
+                'deployed_models': deployed_models,
+                'endpoint_resource_name': endpoint.resource_name,
+                'error': None
+            }
+        except Exception as e:
+            logger.warning(f"Failed to query Vertex AI endpoint: {e}")
+            return {'deployed_models': set(), 'endpoint_resource_name': None, 'error': str(e)}
+
     def create_training_run(
         self,
         name: str,
@@ -1264,12 +1301,6 @@ class TrainingService:
                 "to registry first, or override the blessing check."
             )
 
-        if training_run.is_deployed:
-            raise TrainingServiceError(
-                f"Training run is already deployed to endpoint: "
-                f"{training_run.endpoint_resource_name}"
-            )
-
         self._init_aiplatform()
 
         try:
@@ -1365,17 +1396,11 @@ class TrainingService:
                 traffic_percentage=100,
             )
 
-            # Update training run
-            training_run.is_deployed = True
-            training_run.deployed_at = timezone.now()
-            training_run.endpoint_resource_name = endpoint.resource_name
+            # Update training run with model resource name
             training_run.vertex_model_resource_name = model.resource_name
 
             # Include version fields in save if they were set (fallback upload path)
-            update_fields = [
-                'is_deployed', 'deployed_at', 'endpoint_resource_name',
-                'vertex_model_resource_name'
-            ]
+            update_fields = ['vertex_model_resource_name']
             if training_run.vertex_model_version:
                 update_fields.extend([
                     'vertex_model_version', 'vertex_parent_model_resource_name', 'registered_at'
@@ -1402,30 +1427,29 @@ class TrainingService:
             training_run: TrainingRun instance to undeploy
 
         Returns:
-            Updated TrainingRun instance with cleared deployment info
+            TrainingRun instance (unchanged - deployment status is dynamic)
 
         Raises:
             TrainingServiceError: If model cannot be undeployed
         """
-        if not training_run.is_deployed:
-            raise TrainingServiceError(
-                "Training run is not currently deployed."
-            )
-
-        if not training_run.endpoint_resource_name:
-            # Model marked as deployed but no endpoint - just clear the flag
-            training_run.is_deployed = False
-            training_run.deployed_at = None
-            training_run.save(update_fields=['is_deployed', 'deployed_at'])
-            return training_run
-
         self._init_aiplatform()
 
         try:
             from google.cloud import aiplatform
 
-            # Get the endpoint
-            endpoint = aiplatform.Endpoint(training_run.endpoint_resource_name)
+            # Find endpoint by display name
+            endpoint_display_name = f"{self.ml_model.name}-endpoint"
+            endpoints = aiplatform.Endpoint.list(
+                filter=f'display_name="{endpoint_display_name}"',
+                order_by="create_time desc"
+            )
+
+            if not endpoints:
+                raise TrainingServiceError(
+                    f"No endpoint found with display name: {endpoint_display_name}"
+                )
+
+            endpoint = endpoints[0]
 
             # Find the deployed model ID on this endpoint
             deployed_model_id = None
@@ -1446,26 +1470,17 @@ class TrainingService:
                 )
                 logger.info(
                     f"Undeployed model {model_resource_name} from endpoint "
-                    f"{training_run.endpoint_resource_name}"
+                    f"{endpoint.resource_name}"
                 )
             else:
-                logger.warning(
-                    f"Model {model_resource_name} not found on endpoint "
-                    f"{training_run.endpoint_resource_name}, clearing deployment flag"
+                raise TrainingServiceError(
+                    f"Model {model_resource_name} not found on endpoint {endpoint.resource_name}"
                 )
-
-            # Update training run
-            training_run.is_deployed = False
-            training_run.deployed_at = None
-            training_run.endpoint_resource_name = ''
-            training_run.save(update_fields=[
-                'is_deployed', 'deployed_at', 'endpoint_resource_name'
-            ])
-
-            logger.info(f"Cleared deployment info for {training_run.display_name}")
 
             return training_run
 
+        except TrainingServiceError:
+            raise
         except Exception as e:
             logger.exception(f"Error undeploying model: {e}")
             raise TrainingServiceError(f"Failed to undeploy model: {e}")
@@ -1766,14 +1781,6 @@ class TrainingService:
                 service_url = describe_result.stdout.strip()
 
             logger.info(f"Cloud Run service deployed: {service_url}")
-
-            # Update TrainingRun
-            training_run.is_deployed = True
-            training_run.deployed_at = timezone.now()
-            training_run.endpoint_resource_name = service_url
-            training_run.save(update_fields=[
-                'is_deployed', 'deployed_at', 'endpoint_resource_name', 'updated_at'
-            ])
 
             logger.info(
                 f"Deployed {training_run.display_name} to Cloud Run: {service_url}"

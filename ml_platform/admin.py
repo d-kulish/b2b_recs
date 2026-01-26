@@ -185,7 +185,6 @@ class TrainingRunAdmin(admin.ModelAdmin):
         'status',
         'model_type',
         'is_blessed',
-        'is_deployed',
         'created_at'
     ]
     search_fields = [
@@ -281,14 +280,6 @@ class TrainingRunAdmin(admin.ModelAdmin):
                 'vertex_model_name',
                 'vertex_model_version',
                 'vertex_model_resource_name'
-            ),
-            'classes': ('collapse',),
-        }),
-        ('Deployment', {
-            'fields': (
-                'is_deployed',
-                'deployed_at',
-                'endpoint_resource_name'
             ),
             'classes': ('collapse',),
         }),

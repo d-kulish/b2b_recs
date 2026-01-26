@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides detailed specifications for implementing the **Training** domain in the ML Platform. The Training domain executes full TFX pipelines for production model training.
 
-**Last Updated**: 2026-01-26 (Added Training Scheduler IAM setup documentation)
+**Last Updated**: 2026-01-26 (Unified scheduling in Training Wizard with Run Now/Schedule buttons)
 
 ---
 
@@ -2021,6 +2021,187 @@ Migration `0007_add_registered_model.py` includes:
 3. **Schedule Status in UI**: Models Registry shows schedule status for each model
 4. **Validation**: Cannot create duplicate schedules for same model name
 5. **Backward Compatibility**: Existing data migrated, existing schedules continue working
+
+### Unified Scheduling in Training Wizard (2026-01-26)
+
+The Training Wizard now provides a unified scheduling experience, allowing users to either run training immediately or create a schedule directly from the wizard. This replaces the previous inline schedule options with two dedicated action buttons that integrate with the full ScheduleModal.
+
+#### UI Changes
+
+**Previous Design (Replaced):**
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ 🕐 Schedule                                                     │
+├─────────────────────────────────────────────────────────────────┤
+│ [Run Now] [Schedule Once] [Daily] [Weekly]                      │
+│ Time: [09:00]  Day: [Monday]  Timezone: [UTC]                   │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**New Design:**
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ ┌─────────────────────┐    ┌─────────────────────┐              │
+│ │   ▶ Run Now         │    │   📅 Schedule       │              │
+│ │   (Green button)    │    │   (Purple button)   │              │
+│ └─────────────────────┘    └─────────────────────┘              │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+#### Functionality
+
+**Run Now Button:**
+- Immediately submits the training run
+- Uses `schedule_type: 'now'`
+- Creates TrainingRun and submits to Vertex AI
+
+**Schedule Button:**
+- Opens the full ScheduleModal (same modal used by "Schedule" button on existing runs)
+- Supports all 5 schedule types: Once, Hourly, Daily, Weekly, Monthly
+- Pre-fills model name from Step 1 of wizard
+- Auto-generates schedule name: `{model_name} - Retraining`
+- Creates RegisteredModel + TrainingSchedule + Cloud Scheduler job
+
+#### Data Flow
+
+```
+Training Wizard (Step 3)
+        │
+        ├──── [Run Now] ─────► TrainingWizard.submit()
+        │                      │
+        │                      ▼
+        │               POST /api/training/schedules/
+        │               { schedule_type: 'now', ... }
+        │                      │
+        │                      ▼
+        │               Creates TrainingRun
+        │               Submits to Vertex AI
+        │
+        └──── [Schedule] ────► TrainingWizard.openScheduleModal()
+                               │
+                               ▼
+                         ┌─────────────────────────────┐
+                         │      ScheduleModal          │
+                         │  - MODEL: {model_name}      │
+                         │  - Schedule Name: [...]     │
+                         │  - Type: Once/Hourly/...    │
+                         │  - Time/Day/Timezone        │
+                         │  [Create] [Cancel]          │
+                         └─────────────────────────────┘
+                               │
+                               ▼
+                         POST /api/training/schedules/
+                         {
+                           name: "my-model",
+                           schedule_name: "my-model - Retraining",
+                           schedule_type: "daily",
+                           training_params: {...},
+                           gpu_config: {...},
+                           ...
+                         }
+                               │
+                               ▼
+                         Creates:
+                         - RegisteredModel (model_name)
+                         - TrainingSchedule (schedule_name)
+                         - Cloud Scheduler job
+```
+
+#### API Changes
+
+**POST /api/training/schedules/** - Enhanced for Wizard Mode:
+
+New fields for wizard mode:
+- `schedule_name`: Name for the TrainingSchedule (separate from model name)
+- `schedule_description`: Description for the schedule
+
+The endpoint now:
+1. Distinguishes between `name` (model name) and `schedule_name` (schedule name)
+2. Creates/gets RegisteredModel using the model name
+3. Links the schedule to the RegisteredModel
+4. Falls back to `name` for backward compatibility if `schedule_name` not provided
+
+```python
+# Example wizard mode request
+{
+    "name": "my-retrieval-model",           # Model name (for RegisteredModel)
+    "schedule_name": "Weekly Retraining",   # Schedule name (for TrainingSchedule)
+    "schedule_description": "...",
+    "schedule_type": "weekly",
+    "schedule_time": "09:00",
+    "schedule_day_of_week": 0,
+    "schedule_timezone": "UTC",
+    "dataset_id": 1,
+    "feature_config_id": 2,
+    "model_config_id": 3,
+    "base_experiment_id": 456,
+    "training_params": {...},
+    "gpu_config": {...},
+    "evaluator_config": {...}
+}
+```
+
+#### Frontend Implementation
+
+**training_wizard.js:**
+```javascript
+// New function to open schedule modal with wizard config
+function openScheduleModal() {
+    const wizardConfig = buildWizardConfig();
+    ScheduleModal.openForWizardConfig(wizardConfig);
+}
+
+// Build config object for ScheduleModal
+function buildWizardConfig() {
+    return {
+        model_name: state.formData.name,
+        dataset_id: exp.dataset_id,
+        feature_config_id: exp.feature_config_id,
+        model_config_id: exp.model_config_id,
+        base_experiment_id: exp.experiment_id,
+        training_params: {...},
+        gpu_config: {...},
+        evaluator_config: {...}
+    };
+}
+```
+
+**schedule_modal.js:**
+```javascript
+// New method for wizard integration
+function openForWizardConfig(wizardConfig) {
+    state.mode = 'wizard';
+    state.wizardConfig = wizardConfig;
+
+    // Display model name from wizard
+    document.getElementById('scheduleModelName').textContent = wizardConfig.model_name;
+
+    // Pre-fill schedule name
+    const suggestedName = `${wizardConfig.model_name} - Retraining`;
+    document.getElementById('scheduleNameInput').value = suggestedName;
+
+    // Show modal with all 5 schedule types
+    // ...
+}
+```
+
+#### Files Modified
+
+| File | Change |
+|------|--------|
+| `templates/ml_platform/model_training.html` | Replaced inline schedule section with Run Now/Schedule buttons |
+| `static/css/modals.css` | Added `.wizard-action-btn` styles |
+| `static/css/schedule_modal.css` | Increased z-index to appear above wizard |
+| `static/js/training_wizard.js` | Added `openScheduleModal()`, `buildWizardConfig()` |
+| `static/js/schedule_modal.js` | Added `openForWizardConfig()`, updated `create()` for wizard mode |
+| `ml_platform/training/api.py` | Enhanced `_training_schedule_create()` for wizard mode |
+
+#### Benefits
+
+1. **Full Feature Parity**: All 5 schedule types available from wizard (previously only 4)
+2. **Consistent UX**: Same modal used everywhere for scheduling
+3. **Single Source of Truth**: Schedule UI maintained in one place
+4. **Proper Model Association**: Schedule always linked to RegisteredModel
 
 ### New Training Dialog
 

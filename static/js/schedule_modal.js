@@ -38,9 +38,10 @@ const ScheduleModal = (function() {
     };
 
     let state = {
-        mode: null,         // 'training_run' or 'model'
+        mode: null,         // 'training_run', 'model', 'registered_model', or 'wizard'
         sourceId: null,
         sourceData: null,   // Preview data from API
+        wizardConfig: null, // Config from TrainingWizard (for mode='wizard')
         scheduleConfig: {
             name: '',
             description: '',
@@ -192,6 +193,63 @@ const ScheduleModal = (function() {
 
         // Load registered model details
         await loadRegisteredModelDetails(registeredModelId);
+    }
+
+    /**
+     * Open modal for creating a schedule from Training Wizard configuration.
+     * This is used when the user clicks "Schedule" in the training wizard (step 3).
+     *
+     * @param {Object} wizardConfig - Configuration built from wizard state
+     * @param {string} wizardConfig.model_name - Model name from Step 1
+     * @param {string} wizardConfig.description - Model description
+     * @param {number} wizardConfig.dataset_id - Dataset ID
+     * @param {number} wizardConfig.feature_config_id - Feature config ID
+     * @param {number} wizardConfig.model_config_id - Model config ID
+     * @param {number} wizardConfig.base_experiment_id - Base experiment ID
+     * @param {Object} wizardConfig.training_params - Training parameters
+     * @param {Object} wizardConfig.gpu_config - GPU configuration
+     * @param {Object} wizardConfig.evaluator_config - Evaluator configuration
+     */
+    function openForWizardConfig(wizardConfig) {
+        state.mode = 'wizard';
+        state.sourceId = null;
+        state.wizardConfig = wizardConfig;
+
+        // Reset schedule config but keep wizardConfig
+        state.scheduleConfig = {
+            name: '',
+            description: '',
+            scheduleType: 'daily',
+            scheduledDatetime: null,
+            scheduleTime: '09:00',
+            scheduleMinute: 0,
+            scheduleDayOfWeek: 0,
+            scheduleDayOfMonth: 1,
+            scheduleTimezone: 'UTC'
+        };
+
+        // Show modal
+        const modal = document.getElementById('scheduleModal');
+        modal.classList.remove('hidden');
+
+        // Update subtitle for wizard context
+        document.getElementById('scheduleModalSubtitle').textContent =
+            'Creating schedule for new model';
+
+        // Initialize pickers
+        initializePickers();
+
+        // Display model name from wizard
+        const modelName = wizardConfig.model_name || '-';
+        document.getElementById('scheduleModelName').textContent = modelName;
+
+        // Pre-fill schedule name based on model name
+        const suggestedName = `${wizardConfig.model_name || 'Model'} - Retraining`;
+        document.getElementById('scheduleNameInput').value = suggestedName;
+        state.scheduleConfig.name = suggestedName;
+
+        // Update next run preview
+        updateNextRunPreview();
     }
 
     async function loadRegisteredModelData(trainingRunId) {
@@ -591,9 +649,9 @@ const ScheduleModal = (function() {
     // =============================================================================
 
     async function create() {
-        // Validate
-        const name = document.getElementById('scheduleNameInput').value.trim();
-        if (!name) {
+        // Validate schedule name
+        const scheduleName = document.getElementById('scheduleNameInput').value.trim();
+        if (!scheduleName) {
             showToast('Please enter a schedule name', 'error');
             document.getElementById('scheduleNameInput').focus();
             return;
@@ -601,7 +659,7 @@ const ScheduleModal = (function() {
 
         const type = state.scheduleConfig.scheduleType;
         const timezone = document.getElementById('scheduleTimezoneSelect').value;
-        const description = document.getElementById('scheduleDescriptionInput').value.trim();
+        const scheduleDescription = document.getElementById('scheduleDescriptionInput').value.trim();
 
         // Validate type-specific fields
         if (type === 'once') {
@@ -611,21 +669,54 @@ const ScheduleModal = (function() {
             }
         }
 
-        // Build request data
-        const requestData = {
-            source_training_run_id: state.sourceId,
-            name: name,
-            description: description,
-            schedule_type: type,
-            schedule_timezone: timezone
-        };
+        // Determine endpoint and build request data based on mode
+        let endpoint;
+        let requestData;
 
+        if (state.mode === 'wizard') {
+            // Creating from wizard - use full config endpoint
+            endpoint = config.endpoints.createFromModel;  // /api/training/schedules/
+            const wc = state.wizardConfig;
+
+            requestData = {
+                // Model identity - use model_name from wizard
+                name: wc.model_name,
+                description: wc.description || '',
+
+                // Data configuration from wizard
+                dataset_id: wc.dataset_id,
+                feature_config_id: wc.feature_config_id,
+                model_config_id: wc.model_config_id,
+                base_experiment_id: wc.base_experiment_id,
+
+                // Training configuration from wizard
+                training_params: wc.training_params,
+                gpu_config: wc.gpu_config,
+                evaluator_config: wc.evaluator_config,
+
+                // Schedule-specific fields
+                schedule_name: scheduleName,
+                schedule_description: scheduleDescription,
+                schedule_type: type,
+                schedule_timezone: timezone
+            };
+        } else {
+            // Creating from existing training run
+            endpoint = config.endpoints.createFromRun;  // /api/training/schedules/from-run/
+            requestData = {
+                source_training_run_id: state.sourceId,
+                name: scheduleName,
+                description: scheduleDescription,
+                schedule_type: type,
+                schedule_timezone: timezone
+            };
+        }
+
+        // Add type-specific schedule fields
         if (type === 'once') {
-            // Convert local datetime to ISO format
             const dt = new Date(state.scheduleConfig.scheduledDatetime);
             requestData.scheduled_datetime = dt.toISOString();
         } else if (type === 'hourly') {
-            // Store minute in schedule_time as "00:MM"
             requestData.schedule_time = `00:${String(state.scheduleConfig.scheduleMinute).padStart(2, '0')}`;
         } else if (type === 'monthly') {
             requestData.schedule_time = state.scheduleConfig.scheduleTime || '09:00';
@@ -643,7 +734,7 @@ const ScheduleModal = (function() {
         document.getElementById('scheduleCreateBtn').disabled = true;
 
         try {
-            const response = await fetch(config.endpoints.createFromRun, {
+            const response = await fetch(endpoint, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -655,7 +746,7 @@ const ScheduleModal = (function() {
             const data = await response.json();
 
             if (data.success) {
-                showToast(data.message || `Schedule "${name}" created successfully`, 'success');
+                showToast(data.message || `Schedule "${scheduleName}" created successfully`, 'success');
                 close();
 
                 // Call success callback
@@ -705,6 +796,7 @@ const ScheduleModal = (function() {
         openForTrainingRun: openForTrainingRun,
         openForModel: openForModel,
         openForRegisteredModel: openForRegisteredModel,
+        openForWizardConfig: openForWizardConfig,  // For Training Wizard integration
         close: close,
         handleOverlayClick: handleOverlayClick,
         onScheduleTypeChange: onScheduleTypeChange,

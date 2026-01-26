@@ -590,9 +590,14 @@ const TrainingWizard = (function() {
         }
 
         if (submitBtn) {
-            submitBtn.classList.toggle('hidden', !isLastStep);
-            // Update submit button text for edit mode
-            updateSubmitButtonText();
+            // In edit mode, show footer submit button on step 3
+            // In new mode, hide it (we use inline Run Now/Schedule buttons)
+            if (state.editMode) {
+                submitBtn.classList.toggle('hidden', !isLastStep);
+                updateSubmitButtonText();
+            } else {
+                submitBtn.classList.add('hidden');
+            }
         }
     }
 
@@ -603,17 +608,9 @@ const TrainingWizard = (function() {
         const btnInner = submitBtn.querySelector('.btn-neu-inner');
         if (!btnInner) return;
 
-        const scheduleType = state.formData.scheduleConfig.type;
-
+        // Only used in edit mode - new mode uses inline buttons
         if (state.editMode) {
-            // Edit mode always shows "Save" - user can rerun manually if desired
             btnInner.innerHTML = 'Save';
-        } else {
-            if (scheduleType === 'now') {
-                btnInner.innerHTML = 'Run';
-            } else {
-                btnInner.innerHTML = 'Schedule';
-            }
         }
     }
 
@@ -1385,22 +1382,19 @@ const TrainingWizard = (function() {
             return submitEditMode();
         }
 
-        const submitBtn = document.getElementById('wizardSubmitBtn');
-        const scheduleType = state.formData.scheduleConfig.type;
-        const isScheduled = scheduleType !== 'now';
+        // Find the Run Now button (inline button in step 3)
+        const runNowBtn = document.querySelector('.wizard-action-btn-primary');
 
-        if (submitBtn) {
-            submitBtn.disabled = true;
-            const btnInner = submitBtn.querySelector('.btn-neu-inner');
-            if (btnInner) {
-                btnInner.innerHTML = '<i class="fas fa-spinner fa-spin"></i> ' + (isScheduled ? 'Schedule' : 'Run');
-            }
+        if (runNowBtn) {
+            runNowBtn.disabled = true;
+            runNowBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> <span>Running...</span>';
         }
 
         try {
             const payload = buildPayload();
+            // Always immediate execution - scheduling is handled by openScheduleModal()
+            payload.schedule_type = 'now';
 
-            // Use the schedule API endpoint which handles both immediate and scheduled runs
             const endpoint = '/api/training/schedules/';
 
             const response = await fetch(endpoint, {
@@ -1415,14 +1409,8 @@ const TrainingWizard = (function() {
             const data = await response.json();
 
             if (data.success) {
-                // Success
                 close();
-
-                if (isScheduled) {
-                    showSuccessModal('Training scheduled successfully!');
-                } else {
-                    showSuccessModal('Training run created successfully!');
-                }
+                showSuccessModal('Training run created successfully!');
 
                 // Call completion callback
                 if (config.onComplete) {
@@ -1434,25 +1422,109 @@ const TrainingWizard = (function() {
                     switchChapter('training');
                 }
             } else {
-                // Error
                 showErrorModal(data.error || 'Failed to create training');
             }
         } catch (error) {
             console.error('Submit failed:', error);
             showErrorModal('Failed to create training');
         } finally {
-            if (submitBtn) {
-                submitBtn.disabled = false;
-                const btnInner = submitBtn.querySelector('.btn-neu-inner');
-                if (btnInner) {
-                    if (isScheduled) {
-                        btnInner.innerHTML = 'Schedule';
-                    } else {
-                        btnInner.innerHTML = 'Run';
-                    }
-                }
+            if (runNowBtn) {
+                runNowBtn.disabled = false;
+                runNowBtn.innerHTML = '<i class="fas fa-play"></i> <span>Run Now</span>';
             }
         }
+    }
+
+    /**
+     * Open the Schedule Modal with wizard configuration.
+     * This allows creating a schedule for a new model using the full ScheduleModal UI.
+     */
+    function openScheduleModal() {
+        if (!validateStep(3)) return;
+
+        // Build the wizard config to pass to ScheduleModal
+        const wizardConfig = buildWizardConfig();
+
+        // Check if ScheduleModal is available
+        if (typeof ScheduleModal === 'undefined' || !ScheduleModal.openForWizardConfig) {
+            showErrorModal('Schedule modal is not available');
+            return;
+        }
+
+        // Configure ScheduleModal callbacks
+        ScheduleModal.configure({
+            onSuccess: function(schedule) {
+                // Close the wizard after successful schedule creation
+                close();
+
+                // Call completion callback
+                if (config.onComplete) {
+                    config.onComplete();
+                }
+
+                // Switch to training chapter to show the new schedule
+                if (typeof switchChapter === 'function') {
+                    switchChapter('training');
+                }
+            }
+        });
+
+        // Open the modal with wizard config
+        ScheduleModal.openForWizardConfig(wizardConfig);
+    }
+
+    /**
+     * Build wizard configuration object for ScheduleModal.
+     * Contains all the training configuration needed to create a schedule.
+     */
+    function buildWizardConfig() {
+        const exp = state.formData.selectedExperiment;
+        const params = state.formData.trainingParams;
+        const expSettings = state.formData.experimentSettings;
+        const gpu = state.formData.gpuConfig;
+        const evaluator = state.formData.evaluatorConfig;
+
+        return {
+            // Model identity
+            model_name: state.formData.name,
+            description: state.formData.description || '',
+
+            // Data configuration
+            dataset_id: exp.dataset_id || state.formData.datasetId,
+            feature_config_id: exp.feature_config_id || state.formData.featureConfigId,
+            model_config_id: exp.model_config_id || state.formData.modelConfigId,
+            base_experiment_id: exp.experiment_id,
+
+            // Training parameters
+            training_params: {
+                epochs: params.epochs,
+                batch_size: params.batchSize,
+                learning_rate: params.learningRate,
+                split_strategy: expSettings.splitStrategy,
+                holdout_days: expSettings.holdoutDays,
+                date_column: expSettings.dateColumn,
+                early_stopping: {
+                    enabled: params.earlyStoppingEnabled,
+                    patience: params.earlyStoppingPatience
+                }
+            },
+
+            // GPU configuration
+            gpu_config: {
+                gpu_type: gpu.acceleratorType.replace('NVIDIA_', 'NVIDIA_TESLA_'),
+                gpu_count: gpu.acceleratorCount,
+                preemptible: gpu.usePreemptible
+            },
+
+            // Evaluator configuration
+            evaluator_config: {
+                enabled: evaluator.enabled,
+                blessing_threshold: {
+                    metric: 'recall_at_100',
+                    min_value: parseFloat(evaluator.blessingThreshold)
+                }
+            }
+        };
     }
 
     /**
@@ -1639,6 +1711,7 @@ const TrainingWizard = (function() {
         nextStep: nextStep,
         prevStep: prevStep,
         submit: submit,
+        openScheduleModal: openScheduleModal,  // Opens ScheduleModal for scheduling
         openFromExperiment: openFromExperiment,
         openForEdit: openForEdit,  // Edit mode
         selectExperiment: selectExperiment,
@@ -1653,11 +1726,8 @@ const TrainingWizard = (function() {
         updatePreemptible: updatePreemptible,
         updateEvaluator: updateEvaluator,
         selectDeploymentOption: selectDeploymentOption,
-        selectScheduleType: selectScheduleType,
-        updateScheduleConfig: updateScheduleConfig,
         checkNameAvailability: checkNameAvailability,
         toggleDeploy: toggleDeploy,
-        toggleSchedule: toggleSchedule,
-        onScheduleTypeChange: onScheduleTypeChange
+        toggleStep3Advanced: toggleStep3Advanced
     };
 })();

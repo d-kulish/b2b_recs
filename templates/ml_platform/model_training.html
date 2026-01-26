@@ -1505,125 +1505,16 @@
                     </div>
                 </div>
 
-                <!-- Schedule Section -->
-                <div class="filter-subchapter" style="margin-top: 20px;">
-                    <div class="subchapter-header-tablet" id="wizardScheduleToggle" onclick="TrainingWizard.toggleSchedule()">
-                        <i class="fas fa-clock" style="color: #10b981; margin-right: 10px;"></i>
-                        <span class="subchapter-title" style="flex-grow: 1; text-align: left;">Schedule</span>
-                        <i id="wizardScheduleChevron" class="fas fa-chevron-down subchapter-chevron expanded"></i>
-                    </div>
-                    <div id="wizardScheduleContent" class="subchapter-content-outside">
-                        <!-- Schedule Type Tabs -->
-                        <div class="schedule-tab-group" style="display: flex; gap: 8px; width: 100%; margin-bottom: 16px;">
-                            <label class="schedule-option" style="flex: 1;">
-                                <input type="radio" name="wizardScheduleType" value="now" class="hidden peer" checked onchange="TrainingWizard.onScheduleTypeChange()">
-                                <span class="wizard-tab" style="display: flex; flex-direction: column; align-items: center; gap: 4px; width: 100%; padding: 12px 8px;">
-                                    <i class="fas fa-play-circle"></i>
-                                    <span>Run Now</span>
-                                </span>
-                            </label>
-                            <label class="schedule-option" style="flex: 1;">
-                                <input type="radio" name="wizardScheduleType" value="once" class="hidden peer" onchange="TrainingWizard.onScheduleTypeChange()">
-                                <span class="wizard-tab" style="display: flex; flex-direction: column; align-items: center; gap: 4px; width: 100%; padding: 12px 8px;">
-                                    <i class="fas fa-calendar-day"></i>
-                                    <span>Schedule Once</span>
-                                </span>
-                            </label>
-                            <label class="schedule-option" style="flex: 1;">
-                                <input type="radio" name="wizardScheduleType" value="daily" class="hidden peer" onchange="TrainingWizard.onScheduleTypeChange()">
-                                <span class="wizard-tab" style="display: flex; flex-direction: column; align-items: center; gap: 4px; width: 100%; padding: 12px 8px;">
-                                    <i class="fas fa-calendar-alt"></i>
-                                    <span>Daily</span>
-                                </span>
-                            </label>
-                            <label class="schedule-option" style="flex: 1;">
-                                <input type="radio" name="wizardScheduleType" value="weekly" class="hidden peer" onchange="TrainingWizard.onScheduleTypeChange()">
-                                <span class="wizard-tab" style="display: flex; flex-direction: column; align-items: center; gap: 4px; width: 100%; padding: 12px 8px;">
-                                    <i class="fas fa-calendar-week"></i>
-                                    <span>Weekly</span>
-                                </span>
-                            </label>
-                        </div>
-
-                        <!-- Schedule Once Options -->
-                        <div id="wizardScheduleOnceOptions" class="hidden" style="margin-top: 12px;">
-                            <div style="display: flex; gap: 16px; align-items: flex-end;">
-                                <div style="flex: 1;">
-                                    <label class="training-param-label">Date</label>
-                                    <input type="date" id="wizardScheduleDate" class="training-param-select" style="width: 100%;" onchange="TrainingWizard.updateScheduleConfig('date', this.value)">
-                                </div>
-                                <div style="width: 120px;">
-                                    <label class="training-param-label">Time</label>
-                                    <input type="time" id="wizardScheduleTimeOnce" class="training-param-select" style="width: 100%;" value="09:00" onchange="TrainingWizard.updateScheduleConfig('time', this.value)">
-                                </div>
-                                <div style="width: 180px;">
-                                    <label class="training-param-label">Timezone</label>
-                                    <select id="wizardScheduleTimezone" class="training-param-select" style="width: 100%;" onchange="TrainingWizard.updateScheduleConfig('timezone', this.value)">
-                                        <option value="UTC">UTC</option>
-                                        <option value="Europe/Kyiv">Kyiv (UTC+2/+3)</option>
-                                        <option value="Europe/London">London (UTC+0/+1)</option>
-                                        <option value="America/New_York">New York (UTC-5/-4)</option>
-                                        <option value="America/Los_Angeles">Los Angeles (UTC-8/-7)</option>
-                                        <option value="Asia/Tokyo">Tokyo (UTC+9)</option>
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Daily Options -->
-                        <div id="wizardScheduleDailyOptions" class="hidden" style="margin-top: 12px;">
-                            <div style="display: flex; gap: 16px; align-items: flex-end;">
-                                <div style="width: 120px;">
-                                    <label class="training-param-label">Time</label>
-                                    <input type="time" id="wizardScheduleTimeDaily" class="training-param-select" style="width: 100%;" value="09:00" onchange="TrainingWizard.updateScheduleConfig('time', this.value)">
-                                </div>
-                                <div style="width: 180px;">
-                                    <label class="training-param-label">Timezone</label>
-                                    <select id="wizardScheduleTimezoneDaily" class="training-param-select" style="width: 100%;" onchange="TrainingWizard.updateScheduleConfig('timezone', this.value)">
-                                        <option value="UTC">UTC</option>
-                                        <option value="Europe/Kyiv">Kyiv (UTC+2/+3)</option>
-                                        <option value="Europe/London">London (UTC+0/+1)</option>
-                                        <option value="America/New_York">New York (UTC-5/-4)</option>
-                                        <option value="America/Los_Angeles">Los Angeles (UTC-8/-7)</option>
-                                        <option value="Asia/Tokyo">Tokyo (UTC+9)</option>
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Weekly Options -->
-                        <div id="wizardScheduleWeeklyOptions" class="hidden" style="margin-top: 12px;">
-                            <div style="display: flex; gap: 16px; align-items: flex-end;">
-                                <div style="width: 150px;">
-                                    <label class="training-param-label">Day of Week</label>
-                                    <select id="wizardScheduleDayOfWeek" class="training-param-select" style="width: 100%;" onchange="TrainingWizard.updateScheduleConfig('dayOfWeek', this.value)">
-                                        <option value="0">Monday</option>
-                                        <option value="1">Tuesday</option>
-                                        <option value="2">Wednesday</option>
-                                        <option value="3">Thursday</option>
-                                        <option value="4">Friday</option>
-                                        <option value="5">Saturday</option>
-                                        <option value="6">Sunday</option>
-                                    </select>
-                                </div>
-                                <div style="width: 120px;">
-                                    <label class="training-param-label">Time</label>
-                                    <input type="time" id="wizardScheduleTimeWeekly" class="training-param-select" style="width: 100%;" value="09:00" onchange="TrainingWizard.updateScheduleConfig('time', this.value)">
-                                </div>
-                                <div style="width: 180px;">
-                                    <label class="training-param-label">Timezone</label>
-                                    <select id="wizardScheduleTimezoneWeekly" class="training-param-select" style="width: 100%;" onchange="TrainingWizard.updateScheduleConfig('timezone', this.value)">
-                                        <option value="UTC">UTC</option>
-                                        <option value="Europe/Kyiv">Kyiv (UTC+2/+3)</option>
-                                        <option value="Europe/London">London (UTC+0/+1)</option>
-                                        <option value="America/New_York">New York (UTC-5/-4)</option>
-                                        <option value="America/Los_Angeles">Los Angeles (UTC-8/-7)</option>
-                                        <option value="Asia/Tokyo">Tokyo (UTC+9)</option>
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                <!-- Action Buttons Section -->
+                <div class="wizard-action-section" style="margin-top: 24px; display: flex; gap: 16px; justify-content: center;">
+                    <button type="button" class="wizard-action-btn wizard-action-btn-primary" onclick="TrainingWizard.submit()">
+                        <i class="fas fa-play"></i>
+                        <span>Run Now</span>
+                    </button>
+                    <button type="button" class="wizard-action-btn wizard-action-btn-secondary" onclick="TrainingWizard.openScheduleModal()">
+                        <i class="fas fa-calendar-alt"></i>
+                        <span>Schedule</span>
+                    </button>
                 </div>
 
                 <!-- Advanced Section (collapsed by default) -->

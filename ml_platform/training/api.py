@@ -2299,11 +2299,34 @@ def _training_schedule_create(request, model_endpoint):
             else:
                 schedule_time = dt_time(9, 0)  # Default to 9 AM
 
+        # Handle schedule_name vs name distinction (for wizard mode)
+        # - schedule_name: the name for the TrainingSchedule
+        # - name: the model name (for RegisteredModel)
+        # For backward compatibility, if schedule_name is not provided, use name for the schedule
+        schedule_name = data.get('schedule_name', data['name'])
+        schedule_description = data.get('schedule_description', data.get('description', ''))
+        model_name = data['name']
+
+        # Determine model type from model config (QuickTest links to ModelConfig)
+        model_type = 'retrieval'  # Default
+        if model_config:
+            model_type = model_config.model_type or 'retrieval'
+        elif base_experiment and base_experiment.model_config:
+            model_type = base_experiment.model_config.model_type or 'retrieval'
+
+        # Get or create RegisteredModel for this model name
+        reg_model_service = RegisteredModelService(model_endpoint)
+        registered_model = reg_model_service.get_or_create_for_training(
+            model_name=model_name,
+            model_type=model_type,
+            created_by=request.user if request.user.is_authenticated else None
+        )
+
         # Create the schedule
         schedule = TrainingSchedule.objects.create(
             ml_model=model_endpoint,
-            name=data['name'],
-            description=data.get('description', ''),
+            name=schedule_name,
+            description=schedule_description,
             schedule_type=schedule_type,
             scheduled_datetime=scheduled_datetime,
             schedule_time=schedule_time,
@@ -2320,6 +2343,8 @@ def _training_schedule_create(request, model_endpoint):
             deployment_config=data.get('deployment_config', {}),
             created_by=request.user if request.user.is_authenticated else None,
             status=TrainingSchedule.STATUS_ACTIVE,
+            # Link to RegisteredModel
+            registered_model=registered_model,
         )
 
         # Create Cloud Scheduler job

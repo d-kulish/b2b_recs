@@ -4,6 +4,11 @@
    Styles for the training schedule creation modal
    ============================================================================ */
 
+/* Schedule Modal Overlay - Higher z-index to appear above other modals (e.g., wizard) */
+#scheduleModal.modal-overlay {
+    z-index: 150;
+}
+
 /* Schedule Modal Container */
 .schedule-modal {
     max-width: 686px;  /* 520px + 30% */

@@ -3077,7 +3077,7 @@ def training_schedule_from_run(request):
 # Models Registry API Endpoints
 # =============================================================================
 
-def _serialize_registered_model(training_run, include_details=False, deployed_models=None, endpoint_error=None):
+def _serialize_registered_model(training_run, include_details=False, deployed_models=None, endpoint_error=None, all_version_resources=None):
     """
     Serialize a TrainingRun that has a registered model to dict.
 
@@ -3086,24 +3086,29 @@ def _serialize_registered_model(training_run, include_details=False, deployed_mo
         include_details: If True, include full configuration and artifacts
         deployed_models: Set of vertex_model_resource_name strings currently deployed
         endpoint_error: Error message if Vertex AI endpoint query failed
+        all_version_resources: List of all vertex_model_resource_name for this model's versions
+                              (used to detect if an older version is deployed)
 
     Returns:
         Dict representation of the registered model
     """
-    # Determine model status dynamically from Vertex AI endpoint
+    # Determine deployment status dynamically from Vertex AI endpoint
+    # Three states: 'deployed' (latest on endpoint), 'outdated' (older version deployed), 'idle' (none deployed)
     if endpoint_error:
         model_status = 'unknown'
     elif deployed_models is not None:
-        is_deployed = training_run.vertex_model_resource_name in deployed_models
-        if is_deployed:
+        latest_is_deployed = training_run.vertex_model_resource_name in deployed_models
+        if latest_is_deployed:
             model_status = 'deployed'
-        elif training_run.is_blessed:
-            model_status = 'idle'
+        elif all_version_resources:
+            # Check if any other version is deployed
+            any_version_deployed = any(res in deployed_models for res in all_version_resources)
+            model_status = 'outdated' if any_version_deployed else 'idle'
         else:
-            model_status = 'not_blessed'
+            model_status = 'idle'
     else:
         # Fallback when deployed_models not provided
-        model_status = 'idle' if training_run.is_blessed else 'not_blessed'
+        model_status = 'idle'
 
     # Get primary metrics based on model type
     metrics = {}
@@ -3649,17 +3654,34 @@ def models_list(request):
         # Fetch all models for filtering and pagination
         all_filtered_models = list(queryset)
 
-        # Apply deployed/idle filters in memory using dynamic deployment status
+        # Build version resources mapping for all models (needed for outdated detection)
+        # Maps vertex_model_name -> list of all version resource names
+        all_version_resources = {}
+        for model in all_filtered_models:
+            if model.vertex_model_name not in all_version_resources:
+                versions = TrainingRun.objects.filter(
+                    ml_model=model_endpoint,
+                    vertex_model_name=model.vertex_model_name,
+                    vertex_model_resource_name__isnull=False
+                ).exclude(vertex_model_resource_name='').values_list('vertex_model_resource_name', flat=True)
+                all_version_resources[model.vertex_model_name] = list(versions)
+
+        def get_model_status(m):
+            """Determine deployment status: deployed, outdated, or idle."""
+            if m.vertex_model_resource_name in deployed_models:
+                return 'deployed'
+            version_resources = all_version_resources.get(m.vertex_model_name, [])
+            if any(res in deployed_models for res in version_resources):
+                return 'outdated'
+            return 'idle'
+
+        # Apply deployed/outdated/idle filters in memory using dynamic deployment status
         if status_filter == 'deployed':
-            all_filtered_models = [
-                m for m in all_filtered_models
-                if m.vertex_model_resource_name in deployed_models
-            ]
+            all_filtered_models = [m for m in all_filtered_models if get_model_status(m) == 'deployed']
+        elif status_filter == 'outdated':
+            all_filtered_models = [m for m in all_filtered_models if get_model_status(m) == 'outdated']
         elif status_filter == 'idle':
-            all_filtered_models = [
-                m for m in all_filtered_models
-                if m.is_blessed and m.vertex_model_resource_name not in deployed_models
-            ]
+            all_filtered_models = [m for m in all_filtered_models if get_model_status(m) == 'idle']
 
         # Calculate KPIs - count unique models, not all versions
         # For each KPI, we get the latest version per model name, then count
@@ -3668,7 +3690,7 @@ def models_list(request):
         # Get unique model count (total unique model names)
         total_unique = all_models.values('vertex_model_name').distinct().count()
 
-        # For blessed/deployed/idle, we need to check the LATEST version of each model
+        # For deployed/outdated/idle, we need to check the LATEST version of each model
         # Get latest IDs for all models (unfiltered)
         all_latest_ids = all_models.order_by(
             'vertex_model_name', '-registered_at'
@@ -3676,15 +3698,25 @@ def models_list(request):
 
         latest_models = list(TrainingRun.objects.filter(id__in=list(all_latest_ids)))
 
+        # Build version resources for KPI calculation (for models not already cached)
+        for m in latest_models:
+            if m.vertex_model_name not in all_version_resources:
+                versions = TrainingRun.objects.filter(
+                    ml_model=model_endpoint,
+                    vertex_model_name=m.vertex_model_name,
+                    vertex_model_resource_name__isnull=False
+                ).exclude(vertex_model_resource_name='').values_list('vertex_model_resource_name', flat=True)
+                all_version_resources[m.vertex_model_name] = list(versions)
+
         # Calculate KPIs using dynamic deployment status
-        blessed_count = sum(1 for m in latest_models if m.is_blessed)
-        deployed_count = sum(1 for m in latest_models if m.vertex_model_resource_name in deployed_models)
-        idle_count = sum(1 for m in latest_models if m.is_blessed and m.vertex_model_resource_name not in deployed_models)
+        deployed_count = sum(1 for m in latest_models if get_model_status(m) == 'deployed')
+        outdated_count = sum(1 for m in latest_models if get_model_status(m) == 'outdated')
+        idle_count = sum(1 for m in latest_models if get_model_status(m) == 'idle')
 
         kpi = {
             'total': total_unique,
-            'blessed': blessed_count,
             'deployed': deployed_count,
+            'outdated': outdated_count,
             'idle': idle_count,
             'scheduled': TrainingSchedule.objects.filter(
                 ml_model=model_endpoint,
@@ -3716,21 +3748,17 @@ def models_list(request):
 
         models = all_filtered_models[start_idx:end_idx]
 
-        # Count versions for each model (by vertex_model_name)
-        for model in models:
-            version_count = TrainingRun.objects.filter(
-                ml_model=model_endpoint,
-                vertex_model_name=model.vertex_model_name,
-                vertex_model_resource_name__isnull=False
-            ).exclude(vertex_model_resource_name='').count()
-            model._version_count = version_count
-
         return JsonResponse({
             'success': True,
             'models': [
                 {
-                    **_serialize_registered_model(m, deployed_models=deployed_models, endpoint_error=endpoint_error),
-                    'version_count': getattr(m, '_version_count', 1)
+                    **_serialize_registered_model(
+                        m,
+                        deployed_models=deployed_models,
+                        endpoint_error=endpoint_error,
+                        all_version_resources=all_version_resources.get(m.vertex_model_name, [])
+                    ),
+                    'version_count': len(all_version_resources.get(m.vertex_model_name, []))
                 }
                 for m in models
             ],

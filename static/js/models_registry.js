@@ -39,7 +39,7 @@ const ModelsRegistry = (function() {
 
     let state = {
         models: [],
-        kpi: { total: 0, blessed: 0, deployed: 0, idle: 0, scheduled: 0 },
+        kpi: { total: 0, deployed: 0, outdated: 0, idle: 0, scheduled: 0 },
         pagination: { page: 1, pageSize: 10, totalCount: 0, totalPages: 1 },
         filters: {
             modelType: 'all',
@@ -52,12 +52,13 @@ const ModelsRegistry = (function() {
         searchDebounceTimer: null
     };
 
-    // Status badge configurations
+    // Deployment status badge configurations
+    // Three states: deployed (latest on endpoint), outdated (older version deployed), idle (none deployed)
     const STATUS_CONFIG = {
         deployed: { icon: 'fa-rocket', label: 'Deployed', class: 'deployed' },
+        outdated: { icon: 'fa-exclamation-triangle', label: 'Outdated', class: 'outdated' },
         idle: { icon: 'fa-pause-circle', label: 'Idle', class: 'idle' },
-        not_blessed: { icon: 'fa-exclamation-circle', label: 'Not Blessed', class: 'not_blessed' },
-        pending: { icon: 'fa-clock', label: 'Pending', class: 'pending' }
+        unknown: { icon: 'fa-question-circle', label: 'Unknown', class: 'unknown' }
     };
 
     // Model type configurations
@@ -83,6 +84,32 @@ const ModelsRegistry = (function() {
         if (!isoStr) return '-';
         const d = new Date(isoStr);
         return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+
+    function formatAge(isoStr) {
+        if (!isoStr) return { text: '-', class: '' };
+        const registered = new Date(isoStr);
+        const now = new Date();
+        const diffMs = now - registered;
+        const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+        let ageClass = '';
+        if (days > 14) {
+            ageClass = 'age-old';
+        } else if (days > 7) {
+            ageClass = 'age-warning';
+        }
+
+        let text;
+        if (days === 0) {
+            text = 'Today';
+        } else if (days === 1) {
+            text = '1 day';
+        } else {
+            text = `${days} days`;
+        }
+
+        return { text, class: ageClass };
     }
 
     function formatMetric(value, decimals = 4) {
@@ -246,12 +273,12 @@ const ModelsRegistry = (function() {
                 <div class="models-kpi-label">Total Models</div>
             </div>
             <div class="models-kpi-card">
-                <div class="models-kpi-value highlight-green">${state.kpi.blessed}</div>
-                <div class="models-kpi-label">Blessed</div>
-            </div>
-            <div class="models-kpi-card">
                 <div class="models-kpi-value highlight-green">${state.kpi.deployed}</div>
                 <div class="models-kpi-label">Deployed</div>
+            </div>
+            <div class="models-kpi-card">
+                <div class="models-kpi-value highlight-orange">${state.kpi.outdated}</div>
+                <div class="models-kpi-label">Outdated</div>
             </div>
             <div class="models-kpi-card">
                 <div class="models-kpi-value highlight-blue">${state.kpi.idle}</div>
@@ -279,12 +306,11 @@ const ModelsRegistry = (function() {
                 </select>
             </div>
             <div class="models-filter-group">
-                <label class="models-filter-label">Status</label>
+                <label class="models-filter-label">Deployment</label>
                 <select class="models-filter-select" id="modelsFilterStatus" onchange="ModelsRegistry.setFilter('status', this.value)">
-                    <option value="all" ${state.filters.status === 'all' ? 'selected' : ''}>All Statuses</option>
-                    <option value="blessed" ${state.filters.status === 'blessed' ? 'selected' : ''}>Blessed</option>
-                    <option value="not_blessed" ${state.filters.status === 'not_blessed' ? 'selected' : ''}>Not Blessed</option>
+                    <option value="all" ${state.filters.status === 'all' ? 'selected' : ''}>All</option>
                     <option value="deployed" ${state.filters.status === 'deployed' ? 'selected' : ''}>Deployed</option>
+                    <option value="outdated" ${state.filters.status === 'outdated' ? 'selected' : ''}>Outdated</option>
                     <option value="idle" ${state.filters.status === 'idle' ? 'selected' : ''}>Idle</option>
                 </select>
             </div>
@@ -339,11 +365,11 @@ const ModelsRegistry = (function() {
                             <th>#</th>
                             <th>Model Name</th>
                             <th>Type</th>
+                            <th>Deployment</th>
+                            <th>Schedule</th>
                             <th>Version</th>
                             <th>Metrics</th>
-                            <th>Status</th>
-                            <th>Schedule</th>
-                            <th>Registered</th>
+                            <th>Age</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
@@ -360,9 +386,10 @@ const ModelsRegistry = (function() {
     }
 
     function renderTableRow(model, idx) {
-        const statusConfig = STATUS_CONFIG[model.model_status] || STATUS_CONFIG.pending;
+        const statusConfig = STATUS_CONFIG[model.model_status] || STATUS_CONFIG.idle;
         const typeConfig = TYPE_CONFIG[model.model_type] || TYPE_CONFIG.retrieval;
         const rowNum = (state.pagination.page - 1) * state.pagination.pageSize + idx + 1;
+        const age = formatAge(model.registered_at);
 
         // Get primary metric for display
         let metricsHtml = '';
@@ -408,17 +435,6 @@ const ModelsRegistry = (function() {
                     </span>
                 </td>
                 <td>
-                    <span class="models-version-badge">
-                        <i class="fas fa-code-branch"></i>
-                        v${model.vertex_model_version || '1'}
-                    </span>
-                </td>
-                <td>
-                    <div class="models-metrics-cell">
-                        ${metricsHtml || '<span style="color:#9ca3af;">-</span>'}
-                    </div>
-                </td>
-                <td>
                     <span class="models-status-badge ${statusConfig.class}">
                         <i class="fas ${statusConfig.icon}"></i>
                         ${statusConfig.label}
@@ -437,7 +453,20 @@ const ModelsRegistry = (function() {
                         </span>
                     `}
                 </td>
-                <td>${formatDate(model.registered_at)}</td>
+                <td>
+                    <span class="models-version-badge">
+                        <i class="fas fa-code-branch"></i>
+                        v${model.vertex_model_version || '1'}
+                    </span>
+                </td>
+                <td>
+                    <div class="models-metrics-cell">
+                        ${metricsHtml || '<span style="color:#9ca3af;">-</span>'}
+                    </div>
+                </td>
+                <td>
+                    <span class="models-age-badge ${age.class}">${age.text}</span>
+                </td>
                 <td onclick="event.stopPropagation();">
                     ${renderActionsDropdown(model)}
                 </td>
@@ -474,13 +503,13 @@ const ModelsRegistry = (function() {
                             View Schedule
                         </button>
                     `}
-                    ${model.is_blessed && !model.is_deployed ? `
+                    ${model.model_status !== 'deployed' ? `
                         <button class="models-actions-menu-item" onclick="ModelsRegistry.deploy(${model.id})">
                             <i class="fas fa-rocket"></i>
                             Deploy
                         </button>
                     ` : ''}
-                    ${model.is_deployed ? `
+                    ${model.model_status === 'deployed' ? `
                         <button class="models-actions-menu-item danger" onclick="ModelsRegistry.undeploy(${model.id})">
                             <i class="fas fa-stop-circle"></i>
                             Undeploy

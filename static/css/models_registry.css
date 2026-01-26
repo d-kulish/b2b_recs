@@ -340,18 +340,42 @@
     color: #2563eb;
 }
 
-.models-status-badge.not_blessed {
-    background: #ffedd5;
-    color: #ea580c;
+.models-status-badge.outdated {
+    background: #fef3c7;
+    color: #d97706;
 }
 
-.models-status-badge.pending {
+.models-status-badge.unknown {
     background: #f3f4f6;
     color: #6b7280;
 }
 
 .models-status-badge i {
     font-size: 9px;
+}
+
+/* =========================================================================
+   Age Badges
+   ========================================================================= */
+.models-age-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 500;
+    background: #d1fae5;
+    color: #059669;
+}
+
+.models-age-badge.age-warning {
+    background: #ffedd5;
+    color: #c2410c;
+}
+
+.models-age-badge.age-old {
+    background: #fee2e2;
+    color: #dc2626;
 }
 
 /* =========================================================================

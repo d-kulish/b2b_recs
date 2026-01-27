@@ -180,6 +180,25 @@
     margin-top: 16px;
 }
 
+/* Time and Timezone Row (Daily/Weekly) */
+.schedule-time-timezone-row {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 18px;
+}
+
+.schedule-time-timezone-row .schedule-form-group {
+    margin-bottom: 0;
+}
+
+.schedule-form-group-time {
+    flex: 1;
+}
+
+.schedule-form-group-timezone {
+    flex: 1;
+}
+
 /* Day of Week Selector */
 .schedule-day-selector {
     display: flex;
@@ -404,6 +423,114 @@
 .schedule-datetime-picker,
 .schedule-time-picker {
     cursor: pointer;
+}
+
+/* Time picker wrapper - ensure proper width inheritance */
+.schedule-form-group-time {
+    position: relative;
+}
+
+/* Time picker dropdown - modern, clean style */
+.flatpickr-calendar.hasTime.noCalendar {
+    width: 100% !important;
+    max-width: 280px;
+    min-width: 200px;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+    padding: 16px;
+    background: #fff;
+    margin-top: 4px;
+}
+
+/* Time input container */
+.flatpickr-calendar .flatpickr-time {
+    height: auto;
+    border: none;
+    max-height: none;
+    padding: 8px 0;
+}
+
+/* Hour and minute inputs */
+.flatpickr-calendar .flatpickr-time .numInputWrapper {
+    flex: 1;
+    height: 56px;
+}
+
+.flatpickr-calendar .flatpickr-time .numInputWrapper input {
+    font-size: 28px;
+    font-weight: 600;
+    color: #1f2937;
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 8px;
+    text-align: center;
+    transition: all 0.2s ease;
+}
+
+.flatpickr-calendar .flatpickr-time .numInputWrapper input:hover {
+    background: #f3f4f6;
+    border-color: #d1d5db;
+}
+
+.flatpickr-calendar .flatpickr-time .numInputWrapper input:focus {
+    background: #fff;
+    border-color: #9ca3af;
+    box-shadow: 0 0 0 3px rgba(156, 163, 175, 0.15);
+    outline: none;
+}
+
+/* Up/down arrows */
+.flatpickr-calendar .flatpickr-time .numInputWrapper span {
+    width: 20px;
+    height: 20px;
+    border: none;
+    background: transparent;
+    opacity: 0.5;
+    transition: opacity 0.2s ease;
+}
+
+.flatpickr-calendar .flatpickr-time .numInputWrapper span:hover {
+    opacity: 1;
+    background: #f3f4f6;
+    border-radius: 4px;
+}
+
+.flatpickr-calendar .flatpickr-time .numInputWrapper span:after {
+    border-color: #6b7280 transparent transparent transparent;
+}
+
+.flatpickr-calendar .flatpickr-time .numInputWrapper span.arrowUp:after {
+    border-color: transparent transparent #6b7280 transparent;
+}
+
+/* Time separator (colon) */
+.flatpickr-calendar .flatpickr-time .flatpickr-time-separator {
+    font-size: 28px;
+    font-weight: 600;
+    color: #9ca3af;
+    width: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* AM/PM toggle (if used) */
+.flatpickr-calendar .flatpickr-time .flatpickr-am-pm {
+    font-size: 14px;
+    font-weight: 600;
+    color: #6b7280;
+    background: #f3f4f6;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    padding: 8px 12px;
+    margin-left: 8px;
+    transition: all 0.2s ease;
+}
+
+.flatpickr-calendar .flatpickr-time .flatpickr-am-pm:hover {
+    background: #e5e7eb;
 }
 
 /* Animation keyframes */

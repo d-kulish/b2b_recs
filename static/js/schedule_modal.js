@@ -360,10 +360,9 @@ const ScheduleModal = (function() {
         state.scheduleConfig.scheduleType = scheduleType;
         onScheduleTypeChange(scheduleType);
 
-        // Set timezone
+        // Set timezone (both selects to keep them in sync)
         const timezone = schedule.schedule_timezone || 'UTC';
-        document.getElementById('scheduleTimezoneSelect').value = timezone;
-        state.scheduleConfig.scheduleTimezone = timezone;
+        setTimezoneValue(timezone);
 
         // Set type-specific values
         if (scheduleType === 'once') {
@@ -522,6 +521,8 @@ const ScheduleModal = (function() {
         document.getElementById('scheduleNameInput').value = '';
         document.getElementById('scheduleDescriptionInput').value = '';
         document.getElementById('scheduleTimezoneSelect').value = 'UTC';
+        document.getElementById('scheduleTimezoneSelectStandalone').value = 'UTC';
+        document.getElementById('scheduleTimezoneStandalone').style.display = 'none';
 
         // Reset type tabs
         document.querySelectorAll('.schedule-type-tab').forEach(tab => {
@@ -692,6 +693,7 @@ const ScheduleModal = (function() {
         const recurringOptions = document.getElementById('scheduleOptionsRecurring');
         const monthlyOptions = document.getElementById('scheduleOptionsMonthly');
         const dayOfWeekGroup = document.getElementById('scheduleDayOfWeekGroup');
+        const timezoneStandalone = document.getElementById('scheduleTimezoneStandalone');
 
         // Hide all first
         onceOptions.style.display = 'none';
@@ -701,16 +703,21 @@ const ScheduleModal = (function() {
 
         if (type === 'once') {
             onceOptions.style.display = 'block';
+            timezoneStandalone.style.display = 'block';
         } else if (type === 'hourly') {
             hourlyOptions.style.display = 'block';
+            timezoneStandalone.style.display = 'block';
         } else if (type === 'daily') {
             recurringOptions.style.display = 'block';
             dayOfWeekGroup.style.display = 'none';
+            timezoneStandalone.style.display = 'none';
         } else if (type === 'weekly') {
             recurringOptions.style.display = 'block';
             dayOfWeekGroup.style.display = 'block';
+            timezoneStandalone.style.display = 'none';
         } else if (type === 'monthly') {
             monthlyOptions.style.display = 'block';
+            timezoneStandalone.style.display = 'block';
         }
 
         updateNextRunPreview();
@@ -756,7 +763,7 @@ const ScheduleModal = (function() {
     function updateNextRunPreview() {
         const previewEl = document.getElementById('scheduleNextRunPreview');
         const type = state.scheduleConfig.scheduleType;
-        const timezone = document.getElementById('scheduleTimezoneSelect').value;
+        const timezone = getTimezoneValue();
 
         let previewText = '';
 
@@ -826,7 +833,7 @@ const ScheduleModal = (function() {
         }
 
         const type = state.scheduleConfig.scheduleType;
-        const timezone = document.getElementById('scheduleTimezoneSelect').value;
+        const timezone = getTimezoneValue();
         const scheduleDescription = document.getElementById('scheduleDescriptionInput').value.trim();
 
         // Validate type-specific fields
@@ -995,15 +1002,51 @@ const ScheduleModal = (function() {
     }
 
     // =============================================================================
+    // TIMEZONE HELPERS
+    // =============================================================================
+
+    /**
+     * Get current timezone value from the visible timezone select
+     */
+    function getTimezoneValue() {
+        const type = state.scheduleConfig.scheduleType;
+        if (type === 'daily' || type === 'weekly') {
+            return document.getElementById('scheduleTimezoneSelect').value;
+        } else {
+            return document.getElementById('scheduleTimezoneSelectStandalone').value;
+        }
+    }
+
+    /**
+     * Set timezone value on both selects to keep them synced
+     */
+    function setTimezoneValue(value) {
+        const timezoneSelect = document.getElementById('scheduleTimezoneSelect');
+        const timezoneStandalone = document.getElementById('scheduleTimezoneSelectStandalone');
+        if (timezoneSelect) timezoneSelect.value = value;
+        if (timezoneStandalone) timezoneStandalone.value = value;
+        state.scheduleConfig.scheduleTimezone = value;
+    }
+
+    // =============================================================================
     // EVENT LISTENERS
     // =============================================================================
 
-    // Listen for timezone changes
+    // Listen for timezone changes on both selects
     document.addEventListener('DOMContentLoaded', function() {
         const timezoneSelect = document.getElementById('scheduleTimezoneSelect');
+        const timezoneStandalone = document.getElementById('scheduleTimezoneSelectStandalone');
+
         if (timezoneSelect) {
             timezoneSelect.addEventListener('change', function() {
-                state.scheduleConfig.scheduleTimezone = this.value;
+                setTimezoneValue(this.value);
+                updateNextRunPreview();
+            });
+        }
+
+        if (timezoneStandalone) {
+            timezoneStandalone.addEventListener('change', function() {
+                setTimezoneValue(this.value);
                 updateNextRunPreview();
             });
         }

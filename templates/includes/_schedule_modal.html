@@ -170,13 +170,58 @@
 
             <!-- Schedule Options - Daily/Weekly -->
             <div class="schedule-options" id="scheduleOptionsRecurring">
-                <!-- Time Picker -->
-                <div class="schedule-form-group">
-                    <label for="scheduleTimeInput" class="schedule-form-label">
-                        Time of Day <span class="required">*</span>
-                    </label>
-                    <input type="text" id="scheduleTimeInput" class="schedule-form-input schedule-time-picker"
-                           placeholder="Select time" value="09:00">
+                <!-- Time and Timezone Row -->
+                <div class="schedule-time-timezone-row">
+                    <!-- Time Picker -->
+                    <div class="schedule-form-group schedule-form-group-time">
+                        <label for="scheduleTimeInput" class="schedule-form-label">
+                            Time of Day <span class="required">*</span>
+                        </label>
+                        <input type="text" id="scheduleTimeInput" class="schedule-form-input schedule-time-picker"
+                               placeholder="Select time" value="09:00">
+                    </div>
+
+                    <!-- Timezone Selector (inline for Daily/Weekly) -->
+                    <div class="schedule-form-group schedule-form-group-timezone">
+                        <label for="scheduleTimezoneSelect" class="schedule-form-label">Timezone</label>
+                        <select id="scheduleTimezoneSelect" class="schedule-form-select">
+                            <option value="UTC">UTC</option>
+                            <!-- Americas -->
+                            <option value="Pacific/Honolulu">Hawaii (HST)</option>
+                            <option value="America/Anchorage">Alaska (AKST)</option>
+                            <option value="America/Los_Angeles">Pacific Time (US)</option>
+                            <option value="America/Denver">Mountain Time (US)</option>
+                            <option value="America/Chicago">Central Time (US)</option>
+                            <option value="America/New_York">Eastern Time (US)</option>
+                            <option value="America/Mexico_City">Mexico City (CST)</option>
+                            <option value="America/Sao_Paulo">São Paulo (BRT)</option>
+                            <!-- Europe -->
+                            <option value="Europe/London">London (GMT/BST)</option>
+                            <option value="Europe/Paris">Paris (CET/CEST)</option>
+                            <option value="Europe/Berlin">Berlin (CET/CEST)</option>
+                            <option value="Europe/Warsaw">Warsaw (CET/CEST)</option>
+                            <option value="Europe/Moscow">Moscow (MSK)</option>
+                            <option value="Europe/Istanbul">Istanbul (TRT)</option>
+                            <!-- Middle East & Africa -->
+                            <option value="Africa/Cairo">Cairo (EET)</option>
+                            <option value="Africa/Johannesburg">Johannesburg (SAST)</option>
+                            <option value="Asia/Dubai">Dubai (GST)</option>
+                            <option value="Asia/Jerusalem">Tel Aviv (IST)</option>
+                            <!-- South & Southeast Asia -->
+                            <option value="Asia/Kolkata">India (IST)</option>
+                            <option value="Asia/Bangkok">Bangkok (ICT)</option>
+                            <option value="Asia/Jakarta">Jakarta (WIB)</option>
+                            <!-- East Asia -->
+                            <option value="Asia/Hong_Kong">Hong Kong (HKT)</option>
+                            <option value="Asia/Singapore">Singapore (SGT)</option>
+                            <option value="Asia/Shanghai">Shanghai (CST)</option>
+                            <option value="Asia/Tokyo">Tokyo (JST)</option>
+                            <!-- Oceania -->
+                            <option value="Australia/Perth">Perth (AWST)</option>
+                            <option value="Australia/Sydney">Sydney (AEST/AEDT)</option>
+                            <option value="Pacific/Auckland">Auckland (NZST)</option>
+                        </select>
+                    </div>
                 </div>
 
                 <!-- Day of Week (Weekly Only) -->
@@ -194,23 +239,45 @@
                 </div>
             </div>
 
-            <!-- Timezone Selector -->
-            <div class="schedule-form-group">
-                <label for="scheduleTimezoneSelect" class="schedule-form-label">Timezone</label>
-                <select id="scheduleTimezoneSelect" class="schedule-form-select">
+            <!-- Timezone Selector (standalone for Once, Hourly, Monthly) -->
+            <div class="schedule-form-group" id="scheduleTimezoneStandalone" style="display: none;">
+                <label for="scheduleTimezoneSelectStandalone" class="schedule-form-label">Timezone</label>
+                <select id="scheduleTimezoneSelectStandalone" class="schedule-form-select">
                     <option value="UTC">UTC</option>
-                    <option value="America/New_York">Eastern Time (US)</option>
-                    <option value="America/Chicago">Central Time (US)</option>
-                    <option value="America/Denver">Mountain Time (US)</option>
+                    <!-- Americas -->
+                    <option value="Pacific/Honolulu">Hawaii (HST)</option>
+                    <option value="America/Anchorage">Alaska (AKST)</option>
                     <option value="America/Los_Angeles">Pacific Time (US)</option>
+                    <option value="America/Denver">Mountain Time (US)</option>
+                    <option value="America/Chicago">Central Time (US)</option>
+                    <option value="America/New_York">Eastern Time (US)</option>
+                    <option value="America/Mexico_City">Mexico City (CST)</option>
+                    <option value="America/Sao_Paulo">São Paulo (BRT)</option>
+                    <!-- Europe -->
                     <option value="Europe/London">London (GMT/BST)</option>
                     <option value="Europe/Paris">Paris (CET/CEST)</option>
                     <option value="Europe/Berlin">Berlin (CET/CEST)</option>
                     <option value="Europe/Warsaw">Warsaw (CET/CEST)</option>
-                    <option value="Asia/Tokyo">Tokyo (JST)</option>
-                    <option value="Asia/Shanghai">Shanghai (CST)</option>
+                    <option value="Europe/Moscow">Moscow (MSK)</option>
+                    <option value="Europe/Istanbul">Istanbul (TRT)</option>
+                    <!-- Middle East & Africa -->
+                    <option value="Africa/Cairo">Cairo (EET)</option>
+                    <option value="Africa/Johannesburg">Johannesburg (SAST)</option>
+                    <option value="Asia/Dubai">Dubai (GST)</option>
+                    <option value="Asia/Jerusalem">Tel Aviv (IST)</option>
+                    <!-- South & Southeast Asia -->
+                    <option value="Asia/Kolkata">India (IST)</option>
+                    <option value="Asia/Bangkok">Bangkok (ICT)</option>
+                    <option value="Asia/Jakarta">Jakarta (WIB)</option>
+                    <!-- East Asia -->
+                    <option value="Asia/Hong_Kong">Hong Kong (HKT)</option>
                     <option value="Asia/Singapore">Singapore (SGT)</option>
+                    <option value="Asia/Shanghai">Shanghai (CST)</option>
+                    <option value="Asia/Tokyo">Tokyo (JST)</option>
+                    <!-- Oceania -->
+                    <option value="Australia/Perth">Perth (AWST)</option>
                     <option value="Australia/Sydney">Sydney (AEST/AEDT)</option>
+                    <option value="Pacific/Auckland">Auckland (NZST)</option>
                 </select>
             </div>
 

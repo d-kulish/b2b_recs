@@ -1242,13 +1242,10 @@ const ExpViewModal = (function() {
         const modelConfigName = model.model_config_name || '-';
         document.getElementById('expViewModelConfigName').textContent = modelConfigName;
 
-        // Set model type badge in accordion header
+        // Hide model type badge in accordion header (shown in main header only)
         const modelTypeBadgeSmall = document.getElementById('expViewModelTypeBadgeSmall');
-        const modelType = (model.model_type || 'retrieval').toLowerCase();
         if (modelTypeBadgeSmall) {
-            const badgeClass = `badge-${modelType}`;
-            modelTypeBadgeSmall.className = `exp-view-accordion-badge ${badgeClass}`;
-            modelTypeBadgeSmall.textContent = modelType.charAt(0).toUpperCase() + modelType.slice(1);
+            modelTypeBadgeSmall.style.display = 'none';
         }
 
         // Load full model config details using model_config_id
@@ -1259,39 +1256,9 @@ const ExpViewModal = (function() {
                 '<div class="exp-view-no-filters">No model config</div>';
         }
 
-        // Training Setup section - show training params and GPU config
-        const samplingContainer = document.getElementById('expViewSamplingChips');
-        if (samplingContainer) {
-            // For models, show sampling info if available from the training run
-            if (model.sampling_config) {
-                let samplingHtml = '';
-                const sampling = model.sampling_config;
-                if (sampling.train_percent) samplingHtml += `<div class="exp-view-config-chip">Train: ${sampling.train_percent}%</div>`;
-                if (sampling.val_percent) samplingHtml += `<div class="exp-view-config-chip">Val: ${sampling.val_percent}%</div>`;
-                if (sampling.test_percent) samplingHtml += `<div class="exp-view-config-chip">Test: ${sampling.test_percent}%</div>`;
-                samplingContainer.innerHTML = samplingHtml || '<span style="color:#9ca3af;">N/A</span>';
-            } else {
-                samplingContainer.innerHTML = '<span style="color:#9ca3af;">N/A</span>';
-            }
-        }
-
-        // Training parameters - show GPU config if available
-        const paramsContainer = document.getElementById('expViewTrainingParamsChips');
-        if (paramsContainer) {
-            let paramsHtml = '';
-            if (model.training_params) {
-                const params = model.training_params;
-                if (params.epochs) paramsHtml += `<div class="exp-view-config-chip">Epochs: ${params.epochs}</div>`;
-                if (params.batch_size) paramsHtml += `<div class="exp-view-config-chip">Batch: ${params.batch_size}</div>`;
-                if (params.learning_rate) paramsHtml += `<div class="exp-view-config-chip">LR: ${params.learning_rate}</div>`;
-            }
-            if (model.gpu_config) {
-                const gpu = model.gpu_config;
-                if (gpu.machine_type) paramsHtml += `<div class="exp-view-config-chip">${gpu.machine_type}</div>`;
-                if (gpu.accelerator_type) paramsHtml += `<div class="exp-view-config-chip">${gpu.accelerator_type}</div>`;
-            }
-            paramsContainer.innerHTML = paramsHtml || '<span style="color:#9ca3af;">No parameters</span>';
-        }
+        // Training Setup section - use same format as training runs
+        renderModelSamplingChips(model);
+        renderModelTrainingParamsChips(model);
 
         // Results Summary (metrics)
         renderModelMetrics(model);
@@ -1353,6 +1320,87 @@ const ExpViewModal = (function() {
         }
 
         metricsContainer.innerHTML = metricsHtml;
+    }
+
+    function renderModelSamplingChips(model) {
+        const container = document.getElementById('expViewSamplingChips');
+        if (!container) return;
+
+        const params = model.training_params || {};
+        const sampling = model.sampling_config || {};
+        const chips = [];
+
+        // Split strategy from training_params (same as training runs)
+        if (params.split_strategy) {
+            chips.push({ label: 'Split Strategy', value: params.split_strategy });
+        }
+
+        // Train/Val/Test fractions from training_params (same as training runs)
+        if (params.train_fraction) {
+            chips.push({ label: 'Train', value: `${(params.train_fraction * 100).toFixed(0)}%` });
+        } else if (sampling.train_percent) {
+            chips.push({ label: 'Train', value: `${sampling.train_percent}%` });
+        }
+        if (params.val_fraction) {
+            chips.push({ label: 'Val', value: `${(params.val_fraction * 100).toFixed(0)}%` });
+        } else if (sampling.val_percent) {
+            chips.push({ label: 'Val', value: `${sampling.val_percent}%` });
+        }
+        if (params.test_fraction) {
+            chips.push({ label: 'Test', value: `${(params.test_fraction * 100).toFixed(0)}%` });
+        } else if (sampling.test_percent) {
+            chips.push({ label: 'Test', value: `${sampling.test_percent}%` });
+        }
+
+        if (chips.length === 0) {
+            container.innerHTML = '<span class="exp-view-no-filters">No sampling parameters</span>';
+            return;
+        }
+
+        container.innerHTML = chips.map(chip => `
+            <div class="exp-view-param-chip">
+                <span class="exp-view-param-chip-label">${chip.label}:</span>
+                <span class="exp-view-param-chip-value">${chip.value}</span>
+            </div>
+        `).join('');
+    }
+
+    function renderModelTrainingParamsChips(model) {
+        const container = document.getElementById('expViewTrainingParamsChips');
+        if (!container) return;
+
+        const params = model.training_params || {};
+        const gpuConfig = model.gpu_config || {};
+        const chips = [];
+
+        // Training parameters
+        if (params.epochs) chips.push({ label: 'Epochs', value: params.epochs });
+        if (params.batch_size) chips.push({ label: 'Batch Size', value: formatNumber(params.batch_size) });
+        if (params.learning_rate) chips.push({ label: 'Learning Rate', value: params.learning_rate });
+
+        // GPU config - support both naming conventions (gpu_type from training runs, accelerator_type from models)
+        const gpuType = gpuConfig.gpu_type || gpuConfig.accelerator_type;
+        if (gpuType) {
+            chips.push({ label: 'GPU', value: gpuType.replace('NVIDIA_TESLA_', '').replace('NVIDIA_', '') });
+        }
+        if (gpuConfig.gpu_count) {
+            chips.push({ label: 'GPU Count', value: gpuConfig.gpu_count });
+        }
+        if (gpuConfig.preemptible !== undefined) {
+            chips.push({ label: 'Preemptible', value: gpuConfig.preemptible ? 'Yes' : 'No' });
+        }
+
+        if (chips.length === 0) {
+            container.innerHTML = '<span class="exp-view-no-filters">No training parameters</span>';
+            return;
+        }
+
+        container.innerHTML = chips.map(chip => `
+            <div class="exp-view-param-chip">
+                <span class="exp-view-param-chip-label">${chip.label}:</span>
+                <span class="exp-view-param-chip-value">${chip.value}</span>
+            </div>
+        `).join('');
     }
 
     async function loadModelVersions(modelId) {
@@ -2632,21 +2680,12 @@ const ExpViewModal = (function() {
     function renderModelConfig(mc) {
         const container = document.getElementById('expViewModelConfigContent');
 
-        const modelTypeBadges = {
-            'retrieval': '<i class="fas fa-search"></i> Retrieval',
-            'ranking': '<i class="fas fa-sort-amount-down"></i> Ranking',
-            'multitask': '<i class="fas fa-layer-group"></i> Retrieval / Ranking'
-        };
-        const modelTypeBadgeContent = modelTypeBadges[mc.model_type] || modelTypeBadges['retrieval'];
-
         const buyerLayers = mc.buyer_tower_layers || [];
         const productLayers = mc.product_tower_layers || [];
         const buyerParams = calculateTowerParams(buyerLayers);
         const productParams = calculateTowerParams(productLayers);
 
         let html = `
-            <span class="exp-view-model-type-badge ${mc.model_type}">${modelTypeBadgeContent}</span>
-
             <div class="exp-view-tower-section-title">Tower Architecture</div>
             <div class="exp-view-towers-grid">
                 <div class="exp-view-tower-column">

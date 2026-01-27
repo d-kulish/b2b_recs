@@ -1060,7 +1060,7 @@
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
-    margin-bottom: 16px;
+    flex: 1;
 }
 
 .exp-view-param-chip {
@@ -2523,29 +2523,34 @@
     font-size: 12px;
 }
 
-/* Training Setup Grid Layout */
+/* Training Setup Grid Layout - Horizontal rows */
 .exp-view-training-setup-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
 }
 
 .exp-view-training-setup-column {
     background: #fff;
     border: 1px solid #e5e7eb;
     border-radius: 8px;
-    padding: 16px;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
 }
 
 .exp-view-training-setup-subtitle {
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 600;
     color: #6b7280;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    margin: 0 0 12px 0;
-    padding-bottom: 8px;
-    border-bottom: 1px solid #f3f4f6;
+    margin: 0;
+    padding: 0;
+    border-bottom: none;
+    white-space: nowrap;
+    min-width: 120px;
 }
 
 /* Utility classes for icon colors */

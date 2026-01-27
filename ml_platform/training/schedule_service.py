@@ -194,12 +194,22 @@ class TrainingScheduleService:
         ).order_by('-run_number').first()
         next_run_number = (last_run.run_number + 1) if last_run else 1
 
+        # Determine model type from model_config
+        model_type = TrainingRun.MODEL_TYPE_RETRIEVAL
+        if schedule.model_config:
+            config_model_type = getattr(schedule.model_config, 'model_type', None)
+            if config_model_type == 'multitask':
+                model_type = TrainingRun.MODEL_TYPE_MULTITASK
+            elif config_model_type == 'ranking':
+                model_type = TrainingRun.MODEL_TYPE_RANKING
+
         # Create training run from schedule config
         run_timestamp = timezone.now().strftime('%Y%m%d-%H%M')
         training_run = TrainingRun.objects.create(
             ml_model=schedule.ml_model,
             name=model_name,
             description=f"Scheduled run from '{schedule.name}'",
+            model_type=model_type,
             dataset=schedule.dataset,
             feature_config=schedule.feature_config,
             model_config=schedule.model_config,

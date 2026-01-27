@@ -57,7 +57,7 @@ const TrainingCards = (function() {
         },
         pagination: {
             page: 1,
-            pageSize: 10,
+            pageSize: 5,
             totalCount: 0,
             totalPages: 1,
             hasNext: false,
@@ -572,6 +572,69 @@ const TrainingCards = (function() {
             state.pagination.page = page;
             loadTrainingRuns();
         }
+    }
+
+    // =============================================================================
+    // PAGINATION HELPERS
+    // =============================================================================
+
+    /**
+     * Generate "Showing X-Y of Z runs" text
+     */
+    function generateShowingText(currentPage, totalItems, itemsPerPage) {
+        if (totalItems === 0) return 'Showing 0 runs';
+        const start = (currentPage - 1) * itemsPerPage + 1;
+        const end = Math.min(currentPage * itemsPerPage, totalItems);
+        return `Showing ${start}-${end} of ${totalItems} runs`;
+    }
+
+    /**
+     * Generate a single page button HTML
+     */
+    function generatePageButton(pageNum, currentPage) {
+        const isActive = pageNum === currentPage;
+        if (isActive) {
+            return `<button class="w-8 h-8 flex items-center justify-center rounded-md text-sm font-medium bg-blue-600 text-white">${pageNum}</button>`;
+        }
+        return `<button onclick="TrainingCards.goToPage(${pageNum})" class="w-8 h-8 flex items-center justify-center rounded-md text-sm font-medium border border-gray-300 hover:bg-blue-50 text-gray-700">${pageNum}</button>`;
+    }
+
+    /**
+     * Generate full pagination controls with ellipsis logic
+     */
+    function generatePaginationControls(currentPage, totalPages) {
+        const buttons = [];
+
+        if (totalPages <= 7) {
+            // Show all pages
+            for (let i = 1; i <= totalPages; i++) {
+                buttons.push(generatePageButton(i, currentPage));
+            }
+        } else {
+            // Always show first page
+            buttons.push(generatePageButton(1, currentPage));
+
+            if (currentPage > 3) {
+                buttons.push('<span class="px-1 text-gray-400">...</span>');
+            }
+
+            // Show pages around current page
+            const start = Math.max(2, currentPage - 1);
+            const end = Math.min(totalPages - 1, currentPage + 1);
+
+            for (let i = start; i <= end; i++) {
+                buttons.push(generatePageButton(i, currentPage));
+            }
+
+            if (currentPage < totalPages - 2) {
+                buttons.push('<span class="px-1 text-gray-400">...</span>');
+            }
+
+            // Always show last page
+            buttons.push(generatePageButton(totalPages, currentPage));
+        }
+
+        return buttons.join('');
     }
 
     // =============================================================================
@@ -1164,19 +1227,24 @@ const TrainingCards = (function() {
             return;
         }
 
-        const { page, totalPages, totalCount, hasPrev, hasNext } = state.pagination;
+        const { page, totalPages, totalCount, pageSize, hasPrev, hasNext } = state.pagination;
+        const showingText = generateShowingText(page, totalCount, pageSize);
+        const pageButtons = generatePaginationControls(page, totalPages);
 
         container.innerHTML = `
-            <div class="training-pagination">
-                <button class="training-pagination-btn" onclick="TrainingCards.prevPage()" ${!hasPrev ? 'disabled' : ''}>
-                    <i class="fas fa-chevron-left"></i> Previous
-                </button>
-                <span class="training-pagination-info">
-                    Page ${page} of ${totalPages} (${totalCount} total)
-                </span>
-                <button class="training-pagination-btn" onclick="TrainingCards.nextPage()" ${!hasNext ? 'disabled' : ''}>
-                    Next <i class="fas fa-chevron-right"></i>
-                </button>
+            <div class="flex flex-col sm:flex-row items-center justify-between mt-4 pt-4 border-t border-gray-200 gap-2">
+                <div class="text-sm text-gray-600">${showingText}</div>
+                <div class="flex items-center gap-1">
+                    <button onclick="TrainingCards.prevPage()" ${!hasPrev ? 'disabled' : ''} class="px-3 py-1.5 border rounded-md text-sm font-medium ${hasPrev ? 'border-gray-300 hover:bg-blue-50 text-gray-700' : 'border-gray-200 text-gray-400 cursor-not-allowed'}">
+                        Previous
+                    </button>
+                    <div class="flex items-center gap-1 mx-2">
+                        ${pageButtons}
+                    </div>
+                    <button onclick="TrainingCards.nextPage()" ${!hasNext ? 'disabled' : ''} class="px-3 py-1.5 border rounded-md text-sm font-medium ${hasNext ? 'border-gray-300 hover:bg-blue-50 text-gray-700' : 'border-gray-200 text-gray-400 cursor-not-allowed'}">
+                        Next
+                    </button>
+                </div>
             </div>
         `;
     }

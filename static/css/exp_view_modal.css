@@ -89,6 +89,15 @@
         rgba(209,213,219,1) 100%);
 }
 
+/* Registered model status (green gradient like completed) */
+.exp-view-header.registered {
+    background: linear-gradient(to right,
+        rgba(255,255,255,1) 0%,
+        rgba(220,237,222,0.4) 30%,
+        rgba(200,225,204,0.7) 60%,
+        rgba(178,212,183,1) 100%);
+}
+
 /* Column 1: Experiment Number (20%, centered) */
 .exp-view-header-number {
     width: 20%;
@@ -227,6 +236,86 @@
 
 .exp-view-status-icon.pending {
     background: #9ca3af;
+}
+
+.exp-view-status-icon.registered {
+    background: #16a34a;
+}
+
+/* ==========================================================================
+   Model Mode Header Styles - Simplified prominent display
+   ========================================================================== */
+.exp-view-header.model-mode .exp-view-header-number {
+    width: auto;
+    flex: 1;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    padding-left: 24px;
+    gap: 8px;
+}
+
+.exp-view-header.model-mode .exp-view-title {
+    font-size: 22px;
+    font-weight: 700;
+    color: #111827;
+    letter-spacing: -0.02em;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+}
+
+.exp-view-header.model-mode .exp-view-model-name-text {
+    font-size: 22px;
+    font-weight: 700;
+    color: #111827;
+    letter-spacing: -0.02em;
+}
+
+/* Type badge shown below model name in model mode */
+.exp-view-header.model-mode .exp-view-model-type-inline {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 10px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.exp-view-header.model-mode .exp-view-model-type-inline i {
+    font-size: 10px;
+}
+
+.exp-view-header.model-mode .exp-view-model-type-inline.retrieval {
+    background: #dbeafe;
+    color: #1e40af;
+    border: 1px solid #bfdbfe;
+}
+
+.exp-view-header.model-mode .exp-view-model-type-inline.ranking {
+    background: #fef3c7;
+    color: #92400e;
+    border: 1px solid #fde68a;
+}
+
+.exp-view-header.model-mode .exp-view-model-type-inline.multitask {
+    background: linear-gradient(135deg, #dbeafe 0%, #f3e8ff 100%);
+    color: #6b21a8;
+    border: 1px solid #e9d5ff;
+}
+
+/* Hide the info column in model mode (times, etc.) */
+.exp-view-header.model-mode .exp-view-header-info {
+    display: none;
+}
+
+.exp-view-header.model-mode .exp-view-status-panel {
+    width: auto;
+    padding: 16px 24px;
 }
 
 /* ==========================================================================

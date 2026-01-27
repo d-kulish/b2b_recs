@@ -403,8 +403,9 @@ const ExpViewModal = (function() {
         expNameEl.textContent = run.name || '';
         expNameEl.style.display = run.name ? '' : 'none';
 
-        // Model type badge in header
+        // Model type badge in header - ensure visible for training runs
         const typeBadgeEl = document.getElementById('expViewTypeBadge');
+        typeBadgeEl.style.display = '';  // Restore visibility (may be hidden in model mode)
         const modelType = (run.model_type || 'retrieval').toLowerCase();
         const badgeContents = {
             'retrieval': '<i class="fas fa-search"></i> Retrieval',
@@ -419,7 +420,9 @@ const ExpViewModal = (function() {
         descEl.textContent = run.notes || '';
         descEl.style.display = run.notes ? '' : 'none';
 
-        // Start/End times
+        // Start/End times - ensure times are visible for training runs
+        const timesEl = document.querySelector('.exp-view-times');
+        if (timesEl) timesEl.style.display = '';
         document.getElementById('expViewStartTime').textContent = formatDateTime(run.started_at || run.created_at);
         document.getElementById('expViewEndTime').textContent = run.completed_at ? formatDateTime(run.completed_at) : '-';
 
@@ -1157,85 +1160,119 @@ const ExpViewModal = (function() {
         // Store current model for tab data loading
         window.currentViewModel = model;
 
-        // Status gradient on header based on model_status
+        // Model mode header: use "registered" status for green gradient + model-mode class
         const header = document.getElementById('expViewHeader');
-        header.className = `modal-header exp-view-header ${model.model_status}`;
+        header.className = `modal-header exp-view-header registered model-mode`;
 
-        // Status panel
+        // Status panel - registered status
         const statusPanel = document.getElementById('expViewStatusPanel');
-        statusPanel.className = `exp-view-status-panel ${model.model_status}`;
+        statusPanel.className = `exp-view-status-panel registered`;
 
-        // Status icon
+        // Status icon - green checkmark for registered models
         const statusIcon = document.getElementById('expViewStatusIcon');
-        const statusIcons = {
-            'deployed': 'fa-rocket',
-            'idle': 'fa-pause-circle',
-            'not_blessed': 'fa-exclamation-circle',
-            'pending': 'fa-clock'
-        };
-        statusIcon.className = `exp-view-status-icon ${model.model_status}`;
-        statusIcon.innerHTML = `<i class="fas ${statusIcons[model.model_status] || 'fa-cube'}"></i>`;
+        statusIcon.className = `exp-view-status-icon registered`;
+        statusIcon.innerHTML = `<i class="fas fa-check"></i>`;
 
-        // Title (Model name)
-        document.getElementById('expViewTitle').textContent = model.vertex_model_name || 'Model';
-
-        // Model version as subtitle
-        const expNameEl = document.getElementById('expViewExpName');
-        expNameEl.textContent = `v${model.vertex_model_version || '1'} - Run #${model.run_number}`;
-        expNameEl.style.display = '';
-
-        // Model type badge in header
-        const typeBadgeEl = document.getElementById('expViewTypeBadge');
+        // Title (Model name) - shown prominently with type badge below
+        const titleEl = document.getElementById('expViewTitle');
         const modelType = (model.model_type || 'retrieval').toLowerCase();
         const badgeContents = {
             'retrieval': '<i class="fas fa-search"></i> Retrieval',
             'ranking': '<i class="fas fa-sort-amount-down"></i> Ranking',
             'multitask': '<i class="fas fa-layer-group"></i> Multitask'
         };
-        typeBadgeEl.className = `exp-view-header-type-badge ${modelType}`;
-        typeBadgeEl.innerHTML = badgeContents[modelType] || badgeContents['retrieval'];
+        // Set model name and add type badge inline below it
+        titleEl.innerHTML = `
+            <span class="exp-view-model-name-text">${model.vertex_model_name || 'Model'}</span>
+            <span class="exp-view-model-type-inline ${modelType}">${badgeContents[modelType] || badgeContents['retrieval']}</span>
+        `;
 
-        // Description
+        // Hide version/run info for model mode (simplified header)
+        const expNameEl = document.getElementById('expViewExpName');
+        expNameEl.textContent = '';
+        expNameEl.style.display = 'none';
+
+        // Hide the separate type badge in header-info (we show it inline now)
+        const typeBadgeEl = document.getElementById('expViewTypeBadge');
+        typeBadgeEl.style.display = 'none';
+
+        // Description - hidden
         const descEl = document.getElementById('expViewDescription');
         descEl.textContent = '';
         descEl.style.display = 'none';
 
-        // Start/End times (registered_at, deployed_at)
-        document.getElementById('expViewStartTime').textContent = model.registered_at ?
-            formatDateTime(model.registered_at) : '-';
-        document.getElementById('expViewEndTime').textContent = model.deployed_at ?
-            formatDateTime(model.deployed_at) : '-';
+        // Hide times for model mode (simplified header)
+        const timesEl = document.querySelector('.exp-view-times');
+        if (timesEl) timesEl.style.display = 'none';
 
         // Overview Tab - render model overview
         renderModelOverview(model);
     }
 
     function renderModelOverview(model) {
-        // Dataset section
+        // Reset accordion states when populating new data
+        resetAccordionStates();
+
+        // Dataset section - load full details like training runs
         const datasetName = model.dataset_name || '-';
         document.getElementById('expViewDatasetName').textContent = datasetName;
-        document.getElementById('expViewDatasetDetails').innerHTML =
-            `<div class="exp-view-config-chip">${datasetName}</div>`;
 
-        // Features config
+        // Load full dataset details using dataset_id
+        if (model.dataset_id) {
+            loadDatasetDetails(model.dataset_id);
+        } else {
+            document.getElementById('expViewDatasetDetails').innerHTML =
+                '<div class="exp-view-no-filters">No dataset configured</div>';
+        }
+
+        // Features config - load full details like training runs
         const featureConfigName = model.feature_config_name || '-';
         document.getElementById('expViewFeaturesConfigName').textContent = featureConfigName;
-        document.getElementById('expViewFeaturesConfigContent').innerHTML =
-            `<div class="exp-view-config-chip">${featureConfigName}</div>`;
 
-        // Model config
+        // Load full features config details using feature_config_id
+        if (model.feature_config_id) {
+            loadFeaturesConfig(model.feature_config_id);
+        } else {
+            document.getElementById('expViewFeaturesConfigContent').innerHTML =
+                '<div class="exp-view-no-filters">No features config</div>';
+        }
+
+        // Model config - load full details like training runs
         const modelConfigName = model.model_config_name || '-';
         document.getElementById('expViewModelConfigName').textContent = modelConfigName;
-        document.getElementById('expViewModelConfigContent').innerHTML = `
-            <div class="exp-view-config-chips">
-                <div class="exp-view-config-chip">${modelConfigName}</div>
-                ${model.retrieval_algorithm ? `<div class="exp-view-config-chip">${model.retrieval_algorithm}</div>` : ''}
-            </div>
-        `;
 
-        // For models, clear sampling chips (since models don't have sampling config)
+        // Set model type badge in accordion header
+        const modelTypeBadgeSmall = document.getElementById('expViewModelTypeBadgeSmall');
+        const modelType = (model.model_type || 'retrieval').toLowerCase();
+        if (modelTypeBadgeSmall) {
+            const badgeClass = `badge-${modelType}`;
+            modelTypeBadgeSmall.className = `exp-view-accordion-badge ${badgeClass}`;
+            modelTypeBadgeSmall.textContent = modelType.charAt(0).toUpperCase() + modelType.slice(1);
+        }
+
+        // Load full model config details using model_config_id
+        if (model.model_config_id) {
+            loadModelConfig(model.model_config_id);
+        } else {
+            document.getElementById('expViewModelConfigContent').innerHTML =
+                '<div class="exp-view-no-filters">No model config</div>';
+        }
+
+        // Training Setup section - show training params and GPU config
         const samplingContainer = document.getElementById('expViewSamplingChips');
-        if (samplingContainer) samplingContainer.innerHTML = '<span style="color:#9ca3af;">N/A</span>';
+        if (samplingContainer) {
+            // For models, show sampling info if available from the training run
+            if (model.sampling_config) {
+                let samplingHtml = '';
+                const sampling = model.sampling_config;
+                if (sampling.train_percent) samplingHtml += `<div class="exp-view-config-chip">Train: ${sampling.train_percent}%</div>`;
+                if (sampling.val_percent) samplingHtml += `<div class="exp-view-config-chip">Val: ${sampling.val_percent}%</div>`;
+                if (sampling.test_percent) samplingHtml += `<div class="exp-view-config-chip">Test: ${sampling.test_percent}%</div>`;
+                samplingContainer.innerHTML = samplingHtml || '<span style="color:#9ca3af;">N/A</span>';
+            } else {
+                samplingContainer.innerHTML = '<span style="color:#9ca3af;">N/A</span>';
+            }
+        }
 
         // Training parameters - show GPU config if available
         const paramsContainer = document.getElementById('expViewTrainingParamsChips');
@@ -1839,8 +1876,9 @@ const ExpViewModal = (function() {
         expNameEl.textContent = exp.experiment_name || '';
         expNameEl.style.display = exp.experiment_name ? '' : 'none';
 
-        // Model type badge in header
+        // Model type badge in header - ensure visible for experiments
         const typeBadgeEl = document.getElementById('expViewTypeBadge');
+        typeBadgeEl.style.display = '';  // Restore visibility (may be hidden in model mode)
         const modelType = (exp.model_type || exp.feature_config_type || 'retrieval').toLowerCase();
         const badgeContents = {
             'retrieval': '<i class="fas fa-search"></i> Retrieval',
@@ -1855,7 +1893,9 @@ const ExpViewModal = (function() {
         descEl.textContent = exp.experiment_description || '';
         descEl.style.display = exp.experiment_description ? '' : 'none';
 
-        // Start/End times
+        // Start/End times - ensure times are visible for experiments
+        const timesEl = document.querySelector('.exp-view-times');
+        if (timesEl) timesEl.style.display = '';
         document.getElementById('expViewStartTime').textContent = formatDateTime(exp.started_at || exp.created_at);
         document.getElementById('expViewEndTime').textContent = exp.completed_at ? formatDateTime(exp.completed_at) : '-';
 

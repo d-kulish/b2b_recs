@@ -3280,9 +3280,12 @@ def _serialize_registered_model(training_run, include_details=False, deployed_mo
         # Metrics
         'metrics': metrics,
 
-        # Configuration names
+        # Configuration names and IDs
+        'dataset_id': training_run.dataset_id,
         'dataset_name': training_run.dataset.name if training_run.dataset else None,
+        'feature_config_id': training_run.feature_config_id,
         'feature_config_name': training_run.feature_config.name if training_run.feature_config else None,
+        'model_config_id': training_run.model_config_id,
         'model_config_name': training_run.model_config.name if training_run.model_config else None,
         'retrieval_algorithm': training_run.model_config.retrieval_algorithm if training_run.model_config else None,
 

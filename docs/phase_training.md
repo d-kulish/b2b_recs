@@ -3875,6 +3875,88 @@ Using optimizer: Adagrad with lr=0.01, clipnorm=1.0
 - [Vertex AI Custom Training](https://cloud.google.com/vertex-ai/docs/training/create-custom-job)
 - [TFX AI Platform Trainer](https://www.tensorflow.org/tfx/guide/trainer#training_on_google_cloud_ai_platform)
 
+### Models Registry View Modal - Versions Tab Enhancement (2026-01-27)
+
+Replaced the table-based Versions tab in the Models Registry View modal with a visual KPI-focused design featuring a grouped bar chart and version cards with KPI boxes.
+
+#### Visual Design
+
+**Chart Section:**
+- Grouped bar chart showing KPI trends across up to 5 versions
+- Bars grouped by KPI metric (R@5, R@10, R@50, R@100 for retrieval models)
+- Blue gradient colors from light (oldest) to dark (newest)
+- Legend showing version labels (v1, v2, etc.)
+
+**Version Cards:**
+- Each card shows version number, run ID, and registration date
+- 4 KPI boxes displaying metrics relevant to the model type
+- Clickable to switch to that version's details
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  KPI Trends Across Versions                                      │
+│  ┌─────────────────────────────────────────────────────────────┐│
+│  │    █                              █                          ││
+│  │  █ █ █                          █ █ █                        ││
+│  │  █ █ █ █              █ █ █     █ █ █ █          █ █ █       ││
+│  │  █ █ █ █ █      █ █ █ █ █ █ █   █ █ █ █ █    █ █ █ █ █ █     ││
+│  │  ─────────      ─────────────   ─────────    ───────────     ││
+│  │     R@5             R@10            R@50         R@100        ││
+│  │  ■ v1  ■ v2  ■ v3  ■ v4  ■ v5                               ││
+│  └─────────────────────────────────────────────────────────────┘│
+├─────────────────────────────────────────────────────────────────┤
+│  Version Details                                                 │
+│  ┌─────────────────────────────────────────────────────────────┐│
+│  │  ● v5 - Run #17                                 Jan 26, 2026││
+│  ├─────────────────────────────────────────────────────────────┤│
+│  │  ┌───────┐  ┌───────┐  ┌───────┐  ┌───────┐                ││
+│  │  │  R@5  │  │ R@10  │  │ R@50  │  │ R@100 │                ││
+│  │  │ 0.045 │  │ 0.077 │  │ 0.189 │  │ 0.289 │                ││
+│  │  └───────┘  └───────┘  └───────┘  └───────┘                ││
+│  └─────────────────────────────────────────────────────────────┘│
+└─────────────────────────────────────────────────────────────────┘
+```
+
+#### KPI Configuration by Model Type
+
+| Model Type | KPI 1 | KPI 2 | KPI 3 | KPI 4 |
+|------------|-------|-------|-------|-------|
+| **Retrieval** | R@5 | R@10 | R@50 | R@100 |
+| **Ranking** | RMSE | MAE | Test RMSE | Test MAE |
+| **Multitask** | R@50 | R@100 | RMSE | Test RMSE |
+
+#### Files Modified
+
+| File | Changes |
+|------|---------|
+| `static/js/exp_view_modal.js` | Added `getKpiConfigForModelType()`, rewrote `renderVersionsTab()`, added `renderVersionsChart()`, added chart cleanup |
+| `static/css/exp_view_modal.css` | Added styles for `.versions-tab-content`, `.versions-chart-section`, `.version-card`, `.version-kpis`, `.version-kpi-box` |
+
+#### Technical Implementation
+
+- Uses Chart.js grouped bar chart
+- Limits display to 10 most recent versions in the list
+- Limits chart to 5 most recent versions (reversed to show oldest→newest)
+- Chart instance tracked in `charts.versionsChart` for proper cleanup
+- Responsive design with scrollable version list
+
+### Models Registry View Modal - Lineage Tab Removal (2026-01-27)
+
+Removed the "Lineage" tab from the Models Registry View modal as it was not needed.
+
+**Change:** Updated `visibleTabs` for model mode from:
+```javascript
+['overview', 'versions', 'artifacts', 'deployment', 'lineage']
+```
+to:
+```javascript
+['overview', 'versions', 'artifacts', 'deployment']
+```
+
+**File Modified:** `static/js/exp_view_modal.js` (line 1976)
+
+The modal now shows only 4 tabs: **Overview**, **Versions**, **Artifacts**, **Deployment**.
+
 ---
 
 ## Implementation Checklist

@@ -104,7 +104,8 @@ const ExpViewModal = (function() {
         lossChart: null,
         metricsChart: null,
         gradientChart: null,
-        weightStatsChart: null
+        weightStatsChart: null,
+        versionsChart: null
     };
 
     // Weight data for tower switching
@@ -1391,55 +1392,204 @@ const ExpViewModal = (function() {
         }
     }
 
+    /**
+     * Get KPI configuration based on model type
+     */
+    function getKpiConfigForModelType(modelType) {
+        if (modelType === 'ranking') {
+            return [
+                { key: 'rmse', label: 'RMSE' },
+                { key: 'mae', label: 'MAE' },
+                { key: 'test_rmse', label: 'Test RMSE' },
+                { key: 'test_mae', label: 'Test MAE' }
+            ];
+        } else if (modelType === 'multitask') {
+            return [
+                { key: 'recall_at_50', label: 'R@50' },
+                { key: 'recall_at_100', label: 'R@100' },
+                { key: 'rmse', label: 'RMSE' },
+                { key: 'test_rmse', label: 'Test RMSE' }
+            ];
+        } else { // retrieval (default)
+            return [
+                { key: 'recall_at_5', label: 'R@5' },
+                { key: 'recall_at_10', label: 'R@10' },
+                { key: 'recall_at_50', label: 'R@50' },
+                { key: 'recall_at_100', label: 'R@100' }
+            ];
+        }
+    }
+
+    /**
+     * Render versions tab with visual KPI design
+     */
     function renderVersionsTab(modelName, versions) {
         const container = document.getElementById('expViewTabVersions');
         if (!container) return;
 
+        // Limit to 10 most recent versions
+        const limitedVersions = versions.slice(0, 10);
+
+        // Get model type from first version or current model
+        const modelType = limitedVersions[0]?.model_type || state.currentModel?.model_type || 'retrieval';
+        const kpiConfig = getKpiConfigForModelType(modelType);
+
         const formatDate = (isoStr) => {
             if (!isoStr) return '-';
             return new Date(isoStr).toLocaleDateString('en-US', {
-                month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                month: 'short', day: 'numeric', year: 'numeric'
             });
         };
 
-        let tableRows = versions.map((v, idx) => `
-            <tr class="${v.id === state.currentModel?.id ? 'active' : ''}" onclick="ExpViewModal.selectModelVersion(${v.id})">
-                <td>v${v.vertex_model_version || (versions.length - idx)}</td>
-                <td>Run #${v.run_number}</td>
-                <td>
-                    <span class="models-status-badge ${v.model_status}">
-                        ${v.model_status === 'deployed' ? '<i class="fas fa-rocket"></i>' :
-                          v.model_status === 'idle' ? '<i class="fas fa-pause-circle"></i>' :
-                          '<i class="fas fa-exclamation-circle"></i>'}
-                        ${v.model_status}
-                    </span>
-                </td>
-                <td>${v.is_blessed ? '<i class="fas fa-check-circle" style="color:#10b981;"></i>' : '<i class="fas fa-times-circle" style="color:#f97316;"></i>'}</td>
-                <td>${formatDate(v.registered_at)}</td>
-            </tr>
-        `).join('');
+        const formatMetric = (value) => {
+            if (value === null || value === undefined) return '-';
+            return parseFloat(value).toFixed(3);
+        };
+
+        // Build version cards HTML
+        let versionCardsHtml = limitedVersions.map((v, idx) => {
+            const versionNum = v.vertex_model_version || (versions.length - idx);
+            const metrics = v.metrics || {};
+
+            const kpiBoxesHtml = kpiConfig.map(kpi => `
+                <div class="version-kpi-box">
+                    <div class="version-kpi-label">${kpi.label}</div>
+                    <div class="version-kpi-value">${formatMetric(metrics[kpi.key])}</div>
+                </div>
+            `).join('');
+
+            return `
+                <div class="version-card" onclick="ExpViewModal.selectModelVersion(${v.id})" style="cursor: pointer;">
+                    <div class="version-card-header">
+                        <div class="version-card-info">
+                            <span class="version-badge">
+                                <i class="fas fa-code-branch"></i>
+                                v${versionNum}
+                            </span>
+                            <span class="version-run">Run #${v.run_number}</span>
+                        </div>
+                        <span class="version-date">${formatDate(v.registered_at)}</span>
+                    </div>
+                    <div class="version-kpis">
+                        ${kpiBoxesHtml}
+                    </div>
+                </div>
+            `;
+        }).join('');
 
         container.innerHTML = `
-            <div class="exp-view-section-group">
-                <h4 class="exp-view-group-title">Version History - ${modelName}</h4>
-                <div style="border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
-                    <table class="models-table" style="margin: 0;">
-                        <thead>
-                            <tr>
-                                <th>Version</th>
-                                <th>Training Run</th>
-                                <th>Status</th>
-                                <th>Blessed</th>
-                                <th>Registered</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${tableRows}
-                        </tbody>
-                    </table>
+            <div class="versions-tab-content">
+                <div class="versions-chart-section">
+                    <h4>KPI Trends Across Versions</h4>
+                    <div class="versions-chart-container">
+                        <canvas id="versionsKpiChart"></canvas>
+                    </div>
+                </div>
+                <div class="versions-list-section">
+                    <h4>Version Details</h4>
+                    ${versionCardsHtml}
                 </div>
             </div>
         `;
+
+        // Render the chart after DOM is ready
+        setTimeout(() => {
+            renderVersionsChart(limitedVersions, kpiConfig);
+        }, 0);
+    }
+
+    /**
+     * Render grouped bar chart for version KPIs
+     */
+    function renderVersionsChart(versions, kpiConfig) {
+        const canvas = document.getElementById('versionsKpiChart');
+        if (!canvas) return;
+
+        // Destroy existing chart
+        if (charts.versionsChart) {
+            charts.versionsChart.destroy();
+            charts.versionsChart = null;
+        }
+
+        // Take up to 5 versions for chart, reverse to oldest→newest
+        const chartVersions = versions.slice(0, 5).reverse();
+
+        // Blue gradient colors from light to dark (oldest to newest)
+        const colors = ['#bfdbfe', '#93c5fd', '#60a5fa', '#3b82f6', '#2563eb'];
+
+        // Build datasets - one per version
+        const datasets = chartVersions.map((v, idx) => {
+            const versionNum = v.vertex_model_version || (versions.length - (versions.indexOf(v)));
+            const metrics = v.metrics || {};
+
+            return {
+                label: `v${versionNum}`,
+                data: kpiConfig.map(kpi => metrics[kpi.key] || 0),
+                backgroundColor: colors[idx] || colors[colors.length - 1],
+                borderColor: colors[idx] || colors[colors.length - 1],
+                borderWidth: 1,
+                borderRadius: 3,
+                barPercentage: 0.8,
+                categoryPercentage: 0.7
+            };
+        });
+
+        const ctx = canvas.getContext('2d');
+        charts.versionsChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: kpiConfig.map(kpi => kpi.label),
+                datasets: datasets
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                layout: chartDefaults.layout,
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'bottom',
+                        labels: {
+                            ...chartDefaults.legend.labels,
+                            usePointStyle: false,
+                            boxWidth: 12,
+                            boxHeight: 12
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const value = context.raw;
+                                return `${context.dataset.label}: ${value ? value.toFixed(3) : '-'}`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: {
+                            display: false
+                        },
+                        ticks: {
+                            font: chartDefaults.font.axis
+                        }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        grace: '5%',
+                        grid: {
+                            color: '#f3f4f6'
+                        },
+                        ticks: {
+                            font: chartDefaults.font.axis,
+                            callback: function(value) {
+                                return value.toFixed(2);
+                            }
+                        }
+                    }
+                }
+            }
+        });
     }
 
     function selectModelVersion(modelId) {
@@ -1823,7 +1973,7 @@ const ExpViewModal = (function() {
         if (state.mode === 'training_run') {
             visibleTabs = ['overview', 'pipeline', 'data', 'training'];
         } else if (state.mode === 'model') {
-            visibleTabs = ['overview', 'versions', 'artifacts', 'deployment', 'lineage'];
+            visibleTabs = ['overview', 'versions', 'artifacts', 'deployment'];
         } else {
             visibleTabs = config.showTabs;
         }
@@ -3361,6 +3511,7 @@ const ExpViewModal = (function() {
         if (charts.metricsChart) { charts.metricsChart.destroy(); charts.metricsChart = null; }
         if (charts.gradientChart) { charts.gradientChart.destroy(); charts.gradientChart = null; }
         if (charts.weightStatsChart) { charts.weightStatsChart.destroy(); charts.weightStatsChart = null; }
+        if (charts.versionsChart) { charts.versionsChart.destroy(); charts.versionsChart = null; }
         weightData = { norms: null, stats: null, histogram: null };
     }
 

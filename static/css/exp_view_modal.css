@@ -2554,3 +2554,125 @@
 .text-green-500 { color: #10b981; }
 .text-orange-500 { color: #f59e0b; }
 .mr-2 { margin-right: 8px; }
+
+/* ==========================================================================
+   Versions Tab - Visual KPI Design
+   ========================================================================== */
+
+.versions-tab-content {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    padding: 16px;
+    height: 100%;
+    overflow: hidden;
+}
+
+.versions-chart-section {
+    flex-shrink: 0;
+}
+
+.versions-chart-section h4 {
+    font-size: 13px;
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 12px;
+}
+
+.versions-chart-container {
+    height: 180px;
+    position: relative;
+}
+
+.versions-list-section {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+.versions-list-section h4 {
+    font-size: 13px;
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 12px;
+    position: sticky;
+    top: 0;
+    background: white;
+    padding-bottom: 8px;
+    z-index: 1;
+}
+
+.version-card {
+    margin-bottom: 16px;
+}
+
+.version-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px 12px 0 0;
+}
+
+.version-card-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.version-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 600;
+    font-size: 14px;
+    color: #1f2937;
+}
+
+.version-badge i {
+    color: #3b82f6;
+}
+
+.version-run {
+    font-size: 13px;
+    color: #6b7280;
+}
+
+.version-date {
+    font-size: 12px;
+    color: #9ca3af;
+}
+
+.version-kpis {
+    display: flex;
+    gap: 12px;
+    padding: 12px 16px;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-top: none;
+    border-radius: 0 0 12px 12px;
+}
+
+.version-kpi-box {
+    flex: 1;
+    text-align: center;
+    padding: 10px 8px;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    background: white;
+}
+
+.version-kpi-label {
+    font-size: 11px;
+    font-weight: 500;
+    color: #6b7280;
+    margin-bottom: 4px;
+}
+
+.version-kpi-value {
+    font-size: 16px;
+    font-weight: 600;
+    color: #1f2937;
+}

@@ -2018,3 +2018,385 @@ If issues arise:
 1. Revert `create_training_pipeline()` to remove `custom_executor_spec`
 2. Restore GPU post-processing in `compile_pipeline()`
 3. Note: This will revert to the broken behavior where GPUs are not allocated
+
+---
+
+## Deploy Wizard (Planned)
+
+**Status:** Planned
+**Last Updated:** 2026-01-27
+
+This section documents the planned Deploy Wizard feature that will provide a guided deployment experience with configuration options, health checks, and deployment history.
+
+### Overview
+
+Currently, deployment is a one-click action with hardcoded defaults. The Deploy Wizard will give users control over deployment parameters, require health check validation before deployment, and maintain deployment history for tracking and rollback.
+
+### Design Decisions
+
+| Decision | Choice | Rationale |
+|----------|--------|-----------|
+| **Wizard Steps** | 2 steps | Configuration → Test & Deploy |
+| **Presets** | 3 presets | Development, Production, High Traffic |
+| **Health Check** | Required | Must pass before deployment is finalized |
+| **Authentication** | IAM-based | Secure for customer apps, GCP-native |
+| **Deployment History** | Yes | Track which model deployed when, enable rollback |
+| **Min Instances Default** | 0 | Scale-to-zero for cost efficiency |
+
+### Wizard UI Design
+
+#### Step 1: Configuration
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Deploy to Cloud Run                                                    [×]  │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ● Step 1: Configuration    ○ Step 2: Test & Deploy                         │
+│                                                                             │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  STEP 1: CONFIGURATION                                                      │
+│  ═══════════════════════════════════════════════════════════════════════    │
+│                                                                             │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │ PRESETS                                                              │   │
+│  │ ┌──────────────┐ ┌──────────────┐ ┌──────────────┐                  │   │
+│  │ │ Development  │ │ Production   │ │ High Traffic │                  │   │
+│  │ │              │ │ (Recommended)│ │              │                  │   │
+│  │ │ min: 0       │ │ min: 1       │ │ min: 2       │                  │   │
+│  │ │ max: 2       │ │ max: 10      │ │ max: 50      │                  │   │
+│  │ │ 2Gi / 1 CPU  │ │ 4Gi / 2 CPU  │ │ 8Gi / 4 CPU  │                  │   │
+│  │ │ IAM auth     │ │ IAM auth     │ │ IAM auth     │                  │   │
+│  │ │ $0 idle      │ │ ~$30/mo      │ │ ~$150/mo     │                  │   │
+│  │ └──────────────┘ └──────────────┘ └──────────────┘                  │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                             │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │ SCALING                                                              │   │
+│  │                                                                      │   │
+│  │ Min instances    [0 ▾]     ℹ️ 0 = scale to zero (no idle cost)       │   │
+│  │                            ℹ️ 1+ = always warm (lower latency)       │   │
+│  │                                                                      │   │
+│  │ Max instances    [10 ▾]    ℹ️ Limits concurrent requests             │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                             │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │ RESOURCES                                                            │   │
+│  │                                                                      │   │
+│  │ Memory     [2Gi] [4Gi ▾] [8Gi] [16Gi]                               │   │
+│  │            └─ Recommended: 4Gi for typical models                    │   │
+│  │                                                                      │   │
+│  │ CPU        [1] [2 ▾] [4] [8]                                         │   │
+│  │            └─ Recommended: 2 CPUs                                    │   │
+│  │                                                                      │   │
+│  │ Timeout    [300s ▾]  ℹ️ Max request duration                         │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                             │
+│  ▼ Advanced Options (collapsed by default)                                  │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │ Service name     [model-name-serving    ]  (auto-generated)         │   │
+│  │ Concurrency      [80 ▾]  requests per instance                      │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                             │
+│                                              [Cancel]  [Next: Test →]       │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+#### Step 2: Test & Deploy
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Deploy to Cloud Run                                                    [×]  │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ✓ Step 1: Configuration    ● Step 2: Test & Deploy                         │
+│                                                                             │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  STEP 2: TEST & DEPLOY                                                      │
+│  ═══════════════════════════════════════════════════════════════════════    │
+│                                                                             │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │ CONFIGURATION SUMMARY                                                │   │
+│  │                                                                      │   │
+│  │ Model: training-run-47 (Retrieval, brute_force)                     │   │
+│  │ Container: tf-serving-native:latest                                  │   │
+│  │ Resources: 4Gi memory, 2 CPUs                                        │   │
+│  │ Scaling: 0-10 instances                                              │   │
+│  │ Auth: IAM-protected                                                  │   │
+│  │ Est. cost: $0 idle, ~$0.10/1000 requests                            │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                             │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │ HEALTH CHECK (Required)                                              │   │
+│  │                                                                      │   │
+│  │ Test the model before finalizing deployment                          │   │
+│  │                                                                      │   │
+│  │ Sample Input (auto-populated from feature config):                   │   │
+│  │ ┌───────────────────────────────────────────────────────────────┐   │   │
+│  │ │ {                                                              │   │   │
+│  │ │   "customer_id": 12345,                                        │   │   │
+│  │ │   "city": "Warsaw",                                            │   │   │
+│  │ │   "revenue": 5000.0                                            │   │   │
+│  │ │ }                                                              │   │   │
+│  │ └───────────────────────────────────────────────────────────────┘   │   │
+│  │                                         [Edit Sample Input]          │   │
+│  │                                                                      │   │
+│  │ [Run Health Check]                                                   │   │
+│  │                                                                      │   │
+│  │ ┌───────────────────────────────────────────────────────────────┐   │   │
+│  │ │ ✅ Health check passed (247ms)                                 │   │   │
+│  │ │    Returned 100 product recommendations                        │   │   │
+│  │ │                                                                │   │   │
+│  │ │    Sample response:                                            │   │   │
+│  │ │    product_ids: [12345, 67890, 11111, ...]                    │   │   │
+│  │ │    scores: [0.95, 0.87, 0.82, ...]                            │   │   │
+│  │ └───────────────────────────────────────────────────────────────┘   │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                             │
+│                                        [← Back]  [Cancel]  [Deploy 🚀]      │
+│                                                                             │
+│  ⚠️ Deploy button enabled only after health check passes                    │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Preset Configurations
+
+| Preset | Min Instances | Max Instances | Memory | CPU | Timeout | Use Case |
+|--------|---------------|---------------|--------|-----|---------|----------|
+| **Development** | 0 | 2 | 2Gi | 1 | 300s | Testing, low traffic, cost-sensitive |
+| **Production** | 1 | 10 | 4Gi | 2 | 300s | Standard production workload |
+| **High Traffic** | 2 | 50 | 8Gi | 4 | 300s | High concurrency, low latency required |
+
+### Health Check Specification
+
+The health check is **required** before deployment can be finalized.
+
+#### Health Check Flow
+
+1. **Deploy Temporarily**: Deploy the model with the configured settings
+2. **Generate Sample Input**: Auto-populate buyer features from FeatureConfig
+3. **Send Test Request**: POST to `/v1/models/recommender:predict`
+4. **Validate Response**: Check for `product_ids` and `scores` arrays
+5. **Report Results**: Show latency, response preview, pass/fail status
+6. **Enable Deploy**: Only enable Deploy button if health check passes
+
+#### Health Check API
+
+```
+POST /api/training-runs/<id>/health-check/
+
+Request:
+{
+    "deployment_config": {
+        "memory": "4Gi",
+        "cpu": "2",
+        "min_instances": 0,
+        "max_instances": 10,
+        "timeout": 300
+    },
+    "sample_input": {
+        "customer_id": 12345,
+        "city": "Warsaw",
+        "revenue": 5000.0
+    }
+}
+
+Response:
+{
+    "success": true,
+    "health_check": {
+        "status": "passed",
+        "latency_ms": 247,
+        "response_preview": {
+            "product_ids": [12345, 67890, 11111],
+            "scores": [0.95, 0.87, 0.82]
+        },
+        "product_count": 100
+    },
+    "temp_service_url": "https://temp-xxx.run.app"
+}
+```
+
+#### Health Check Failure Scenarios
+
+| Failure Type | Message | Action |
+|--------------|---------|--------|
+| Model load failed | "Model failed to load. Check GCS path and model format." | Show logs link |
+| Timeout | "Health check timed out (>30s). Model may be too large." | Suggest more memory |
+| Invalid response | "Response missing product_ids or scores." | Show raw response |
+| Container crash | "Container crashed during startup." | Show logs link |
+
+### Deployment History
+
+Track all deployments for audit trail and rollback capability.
+
+#### DeploymentHistory Model
+
+```python
+class DeploymentHistory(models.Model):
+    """Track deployment history for a training run."""
+
+    training_run = models.ForeignKey('TrainingRun', on_delete=models.CASCADE)
+    ml_model = models.ForeignKey('ModelEndpoint', on_delete=models.CASCADE)
+
+    # Deployment info
+    deployed_at = models.DateTimeField(auto_now_add=True)
+    deployed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
+
+    # Configuration snapshot
+    deployment_config = models.JSONField()  # memory, cpu, min/max instances
+    service_url = models.URLField()
+    service_name = models.CharField(max_length=100)
+    container_image = models.CharField(max_length=255)
+
+    # Status
+    STATUS_CHOICES = [
+        ('active', 'Active'),
+        ('superseded', 'Superseded'),  # Replaced by newer deployment
+        ('rolled_back', 'Rolled Back'),
+        ('failed', 'Failed'),
+    ]
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES)
+
+    # Health check results
+    health_check_passed = models.BooleanField(default=False)
+    health_check_latency_ms = models.IntegerField(null=True)
+
+    # Rollback reference
+    rolled_back_from = models.ForeignKey('self', null=True, on_delete=models.SET_NULL)
+
+    class Meta:
+        ordering = ['-deployed_at']
+        indexes = [
+            models.Index(fields=['ml_model', 'status']),
+            models.Index(fields=['training_run', '-deployed_at']),
+        ]
+```
+
+#### Deployment History UI
+
+Add a "Deployment History" section to the Training Run view modal:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ DEPLOYMENT HISTORY                                                          │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│ │ Status │ Deployed At       │ Config           │ Latency │ Action        │ │
+│ ├────────┼───────────────────┼──────────────────┼─────────┼───────────────┤ │
+│ │ ● Active│ Jan 27, 2026 14:30│ 4Gi/2CPU, 0-10  │ 247ms   │               │ │
+│ │ ○ Old   │ Jan 25, 2026 10:15│ 2Gi/1CPU, 0-5   │ 312ms   │ [Rollback]    │ │
+│ │ ○ Old   │ Jan 20, 2026 09:00│ 2Gi/1CPU, 0-2   │ 425ms   │ [Rollback]    │ │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Authentication (IAM)
+
+All deployments will use IAM-based authentication.
+
+#### Cloud Run Configuration
+
+```bash
+# Remove --allow-unauthenticated
+# Add IAM binding for authorized callers
+gcloud run services add-iam-policy-binding {service-name} \
+    --member="serviceAccount:{caller-sa}@{project}.iam.gserviceaccount.com" \
+    --role="roles/run.invoker" \
+    --region=europe-central2
+```
+
+#### Client Authentication
+
+Callers must include an identity token:
+
+```python
+import google.auth.transport.requests
+import google.oauth2.id_token
+
+# Get identity token for the Cloud Run service
+auth_req = google.auth.transport.requests.Request()
+token = google.oauth2.id_token.fetch_id_token(auth_req, service_url)
+
+# Call the service
+response = requests.post(
+    f"{service_url}/v1/models/recommender:predict",
+    headers={"Authorization": f"Bearer {token}"},
+    json={"instances": [{"customer_id": 12345, ...}]}
+)
+```
+
+### Files to Create/Modify
+
+| File | Action | Description |
+|------|--------|-------------|
+| `templates/includes/_deploy_wizard.html` | Create | Wizard modal HTML |
+| `static/js/deploy_wizard.js` | Create | Wizard logic, API calls, state management |
+| `static/css/deploy_wizard.css` | Create | Wizard styling |
+| `ml_platform/training/models.py` | Modify | Add `DeploymentHistory` model |
+| `ml_platform/training/api.py` | Modify | Add health-check endpoint, deployment-history endpoints |
+| `ml_platform/training/services.py` | Modify | Update `deploy_to_cloud_run()` to accept config, add IAM |
+| `ml_platform/training/urls.py` | Modify | Add new URL routes |
+| `static/js/training_cards.js` | Modify | Replace one-click deploy with wizard trigger |
+
+### API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/training-runs/<id>/deploy-config/` | GET | Get current deployment config |
+| `/api/training-runs/<id>/deploy-config/` | POST | Save deployment config |
+| `/api/training-runs/<id>/health-check/` | POST | Run health check with temp deployment |
+| `/api/training-runs/<id>/deploy-cloud-run/` | POST | Finalize deployment (existing, modified) |
+| `/api/training-runs/<id>/deployment-history/` | GET | Get deployment history |
+| `/api/deployments/<id>/rollback/` | POST | Rollback to a previous deployment |
+
+### Implementation Phases
+
+#### Phase 1: Basic Wizard (MVP)
+- 2-step wizard UI
+- 3 presets (Development, Production, High Traffic)
+- Scaling controls (min/max instances)
+- Resource controls (memory, CPU)
+- Save config and deploy
+
+#### Phase 2: Health Check
+- Temporary deployment for testing
+- Sample input builder (auto-populate from FeatureConfig)
+- Test endpoint with sample request
+- Show latency, response preview
+- Block deploy until health check passes
+
+#### Phase 3: IAM Authentication
+- Remove `--allow-unauthenticated`
+- Add IAM policy binding on deployment
+- Document client authentication requirements
+
+#### Phase 4: Deployment History & Rollback
+- `DeploymentHistory` model
+- History UI in view modal
+- Rollback to previous deployment
+- Audit trail
+
+### Future Enhancements (Not in Initial Scope)
+
+| Feature | Description | Priority |
+|---------|-------------|----------|
+| Traffic Splitting | A/B testing between model versions | Low |
+| Canary Rollout | Gradual traffic shift (10% → 50% → 100%) | Low |
+| Blue-Green Deployment | Two parallel endpoints for zero-downtime | Low |
+| Auto-Rollback | Automatic rollback on error rate spike | Low |
+| Cost Monitoring | Track deployment costs over time | Low |
+
+### Legacy Code: Vertex AI Endpoint Deployment
+
+> **Note:** The `deploy_model()` method in `services.py` (lines 1278-1419) deploys to Vertex AI Endpoints. This code is **not currently used** as Cloud Run is the target deployment platform. The code is retained for potential future use but should be considered legacy/inactive.
+
+```python
+# LEGACY - Not currently used
+# See deploy_to_cloud_run() for active deployment logic
+def deploy_model(self, training_run: TrainingRun) -> TrainingRun:
+    """Deploy to Vertex AI Endpoint (LEGACY - use deploy_to_cloud_run instead)"""
+    ...
+```

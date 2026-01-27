@@ -401,6 +401,12 @@
     grid-template-rows: auto auto;
 }
 
+/* Delete button: right-align within its grid cell, directly beneath View */
+.models-actions-cell .ml-card-actions-grid .card-action-btn.icon-only.delete {
+    width: auto;
+    justify-self: end;
+}
+
 /* =========================================================================
    Pagination
    ========================================================================= */
@@ -506,6 +512,12 @@
 
 .models-loading-text {
     font-size: 14px;
+}
+
+/* Loading state inside KPI row - span all columns and center */
+.models-kpi-row .models-loading {
+    grid-column: 1 / -1;
+    padding: 40px 20px;
 }
 
 /* =========================================================================

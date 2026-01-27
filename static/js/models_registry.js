@@ -90,8 +90,13 @@ const ModelsRegistry = (function() {
         if (!isoStr) return { text: '-', class: '' };
         const registered = new Date(isoStr);
         const now = new Date();
-        const diffMs = now - registered;
-        const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+        // Compare calendar dates (normalized to local midnight), not elapsed time
+        // This ensures Jan 26 -> Jan 27 = 1 day, regardless of time of day
+        const registeredDate = new Date(registered.getFullYear(), registered.getMonth(), registered.getDate());
+        const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const diffMs = todayDate - registeredDate;
+        const days = Math.round(diffMs / (1000 * 60 * 60 * 24));
 
         let ageClass = '';
         if (days > 14) {

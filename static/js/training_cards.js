@@ -1851,6 +1851,9 @@ const TrainingSchedules = (function() {
                                 <i class="fas fa-play-circle"></i>
                             </button>
                         `}
+                        <button class="card-action-btn edit" onclick="TrainingSchedules.editSchedule(${schedule.id})" title="Edit Schedule">
+                            <i class="fas fa-edit"></i>
+                        </button>
                         <button class="card-action-btn delete" onclick="TrainingSchedules.deleteSchedule(${schedule.id})" title="Delete Schedule">
                             <i class="fas fa-trash"></i>
                         </button>
@@ -1995,6 +1998,22 @@ const TrainingSchedules = (function() {
         }
     }
 
+    function editSchedule(scheduleId) {
+        // Open the schedule modal in edit mode
+        if (typeof ScheduleModal !== 'undefined' && ScheduleModal.openForEdit) {
+            ScheduleModal.configure({
+                onSuccess: function(schedule) {
+                    showToast(`Schedule "${schedule.name}" updated successfully`, 'success');
+                    // Refresh schedules list
+                    loadAllSchedules();
+                }
+            });
+            ScheduleModal.openForEdit(scheduleId);
+        } else {
+            showToast('Edit feature not available', 'error');
+        }
+    }
+
     // =============================================================================
     // INITIALIZATION
     // =============================================================================
@@ -2014,6 +2033,7 @@ const TrainingSchedules = (function() {
         resumeSchedule: resumeSchedule,
         deleteSchedule: deleteSchedule,
         triggerNow: triggerNow,
-        toggleSection: toggleSection
+        toggleSection: toggleSection,
+        editSchedule: editSchedule
     };
 })();

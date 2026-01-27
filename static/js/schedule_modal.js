@@ -31,17 +31,20 @@ const ScheduleModal = (function() {
         endpoints: {
             preview: '/api/training/schedules/preview/',
             createFromRun: '/api/training/schedules/from-run/',
-            createFromModel: '/api/training/schedules/'
+            createFromModel: '/api/training/schedules/',
+            detail: '/api/training/schedules/{id}/',
+            update: '/api/training/schedules/{id}/'
         },
         onSuccess: null,
         onError: null
     };
 
     let state = {
-        mode: null,         // 'training_run', 'model', 'registered_model', or 'wizard'
+        mode: null,         // 'training_run', 'model', 'registered_model', 'wizard', or 'edit'
         sourceId: null,
         sourceData: null,   // Preview data from API
         wizardConfig: null, // Config from TrainingWizard (for mode='wizard')
+        editScheduleId: null, // Track schedule being edited (for mode='edit')
         scheduleConfig: {
             name: '',
             description: '',
@@ -252,6 +255,160 @@ const ScheduleModal = (function() {
         updateNextRunPreview();
     }
 
+    /**
+     * Open modal for editing an existing schedule.
+     * Only schedule timing fields can be modified.
+     *
+     * @param {number} scheduleId - ID of the schedule to edit
+     */
+    async function openForEdit(scheduleId) {
+        state.mode = 'edit';
+        state.editScheduleId = scheduleId;
+        state.sourceId = null;
+
+        // Reset schedule config
+        state.scheduleConfig = {
+            name: '',
+            description: '',
+            scheduleType: 'daily',
+            scheduledDatetime: null,
+            scheduleTime: '09:00',
+            scheduleMinute: 0,
+            scheduleDayOfWeek: 0,
+            scheduleDayOfMonth: 1,
+            scheduleTimezone: 'UTC'
+        };
+
+        // Show modal
+        const modal = document.getElementById('scheduleModal');
+        modal.classList.remove('hidden');
+
+        // Update title and button for edit mode
+        const titleEl = document.getElementById('scheduleModalTitle');
+        const subtitleEl = document.getElementById('scheduleModalSubtitle');
+        const btnTextEl = document.getElementById('scheduleCreateBtnText');
+
+        if (titleEl) titleEl.textContent = 'Edit Training Schedule';
+        if (subtitleEl) subtitleEl.textContent = 'Modifying schedule timing';
+        if (btnTextEl) btnTextEl.textContent = 'Save';
+
+        // Initialize pickers
+        initializePickers();
+
+        // Load schedule data
+        await loadScheduleForEdit(scheduleId);
+    }
+
+    /**
+     * Load schedule details and populate form for editing.
+     */
+    async function loadScheduleForEdit(scheduleId) {
+        try {
+            const url = config.endpoints.detail.replace('{id}', scheduleId);
+            const response = await fetch(url);
+            const data = await response.json();
+
+            if (!data.success) {
+                console.error('Failed to load schedule:', data.error);
+                showToast(data.error || 'Failed to load schedule', 'error');
+                close();
+                return;
+            }
+
+            const schedule = data.schedule;
+
+            // Check if schedule can be edited
+            if (schedule.status !== 'active' && schedule.status !== 'paused') {
+                showToast(`Cannot edit schedule in ${schedule.status} status`, 'error');
+                close();
+                return;
+            }
+
+            // Update subtitle with schedule name
+            const subtitleEl = document.getElementById('scheduleModalSubtitle');
+            if (subtitleEl) subtitleEl.textContent = `Editing schedule: ${schedule.name}`;
+
+            // Display model name
+            const modelName = schedule.registered_model_name || '-';
+            document.getElementById('scheduleModelName').textContent = modelName;
+
+            // Populate form with existing values
+            populateFormForEdit(schedule);
+
+            // Update next run preview
+            updateNextRunPreview();
+
+        } catch (error) {
+            console.error('Error loading schedule:', error);
+            showToast('Failed to load schedule', 'error');
+            close();
+        }
+    }
+
+    /**
+     * Populate the form fields with existing schedule data for editing.
+     */
+    function populateFormForEdit(schedule) {
+        // Set name and description
+        document.getElementById('scheduleNameInput').value = schedule.name || '';
+        document.getElementById('scheduleDescriptionInput').value = schedule.description || '';
+        state.scheduleConfig.name = schedule.name || '';
+        state.scheduleConfig.description = schedule.description || '';
+
+        // Set schedule type and show appropriate options
+        const scheduleType = schedule.schedule_type || 'daily';
+        state.scheduleConfig.scheduleType = scheduleType;
+        onScheduleTypeChange(scheduleType);
+
+        // Set timezone
+        const timezone = schedule.schedule_timezone || 'UTC';
+        document.getElementById('scheduleTimezoneSelect').value = timezone;
+        state.scheduleConfig.scheduleTimezone = timezone;
+
+        // Set type-specific values
+        if (scheduleType === 'once') {
+            // Set datetime
+            if (schedule.scheduled_datetime && state.flatpickrDatetime) {
+                state.flatpickrDatetime.setDate(new Date(schedule.scheduled_datetime), true);
+                state.scheduleConfig.scheduledDatetime = schedule.scheduled_datetime;
+            }
+        } else if (scheduleType === 'hourly') {
+            // Set minute (extract from schedule_time which is "HH:MM")
+            const timeStr = schedule.schedule_time || '00:00';
+            const minute = parseInt(timeStr.split(':')[1]) || 0;
+            // Round to nearest 15 for the buttons (0, 15, 30, 45)
+            const roundedMinute = Math.round(minute / 15) * 15;
+            state.scheduleConfig.scheduleMinute = roundedMinute >= 60 ? 45 : roundedMinute;
+            selectMinute(state.scheduleConfig.scheduleMinute);
+        } else if (scheduleType === 'daily' || scheduleType === 'weekly') {
+            // Set time
+            const timeStr = schedule.schedule_time || '09:00';
+            if (state.flatpickrTime) {
+                state.flatpickrTime.setDate(timeStr, true);
+            }
+            state.scheduleConfig.scheduleTime = timeStr;
+
+            // For weekly, set day of week
+            if (scheduleType === 'weekly') {
+                const dayOfWeek = schedule.schedule_day_of_week ?? 0;
+                state.scheduleConfig.scheduleDayOfWeek = dayOfWeek;
+                selectDay(dayOfWeek);
+            }
+        } else if (scheduleType === 'monthly') {
+            // Set time
+            const timeStr = schedule.schedule_time || '09:00';
+            if (state.flatpickrMonthlyTime) {
+                state.flatpickrMonthlyTime.setDate(timeStr, true);
+            }
+            state.scheduleConfig.scheduleTime = timeStr;
+
+            // Set day of month
+            const dayOfMonth = schedule.schedule_day_of_month || 1;
+            state.scheduleConfig.scheduleDayOfMonth = dayOfMonth;
+            selectDayOfMonth(dayOfMonth);
+        }
+    }
+
     async function loadRegisteredModelData(trainingRunId) {
         // This is called when openForModel is used with a training run ID
         // (for backward compatibility with ModelsRegistry)
@@ -307,14 +464,18 @@ const ScheduleModal = (function() {
 
             // If there's a latest version, use it as the source for preview
             if (regModel.latest_version_id) {
+                // Update sourceId to the TrainingRun ID - this is required for creating the schedule
+                // The schedule API expects source_training_run_id, not registered_model_id
+                state.sourceId = regModel.latest_version_id;
                 await loadPreviewData(regModel.latest_version_id);
             } else {
-                // Model has no versions yet - show model name directly
-                document.getElementById('scheduleModelName').textContent = regModel.model_name;
-                document.getElementById('scheduleNameInput').placeholder = `${regModel.model_name} - Retraining`;
+                // Model has no versions yet - cannot create schedule without configuration
+                showToast('This model has no training runs to base a schedule on', 'error');
+                close();
+                return;
             }
 
-            // Store registered model info for creating schedule
+            // Store registered model info for reference
             state.registeredModelId = registeredModelId;
             state.registeredModelName = regModel.model_name;
 
@@ -337,6 +498,7 @@ const ScheduleModal = (function() {
 
     function resetState() {
         state.sourceData = null;
+        state.editScheduleId = null;
         state.scheduleConfig = {
             name: '',
             description: '',
@@ -349,6 +511,12 @@ const ScheduleModal = (function() {
             scheduleTimezone: 'UTC'
         };
         state.isLoading = false;
+
+        // Reset title and button text to defaults
+        const titleEl = document.getElementById('scheduleModalTitle');
+        const btnTextEl = document.getElementById('scheduleCreateBtnText');
+        if (titleEl) titleEl.textContent = 'Create Training Schedule';
+        if (btnTextEl) btnTextEl.textContent = 'Create';
 
         // Reset form
         document.getElementById('scheduleNameInput').value = '';
@@ -669,11 +837,40 @@ const ScheduleModal = (function() {
             }
         }
 
-        // Determine endpoint and build request data based on mode
+        // Determine endpoint, method, and build request data based on mode
         let endpoint;
+        let method = 'POST';
         let requestData;
 
-        if (state.mode === 'wizard') {
+        if (state.mode === 'edit') {
+            // Editing existing schedule - use PUT
+            endpoint = config.endpoints.update.replace('{id}', state.editScheduleId);
+            method = 'PUT';
+
+            // Only send schedule timing fields (not training config)
+            requestData = {
+                name: scheduleName,
+                description: scheduleDescription,
+                schedule_type: type,
+                schedule_timezone: timezone
+            };
+
+            // Add type-specific schedule fields
+            if (type === 'once') {
+                const dt = new Date(state.scheduleConfig.scheduledDatetime);
+                requestData.scheduled_datetime = dt.toISOString();
+            } else if (type === 'hourly') {
+                requestData.schedule_time = `00:${String(state.scheduleConfig.scheduleMinute).padStart(2, '0')}`;
+            } else if (type === 'monthly') {
+                requestData.schedule_time = state.scheduleConfig.scheduleTime || '09:00';
+                requestData.schedule_day_of_month = state.scheduleConfig.scheduleDayOfMonth;
+            } else {
+                requestData.schedule_time = state.scheduleConfig.scheduleTime || '09:00';
+                if (type === 'weekly') {
+                    requestData.schedule_day_of_week = state.scheduleConfig.scheduleDayOfWeek;
+                }
+            }
+        } else if (state.mode === 'wizard') {
             // Creating from wizard - use full config endpoint
             endpoint = config.endpoints.createFromModel;  // /api/training/schedules/
             const wc = state.wizardConfig;
@@ -700,6 +897,22 @@ const ScheduleModal = (function() {
                 schedule_type: type,
                 schedule_timezone: timezone
             };
+
+            // Add type-specific schedule fields
+            if (type === 'once') {
+                const dt = new Date(state.scheduleConfig.scheduledDatetime);
+                requestData.scheduled_datetime = dt.toISOString();
+            } else if (type === 'hourly') {
+                requestData.schedule_time = `00:${String(state.scheduleConfig.scheduleMinute).padStart(2, '0')}`;
+            } else if (type === 'monthly') {
+                requestData.schedule_time = state.scheduleConfig.scheduleTime || '09:00';
+                requestData.schedule_day_of_month = state.scheduleConfig.scheduleDayOfMonth;
+            } else {
+                requestData.schedule_time = state.scheduleConfig.scheduleTime || '09:00';
+                if (type === 'weekly') {
+                    requestData.schedule_day_of_week = state.scheduleConfig.scheduleDayOfWeek;
+                }
+            }
         } else {
             // Creating from existing training run
             endpoint = config.endpoints.createFromRun;  // /api/training/schedules/from-run/
@@ -710,23 +923,32 @@ const ScheduleModal = (function() {
                 schedule_type: type,
                 schedule_timezone: timezone
             };
-        }
 
-        // Add type-specific schedule fields
-        if (type === 'once') {
-            const dt = new Date(state.scheduleConfig.scheduledDatetime);
-            requestData.scheduled_datetime = dt.toISOString();
-        } else if (type === 'hourly') {
-            requestData.schedule_time = `00:${String(state.scheduleConfig.scheduleMinute).padStart(2, '0')}`;
-        } else if (type === 'monthly') {
-            requestData.schedule_time = state.scheduleConfig.scheduleTime || '09:00';
-            requestData.schedule_day_of_month = state.scheduleConfig.scheduleDayOfMonth;
-        } else {
-            requestData.schedule_time = state.scheduleConfig.scheduleTime || '09:00';
-            if (type === 'weekly') {
-                requestData.schedule_day_of_week = state.scheduleConfig.scheduleDayOfWeek;
+            // Add type-specific schedule fields
+            if (type === 'once') {
+                const dt = new Date(state.scheduleConfig.scheduledDatetime);
+                requestData.scheduled_datetime = dt.toISOString();
+            } else if (type === 'hourly') {
+                requestData.schedule_time = `00:${String(state.scheduleConfig.scheduleMinute).padStart(2, '0')}`;
+            } else if (type === 'monthly') {
+                requestData.schedule_time = state.scheduleConfig.scheduleTime || '09:00';
+                requestData.schedule_day_of_month = state.scheduleConfig.scheduleDayOfMonth;
+            } else {
+                requestData.schedule_time = state.scheduleConfig.scheduleTime || '09:00';
+                if (type === 'weekly') {
+                    requestData.schedule_day_of_week = state.scheduleConfig.scheduleDayOfWeek;
+                }
             }
         }
+
+        // Determine success message based on mode
+        const isEdit = state.mode === 'edit';
+        const successMessage = isEdit
+            ? `Schedule "${scheduleName}" updated successfully`
+            : `Schedule "${scheduleName}" created successfully`;
+        const errorMessage = isEdit
+            ? 'Failed to update schedule'
+            : 'Failed to create schedule';
 
         // Show loading
         state.isLoading = true;
@@ -735,7 +957,7 @@ const ScheduleModal = (function() {
 
         try {
             const response = await fetch(endpoint, {
-                method: 'POST',
+                method: method,
                 headers: {
                     'Content-Type': 'application/json',
                     'X-CSRFToken': getCookie('csrftoken')
@@ -746,7 +968,7 @@ const ScheduleModal = (function() {
             const data = await response.json();
 
             if (data.success) {
-                showToast(data.message || `Schedule "${scheduleName}" created successfully`, 'success');
+                showToast(data.message || successMessage, 'success');
                 close();
 
                 // Call success callback
@@ -754,14 +976,14 @@ const ScheduleModal = (function() {
                     config.onSuccess(data.schedule);
                 }
             } else {
-                showToast(data.error || 'Failed to create schedule', 'error');
+                showToast(data.error || errorMessage, 'error');
                 if (config.onError) {
                     config.onError(data.error);
                 }
             }
         } catch (error) {
-            console.error('Error creating schedule:', error);
-            showToast('Failed to create schedule', 'error');
+            console.error('Error with schedule:', error);
+            showToast(errorMessage, 'error');
             if (config.onError) {
                 config.onError(error.message);
             }
@@ -797,6 +1019,7 @@ const ScheduleModal = (function() {
         openForModel: openForModel,
         openForRegisteredModel: openForRegisteredModel,
         openForWizardConfig: openForWizardConfig,  // For Training Wizard integration
+        openForEdit: openForEdit,  // For editing existing schedules
         close: close,
         handleOverlayClick: handleOverlayClick,
         onScheduleTypeChange: onScheduleTypeChange,

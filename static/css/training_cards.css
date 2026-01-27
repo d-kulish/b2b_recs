@@ -665,6 +665,17 @@
     width: 32px;
 }
 
+.schedule-card-actions .card-action-btn.edit {
+    width: 32px;
+    background-color: #f3f4f6;
+    color: #374151;
+}
+
+.schedule-card-actions .card-action-btn.edit:hover {
+    background-color: #e5e7eb;
+    color: #111827;
+}
+
 .schedule-action-btn {
     width: 28px;
     height: 28px;

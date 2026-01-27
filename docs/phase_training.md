@@ -1514,6 +1514,7 @@ Response:
 | GET | `/api/training/schedules/` | List all schedules |
 | POST | `/api/training/schedules/` | Create schedule (full config) |
 | GET | `/api/training/schedules/{id}/` | Get schedule details |
+| PUT | `/api/training/schedules/{id}/` | Edit schedule (timing only) |
 | DELETE | `/api/training/schedules/{id}/` | Delete schedule |
 | POST | `/api/training/schedules/{id}/pause/` | Pause schedule |
 | POST | `/api/training/schedules/{id}/resume/` | Resume schedule |
@@ -1555,6 +1556,13 @@ class TrainingScheduleService:
 
     def trigger_now(self, schedule) -> Dict:
         """Manually triggers schedule execution"""
+
+    def update_schedule(self, schedule, webhook_base_url, update_data) -> Dict:
+        """Updates schedule timing fields and Cloud Scheduler job"""
+        # Only editable: name, description, schedule_type, schedule_time,
+        # schedule_day_of_week, schedule_day_of_month, schedule_timezone,
+        # scheduled_datetime
+        # Training config (training_params, gpu_config, etc.) remains frozen
 ```
 
 #### Frontend Components
@@ -1595,6 +1603,7 @@ const ScheduleModal = (function() {
         configure: function(options) {...},
         openForTrainingRun: function(runId) {...},
         openForModel: function(modelId) {...},
+        openForEdit: function(scheduleId) {...},   // Edit existing schedule
         close: function() {...},
         onScheduleTypeChange: function(type) {...},
         selectDay: function(day) {...},
@@ -2353,6 +2362,104 @@ vertex_pipeline_job_id = models.CharField(
     blank=True,
     help_text="Short pipeline job ID for display"
 )
+```
+
+### Edit Schedule Feature (2026-01-27)
+
+Added ability to edit existing training schedules from the Schedules section. Users can modify schedule timing (type, time, day, timezone) but NOT training configuration (which remains frozen from the source run).
+
+#### Editable Fields
+- `name` - Schedule display name
+- `description` - Optional description
+- `schedule_type` - once, hourly, daily, weekly, monthly
+- `schedule_time` - Time of day (HH:MM)
+- `schedule_day_of_week` - Day for weekly schedules (0-6, Monday=0)
+- `schedule_day_of_month` - Day for monthly schedules (1-31)
+- `schedule_timezone` - Timezone for schedule
+- `scheduled_datetime` - For one-time schedules
+
+#### Non-Editable Fields (Frozen from Source)
+- `training_params`
+- `gpu_config`
+- `evaluator_config`
+- `deployment_config`
+
+#### API Endpoint
+
+```
+PUT /api/training/schedules/{id}/
+
+Request:
+{
+    "name": "Updated Schedule Name",
+    "description": "New description",
+    "schedule_type": "weekly",
+    "schedule_time": "10:00",
+    "schedule_day_of_week": 2,
+    "schedule_timezone": "Europe/Warsaw"
+}
+
+Response:
+{
+    "success": true,
+    "schedule": {...},
+    "message": "Schedule updated successfully"
+}
+```
+
+#### Validation Rules
+- Schedule must be in `active` or `paused` status (not `cancelled` or `completed`)
+- `name` cannot be empty
+- `schedule_type` must be valid (once, hourly, daily, weekly, monthly)
+- `schedule_day_of_week` must be 0-6
+- `schedule_day_of_month` must be 1-31
+- For `once` type, `scheduled_datetime` must be in the future
+
+#### Implementation Changes
+
+| File | Changes |
+|------|---------|
+| `ml_platform/training/api.py` | Added PUT support to `training_schedule_detail`, added `_training_schedule_update()` |
+| `ml_platform/training/schedule_service.py` | Added `update_schedule()` and `_update_scheduler_job()` methods |
+| `static/js/training_cards.js` | Added edit button to schedule cards, added `editSchedule()` function |
+| `static/js/schedule_modal.js` | Added `openForEdit()`, edit mode state, PUT request handling |
+| `templates/includes/_schedule_modal.html` | Made title/button text dynamic with IDs |
+| `static/css/training_cards.css` | Added edit button styling |
+
+#### UI Flow
+
+```
+User clicks Edit button on schedule card
+         ↓
+ScheduleModal.openForEdit(scheduleId)
+         ↓
+GET /api/training/schedules/{id}/ (fetch current values)
+         ↓
+Modal opens with:
+- Title: "Edit Training Schedule"
+- Subtitle: "Editing schedule: {name}"
+- Button: "Save" (instead of "Create")
+- Form pre-populated with current values
+         ↓
+User modifies schedule timing
+         ↓
+Click "Save" → PUT /api/training/schedules/{id}/
+         ↓
+Cloud Scheduler job updated (if active)
+         ↓
+Modal closes, schedule list refreshes
+```
+
+#### Schedule Card Actions (Updated)
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Schedule Card Actions                                                        │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  [▶ Run]  [⏸ Pause/▶ Resume]  [✏ Edit]  [🗑 Delete]                         │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### New Training Dialog

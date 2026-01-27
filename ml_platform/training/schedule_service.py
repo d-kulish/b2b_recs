@@ -395,6 +395,207 @@ class TrainingScheduleService:
                 'message': f'Failed to trigger training: {str(e)}'
             }
 
+    def update_schedule(
+        self,
+        schedule: TrainingSchedule,
+        webhook_base_url: str,
+        update_data: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Update schedule fields and Cloud Scheduler job.
+
+        Only schedule timing fields can be updated (name, description,
+        schedule_type, schedule_time, etc.). Training configuration
+        (training_params, gpu_config, etc.) remains frozen.
+
+        Args:
+            schedule: TrainingSchedule instance
+            webhook_base_url: Base URL for the webhook endpoint
+            update_data: Dict with fields to update
+
+        Returns:
+            Dict with:
+                - success: bool
+                - message: Status message
+        """
+        # Check if schedule is in editable status
+        if schedule.status not in (TrainingSchedule.STATUS_ACTIVE, TrainingSchedule.STATUS_PAUSED):
+            return {
+                'success': False,
+                'message': f'Cannot edit schedule in {schedule.status} status'
+            }
+
+        # Track which fields were updated
+        updated_fields = []
+
+        # Update editable fields
+        if 'name' in update_data:
+            schedule.name = update_data['name']
+            updated_fields.append('name')
+
+        if 'description' in update_data:
+            schedule.description = update_data['description'] or ''
+            updated_fields.append('description')
+
+        if 'schedule_type' in update_data:
+            schedule.schedule_type = update_data['schedule_type']
+            updated_fields.append('schedule_type')
+
+        if 'schedule_time' in update_data:
+            time_str = update_data['schedule_time']
+            if time_str:
+                try:
+                    parts = time_str.split(':')
+                    schedule.schedule_time = time(int(parts[0]), int(parts[1]))
+                except (ValueError, IndexError):
+                    return {
+                        'success': False,
+                        'message': f'Invalid time format: {time_str}'
+                    }
+            updated_fields.append('schedule_time')
+
+        if 'schedule_day_of_week' in update_data:
+            schedule.schedule_day_of_week = update_data['schedule_day_of_week']
+            updated_fields.append('schedule_day_of_week')
+
+        if 'schedule_day_of_month' in update_data:
+            schedule.schedule_day_of_month = update_data['schedule_day_of_month']
+            updated_fields.append('schedule_day_of_month')
+
+        if 'schedule_timezone' in update_data:
+            schedule.schedule_timezone = update_data['schedule_timezone']
+            updated_fields.append('schedule_timezone')
+
+        if 'scheduled_datetime' in update_data:
+            dt_str = update_data['scheduled_datetime']
+            if dt_str:
+                from django.utils.dateparse import parse_datetime
+                schedule.scheduled_datetime = parse_datetime(dt_str)
+            else:
+                schedule.scheduled_datetime = None
+            updated_fields.append('scheduled_datetime')
+
+        if not updated_fields:
+            return {
+                'success': True,
+                'message': 'No fields to update'
+            }
+
+        # Recalculate next_run_at
+        schedule.next_run_at = self._calculate_next_run(schedule)
+        updated_fields.append('next_run_at')
+        updated_fields.append('updated_at')
+
+        # Save schedule
+        schedule.save(update_fields=updated_fields)
+
+        # Update Cloud Scheduler job if schedule is active
+        if schedule.status == TrainingSchedule.STATUS_ACTIVE:
+            result = self._update_scheduler_job(schedule, webhook_base_url)
+            if not result['success']:
+                logger.warning(f"Failed to update Cloud Scheduler job: {result['message']}")
+                # Don't fail the update - DB changes were saved
+
+        return {
+            'success': True,
+            'message': f'Schedule updated successfully'
+        }
+
+    def _update_scheduler_job(
+        self,
+        schedule: TrainingSchedule,
+        webhook_base_url: str
+    ) -> Dict[str, Any]:
+        """
+        Update Cloud Scheduler job with new schedule settings.
+
+        Args:
+            schedule: TrainingSchedule instance
+            webhook_base_url: Base URL for the webhook endpoint
+
+        Returns:
+            Dict with success status and message
+        """
+        # Check if Cloud Scheduler should be skipped (e.g., in development)
+        skip_scheduler = getattr(settings, 'SKIP_CLOUD_SCHEDULER', False)
+        if skip_scheduler:
+            logger.info(f"Skipping Cloud Scheduler job update (SKIP_CLOUD_SCHEDULER=True) for schedule {schedule.id}")
+            return {
+                'success': True,
+                'message': 'Schedule updated (dev mode - no Cloud Scheduler job)'
+            }
+
+        if not schedule.cloud_scheduler_job_name:
+            # No existing job to update - create one
+            return self.create_schedule(schedule, webhook_base_url)
+
+        try:
+            from google.cloud import scheduler_v1
+            import json
+
+            client = scheduler_v1.CloudSchedulerClient()
+
+            # Generate new cron expression
+            cron_expr = self._get_cron_expression(schedule)
+
+            # Build webhook URL
+            webhook_url = f"{webhook_base_url}/api/training/schedules/{schedule.id}/webhook/"
+            parsed_url = urlparse(webhook_url)
+            audience = f"{parsed_url.scheme}://{parsed_url.netloc}"
+
+            # Service account for OIDC authentication
+            service_account = getattr(
+                settings,
+                'TRAINING_SCHEDULER_SERVICE_ACCOUNT',
+                f"training-scheduler@{self.project_id}.iam.gserviceaccount.com"
+            )
+
+            http_target = scheduler_v1.HttpTarget(
+                uri=webhook_url,
+                http_method=scheduler_v1.HttpMethod.POST,
+                headers={'Content-Type': 'application/json'},
+                body=json.dumps({
+                    'schedule_id': schedule.id,
+                    'trigger': 'scheduled'
+                }).encode('utf-8'),
+                oidc_token=scheduler_v1.OidcToken(
+                    service_account_email=service_account,
+                    audience=audience
+                )
+            )
+
+            job = scheduler_v1.Job(
+                name=schedule.cloud_scheduler_job_name,
+                description=f'Training schedule: {schedule.name} (ID: {schedule.id})',
+                schedule=cron_expr,
+                time_zone=schedule.schedule_timezone,
+                http_target=http_target
+            )
+
+            # Update the job
+            updated_job = client.update_job(
+                request=scheduler_v1.UpdateJobRequest(
+                    job=job,
+                    update_mask={'paths': ['schedule', 'time_zone', 'description', 'http_target']}
+                )
+            )
+
+            logger.info(f"Updated Cloud Scheduler job: {updated_job.name} with schedule: {cron_expr}")
+
+            return {
+                'success': True,
+                'job_name': updated_job.name,
+                'schedule': cron_expr,
+                'message': f'Cloud Scheduler job updated: {cron_expr}'
+            }
+
+        except Exception as e:
+            logger.exception(f"Failed to update Cloud Scheduler job: {e}")
+            return {
+                'success': False,
+                'message': f'Failed to update Cloud Scheduler job: {str(e)}'
+            }
+
     def _delete_scheduler_job(self, schedule: TrainingSchedule) -> Dict[str, Any]:
         """
         Delete Cloud Scheduler job.

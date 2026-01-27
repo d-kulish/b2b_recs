@@ -1994,6 +1994,7 @@ def _serialize_training_schedule(schedule, include_runs=False):
         'scheduled_datetime': schedule.scheduled_datetime.isoformat() if schedule.scheduled_datetime else None,
         'schedule_time': schedule.schedule_time.strftime('%H:%M') if schedule.schedule_time else None,
         'schedule_day_of_week': schedule.schedule_day_of_week,
+        'schedule_day_of_month': schedule.schedule_day_of_month,
         'schedule_timezone': schedule.schedule_timezone,
 
         # Relationships
@@ -2466,12 +2467,13 @@ def _create_immediate_training_run(request, model_endpoint, data):
 
 
 @csrf_exempt
-@require_http_methods(["GET", "DELETE"])
+@require_http_methods(["GET", "PUT", "DELETE"])
 def training_schedule_detail(request, schedule_id):
     """
-    Get or delete a Training Schedule.
+    Get, update, or delete a Training Schedule.
 
     GET /api/training/schedules/<id>/
+    PUT /api/training/schedules/<id>/
     DELETE /api/training/schedules/<id>/
     """
     try:
@@ -2500,6 +2502,8 @@ def training_schedule_detail(request, schedule_id):
                 'success': True,
                 'schedule': _serialize_training_schedule(schedule, include_runs=True)
             })
+        elif request.method == 'PUT':
+            return _training_schedule_update(request, model_endpoint, schedule)
         else:  # DELETE
             service = TrainingScheduleService(model_endpoint)
             result = service.delete_schedule(schedule)
@@ -2518,6 +2522,125 @@ def training_schedule_detail(request, schedule_id):
 
     except Exception as e:
         logger.exception(f"Error with training schedule detail: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+def _training_schedule_update(request, model_endpoint, schedule):
+    """
+    Handle PUT request to update a training schedule.
+
+    Editable fields: name, description, schedule_type, schedule_time,
+    schedule_day_of_week, schedule_day_of_month, schedule_timezone,
+    scheduled_datetime.
+
+    Training configuration (training_params, gpu_config, etc.) remains frozen.
+    """
+    from .schedule_service import TrainingScheduleService
+
+    try:
+        data = json.loads(request.body)
+
+        # Validate schedule status
+        if schedule.status not in (TrainingSchedule.STATUS_ACTIVE, TrainingSchedule.STATUS_PAUSED):
+            return JsonResponse({
+                'success': False,
+                'error': f'Cannot edit schedule in {schedule.status} status. Only active or paused schedules can be edited.'
+            }, status=400)
+
+        # Validate required fields
+        if 'name' in data and not data['name'].strip():
+            return JsonResponse({
+                'success': False,
+                'error': 'Schedule name cannot be empty'
+            }, status=400)
+
+        # Validate schedule_type if provided
+        if 'schedule_type' in data:
+            valid_types = [
+                TrainingSchedule.SCHEDULE_TYPE_ONCE,
+                TrainingSchedule.SCHEDULE_TYPE_HOURLY,
+                TrainingSchedule.SCHEDULE_TYPE_DAILY,
+                TrainingSchedule.SCHEDULE_TYPE_WEEKLY,
+                TrainingSchedule.SCHEDULE_TYPE_MONTHLY
+            ]
+            if data['schedule_type'] not in valid_types:
+                return JsonResponse({
+                    'success': False,
+                    'error': f"Invalid schedule_type. Must be one of: {', '.join(valid_types)}"
+                }, status=400)
+
+        # Validate schedule_day_of_week if provided
+        if 'schedule_day_of_week' in data:
+            day = data['schedule_day_of_week']
+            if day is not None and (not isinstance(day, int) or day < 0 or day > 6):
+                return JsonResponse({
+                    'success': False,
+                    'error': 'schedule_day_of_week must be 0-6 (Monday=0, Sunday=6)'
+                }, status=400)
+
+        # Validate schedule_day_of_month if provided
+        if 'schedule_day_of_month' in data:
+            day = data['schedule_day_of_month']
+            if day is not None and (not isinstance(day, int) or day < 1 or day > 31):
+                return JsonResponse({
+                    'success': False,
+                    'error': 'schedule_day_of_month must be 1-31'
+                }, status=400)
+
+        # Validate scheduled_datetime for 'once' type
+        schedule_type = data.get('schedule_type', schedule.schedule_type)
+        if schedule_type == TrainingSchedule.SCHEDULE_TYPE_ONCE:
+            if 'scheduled_datetime' in data:
+                from django.utils.dateparse import parse_datetime
+                dt = parse_datetime(data['scheduled_datetime']) if data['scheduled_datetime'] else None
+                if dt and dt <= timezone.now():
+                    return JsonResponse({
+                        'success': False,
+                        'error': 'scheduled_datetime must be in the future'
+                    }, status=400)
+
+        # Build webhook base URL
+        webhook_base_url = request.build_absolute_uri('/').rstrip('/')
+
+        # Extract only editable fields
+        update_data = {}
+        editable_fields = [
+            'name', 'description', 'schedule_type', 'schedule_time',
+            'schedule_day_of_week', 'schedule_day_of_month',
+            'schedule_timezone', 'scheduled_datetime'
+        ]
+        for field in editable_fields:
+            if field in data:
+                update_data[field] = data[field]
+
+        # Update schedule
+        service = TrainingScheduleService(model_endpoint)
+        result = service.update_schedule(schedule, webhook_base_url, update_data)
+
+        if result['success']:
+            # Refresh from DB to get updated fields
+            schedule.refresh_from_db()
+            return JsonResponse({
+                'success': True,
+                'schedule': _serialize_training_schedule(schedule),
+                'message': result['message']
+            })
+        else:
+            return JsonResponse({
+                'success': False,
+                'error': result['message']
+            }, status=400)
+
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'error': 'Invalid JSON'
+        }, status=400)
+    except Exception as e:
+        logger.exception(f"Error updating training schedule: {e}")
         return JsonResponse({
             'success': False,
             'error': str(e)

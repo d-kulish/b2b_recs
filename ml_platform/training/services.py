@@ -713,10 +713,27 @@ class TrainingService:
                         update_fields.append(f'recall_at_{k}')
 
                 # Extract RMSE/MAE (ranking models)
-                for metric in ['rmse', 'mae', 'test_rmse', 'test_mae']:
-                    if metric in final_metrics:
-                        setattr(training_run, metric, final_metrics[metric])
-                        update_fields.append(metric)
+                # Validation metrics (rmse, mae) are stored in loss dict as arrays
+                # Test metrics (test_rmse, test_mae) are in final_metrics
+                loss_data = training_metrics.get('loss', {})
+
+                # Validation RMSE/MAE from loss arrays (last epoch value)
+                if 'val_rmse' in loss_data and loss_data['val_rmse']:
+                    training_run.rmse = loss_data['val_rmse'][-1]
+                    update_fields.append('rmse')
+
+                if 'val_mae' in loss_data and loss_data['val_mae']:
+                    training_run.mae = loss_data['val_mae'][-1]
+                    update_fields.append('mae')
+
+                # Test RMSE/MAE from final_metrics
+                if 'test_rmse' in final_metrics:
+                    training_run.test_rmse = final_metrics['test_rmse']
+                    update_fields.append('test_rmse')
+
+                if 'test_mae' in final_metrics:
+                    training_run.test_mae = final_metrics['test_mae']
+                    update_fields.append('test_mae')
 
                 if update_fields:
                     training_run.save(update_fields=update_fields)

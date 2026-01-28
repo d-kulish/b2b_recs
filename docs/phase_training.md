@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides detailed specifications for implementing the **Training** domain in the ML Platform. The Training domain executes full TFX pipelines for production model training.
 
-**Last Updated**: 2026-01-26 (Dynamic deployment status from Vertex AI endpoint)
+**Last Updated**: 2026-01-28 (Fix: RMSE/MAE metric extraction for ranking/multitask models)
 
 ---
 
@@ -3969,6 +3969,132 @@ NCCL INFO comm ... rank 1 nranks 2 cudaDev 1 ... - Init COMPLETE
 
 - [Keras Distributed Training Guide](https://www.tensorflow.org/tutorials/distribute/custom_training)
 - [Loss Reduction with Distribution Strategies](https://www.tensorflow.org/api_docs/python/tf/keras/losses/Reduction)
+
+## Bug Fix: RMSE/MAE Validation Metrics Not Extracted for Ranking/Multitask Training Runs (2026-01-28)
+
+### Problem Description
+
+After completing a **multitask (hybrid) model** training pipeline (`training-tr-17-20260124-094938-20260124095148`, Training #20), the RMSE and MAE KPI boxes in the Training UI showed "-" while TEST RMSE (0.6071) and TEST MAE (0.4124) displayed correctly.
+
+### Root Cause Analysis
+
+The `TrainingService._extract_results()` method in `ml_platform/training/services.py` used incorrect keys to extract validation RMSE/MAE from the training metrics JSON.
+
+#### How Metrics Are Stored in `training_metrics.json`
+
+The `MetricsCollector.log_metric()` method categorizes metrics into two locations:
+
+1. **Per-epoch metrics** (logged by `MetricsCallback.on_epoch_end`): `val_rmse`, `val_mae` etc. are stored in the **`loss` dict as arrays** (one value per epoch)
+2. **Final/test metrics** (logged after training): `test_rmse`, `test_mae` are stored in the **`final_metrics` dict as scalars**
+
+Actual JSON structure for Training #20:
+```json
+{
+  "loss": {
+    "val_rmse": [0.83, 0.77, ..., 0.6270],
+    "val_mae": [0.58, 0.52, ..., 0.4199],
+    ...
+  },
+  "final_metrics": {
+    "test_rmse": 0.6071,
+    "test_mae": 0.4124,
+    "final_val_rmse": 0.6270,
+    "final_val_mae": 0.4199,
+    ...
+  }
+}
+```
+
+#### The Bug (TrainingService extraction)
+
+```python
+# BROKEN - looked for bare 'rmse'/'mae' in final_metrics (don't exist)
+for metric in ['rmse', 'mae', 'test_rmse', 'test_mae']:
+    if metric in final_metrics:
+        setattr(training_run, metric, final_metrics[metric])
+```
+
+- `'rmse' in final_metrics` -> **False** (stored as `final_rmse` or in `loss['val_rmse']`)
+- `'mae' in final_metrics` -> **False** (stored as `final_mae` or in `loss['val_mae']`)
+- `'test_rmse' in final_metrics` -> **True** (works correctly)
+- `'test_mae' in final_metrics` -> **True** (works correctly)
+
+#### Why QuickTest (Experiments) Worked
+
+The `ExperimentService` in `ml_platform/experiments/services.py` used the correct extraction logic:
+
+```python
+loss_data = training_metrics.get('loss', {})
+if 'val_rmse' in loss_data and loss_data['val_rmse']:
+    quick_test.rmse = loss_data['val_rmse'][-1]  # Last epoch value
+```
+
+The `TrainingService` extraction was written separately and didn't match this logic.
+
+### The Fix
+
+**File:** `ml_platform/training/services.py` (lines 715-736)
+
+```python
+# BEFORE (broken)
+for metric in ['rmse', 'mae', 'test_rmse', 'test_mae']:
+    if metric in final_metrics:
+        setattr(training_run, metric, final_metrics[metric])
+        update_fields.append(metric)
+
+# AFTER (fixed - matches ExperimentService logic)
+loss_data = training_metrics.get('loss', {})
+
+# Validation RMSE/MAE from loss arrays (last epoch value)
+if 'val_rmse' in loss_data and loss_data['val_rmse']:
+    training_run.rmse = loss_data['val_rmse'][-1]
+    update_fields.append('rmse')
+
+if 'val_mae' in loss_data and loss_data['val_mae']:
+    training_run.mae = loss_data['val_mae'][-1]
+    update_fields.append('mae')
+
+# Test RMSE/MAE from final_metrics (unchanged - already correct)
+if 'test_rmse' in final_metrics:
+    training_run.test_rmse = final_metrics['test_rmse']
+    update_fields.append('test_rmse')
+
+if 'test_mae' in final_metrics:
+    training_run.test_mae = final_metrics['test_mae']
+    update_fields.append('test_mae')
+```
+
+### Backfill for Existing Runs
+
+Created management command to re-extract RMSE/MAE from cached `training_history_json` for completed ranking/multitask training runs:
+
+**File:** `ml_platform/management/commands/backfill_ranking_metrics.py`
+
+```bash
+# Preview what would be updated
+python manage.py backfill_ranking_metrics --dry-run
+
+# Run the backfill
+python manage.py backfill_ranking_metrics
+
+# Force re-populate even if values exist
+python manage.py backfill_ranking_metrics --force
+```
+
+**Backfill result for Training #20:**
+```
+Found 1 training run(s) to process.
+[1/1] Processing TrainingRun 29 (Training #20, type=multitask)...
+  Updated: RMSE=0.6270, MAE=0.4199
+Completed: 1 updated, 0 skipped, 0 errors
+```
+
+### Files Modified
+
+| File | Change |
+|------|--------|
+| `ml_platform/training/services.py` | Fixed `_extract_results()` to read validation RMSE/MAE from `loss` dict instead of `final_metrics` |
+| `ml_platform/management/commands/backfill_ranking_metrics.py` | New management command to backfill RMSE/MAE for existing completed training runs |
 
 ### Models Registry View Modal - Versions Tab Enhancement (2026-01-27)
 

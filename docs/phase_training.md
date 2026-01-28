@@ -3875,6 +3875,101 @@ Using optimizer: Adagrad with lr=0.01, clipnorm=1.0
 - [Vertex AI Custom Training](https://cloud.google.com/vertex-ai/docs/training/create-custom-job)
 - [TFX AI Platform Trainer](https://www.tensorflow.org/tfx/guide/trainer#training_on_google_cloud_ai_platform)
 
+## Critical Bug Fix: Multi-GPU Training Loss Reduction Incompatibility (2026-01-28)
+
+### Problem Description
+
+Scheduled training pipeline `training-tr-27-20260128-030005-20260128030249` for a **multitask (hybrid) model** failed at the Trainer stage when running with 2 GPUs in `europe-west4`. A retrieval model pipeline succeeded an hour later with the same infrastructure.
+
+**Error from Vertex AI Custom Job logs:**
+```
+ValueError: Please use `tf.keras.losses.Reduction.SUM` or `tf.keras.losses.Reduction.NONE`
+for loss reduction when losses are used with `tf.distribute.Strategy`, except for
+specifying losses in `Model.compile()` for use by the built-in training loop `Model.fit()`.
+```
+
+### Root Cause Analysis
+
+The `tfrs.tasks.Ranking` loss function was created with the **default reduction mode** (`AUTO` → `SUM_OVER_BATCH_SIZE`), which is incompatible with `tf.distribute.MirroredStrategy` for multi-GPU training.
+
+#### Why Retrieval Models Worked
+
+- **Retrieval models** use `tfrs.tasks.Retrieval()` which computes loss internally using in-batch negatives
+- The retrieval task handles its own loss computation and doesn't expose a Keras loss function directly
+- No explicit loss reduction parameter is needed
+
+#### Why Ranking/Multitask Models Failed
+
+- **Ranking and Multitask models** use `tfrs.tasks.Ranking(loss=tf.keras.losses.MeanSquaredError())`
+- The `MeanSquaredError()` (and other Keras loss functions) default to `Reduction.AUTO`
+- When using `MirroredStrategy`, Keras requires explicit `Reduction.SUM` or `Reduction.NONE`
+- The error occurs during `model.fit()` when the distributed strategy validates loss reduction modes
+
+### The Fix
+
+**File:** `ml_platform/configs/services.py`
+
+**Locations:**
+- `_generate_ranking_model()` (~line 4171)
+- `_generate_multitask_model()` (~line 5289)
+
+```python
+# BEFORE (broken)
+loss_mapping = {
+    'mse': 'tf.keras.losses.MeanSquaredError()',
+    'binary_crossentropy': 'tf.keras.losses.BinaryCrossentropy()',
+    'huber': 'tf.keras.losses.Huber()',
+}
+
+# AFTER (fixed)
+# CRITICAL: Must use Reduction.SUM for distributed training (multi-GPU)
+# Default AUTO/SUM_OVER_BATCH_SIZE is incompatible with MirroredStrategy
+loss_mapping = {
+    'mse': 'tf.keras.losses.MeanSquaredError(reduction=tf.keras.losses.Reduction.SUM)',
+    'binary_crossentropy': 'tf.keras.losses.BinaryCrossentropy(reduction=tf.keras.losses.Reduction.SUM)',
+    'huber': 'tf.keras.losses.Huber(reduction=tf.keras.losses.Reduction.SUM)',
+}
+```
+
+### Why This Bug Wasn't Caught Earlier
+
+1. **Single-GPU Quick Tests**: Quick Tests use 1 GPU, where `MirroredStrategy` isn't used
+2. **Retrieval-only production runs**: Previous production training used retrieval models which don't have this issue
+3. **Multitask is new**: The multitask model type was recently implemented and this was the first scheduled 2-GPU production run
+
+### Verification
+
+Custom job test with 2 GPUs using artifacts from the failed pipeline:
+
+```bash
+./venv/bin/python scripts/test_services_trainer.py \
+    --feature-config-id 9 \
+    --model-config-id 17 \
+    --source-exp "tr-27-20260128-030005/555035914949/training-tr-27-20260128-030005-20260128030249" \
+    --epochs 2 \
+    --gpu-count 2 \
+    --learning-rate 0.001 \
+    --wait
+```
+
+**Result:** `JOB_STATE_SUCCEEDED` with NCCL confirming 2 GPUs:
+```
+NCCL INFO comm ... rank 0 nranks 2 cudaDev 0 ... - Init COMPLETE
+NCCL INFO comm ... rank 1 nranks 2 cudaDev 1 ... - Init COMPLETE
+```
+
+### Files Modified
+
+| File | Change |
+|------|--------|
+| `ml_platform/configs/services.py` | Added `reduction=tf.keras.losses.Reduction.SUM` to loss functions in both `_generate_ranking_model()` and `_generate_multitask_model()` |
+| `scripts/test_services_trainer.py` | Added `--gpu-count` argument for testing multi-GPU configurations |
+
+### Related Documentation
+
+- [Keras Distributed Training Guide](https://www.tensorflow.org/tutorials/distribute/custom_training)
+- [Loss Reduction with Distribution Strategies](https://www.tensorflow.org/api_docs/python/tf/keras/losses/Reduction)
+
 ### Models Registry View Modal - Versions Tab Enhancement (2026-01-27)
 
 Replaced the table-based Versions tab in the Models Registry View modal with a visual KPI-focused design featuring a grouped bar chart and version cards with KPI boxes.

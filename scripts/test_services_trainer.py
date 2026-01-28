@@ -77,7 +77,7 @@ def find_artifacts(source_exp: str) -> dict:
     }
 
 
-def create_runner_script(artifacts: dict, trainer_gcs_path: str, output_path: str, gcs_output_path: str, epochs: int, learning_rate: float) -> str:
+def create_runner_script(artifacts: dict, trainer_gcs_path: str, output_path: str, gcs_output_path: str, epochs: int, learning_rate: float, gpu_count: int = 1) -> str:
     """Create the script that will run inside the CustomJob."""
 
     return f'''#!/usr/bin/env python3
@@ -142,7 +142,7 @@ def main():
         'learning_rate': {learning_rate},
         'gcs_output_path': '{gcs_output_path}',  # For MetricsCollector to save training_metrics.json
         'gpu_enabled': True,
-        'gpu_count': 1,
+        'gpu_count': {gpu_count},
     }}
 
     # Create data accessor
@@ -354,6 +354,7 @@ def main():
     parser.add_argument('--source-exp', default='qt-62-20251231-154907', help='Source experiment for artifacts')
     parser.add_argument('--epochs', type=int, default=2, help='Training epochs')
     parser.add_argument('--learning-rate', type=float, default=0.1, help='Learning rate')
+    parser.add_argument('--gpu-count', type=int, default=1, help='Number of GPUs (1 or 2)')
     parser.add_argument('--output-gcs-path', type=str, default=None, help='Custom GCS output path (e.g., gs://bucket/qt-94-xxx)')
     parser.add_argument('--dry-run', action='store_true', help='Generate code but do not submit job')
     parser.add_argument('--create-quicktest', action='store_true', help='Create a QuickTest record in Django DB')
@@ -425,7 +426,7 @@ def main():
         gcs_output_path = f'gs://{ARTIFACTS_BUCKET}/{run_id}'  # Base path for MetricsCollector
     output_path = f'{gcs_output_path}/model'  # Model output subdirectory
     logger.info(f"GCS output path: {gcs_output_path}")
-    runner_script = create_runner_script(artifacts, trainer_gcs_path, output_path, gcs_output_path, args.epochs, args.learning_rate)
+    runner_script = create_runner_script(artifacts, trainer_gcs_path, output_path, gcs_output_path, args.epochs, args.learning_rate, args.gpu_count)
 
     # Upload runner script
     runner_blob_path = f'{run_id}/runner.py'
@@ -449,13 +450,16 @@ def main():
     # Submit CustomJob
     aiplatform.init(project=PROJECT_ID, location=REGION)
 
+    # Machine type depends on GPU count: n1-standard-8 for 1 GPU, n1-standard-16 for 2 GPUs
+    machine_type = 'n1-standard-16' if args.gpu_count >= 2 else 'n1-standard-8'
+
     job = aiplatform.CustomJob(
         display_name=f'services-test-{run_id}',
         worker_pool_specs=[{
             'machine_spec': {
-                'machine_type': 'n1-standard-8',
+                'machine_type': machine_type,
                 'accelerator_type': 'NVIDIA_TESLA_T4',
-                'accelerator_count': 1,
+                'accelerator_count': args.gpu_count,
             },
             'replica_count': 1,
             'container_spec': {

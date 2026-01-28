@@ -4168,12 +4168,14 @@ def _input_fn(
         rating_head_code = self._generate_rating_head_code()
 
         # Get loss function
+        # CRITICAL: Must use Reduction.SUM for distributed training (multi-GPU)
+        # Default AUTO/SUM_OVER_BATCH_SIZE is incompatible with MirroredStrategy
         loss_mapping = {
-            'mse': 'tf.keras.losses.MeanSquaredError()',
-            'binary_crossentropy': 'tf.keras.losses.BinaryCrossentropy()',
-            'huber': 'tf.keras.losses.Huber()',
+            'mse': 'tf.keras.losses.MeanSquaredError(reduction=tf.keras.losses.Reduction.SUM)',
+            'binary_crossentropy': 'tf.keras.losses.BinaryCrossentropy(reduction=tf.keras.losses.Reduction.SUM)',
+            'huber': 'tf.keras.losses.Huber(reduction=tf.keras.losses.Reduction.SUM)',
         }
-        loss_class = loss_mapping.get(self.loss_function, 'tf.keras.losses.MeanSquaredError()')
+        loss_class = loss_mapping.get(self.loss_function, 'tf.keras.losses.MeanSquaredError(reduction=tf.keras.losses.Reduction.SUM)')
 
         return f'''
 # =============================================================================
@@ -5287,12 +5289,14 @@ def _input_fn(
         rating_head_code = self._generate_rating_head_code()
 
         # Get loss function
+        # CRITICAL: Must use Reduction.SUM for distributed training (multi-GPU)
+        # Default AUTO/SUM_OVER_BATCH_SIZE is incompatible with MirroredStrategy
         loss_mapping = {
-            'mse': 'tf.keras.losses.MeanSquaredError()',
-            'binary_crossentropy': 'tf.keras.losses.BinaryCrossentropy()',
-            'huber': 'tf.keras.losses.Huber()',
+            'mse': 'tf.keras.losses.MeanSquaredError(reduction=tf.keras.losses.Reduction.SUM)',
+            'binary_crossentropy': 'tf.keras.losses.BinaryCrossentropy(reduction=tf.keras.losses.Reduction.SUM)',
+            'huber': 'tf.keras.losses.Huber(reduction=tf.keras.losses.Reduction.SUM)',
         }
-        loss_class = loss_mapping.get(self.loss_function, 'tf.keras.losses.MeanSquaredError()')
+        loss_class = loss_mapping.get(self.loss_function, 'tf.keras.losses.MeanSquaredError(reduction=tf.keras.losses.Reduction.SUM)')
 
         return f'''
 # =============================================================================

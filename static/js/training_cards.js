@@ -1509,31 +1509,37 @@ const TrainingCards = (function() {
     }
 
     async function deployRunCloudRun(runId) {
-        if (!confirm('Are you sure you want to deploy this model to Cloud Run? This will create a serverless TF Serving endpoint.')) {
-            return;
-        }
-
-        try {
-            const url = buildUrl(config.endpoints.deployCloudRun, { id: runId });
-            const response = await fetch(url, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': getCookie('csrftoken')
-                }
-            });
-
-            const data = await response.json();
-
-            if (data.success) {
-                showToast(data.message || 'Model deployed to Cloud Run', 'success');
-                loadTrainingRuns();
-            } else {
-                showToast(data.error || 'Failed to deploy model to Cloud Run', 'error');
+        // Use the DeployWizard modal instead of confirm dialog
+        if (typeof DeployWizard !== 'undefined') {
+            DeployWizard.open(runId);
+        } else {
+            // Fallback to simple confirm if DeployWizard is not available
+            if (!confirm('Are you sure you want to deploy this model to Cloud Run? This will create a serverless TF Serving endpoint.')) {
+                return;
             }
-        } catch (error) {
-            console.error('Error deploying training run to Cloud Run:', error);
-            showToast('Failed to deploy model to Cloud Run', 'error');
+
+            try {
+                const url = buildUrl(config.endpoints.deployCloudRun, { id: runId });
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCookie('csrftoken')
+                    }
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showToast(data.message || 'Model deployed to Cloud Run', 'success');
+                    loadTrainingRuns();
+                } else {
+                    showToast(data.error || 'Failed to deploy model to Cloud Run', 'error');
+                }
+            } catch (error) {
+                console.error('Error deploying training run to Cloud Run:', error);
+                showToast('Failed to deploy model to Cloud Run', 'error');
+            }
         }
     }
 

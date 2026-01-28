@@ -14,6 +14,7 @@
 <link rel="stylesheet" href="{% static 'css/models_registry.css' %}?v=2">
 <link rel="stylesheet" href="{% static 'css/schedule_calendar.css' %}?v=1">
 <link rel="stylesheet" href="{% static 'css/schedule_modal.css' %}?v=1">
+<link rel="stylesheet" href="{% static 'css/deploy_wizard.css' %}?v=1">
 <!-- Flatpickr for datetime pickers -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 <style>
@@ -1216,6 +1217,9 @@
 <!-- Schedule Modal (Reusable Component) -->
 {% include 'includes/_schedule_modal.html' %}
 
+<!-- Deploy Wizard Modal (Cloud Run Deployment) -->
+{% include 'includes/_deploy_wizard.html' %}
+
 <!-- Training Wizard Modal -->
 <div id="trainingWizardModal" class="modal-overlay hidden" onclick="if(event.target === this) TrainingWizard.close()">
     <div class="modal-container modal-container-wizard" style="max-width: 800px;">
@@ -1757,6 +1761,7 @@
 <script src="{% static 'js/pipeline_dag.js' %}?v=1"></script>
 <script src="{% static 'js/exp_view_modal.js' %}?v=2"></script>
 <script src="{% static 'js/schedule_modal.js' %}?v=1"></script>
+<script src="{% static 'js/deploy_wizard.js' %}?v=1"></script>
 <script src="{% static 'js/training_wizard.js' %}?v=3"></script>
 <script src="{% static 'js/training_cards.js' %}?v=9"></script>
 <script src="{% static 'js/schedule_calendar.js' %}?v=2"></script>
@@ -1823,6 +1828,16 @@ document.addEventListener('DOMContentLoaded', function() {
         onComplete: function() {
             TrainingCards.refresh();
             // Also refresh Models Registry when training completes
+            ModelsRegistry.refresh();
+        }
+    });
+
+    // Configure DeployWizard
+    DeployWizard.configure({
+        onSuccess: function(result) {
+            // Refresh training cards to show updated deployment status
+            TrainingCards.refresh();
+            // Also refresh Models Registry
             ModelsRegistry.refresh();
         }
     });

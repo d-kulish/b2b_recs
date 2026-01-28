@@ -1,0 +1,411 @@
+/* ============================================================================
+   DEPLOY WIZARD STYLES - B2B ML Platform
+   ============================================================================
+   Styles for the Cloud Run deployment wizard modal
+   ============================================================================ */
+
+/* Deploy Wizard Modal Overlay - Higher z-index to appear above other modals */
+#deployWizardModal.modal-overlay {
+    z-index: 150;
+}
+
+/* Deploy Wizard Modal Container */
+.deploy-wizard-modal {
+    max-width: 640px;
+    width: 100%;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+}
+
+/* Deploy Wizard Modal Header - Green gradient theme */
+.deploy-wizard-header {
+    padding: 20px 24px;
+    border-bottom: 1px solid #e5e7eb;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+    border-radius: 12px 12px 0 0;
+}
+
+.deploy-wizard-header-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    flex-shrink: 0;
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+.deploy-wizard-header-text {
+    flex: 1;
+}
+
+.deploy-wizard-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: #111827;
+    margin: 0 0 4px 0;
+}
+
+.deploy-wizard-subtitle {
+    font-size: 13px;
+    color: #065f46;
+    margin: 0;
+}
+
+/* Close button hidden - Cancel button in footer serves same purpose */
+.deploy-wizard-close {
+    display: none;
+}
+
+/* Deploy Wizard Modal Body */
+.deploy-wizard-body {
+    padding: 20px 24px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+/* Model Info Card */
+.deploy-model-info-card {
+    display: flex;
+    gap: 24px;
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin-bottom: 20px;
+}
+
+.deploy-model-info-item {
+    flex: 1;
+}
+
+.deploy-model-info-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+}
+
+.deploy-model-info-value {
+    font-size: 15px;
+    font-weight: 700;
+    color: #111827;
+}
+
+/* Section Title */
+.deploy-section-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 12px;
+}
+
+/* Preset Cards Container */
+.deploy-preset-cards {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+/* Individual Preset Card */
+.deploy-preset-card {
+    flex: 1;
+    padding: 16px;
+    border: 2px solid #e5e7eb;
+    border-radius: 12px;
+    background: white;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+    text-align: center;
+}
+
+.deploy-preset-card:hover:not(.selected) {
+    border-color: #d1d5db;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.deploy-preset-card.selected {
+    border-color: #10b981;
+    background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
+}
+
+.deploy-preset-card.selected::before {
+    content: '';
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 20px;
+    height: 20px;
+    background: #10b981;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.deploy-preset-card.selected::after {
+    content: '\f00c';
+    font-family: 'Font Awesome 6 Free';
+    font-weight: 900;
+    position: absolute;
+    top: 11px;
+    right: 13px;
+    font-size: 10px;
+    color: white;
+}
+
+.deploy-preset-name {
+    font-size: 14px;
+    font-weight: 700;
+    color: #111827;
+    margin-bottom: 4px;
+}
+
+.deploy-preset-recommended {
+    display: inline-block;
+    background: #10b981;
+    color: white;
+    font-size: 9px;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.deploy-preset-specs {
+    font-size: 12px;
+    color: #6b7280;
+    margin-bottom: 4px;
+}
+
+.deploy-preset-specs strong {
+    color: #374151;
+}
+
+.deploy-preset-use-case {
+    font-size: 11px;
+    color: #9ca3af;
+    font-style: italic;
+}
+
+/* Advanced Options Section */
+.deploy-advanced-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 16px;
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    cursor: pointer;
+    margin-bottom: 12px;
+    transition: all 0.2s ease;
+}
+
+.deploy-advanced-toggle:hover {
+    background: #f3f4f6;
+}
+
+.deploy-advanced-toggle i.fa-cog {
+    color: #6b7280;
+}
+
+.deploy-advanced-toggle-text {
+    flex: 1;
+    font-size: 13px;
+    font-weight: 600;
+    color: #374151;
+}
+
+.deploy-advanced-toggle-chevron {
+    color: #9ca3af;
+    transition: transform 0.2s ease;
+}
+
+.deploy-advanced-toggle.expanded .deploy-advanced-toggle-chevron {
+    transform: rotate(90deg);
+}
+
+/* Advanced Options Grid */
+.deploy-advanced-options {
+    display: none;
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 16px;
+    margin-bottom: 20px;
+}
+
+.deploy-advanced-options.visible {
+    display: block;
+}
+
+.deploy-options-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+}
+
+.deploy-option-field {
+    display: flex;
+    flex-direction: column;
+}
+
+.deploy-option-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    margin-bottom: 6px;
+}
+
+.deploy-option-input,
+.deploy-option-select {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    font-size: 14px;
+    color: #374151;
+    background-color: white;
+    transition: all 0.2s ease;
+}
+
+.deploy-option-input:focus,
+.deploy-option-select:focus {
+    outline: none;
+    border-color: #10b981;
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
+}
+
+/* Configuration Summary Panel */
+.deploy-config-summary {
+    background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+    border: 1px solid #bbf7d0;
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-top: 16px;
+}
+
+.deploy-config-summary-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: #166534;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.deploy-config-summary-title i {
+    color: #16a34a;
+}
+
+.deploy-config-summary-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+}
+
+.deploy-config-summary-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.deploy-config-summary-label {
+    font-size: 12px;
+    color: #166534;
+}
+
+.deploy-config-summary-value {
+    font-size: 13px;
+    font-weight: 600;
+    color: #14532d;
+}
+
+.deploy-config-summary-separator {
+    width: 1px;
+    height: 16px;
+    background: #bbf7d0;
+}
+
+/* Loading Overlay */
+.deploy-wizard-loading {
+    position: absolute;
+    inset: 0;
+    background: rgba(255, 255, 255, 0.9);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 12px;
+    z-index: 10;
+}
+
+.deploy-wizard-loading.hidden {
+    display: none;
+}
+
+.deploy-wizard-loading-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    color: #6b7280;
+    font-size: 14px;
+}
+
+.deploy-wizard-loading-content i {
+    font-size: 28px;
+    color: #10b981;
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+    .deploy-wizard-modal {
+        max-width: 100%;
+        margin: 8px;
+    }
+
+    .deploy-preset-cards {
+        flex-direction: column;
+    }
+
+    .deploy-options-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .deploy-model-info-card {
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .deploy-config-summary-grid {
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .deploy-config-summary-separator {
+        display: none;
+    }
+}

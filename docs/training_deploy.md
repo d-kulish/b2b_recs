@@ -2,7 +2,7 @@
 
 This document describes the model deployment architecture for TFRS (TensorFlow Recommenders) models trained via TFX pipelines. It covers the implementation details, configuration options, and usage instructions.
 
-**Last Updated:** 2026-01-21 (Hybrid TF Serving deployment)
+**Last Updated:** 2026-01-28 (Deploy Wizard with configurable presets)
 
 **Status:** Implemented
 
@@ -19,6 +19,7 @@ This document describes the model deployment architecture for TFRS (TensorFlow R
 9. [Troubleshooting](#troubleshooting)
 10. [ScaNN Model Serving](#scann-model-serving-retrieval-models)
 11. [Hybrid TF Serving Deployment](#hybrid-tf-serving-deployment-2026-01-21)
+12. [Deploy Wizard](#deploy-wizard-2026-01-28)
 
 ---
 
@@ -596,7 +597,7 @@ path(
 
 **File:** `static/js/training_cards.js`
 
-The "Cloud Run" button appears for completed training runs that are not yet deployed:
+The "Cloud Run" button appears for completed training runs that are not yet deployed. Clicking it opens the Deploy Wizard modal:
 
 ```javascript
 // Deploy to Cloud Run button (for completed runs with registered model)
@@ -606,6 +607,13 @@ if (allowedActions.includes('deployCloudRun') && run.status === 'completed' && !
                 onclick="event.stopPropagation(); TrainingCards.deployRunCloudRun(${run.id})"
                 title="Deploy to Cloud Run">Cloud Run</button>
     `);
+}
+
+// deployRunCloudRun now opens the Deploy Wizard
+async function deployRunCloudRun(runId) {
+    if (typeof DeployWizard !== 'undefined') {
+        DeployWizard.open(runId);
+    }
 }
 ```
 
@@ -651,8 +659,13 @@ Default values can be overridden via `training_run.deployment_config`:
 1. **Train a model** via the Training page
 2. Wait for pipeline completion (model is automatically registered)
 3. Click **"Cloud Run"** button on the training card
-4. Confirm deployment
-5. Copy the endpoint URL from the response
+4. **Deploy Wizard opens** - select a deployment preset or configure advanced options:
+   - **Development**: 0-2 instances, 2Gi memory, 1 CPU (testing, low traffic)
+   - **Production**: 1-10 instances, 4Gi memory, 2 CPU (standard workload) - *Recommended*
+   - **High Traffic**: 2-50 instances, 8Gi memory, 4 CPU (high concurrency)
+5. Optionally expand **Advanced Options** to customize min/max instances, memory, and CPU
+6. Click **Deploy** to start deployment
+7. Copy the endpoint URL from the success notification
 
 ### Making Predictions
 
@@ -2400,3 +2413,138 @@ def deploy_model(self, training_run: TrainingRun) -> TrainingRun:
     """Deploy to Vertex AI Endpoint (LEGACY - use deploy_to_cloud_run instead)"""
     ...
 ```
+
+---
+
+## Deploy Wizard (2026-01-28)
+
+This section documents the Deploy Wizard feature that replaces the previous one-click deployment with a configurable modal interface.
+
+### Overview
+
+The Deploy Wizard provides a user-friendly modal for configuring Cloud Run deployments with preset configurations (Development, Production, High Traffic) and advanced options for scaling and resources.
+
+### Files
+
+| File | Description |
+|------|-------------|
+| `templates/includes/_deploy_wizard.html` | Modal HTML template |
+| `static/js/deploy_wizard.js` | JavaScript IIFE module (~200 lines) |
+| `static/css/deploy_wizard.css` | Modal styles (~250 lines) |
+
+### Preset Configurations
+
+| Preset | Min Instances | Max Instances | Memory | CPU | Use Case |
+|--------|---------------|---------------|--------|-----|----------|
+| **Development** | 0 | 2 | 2Gi | 1 | Testing, low traffic |
+| **Production** | 1 | 10 | 4Gi | 2 | Standard workload (Recommended) |
+| **High Traffic** | 2 | 50 | 8Gi | 4 | High concurrency |
+
+### JavaScript API
+
+```javascript
+// Configure callbacks
+DeployWizard.configure({
+    onSuccess: function(result) {
+        console.log('Deployed:', result.endpoint_url);
+    },
+    onError: function(error) {
+        console.error('Deployment failed:', error);
+    }
+});
+
+// Open wizard for a training run
+DeployWizard.open(runId);
+
+// Close the wizard
+DeployWizard.close();
+
+// Select a preset programmatically
+DeployWizard.selectPreset('production'); // 'development', 'production', 'high_traffic'
+
+// Toggle advanced options visibility
+DeployWizard.toggleAdvanced();
+
+// Update individual config values
+DeployWizard.updateConfig('min_instances', 2);
+DeployWizard.updateConfig('memory', '8Gi');
+
+// Trigger deployment
+DeployWizard.deploy();
+```
+
+### API Endpoint Changes
+
+The `POST /api/training-runs/{id}/deploy-cloud-run/` endpoint now accepts an optional request body with deployment configuration:
+
+**Request:**
+```json
+POST /api/training-runs/47/deploy-cloud-run/
+{
+    "deployment_config": {
+        "min_instances": 1,
+        "max_instances": 10,
+        "memory": "4Gi",
+        "cpu": "2",
+        "timeout": "300"
+    }
+}
+```
+
+**Response:**
+```json
+{
+    "success": true,
+    "training_run": {...},
+    "endpoint_url": "https://model-serving-xxx.run.app",
+    "message": "Model deployed to Cloud Run: https://model-serving-xxx.run.app"
+}
+```
+
+The deployment config is merged with any existing config on the TrainingRun (request values take precedence) and saved before deployment.
+
+### UI Design
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│ ☁️ Deploy to Cloud Run                                          [×] │
+│    Deploying model-name to Cloud Run                                │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│  MODEL                    Training Run                              │
+│  product-recs-v3          Run #47                                   │
+│                                                                     │
+│  DEPLOYMENT PRESET                                                  │
+│  ┌─────────────┐ ┌─────────────────┐ ┌─────────────┐               │
+│  │ Development │ │ Production      │ │ High Traffic│               │
+│  │ min: 0      │ │ (Recommended)   │ │ min: 2      │               │
+│  │ max: 2      │ │ min: 1, max: 10 │ │ max: 50     │               │
+│  │ 2Gi / 1 CPU │ │ 4Gi / 2 CPU     │ │ 8Gi / 4 CPU │               │
+│  └─────────────┘ └─────────────────┘ └─────────────┘               │
+│                                                                     │
+│  ▼ Advanced Options                                                 │
+│    Min: [1]  Max: [10]  Memory: [4Gi ▼]  CPU: [2 ▼]                │
+│                                                                     │
+│  ┌─ Configuration Summary ────────────────────────────────────────┐│
+│  │ Instances: 1-10 │ Memory: 4Gi │ CPU: 2 vCPU │ Timeout: 300s    ││
+│  └────────────────────────────────────────────────────────────────┘│
+│                                                                     │
+│                                        [Cancel]  [Deploy 🚀]        │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### Integration Points
+
+1. **Training Cards** (`static/js/training_cards.js`):
+   - `deployRunCloudRun()` now calls `DeployWizard.open(runId)` instead of showing a confirm dialog
+
+2. **Model Training Page** (`templates/ml_platform/model_training.html`):
+   - Includes CSS, JS, and HTML template
+   - Configures `DeployWizard.configure()` with success callback to refresh TrainingCards and ModelsRegistry
+
+3. **API** (`ml_platform/training/api.py`):
+   - `training_run_deploy_cloud_run()` parses `deployment_config` from request body
+   - Merges with existing config and saves to TrainingRun before deployment
+
+4. **Service** (`ml_platform/training/services.py`):
+   - `deploy_to_cloud_run()` reads config from `training_run.deployment_config` (unchanged)

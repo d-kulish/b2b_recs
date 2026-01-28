@@ -1307,6 +1307,17 @@ def training_run_deploy_cloud_run(request, training_run_id):
 
     POST /api/training-runs/<id>/deploy-cloud-run/
 
+    Request body (optional):
+    {
+        "deployment_config": {
+            "min_instances": 1,
+            "max_instances": 10,
+            "memory": "4Gi",
+            "cpu": "2",
+            "timeout": "300"
+        }
+    }
+
     This deploys the model to a Cloud Run service for serverless inference.
     The model must be registered in the Model Registry first.
 
@@ -1351,6 +1362,23 @@ def training_run_deploy_cloud_run(request, training_run_id):
                 'success': False,
                 'error': "Model not registered in Model Registry. Wait for registration to complete."
             }, status=400)
+
+        # Parse deployment config from request body
+        try:
+            body = json.loads(request.body) if request.body else {}
+        except json.JSONDecodeError:
+            body = {}
+
+        deployment_config = body.get('deployment_config', {})
+
+        # Merge with existing config (request takes precedence)
+        existing_config = training_run.deployment_config or {}
+        merged_config = {**existing_config, **deployment_config}
+
+        # Update training run with new deployment config
+        if deployment_config:
+            training_run.deployment_config = merged_config
+            training_run.save(update_fields=['deployment_config'])
 
         # Deploy to Cloud Run (independent of Vertex AI endpoint deployment)
         service = TrainingService(model_endpoint)

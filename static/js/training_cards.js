@@ -1480,31 +1480,37 @@ const TrainingCards = (function() {
     }
 
     async function deployRun(runId) {
-        if (!confirm('Are you sure you want to deploy this model to a Vertex AI Endpoint? This will make the model available for serving predictions.')) {
-            return;
-        }
-
-        try {
-            const url = buildUrl(config.endpoints.deploy, { id: runId });
-            const response = await fetch(url, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': getCookie('csrftoken')
-                }
-            });
-
-            const data = await response.json();
-
-            if (data.success) {
-                showToast(data.message || 'Model deployed successfully', 'success');
-                loadTrainingRuns();
-            } else {
-                showToast(data.error || 'Failed to deploy model', 'error');
+        // Use the DeployWizard modal instead of confirm dialog
+        if (typeof DeployWizard !== 'undefined') {
+            DeployWizard.open(runId);
+        } else {
+            // Fallback to simple confirm if DeployWizard is not available
+            if (!confirm('Are you sure you want to deploy this model to a Vertex AI Endpoint? This will make the model available for serving predictions.')) {
+                return;
             }
-        } catch (error) {
-            console.error('Error deploying training run:', error);
-            showToast('Failed to deploy model', 'error');
+
+            try {
+                const url = buildUrl(config.endpoints.deploy, { id: runId });
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCookie('csrftoken')
+                    }
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showToast(data.message || 'Model deployed successfully', 'success');
+                    loadTrainingRuns();
+                } else {
+                    showToast(data.error || 'Failed to deploy model', 'error');
+                }
+            } catch (error) {
+                console.error('Error deploying training run:', error);
+                showToast('Failed to deploy model', 'error');
+            }
         }
     }
 

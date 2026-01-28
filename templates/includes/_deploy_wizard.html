@@ -33,7 +33,6 @@
             </div>
             <div class="deploy-wizard-header-text">
                 <h3 class="deploy-wizard-title">Deploy to Cloud Run</h3>
-                <p class="deploy-wizard-subtitle" id="deployWizardSubtitle">Configure deployment settings</p>
             </div>
             <button class="deploy-wizard-close" onclick="DeployWizard.close()" title="Close">
                 <i class="fas fa-times"></i>
@@ -49,56 +48,62 @@
                     <div class="deploy-model-info-value" id="deployModelName">-</div>
                 </div>
                 <div class="deploy-model-info-item">
-                    <div class="deploy-model-info-label">Training Run</div>
-                    <div class="deploy-model-info-value" id="deployRunId">-</div>
+                    <div class="deploy-model-info-label">Version</div>
+                    <div class="deploy-model-info-value" id="deployModelVersion">-</div>
                 </div>
             </div>
 
-            <!-- Deployment Preset Section -->
-            <div class="deploy-section-title">Deployment Preset</div>
-            <div class="deploy-preset-cards">
-                <!-- Development Preset -->
-                <div class="deploy-preset-card" data-preset="development" onclick="DeployWizard.selectPreset('development')">
-                    <div class="deploy-preset-name">Development</div>
-                    <div class="deploy-preset-specs">
-                        <strong>0-2</strong> instances
-                    </div>
-                    <div class="deploy-preset-specs">
-                        <strong>2Gi</strong> / <strong>1</strong> CPU
-                    </div>
-                    <div class="deploy-preset-use-case">Testing, low traffic</div>
-                </div>
+            <!-- Deployment Preset Toggle - matches subchapter-header-tablet pattern -->
+            <div class="deploy-preset-toggle expanded" id="deployPresetToggle" onclick="DeployWizard.togglePresets()">
+                <span class="deploy-preset-toggle-text"><i class="fas fa-layer-group mr-2 text-indigo-500"></i>Deployment Preset</span>
+                <i class="fas fa-chevron-right deploy-preset-toggle-chevron"></i>
+            </div>
 
-                <!-- Production Preset -->
-                <div class="deploy-preset-card selected" data-preset="production" onclick="DeployWizard.selectPreset('production')">
-                    <div class="deploy-preset-recommended">Recommended</div>
-                    <div class="deploy-preset-name">Production</div>
-                    <div class="deploy-preset-specs">
-                        <strong>1-10</strong> instances
+            <!-- Deployment Preset Panel (expanded by default) -->
+            <div class="deploy-preset-options visible" id="deployPresetOptions">
+                <div class="deploy-preset-cards">
+                    <!-- Development Preset -->
+                    <div class="deploy-preset-card" data-preset="development" onclick="DeployWizard.selectPreset('development')">
+                        <div class="deploy-preset-name">Development</div>
+                        <div class="deploy-preset-specs">
+                            <strong>0-2</strong> instances
+                        </div>
+                        <div class="deploy-preset-specs">
+                            <strong>2Gi</strong> / <strong>1</strong> CPU
+                        </div>
+                        <div class="deploy-preset-use-case">Testing, low traffic</div>
                     </div>
-                    <div class="deploy-preset-specs">
-                        <strong>4Gi</strong> / <strong>2</strong> CPU
-                    </div>
-                    <div class="deploy-preset-use-case">Standard workload</div>
-                </div>
 
-                <!-- High Traffic Preset -->
-                <div class="deploy-preset-card" data-preset="high_traffic" onclick="DeployWizard.selectPreset('high_traffic')">
-                    <div class="deploy-preset-name">High Traffic</div>
-                    <div class="deploy-preset-specs">
-                        <strong>2-50</strong> instances
+                    <!-- Production Preset -->
+                    <div class="deploy-preset-card selected" data-preset="production" onclick="DeployWizard.selectPreset('production')">
+                        <div class="deploy-preset-recommended">Recommended</div>
+                        <div class="deploy-preset-name">Production</div>
+                        <div class="deploy-preset-specs">
+                            <strong>1-10</strong> instances
+                        </div>
+                        <div class="deploy-preset-specs">
+                            <strong>4Gi</strong> / <strong>2</strong> CPU
+                        </div>
+                        <div class="deploy-preset-use-case">Standard workload</div>
                     </div>
-                    <div class="deploy-preset-specs">
-                        <strong>8Gi</strong> / <strong>4</strong> CPU
+
+                    <!-- High Traffic Preset -->
+                    <div class="deploy-preset-card" data-preset="high_traffic" onclick="DeployWizard.selectPreset('high_traffic')">
+                        <div class="deploy-preset-name">High Traffic</div>
+                        <div class="deploy-preset-specs">
+                            <strong>2-50</strong> instances
+                        </div>
+                        <div class="deploy-preset-specs">
+                            <strong>8Gi</strong> / <strong>4</strong> CPU
+                        </div>
+                        <div class="deploy-preset-use-case">High concurrency</div>
                     </div>
-                    <div class="deploy-preset-use-case">High concurrency</div>
                 </div>
             </div>
 
-            <!-- Advanced Options Toggle -->
+            <!-- Advanced Options Toggle - matches subchapter-header-tablet pattern -->
             <div class="deploy-advanced-toggle" id="deployAdvancedToggle" onclick="DeployWizard.toggleAdvanced()">
-                <i class="fas fa-cog"></i>
-                <span class="deploy-advanced-toggle-text">Advanced Options</span>
+                <span class="deploy-advanced-toggle-text"><i class="fas fa-cog mr-2 text-green-500"></i>Advanced Options</span>
                 <i class="fas fa-chevron-right deploy-advanced-toggle-chevron"></i>
             </div>
 
@@ -138,13 +143,25 @@
                             <option value="8">8 vCPU</option>
                         </select>
                     </div>
+                    <div class="deploy-option-field">
+                        <label class="deploy-option-label" for="deployTimeout">Timeout</label>
+                        <select id="deployTimeout" class="deploy-option-select"
+                                onchange="DeployWizard.updateConfig('timeout', this.value)">
+                            <option value="100">100 s</option>
+                            <option value="200">200 s</option>
+                            <option value="300" selected>300 s</option>
+                            <option value="400">400 s</option>
+                            <option value="500">500 s</option>
+                            <option value="600">600 s</option>
+                        </select>
+                    </div>
                 </div>
             </div>
 
             <!-- Configuration Summary -->
             <div class="deploy-config-summary" id="deployConfigSummary">
                 <div class="deploy-config-summary-title">
-                    <i class="fas fa-clipboard-check"></i> Configuration Summary
+                    <i class="fas fa-clipboard-check text-purple-500"></i> Configuration Summary
                 </div>
                 <div class="deploy-config-summary-grid">
                     <div class="deploy-config-summary-item">
@@ -175,7 +192,7 @@
             <div class="footer-left"></div>
             <div class="footer-right">
                 <button class="btn-neu btn-neu-action btn-neu-save" id="deployWizardDeployBtn" onclick="DeployWizard.deploy()">
-                    <span class="btn-neu-inner"><i class="fas fa-rocket" style="margin-right: 6px;"></i>Deploy</span>
+                    <span class="btn-neu-inner">Deploy</span>
                 </button>
                 <button class="btn-neu btn-neu-action btn-neu-cancel" onclick="DeployWizard.close()">
                     <span class="btn-neu-inner">Cancel</span>

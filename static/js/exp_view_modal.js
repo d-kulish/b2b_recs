@@ -864,6 +864,13 @@ const ExpViewModal = (function() {
     }
 
     async function deployTrainingRun(runId) {
+        // Use the DeployWizard modal instead of confirm dialog
+        if (typeof DeployWizard !== 'undefined') {
+            DeployWizard.open(runId);
+            return;
+        }
+
+        // Fallback to simple confirm if DeployWizard is not available
         if (!confirm('Are you sure you want to deploy this model to a Vertex AI Endpoint?')) return;
 
         try {
@@ -890,6 +897,13 @@ const ExpViewModal = (function() {
     }
 
     async function deployToCloudRun(runId) {
+        // Use the DeployWizard modal instead of confirm dialog
+        if (typeof DeployWizard !== 'undefined') {
+            DeployWizard.open(runId);
+            return;
+        }
+
+        // Fallback to simple confirm if DeployWizard is not available
         if (!confirm('Are you sure you want to deploy this model to Cloud Run? This will create a serverless TF Serving endpoint.')) return;
 
         try {
@@ -1895,6 +1909,13 @@ const ExpViewModal = (function() {
     }
 
     async function deployModel(modelId) {
+        // Use the DeployWizard modal instead of confirm dialog
+        if (typeof DeployWizard !== 'undefined') {
+            DeployWizard.open(modelId);
+            return;
+        }
+
+        // Fallback to simple confirm if DeployWizard is not available
         if (!confirm('Are you sure you want to deploy this model?')) return;
 
         try {

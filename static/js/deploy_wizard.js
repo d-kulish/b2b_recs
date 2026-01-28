@@ -65,6 +65,7 @@ const DeployWizard = (function() {
         trainingRunId: null,
         trainingRunData: null,
         selectedPreset: 'production',
+        presetsExpanded: true,
         advancedExpanded: false,
         deploymentConfig: {
             min_instances: 1,
@@ -205,10 +206,9 @@ const DeployWizard = (function() {
             const modelName = data.training_run.vertex_model_name ||
                               data.training_run.display_name ||
                               '-';
+            const modelVersion = data.training_run.vertex_model_version || '-';
             document.getElementById('deployModelName').textContent = modelName;
-            document.getElementById('deployRunId').textContent = `Run #${runId}`;
-            document.getElementById('deployWizardSubtitle').textContent =
-                `Deploying ${modelName} to Cloud Run`;
+            document.getElementById('deployModelVersion').textContent = modelVersion;
 
         } catch (error) {
             console.error('Error loading training run:', error);
@@ -254,6 +254,21 @@ const DeployWizard = (function() {
         document.getElementById('deployMaxInstances').value = preset.max_instances;
         document.getElementById('deployMemory').value = preset.memory;
         document.getElementById('deployCpu').value = preset.cpu;
+        document.getElementById('deployTimeout').value = preset.timeout;
+    }
+
+    // =============================================================================
+    // PRESETS TOGGLE
+    // =============================================================================
+
+    function togglePresets() {
+        state.presetsExpanded = !state.presetsExpanded;
+
+        const toggle = document.getElementById('deployPresetToggle');
+        const options = document.getElementById('deployPresetOptions');
+
+        toggle.classList.toggle('expanded', state.presetsExpanded);
+        options.classList.toggle('visible', state.presetsExpanded);
     }
 
     // =============================================================================
@@ -369,6 +384,7 @@ const DeployWizard = (function() {
         close: close,
         handleOverlayClick: handleOverlayClick,
         selectPreset: selectPreset,
+        togglePresets: togglePresets,
         toggleAdvanced: toggleAdvanced,
         updateConfig: updateConfig,
         deploy: deploy,

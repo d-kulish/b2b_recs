@@ -13,35 +13,36 @@
 .deploy-wizard-modal {
     max-width: 640px;
     width: 100%;
+    height: 580px;
     max-height: 85vh;
     display: flex;
     flex-direction: column;
     position: relative;
 }
 
-/* Deploy Wizard Modal Header - Green gradient theme */
+/* Deploy Wizard Modal Header - Soft teal gradient theme */
 .deploy-wizard-header {
-    padding: 20px 24px;
+    padding: 18px 24px;
     border-bottom: 1px solid #e5e7eb;
     display: flex;
     align-items: center;
     gap: 14px;
-    background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+    background: linear-gradient(135deg, #f0fdfa 0%, #e0f2fe 100%);
     border-radius: 12px 12px 0 0;
 }
 
 .deploy-wizard-header-icon {
-    width: 48px;
-    height: 48px;
-    border-radius: 12px;
-    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #0d9488 0%, #0891b2 100%);
     color: white;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 20px;
+    font-size: 18px;
     flex-shrink: 0;
-    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+    box-shadow: 0 3px 10px rgba(13, 148, 136, 0.25);
 }
 
 .deploy-wizard-header-text {
@@ -57,7 +58,7 @@
 
 .deploy-wizard-subtitle {
     font-size: 13px;
-    color: #065f46;
+    color: #0f766e;
     margin: 0;
 }
 
@@ -76,25 +77,26 @@
 /* Model Info Card */
 .deploy-model-info-card {
     display: flex;
-    gap: 24px;
+    gap: 32px;
     background: #ffffff;
     border: 1px solid #e5e7eb;
     border-radius: 10px;
-    padding: 16px 20px;
+    padding: 12px 20px;
     margin-bottom: 20px;
 }
 
 .deploy-model-info-item {
-    flex: 1;
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
 }
 
 .deploy-model-info-label {
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 600;
     color: #6b7280;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    margin-bottom: 4px;
 }
 
 .deploy-model-info-value {
@@ -103,29 +105,77 @@
     color: #111827;
 }
 
-/* Section Title */
+/* Section Title - unified with Configuration Summary */
 .deploy-section-title {
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 600;
     color: #6b7280;
     text-transform: uppercase;
     letter-spacing: 0.5px;
+    margin-bottom: 10px;
+}
+
+/* Deployment Preset Toggle - matches subchapter-header-tablet style */
+.deploy-preset-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 20px;
+    background: #fff;
+    border: 1px solid #000;
+    border-radius: 8px;
+    cursor: pointer;
     margin-bottom: 12px;
+    transition: background-color 0.15s ease;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.deploy-preset-toggle:hover {
+    background: #fafafa;
+}
+
+.deploy-preset-toggle-text {
+    flex: 1;
+    font-size: 15px;
+    font-weight: 600;
+    color: #111;
+}
+
+.deploy-preset-toggle-chevron {
+    color: #000;
+    font-size: 14px;
+    width: 16px;
+    text-align: center;
+    transition: transform 0.2s ease;
+}
+
+.deploy-preset-toggle.expanded .deploy-preset-toggle-chevron {
+    transform: rotate(90deg);
+}
+
+/* Deployment Preset Options Panel */
+.deploy-preset-options {
+    display: none;
+    padding: 0 0 8px 0;
+}
+
+.deploy-preset-options.visible {
+    display: block;
 }
 
 /* Preset Cards Container */
 .deploy-preset-cards {
     display: flex;
-    gap: 12px;
-    margin-bottom: 20px;
+    gap: 10px;
+    margin-bottom: 16px;
 }
 
-/* Individual Preset Card */
+/* Individual Preset Card - Compact */
 .deploy-preset-card {
     flex: 1;
-    padding: 16px;
-    border: 2px solid #e5e7eb;
-    border-radius: 12px;
+    padding: 10px 12px;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
     background: white;
     cursor: pointer;
     transition: all 0.2s ease;
@@ -135,27 +185,24 @@
 
 .deploy-preset-card:hover:not(.selected) {
     border-color: #d1d5db;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    background: #fafafa;
 }
 
 .deploy-preset-card.selected {
-    border-color: #10b981;
-    background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
-    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
+    border-color: #6366f1;
+    background: #f5f5ff;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
 }
 
 .deploy-preset-card.selected::before {
     content: '';
     position: absolute;
-    top: 8px;
-    right: 8px;
-    width: 20px;
-    height: 20px;
-    background: #10b981;
+    top: 6px;
+    right: 6px;
+    width: 16px;
+    height: 16px;
+    background: #6366f1;
     border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
 }
 
 .deploy-preset-card.selected::after {
@@ -163,36 +210,37 @@
     font-family: 'Font Awesome 6 Free';
     font-weight: 900;
     position: absolute;
-    top: 11px;
-    right: 13px;
-    font-size: 10px;
+    top: 8px;
+    right: 10px;
+    font-size: 8px;
     color: white;
 }
 
 .deploy-preset-name {
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 700;
     color: #111827;
-    margin-bottom: 4px;
+    margin-bottom: 2px;
 }
 
 .deploy-preset-recommended {
     display: inline-block;
-    background: #10b981;
+    background: #6366f1;
     color: white;
-    font-size: 9px;
+    font-size: 8px;
     font-weight: 600;
-    padding: 2px 6px;
-    border-radius: 4px;
-    margin-bottom: 8px;
+    padding: 2px 5px;
+    border-radius: 3px;
+    margin-bottom: 4px;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.3px;
 }
 
 .deploy-preset-specs {
-    font-size: 12px;
+    font-size: 11px;
     color: #6b7280;
-    margin-bottom: 4px;
+    margin-bottom: 2px;
+    line-height: 1.4;
 }
 
 .deploy-preset-specs strong {
@@ -200,42 +248,42 @@
 }
 
 .deploy-preset-use-case {
-    font-size: 11px;
+    font-size: 10px;
     color: #9ca3af;
     font-style: italic;
 }
 
-/* Advanced Options Section */
+/* Advanced Options Section - matches subchapter-header-tablet style */
 .deploy-advanced-toggle {
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 12px 16px;
-    background: #f9fafb;
-    border: 1px solid #e5e7eb;
-    border-radius: 10px;
+    padding: 14px 20px;
+    background: #fff;
+    border: 1px solid #000;
+    border-radius: 8px;
     cursor: pointer;
     margin-bottom: 12px;
-    transition: all 0.2s ease;
+    transition: background-color 0.15s ease;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 .deploy-advanced-toggle:hover {
-    background: #f3f4f6;
-}
-
-.deploy-advanced-toggle i.fa-cog {
-    color: #6b7280;
+    background: #fafafa;
 }
 
 .deploy-advanced-toggle-text {
     flex: 1;
-    font-size: 13px;
+    font-size: 15px;
     font-weight: 600;
-    color: #374151;
+    color: #111;
 }
 
 .deploy-advanced-toggle-chevron {
-    color: #9ca3af;
+    color: #000;
+    font-size: 14px;
+    width: 16px;
+    text-align: center;
     transition: transform 0.2s ease;
 }
 
@@ -246,10 +294,7 @@
 /* Advanced Options Grid */
 .deploy-advanced-options {
     display: none;
-    background: #f9fafb;
-    border: 1px solid #e5e7eb;
-    border-radius: 10px;
-    padding: 16px;
+    padding: 16px 0;
     margin-bottom: 20px;
 }
 
@@ -259,7 +304,7 @@
 
 .deploy-options-grid {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(5, 1fr);
     gap: 12px;
 }
 
@@ -280,74 +325,76 @@
 .deploy-option-input,
 .deploy-option-select {
     width: 100%;
-    padding: 10px 12px;
+    height: 42px;
+    padding: 0 12px;
     border: 1px solid #d1d5db;
     border-radius: 8px;
     font-size: 14px;
     color: #374151;
     background-color: white;
+    box-sizing: border-box;
     transition: all 0.2s ease;
 }
 
 .deploy-option-input:focus,
 .deploy-option-select:focus {
     outline: none;
-    border-color: #10b981;
-    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
+    border-color: #6366f1;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
 }
 
-/* Configuration Summary Panel */
+/* Configuration Summary Panel - matches header style */
 .deploy-config-summary {
-    background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
-    border: 1px solid #bbf7d0;
-    border-radius: 10px;
-    padding: 14px 16px;
-    margin-top: 16px;
+    padding: 14px 20px;
+    margin-top: 12px;
+    background: #fff;
+    border: 1px solid #000;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 .deploy-config-summary-title {
-    font-size: 11px;
+    font-size: 15px;
     font-weight: 600;
-    color: #166534;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-bottom: 10px;
+    color: #111;
+    margin-bottom: 12px;
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
 }
 
 .deploy-config-summary-title i {
-    color: #16a34a;
+    color: #8b5cf6;
 }
 
 .deploy-config-summary-grid {
     display: flex;
-    flex-wrap: wrap;
+    justify-content: space-between;
     gap: 16px;
 }
 
 .deploy-config-summary-item {
     display: flex;
+    flex-direction: column;
     align-items: center;
-    gap: 6px;
+    flex: 1;
+    text-align: center;
 }
 
 .deploy-config-summary-label {
-    font-size: 12px;
-    color: #166534;
+    font-size: 11px;
+    color: #6b7280;
+    margin-bottom: 2px;
 }
 
 .deploy-config-summary-value {
-    font-size: 13px;
-    font-weight: 600;
-    color: #14532d;
+    font-size: 14px;
+    font-weight: 700;
+    color: #111;
 }
 
 .deploy-config-summary-separator {
-    width: 1px;
-    height: 16px;
-    background: #bbf7d0;
+    display: none;
 }
 
 /* Loading Overlay */

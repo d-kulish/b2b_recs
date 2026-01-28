@@ -613,8 +613,14 @@ const ModelsRegistry = (function() {
     }
 
     function deploy(modelId) {
-        if (confirm('Are you sure you want to deploy this model?')) {
-            deployModel(modelId);
+        // Use the DeployWizard modal instead of confirm dialog
+        if (typeof DeployWizard !== 'undefined') {
+            DeployWizard.open(modelId);
+        } else {
+            // Fallback to simple confirm if DeployWizard is not available
+            if (confirm('Are you sure you want to deploy this model?')) {
+                deployModel(modelId);
+            }
         }
     }
 

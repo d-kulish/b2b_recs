@@ -855,3 +855,67 @@ class TrainingRun(models.Model):
             return int((self.completed_at - self.started_at).total_seconds())
         from django.utils import timezone
         return int((timezone.now() - self.started_at).total_seconds())
+
+
+class DeployedEndpoint(models.Model):
+    """
+    Tracks Cloud Run endpoints owned by registered models.
+
+    Ensures users can only deploy new model versions to endpoints
+    that were previously created for the same model.
+    """
+
+    registered_model = models.ForeignKey(
+        'RegisteredModel',
+        on_delete=models.CASCADE,
+        related_name='deployed_endpoints',
+        help_text="Model this endpoint belongs to"
+    )
+
+    service_name = models.CharField(
+        max_length=63,
+        unique=True,
+        help_text="Cloud Run service name (unique across project)"
+    )
+
+    service_url = models.URLField(
+        blank=True,
+        help_text="Cloud Run service URL"
+    )
+
+    deployed_version = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Currently deployed model version"
+    )
+
+    deployed_training_run = models.ForeignKey(
+        'TrainingRun',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='deployments',
+        help_text="Training run currently deployed to this endpoint"
+    )
+
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Whether endpoint exists and is active"
+    )
+
+    deployment_config = models.JSONField(
+        default=dict,
+        help_text="Last deployment configuration (instances, memory, cpu, etc.)"
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        app_label = 'training'
+        ordering = ['-updated_at']
+        verbose_name = 'Deployed Endpoint'
+        verbose_name_plural = 'Deployed Endpoints'
+
+    def __str__(self):
+        return f"{self.service_name} ({self.registered_model.model_name})"

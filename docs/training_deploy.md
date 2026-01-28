@@ -2,7 +2,7 @@
 
 This document describes the model deployment architecture for TFRS (TensorFlow Recommenders) models trained via TFX pipelines. It covers the implementation details, configuration options, and usage instructions.
 
-**Last Updated:** 2026-01-28 (Deploy Wizard with Endpoint Selection)
+**Last Updated:** 2026-01-28 (Model-Scoped Endpoint Tracking)
 
 **Status:** Implemented
 
@@ -20,6 +20,7 @@ This document describes the model deployment architecture for TFRS (TensorFlow R
 10. [ScaNN Model Serving](#scann-model-serving-retrieval-models)
 11. [Hybrid TF Serving Deployment](#hybrid-tf-serving-deployment-2026-01-21)
 12. [Deploy Wizard](#deploy-wizard-2026-01-28)
+13. [Model-Scoped Endpoint Tracking](#model-scoped-endpoint-tracking-2026-01-28)
 
 ---
 
@@ -2621,4 +2622,119 @@ The deployment config is merged with any existing config on the TrainingRun (req
    - `deploy_to_cloud_run(training_run, service_name=None)` - Accepts optional custom service name
 
 5. **URL Routes** (`ml_platform/training/urls.py`):
-   - `api/cloud-run/services/` - GET endpoint for listing services
+   - `api/cloud-run/services/` - GET endpoint for listing services (deprecated for endpoint selection)
+   - `api/registered-models/<id>/endpoints/` - GET endpoint for model-scoped endpoints
+
+### Model-Scoped Endpoint Tracking (2026-01-28)
+
+The Deploy Wizard now tracks endpoint ownership at the **RegisteredModel** level, preventing users from accidentally deploying models to unrelated Cloud Run services.
+
+#### Problem Solved
+
+Previously, the "Update Existing Endpoint" dropdown showed **all** Cloud Run services in the GCP project, including unrelated services like `django-app`, `tfdv-parser`, etc. This created a risk of accidentally overwriting production services with ML models.
+
+#### Solution: DeployedEndpoint Model
+
+A new Django model tracks which endpoints belong to which registered models:
+
+```python
+class DeployedEndpoint(models.Model):
+    """Tracks Cloud Run endpoints owned by registered models."""
+
+    registered_model = models.ForeignKey('RegisteredModel', on_delete=models.CASCADE)
+    service_name = models.CharField(max_length=63, unique=True)
+    service_url = models.URLField(blank=True)
+    deployed_version = models.CharField(max_length=100, blank=True)
+    deployed_training_run = models.ForeignKey('TrainingRun', null=True, on_delete=models.SET_NULL)
+    is_active = models.BooleanField(default=True)
+    deployment_config = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+```
+
+#### Endpoint Selection Behavior
+
+| Scenario | "Update Existing Endpoint" Option |
+|----------|-----------------------------------|
+| First deployment for a model | **Disabled** - only "Create New Endpoint" available |
+| Model has existing endpoints | **Enabled** - shows only endpoints belonging to this model |
+
+#### API Endpoint
+
+`GET /api/registered-models/<id>/endpoints/`
+
+Returns only endpoints belonging to the specified registered model:
+
+```json
+{
+    "success": true,
+    "endpoints": [
+        {
+            "id": 1,
+            "service_name": "chern-retriv-serving",
+            "service_url": "https://chern-retriv-serving-xxx.run.app",
+            "deployed_version": "v2",
+            "deployed_training_run_id": 15,
+            "is_active": true,
+            "updated_at": "2026-01-28T12:30:00Z"
+        }
+    ]
+}
+```
+
+#### Deployment Flow
+
+```
+User clicks Deploy
+    │
+    ├─► Load training run (includes registered_model_id)
+    │
+    ├─► Fetch model-scoped endpoints:
+    │   GET /api/registered-models/{id}/endpoints/
+    │
+    ├─► If no endpoints exist:
+    │       • Disable "Update Existing Endpoint"
+    │       • Show: "No existing endpoints for this model"
+    │       • Force "Create New Endpoint" mode
+    │
+    └─► If endpoints exist:
+            • Enable "Update Existing Endpoint"
+            • Populate dropdown with model-specific endpoints only
+    │
+    ▼
+User clicks Deploy
+    │
+    └─► POST /api/training-runs/{id}/deploy-cloud-run/
+            │
+            └─► TrainingService.deploy_to_cloud_run()
+                    │
+                    └─► Create/Update DeployedEndpoint record
+                        (ties service_name to registered_model)
+```
+
+#### Files Modified
+
+| File | Change |
+|------|--------|
+| `ml_platform/training/models.py` | Added `DeployedEndpoint` model |
+| `ml_platform/training/migrations/0010_add_deployed_endpoint.py` | Migration for new model |
+| `ml_platform/training/api.py` | Added `registered_model_endpoints()` API |
+| `ml_platform/training/urls.py` | Added URL route for endpoints API |
+| `ml_platform/training/services.py` | Updated `deploy_to_cloud_run()` to create `DeployedEndpoint` records |
+| `static/js/deploy_wizard.js` | Updated to fetch model-scoped endpoints, added visibility control |
+| `templates/includes/_deploy_wizard.html` | Added "No endpoints" message UI |
+| `static/css/deploy_wizard.css` | Styles for disabled state and no-endpoints message |
+
+#### Migration
+
+Apply the migration to create the `DeployedEndpoint` table:
+
+```bash
+python manage.py migrate training
+```
+
+#### Backward Compatibility
+
+Existing deployments created before this feature will not have `DeployedEndpoint` records. Users can:
+1. Deploy a new version to create the tracking record, or
+2. The system will create a record on the next deployment to that service name

@@ -1925,6 +1925,31 @@ class TrainingService:
                 f"Deployed {training_run.display_name} to Cloud Run: {service_url}"
             )
 
+            # Record the endpoint in the database for model-scoped tracking
+            if training_run.registered_model:
+                from .models import DeployedEndpoint
+
+                endpoint, created = DeployedEndpoint.objects.update_or_create(
+                    service_name=service_name,
+                    defaults={
+                        'registered_model': training_run.registered_model,
+                        'service_url': service_url,
+                        'deployed_version': training_run.vertex_model_version or str(training_run.run_number),
+                        'deployed_training_run': training_run,
+                        'is_active': True,
+                        'deployment_config': {
+                            'min_instances': min_instances,
+                            'max_instances': max_instances,
+                            'memory': memory,
+                            'cpu': cpu,
+                            'timeout': timeout,
+                        }
+                    }
+                )
+                logger.info(
+                    f"{'Created' if created else 'Updated'} DeployedEndpoint record for {service_name}"
+                )
+
             return service_url
 
         except subprocess.TimeoutExpired:

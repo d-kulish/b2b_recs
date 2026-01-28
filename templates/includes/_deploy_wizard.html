@@ -93,14 +93,19 @@
                         <div class="deploy-endpoint-option-title">Update Existing Endpoint</div>
                     </div>
                     <div class="deploy-endpoint-option-content">
+                        <!-- No endpoints message -->
+                        <div class="deploy-no-endpoints-msg hidden" id="deployNoEndpointsMsg">
+                            <i class="fas fa-info-circle"></i>
+                            <span>No existing endpoints for this model. Deploy first to create one.</span>
+                        </div>
                         <div class="deploy-services-container" id="deployServicesContainer">
                             <select id="deployServicesSelect" class="deploy-services-select"
                                     onchange="DeployWizard.selectExistingService(this.value)"
                                     onclick="event.stopPropagation()">
-                                <option value="">Select a service...</option>
+                                <option value="">Select an endpoint...</option>
                             </select>
                             <div class="deploy-services-loading hidden" id="deployServicesLoading">
-                                <i class="fas fa-spinner fa-spin"></i> Loading services...
+                                <i class="fas fa-spinner fa-spin"></i> Loading endpoints...
                             </div>
                         </div>
                         <div class="deploy-service-warning hidden" id="deployServiceWarning">

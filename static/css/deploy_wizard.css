@@ -370,6 +370,37 @@
     flex-shrink: 0;
 }
 
+/* Disabled endpoint option */
+.deploy-endpoint-option.disabled {
+    opacity: 0.6;
+    pointer-events: none;
+    cursor: not-allowed;
+}
+
+.deploy-endpoint-option.disabled .deploy-endpoint-option-radio {
+    border-color: #ccc;
+}
+
+/* No endpoints message */
+.deploy-no-endpoints-msg {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px;
+    background: #f0f9ff;
+    border-radius: 6px;
+    font-size: 13px;
+    color: #0369a1;
+}
+
+.deploy-no-endpoints-msg.hidden {
+    display: none;
+}
+
+.deploy-no-endpoints-msg i {
+    flex-shrink: 0;
+}
+
 /* =============================================================================
    CONFIGURATION SUMMARY BADGE
    ============================================================================= */

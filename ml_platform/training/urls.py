@@ -200,6 +200,11 @@ urlpatterns = [
         api.registered_model_versions,
         name='registered_model_versions'
     ),
+    path(
+        'api/registered-models/<int:registered_model_id>/endpoints/',
+        api.registered_model_endpoints,
+        name='registered_model_endpoints'
+    ),
 
     # ==========================================================================
     # Models Registry API endpoints

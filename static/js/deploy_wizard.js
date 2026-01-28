@@ -65,6 +65,7 @@ const DeployWizard = (function() {
     let state = {
         trainingRunId: null,
         trainingRunData: null,
+        registeredModelId: null,
         selectedPreset: 'production',
         presetsExpanded: true,
         advancedExpanded: false,
@@ -239,6 +240,7 @@ const DeployWizard = (function() {
             }
 
             state.trainingRunData = data.training_run;
+            state.registeredModelId = data.training_run.registered_model_id || null;
 
             // Update UI with model info
             const modelName = data.training_run.vertex_model_name ||
@@ -251,6 +253,9 @@ const DeployWizard = (function() {
             // Update auto-generated service name preview
             const autoServiceName = generateServiceName(modelName);
             document.getElementById('deployAutoServiceName').textContent = autoServiceName;
+
+            // Load model-scoped endpoints
+            loadExistingServices();
 
         } catch (error) {
             console.error('Error loading training run:', error);
@@ -347,6 +352,11 @@ const DeployWizard = (function() {
     }
 
     function selectEndpointMode(mode) {
+        // Prevent selecting 'existing' mode if no endpoints available
+        if (mode === 'existing' && state.availableServices.length === 0) {
+            return;
+        }
+
         state.endpointMode = mode;
 
         // Update visual selection
@@ -406,6 +416,14 @@ const DeployWizard = (function() {
     async function loadExistingServices() {
         if (state.servicesLoading) return;
 
+        // If no registered model, can't load endpoints
+        if (!state.registeredModelId) {
+            state.availableServices = [];
+            state.servicesLoaded = true;
+            updateEndpointOptionsVisibility();
+            return;
+        }
+
         state.servicesLoading = true;
         const loadingEl = document.getElementById('deployServicesLoading');
         const selectEl = document.getElementById('deployServicesSelect');
@@ -414,40 +432,53 @@ const DeployWizard = (function() {
         selectEl.disabled = true;
 
         try {
-            const response = await fetch(config.endpoints.cloudRunServices);
+            // Use model-scoped endpoint instead of global services list
+            const response = await fetch(`/api/registered-models/${state.registeredModelId}/endpoints/`);
             const data = await response.json();
 
             if (data.success) {
-                state.availableServices = data.services || [];
+                state.availableServices = data.endpoints || [];
                 state.servicesLoaded = true;
 
                 // Populate dropdown
-                selectEl.innerHTML = '<option value="">Select a service...</option>';
-                state.availableServices.forEach(svc => {
+                selectEl.innerHTML = '<option value="">Select an endpoint...</option>';
+                state.availableServices.forEach(ep => {
                     const option = document.createElement('option');
-                    option.value = svc.name;
-                    option.textContent = svc.is_ml_serving
-                        ? `${svc.name} (ML Serving)`
-                        : svc.name;
+                    option.value = ep.service_name;
+                    option.textContent = `${ep.service_name} (v${ep.deployed_version})`;
                     selectEl.appendChild(option);
                 });
-
-                if (state.availableServices.length === 0) {
-                    const option = document.createElement('option');
-                    option.value = '';
-                    option.textContent = 'No services found';
-                    option.disabled = true;
-                    selectEl.appendChild(option);
-                }
             } else {
-                console.error('Failed to load services:', data.error);
+                console.error('Failed to load endpoints:', data.error);
+                state.availableServices = [];
             }
         } catch (error) {
-            console.error('Error loading services:', error);
+            console.error('Error loading endpoints:', error);
+            state.availableServices = [];
         } finally {
             state.servicesLoading = false;
             loadingEl.classList.add('hidden');
             selectEl.disabled = false;
+            updateEndpointOptionsVisibility();
+        }
+    }
+
+    function updateEndpointOptionsVisibility() {
+        const existingOption = document.querySelector('.deploy-endpoint-option[data-mode="existing"]');
+        const noEndpointsMsg = document.getElementById('deployNoEndpointsMsg');
+
+        if (state.availableServices.length === 0) {
+            // No endpoints for this model - disable "Update Existing" option
+            if (existingOption) existingOption.classList.add('disabled');
+            if (noEndpointsMsg) noEndpointsMsg.classList.remove('hidden');
+
+            // Force selection to "new" if currently on "existing"
+            if (state.endpointMode === 'existing') {
+                selectEndpointMode('new');
+            }
+        } else {
+            if (existingOption) existingOption.classList.remove('disabled');
+            if (noEndpointsMsg) noEndpointsMsg.classList.add('hidden');
         }
     }
 

@@ -66,6 +66,7 @@ def _serialize_training_run(training_run, include_details=False, deployed_models
         'retrieval_algorithm': training_run.model_config.retrieval_algorithm if training_run.model_config else None,
         'base_experiment_number': training_run.base_experiment.experiment_number if training_run.base_experiment else None,
         'is_scheduled': training_run.schedule_id is not None,
+        'registered_model_id': training_run.registered_model_id,
 
         # Type and status
         'model_type': training_run.model_type,
@@ -1454,6 +1455,42 @@ def training_run_deploy_cloud_run(request, training_run_id):
             'success': False,
             'error': str(e)
         }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def registered_model_endpoints(request, registered_model_id):
+    """
+    GET /api/registered-models/<id>/endpoints/
+
+    List Cloud Run endpoints associated with a registered model.
+    """
+    from .models import DeployedEndpoint
+
+    try:
+        registered_model = RegisteredModel.objects.get(id=registered_model_id)
+    except RegisteredModel.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Model not found'}, status=404)
+
+    endpoints = DeployedEndpoint.objects.filter(
+        registered_model=registered_model,
+        is_active=True
+    ).order_by('-updated_at')
+
+    return JsonResponse({
+        'success': True,
+        'endpoints': [
+            {
+                'id': ep.id,
+                'service_name': ep.service_name,
+                'service_url': ep.service_url,
+                'deployed_version': ep.deployed_version,
+                'deployed_training_run_id': ep.deployed_training_run_id,
+                'updated_at': ep.updated_at.isoformat(),
+            }
+            for ep in endpoints
+        ]
+    })
 
 
 # =============================================================================
@@ -3712,6 +3749,63 @@ def registered_model_versions(request, registered_model_id):
 
     except Exception as e:
         logger.exception(f"Error getting registered model versions: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def registered_model_endpoints(request, registered_model_id):
+    """
+    GET /api/registered-models/<id>/endpoints/
+
+    List Cloud Run endpoints associated with a registered model.
+    """
+    from .models import RegisteredModel, DeployedEndpoint
+
+    try:
+        model_endpoint = _get_model_endpoint(request)
+        if not model_endpoint:
+            return JsonResponse({
+                'success': False,
+                'error': 'No model endpoint selected'
+            }, status=400)
+
+        try:
+            registered_model = RegisteredModel.objects.get(
+                id=registered_model_id,
+                ml_model=model_endpoint
+            )
+        except RegisteredModel.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': 'Model not found'
+            }, status=404)
+
+        endpoints = DeployedEndpoint.objects.filter(
+            registered_model=registered_model,
+            is_active=True
+        ).order_by('-updated_at')
+
+        return JsonResponse({
+            'success': True,
+            'endpoints': [
+                {
+                    'id': ep.id,
+                    'service_name': ep.service_name,
+                    'service_url': ep.service_url,
+                    'deployed_version': ep.deployed_version,
+                    'deployed_training_run_id': ep.deployed_training_run_id,
+                    'updated_at': ep.updated_at.isoformat(),
+                }
+                for ep in endpoints
+            ]
+        })
+
+    except Exception as e:
+        logger.exception(f"Error getting registered model endpoints: {e}")
         return JsonResponse({
             'success': False,
             'error': str(e)

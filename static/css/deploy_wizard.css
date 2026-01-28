@@ -13,7 +13,7 @@
 .deploy-wizard-modal {
     max-width: 640px;
     width: 100%;
-    height: 580px;
+    height: 680px;
     max-height: 85vh;
     display: flex;
     flex-direction: column;
@@ -103,6 +103,310 @@
     font-size: 15px;
     font-weight: 700;
     color: #111827;
+}
+
+/* =============================================================================
+   ENDPOINT SELECTION SECTION
+   ============================================================================= */
+
+/* Endpoint Selection Toggle - matches subchapter-header-tablet style */
+.deploy-endpoint-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 20px;
+    background: #fff;
+    border: 1px solid #000;
+    border-radius: 8px;
+    cursor: pointer;
+    margin-bottom: 12px;
+    transition: background-color 0.15s ease;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.deploy-endpoint-toggle:hover {
+    background: #fafafa;
+}
+
+.deploy-endpoint-toggle-text {
+    flex: 1;
+    font-size: 15px;
+    font-weight: 600;
+    color: #111;
+}
+
+.deploy-endpoint-toggle-chevron {
+    color: #000;
+    font-size: 14px;
+    width: 16px;
+    text-align: center;
+    transition: transform 0.2s ease;
+}
+
+.deploy-endpoint-toggle.expanded .deploy-endpoint-toggle-chevron {
+    transform: rotate(90deg);
+}
+
+/* Endpoint Selection Options Panel */
+.deploy-endpoint-options {
+    display: none;
+    padding: 0 0 12px 0;
+}
+
+.deploy-endpoint-options.visible {
+    display: block;
+}
+
+/* Endpoint Option Cards */
+.deploy-endpoint-option {
+    padding: 12px 16px;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    background: white;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    margin-bottom: 10px;
+}
+
+.deploy-endpoint-option:last-child {
+    margin-bottom: 0;
+}
+
+.deploy-endpoint-option:hover:not(.selected) {
+    border-color: #d1d5db;
+    background: #fafafa;
+}
+
+.deploy-endpoint-option.selected {
+    border-color: #3b82f6;
+    background: #eff6ff;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+}
+
+.deploy-endpoint-option-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.deploy-endpoint-option-radio {
+    width: 18px;
+    height: 18px;
+    border: 2px solid #d1d5db;
+    border-radius: 50%;
+    flex-shrink: 0;
+    transition: all 0.2s ease;
+    position: relative;
+}
+
+.deploy-endpoint-option.selected .deploy-endpoint-option-radio {
+    border-color: #3b82f6;
+    background: #3b82f6;
+}
+
+.deploy-endpoint-option.selected .deploy-endpoint-option-radio::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 6px;
+    height: 6px;
+    background: white;
+    border-radius: 50%;
+}
+
+.deploy-endpoint-option-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #111827;
+}
+
+.deploy-endpoint-option-content {
+    margin-top: 10px;
+    padding-left: 28px;
+}
+
+/* Auto-generated name preview */
+.deploy-endpoint-preview {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #f3f4f6;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 13px;
+    color: #374151;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.deploy-endpoint-preview i {
+    color: #6b7280;
+    font-size: 11px;
+}
+
+/* Custom name toggle */
+.deploy-custom-name-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 10px;
+    font-size: 13px;
+    color: #6b7280;
+    cursor: pointer;
+}
+
+.deploy-custom-name-toggle input[type="checkbox"] {
+    width: 14px;
+    height: 14px;
+    cursor: pointer;
+}
+
+.deploy-custom-name-toggle label {
+    cursor: pointer;
+}
+
+/* Custom name input container */
+.deploy-custom-name-container {
+    margin-top: 10px;
+}
+
+.deploy-custom-name-container.hidden {
+    display: none;
+}
+
+.deploy-custom-name-input {
+    width: 100%;
+    max-width: 300px;
+    height: 38px;
+    padding: 0 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 14px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    color: #374151;
+    background-color: white;
+    transition: all 0.2s ease;
+}
+
+.deploy-custom-name-input:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+}
+
+.deploy-custom-name-hint {
+    margin-top: 4px;
+    font-size: 11px;
+    color: #9ca3af;
+}
+
+/* Services dropdown container */
+.deploy-services-container {
+    position: relative;
+}
+
+.deploy-services-select {
+    width: 100%;
+    max-width: 300px;
+    height: 38px;
+    padding: 0 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 14px;
+    color: #374151;
+    background-color: white;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.deploy-services-select:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+}
+
+.deploy-services-select:disabled {
+    background-color: #f9fafb;
+    cursor: not-allowed;
+}
+
+.deploy-services-loading {
+    margin-top: 8px;
+    font-size: 12px;
+    color: #6b7280;
+}
+
+.deploy-services-loading.hidden {
+    display: none;
+}
+
+.deploy-services-loading i {
+    margin-right: 6px;
+}
+
+/* Service update warning */
+.deploy-service-warning {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin-top: 10px;
+    padding: 10px 12px;
+    background: #fef3c7;
+    border: 1px solid #f59e0b;
+    border-radius: 6px;
+    font-size: 12px;
+    color: #92400e;
+}
+
+.deploy-service-warning.hidden {
+    display: none;
+}
+
+.deploy-service-warning i {
+    color: #f59e0b;
+    margin-top: 1px;
+    flex-shrink: 0;
+}
+
+/* =============================================================================
+   CONFIGURATION SUMMARY BADGE
+   ============================================================================= */
+
+.deploy-config-summary-endpoint {
+    width: 100%;
+    flex-direction: row !important;
+    justify-content: flex-start;
+    text-align: left !important;
+    gap: 8px;
+}
+
+.deploy-config-summary-endpoint .deploy-config-summary-value {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.deploy-config-summary-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.deploy-config-summary-badge.new {
+    background: #d1fae5;
+    color: #065f46;
+}
+
+.deploy-config-summary-badge.update {
+    background: #fef3c7;
+    color: #92400e;
 }
 
 /* Section Title - unified with Configuration Summary */

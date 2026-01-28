@@ -2,7 +2,7 @@
 
 This document describes the model deployment architecture for TFRS (TensorFlow Recommenders) models trained via TFX pipelines. It covers the implementation details, configuration options, and usage instructions.
 
-**Last Updated:** 2026-01-28 (Deploy Wizard with configurable presets)
+**Last Updated:** 2026-01-28 (Deploy Wizard with Endpoint Selection)
 
 **Status:** Implemented
 
@@ -2422,15 +2422,32 @@ This section documents the Deploy Wizard feature that replaces the previous one-
 
 ### Overview
 
-The Deploy Wizard provides a user-friendly modal for configuring Cloud Run deployments with preset configurations (Development, Production, High Traffic) and advanced options for scaling and resources.
+The Deploy Wizard provides a user-friendly modal for configuring Cloud Run deployments with:
+- **Endpoint Selection**: Create new endpoints or update existing Cloud Run services
+- **Preset Configurations**: Development, Production, High Traffic presets
+- **Advanced Options**: Fine-tune scaling and resource settings
 
 ### Files
 
 | File | Description |
 |------|-------------|
 | `templates/includes/_deploy_wizard.html` | Modal HTML template |
-| `static/js/deploy_wizard.js` | JavaScript IIFE module (~200 lines) |
-| `static/css/deploy_wizard.css` | Modal styles (~250 lines) |
+| `static/js/deploy_wizard.js` | JavaScript IIFE module (~400 lines) |
+| `static/css/deploy_wizard.css` | Modal styles (~460 lines) |
+
+### Endpoint Selection
+
+The wizard allows users to either create a new Cloud Run service or update an existing one:
+
+#### Create New Endpoint (Default)
+- **Auto-generated name**: Service name derived from model name (e.g., `chern-retriv-v2-serving`)
+- **Custom name**: Optional custom service name with real-time validation
+- Service names are sanitized: lowercase, alphanumeric + hyphens, max 63 chars
+
+#### Update Existing Endpoint
+- Dropdown populated from existing Cloud Run services via `GET /api/cloud-run/services/`
+- ML serving endpoints (ending in `-serving`) are highlighted
+- Warning displayed when updating existing service
 
 ### Preset Configurations
 
@@ -2459,6 +2476,13 @@ DeployWizard.open(runId);
 // Close the wizard
 DeployWizard.close();
 
+// Endpoint selection
+DeployWizard.toggleEndpoint();                    // Expand/collapse endpoint section
+DeployWizard.selectEndpointMode('new');           // 'new' or 'existing'
+DeployWizard.toggleCustomName();                  // Toggle custom name input
+DeployWizard.updateCustomName('my-service');      // Set custom service name
+DeployWizard.selectExistingService('svc-name');   // Select existing service
+
 // Select a preset programmatically
 DeployWizard.selectPreset('production'); // 'development', 'production', 'high_traffic'
 
@@ -2473,14 +2497,46 @@ DeployWizard.updateConfig('memory', '8Gi');
 DeployWizard.deploy();
 ```
 
-### API Endpoint Changes
+### API Endpoints
 
-The `POST /api/training-runs/{id}/deploy-cloud-run/` endpoint now accepts an optional request body with deployment configuration:
+#### List Cloud Run Services
+
+`GET /api/cloud-run/services/`
+
+Returns list of existing Cloud Run services that can be updated.
+
+**Response:**
+```json
+{
+    "success": true,
+    "services": [
+        {
+            "name": "chern-retriv-v2-serving",
+            "url": "https://chern-retriv-v2-serving-xxx.run.app",
+            "status": "Ready",
+            "is_ml_serving": true
+        },
+        {
+            "name": "other-service",
+            "url": "https://other-service-xxx.run.app",
+            "status": "Ready",
+            "is_ml_serving": false
+        }
+    ]
+}
+```
+
+#### Deploy to Cloud Run
+
+`POST /api/training-runs/{id}/deploy-cloud-run/`
+
+Deploys model to Cloud Run. Accepts optional `service_name` to create with custom name or update existing service.
 
 **Request:**
 ```json
 POST /api/training-runs/47/deploy-cloud-run/
 {
+    "service_name": "my-custom-service",
     "deployment_config": {
         "min_instances": 1,
         "max_instances": 10,
@@ -2491,13 +2547,18 @@ POST /api/training-runs/47/deploy-cloud-run/
 }
 ```
 
+| Field | Required | Description |
+|-------|----------|-------------|
+| `service_name` | No | Custom service name or existing service to update. If omitted, auto-generates from model name. |
+| `deployment_config` | No | Resource and scaling configuration |
+
 **Response:**
 ```json
 {
     "success": true,
     "training_run": {...},
-    "endpoint_url": "https://model-serving-xxx.run.app",
-    "message": "Model deployed to Cloud Run: https://model-serving-xxx.run.app"
+    "endpoint_url": "https://my-custom-service-xxx.run.app",
+    "message": "Model deployed to Cloud Run: https://my-custom-service-xxx.run.app"
 }
 ```
 
@@ -2507,29 +2568,38 @@ The deployment config is merged with any existing config on the TrainingRun (req
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│ ☁️ Deploy to Cloud Run                                          [×] │
-│    Deploying model-name to Cloud Run                                │
+│ ☁️ Deploy to Cloud Run                                              │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                     │
-│  MODEL                    Training Run                              │
-│  product-recs-v3          Run #47                                   │
+│  MODEL  product-recs-v3          VERSION  v47                       │
 │                                                                     │
-│  DEPLOYMENT PRESET                                                  │
+│  ▼ Endpoint Selection                                               │
+│  ┌───────────────────────────────────────────────────────────────┐ │
+│  │ ◉ Create New Endpoint                                         │ │
+│  │   └─ 🏷️ product-recs-v3-serving                               │ │
+│  │   └─ ☐ Use custom name                                        │ │
+│  └───────────────────────────────────────────────────────────────┘ │
+│  ┌───────────────────────────────────────────────────────────────┐ │
+│  │ ○ Update Existing Endpoint                                    │ │
+│  │   └─ [Select a service... ▼]                                  │ │
+│  └───────────────────────────────────────────────────────────────┘ │
+│                                                                     │
+│  ▼ Deployment Preset                                                │
 │  ┌─────────────┐ ┌─────────────────┐ ┌─────────────┐               │
-│  │ Development │ │ Production      │ │ High Traffic│               │
-│  │ min: 0      │ │ (Recommended)   │ │ min: 2      │               │
-│  │ max: 2      │ │ min: 1, max: 10 │ │ max: 50     │               │
-│  │ 2Gi / 1 CPU │ │ 4Gi / 2 CPU     │ │ 8Gi / 4 CPU │               │
-│  └─────────────┘ └─────────────────┘ └─────────────┘               │
+│  │ Development │ │ Production ✓    │ │ High Traffic│               │
+│  │ 0-2 inst    │ │ (Recommended)   │ │ 2-50 inst   │               │
+│  │ 2Gi / 1 CPU │ │ 1-10 instances  │ │ 8Gi / 4 CPU │               │
+│  └─────────────┘ │ 4Gi / 2 CPU     │ └─────────────┘               │
+│                  └─────────────────┘                                │
 │                                                                     │
-│  ▼ Advanced Options                                                 │
-│    Min: [1]  Max: [10]  Memory: [4Gi ▼]  CPU: [2 ▼]                │
+│  ▸ Advanced Options                                                 │
 │                                                                     │
 │  ┌─ Configuration Summary ────────────────────────────────────────┐│
+│  │ Endpoint: product-recs-v3-serving [new]                        ││
 │  │ Instances: 1-10 │ Memory: 4Gi │ CPU: 2 vCPU │ Timeout: 300s    ││
 │  └────────────────────────────────────────────────────────────────┘│
 │                                                                     │
-│                                        [Cancel]  [Deploy 🚀]        │
+│                                        [Deploy]  [Cancel]           │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -2543,8 +2613,12 @@ The deployment config is merged with any existing config on the TrainingRun (req
    - Configures `DeployWizard.configure()` with success callback to refresh TrainingCards and ModelsRegistry
 
 3. **API** (`ml_platform/training/api.py`):
-   - `training_run_deploy_cloud_run()` parses `deployment_config` from request body
-   - Merges with existing config and saves to TrainingRun before deployment
+   - `cloud_run_services_list()` - Lists existing Cloud Run services
+   - `training_run_deploy_cloud_run()` - Parses `deployment_config` and `service_name` from request body
 
 4. **Service** (`ml_platform/training/services.py`):
-   - `deploy_to_cloud_run()` reads config from `training_run.deployment_config` (unchanged)
+   - `list_cloud_run_services()` - Calls `gcloud run services list` and returns parsed service info
+   - `deploy_to_cloud_run(training_run, service_name=None)` - Accepts optional custom service name
+
+5. **URL Routes** (`ml_platform/training/urls.py`):
+   - `api/cloud-run/services/` - GET endpoint for listing services

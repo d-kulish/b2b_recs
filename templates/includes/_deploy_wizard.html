@@ -53,6 +53,64 @@
                 </div>
             </div>
 
+            <!-- Endpoint Selection Toggle -->
+            <div class="deploy-endpoint-toggle expanded" id="deployEndpointToggle" onclick="DeployWizard.toggleEndpoint()">
+                <span class="deploy-endpoint-toggle-text"><i class="fas fa-server mr-2 text-blue-500"></i>Endpoint Selection</span>
+                <i class="fas fa-chevron-right deploy-endpoint-toggle-chevron"></i>
+            </div>
+
+            <!-- Endpoint Selection Panel -->
+            <div class="deploy-endpoint-options visible" id="deployEndpointOptions">
+                <!-- Create New Endpoint Option -->
+                <div class="deploy-endpoint-option selected" data-mode="new" onclick="DeployWizard.selectEndpointMode('new')">
+                    <div class="deploy-endpoint-option-header">
+                        <div class="deploy-endpoint-option-radio"></div>
+                        <div class="deploy-endpoint-option-title">Create New Endpoint</div>
+                    </div>
+                    <div class="deploy-endpoint-option-content">
+                        <div class="deploy-endpoint-preview" id="deployEndpointPreview">
+                            <i class="fas fa-tag"></i>
+                            <span id="deployAutoServiceName">-</span>
+                        </div>
+                        <div class="deploy-custom-name-toggle" onclick="event.stopPropagation(); DeployWizard.toggleCustomName()">
+                            <input type="checkbox" id="deployCustomNameCheck" onclick="event.stopPropagation()">
+                            <label for="deployCustomNameCheck" onclick="event.stopPropagation()">Use custom name</label>
+                        </div>
+                        <div class="deploy-custom-name-container hidden" id="deployCustomNameContainer">
+                            <input type="text" id="deployCustomNameInput" class="deploy-custom-name-input"
+                                   placeholder="my-custom-service"
+                                   oninput="DeployWizard.updateCustomName(this.value)"
+                                   onclick="event.stopPropagation()">
+                            <div class="deploy-custom-name-hint">Lowercase letters, numbers, and hyphens only</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Update Existing Endpoint Option -->
+                <div class="deploy-endpoint-option" data-mode="existing" onclick="DeployWizard.selectEndpointMode('existing')">
+                    <div class="deploy-endpoint-option-header">
+                        <div class="deploy-endpoint-option-radio"></div>
+                        <div class="deploy-endpoint-option-title">Update Existing Endpoint</div>
+                    </div>
+                    <div class="deploy-endpoint-option-content">
+                        <div class="deploy-services-container" id="deployServicesContainer">
+                            <select id="deployServicesSelect" class="deploy-services-select"
+                                    onchange="DeployWizard.selectExistingService(this.value)"
+                                    onclick="event.stopPropagation()">
+                                <option value="">Select a service...</option>
+                            </select>
+                            <div class="deploy-services-loading hidden" id="deployServicesLoading">
+                                <i class="fas fa-spinner fa-spin"></i> Loading services...
+                            </div>
+                        </div>
+                        <div class="deploy-service-warning hidden" id="deployServiceWarning">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <span>This will update the existing service with the new model version.</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Deployment Preset Toggle - matches subchapter-header-tablet pattern -->
             <div class="deploy-preset-toggle expanded" id="deployPresetToggle" onclick="DeployWizard.togglePresets()">
                 <span class="deploy-preset-toggle-text"><i class="fas fa-layer-group mr-2 text-indigo-500"></i>Deployment Preset</span>
@@ -162,6 +220,15 @@
             <div class="deploy-config-summary" id="deployConfigSummary">
                 <div class="deploy-config-summary-title">
                     <i class="fas fa-clipboard-check text-purple-500"></i> Configuration Summary
+                </div>
+                <div class="deploy-config-summary-grid">
+                    <div class="deploy-config-summary-item deploy-config-summary-endpoint">
+                        <span class="deploy-config-summary-label">Endpoint:</span>
+                        <span class="deploy-config-summary-value">
+                            <span id="deploySummaryEndpoint">-</span>
+                            <span class="deploy-config-summary-badge new" id="deploySummaryBadge">new</span>
+                        </span>
+                    </div>
                 </div>
                 <div class="deploy-config-summary-grid">
                     <div class="deploy-config-summary-item">

@@ -1300,6 +1300,56 @@ def training_run_register(request, training_run_id):
 
 
 @csrf_exempt
+@require_http_methods(["GET"])
+def cloud_run_services_list(request):
+    """
+    List existing Cloud Run services in the project.
+
+    GET /api/cloud-run/services/
+
+    Returns list of Cloud Run services that can be updated with new model deployments.
+    Services ending in '-serving' are flagged as ML serving endpoints.
+
+    Returns:
+    {
+        "success": true,
+        "services": [
+            {
+                "name": "model-serving",
+                "url": "https://model-serving-xxx.run.app",
+                "status": "Ready",
+                "is_ml_serving": true
+            },
+            ...
+        ]
+    }
+    """
+    try:
+        model_endpoint = _get_model_endpoint(request)
+        if not model_endpoint:
+            return JsonResponse({
+                'success': False,
+                'error': 'No model endpoint selected'
+            }, status=400)
+
+        service = TrainingService(model_endpoint)
+        services = service.list_cloud_run_services()
+
+        return JsonResponse({
+            'success': True,
+            'services': services
+        })
+
+    except Exception as e:
+        logger.exception(f"Error listing Cloud Run services: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e),
+            'services': []
+        }, status=500)
+
+
+@csrf_exempt
 @require_http_methods(["POST"])
 def training_run_deploy_cloud_run(request, training_run_id):
     """
@@ -1370,6 +1420,7 @@ def training_run_deploy_cloud_run(request, training_run_id):
             body = {}
 
         deployment_config = body.get('deployment_config', {})
+        service_name = body.get('service_name')  # Optional custom service name
 
         # Merge with existing config (request takes precedence)
         existing_config = training_run.deployment_config or {}
@@ -1383,7 +1434,7 @@ def training_run_deploy_cloud_run(request, training_run_id):
         # Deploy to Cloud Run (independent of Vertex AI endpoint deployment)
         service = TrainingService(model_endpoint)
         try:
-            endpoint_url = service.deploy_to_cloud_run(training_run)
+            endpoint_url = service.deploy_to_cloud_run(training_run, service_name=service_name)
         except TrainingServiceError as e:
             return JsonResponse({
                 'success': False,

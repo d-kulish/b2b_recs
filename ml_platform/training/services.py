@@ -1720,15 +1720,92 @@ class TrainingService:
         # Default to brute_force if not specified
         return 'brute_force'
 
-    def deploy_to_cloud_run(self, training_run: TrainingRun) -> str:
+    def list_cloud_run_services(self) -> list:
+        """
+        List existing Cloud Run services in the project.
+
+        Returns list of services with their details, useful for updating
+        existing deployments instead of creating new ones.
+
+        Returns:
+            list: List of dicts with service info:
+                  - name: Service name
+                  - url: Service URL
+                  - status: Service status (e.g., 'Ready')
+                  - is_ml_serving: True if name ends with '-serving'
+        """
+        import subprocess
+        import json as json_module
+
+        try:
+            cmd = [
+                'gcloud', 'run', 'services', 'list',
+                f'--region={self.REGION}',
+                f'--project={self.project_id}',
+                '--format=json'
+            ]
+
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+
+            if result.returncode != 0:
+                logger.warning(f"Failed to list Cloud Run services: {result.stderr}")
+                return []
+
+            services_data = json_module.loads(result.stdout) if result.stdout else []
+            services = []
+
+            for svc in services_data:
+                # Extract metadata
+                metadata = svc.get('metadata', {})
+                name = metadata.get('name', '')
+
+                # Extract status
+                status_obj = svc.get('status', {})
+                conditions = status_obj.get('conditions', [])
+                status = 'Unknown'
+                for cond in conditions:
+                    if cond.get('type') == 'Ready':
+                        status = 'Ready' if cond.get('status') == 'True' else 'Not Ready'
+                        break
+
+                # Extract URL
+                url = status_obj.get('url', '')
+
+                services.append({
+                    'name': name,
+                    'url': url,
+                    'status': status,
+                    'is_ml_serving': name.endswith('-serving')
+                })
+
+            # Sort: ML serving services first, then alphabetically
+            services.sort(key=lambda x: (not x['is_ml_serving'], x['name']))
+
+            return services
+
+        except subprocess.TimeoutExpired:
+            logger.warning("Timeout listing Cloud Run services")
+            return []
+        except Exception as e:
+            logger.warning(f"Error listing Cloud Run services: {e}")
+            return []
+
+    def deploy_to_cloud_run(self, training_run: TrainingRun, service_name: str = None) -> str:
         """
         Deploy trained model to Cloud Run with TF Serving.
 
-        Creates a new Cloud Run service running the tf-serving container,
+        Creates or updates a Cloud Run service running the tf-serving container,
         configured to load the model from GCS at startup.
 
         Args:
             training_run: TrainingRun instance to deploy
+            service_name: Optional custom service name. If not provided,
+                          generates default name from model name.
 
         Returns:
             str: Cloud Run service URL
@@ -1749,7 +1826,12 @@ class TrainingService:
             raise TrainingServiceError("No GCS artifacts path found for this training run")
 
         # Build service name (must be lowercase, alphanumeric, and hyphens only)
-        service_name = f"{self.ml_model.name}-serving".lower().replace('_', '-')
+        if service_name:
+            # Use provided service name (already sanitized by frontend)
+            service_name = service_name.lower().replace('_', '-')
+        else:
+            # Generate default name from model name
+            service_name = f"{self.ml_model.name}-serving".lower().replace('_', '-')
         # Ensure name is valid (max 63 chars, starts with letter)
         service_name = service_name[:63]
         if not service_name[0].isalpha():

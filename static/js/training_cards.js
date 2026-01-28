@@ -158,6 +158,12 @@ const TrainingCards = (function() {
         return val.toFixed(decimals);
     }
 
+    function formatPercent(val, decimals = 1) {
+        if (val === null || val === undefined) return '-';
+        if (typeof val !== 'number') return val;
+        return (val * 100).toFixed(decimals) + '%';
+    }
+
     function formatDuration(seconds) {
         if (!seconds && seconds !== 0) return '-';
         if (seconds < 60) return `${seconds}s`;
@@ -877,19 +883,19 @@ const TrainingCards = (function() {
                         <div class="ml-card-metrics-row">
                             <div class="ml-card-metric">
                                 <div class="ml-card-metric-label">R@5</div>
-                                <div class="ml-card-metric-value ${run.recall_at_5 == null ? 'empty' : ''}">${formatNumber(run.recall_at_5)}</div>
+                                <div class="ml-card-metric-value ${run.recall_at_5 == null ? 'empty' : ''}">${formatPercent(run.recall_at_5)}</div>
                             </div>
                             <div class="ml-card-metric">
                                 <div class="ml-card-metric-label">R@10</div>
-                                <div class="ml-card-metric-value ${run.recall_at_10 == null ? 'empty' : ''}">${formatNumber(run.recall_at_10)}</div>
+                                <div class="ml-card-metric-value ${run.recall_at_10 == null ? 'empty' : ''}">${formatPercent(run.recall_at_10)}</div>
                             </div>
                             <div class="ml-card-metric">
                                 <div class="ml-card-metric-label">R@50</div>
-                                <div class="ml-card-metric-value ${run.recall_at_50 == null ? 'empty' : ''}">${formatNumber(run.recall_at_50)}</div>
+                                <div class="ml-card-metric-value ${run.recall_at_50 == null ? 'empty' : ''}">${formatPercent(run.recall_at_50)}</div>
                             </div>
                             <div class="ml-card-metric">
                                 <div class="ml-card-metric-label">R@100</div>
-                                <div class="ml-card-metric-value ${run.recall_at_100 == null ? 'empty' : ''}">${formatNumber(run.recall_at_100)}</div>
+                                <div class="ml-card-metric-value ${run.recall_at_100 == null ? 'empty' : ''}">${formatPercent(run.recall_at_100)}</div>
                             </div>
                         </div>
                     </div>
@@ -900,19 +906,19 @@ const TrainingCards = (function() {
                         <div class="ml-card-metrics-row">
                             <div class="ml-card-metric">
                                 <div class="ml-card-metric-label">RMSE</div>
-                                <div class="ml-card-metric-value ${run.rmse == null ? 'empty' : ''}">${formatNumber(run.rmse, 4)}</div>
+                                <div class="ml-card-metric-value ${run.rmse == null ? 'empty' : ''}">${formatNumber(run.rmse, 2)}</div>
                             </div>
                             <div class="ml-card-metric">
                                 <div class="ml-card-metric-label">TEST RMSE</div>
-                                <div class="ml-card-metric-value ${run.test_rmse == null ? 'empty' : ''}">${formatNumber(run.test_rmse, 4)}</div>
+                                <div class="ml-card-metric-value ${run.test_rmse == null ? 'empty' : ''}">${formatNumber(run.test_rmse, 2)}</div>
                             </div>
                             <div class="ml-card-metric">
                                 <div class="ml-card-metric-label">MAE</div>
-                                <div class="ml-card-metric-value ${run.mae == null ? 'empty' : ''}">${formatNumber(run.mae, 4)}</div>
+                                <div class="ml-card-metric-value ${run.mae == null ? 'empty' : ''}">${formatNumber(run.mae, 2)}</div>
                             </div>
                             <div class="ml-card-metric">
                                 <div class="ml-card-metric-label">TEST MAE</div>
-                                <div class="ml-card-metric-value ${run.test_mae == null ? 'empty' : ''}">${formatNumber(run.test_mae, 4)}</div>
+                                <div class="ml-card-metric-value ${run.test_mae == null ? 'empty' : ''}">${formatNumber(run.test_mae, 2)}</div>
                             </div>
                         </div>
                     </div>
@@ -923,19 +929,19 @@ const TrainingCards = (function() {
                 <div class="ml-card-metrics-row">
                     <div class="ml-card-metric">
                         <div class="ml-card-metric-label">RMSE</div>
-                        <div class="ml-card-metric-value ${run.rmse == null ? 'empty' : ''}">${formatNumber(run.rmse, 4)}</div>
+                        <div class="ml-card-metric-value ${run.rmse == null ? 'empty' : ''}">${formatNumber(run.rmse, 2)}</div>
                     </div>
                     <div class="ml-card-metric">
                         <div class="ml-card-metric-label">TEST RMSE</div>
-                        <div class="ml-card-metric-value ${run.test_rmse == null ? 'empty' : ''}">${formatNumber(run.test_rmse, 4)}</div>
+                        <div class="ml-card-metric-value ${run.test_rmse == null ? 'empty' : ''}">${formatNumber(run.test_rmse, 2)}</div>
                     </div>
                     <div class="ml-card-metric">
                         <div class="ml-card-metric-label">MAE</div>
-                        <div class="ml-card-metric-value ${run.mae == null ? 'empty' : ''}">${formatNumber(run.mae, 4)}</div>
+                        <div class="ml-card-metric-value ${run.mae == null ? 'empty' : ''}">${formatNumber(run.mae, 2)}</div>
                     </div>
                     <div class="ml-card-metric">
                         <div class="ml-card-metric-label">TEST MAE</div>
-                        <div class="ml-card-metric-value ${run.test_mae == null ? 'empty' : ''}">${formatNumber(run.test_mae, 4)}</div>
+                        <div class="ml-card-metric-value ${run.test_mae == null ? 'empty' : ''}">${formatNumber(run.test_mae, 2)}</div>
                     </div>
                 </div>
             `;
@@ -945,19 +951,19 @@ const TrainingCards = (function() {
                 <div class="ml-card-metrics-row">
                     <div class="ml-card-metric">
                         <div class="ml-card-metric-label">R@5</div>
-                        <div class="ml-card-metric-value ${run.recall_at_5 == null ? 'empty' : ''}">${formatNumber(run.recall_at_5)}</div>
+                        <div class="ml-card-metric-value ${run.recall_at_5 == null ? 'empty' : ''}">${formatPercent(run.recall_at_5)}</div>
                     </div>
                     <div class="ml-card-metric">
                         <div class="ml-card-metric-label">R@10</div>
-                        <div class="ml-card-metric-value ${run.recall_at_10 == null ? 'empty' : ''}">${formatNumber(run.recall_at_10)}</div>
+                        <div class="ml-card-metric-value ${run.recall_at_10 == null ? 'empty' : ''}">${formatPercent(run.recall_at_10)}</div>
                     </div>
                     <div class="ml-card-metric">
                         <div class="ml-card-metric-label">R@50</div>
-                        <div class="ml-card-metric-value ${run.recall_at_50 == null ? 'empty' : ''}">${formatNumber(run.recall_at_50)}</div>
+                        <div class="ml-card-metric-value ${run.recall_at_50 == null ? 'empty' : ''}">${formatPercent(run.recall_at_50)}</div>
                     </div>
                     <div class="ml-card-metric">
                         <div class="ml-card-metric-label">R@100</div>
-                        <div class="ml-card-metric-value ${run.recall_at_100 == null ? 'empty' : ''}">${formatNumber(run.recall_at_100)}</div>
+                        <div class="ml-card-metric-value ${run.recall_at_100 == null ? 'empty' : ''}">${formatPercent(run.recall_at_100)}</div>
                     </div>
                 </div>
             `;

@@ -1290,8 +1290,8 @@ const ExpViewModal = (function() {
         resultsSummary.classList.remove('hidden');
 
         let metricsHtml = '';
-        const formatMetric = v => v != null ? v.toFixed(4) : 'N/A';
-        const formatRecall = v => v != null ? (v * 100).toFixed(0) + '%' : 'N/A';
+        const formatMetric = v => v != null ? v.toFixed(2) : 'N/A';
+        const formatRecall = v => v != null ? (v * 100).toFixed(1) + '%' : 'N/A';
 
         if (model.model_type === 'ranking') {
             metricsHtml = `
@@ -2917,8 +2917,8 @@ const ExpViewModal = (function() {
         const container = document.getElementById('expViewMetricsSummary');
         if (!container) return;
 
-        const formatRecall = v => v != null ? (v * 100).toFixed(2) + '%' : 'N/A';
-        const formatRMSE = v => v != null ? v.toFixed(4) : 'N/A';
+        const formatRecall = v => v != null ? (v * 100).toFixed(1) + '%' : 'N/A';
+        const formatRMSE = v => v != null ? v.toFixed(2) : 'N/A';
 
         let items;
         if (configType === 'multitask') {

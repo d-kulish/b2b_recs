@@ -746,8 +746,8 @@ const TrainingWizard = (function() {
             const isBest = exp.experiment_id === state.bestExperimentId;
             const metricLabel = state.formData.modelType === 'ranking' ? 'RMSE' : 'R@100';
             const metricValue = state.formData.modelType === 'ranking'
-                ? (exp.test_rmse != null ? exp.test_rmse.toFixed(4) : '-')
-                : (exp.recall_at_100 != null ? exp.recall_at_100.toFixed(3) : '-');
+                ? (exp.test_rmse != null ? exp.test_rmse.toFixed(2) : '-')
+                : (exp.recall_at_100 != null ? (exp.recall_at_100 * 100).toFixed(1) + '%' : '-');
 
             return `
                 <div class="wizard-experiment-item ${isSelected ? 'selected' : ''}"

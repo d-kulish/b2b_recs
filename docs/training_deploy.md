@@ -2,7 +2,7 @@
 
 This document describes the model deployment architecture for TFRS (TensorFlow Recommenders) models trained via TFX pipelines. It covers the implementation details, configuration options, and usage instructions.
 
-**Last Updated:** 2026-01-28 (Model-Scoped Endpoint Tracking)
+**Last Updated:** 2026-01-29 (Service Name & Versioned Model Path Fixes)
 
 **Status:** Implemented
 
@@ -2738,3 +2738,127 @@ python manage.py migrate training
 Existing deployments created before this feature will not have `DeployedEndpoint` records. Users can:
 1. Deploy a new version to create the tracking record, or
 2. The system will create a record on the next deployment to that service name
+
+---
+
+## Bug Fixes (2026-01-29)
+
+### Fix 1: All Models Deploying to Same Endpoint
+
+**Problem:** When deploying different models from the Model Registry, all deployments went to the same Cloud Run service (e.g., `test-v1-serving`) regardless of which model was selected.
+
+**Root Cause:** Mismatch between frontend and backend service name generation:
+
+| Component | Name Source | Result |
+|-----------|-------------|--------|
+| **Frontend** (display) | `training_run.vertex_model_name` | `chern-retriv-v2-serving` |
+| **Backend** (actual) | `self.ml_model.name` (ModelEndpoint) | `test-v1-serving` |
+
+The frontend showed one service name but the backend generated a different one using the parent ModelEndpoint name instead of the individual model's name.
+
+**Fix Applied:**
+
+1. **Frontend** (`static/js/deploy_wizard.js`): Updated `getEffectiveServiceName()` to always send the auto-generated name for new endpoints instead of relying on backend default:
+
+```javascript
+function getEffectiveServiceName() {
+    if (state.endpointMode === 'existing') {
+        return state.selectedService || null;
+    } else if (state.customNameEnabled && state.customName) {
+        return state.customName;
+    }
+    // Always send the auto-generated name for new endpoints
+    if (state.trainingRunData) {
+        const modelName = state.trainingRunData.vertex_model_name ||
+                          state.trainingRunData.display_name || '-';
+        return generateServiceName(modelName);
+    }
+    return null;
+}
+```
+
+2. **Backend** (`ml_platform/training/services.py`): Updated service name generation to use proper priority chain:
+
+```python
+model_name = (
+    training_run.vertex_model_name or
+    (training_run.registered_model.model_name
+     if training_run.registered_model else None) or
+    training_run.name or
+    self.ml_model.name  # Fallback to ModelEndpoint
+)
+service_name = f"{model_name}-serving".lower().replace('_', '-')
+```
+
+**Files Modified:**
+- `static/js/deploy_wizard.js` - `getEffectiveServiceName()` function
+- `ml_platform/training/services.py` - Service name generation in `deploy_to_cloud_run()`
+
+---
+
+### Fix 2: Container Failed to Start (Versioned Model Path)
+
+**Problem:** Cloud Run deployment failed with error:
+```
+The user-provided container failed to start and listen on the port defined
+provided by the PORT=8501 environment variable within the allocated timeout.
+```
+
+**Root Cause:** The `MODEL_PATH` environment variable was missing the versioned subdirectory.
+
+TFX Pusher creates a versioned subdirectory inside `pushed_model/`:
+```
+gs://bucket/artifacts/pushed_model/
+└── 1768842986/           # Versioned subdirectory (timestamp)
+    ├── saved_model.pb
+    ├── variables/
+    └── assets/
+```
+
+The code was passing:
+```
+MODEL_PATH=gs://bucket/artifacts/pushed_model
+```
+
+But should have been:
+```
+MODEL_PATH=gs://bucket/artifacts/pushed_model/1768842986
+```
+
+The startup script runs `gsutil -m cp -r "$MODEL_PATH/*"`, which with the wrong path would copy the version directory itself instead of its contents, resulting in:
+```
+/models/recommender/1/
+└── 1768842986/        # Wrong - nested!
+    └── saved_model.pb
+```
+
+Instead of:
+```
+/models/recommender/1/
+├── saved_model.pb     # Correct - flat
+├── variables/
+└── assets/
+```
+
+**Fix Applied:**
+
+Added helper method `_find_versioned_model_path()` that:
+1. Lists blobs in the `pushed_model` directory
+2. Finds `saved_model.pb` to locate the versioned subdirectory
+3. Returns the full path including the version number
+
+```python
+def _find_versioned_model_path(self, base_model_path: str) -> str:
+    """Find the versioned subdirectory within the pushed_model path."""
+    # ... parses GCS path, lists blobs, finds saved_model.pb
+    # Returns: gs://bucket/artifacts/pushed_model/1768842986
+```
+
+**Files Modified:**
+- `ml_platform/training/services.py` - Added `_find_versioned_model_path()` method, updated `deploy_to_cloud_run()` to use it
+
+**Verification:**
+After fix, deployment logs show:
+```
+Found versioned model path: gs://bucket/artifacts/pushed_model/1768842986
+```

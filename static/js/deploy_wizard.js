@@ -498,7 +498,7 @@ const DeployWizard = (function() {
 
     /**
      * Get the effective service name based on current selection.
-     * Returns null if using auto-generated name (backend will generate).
+     * Always returns the intended service name to ensure frontend/backend consistency.
      */
     function getEffectiveServiceName() {
         if (state.endpointMode === 'existing') {
@@ -506,7 +506,14 @@ const DeployWizard = (function() {
         } else if (state.customNameEnabled && state.customName) {
             return state.customName;
         }
-        // Return null to let backend generate default name
+        // Always send the auto-generated name for new endpoints
+        // This ensures the displayed name matches what gets deployed
+        if (state.trainingRunData) {
+            const modelName = state.trainingRunData.vertex_model_name ||
+                              state.trainingRunData.display_name ||
+                              '-';
+            return generateServiceName(modelName);
+        }
         return null;
     }
 

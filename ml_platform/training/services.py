@@ -1918,6 +1918,57 @@ class TrainingService:
         # Default to brute_force if not specified
         return 'brute_force'
 
+    def _find_versioned_model_path(self, base_model_path: str) -> str:
+        """
+        Find the versioned subdirectory within the pushed_model path.
+
+        TFX Pusher creates a versioned subdirectory (usually a timestamp) inside
+        the pushed_model directory:
+            pushed_model/{version_number}/saved_model.pb
+
+        This method detects the version subdirectory and returns the full path.
+
+        Args:
+            base_model_path: GCS path like gs://bucket/artifacts/pushed_model
+
+        Returns:
+            str: Full path including version subdirectory, or base path if not found
+        """
+        try:
+            # Parse bucket and prefix from gs:// path
+            if not base_model_path.startswith('gs://'):
+                return base_model_path
+
+            path_without_scheme = base_model_path[5:]  # Remove 'gs://'
+            parts = path_without_scheme.split('/', 1)
+            bucket_name = parts[0]
+            prefix = parts[1] if len(parts) > 1 else ''
+
+            # List objects in the pushed_model directory
+            bucket = self.storage_client.bucket(bucket_name)
+            blobs = list(bucket.list_blobs(prefix=f"{prefix}/", max_results=50))
+
+            # Look for saved_model.pb to find the versioned directory
+            for blob in blobs:
+                if blob.name.endswith('saved_model.pb'):
+                    # Extract the version directory from the path
+                    # e.g., artifacts/pushed_model/1768842986/saved_model.pb
+                    # -> artifacts/pushed_model/1768842986
+                    model_dir = '/'.join(blob.name.split('/')[:-1])
+                    versioned_path = f"gs://{bucket_name}/{model_dir}"
+                    logger.info(f"Found versioned model path: {versioned_path}")
+                    return versioned_path
+
+            # If no versioned directory found, return base path
+            logger.warning(
+                f"No versioned subdirectory found in {base_model_path}, using base path"
+            )
+            return base_model_path
+
+        except Exception as e:
+            logger.warning(f"Error finding versioned model path: {e}, using base path")
+            return base_model_path
+
     def list_cloud_run_services(self) -> list:
         """
         List existing Cloud Run services in the project.
@@ -2028,11 +2079,20 @@ class TrainingService:
             # Use provided service name (already sanitized by frontend)
             service_name = service_name.lower().replace('_', '-')
         else:
-            # Generate default name from model name
-            service_name = f"{self.ml_model.name}-serving".lower().replace('_', '-')
-        # Ensure name is valid (max 63 chars, starts with letter)
-        service_name = service_name[:63]
-        if not service_name[0].isalpha():
+            # Generate default name from registered model or training run
+            # Priority: vertex_model_name > registered_model.model_name > training_run.name > ml_model.name
+            model_name = (
+                training_run.vertex_model_name or
+                (training_run.registered_model.model_name
+                 if training_run.registered_model else None) or
+                training_run.name or
+                self.ml_model.name  # Fallback to ModelEndpoint
+            )
+            service_name = f"{model_name}-serving".lower().replace('_', '-')
+        # Ensure name is valid (max 63 chars, starts with letter, alphanumeric + hyphens only)
+        service_name = ''.join(c if c.isalnum() or c == '-' else '-' for c in service_name)
+        service_name = service_name.replace('--', '-').strip('-')[:63]
+        if not service_name or not service_name[0].isalpha():
             service_name = f"m-{service_name}"[:63]
 
         # Get deployment config
@@ -2043,8 +2103,11 @@ class TrainingService:
         max_instances = deployment_config.get('max_instances', 10)
         timeout = deployment_config.get('timeout', '300')  # 5 minutes default
 
-        # Model path in GCS
-        model_path = f"{training_run.gcs_artifacts_path}/pushed_model"
+        # Model path in GCS - need to find the versioned subdirectory
+        # TFX Pusher creates: pushed_model/{version_number}/saved_model.pb
+        # We need to pass the full path including the version subdirectory
+        base_model_path = f"{training_run.gcs_artifacts_path}/pushed_model"
+        model_path = self._find_versioned_model_path(base_model_path)
 
         # Select container image based on retrieval algorithm
         # ScaNN models require Python/Flask server with ScaNN ops support

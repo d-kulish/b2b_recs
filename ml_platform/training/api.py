@@ -3357,6 +3357,8 @@ def _serialize_registered_model(training_run, include_details=False, deployed_mo
             'recall_at_50': training_run.recall_at_50,
             'rmse': training_run.rmse,
             'mae': training_run.mae,
+            'test_rmse': training_run.test_rmse,
+            'test_mae': training_run.test_mae,
         }
     elif training_run.model_type == TrainingRun.MODEL_TYPE_RANKING:
         metrics = {

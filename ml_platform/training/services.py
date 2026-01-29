@@ -341,7 +341,8 @@ class TrainingService:
                 training_run.status = new_status
 
                 if new_status == TrainingRun.STATUS_COMPLETED:
-                    training_run.completed_at = timezone.now()
+                    # Use actual pipeline end time from Vertex AI instead of current time
+                    training_run.completed_at = pipeline_job.end_time or timezone.now()
                     logger.info(f"{training_run.display_name}: Pipeline completed, extracting results")
                     # Extract results from GCS
                     self._extract_results(training_run)
@@ -349,13 +350,19 @@ class TrainingService:
                     self._cache_training_history(training_run)
 
                 elif new_status == TrainingRun.STATUS_FAILED:
-                    training_run.completed_at = timezone.now()
+                    # Use actual pipeline end time from Vertex AI instead of current time
+                    training_run.completed_at = pipeline_job.end_time or timezone.now()
                     # Try to extract error message
                     if hasattr(pipeline_job, 'error') and pipeline_job.error:
                         training_run.error_message = str(pipeline_job.error)
                     logger.warning(
                         f"{training_run.display_name}: Pipeline failed: {training_run.error_message}"
                     )
+
+                elif new_status == TrainingRun.STATUS_CANCELLED:
+                    # Use actual pipeline end time from Vertex AI instead of current time
+                    training_run.completed_at = pipeline_job.end_time or timezone.now()
+                    logger.info(f"{training_run.display_name}: Pipeline was cancelled")
 
                 training_run.save()
 

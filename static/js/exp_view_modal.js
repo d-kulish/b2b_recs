@@ -1312,7 +1312,28 @@ const ExpViewModal = (function() {
                     <div class="exp-view-metric-card-value">${formatMetric(model.metrics.test_mae)}</div>
                 </div>
             `;
+        } else if (model.model_type === 'multitask') {
+            // Hybrid/Multitask models: R@50, R@100, Test RMSE, Test MAE
+            metricsHtml = `
+                <div class="exp-view-metric-card">
+                    <div class="exp-view-metric-card-label">R@50</div>
+                    <div class="exp-view-metric-card-value">${formatRecall(model.metrics.recall_at_50)}</div>
+                </div>
+                <div class="exp-view-metric-card">
+                    <div class="exp-view-metric-card-label">R@100</div>
+                    <div class="exp-view-metric-card-value">${formatRecall(model.metrics.recall_at_100)}</div>
+                </div>
+                <div class="exp-view-metric-card">
+                    <div class="exp-view-metric-card-label">Test RMSE</div>
+                    <div class="exp-view-metric-card-value">${formatMetric(model.metrics.test_rmse)}</div>
+                </div>
+                <div class="exp-view-metric-card">
+                    <div class="exp-view-metric-card-label">Test MAE</div>
+                    <div class="exp-view-metric-card-value">${formatMetric(model.metrics.test_mae)}</div>
+                </div>
+            `;
         } else {
+            // Retrieval models: R@5, R@10, R@50, R@100
             metricsHtml = `
                 <div class="exp-view-metric-card">
                     <div class="exp-view-metric-card-label">R@5</div>
@@ -1466,11 +1487,12 @@ const ExpViewModal = (function() {
                 { key: 'test_mae', label: 'Test MAE' }
             ];
         } else if (modelType === 'multitask') {
+            // Hybrid/Multitask: R@50, R@100, Test RMSE, Test MAE
             return [
                 { key: 'recall_at_50', label: 'R@50' },
                 { key: 'recall_at_100', label: 'R@100' },
-                { key: 'rmse', label: 'RMSE' },
-                { key: 'test_rmse', label: 'Test RMSE' }
+                { key: 'test_rmse', label: 'Test RMSE' },
+                { key: 'test_mae', label: 'Test MAE' }
             ];
         } else { // retrieval (default)
             return [
@@ -1596,7 +1618,34 @@ const ExpViewModal = (function() {
             };
         });
 
+        // Build scales configuration - single Y-axis for all model types
+        const scales = {
+            x: {
+                grid: {
+                    display: false
+                },
+                ticks: {
+                    font: chartDefaults.font.axis
+                }
+            },
+            y: {
+                beginAtZero: true,
+                grace: '5%',
+                grid: {
+                    color: '#f3f4f6'
+                },
+                ticks: {
+                    font: chartDefaults.font.axis,
+                    callback: function(value) {
+                        return value.toFixed(2);
+                    }
+                }
+            }
+        };
+
         const ctx = canvas.getContext('2d');
+
+        // For all model types: KPIs on X-axis, versions as separate colored datasets
         charts.versionsChart = new Chart(ctx, {
             type: 'bar',
             data: {
@@ -1622,34 +1671,17 @@ const ExpViewModal = (function() {
                         callbacks: {
                             label: function(context) {
                                 const value = context.raw;
+                                const kpiLabel = kpiConfig[context.dataIndex]?.label || '';
+                                // Format recall as percentage, RMSE/MAE as decimal
+                                if (kpiLabel.startsWith('R@')) {
+                                    return `${context.dataset.label}: ${value ? (value * 100).toFixed(1) + '%' : '-'}`;
+                                }
                                 return `${context.dataset.label}: ${value ? value.toFixed(3) : '-'}`;
                             }
                         }
                     }
                 },
-                scales: {
-                    x: {
-                        grid: {
-                            display: false
-                        },
-                        ticks: {
-                            font: chartDefaults.font.axis
-                        }
-                    },
-                    y: {
-                        beginAtZero: true,
-                        grace: '5%',
-                        grid: {
-                            color: '#f3f4f6'
-                        },
-                        ticks: {
-                            font: chartDefaults.font.axis,
-                            callback: function(value) {
-                                return value.toFixed(2);
-                            }
-                        }
-                    }
-                }
+                scales: scales
             }
         });
     }

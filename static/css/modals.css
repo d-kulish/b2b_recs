@@ -3345,3 +3345,85 @@ select option {
 }
 
 /* Note: .subchapter-body class removed - using .subchapter-content-outside directly */
+
+/* ============================================================================
+   MODEL PAGE HORIZONTAL NAVIGATION BAR
+   ============================================================================
+   Replaces vertical sidebar with horizontal tab bar below header card
+   ============================================================================ */
+
+.model-nav-bar {
+    position: relative;
+    margin-top: -24px;           /* Overlap with header card */
+    z-index: 20;
+    max-width: 1050px;           /* Increased from 900px (+15%) */
+    margin-left: auto;
+    margin-right: auto;
+    padding-top: 4px;            /* Space for green button to extend above */
+    padding-bottom: 4px;         /* Space for green button to extend below */
+}
+
+.model-nav-bar .progress-bar-pills {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    border: 1px solid #000;      /* Black thin border */
+    border-radius: 12px;         /* Rounded corners */
+    background-color: #fff;
+    overflow: visible;           /* Allow green button to extend beyond */
+}
+
+/* Larger pills for model navigation */
+.model-nav-bar .progress-step-pill {
+    padding: 6px 24px;           /* Smaller height for white buttons */
+    font-size: 15px;             /* Increased from 14px */
+    border-radius: 10px;
+}
+
+.model-nav-bar .progress-step-pill.current {
+    padding-top: 14px;           /* Taller green button */
+    padding-bottom: 14px;
+    border-radius: 10px;
+    margin-top: -6px;            /* Extend above container */
+    margin-bottom: -6px;         /* Extend below container */
+    margin-left: 2px;
+    margin-right: 2px;
+}
+
+.model-nav-bar .progress-step-pill.future {
+    background-color: #ffffff;
+    border-radius: 10px;
+}
+
+.model-nav-bar .progress-step-pill.completed {
+    padding-top: 6px;            /* Match white button height */
+    padding-bottom: 6px;
+    border-radius: 10px;
+    margin-right: 0;
+    padding-right: 24px;
+    border: none;
+    margin-top: 0;
+    margin-bottom: 0;
+}
+
+/* Mobile: horizontal scroll */
+@media (max-width: 768px) {
+    .model-nav-bar {
+        max-width: 100%;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        padding: 0 16px;
+    }
+
+    .model-nav-bar .progress-bar-pills {
+        min-width: max-content;
+    }
+}
+
+/* Anchor-based pills (clickable navigation) */
+.progress-step-pill-link {
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.progress-step-pill-link:hover:not(.current) {
+    background-color: #f3f4f6;
+}

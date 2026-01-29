@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides detailed specifications for implementing the **Deployment** domain in the ML Platform. The Deployment domain handles model serving, version management, and production deployment.
 
-**Last Updated**: 2025-12-01
+**Last Updated**: 2026-01-29 (Added Endpoint Testing & Validation)
 
 ---
 
@@ -793,3 +793,759 @@ def validate_api_key(auth_header: str) -> bool:
 - [Implementation Overview](../implementation.md)
 - [Training Phase](phase_training.md)
 - [Experiments Phase](phase_experiments.md)
+
+---
+
+# Endpoint Testing & Validation (2026-01-29)
+
+## Problem Statement
+
+Models deployed to Cloud Run via TF Serving have never been validated end-to-end. We need a systematic way to:
+
+1. Verify the deployed model accepts the expected input format
+2. Confirm the model returns valid recommendations (product IDs + scores)
+3. Measure inference latency and throughput
+4. Provide confidence that the model works as trained
+
+### Key Insight: Transform is Embedded
+
+The `ServingModel` includes the TFT (TensorFlow Transform) layer with all vocabularies and normalization parameters embedded. This means:
+
+- **No separate Transform step needed** when querying the endpoint
+- **Raw feature values required** in the correct format (aliased column names)
+- **Column names must match** the `FeatureConfig.buyer_model_features` display names
+
+---
+
+## Data Flow: Training vs Serving
+
+```
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ TRAINING TIME                                                                 │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                                                                               │
+│ Dataset Config (e.g., old_examples_chernigiv)                                │
+│   • primary_table, secondary_tables                                          │
+│   • column_aliases: {division_desc → category, mge_cat_desc → sub_category} │
+│   • filters: date range, top products by revenue, etc.                       │
+│                    │                                                          │
+│                    ▼                                                          │
+│ BigQueryExampleGen → TFRecords with aliased columns                          │
+│                    │                                                          │
+│                    ▼                                                          │
+│ Transform Component (FeatureConfig preprocessing_fn)                          │
+│   → Vocabularies, normalization, bucketization, cyclical encoding            │
+│                    │                                                          │
+│                    ▼                                                          │
+│ Trainer → TFRS Two-Tower Model                                               │
+│                    │                                                          │
+│                    ▼                                                          │
+│ Pusher → SavedModel with embedded TFT layer + product embeddings             │
+│                                                                               │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ SERVING TIME                                                                  │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                                                                               │
+│ Client Request (JSON):                                                        │
+│   {                                                                          │
+│     "instances": [{                                                          │
+│       "customer_id": "CUST123",                                              │
+│       "category": "Electronics",         ← Aliased column names              │
+│       "sub_category": "Laptops",                                             │
+│       "revenue": 5000.0,                                                     │
+│       "date": 1704067200                 ← Unix timestamp (INT64)            │
+│     }]                                                                       │
+│   }                                                                          │
+│                    │                                                          │
+│                    ▼                                                          │
+│ ServingModel.serve():                                                        │
+│   1. Apply TFT layer (vocab lookup, normalization)                           │
+│   2. Get query embedding from buyer tower                                    │
+│   3. Compute similarities with pre-computed product embeddings               │
+│   4. Return top-100 product_ids + scores                                     │
+│                    │                                                          │
+│                    ▼                                                          │
+│ Response: {"predictions": [{"product_ids": [...], "scores": [...]}]}         │
+│                                                                               │
+└──────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Endpoint Testing Service Architecture
+
+```
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ ENDPOINT TESTING SERVICE                                                      │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                                                                               │
+│ ┌─────────────────────────────────────────────────────────────────────────┐  │
+│ │ 1. Test Data Generator                                                   │  │
+│ │    • Input: dataset_id, feature_config_id, sample_count                 │  │
+│ │    • Action: Query BigQuery using Dataset config (same as ExampleGen)   │  │
+│ │    • Output: List of raw feature dicts ready for model input            │  │
+│ └─────────────────────────────────────────────────────────────────────────┘  │
+│                                        │                                      │
+│                                        ▼                                      │
+│ ┌─────────────────────────────────────────────────────────────────────────┐  │
+│ │ 2. Endpoint Caller                                                       │  │
+│ │    • Input: endpoint_url, test_data                                     │  │
+│ │    • Action: POST /v1/models/recommender:predict                        │  │
+│ │    • Output: {predictions, latency, status}                             │  │
+│ └─────────────────────────────────────────────────────────────────────────┘  │
+│                                        │                                      │
+│                                        ▼                                      │
+│ ┌─────────────────────────────────────────────────────────────────────────┐  │
+│ │ 3. Response Validator                                                    │  │
+│ │    • Validates: product_ids exists, scores are floats, count matches k  │  │
+│ │    • Optional: Cross-reference product_ids against known product table  │  │
+│ │    • Output: {valid: bool, issues: [], stats: {}}                       │  │
+│ └─────────────────────────────────────────────────────────────────────────┘  │
+│                                        │                                      │
+│                                        ▼                                      │
+│ ┌─────────────────────────────────────────────────────────────────────────┐  │
+│ │ 4. Results Report                                                        │  │
+│ │    • Success rate, average latency, score distributions                 │  │
+│ │    • Sample recommendations for review                                  │  │
+│ │    • Comparison with expected behavior (if baseline exists)             │  │
+│ └─────────────────────────────────────────────────────────────────────────┘  │
+│                                                                               │
+└──────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Implementation Plan
+
+### Phase 1: CLI Script (Quick Testing)
+
+**File:** `scripts/test_deployed_endpoint.py`
+
+A standalone script for immediate endpoint validation:
+
+```bash
+python scripts/test_deployed_endpoint.py \
+  --endpoint-url="https://chern-retriv-v5-serving-555035914949.europe-central2.run.app" \
+  --dataset-id=14 \
+  --feature-config-id=9 \
+  --sample-count=10
+```
+
+**Output:**
+```
+Endpoint Test Results
+=====================
+Endpoint: https://chern-retriv-v5-serving-...
+Dataset: old_examples_chernigiv
+Feature Config: chern_v2
+
+Health Check: PASSED
+Requests Sent: 10
+Successful: 10
+Failed: 0
+
+Latency (ms):
+  Avg: 245
+  Min: 180
+  Max: 320
+
+Validation: ALL PASSED
+  - All responses have product_ids (100 items each)
+  - All responses have scores (sorted descending)
+
+Sample Prediction:
+  Input: {"customer_id": "12345", "category": "Electronics", ...}
+  Top 5 Products: ["PROD001", "PROD002", "PROD003", "PROD004", "PROD005"]
+  Top 5 Scores: [0.95, 0.87, 0.82, 0.79, 0.75]
+```
+
+### Phase 2: Django API Endpoint
+
+**Endpoint:** `POST /api/deployed-endpoints/{id}/test/`
+
+**Request:**
+```json
+{
+  "sample_count": 10,
+  "timeout_seconds": 30,
+  "batch_size": 1
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "endpoint_url": "https://chern-retriv-v5-serving-...",
+  "test_config": {
+    "dataset": "old_examples_chernigiv",
+    "feature_config": "chern_v2",
+    "sample_count": 10
+  },
+  "health_check": {
+    "healthy": true,
+    "status_code": 200
+  },
+  "test_results": {
+    "requests_sent": 10,
+    "successful": 10,
+    "failed": 0,
+    "avg_latency_ms": 245,
+    "min_latency_ms": 180,
+    "max_latency_ms": 320
+  },
+  "validation": {
+    "all_valid": true,
+    "valid_count": 10,
+    "total_count": 10,
+    "issues": []
+  },
+  "sample_predictions": [
+    {
+      "input": {"customer_id": "12345", "category": "Electronics", ...},
+      "output": {
+        "product_ids": ["PROD001", "PROD002", ...],
+        "scores": [0.95, 0.87, ...]
+      }
+    }
+  ]
+}
+```
+
+### Phase 3: UI Integration
+
+Add a "Test Endpoint" button to:
+- Training page (on deployed model cards)
+- Models Registry page (on endpoint entries)
+
+**Modal Features:**
+- Configuration options (sample count, timeout)
+- Real-time progress indicator
+- Results display with sample predictions
+- Export results as JSON
+
+### Phase 4: Scheduled Health Checks
+
+**Cloud Scheduler Job:**
+- Run every 15 minutes for production endpoints
+- Alert on failures via Cloud Monitoring
+- Store results in `EndpointTestResult` model
+
+---
+
+## Component Specifications
+
+### Component 1: EndpointTestDataExtractor
+
+Extracts test data from BigQuery using the same query logic as training.
+
+```python
+class EndpointTestDataExtractor:
+    """
+    Extract test data from BigQuery using the same query logic as training,
+    but formatted for endpoint inference.
+    """
+
+    def __init__(self, dataset: Dataset, feature_config: FeatureConfig):
+        self.dataset = dataset
+        self.feature_config = feature_config
+        self.bq_service = BigQueryService(dataset.model_endpoint, dataset)
+
+    def get_buyer_feature_columns(self) -> List[str]:
+        """Get list of buyer feature column names (aliased)."""
+        return [
+            f.get('display_name') or f.get('column')
+            for f in self.feature_config.buyer_model_features
+        ]
+
+    def get_input_schema(self) -> Dict[str, str]:
+        """Get the expected input schema with types."""
+        schema = {}
+        for feature in self.feature_config.buyer_model_features:
+            col_name = feature.get('display_name') or feature.get('column')
+            bq_type = feature.get('bq_type', 'STRING')
+            schema[col_name] = bq_type
+        return schema
+
+    def extract_test_samples(self, count: int = 10) -> List[Dict]:
+        """
+        Query BigQuery for raw test data.
+        Returns list of dicts matching the model's input signature.
+        """
+        buyer_cols = self.get_buyer_feature_columns()
+        query = self._build_test_query(buyer_cols, count)
+        results = self.bq_service.execute_query(query)
+        return self._format_for_inference(results)
+
+    def _build_test_query(self, columns: List[str], limit: int) -> str:
+        """Build a simple SELECT query for test data."""
+        base_query = self.bq_service.generate_query(
+            self.dataset,
+            for_tfx=True  # Ensures TIMESTAMP → INT64 conversion
+        )
+        return f"""
+        WITH base AS ({base_query})
+        SELECT {', '.join(columns)}
+        FROM base
+        ORDER BY RAND()
+        LIMIT {limit}
+        """
+
+    def _format_for_inference(self, rows) -> List[Dict]:
+        """Format BQ results for TF Serving input."""
+        formatted = []
+        for row in rows:
+            instance = {}
+            for feature in self.feature_config.buyer_model_features:
+                col_name = feature.get('display_name') or feature.get('column')
+                bq_type = feature.get('bq_type', 'STRING')
+                value = row.get(col_name)
+
+                # Convert to expected type
+                if bq_type in ('TIMESTAMP', 'DATETIME'):
+                    instance[col_name] = int(value) if value else 0
+                elif bq_type in ('FLOAT64', 'FLOAT', 'NUMERIC'):
+                    instance[col_name] = float(value) if value else 0.0
+                elif bq_type in ('INT64', 'INTEGER'):
+                    instance[col_name] = int(value) if value else 0
+                else:
+                    instance[col_name] = str(value) if value else ""
+
+            formatted.append(instance)
+        return formatted
+```
+
+### Component 2: EndpointTester
+
+Sends requests to the deployed endpoint and measures performance.
+
+```python
+class EndpointTester:
+    """Test a deployed TF Serving endpoint."""
+
+    def __init__(self, endpoint_url: str, model_name: str = 'recommender'):
+        self.endpoint_url = endpoint_url.rstrip('/')
+        self.model_name = model_name
+        self.predict_url = f"{self.endpoint_url}/v1/models/{model_name}:predict"
+        self.status_url = f"{self.endpoint_url}/v1/models/{model_name}"
+
+    def health_check(self) -> Dict:
+        """Check if the endpoint is healthy."""
+        try:
+            resp = requests.get(self.status_url, timeout=10)
+            return {
+                "healthy": resp.status_code == 200,
+                "status_code": resp.status_code,
+                "response": resp.json() if resp.ok else resp.text
+            }
+        except requests.RequestException as e:
+            return {
+                "healthy": False,
+                "status_code": None,
+                "error": str(e)
+            }
+
+    def predict(self, instances: List[Dict], timeout: int = 30) -> Dict:
+        """Send prediction request and measure latency."""
+        start = time.time()
+
+        try:
+            resp = requests.post(
+                self.predict_url,
+                json={"instances": instances},
+                timeout=timeout
+            )
+            latency_ms = (time.time() - start) * 1000
+
+            return {
+                "success": resp.ok,
+                "status_code": resp.status_code,
+                "latency_ms": latency_ms,
+                "predictions": resp.json().get('predictions') if resp.ok else None,
+                "error": resp.text if not resp.ok else None
+            }
+        except requests.RequestException as e:
+            return {
+                "success": False,
+                "status_code": None,
+                "latency_ms": (time.time() - start) * 1000,
+                "predictions": None,
+                "error": str(e)
+            }
+
+    def run_test_suite(
+        self,
+        test_data: List[Dict],
+        batch_size: int = 1,
+        timeout: int = 30
+    ) -> Dict:
+        """Run full test suite with multiple requests."""
+        results = {
+            "total_requests": 0,
+            "successful": 0,
+            "failed": 0,
+            "latencies": [],
+            "predictions": [],
+            "errors": []
+        }
+
+        for i in range(0, len(test_data), batch_size):
+            batch = test_data[i:i+batch_size]
+            result = self.predict(batch, timeout=timeout)
+
+            results["total_requests"] += 1
+            if result["success"]:
+                results["successful"] += 1
+                results["latencies"].append(result["latency_ms"])
+                results["predictions"].append({
+                    "input": batch,
+                    "output": result["predictions"]
+                })
+            else:
+                results["failed"] += 1
+                results["errors"].append({
+                    "input": batch,
+                    "error": result["error"],
+                    "status_code": result["status_code"]
+                })
+
+        # Calculate statistics
+        if results["latencies"]:
+            results["avg_latency_ms"] = sum(results["latencies"]) / len(results["latencies"])
+            results["min_latency_ms"] = min(results["latencies"])
+            results["max_latency_ms"] = max(results["latencies"])
+            results["p50_latency_ms"] = sorted(results["latencies"])[len(results["latencies"]) // 2]
+            results["p95_latency_ms"] = sorted(results["latencies"])[int(len(results["latencies"]) * 0.95)]
+
+        return results
+```
+
+### Component 3: ResponseValidator
+
+Validates that prediction responses match the expected format.
+
+```python
+class ResponseValidator:
+    """Validate prediction responses."""
+
+    def __init__(self, expected_k: int = 100):
+        self.expected_k = expected_k
+
+    def validate(self, predictions: List[Dict]) -> Dict:
+        """Validate prediction format and content."""
+        issues = []
+        valid_count = 0
+
+        for i, pred in enumerate(predictions):
+            pred_issues = self._validate_single(pred)
+
+            if pred_issues:
+                issues.append({"prediction_index": i, "issues": pred_issues})
+            else:
+                valid_count += 1
+
+        return {
+            "all_valid": len(issues) == 0,
+            "valid_count": valid_count,
+            "total_count": len(predictions),
+            "issues": issues
+        }
+
+    def _validate_single(self, pred: Dict) -> List[str]:
+        """Validate a single prediction."""
+        issues = []
+
+        # Check product_ids exists and is correct format
+        if 'product_ids' not in pred:
+            issues.append("Missing 'product_ids' field")
+        elif not isinstance(pred['product_ids'], list):
+            issues.append("'product_ids' is not a list")
+        elif len(pred['product_ids']) != self.expected_k:
+            issues.append(f"Expected {self.expected_k} products, got {len(pred['product_ids'])}")
+
+        # Check scores exists and is correct format
+        if 'scores' not in pred:
+            issues.append("Missing 'scores' field")
+        elif not isinstance(pred['scores'], list):
+            issues.append("'scores' is not a list")
+        elif 'product_ids' in pred and len(pred.get('scores', [])) != len(pred.get('product_ids', [])):
+            issues.append("Scores and product_ids length mismatch")
+
+        # Check scores are valid and sorted
+        if 'scores' in pred and isinstance(pred['scores'], list) and len(pred['scores']) > 0:
+            if not all(isinstance(s, (int, float)) for s in pred['scores']):
+                issues.append("Scores contain non-numeric values")
+            elif pred['scores'] != sorted(pred['scores'], reverse=True):
+                issues.append("Scores not sorted in descending order")
+
+        return issues
+```
+
+### Component 4: Test Orchestrator
+
+Combines all components into a single test flow.
+
+```python
+def test_deployed_endpoint(
+    endpoint_url: str,
+    dataset_id: int,
+    feature_config_id: int,
+    sample_count: int = 10,
+    batch_size: int = 1,
+    timeout: int = 30
+) -> Dict:
+    """
+    Complete endpoint test flow.
+
+    Args:
+        endpoint_url: Full URL of the deployed endpoint
+        dataset_id: ID of the Dataset used for training
+        feature_config_id: ID of the FeatureConfig used for training
+        sample_count: Number of test samples to generate
+        batch_size: Number of instances per request
+        timeout: Request timeout in seconds
+
+    Returns:
+        Comprehensive test report dict
+    """
+    from ml_platform.models import Dataset, FeatureConfig
+
+    # Load configs
+    dataset = Dataset.objects.get(id=dataset_id)
+    feature_config = FeatureConfig.objects.get(id=feature_config_id)
+
+    # Initialize components
+    extractor = EndpointTestDataExtractor(dataset, feature_config)
+    tester = EndpointTester(endpoint_url)
+    validator = ResponseValidator(expected_k=100)
+
+    # Health check first
+    health = tester.health_check()
+    if not health["healthy"]:
+        return {
+            "success": False,
+            "error": "Endpoint health check failed",
+            "health_check": health
+        }
+
+    # Extract test data
+    try:
+        test_data = extractor.extract_test_samples(sample_count)
+    except Exception as e:
+        return {
+            "success": False,
+            "error": f"Failed to extract test data: {str(e)}",
+            "health_check": health
+        }
+
+    # Run predictions
+    results = tester.run_test_suite(test_data, batch_size=batch_size, timeout=timeout)
+
+    # Validate responses
+    all_predictions = []
+    for p in results["predictions"]:
+        if p["output"]:
+            all_predictions.extend(p["output"])
+
+    validation = validator.validate(all_predictions)
+
+    # Build report
+    return {
+        "success": results["failed"] == 0 and validation["all_valid"],
+        "endpoint_url": endpoint_url,
+        "test_config": {
+            "dataset_id": dataset_id,
+            "dataset_name": dataset.name,
+            "feature_config_id": feature_config_id,
+            "feature_config_name": feature_config.name,
+            "sample_count": sample_count,
+            "batch_size": batch_size
+        },
+        "input_schema": extractor.get_input_schema(),
+        "health_check": health,
+        "test_results": {
+            "requests_sent": results["total_requests"],
+            "successful": results["successful"],
+            "failed": results["failed"],
+            "avg_latency_ms": results.get("avg_latency_ms"),
+            "min_latency_ms": results.get("min_latency_ms"),
+            "max_latency_ms": results.get("max_latency_ms"),
+            "p50_latency_ms": results.get("p50_latency_ms"),
+            "p95_latency_ms": results.get("p95_latency_ms")
+        },
+        "validation": validation,
+        "errors": results.get("errors", []),
+        "sample_predictions": results["predictions"][:3]
+    }
+```
+
+---
+
+## Database Model
+
+### EndpointTestResult (New Model)
+
+Stores test results for historical tracking.
+
+```python
+class EndpointTestResult(models.Model):
+    """Stores endpoint test results for tracking."""
+
+    deployed_endpoint = models.ForeignKey(
+        'DeployedEndpoint',
+        on_delete=models.CASCADE,
+        related_name='test_results'
+    )
+
+    # Test configuration
+    dataset = models.ForeignKey('Dataset', on_delete=models.SET_NULL, null=True)
+    feature_config = models.ForeignKey('FeatureConfig', on_delete=models.SET_NULL, null=True)
+    sample_count = models.PositiveIntegerField()
+
+    # Results
+    success = models.BooleanField()
+    requests_sent = models.PositiveIntegerField()
+    requests_succeeded = models.PositiveIntegerField()
+    requests_failed = models.PositiveIntegerField()
+
+    # Latency metrics (ms)
+    avg_latency_ms = models.FloatField(null=True)
+    min_latency_ms = models.FloatField(null=True)
+    max_latency_ms = models.FloatField(null=True)
+    p50_latency_ms = models.FloatField(null=True)
+    p95_latency_ms = models.FloatField(null=True)
+
+    # Validation
+    all_responses_valid = models.BooleanField()
+    validation_issues = models.JSONField(default=list)
+
+    # Full results (JSON)
+    full_results = models.JSONField(default=dict)
+
+    # Metadata
+    triggered_by = models.CharField(max_length=50)  # 'manual', 'api', 'scheduled'
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['deployed_endpoint', '-created_at']),
+            models.Index(fields=['success', '-created_at']),
+        ]
+```
+
+---
+
+## Manual Testing Guide
+
+For immediate testing before the service is built:
+
+### Step 1: Get Input Schema
+
+```python
+# Django shell
+from ml_platform.models import FeatureConfig
+
+fc = FeatureConfig.objects.get(name='chern_v2')
+for f in fc.buyer_model_features:
+    print(f"{f.get('display_name') or f.get('column')}: {f.get('bq_type')}")
+```
+
+### Step 2: Query Sample Data
+
+```sql
+-- Replace column names with actual buyer features from Step 1
+SELECT
+  customer_id,
+  category,
+  sub_category,
+  revenue,
+  UNIX_SECONDS(CAST(date AS TIMESTAMP)) as date
+FROM `b2b-recs.raw_data.transactions` t
+LEFT JOIN `b2b-recs.raw_data.products` p ON t.product_id = p.product_id
+LIMIT 5
+```
+
+### Step 3: Test Endpoint
+
+```bash
+# Health check
+curl "https://chern-retriv-v5-serving-555035914949.europe-central2.run.app/v1/models/recommender"
+
+# Prediction request
+curl -X POST \
+  "https://chern-retriv-v5-serving-555035914949.europe-central2.run.app/v1/models/recommender:predict" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "instances": [
+      {
+        "customer_id": "12345",
+        "category": "Electronics",
+        "sub_category": "Laptops",
+        "revenue": 5000.0,
+        "date": 1704067200
+      }
+    ]
+  }'
+```
+
+### Step 4: Verify Response
+
+Expected format:
+```json
+{
+  "predictions": [
+    {
+      "product_ids": ["PROD001", "PROD002", ...],
+      "scores": [0.95, 0.87, ...]
+    }
+  ]
+}
+```
+
+Validation checklist:
+- [ ] Response status is 200
+- [ ] `predictions` array exists
+- [ ] Each prediction has `product_ids` (100 items)
+- [ ] Each prediction has `scores` (100 items)
+- [ ] Scores are sorted descending
+- [ ] Product IDs are valid strings
+
+---
+
+## Troubleshooting
+
+### Common Issues
+
+| Issue | Cause | Solution |
+|-------|-------|----------|
+| 404 Not Found | Model name mismatch | Check `MODEL_NAME` env var in Cloud Run |
+| 400 Bad Request | Input schema mismatch | Verify column names match FeatureConfig |
+| 500 Internal Error | Transform failure | Check model signature vs input types |
+| Cold start timeout | Scale-to-zero + large model | Increase `min_instances` to 1 |
+| Wrong product IDs | Model not properly saved | Verify `pushed_model` path has correct version |
+
+### Debugging Commands
+
+```bash
+# Check Cloud Run service status
+gcloud run services describe chern-retriv-v5-serving --region=europe-central2
+
+# View service logs
+gcloud run services logs read chern-retriv-v5-serving --region=europe-central2 --limit=50
+
+# Check model signature
+saved_model_cli show --dir=/path/to/model --all
+```
+
+---
+
+## Endpoint Testing Roadmap
+
+1. **Phase 1** (Current): CLI script for manual testing
+2. **Phase 2**: Django API endpoint + test history storage
+3. **Phase 3**: UI integration (Test button on deployed models)
+4. **Phase 4**: Scheduled health checks with alerting
+5. **Phase 5**: Load testing support (concurrent requests, throughput measurement)

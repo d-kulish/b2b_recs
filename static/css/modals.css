@@ -3356,7 +3356,7 @@ select option {
     position: relative;
     margin-top: -28px;           /* Overlap with header card */
     z-index: 20;
-    max-width: 1050px;           /* Increased from 900px (+15%) */
+    max-width: 1155px;           /* Increased to match wider content area */
     margin-left: auto;
     margin-right: auto;
     padding-top: 4px;            /* Space for green button to extend above */

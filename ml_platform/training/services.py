@@ -79,13 +79,14 @@ class TrainingService:
 
     PIPELINE_DISPLAY_NAME_PREFIX = 'training'
 
-    # 8 stages for Training (vs 6 for Experiments)
-    # Includes Evaluator and Pusher components
+    # 9 stages for Training (vs 6 for Experiments)
+    # Includes Evaluator, Register (model registry), and optional Deploy
     # NOTE: Stage names must match TFX_PIPELINE.components 'id' in pipeline_dag.js
-    STAGE_ORDER = ['Compile', 'Examples', 'Stats', 'Schema', 'Transform', 'Train', 'Evaluator', 'Pusher']
+    STAGE_ORDER = ['Compile', 'Examples', 'Stats', 'Schema', 'Transform', 'Train', 'Evaluator', 'Register', 'Deploy']
 
     # Mapping from TFX component names to display names
     # NOTE: Display names must match TFX_PIPELINE.components 'id' in pipeline_dag.js
+    # 'pusher' TFX component maps to 'Register' display name (model registry registration)
     STAGE_NAME_MAP = {
         'bigqueryexamplegen': 'Examples',
         'statisticsgen': 'Stats',
@@ -93,7 +94,7 @@ class TrainingService:
         'transform': 'Transform',
         'trainer': 'Train',
         'evaluator': 'Evaluator',
-        'pusher': 'Pusher',
+        'pusher': 'Register',
     }
 
     def __init__(self, ml_model):
@@ -290,6 +291,17 @@ class TrainingService:
             f"Refreshing status (current: {training_run.status})"
         )
 
+        # Skip refresh for deployment-related states (handled separately)
+        if training_run.status in (
+            TrainingRun.STATUS_DEPLOYING,
+            TrainingRun.STATUS_DEPLOYED,
+            TrainingRun.STATUS_DEPLOY_FAILED
+        ):
+            logger.info(
+                f"{training_run.display_name}: In deployment state, skipping pipeline refresh"
+            )
+            return training_run
+
         # Phase 1: If no Vertex AI job yet, check Cloud Build status
         if not training_run.vertex_pipeline_job_name:
             logger.info(
@@ -412,7 +424,11 @@ class TrainingService:
                 training_run.started_at = timezone.now()
 
                 # Update stage_details: Compile completed, Examples starting
-                training_run.stage_details = [
+                # Check if deployment is enabled to include Deploy stage
+                deployment_config = training_run.deployment_config or {}
+                deploy_enabled = deployment_config.get('enabled', False)
+
+                stage_details = [
                     {'name': 'Compile', 'status': 'completed', 'duration_seconds': None},
                     {'name': 'Examples', 'status': 'running', 'duration_seconds': None},
                     {'name': 'Stats', 'status': 'pending', 'duration_seconds': None},
@@ -420,10 +436,20 @@ class TrainingService:
                     {'name': 'Transform', 'status': 'pending', 'duration_seconds': None},
                     {'name': 'Train', 'status': 'pending', 'duration_seconds': None},
                     {'name': 'Evaluator', 'status': 'pending', 'duration_seconds': None},
-                    {'name': 'Pusher', 'status': 'pending', 'duration_seconds': None},
+                    {'name': 'Register', 'status': 'pending', 'duration_seconds': None},
                 ]
+
+                # Add Deploy stage if deployment is enabled, otherwise mark as skipped
+                stage_details.append({
+                    'name': 'Deploy',
+                    'status': 'pending' if deploy_enabled else 'skipped',
+                    'duration_seconds': None
+                })
+
+                training_run.stage_details = stage_details
                 training_run.current_stage = 'examples'
-                training_run.progress_percent = 12  # ~1/8 stages complete
+                total_stages = 9 if deploy_enabled else 8
+                training_run.progress_percent = int(100 / total_stages)  # ~1/9 or 1/8 stages complete
 
                 training_run.save(update_fields=[
                     'vertex_pipeline_job_name',
@@ -446,6 +472,10 @@ class TrainingService:
                 training_run.completed_at = timezone.now()
 
                 # Update stage_details: Compile failed
+                # Check if deployment is enabled to include Deploy stage
+                deployment_config = training_run.deployment_config or {}
+                deploy_enabled = deployment_config.get('enabled', False)
+
                 training_run.stage_details = [
                     {'name': 'Compile', 'status': 'failed', 'duration_seconds': None},
                     {'name': 'Examples', 'status': 'pending', 'duration_seconds': None},
@@ -454,7 +484,8 @@ class TrainingService:
                     {'name': 'Transform', 'status': 'pending', 'duration_seconds': None},
                     {'name': 'Train', 'status': 'pending', 'duration_seconds': None},
                     {'name': 'Evaluator', 'status': 'pending', 'duration_seconds': None},
-                    {'name': 'Pusher', 'status': 'pending', 'duration_seconds': None},
+                    {'name': 'Register', 'status': 'pending', 'duration_seconds': None},
+                    {'name': 'Deploy', 'status': 'pending' if deploy_enabled else 'skipped', 'duration_seconds': None},
                 ]
                 training_run.current_stage = 'failed'
 
@@ -487,6 +518,10 @@ class TrainingService:
             pipeline_state = pipeline_job.state.name
             logger.info(f"{training_run.display_name}: Pipeline state is {pipeline_state}")
 
+            # Check if deployment is enabled
+            deployment_config = training_run.deployment_config or {}
+            deploy_enabled = deployment_config.get('enabled', False)
+
             # Handle terminal pipeline states first
             if pipeline_state == 'PIPELINE_STATE_SUCCEEDED':
                 # Pipeline completed - check actual task statuses to handle skipped stages
@@ -496,7 +531,9 @@ class TrainingService:
                     {'name': 'Compile', 'status': 'completed', 'duration_seconds': None}
                 ]
 
-                for stage_name in self.STAGE_ORDER[1:]:  # Skip 'Compile'
+                # Process pipeline stages (excluding Deploy which is handled separately)
+                pipeline_stages = [s for s in self.STAGE_ORDER[1:] if s != 'Deploy']
+                for stage_name in pipeline_stages:
                     task_info = task_statuses.get(stage_name, {})
                     # Default to 'skipped' if task not found (wasn't triggered)
                     status = task_info.get('status', 'skipped')
@@ -507,6 +544,15 @@ class TrainingService:
                         'status': status,
                         'duration_seconds': duration
                     })
+
+                # Add Deploy stage with appropriate status
+                # Note: Actual Deploy status is updated by _auto_deploy_to_cloud_run
+                # At this point, if deploy is enabled, it's 'pending' until _extract_results runs
+                stage_details.append({
+                    'name': 'Deploy',
+                    'status': 'pending' if deploy_enabled else 'skipped',
+                    'duration_seconds': None
+                })
 
                 current_stage = 'completed'
                 progress_percent = 100
@@ -521,7 +567,8 @@ class TrainingService:
                 ]
 
                 failed_stage_found = False
-                for stage_name in self.STAGE_ORDER[1:]:  # Skip 'Compile'
+                pipeline_stages = [s for s in self.STAGE_ORDER[1:] if s != 'Deploy']
+                for stage_name in pipeline_stages:
                     task_info = task_statuses.get(stage_name, {})
                     status = task_info.get('status', 'pending')
                     duration = task_info.get('duration_seconds')
@@ -539,10 +586,17 @@ class TrainingService:
                         'duration_seconds': duration
                     })
 
+                # Add Deploy stage (pending since pipeline failed before reaching it)
+                stage_details.append({
+                    'name': 'Deploy',
+                    'status': 'pending' if deploy_enabled else 'skipped',
+                    'duration_seconds': None
+                })
+
                 # If no specific failed stage found, mark first pending/running as failed
                 if not failed_stage_found:
                     for stage in stage_details:
-                        if stage['name'] != 'Compile' and stage['status'] in ('pending', 'running'):
+                        if stage['name'] not in ('Compile', 'Deploy') and stage['status'] in ('pending', 'running'):
                             stage['status'] = 'failed'
                             training_run.error_stage = stage['name'].lower()
                             break
@@ -559,7 +613,8 @@ class TrainingService:
                     {'name': 'Compile', 'status': 'completed', 'duration_seconds': None}
                 ]
 
-                for stage_name in self.STAGE_ORDER[1:]:  # Skip 'Compile'
+                pipeline_stages = [s for s in self.STAGE_ORDER[1:] if s != 'Deploy']
+                for stage_name in pipeline_stages:
                     task_info = task_statuses.get(stage_name, {})
                     stage_details.append({
                         'name': stage_name,
@@ -567,9 +622,18 @@ class TrainingService:
                         'duration_seconds': task_info.get('duration_seconds')
                     })
 
-                # Determine current stage
+                # Add Deploy stage (pending until pipeline completes)
+                stage_details.append({
+                    'name': 'Deploy',
+                    'status': 'pending' if deploy_enabled else 'skipped',
+                    'duration_seconds': None
+                })
+
+                # Determine current stage (excluding Deploy which comes after pipeline)
                 current_stage = 'completed'
                 for stage in stage_details:
+                    if stage['name'] == 'Deploy':
+                        continue  # Skip Deploy stage for current stage determination
                     if stage['status'] == 'running':
                         current_stage = stage['name'].lower()
                         break
@@ -805,6 +869,130 @@ class TrainingService:
             self._register_to_model_registry(training_run)
         except Exception as e:
             logger.warning(f"Model registration failed (non-fatal): {e}")
+
+        # Auto-deploy to Cloud Run if enabled
+        deployment_config = training_run.deployment_config or {}
+        if deployment_config.get('enabled'):
+            try:
+                self._auto_deploy_to_cloud_run(training_run)
+            except Exception as e:
+                logger.error(f"Auto-deployment failed for {training_run.display_name}: {e}")
+                training_run.status = TrainingRun.STATUS_DEPLOY_FAILED
+                training_run.deployment_status = 'failed'
+                training_run.deployment_error = str(e)
+                training_run.save(update_fields=['status', 'deployment_status', 'deployment_error'])
+
+    def _auto_deploy_to_cloud_run(self, training_run: TrainingRun) -> None:
+        """
+        Automatically deploy to Cloud Run after successful training.
+        Called from _extract_results() when deployment is enabled.
+
+        Updates the training run status and stage_details to reflect deployment progress.
+
+        Args:
+            training_run: TrainingRun instance with deployment_config.enabled = True
+        """
+        from .models import DeployedEndpoint
+
+        deployment_config = training_run.deployment_config or {}
+        service_name = deployment_config.get('service_name')
+
+        logger.info(
+            f"{training_run.display_name}: Starting auto-deployment to Cloud Run"
+            f" (service: {service_name})"
+        )
+
+        # Update status to deploying
+        training_run.status = TrainingRun.STATUS_DEPLOYING
+        training_run.deployment_status = 'deploying'
+        training_run.deploy_enabled = True
+        training_run.deployment_started_at = timezone.now()
+        training_run.save(update_fields=[
+            'status', 'deployment_status', 'deploy_enabled', 'deployment_started_at'
+        ])
+
+        # Update stage_details to show Deploy stage as running
+        self._update_deploy_stage_status(training_run, 'running')
+
+        try:
+            # Call existing deploy_to_cloud_run method
+            service_url = self.deploy_to_cloud_run(training_run, service_name=service_name)
+
+            # Update training run with successful deployment
+            training_run.status = TrainingRun.STATUS_DEPLOYED
+            training_run.deployment_status = 'deployed'
+            training_run.deployment_completed_at = timezone.now()
+
+            # Link to the DeployedEndpoint record
+            if service_name:
+                try:
+                    endpoint = DeployedEndpoint.objects.get(service_name=service_name)
+                    training_run.deployed_endpoint = endpoint
+                except DeployedEndpoint.DoesNotExist:
+                    pass
+
+            training_run.save(update_fields=[
+                'status', 'deployment_status', 'deployment_completed_at', 'deployed_endpoint'
+            ])
+
+            # Update stage_details to show Deploy stage as completed
+            self._update_deploy_stage_status(training_run, 'completed')
+
+            logger.info(
+                f"{training_run.display_name}: Auto-deployment completed successfully"
+                f" - URL: {service_url}"
+            )
+
+        except Exception as e:
+            # Deployment failed
+            training_run.status = TrainingRun.STATUS_DEPLOY_FAILED
+            training_run.deployment_status = 'failed'
+            training_run.deployment_error = str(e)
+            training_run.deployment_completed_at = timezone.now()
+            training_run.save(update_fields=[
+                'status', 'deployment_status', 'deployment_error', 'deployment_completed_at'
+            ])
+
+            # Update stage_details to show Deploy stage as failed
+            self._update_deploy_stage_status(training_run, 'failed')
+
+            logger.error(
+                f"{training_run.display_name}: Auto-deployment failed: {e}"
+            )
+            raise
+
+    def _update_deploy_stage_status(self, training_run: TrainingRun, status: str) -> None:
+        """
+        Update the Deploy stage status in stage_details.
+
+        Args:
+            training_run: TrainingRun instance
+            status: New status ('pending', 'running', 'completed', 'failed', 'skipped')
+        """
+        stage_details = training_run.stage_details or []
+
+        # Check if Deploy stage already exists
+        deploy_stage_exists = any(s.get('name') == 'Deploy' for s in stage_details)
+
+        if deploy_stage_exists:
+            # Update existing Deploy stage
+            for stage in stage_details:
+                if stage.get('name') == 'Deploy':
+                    stage['status'] = status
+                    if status == 'completed' and training_run.deployment_started_at:
+                        duration = (timezone.now() - training_run.deployment_started_at).total_seconds()
+                        stage['duration_seconds'] = int(duration)
+                    break
+        else:
+            # Add Deploy stage
+            stage_details.append({
+                'name': 'Deploy',
+                'status': status,
+                'duration_seconds': None
+            })
+
+        training_run.stage_details = stage_details
+        training_run.save(update_fields=['stage_details'])
 
     def _register_to_model_registry(self, training_run: TrainingRun) -> None:
         """
@@ -2084,7 +2272,11 @@ class TrainingService:
             training_run.cloud_build_run_id = run_id
             training_run.status = TrainingRun.STATUS_SUBMITTING
 
-            # Initialize stage_details with 8 stages
+            # Check if deployment is enabled
+            deployment_config = training_run.deployment_config or {}
+            deploy_enabled = deployment_config.get('enabled', False)
+
+            # Initialize stage_details with 9 stages (including Deploy)
             training_run.stage_details = [
                 {'name': 'Compile', 'status': 'running', 'duration_seconds': None},
                 {'name': 'Examples', 'status': 'pending', 'duration_seconds': None},
@@ -2093,7 +2285,8 @@ class TrainingService:
                 {'name': 'Transform', 'status': 'pending', 'duration_seconds': None},
                 {'name': 'Train', 'status': 'pending', 'duration_seconds': None},
                 {'name': 'Evaluator', 'status': 'pending', 'duration_seconds': None},
-                {'name': 'Pusher', 'status': 'pending', 'duration_seconds': None},
+                {'name': 'Register', 'status': 'pending', 'duration_seconds': None},
+                {'name': 'Deploy', 'status': 'pending' if deploy_enabled else 'skipped', 'duration_seconds': None},
             ]
             training_run.current_stage = 'compile'
             training_run.save(update_fields=[

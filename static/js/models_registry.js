@@ -353,7 +353,7 @@ const ModelsRegistry = (function() {
                 emptyState.innerHTML = `
                     <div class="empty-icon"><i class="fas fa-cube"></i></div>
                     <h3>No Registered Models</h3>
-                    <p>Complete training runs with the Pusher component to register models in Vertex AI Model Registry.</p>
+                    <p>Complete training runs with the Register component to register models in Vertex AI Model Registry.</p>
                 `;
             }
             return;

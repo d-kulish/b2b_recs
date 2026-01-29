@@ -375,7 +375,7 @@ const ModelsRegistry = (function() {
                             <th>Version</th>
                             <th>Metrics</th>
                             <th>Age</th>
-                            <th>Actions</th>
+                            <th class="models-actions-header">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -396,7 +396,10 @@ const ModelsRegistry = (function() {
         const rowNum = (state.pagination.page - 1) * state.pagination.pageSize + idx + 1;
         const age = formatAge(model.registered_at);
 
-        // Get primary metric for display
+        // Get metrics for display based on model type
+        // - Retrieval: R@5, R@10, R@50, R@100
+        // - Ranking: RMSE, Test RMSE, MAE, Test MAE
+        // - Multitask/Hybrid: R@50, R@100, RMSE, Test RMSE
         let metricsHtml = '';
         if (model.metrics) {
             if (model.model_type === 'ranking') {
@@ -406,12 +409,49 @@ const ModelsRegistry = (function() {
                         <span class="models-metric-value">${formatMetric(model.metrics.rmse, 2)}</span>
                     </div>
                     <div class="models-metric-item">
+                        <span class="models-metric-label">Test RMSE</span>
+                        <span class="models-metric-value">${formatMetric(model.metrics.test_rmse, 2)}</span>
+                    </div>
+                    <div class="models-metric-item">
                         <span class="models-metric-label">MAE</span>
                         <span class="models-metric-value">${formatMetric(model.metrics.mae, 2)}</span>
                     </div>
+                    <div class="models-metric-item">
+                        <span class="models-metric-label">Test MAE</span>
+                        <span class="models-metric-value">${formatMetric(model.metrics.test_mae, 2)}</span>
+                    </div>
+                `;
+            } else if (model.model_type === 'multitask') {
+                // Hybrid/Multitask: R@50, R@100, RMSE, Test RMSE
+                metricsHtml = `
+                    <div class="models-metric-item">
+                        <span class="models-metric-label">R@50</span>
+                        <span class="models-metric-value">${formatMetricAsPercent(model.metrics.recall_at_50)}</span>
+                    </div>
+                    <div class="models-metric-item">
+                        <span class="models-metric-label">R@100</span>
+                        <span class="models-metric-value">${formatMetricAsPercent(model.metrics.recall_at_100)}</span>
+                    </div>
+                    <div class="models-metric-item">
+                        <span class="models-metric-label">RMSE</span>
+                        <span class="models-metric-value">${formatMetric(model.metrics.rmse, 2)}</span>
+                    </div>
+                    <div class="models-metric-item">
+                        <span class="models-metric-label">Test RMSE</span>
+                        <span class="models-metric-value">${formatMetric(model.metrics.test_rmse, 2)}</span>
+                    </div>
                 `;
             } else {
+                // Retrieval: R@5, R@10, R@50, R@100
                 metricsHtml = `
+                    <div class="models-metric-item">
+                        <span class="models-metric-label">R@5</span>
+                        <span class="models-metric-value">${formatMetricAsPercent(model.metrics.recall_at_5)}</span>
+                    </div>
+                    <div class="models-metric-item">
+                        <span class="models-metric-label">R@10</span>
+                        <span class="models-metric-value">${formatMetricAsPercent(model.metrics.recall_at_10)}</span>
+                    </div>
                     <div class="models-metric-item">
                         <span class="models-metric-label">R@50</span>
                         <span class="models-metric-value">${formatMetricAsPercent(model.metrics.recall_at_50)}</span>

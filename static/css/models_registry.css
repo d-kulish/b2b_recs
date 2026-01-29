@@ -287,6 +287,7 @@
 .models-metrics-cell {
     display: flex;
     gap: 8px;
+    flex-wrap: wrap;
 }
 
 .models-metric-chip {
@@ -386,14 +387,22 @@
    - .card-action-btn.deploy, .view, .schedule
    - .card-action-btn.icon-only.delete
    ========================================================================= */
+/* Actions column header: right-align to match button positions */
+.models-actions-header {
+    text-align: right;
+    padding-right: 16px !important;
+}
+
 .models-actions-cell {
     padding: 12px 16px !important;
 }
 
 /* Set fixed width for the actions column container in the table */
 /* Width: 210px gives ~102px per button (2 cols with 6px gap), matching Training Runs */
+/* margin-left: auto pushes the container to the right edge of the cell */
 .models-actions-cell .ml-card-col-actions {
     width: 210px;
+    margin-left: auto;
 }
 
 /* Override for 2x2 grid (Models Registry uses 2 rows, not 3) */

@@ -3354,7 +3354,7 @@ select option {
 
 .model-nav-bar {
     position: relative;
-    margin-top: -24px;           /* Overlap with header card */
+    margin-top: -28px;           /* Overlap with header card */
     z-index: 20;
     max-width: 1050px;           /* Increased from 900px (+15%) */
     margin-left: auto;

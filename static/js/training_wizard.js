@@ -484,6 +484,17 @@ const TrainingWizard = (function() {
                 blessingThreshold: 0.40
             },
             deploymentOption: 'register_only',
+            deploymentConfig: {
+                enabled: false,
+                serviceName: '',
+                customName: false,
+                preset: 'production',
+                minInstances: 1,
+                maxInstances: 10,
+                memory: '4Gi',
+                cpu: '2',
+                timeout: '300'
+            },
             scheduleConfig: {
                 type: 'now',
                 datetime: null,

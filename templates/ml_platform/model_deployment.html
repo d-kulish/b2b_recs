@@ -1,10 +1,70 @@
 {% extends 'base_model.html' %}
+{% load static %}
 
-{% block title %}{{ model.name }} - PLACEHOLDER{% endblock %}
+{% block title %}{{ model.name }} - Deployment{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/endpoints_table.css' %}?v=1">
+{% endblock %}
 
 {% block model_content %}
-<div class="bg-white rounded-lg shadow p-6">
-    <h2 class="text-2xl font-bold text-gray-900 mb-4">PLACEHOLDER_TITLE</h2>
-    <p class="text-gray-600">This page is under development.</p>
+<!-- CHAPTER: SERVING ENDPOINTS -->
+<div id="endpointsChapter" class="bg-white rounded-xl border border-black shadow-lg p-6">
+    <!-- Header with Icon -->
+    <div class="flex items-center justify-between mb-6">
+        <div class="flex items-center gap-3">
+            <div class="chapter-icon" style="background: linear-gradient(135deg, #6366f1 0%, #818cf8 100%);">
+                <i class="fas fa-server text-white text-lg"></i>
+            </div>
+            <h2 class="text-lg font-bold text-gray-900">Serving Endpoints</h2>
+        </div>
+    </div>
+
+    <!-- KPI Summary Row -->
+    <div id="endpointsKpiSummary" class="endpoints-kpi-row">
+        <!-- Populated by JavaScript -->
+        <div class="endpoints-loading">
+            <i class="fas fa-spinner fa-spin"></i>
+            <span class="endpoints-loading-text">Loading...</span>
+        </div>
+    </div>
+
+    <!-- Filter Bar -->
+    <div id="endpointsFilterBar" class="endpoints-filter-bar">
+        <!-- Populated by JavaScript -->
+    </div>
+
+    <!-- Endpoints Table -->
+    <div id="endpointsTable">
+        <!-- Populated by JavaScript -->
+    </div>
+
+    <!-- Empty State (hidden by default) -->
+    <div id="endpointsEmptyState" class="endpoints-empty-state" style="display: none;">
+        <div class="empty-icon"><i class="fas fa-server"></i></div>
+        <h3>No Deployed Endpoints</h3>
+        <p>Deploy models from the Training page to create serving endpoints.</p>
+    </div>
 </div>
+<!-- End Chapter: Serving Endpoints -->
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/endpoints_table.js' %}?v=1"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize Endpoints Table
+    EndpointsTable.init({
+        containerId: '#endpointsChapter',
+        kpiContainerId: '#endpointsKpiSummary',
+        filterBarId: '#endpointsFilterBar',
+        tableContainerId: '#endpointsTable',
+        emptyStateId: '#endpointsEmptyState',
+        // GCP configuration
+        region: 'europe-central2',
+        project: 'b2b-recs'
+    });
+    EndpointsTable.load();
+});
+</script>
 {% endblock %}

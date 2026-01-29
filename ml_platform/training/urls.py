@@ -254,4 +254,23 @@ urlpatterns = [
         api.training_schedules_calendar,
         name='training_schedules_calendar'
     ),
+
+    # ==========================================================================
+    # Deployed Endpoints API endpoints
+    # ==========================================================================
+    path(
+        'api/deployed-endpoints/',
+        api.deployed_endpoints_list,
+        name='deployed_endpoints_list'
+    ),
+    path(
+        'api/deployed-endpoints/<int:endpoint_id>/',
+        api.endpoint_detail,
+        name='endpoint_detail'
+    ),
+    path(
+        'api/deployed-endpoints/<int:endpoint_id>/undeploy/',
+        api.endpoint_undeploy,
+        name='endpoint_undeploy'
+    ),
 ]

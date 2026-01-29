@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides detailed specifications for implementing the **Deployment** domain in the ML Platform. The Deployment domain handles model serving, version management, and production deployment.
 
-**Last Updated**: 2026-01-29 (Added Endpoint Testing & Validation)
+**Last Updated**: 2026-01-29 (Added Serving Endpoints Chapter implementation)
 
 ---
 
@@ -747,16 +747,17 @@ def validate_api_key(auth_header: str) -> bool:
 ## Implementation Checklist
 
 ### Phase 1: Basic Deployment
-- [ ] Create Django models (Deployment, ServingMetrics, APIKey)
-- [ ] Create deployment sub-app structure
-- [ ] Implement basic deployment API
-- [ ] Create deployment dashboard UI
+- [x] Create Django models (DeployedEndpoint in `ml_platform/training/models.py`)
+- [ ] Create deployment sub-app structure (using training app for now)
+- [x] Implement basic deployment API (deployed-endpoints endpoints)
+- [x] Create deployment dashboard UI (Serving Endpoints chapter)
 
 ### Phase 2: Cloud Run Integration
-- [ ] Implement DeploymentService
-- [ ] Copy model artifacts to serving bucket
-- [ ] Update Cloud Run service
-- [ ] Traffic switching
+- [x] Implement DeploymentService (`deploy_to_cloud_run` in TrainingService)
+- [x] Copy model artifacts to serving bucket (handled by TFX Pusher)
+- [x] Update Cloud Run service (gcloud CLI integration)
+- [x] Delete Cloud Run service (`delete_cloud_run_service` method)
+- [ ] Traffic switching (future)
 
 ### Phase 3: Health & Monitoring
 - [ ] Implement HealthCheckService
@@ -793,6 +794,160 @@ def validate_api_key(auth_header: str) -> bool:
 - [Implementation Overview](../implementation.md)
 - [Training Phase](phase_training.md)
 - [Experiments Phase](phase_experiments.md)
+
+---
+
+# Serving Endpoints Chapter (2026-01-29)
+
+## Implementation Summary
+
+The Serving Endpoints chapter displays all deployed ML serving endpoints (Cloud Run services with names ending in `-serving`) on the Deployment page. The UI follows the Models Registry chapter pattern from the Training page.
+
+### Files Created/Modified
+
+| File | Action | Purpose |
+|------|--------|---------|
+| `ml_platform/training/api.py` | Modified | Added 3 API functions + serializer |
+| `ml_platform/training/urls.py` | Modified | Registered 3 new URL patterns |
+| `ml_platform/training/services.py` | Modified | Added `delete_cloud_run_service()` method |
+| `templates/ml_platform/model_deployment.html` | Modified | Full chapter implementation |
+| `static/js/endpoints_table.js` | Created | IIFE module for table management |
+| `static/css/endpoints_table.css` | Created | Styles with `.endpoints-` prefix |
+
+### API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/deployed-endpoints/` | List endpoints with filters, pagination, KPIs |
+| GET | `/api/deployed-endpoints/<id>/` | Get endpoint details |
+| POST | `/api/deployed-endpoints/<id>/undeploy/` | Delete Cloud Run service, mark inactive |
+
+### API Response Format (List)
+
+```json
+{
+  "success": true,
+  "endpoints": [{
+    "id": 1,
+    "service_name": "my-model-serving",
+    "service_url": "https://...",
+    "deployed_version": "v1",
+    "is_active": true,
+    "model_name": "my-model",
+    "model_type": "retrieval",
+    "registered_model_id": 123,
+    "deployment_config": {"memory": "4Gi", "cpu": "2", ...},
+    "updated_at": "2026-01-28T..."
+  }],
+  "kpi": {"total": 5, "active": 4, "inactive": 1, "last_updated": "..."},
+  "pagination": {"page": 1, "page_size": 10, "total_count": 5, ...},
+  "model_names": ["model-a", "model-b"]
+}
+```
+
+### UI Features
+
+**KPI Summary Row (4 cards):**
+- Total Endpoints
+- Active (green)
+- Inactive (red)
+- Last Updated (blue, relative time)
+
+**Filter Bar:**
+- Model Type dropdown (All, Retrieval, Ranking, Multitask)
+- Status dropdown (All, Active, Inactive)
+- Model Name dropdown (populated dynamically)
+- Search input (debounced)
+- Refresh button
+
+**Endpoints Table Columns:**
+1. # (row number)
+2. Endpoint Name (service name + run number)
+3. Model (type badge + model name)
+4. Version (badge with icon)
+5. URL (truncated with copy button)
+6. Config (CPU/Memory)
+7. Status (Active/Inactive badge)
+8. Last Updated (relative time)
+9. Actions (icon buttons)
+
+**Action Buttons:**
+- Test (placeholder for future testing feature)
+- Copy URL (clipboard)
+- View Logs (opens Cloud Run logs in new tab)
+- View Details (opens ExpViewModal for linked training run)
+- Undeploy (confirmation + delete)
+
+### JavaScript Module: `EndpointsTable`
+
+```javascript
+// Usage
+EndpointsTable.init({
+    containerId: '#endpointsChapter',
+    kpiContainerId: '#endpointsKpiSummary',
+    filterBarId: '#endpointsFilterBar',
+    tableContainerId: '#endpointsTable',
+    emptyStateId: '#endpointsEmptyState',
+    region: 'europe-central2',
+    project: 'b2b-recs'
+});
+EndpointsTable.load();
+
+// Public API
+EndpointsTable.refresh()
+EndpointsTable.setFilter(key, value)
+EndpointsTable.handleSearch(value)
+EndpointsTable.copyUrl(endpointId)
+EndpointsTable.viewLogs(endpointId)
+EndpointsTable.viewDetails(endpointId)
+EndpointsTable.testEndpoint(endpointId)
+EndpointsTable.confirmUndeploy(endpointId)
+EndpointsTable.nextPage()
+EndpointsTable.prevPage()
+```
+
+### Service Method: `delete_cloud_run_service`
+
+```python
+# ml_platform/training/services.py
+
+def delete_cloud_run_service(self, service_name: str) -> bool:
+    """
+    Delete a Cloud Run service using gcloud CLI.
+
+    Args:
+        service_name: Name of the Cloud Run service to delete
+
+    Returns:
+        bool: True if deletion was successful
+
+    Raises:
+        TrainingServiceError: If deletion fails
+    """
+```
+
+### Design Decisions
+
+| Decision | Rationale |
+|----------|-----------|
+| Skip "Requests" KPI | Requires Cloud Monitoring integration; can add later |
+| "Test" action as placeholder | Full testing feature documented below |
+| Icon-only action buttons | Fits more actions in table row |
+| 4 KPI cards (not 5) | Matches available data without Cloud Monitoring |
+| Purple gradient icon (`#6366f1`) | Distinguishes from green (Models Registry) |
+| Filter by model name | Useful when multiple models are deployed |
+
+### Verification Steps
+
+1. Navigate to `/models/<id>/deployment/`
+2. Verify KPI cards show correct counts
+3. Test all filters (Model Type, Status, Model Name, Search)
+4. Verify table pagination
+5. Test actions:
+   - Copy URL: Check clipboard
+   - View Logs: Opens GCP Console in new tab
+   - View Details: Opens ExpViewModal
+   - Undeploy: Shows confirmation, refreshes table
 
 ---
 

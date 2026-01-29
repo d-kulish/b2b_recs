@@ -4777,3 +4777,298 @@ def training_schedules_calendar(request):
             'success': False,
             'error': str(e)
         }, status=500)
+
+
+# =============================================================================
+# DEPLOYED ENDPOINTS API
+# =============================================================================
+
+def _serialize_deployed_endpoint(endpoint, include_details=False):
+    """
+    Serialize a DeployedEndpoint model to dict.
+
+    Args:
+        endpoint: DeployedEndpoint model instance
+        include_details: If True, include full deployment config
+
+    Returns:
+        Dict representation of the deployed endpoint
+    """
+    from .models import DeployedEndpoint
+
+    data = {
+        'id': endpoint.id,
+        'service_name': endpoint.service_name,
+        'service_url': endpoint.service_url,
+        'deployed_version': endpoint.deployed_version,
+        'is_active': endpoint.is_active,
+
+        # Registered model info
+        'registered_model_id': endpoint.registered_model_id,
+        'model_name': endpoint.registered_model.model_name if endpoint.registered_model else None,
+        'model_type': endpoint.registered_model.model_type if endpoint.registered_model else None,
+
+        # Training run info (currently deployed)
+        'training_run_id': endpoint.deployed_training_run_id,
+        'run_number': endpoint.deployed_training_run.run_number if endpoint.deployed_training_run else None,
+
+        # Timestamps
+        'created_at': endpoint.created_at.isoformat() if endpoint.created_at else None,
+        'updated_at': endpoint.updated_at.isoformat() if endpoint.updated_at else None,
+    }
+
+    if include_details:
+        data['deployment_config'] = endpoint.deployment_config or {}
+
+    return data
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def deployed_endpoints_list(request):
+    """
+    List all deployed ML serving endpoints with filters, pagination, KPIs.
+
+    GET /api/deployed-endpoints/
+    GET /api/deployed-endpoints/?model_type=retrieval
+    GET /api/deployed-endpoints/?status=active
+    GET /api/deployed-endpoints/?model_name=my-model
+    GET /api/deployed-endpoints/?search=product
+
+    Returns deployed endpoints with KPI summary.
+    Only shows endpoints with service names ending in '-serving'.
+    """
+    from .models import DeployedEndpoint
+    from django.db.models import Q
+
+    try:
+        model_endpoint = _get_model_endpoint(request)
+        if not model_endpoint:
+            return JsonResponse({
+                'success': False,
+                'error': 'No model endpoint selected'
+            }, status=400)
+
+        # Base queryset: only ML serving endpoints (ending with '-serving')
+        queryset = DeployedEndpoint.objects.filter(
+            registered_model__ml_model=model_endpoint,
+            service_name__endswith='-serving'
+        ).select_related('registered_model', 'deployed_training_run')
+
+        # Calculate KPIs before filtering
+        all_endpoints = queryset
+        total_count = all_endpoints.count()
+        active_count = all_endpoints.filter(is_active=True).count()
+        inactive_count = all_endpoints.filter(is_active=False).count()
+        last_updated = all_endpoints.order_by('-updated_at').values_list('updated_at', flat=True).first()
+
+        kpi = {
+            'total': total_count,
+            'active': active_count,
+            'inactive': inactive_count,
+            'last_updated': last_updated.isoformat() if last_updated else None,
+        }
+
+        # Get unique model names for filter dropdown
+        model_names = list(
+            queryset.values_list('registered_model__model_name', flat=True)
+            .distinct()
+            .order_by('registered_model__model_name')
+        )
+
+        # Apply filters
+        model_type = request.GET.get('model_type')
+        if model_type and model_type != 'all':
+            queryset = queryset.filter(registered_model__model_type=model_type)
+
+        status_filter = request.GET.get('status')
+        if status_filter and status_filter != 'all':
+            if status_filter == 'active':
+                queryset = queryset.filter(is_active=True)
+            elif status_filter == 'inactive':
+                queryset = queryset.filter(is_active=False)
+
+        model_name_filter = request.GET.get('model_name')
+        if model_name_filter and model_name_filter != 'all':
+            queryset = queryset.filter(registered_model__model_name=model_name_filter)
+
+        search = request.GET.get('search', '').strip()
+        if search:
+            queryset = queryset.filter(
+                Q(service_name__icontains=search) |
+                Q(registered_model__model_name__icontains=search) |
+                Q(deployed_version__icontains=search)
+            )
+
+        # Order by most recently updated
+        queryset = queryset.order_by('-updated_at')
+
+        # Pagination
+        try:
+            page = int(request.GET.get('page', 1))
+            page_size = int(request.GET.get('page_size', 10))
+        except ValueError:
+            page = 1
+            page_size = 10
+
+        page = max(1, page)
+        page_size = max(1, min(50, page_size))
+
+        filtered_count = queryset.count()
+        total_pages = (filtered_count + page_size - 1) // page_size if filtered_count > 0 else 1
+        page = min(page, total_pages)
+
+        start_idx = (page - 1) * page_size
+        end_idx = start_idx + page_size
+
+        endpoints = list(queryset[start_idx:end_idx])
+
+        return JsonResponse({
+            'success': True,
+            'endpoints': [
+                _serialize_deployed_endpoint(ep, include_details=True)
+                for ep in endpoints
+            ],
+            'kpi': kpi,
+            'pagination': {
+                'page': page,
+                'page_size': page_size,
+                'total_count': filtered_count,
+                'total_pages': total_pages,
+                'has_next': page < total_pages,
+                'has_prev': page > 1
+            },
+            'model_names': model_names
+        })
+
+    except Exception as e:
+        logger.exception(f"Error listing deployed endpoints: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def endpoint_detail(request, endpoint_id):
+    """
+    Get detailed information about a deployed endpoint.
+
+    GET /api/deployed-endpoints/<id>/
+
+    Returns full endpoint details including deployment config.
+    """
+    from .models import DeployedEndpoint
+
+    try:
+        model_endpoint = _get_model_endpoint(request)
+        if not model_endpoint:
+            return JsonResponse({
+                'success': False,
+                'error': 'No model endpoint selected'
+            }, status=400)
+
+        try:
+            endpoint = DeployedEndpoint.objects.select_related(
+                'registered_model', 'deployed_training_run'
+            ).get(
+                id=endpoint_id,
+                registered_model__ml_model=model_endpoint
+            )
+        except DeployedEndpoint.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': f'Endpoint {endpoint_id} not found'
+            }, status=404)
+
+        return JsonResponse({
+            'success': True,
+            'endpoint': _serialize_deployed_endpoint(endpoint, include_details=True)
+        })
+
+    except Exception as e:
+        logger.exception(f"Error getting endpoint detail: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def endpoint_undeploy(request, endpoint_id):
+    """
+    Undeploy an endpoint by deleting the Cloud Run service.
+
+    POST /api/deployed-endpoints/<id>/undeploy/
+
+    Deletes the Cloud Run service and marks the endpoint as inactive.
+    """
+    from .models import DeployedEndpoint
+
+    try:
+        model_endpoint = _get_model_endpoint(request)
+        if not model_endpoint:
+            return JsonResponse({
+                'success': False,
+                'error': 'No model endpoint selected'
+            }, status=400)
+
+        try:
+            endpoint = DeployedEndpoint.objects.select_related(
+                'registered_model', 'deployed_training_run'
+            ).get(
+                id=endpoint_id,
+                registered_model__ml_model=model_endpoint
+            )
+        except DeployedEndpoint.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': f'Endpoint {endpoint_id} not found'
+            }, status=404)
+
+        if not endpoint.is_active:
+            return JsonResponse({
+                'success': False,
+                'error': 'Endpoint is already inactive'
+            }, status=400)
+
+        # Delete the Cloud Run service
+        service = TrainingService(model_endpoint)
+        try:
+            success = service.delete_cloud_run_service(endpoint.service_name)
+            if not success:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Failed to delete Cloud Run service'
+                }, status=500)
+        except TrainingServiceError as e:
+            return JsonResponse({
+                'success': False,
+                'error': str(e)
+            }, status=500)
+
+        # Mark endpoint as inactive
+        endpoint.is_active = False
+        endpoint.save(update_fields=['is_active', 'updated_at'])
+
+        # Update training run deployment status if linked
+        if endpoint.deployed_training_run:
+            training_run = endpoint.deployed_training_run
+            training_run.deployment_status = None
+            training_run.deployed_endpoint = None
+            training_run.save(update_fields=['deployment_status', 'deployed_endpoint'])
+
+        return JsonResponse({
+            'success': True,
+            'message': f'Endpoint {endpoint.service_name} undeployed successfully',
+            'endpoint': _serialize_deployed_endpoint(endpoint, include_details=True)
+        })
+
+    except Exception as e:
+        logger.exception(f"Error undeploying endpoint: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)

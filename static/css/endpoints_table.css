@@ -1,0 +1,609 @@
+/**
+ * Endpoints Table CSS
+ *
+ * Styles for the Serving Endpoints chapter on the Deployment page.
+ * Includes: KPI summary row, filter bar, endpoints table, status badges, actions.
+ * Adapted from models_registry.css with .endpoints- prefix.
+ */
+
+/* =========================================================================
+   KPI Summary Row (4 cards for endpoints)
+   ========================================================================= */
+.endpoints-kpi-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.endpoints-kpi-card {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 10px 8px;
+    text-align: center;
+    transition: all 0.2s ease;
+}
+
+.endpoints-kpi-card:hover {
+    border-color: #d1d5db;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.endpoints-kpi-value {
+    font-size: 18px;
+    font-weight: 700;
+    color: #111827;
+    line-height: 1.2;
+}
+
+.endpoints-kpi-value.highlight-green {
+    color: #10b981;
+}
+
+.endpoints-kpi-value.highlight-blue {
+    color: #3b82f6;
+}
+
+.endpoints-kpi-value.highlight-orange {
+    color: #f97316;
+}
+
+.endpoints-kpi-value.highlight-red {
+    color: #ef4444;
+}
+
+.endpoints-kpi-value.highlight-purple {
+    color: #6366f1;
+}
+
+.endpoints-kpi-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-top: 4px;
+}
+
+.endpoints-kpi-sublabel {
+    font-size: 10px;
+    color: #9ca3af;
+    margin-top: 2px;
+}
+
+/* =========================================================================
+   Filter Bar
+   ========================================================================= */
+.endpoints-filter-bar {
+    display: flex;
+    align-items: flex-end;
+    gap: 16px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+
+.endpoints-filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.endpoints-filter-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.endpoints-filter-select {
+    padding: 8px 12px;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    font-size: 13px;
+    background: white;
+    min-width: 140px;
+    color: #374151;
+    cursor: pointer;
+}
+
+.endpoints-filter-select:focus {
+    outline: none;
+    border-color: #6366f1;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.1);
+}
+
+.endpoints-search-input {
+    flex: 1;
+    min-width: 200px;
+    padding: 8px 12px;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    font-size: 13px;
+    background: white;
+}
+
+.endpoints-search-input:focus {
+    outline: none;
+    border-color: #6366f1;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.1);
+}
+
+.endpoints-search-input::placeholder {
+    color: #9ca3af;
+}
+
+.endpoints-filter-spacer {
+    flex: 1;
+}
+
+.endpoints-refresh-btn {
+    padding: 8px 16px;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    background: white;
+    font-size: 13px;
+    color: #374151;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s ease;
+}
+
+.endpoints-refresh-btn:hover {
+    background: #f3f4f6;
+    border-color: #d1d5db;
+}
+
+.endpoints-refresh-btn.loading i {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* =========================================================================
+   Endpoints Table
+   ========================================================================= */
+.endpoints-table-container {
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    overflow: hidden;
+    background: white;
+}
+
+.endpoints-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.endpoints-table th {
+    text-align: left;
+    padding: 12px 16px;
+    font-weight: 600;
+    color: #374151;
+    background: #f9fafb;
+    border-bottom: 2px solid #e5e7eb;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+}
+
+.endpoints-table th.sortable {
+    cursor: pointer;
+    user-select: none;
+}
+
+.endpoints-table th.sortable:hover {
+    background: #f3f4f6;
+}
+
+.endpoints-table th .sort-icon {
+    margin-left: 4px;
+    opacity: 0.4;
+}
+
+.endpoints-table th.sorted .sort-icon {
+    opacity: 1;
+    color: #6366f1;
+}
+
+.endpoints-table td {
+    padding: 12px 16px;
+    border-bottom: 1px solid #f3f4f6;
+    vertical-align: middle;
+}
+
+.endpoints-table tbody tr {
+    transition: background 0.15s ease;
+}
+
+.endpoints-table tbody tr:hover {
+    background: #f9fafb;
+}
+
+.endpoints-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+/* Endpoint Name Cell */
+.endpoints-table-name {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.endpoints-table-name-main {
+    font-weight: 600;
+    color: #111827;
+}
+
+.endpoints-table-name-sub {
+    font-size: 11px;
+    color: #6b7280;
+}
+
+/* Model Type Badge */
+.endpoints-type-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 500;
+}
+
+.endpoints-type-badge.retrieval {
+    background: #f3e8ff;
+    color: #7c3aed;
+}
+
+.endpoints-type-badge.ranking {
+    background: #fef3c7;
+    color: #d97706;
+}
+
+.endpoints-type-badge.multitask {
+    background: #fce7f3;
+    color: #db2777;
+}
+
+/* Version Badge */
+.endpoints-version-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    background: #f3f4f6;
+    border-radius: 4px;
+    font-size: 12px;
+    color: #374151;
+}
+
+.endpoints-version-badge i {
+    font-size: 10px;
+    color: #9ca3af;
+}
+
+/* URL Cell */
+.endpoints-url-cell {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    max-width: 280px;
+}
+
+.endpoints-url-text {
+    font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+    font-size: 11px;
+    color: #4b5563;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 220px;
+}
+
+.endpoints-url-copy-btn {
+    padding: 4px 6px;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: #9ca3af;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    flex-shrink: 0;
+}
+
+.endpoints-url-copy-btn:hover {
+    background: #f3f4f6;
+    color: #6366f1;
+}
+
+.endpoints-url-copy-btn.copied {
+    color: #10b981;
+}
+
+/* Config Badge */
+.endpoints-config-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    background: #f3f4f6;
+    border-radius: 4px;
+    font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+    font-size: 10px;
+    color: #6b7280;
+}
+
+/* =========================================================================
+   Status Badges
+   ========================================================================= */
+.endpoints-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.endpoints-status-badge.active {
+    background: #d1fae5;
+    color: #059669;
+}
+
+.endpoints-status-badge.inactive {
+    background: #fee2e2;
+    color: #dc2626;
+}
+
+.endpoints-status-badge i {
+    font-size: 9px;
+}
+
+/* =========================================================================
+   Action Buttons (Icon-only style)
+   ========================================================================= */
+.endpoints-actions-header {
+    text-align: right;
+    padding-right: 16px !important;
+}
+
+.endpoints-actions-cell {
+    padding: 8px 16px !important;
+}
+
+.endpoints-action-buttons {
+    display: flex;
+    gap: 4px;
+    justify-content: flex-end;
+}
+
+.endpoints-action-btn {
+    padding: 6px 8px;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    background: white;
+    color: #6b7280;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+}
+
+.endpoints-action-btn:hover {
+    background: #f3f4f6;
+    border-color: #d1d5db;
+}
+
+.endpoints-action-btn.test:hover {
+    background: #ede9fe;
+    border-color: #a78bfa;
+    color: #7c3aed;
+}
+
+.endpoints-action-btn.copy:hover {
+    background: #e0f2fe;
+    border-color: #7dd3fc;
+    color: #0284c7;
+}
+
+.endpoints-action-btn.logs:hover {
+    background: #fef3c7;
+    border-color: #fcd34d;
+    color: #d97706;
+}
+
+.endpoints-action-btn.details:hover {
+    background: #dbeafe;
+    border-color: #93c5fd;
+    color: #2563eb;
+}
+
+.endpoints-action-btn.undeploy:hover {
+    background: #fee2e2;
+    border-color: #fca5a5;
+    color: #dc2626;
+}
+
+.endpoints-action-btn[disabled] {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.endpoints-action-btn[disabled]:hover {
+    background: white;
+    border-color: #e5e7eb;
+    color: #6b7280;
+}
+
+/* Tooltip for action buttons */
+.endpoints-action-btn[title] {
+    position: relative;
+}
+
+/* =========================================================================
+   Pagination
+   ========================================================================= */
+.endpoints-pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid #e5e7eb;
+}
+
+.endpoints-pagination-btn {
+    padding: 8px 12px;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    background: white;
+    font-size: 13px;
+    color: #374151;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    transition: all 0.15s ease;
+}
+
+.endpoints-pagination-btn:hover:not(:disabled) {
+    background: #f3f4f6;
+    border-color: #d1d5db;
+}
+
+.endpoints-pagination-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.endpoints-pagination-info {
+    font-size: 13px;
+    color: #6b7280;
+    padding: 0 12px;
+}
+
+/* =========================================================================
+   Empty State
+   ========================================================================= */
+.endpoints-empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 20px;
+    text-align: center;
+}
+
+.endpoints-empty-state .empty-icon {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 16px;
+}
+
+.endpoints-empty-state .empty-icon i {
+    font-size: 32px;
+    color: #9ca3af;
+}
+
+.endpoints-empty-state h3 {
+    font-size: 18px;
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 8px;
+}
+
+.endpoints-empty-state p {
+    font-size: 14px;
+    color: #6b7280;
+    margin-bottom: 20px;
+    max-width: 400px;
+}
+
+/* =========================================================================
+   Loading State
+   ========================================================================= */
+.endpoints-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 20px;
+    color: #6b7280;
+}
+
+.endpoints-loading i {
+    font-size: 24px;
+    margin-bottom: 12px;
+    color: #6366f1;
+}
+
+.endpoints-loading-text {
+    font-size: 14px;
+}
+
+/* Loading state inside KPI row - span all columns and center */
+.endpoints-kpi-row .endpoints-loading {
+    grid-column: 1 / -1;
+    padding: 40px 20px;
+}
+
+/* =========================================================================
+   Responsive
+   ========================================================================= */
+@media (max-width: 1200px) {
+    .endpoints-kpi-row {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 768px) {
+    .endpoints-kpi-row {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .endpoints-filter-bar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .endpoints-filter-spacer {
+        display: none;
+    }
+
+    .endpoints-table {
+        font-size: 12px;
+    }
+
+    .endpoints-table th,
+    .endpoints-table td {
+        padding: 10px 12px;
+    }
+
+    .endpoints-url-cell {
+        max-width: 150px;
+    }
+
+    .endpoints-url-text {
+        max-width: 120px;
+    }
+}

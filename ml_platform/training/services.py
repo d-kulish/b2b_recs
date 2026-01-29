@@ -2219,6 +2219,62 @@ class TrainingService:
             logger.exception(f"Error deploying to Cloud Run: {e}")
             raise TrainingServiceError(f"Failed to deploy to Cloud Run: {e}")
 
+    def delete_cloud_run_service(self, service_name: str) -> bool:
+        """
+        Delete a Cloud Run service.
+
+        Args:
+            service_name: Name of the Cloud Run service to delete
+
+        Returns:
+            bool: True if deletion was successful
+
+        Raises:
+            TrainingServiceError: If deletion fails
+        """
+        import subprocess
+
+        if not service_name:
+            raise TrainingServiceError("Service name is required")
+
+        logger.info(f"Deleting Cloud Run service: {service_name}")
+
+        try:
+            cmd = [
+                'gcloud', 'run', 'services', 'delete', service_name,
+                f'--region={self.REGION}',
+                f'--project={self.project_id}',
+                '--quiet',  # Skip confirmation prompt
+            ]
+
+            logger.info(f"Running: {' '.join(cmd)}")
+
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=120,  # 2 minute timeout for deletion
+            )
+
+            if result.returncode != 0:
+                error_msg = result.stderr or result.stdout or "Unknown error"
+                # Check if service doesn't exist (not an error for us)
+                if 'could not be found' in error_msg.lower() or 'not found' in error_msg.lower():
+                    logger.info(f"Service {service_name} not found (already deleted)")
+                    return True
+                raise TrainingServiceError(f"Cloud Run service deletion failed: {error_msg}")
+
+            logger.info(f"Successfully deleted Cloud Run service: {service_name}")
+            return True
+
+        except subprocess.TimeoutExpired:
+            raise TrainingServiceError("Cloud Run service deletion timed out after 2 minutes")
+        except TrainingServiceError:
+            raise
+        except Exception as e:
+            logger.exception(f"Error deleting Cloud Run service: {e}")
+            raise TrainingServiceError(f"Failed to delete Cloud Run service: {e}")
+
     def submit_training_pipeline(self, training_run: TrainingRun) -> TrainingRun:
         """
         Submit a training run to Vertex AI Pipeline.
